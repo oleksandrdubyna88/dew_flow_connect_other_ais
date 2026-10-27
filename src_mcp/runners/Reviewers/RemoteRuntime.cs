@@ -146,7 +146,7 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
         [.. effort.Length > 0 ? ["--effort", effort] : (string[])[], .. systemFile.Length > 0 ? ["--system-prompt-file", systemFile] : (string[])[]];
 
     /// <summary>
-    /// The shim's command line for THIS launch (story 4.1 of todo/PLAN_every_round_is_counted.md): its own waiting deadline
+    /// The shim's command line for THIS launch (story 4.1 of research/PLAN_every_round_is_counted.md): its own waiting deadline
     /// and the vendor's budget re-derived from the launch's EFFECTIVE timeout, the attempt it is, and the round it belongs to.
     /// </summary>
     /// <remarks>

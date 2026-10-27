@@ -248,7 +248,7 @@ public static class VibeHomes
         }
     }
 
-    private static bool IsTheLock(string entry) => Path.GetFileName(entry).Equals(LockName, StringComparison.OrdinalIgnoreCase);
+    private static bool IsTheLock(string entry) => FolderLock.IsTheLock(entry, LockName);
 
     /// <summary>
     /// The newest write of the folder's entries and their entries — a home a launch just wrote into is young — or of the folder

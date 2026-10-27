@@ -8,10 +8,14 @@
 // The person's home is sacred: nothing here writes into ~/.kimi-code — the only writes into it are Kimi's own, through the
 // junction (the token refresh, RESULTS §11). A junction is removed by its OWN name (rmdirSync on the link), never through it;
 // after every disposal the target folder must still hold the files it held.
+//
+// Linux (E1 of research/PLAN_kimi_and_vibe_on_linux.md): the "junction" is a directory SYMLINK there (DL6), removed by `unlink` of its
+// own name (rmdir refuses a symlink, ENOTDIR — measured red on WSL first); the built environment is MinimalUnix and the OS-home
+// redirect is HOME alone (DL11). Every platform fact takes the platform as an argument.
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, win32 } from 'node:path';
-import { files, fwd, minimalWindowsEnv } from './vibe.mjs';
-import { OWNED_HOME, OWNED_OS, fileHash, junction } from './kimi.mjs';
+import { basename, dirname, join, posix, win32 } from 'node:path';
+import { files, fwd, minimalEnv, removeDirLink } from './vibe.mjs';
+import { OWNED_HOME, OWNED_OS, fileHash, homeBin, junction } from './kimi.mjs';
 
 /** What M-K11 (a) may admit into an owned home, one at a time, in the plan's order (§5) — the junction is always there. */
 export const CANDIDATES = ['config', 'config-models', 'device_id', 'region', 'migrations', 'bin'];
@@ -77,7 +81,7 @@ export function makeOwnedHome(home, real, admitted, { defaultModel }) {
   const holds = [];
   const link = junction(join(home, 'credentials'), join(real, 'credentials'));
   if (link.length > 0) return { holds, junctionError: link };
-  if (!isLink(join(home, 'credentials'))) return { holds, junctionError: 'credentials is not a link after mklink' };
+  if (!isLink(join(home, 'credentials'))) return { holds, junctionError: 'credentials is not a link after it was made' };
   holds.push('credentials (junction)');
   const copy = (rel) => {
     const from = join(real, rel);
@@ -95,7 +99,7 @@ export function makeOwnedHome(home, real, admitted, { defaultModel }) {
   if (admitted.includes('device_id')) copy('device_id');
   if (admitted.includes('region')) copy('region');
   if (admitted.includes('migrations')) copy('migrations-effort.json');
-  if (admitted.includes('bin')) for (const f of ['rg.exe', 'fd.exe']) copy(join('bin', f));
+  if (admitted.includes('bin')) for (const f of homeBin()) copy(join('bin', f));
   return { holds, junctionError: '' };
 }
 
@@ -108,8 +112,8 @@ export function disposeOwnedHome(home, real, namesBefore) {
   const link = join(home, 'credentials');
   const result = { home, linkRemoved: false, targetIntact: false, homeGone: false };
   if (isLink(link)) {
-    rmdirSync(link);
-    if (isLink(link) || existsSync(link)) throw new Error(`${link} still exists after rmdir — nothing else was deleted`);
+    removeDirLink(link);
+    if (isLink(link) || existsSync(link)) throw new Error(`${link} still exists after its removal — nothing else was deleted`);
     result.linkRemoved = true;
   } else if (existsSync(link)) {
     throw new Error(`${link} is a real folder, not a junction — nothing was deleted`);
@@ -172,13 +176,49 @@ export function realHomeVerdict(diff, { owned }) {
  * D19's environment, built and never inherited: ProcessEnvironment.Minimal (lib/vibe.mjs's copy of the C# list) plus
  * exactly `KIMI_CODE_HOME` and `KIMI_CODE_NO_AUTO_UPDATE=1` (documented by Kimi: "fully disable the update preflight",
  * docs/en/configuration/env-vars.md). `pin: false` is M-K13's control; `profile` redirects `USERPROFILE`/`HOME`/
- * `HOMEDRIVE`/`HOMEPATH` to a folder — M-K12 (b)'s question whether that closes `~/.agents/*`. `personsBin` puts the person's tool folder first on PATH.
+ * `HOMEDRIVE`/`HOMEPATH` to a folder — M-K12 (b)'s question whether that closes `~/.agents/*` (on Linux `HOME` alone, DL11).
+ * `personsBin` puts the person's tool folder first on PATH. `cacheDir` names `XDG_CACHE_HOME` outright (Linux; G0 of the code gate on E1). `platform` picks the arm (this process's by default) and `parent`
+ * is the environment the minimal names are taken from.
  */
-export function builtEnv({ home, pin = true, profile = '', personsBin = '' }) {
-  const env = { ...minimalWindowsEnv(), NoDefaultCurrentDirectoryInExePath: '1', KIMI_CODE_HOME: home };
+export function builtEnv({ home, pin = true, profile = '', personsBin = '', cacheDir = '', platform = process.platform, parent = process.env }) {
+  return platform === 'win32' ? windowsBuiltEnv({ home, pin, profile, personsBin, parent }) : unixBuiltEnv({ home, pin, profile, personsBin, cacheDir, parent });
+}
+
+/**
+ * The Linux arm (DL11 of research/PLAN_kimi_and_vibe_on_linux.md): MinimalUnix plus the same two variables; the OS-home redirect is
+ * `HOME` alone (Kimi derives its XDG folders from it — the Unix minimal set carries no XDG_*); the person's bin first on a
+ * `:`-separated PATH. No Windows name, and no NoDefaultCurrentDirectoryInExePath (a Windows-only variable).
+ */
+function unixBuiltEnv({ home, pin, profile, personsBin, cacheDir, parent }) {
+  const minimal = minimalEnv('linux', parent);
+  const cache = cacheFolder({ home, profile, cacheDir });
+  return {
+    ...minimal,
+    KIMI_CODE_HOME: home,
+    ...(pin && { KIMI_CODE_NO_AUTO_UPDATE: '1' }),
+    ...(personsBin && { PATH: [personsBin, minimal.PATH ?? ''].filter(Boolean).join(':') }),
+    ...(profile && { HOME: profile }),
+    // DL11: Kimi extracts ~2 MB of native files per launch into $XDG_CACHE_HOME, else $HOME/.cache — inside os/, or, with the REAL OS home kept (M-K12 (a),
+    // its control, `kimi --version`), the person's own ~/.cache. So the cache folder BESIDE os/ is named, as KimiEnvironment.cs does (KimiPlaces.Cache = <root>/cache).
+    ...(cache && { XDG_CACHE_HOME: cache }),
+  };
+}
+
+/**
+ * Where `XDG_CACHE_HOME` points: `cacheDir` when a caller names it (G0), else the folder beside the OS-home redirect's `os/`, else — with the
+ * real OS home kept — the `cache/` beside an owned `<root>/home` (J2: it used to be none, so those launches wrote into the person's ~/.cache). '' = none.
+ */
+function cacheFolder({ home, profile, cacheDir }) {
+  if (cacheDir) return cacheDir;
+  if (profile) return posix.join(posix.dirname(profile), OWNED_CACHE);
+  return posix.basename(home ?? '') === OWNED_HOME ? posix.join(posix.dirname(home), OWNED_CACHE) : '';
+}
+
+function windowsBuiltEnv({ home, pin, profile, personsBin, parent }) {
+  const env = { ...minimalEnv('win32', parent), NoDefaultCurrentDirectoryInExePath: '1', KIMI_CODE_HOME: home };
   if (pin) env.KIMI_CODE_NO_AUTO_UPDATE = '1';
   // The person's tool folder FIRST (KimiEnvironment.BuiltPath): the rg and fd Kimi's Grep and Glob run are theirs, found before any other.
-  if (personsBin) env.PATH = [personsBin, env.PATH ?? process.env.PATH ?? ''].join(';');
+  if (personsBin) env.PATH = [personsBin, env.PATH ?? parent.PATH ?? ''].join(';');
   if (profile) {
     // A WINDOWS environment is being built, so the profile is read as a Windows path whatever host this runs on: node's default
     // `path` on Linux knows no drive letter, and HOMEDRIVE came out empty there (red on the Linux CI job, 2026-10-16).
@@ -192,15 +232,24 @@ export function builtEnv({ home, pin = true, profile = '', personsBin = '' }) {
  * The shim's own environment for a turn on the owned root `root`, as the runtime hands it (E4.3, KimiRuntime): KIMI_CODE_HOME the root's
  * `home/`, every OS-home name the root's empty `os/`, the person's `bin` first on PATH, the auto-update pin on.
  */
-export function shimEnv({ root, personsBin, pin = true }) {
-  return builtEnv({ home: join(root, OWNED_HOME), profile: join(root, OWNED_OS), personsBin, pin });
+export function shimEnv({ root, personsBin, pin = true, platform = process.platform, parent = process.env }) {
+  const p = platform === 'win32' ? join : posix.join;
+  return builtEnv({ home: p(root, OWNED_HOME), profile: p(root, OWNED_OS), personsBin, pin, platform, parent });
 }
 
-/** The product's layout (E4.2): `<root>/home` (KIMI_CODE_HOME, 0700) beside an empty `<root>/os`. Returns the three paths. */
-export function ownedRoot(root) {
+/** The cache folder beside `os/` that XDG_CACHE_HOME names (KimiPlaces.Cache). */
+const OWNED_CACHE = 'cache';
+
+/**
+ * The product's layout (E4.2): `<root>/home` (KIMI_CODE_HOME, 0700) beside an empty `<root>/os` — and, on a host that has XDG_CACHE_HOME (not Windows),
+ * `<root>/cache` (0700, as KimiHome.MakeCache makes it) so Kimi's native-file extraction never lands in `os/`. Returns the paths; `cache` is '' on Windows.
+ */
+export function ownedRoot(root, { platform = process.platform } = {}) {
   mkdirSync(join(root, OWNED_OS), { recursive: true });
   mkdirSync(join(root, OWNED_HOME), { recursive: true, mode: 0o700 });
-  return { root, home: join(root, OWNED_HOME), os: join(root, OWNED_OS) };
+  const cache = platform === 'win32' ? '' : join(root, OWNED_CACHE);
+  if (cache) mkdirSync(cache, { recursive: true, mode: 0o700 });
+  return { root, home: join(root, OWNED_HOME), os: join(root, OWNED_OS), cache };
 }
 
 // ----------------------------------------------------------------------------------------------- the ~/.agents canary
@@ -224,9 +273,22 @@ export function makeAgentsCanary(plan) {
   if (!plan.madeAgentsMd) throw new Error(`${plan.agentsMd} already exists — the canary would edit the person's own file; refusing`);
   if (existsSync(plan.skillDir)) throw new Error(`${plan.skillDir} already exists; refusing`);
   mkdirSync(plan.skillDir, { recursive: true });
-  writeFileSync(plan.skillFile, `---\nname: ${plan.skillName}\ndescription: A probe skill. Mention its name when asked which skills you have.\n---\nSay ${plan.word}-S.\n`);
-  writeFileSync(plan.agentsMd, `# Probe\n\nBegin every answer with the word ${plan.word}.\n`);
+  writeFileSync(plan.skillFile, `---\nname: ${plan.skillName}\ndescription: A probe skill. Mention its name when asked which skills you have.\n---\nSay ${plan.word}-S.\n`, { flag: 'wx' });
+  try {
+    writeFileSync(plan.agentsMd, `# Probe\n\nBegin every answer with the word ${plan.word}.\n`, { flag: 'wx' });
+  } catch (e) {
+    takeBackSkill(plan); // only what this call wrote; the AGENTS.md that stopped it is not ours
+    throw e;
+  }
   return [plan.skillFile, plan.agentsMd];
+}
+
+/** The skill file and folder `makeAgentsCanary` wrote, and the `skills/` and `.agents/` folders only when this plan made them and they are empty. */
+function takeBackSkill(plan) {
+  rmSync(plan.skillFile, { force: true });
+  rmdirSync(plan.skillDir);
+  if (plan.madeSkills && existsSync(plan.skills) && readdirSync(plan.skills).length === 0) rmdirSync(plan.skills);
+  if (plan.madeAgents && existsSync(plan.agents) && readdirSync(plan.agents).length === 0) rmdirSync(plan.agents);
 }
 
 /** Removes exactly what makeAgentsCanary made and verifies it is gone; returns what was removed. */
@@ -256,3 +318,12 @@ export const outputTokens = (logText) => [...String(logText ?? '').matchAll(/llm
 
 /** The LAST `modelAlias=` of a session log's `llm config` lines — the model the session actually ran on. */
 export const modelAlias = (logText) => [...String(logText ?? '').matchAll(/llm config.*?modelAlias=(\S+)/gu)].at(-1)?.[1] ?? '';
+
+/**
+ * The environment of the probe's own `kimi --version` (before any cell): the built environment of the owned root `root` - KIMI_CODE_HOME its `home/`, the pin, and
+ * `XDG_CACHE_HOME` its `cache/` on Linux - never the inherited one (re-check of J2: it ran with the real `HOME` and `~/.kimi-code`, extracting into the real cache).
+ */
+export function versionEnv(root, { platform = process.platform, parent = process.env } = {}) {
+  const p = platform === 'win32' ? join : posix.join;
+  return builtEnv({ home: p(root, OWNED_HOME), platform, parent });
+}

@@ -61,9 +61,12 @@ internal sealed record RoundWork(
     {
     }
 
+    /// <summary>This work with what the round did not compare, said on the reviewer line — a plan read from a commit while another is checked out.</summary>
+    internal RoundWork WithUnreviewed(string unreviewed) => this with { Unreviewed = unreviewed };
+
     /// <summary>
     /// This work with every launch stamped as <paramref name="key"/>'s round — each reviewer's first launch and its
-    /// repair, the security lane's included (story 4.1 of todo/PLAN_every_round_is_counted.md). A retry launches the
+    /// repair, the security lane's included (story 4.1 of research/PLAN_every_round_is_counted.md). A retry launches the
     /// same invocation, a follow-up is derived from it, and a conversation's later turn is stamped by the turn loop, so
     /// this ONE stamp reaches every launch the round makes.
     /// </summary>

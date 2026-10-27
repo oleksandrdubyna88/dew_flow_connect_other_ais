@@ -33,7 +33,8 @@
 > (started 1 of 1 when trusted). Also: the inventory is DATA only — admission by name, no manifest (§18); the auto-update
 > preflight never runs under `kimi acp` and the pin works where it does run (§20); `/usage` is cumulative across
 > `session/load` (§23); the person's home was byte-identical but for `credentials/` across all 53 owned-home launches (§24).
-> M-K14 was NOT run (the owner's answer: later).
+> M-K14 was NOT run (the owner's answer: later). **M-K14 note, 2026-10-20 (D6 of `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`):** the Kimi exit 77s recorded since
+> 2026-10-16 cannot be classified and may be quota answers — see the note at the end of §25 and the capture step in §31.
 >
 > **E4.3's cell (§27, 2026-10-15): M-K15 — the shim's inheritable tree hold, with the real Kimi 2.1.1.** 16 launches of the shipped
 > `coai-mcp --ask-acp --profile kimi` on owned homes (12 in the recorded run, 4 smoke runs of the script). **The hold gates:** after a normal end
@@ -44,7 +45,7 @@
 > sign-in (2 of 2 refreshing launches, none of 13 others observed) — `KimiHome`'s allowlist did not admit it and would have refused the next launch
 > on that home; it does now.
 >
-> **E5.1's cell (§29, 2026-10-16): M-K16 — `session/load` as the shim will use it.** 12 paid turns and 3 unpaid loads, turn 1 always through the shipped shim:
+> **E5.1's cell (§33, 2026-10-16): M-K16 — `session/load` as the shim will use it.** 12 paid turns and 3 unpaid loads, turn 1 always through the shipped shim:
 > the load result **announces the `model` option** (the home's one model, 9 of 9 loads); Kimi **replays the history** as `session/update` during the load,
 > BEFORE its response (the earlier answers verbatim, 9 of 9); an unknown id is JSON-RPC **-32602** `Invalid params: Unknown sessionId: <id>` (3 of 3, 30–48 ms);
 > three turns keep one id and a cumulative total that only rises, the output delta equal to that turn's `outputTokens` (6 of 6 loaded turns). Each fact took
@@ -575,9 +576,14 @@ lock handle and outlives `kimi` (measured by E4.3 on 2026-10-15, §27: nothing d
 every turn's end can cut a refresh); and a sign-in folder on a volume with no drive letter (an admin VHD mount), which
 `GetFinalPathNameByHandle` may not name — refused fail-closed by E4.2, unmeasured.
 
+**M-K14 note, 2026-10-20 (`todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` D6).** Every Kimi exit 77 recorded since 2026-10-16 is **unclassifiable**: coai kept only the cure,
+never the vendor's text, and no `kimi-code.log` survives (the homes are removed after each round). On 2026-10-18/19 they coincided with a 100 %-used 5-hour quota, and over ACP a
+quota answer may have been filed as `not_signed_in`. So a quota cause existed and cannot be excluded; the refresh-rotation suspicion is neither confirmed nor cleared by these
+exits. From the first coai-mcp release after 0.62.0 that carries story 2 of that plan (the line `— the vendor said: …`), the vendor's sentence is kept, and a new exit 77 can be read.
+
 Added 2026-10-15 (E4.3 review): **many `device_id`s per sign-in** — each refreshed owned home writes a NEW `device_id` (§27), so one sign-in accumulates one id per home that refreshed; whether many ids per sign-in matter to the vendor is unmeasured.
 
-Added 2026-10-16 (M-K16, §29): whether `session/load` replays `tool_call` updates (no measured turn used a tool); a `session/new` on the same owned home side by side with the load's announcement; a load after the conversation's `cwd` folder was removed or renamed; a conversation of more than three turns; a load by a second process while the first still runs.
+Added 2026-10-16 (M-K16, §33): whether `session/load` replays `tool_call` updates (no measured turn used a tool); a `session/new` on the same owned home side by side with the load's announcement; a load after the conversation's `cwd` folder was removed or renamed; a conversation of more than three turns; a load by a second process while the first still runs.
 
 ## 26. What this changes in the plan (for the plan's owner to decide)
 
@@ -708,7 +714,342 @@ awaiting), a round with two Kimi rows or a Kimi row beside another vendor, a ret
 
 Spend: 4 paid launches, 4 answered; nothing was refused.
 
-## 29. M-K16 — `session/load` as the shim will use it: it announces the model, it REPLAYS the history before it answers, an unknown id is `-32602`, and three turns stay cumulative (2026-10-16)
+## 29. Kimi Code 2.2.0 on Linux (WSL2) — cells L-K1, L-K2, L-K3, L-K4, L-K6, L-K7, run for `research/PLAN_kimi_and_vibe_on_linux.md` E4 (2026-10-16)
+
+> Scout run, epic E4 of `research/PLAN_kimi_and_vibe_on_linux.md`. WSL2 Ubuntu (kernel 6.18, x86_64, ext4 under `/tmp` and `~`),
+> Kimi Code **2.2.0** (`~/.kimi-code/bin/kimi`, dynamically linked ELF), ripgrep 14.1.0 at `/usr/bin/rg`, `fd` in `~/.kimi-code/bin`.
+> **8 paid turns** (T1, T2, T3, T5 answered; K4-none answered; K4-parent, K4-pid, K4-group cut by the kill). All free calls were
+> `kimi --version`, `kimi acp --help`, and `/proc` reads.
+>
+> How it ran. Every launch: one script FILE, `env -i`, built environment `PATH=~/.kimi-code/bin:/usr/bin:/bin`,
+> `HOME=<owned os folder>`, `KIMI_CODE_HOME=<owned home>`, `KIMI_CODE_NO_AUTO_UPDATE=1`. The owned home held a coai-shaped `config.toml`
+> (the person's OAuth slot name read from his `config.toml`, no secret) and `credentials` as a **symlink** to `~/.kimi-code/credentials`.
+> The client was a small ACP client (`kt2.mjs`, Node) that answers every permission request with `reject_once` and serves
+> `fs/read_text_file` only inside the working folder — the same decisions as the shim. It started `kimi acp` with
+> `detached: true` (so the agent is its own process-group and session leader) and handed it the lock file as **fd 3**.
+> Two read-only observers ran during every turn: a `/proc` sampler every 50 ms (pid, parent, group, session, `comm`, `exe`, open lock fd)
+> and an `inotify` watcher on the person's `~/.kimi-code` (recursive), the credentials folder, `~/.cache/kimi-code`, the owned OS folder
+> and the top of `~`. Before every launch: no `kimi` process by `comm` **and** by `/proc/<pid>/exe` (see §L-K6 for why both).
+> Before and after every launch: names, sizes, modes, mtimes (never content) of the credentials folder, of the person's whole
+> `~/.kimi-code`, of the owned home and of the top level of `~`.
+> Nothing was deleted, truncated or moved. Nothing was created outside `/tmp/testsToDelete-wsl-kimi-r1/`. The person's TUI was not started.
+> `kimi login` was never run. No credential content was read, copied or printed.
+
+### 0. Predictions (written before the runs)
+
+| Cell | Prediction |
+|---|---|
+| L-K1 | `kimi --version` and `kimi acp --help` answer in the built environment. Kimi finds `/usr/bin/rg` on the built `PATH`, so no `bin/` appears in the owned home. |
+| L-K2 | Signed in through the link. A refresh, when one is due, is written into the person's credentials folder (through the link). Kimi does not replace the link and does not change the target's mode. |
+| L-K3 | `os/` stays EMPTY under `HOME` alone (the plan's DL11 premise). Kimi's own data goes to the owned home. Kimi reads `$HOME/.agents/…` of the redirected `HOME`, so the person's `~/.agents` is out of reach. |
+| L-K4 | `kimi acp` has a short-lived child for a Grep (`rg`), in the agent's process group. Only the agent holds the lock fd. No descendant is another `kimi`. Killing the agent by pid leaves the child; killing the group kills it. |
+| L-K6 | `comm` of `kimi acp` is `kimi`; the parent chain reaches the driver. |
+| L-K7 | Every write arm is refused. `session/load` works on Linux in the M-K16 shape. |
+
+### 1. L-K1 — the live launch, and rg
+
+| Item | Result |
+|---|---|
+| `kimi --version`, built environment, owned home | `2.2.0`, exit 0, free |
+| `kimi acp --help` | `Usage: kimi acp [options]`, options `--login`, `--region`, `-h`. No other flag. |
+| `initialize` | `agentInfo` = `Kimi Code CLI` 2.2.0, `loadSession: true` |
+| Grep turn, `rg` on the built `PATH` (K4-none, T1 and the three cut turns) | `rg` ran as `/usr/bin/rg --hidden --max-columns 500 --null --glob !.git --glob !.svn --glob !.hg --glob !.bzr …`, a DIRECT child of `kimi acp`. The Grep result came back. |
+| `bin/` in the owned home | **absent after all 8 launches** (the listing of the home never shows a `bin`) |
+| Not run | the arm without `rg` on `PATH` (where the lazy download lands). The owner asked only for the arm with `rg`. |
+
+**Verdict L-K1: holds.** With `rg` on the built `PATH` nothing is downloaded and the owned home gets no `bin/` — M-K12 (c) on Linux.
+**Confirms DL5 / DL12** (the person's tool on the built `PATH`; the install button provides `rg`).
+**Adds one fact the plan does not have: a Grep has a 20-second timeout inside Kimi.** K4-none: `rg` was alive from 7.8 s to 27.7 s and
+the Grep came back as *"timed out after 20 seconds"*; Kimi itself ended `rg` (the agent was alive). A review with a big tree can therefore
+see a failed Grep that is not a coai fault.
+
+### 2. L-K2 — sign-in through the symlink into the 0700 folder
+
+The person's credentials folder before the first turn (names only): one directory `credentials` (mode **700**) holding ONE file
+`kimi-code-env-<hex>.json` (1556 bytes, mode **600**), last written 12:34 — that is, by his own TUI before it was closed.
+
+| Question | Evidence | Verdict |
+|---|---|---|
+| Is the turn signed in? | 8 of 8 launches answered or ran their tools. No sign-in error in any log. | **yes, 8/8** |
+| Does a refresh land in the person's folder? | **T1 refreshed** (the token was ~100 min old). The inotify log shows, in `~/.kimi-code/credentials/`, in one millisecond: `kimi-code-env-<hex>.json.tmp.<pid>.<rand>` CREATE → MODIFY → CLOSE_WRITE → ATTRIB → MOVED_FROM, then `kimi-code-env-<hex>.json` MOVED_TO (an atomic temp-and-rename; `<pid>` is the agent's pid). After it: same file name, same size 1556, mode 600, a NEW inode, mtime 14:15:17. The 6 later launches (no refresh due) only OPENed and read it. | **yes — through the link, into the person's folder** |
+| Does Kimi replace the link? | `find` on the owned home before/after T1 and every later turn: `credentials -> ~/.kimi-code/credentials`, **same inode**, 8 of 8 identical. | **no** |
+| Does Kimi `chmod` the target? | Folder mode **700** before and after (8 of 8); file 600 before and after. **But** the inotify log shows an `ATTRIB` event on the folder itself, at the moment of the refresh (T1 only). `ATTRIB` does not say whether it was a `chmod` or a time change; the mode did not move. The temp file also got an `ATTRIB` (its own mode, before the rename). | **mode unchanged; Kimi MAY touch the folder's attributes** (see DL6 note) |
+| Did the folder keep every file name? | After the refresh: the same ONE name. No `*.tmp.*` left behind. | **yes** |
+| Does Kimi touch the rest of the person's `~/.kimi-code`? | 8 launches: every file in `~/.kimi-code` (type, path, size, mode, mtime) identical before and after, except the credentials file in T1. The watcher saw **no** OPEN/ACCESS/WRITE on `config.toml`, `tui.toml`, `device_id`, `sessions/`, `session_index.jsonl`, `workspaces.json`; only `bin/kimi` (the exec) and `credentials/`. | **holds, 8/8** |
+| The person's own `kimi --version` afterwards | `2.2.0`, exit 0, with his real `HOME` and `KIMI_CODE_NO_AUTO_UPDATE=1`; the watcher on his `~/.kimi-code` and `~/.cache/kimi-code` saw **no event**; the file listing was identical. | **works, wrote nothing** |
+| Not done | A signed-in turn on the person's real home (it would write his `sessions/`; the run was told never to write into `~/.kimi-code`). The proof that his sign-in survived is the 6 owned-home turns that followed the refresh, all signed in through the link. | stated |
+
+A related fact: Kimi created a **0-byte file `oauth/kimi-code-env-<hex>` inside the OWNED home** at the start of T1, one second BEFORE the
+refresh. It looks like Kimi's refresh lock. If so it is per `KIMI_CODE_HOME`, not per sign-in folder: two owned homes that link the same
+credentials folder do not serialise their refreshes through Kimi. (Inference from the name, size and timing; not tested.)
+
+**Verdict L-K2: holds.** **Confirms DL6** (a directory symlink into the person's folder signs in, refreshes in place, is not replaced,
+the folder keeps its names and its 0700). **Confirms the need for DL7's coai-owned lock** (Kimi's own lock does not cross homes).
+**One addition to DL6:** Kimi writes a temp file INSIDE the person's folder and renames it, so the folder must stay writable for the
+user, and `HeldFile`/the sweeps must never treat a `*.tmp.*` name there as theirs.
+
+### 3. L-K3 — `HOME` → `os/` alone
+
+Four fresh OS folders (`os-b`, `os-c`, `os-d` for T1/K4, T2, T3; the free `--version` also filled `os`).
+
+| Question | Evidence | Verdict |
+|---|---|---|
+| Does `os/` stay empty? | **No.** Every launch, even `kimi --version`, writes `~/.cache/kimi-code/native/2.2.0/linux-x64/<sha256>/…` under the redirected `HOME`: **9 files, 1 988 kB**, extracted from the binary (two `.node` addons, `pi-tui`, `search-worker.mjs`, `text-build-worker.mjs`, `kap-server`, `minidb`, a `.kimi-native-entry.cjs`). 3 of 3 fresh folders (T1, T2, T3) gave the same 29 entries; the canary folder gave 34 (its 5 canary entries + the same 29). **Nothing else** lands in `os/`: no `.config`, no `.local`, no `.agents`. | **CONTRADICTS DL11's "`os/` stays empty"** |
+| What lands in the owned home? | Names only: `cache/query-store/shard-00…15/` (db.wal, db.indexes.json, db.lock, generations/), `cache/client-configs`, `device_id` (36 bytes), `logs/kimi-code.log`, `oauth/kimi-code-env-<hex>` (0 bytes), `session_index.jsonl`, `sessions/.index-dirty/…`, `sessions/.index-cache/`, `sessions/wd_<name>_<hash>/session_<id>/{agents/main/wire.jsonl, logs/, notify/state.json, state.json}`. Same families as Windows §18. | as Windows |
+| Does `XDG_CACHE_HOME` move the cache? | Free run: `HOME=<empty>`, `XDG_CACHE_HOME=<owned folder>`, `kimi --version` → the cache went to `<owned>/kimi-code/native/2.2.0/linux-x64/…`; the `HOME` folder stayed **empty (0 entries)**. | **yes — a way to keep `os/` empty** |
+| Does Kimi read `$HOME/.agents/AGENTS.md` and `skills/`? | Canary in an OWNED fake home (`os-e/.agents/AGENTS.md` and `os-e/.agents/skills/canary-skill/SKILL.md`, both mine): the inotify log shows OPEN + ACCESS of `AGENTS.md`, of `skills/` and of `SKILL.md`; the answer to "list the canary words" was **both words**. So Kimi on Linux loads `$HOME/.agents/*` of whatever `HOME` it is given. | **reads it — from the redirected HOME** |
+| Is the person's real `~/.agents` read? | `~/.agents` **does not exist** on this machine, so there is nothing to read or to canary. The canary write into the real `~/.agents` was **not approved and not done**. By mechanism, `HOME=os/` makes `$HOME/.agents` mean `os/.agents`; no launch accessed the person's `~/.kimi-code` outside credentials either. | **closed by the redirect (by mechanism; the real-folder canary is NOT run)** |
+| Did anything else touch the person's `~` during the runs? | The watcher saw ~640 OPEN/ACCESS of `~/.gitconfig` and 18 of `~/.bashrc` over the whole session. These are NOT Kimi: Kimi's `HOME` is the owned folder, and the events are spread over the machine's other sessions (git polling, terminals). Not attributed to any process. The top-level names of `~` were identical before and after all 8 launches. | noise, stated |
+
+**Verdict L-K3: the redirect holds, the premise does not.** **CONTRADICTS DL11** at one point: `KimiHome.OsProblem` refuses an `os/` that holds
+anything (`KimiHome.cs:185-195`), and Kimi 2.2.0 puts ~2 MB of extracted native code there on its FIRST run in a fresh `HOME` — so
+the check would refuse the second launch of every conversation. **Re-decide with the owner**, two options both measured here:
+(a) admit exactly `.cache/kimi-code/native/<version>/<platform>/<sha256>/**` in `os/` (file kinds listed above); or (b) add
+`XDG_CACHE_HOME` to Kimi's built environment, pointing INSIDE the owned home (for example `<home>/xdg-cache`), which keeps `os/` empty
+and puts the cache where `KimiHome` already judges names. (b) also needs one name in the home's allowlist (the same cache path),
+but it keeps DL11's rule intact. Note what is in the cache: **code Kimi loads again** (`.node`, `.mjs`) — written by Kimi from its own
+binary, in a folder every denied-write turn cannot touch; the rule should still say it is Kimi's own data, never coai's.
+
+### 4. L-K4 — the process tree during a Grep turn, and the kill arms
+
+Prompt: one Grep, `output_mode count`, path `/mnt/c/Windows/System32` (a long search: Kimi's 20-second timeout gives a window).
+Each row is one launch.
+
+**The tree** (all four launches show the same):
+
+| Process | ppid | pgid | sid | `comm` | holds the lock fd? |
+|---|---|---|---|---|---|
+| `kimi acp` (the agent) | the driver | = its pid | = its pid (it is the leader: `detached: true`) | `MainThread` (see L-K6) | **yes, fd 3** |
+| a transient `env` | the agent | the agent's | the agent's | `env` | not read: it lived < 50 ms; seen at +0.4–0.5 s after the start in **every** launch (what it ran is not known) |
+| `/usr/bin/rg …` (during the Grep) | the agent | **its own pid** | **its own pid** | `rg` | **no** |
+
+`rg` is its own process-group leader **and** its own session leader (`pgid = sid = pid`). No descendant of the agent is another
+`kimi` (no process with `exe` = `kimi` besides the agent, in 8 launches).
+
+**The kill arms** (`kill` after `rg` was seen running for 2 s; sampler every 50 ms; lock probed from outside every 0.5 s):
+
+| Arm | The agent | `rg` | The lock |
+|---|---|---|---|
+| none (normal end) | exits 0.1 s after the answer, on stdin EOF | Kimi ended it itself at its 20 s timeout; none left | FREE after the agent's exit |
+| SIGKILL the driver ("the parent") | **exits ≈0.1 s later** (stdin EOF); was reparented once, to a WSL `Relay(<pid>)` process, then gone | **gone with it** (no survivor) | FREE ≤ 1 s after |
+| SIGKILL the agent by pid | dead | **survives it**, reparented to the same `Relay(<pid>)`; seen alive for 0.1–0.4 s, then gone. I did NOT kill it (no cleanup line). Cause not measured; a broken pipe is the likely one. | HELD only by the driver's own copy of the descriptor (not separable here); `rg` held no fd on the lock |
+| SIGKILL the agent's process group (`kill -9 -- -<pgid>`) | dead | **survives it** (own group and session), alive 0.3–0.5 s after the agent was dead, then gone | same |
+
+**Verdict L-K4.**
+- **Confirms DL8's premise**: only the agent (the direct child that inherited the fd) holds the lock descriptor; `rg` and `env` do not; no
+  descendant is a second `kimi`, so DL8's "a refresher is only ever `kimi` itself" holds for this tree. (The .NET half — L-N1 — was not part of this run.)
+- **Confirms DL9's measured reasons with the REAL Kimi, not only the fake agent**: `rg` is in its own session, so a group kill misses it; a pid
+  kill leaves it. Both leave a child alive for a moment after the agent is dead. **Softens DL9's urgency, does not remove it**: in these runs
+  the orphan `rg` ended on its own within about half a second; a child that does not write to a closed pipe would not. The subreaper rule
+  and the re-listing confirmation stay; the survivor-marker policy (the plan's longest paragraph) is not shown to be needed by anything
+  Kimi 2.2.0 did here — that is a measurement, and a wider tool set (sub-agents, background shell, MCP) was not run.
+- **New fact for DL9**: under WSL an orphan is reparented to a `Relay(<pid>)` process of the session, not to pid 1. A teardown that looks
+  for "orphans of the tree" by `ppid == 1` would miss it; the subreaper design (descendants of the SHIM by parent) is the right one.
+
+### 5. L-K6 — `comm` and the parent chain
+
+| Item | Result |
+|---|---|
+| `/proc/<pid>/stat` `comm` of `kimi acp` | **`MainThread`** — not `kimi`. Seen in every launch from the first sample (+0.01 s). |
+| after the stdin EOF (shutdown) | `comm` read **`kimi-code`** in the one sample taken then (K4-parent). |
+| `readlink /proc/<pid>/exe` | `…/.kimi-code/bin/kimi` (basename `kimi`) — stable |
+| argv | `~/.kimi-code/bin/kimi acp` |
+| parent chain, up to the driver and beyond | `kimi acp` ← `node` (the driver) ← `bash` ← `bash` ← `Relay(<pid>)` ← `SessionLeader` ← `init-systemd` ← `systemd` |
+| other processes on this machine with `comm` `MainThread` | all Node processes (VS Code server, `next dev`, MCP servers): `MainThread` is the JavaScript runtime's main-thread name |
+| the person's TUI | not running (closed by the owner); its `comm` was NOT re-measured. The earlier scout saw `comm` = `kimi` for it. |
+
+**Verdict L-K6: CONTRADICTS DL10 as written.** DL10 keeps `KimiNames = ["kimi", "kimi.exe"]` and matches the process NAME
+(`ForeignKimi.cs:46-48`, `IsKimi` on `Name`). On Linux that name is `comm`, and `kimi acp` reads `MainThread` (then `kimi-code`). A
+foreign-Kimi wait that reads `comm` **would not see a `kimi acp` at all**, and may or may not see the TUI. **Re-decide**: the
+Linux `ProcessEntry.Name` must come from the **basename of `/proc/<pid>/exe`** (stable `kimi`), read with the same "unreadable is
+never clear" rule (a process of another user answers `EACCES`; count it as unreadable, not as absent), with `argv[0]` as a second
+witness. The parent-chain rule for "coai's own" is unchanged and works (the chain reaches the driver/shim); the orphan direction is
+safe on WSL, because an orphan is reparented to a live `Relay` or `systemd`, whose chain never reaches the shim, so it counts as the
+person's — the safe direction. `coai-mcp`'s own `comm` was not measured here (a .NET AOT binary); measure it before relying on `CoaiNames`.
+My own pre-launch guard checked both `comm` and `/proc/<pid>/exe` for this reason.
+
+### 6. L-K7 — write arms and `session/load`
+
+**Write arms** (the client answers every permission request with `reject_once`, as the shim does):
+
+| Turn | Tool | Outcome |
+|---|---|---|
+| T1 | `Write` `written.txt` | permission asked, rejected; tool `failed`; the answer says "the approval request was rejected"; no file |
+| T2 | `Bash` `echo hi > written.txt` | permission asked, rejected; tool `failed`; no file |
+| T2 | `Write` `written2.txt` | permission asked, rejected; tool `failed`; no file |
+
+The working folder and the `outside/` folder held only their two starting files after all 8 launches. **Verdict: 3 of 3 write arms refused,
+nothing written** (Windows §6 on Linux). `Read` was served through `fs/read_text_file` (inside the folder only); the vendor-configuration
+paths (`AGENTS.md`, `.kimi-code/AGENTS.md`) were refused by the client boundary rule, as on Windows. `Grep` and `Glob` read the disk
+themselves (no `fs` call): `Grep` of `/mnt/c/Windows/System32` was NOT stopped by the boundary — the known M-K6 behaviour holds on Linux
+(Kimi asked the client only for the three config-file names above).
+
+**`session/load` of T1's session in a new process, new OS folder (T3):**
+
+| Item | Result |
+|---|---|
+| the session store | found in the owned home; the same session id as turn 1 |
+| `session/load` result | keys `configOptions`, `modes`. **No `models` key.** The model is announced as `configOptions[id = model].currentValue` = `kimi-code/k3-256k` (the `default_model` of the coai-written `config.toml`). |
+| history before the load response | **13 `session/update` messages were replayed** before the response: `user_message_chunk` 2, `agent_thought_chunk` 2, `tool_call` 4, `tool_call_update` 4, `agent_message_chunk` 1 |
+| the loaded session remembered | "The first marker was `MARKER-INSIDE-K7 → ok`, and Write was not allowed" — yes, both |
+| usage | the `/usage` follow-up on the same connection answered `Context: 20607 / 262144 tokens (8%)` and `Session total: 60940 input, 373 output`, which holds turn 1's calls AND turn 3's — **cumulative** (a single turn here is ~20 000 input) |
+| time | the load answered in 223 ms |
+
+**Verdict L-K7: holds on Linux.** The M-K16 shape is the same as Windows, except that the load result announces the model through
+`configOptions`, not through a `models` object: the shim's reader must look there (a check, not a change of design). **Confirms S5's
+`UsageIsCumulative = true` on Linux.**
+
+### 7. What holds on Linux, what does not (this run)
+
+| Plan decision | Cell | Verdict | In one line |
+|---|---|---|---|
+| DL6 — credentials by directory symlink | L-K2 | **CONFIRMED** | signs in 8/8; refresh written in place (temp + rename) in the person's folder; link not replaced; mode 700 kept; names kept; Kimi itself may touch the folder's attributes |
+| DL8 — the tree hold covers the shim and `kimi` | L-K4 | **CONFIRMED (premise); L-N1 still needed** | only the agent holds the fd; no descendant `kimi`; `rg`/`env` hold nothing |
+| DL9 — teardown by subreaper and identity | L-K4 | **CONFIRMED, with a softer urgency** | `rg` (own session) survives pid and group kills; it ended in ≤0.5 s on its own; orphans go to a `Relay`, not pid 1 |
+| DL10 — `/proc` listing for the foreign-Kimi wait | L-K6 | **RE-DECIDE** | `comm` of `kimi acp` is `MainThread`; match on `/proc/<pid>/exe` instead |
+| DL11 — `HOME` alone | L-K3 | **RE-DECIDE `os/` must stay empty** | the redirect holds; Kimi extracts ~2 MB of native code into `$HOME/.cache` on first run; `XDG_CACHE_HOME` moves it |
+| DL5 / DL12 — rg on the built PATH | L-K1 | **CONFIRMED** | `/usr/bin/rg` found, no `bin/` in the home |
+| DL7 — own lock key | L-K2 | **SUPPORTED** | Kimi's own refresh lock is per `KIMI_CODE_HOME` (inferred) |
+
+### 8. Not measured / left over
+
+- L-K1's arm without `rg` (where the lazy download lands).
+- The canary in the person's REAL `~/.agents` (not approved; the folder does not exist on this machine).
+- L-N1 (.NET `FileShare` on Linux) and L-N2/L-N3 (the subreaper tests): not Kimi cells.
+- Whether a Kimi child that does NOT end on a broken pipe exists (sub-agents, background shell, a user-level MCP server were not run).
+- What the transient `env` child at +0.4 s runs.
+- n = 1 per kill arm (the Windows cells were 3 of 3). The refresh was seen once (T1); the token is rotating, so a second one was not forced.
+- The `ATTRIB` on the credentials folder: `chmod` or time change is not separable with `inotify`.
+- Folders left for the owner to remove by hand (nothing was deleted): everything under `/tmp/testsToDelete-wsl-kimi-r1/` —
+  `home/`, `os/`, `os-b/`, `os-c/`, `os-d/`, `os-e/` (the canary), `os-xdg/`, `xdgcache/`, `repo/`, `outside/`, `locks/`, `logs/`.
+
+## 30. L-N1 — .NET's inheritable hold on Linux is SHARED, and the descriptor IS inherited (2026-10-16, `research/PLAN_kimi_and_vibe_on_linux.md` DL8; A2 §3)
+
+The question: `HeldFile.Take(path, inheritable: true)` opens with `FileShare.None | FileShare.Inheritable`. On Unix .NET turns a share mode into an advisory `flock`. Is the combined mode still an EXCLUSIVE lock, and does the descriptor reach a child started after the take? Not a Kimi cell: a test, in real child processes (`FakeCli hold-file` for the bare primitive, `FakeCli tree-hold` for the product's `KimiCredentialsLock.HoldTree`), on the `ubuntu-latest` job of `ci.yml`.
+
+**Prediction** (from `SafeFileHandle.Unix.cs`, .NET v10.0.11, read before any run): `LOCK_EX` only when `share == FileShare.None` exactly, otherwise `LOCK_SH`; `O_CLOEXEC` only when `Inheritable` is absent. So (a) exclusive: FAIL; (b) inherited: hold.
+
+**Observed.**
+
+| Run | Arm | Result |
+|---|---|---|
+| CI run 38923199105, job `build · test · family checks` (the primitive, `HeldFileInheritableOnLinuxTests`) | (a) non-inheritable take beside an inheritable hold is Busy | green |
+| same | (a) a SECOND inheritable take is Busy (S-K4) | **RED**: `Expected string to be "busy" … because a second take of an inheritable hold succeeded — the lock is shared, not exclusive (S-K4), but "taken"` |
+| same | (b) the hold outlives its opener's `SIGKILL` while a child started after the take lives (S-K5) | green |
+| CI run 38929393936 (`TheTreeHoldIsExclusiveAndInheritedOnLinuxTests` over `HoldTree`, A2's test commit before the Linux key existed) | all arms | red for the key, not for L-N1: the shim answered `Unusable … cannot be named by its handle` (the Linux key was empty); the lifted `KimiCredentialsLockTests` skips failed the same way |
+
+Both predictions held: the inheritable take is a SHARED lock (a second shim on the same sign-in would have been let in — two refreshers of a rotating token), and the descriptor is inherited.
+
+**Decision (A2 §3.3, row "red / any").** `HeldFile.Take(path, inheritable: true)` on Linux is native: `open(path, O_RDWR|O_CREAT|O_NOCTTY, 0600)` — no `O_CLOEXEC` — then `flock(LOCK_EX|LOCK_NB)`, through `LibraryImport("libc")`, in `LinuxHeldFile`, behind the unchanged `Hold` union (`EWOULDBLOCK` → `Busy`, any other errno → `Unusable`). A `FileStream` built over the descriptor takes no second lock, so .NET's own non-inheritable `LOCK_EX|LOCK_NB` probes refuse against a native holder and the native take refuses against a .NET one. Every other take, on every host, stays .NET's. The `HeldFile` remark says so.
+
+**After the native take** (CI run 38960351979, the first with all of A2; ubuntu job): `HeldFileInheritableOnLinuxTests` (3), `TheTreeHoldIsExclusiveAndInheritedOnLinuxTests` (3) and the three lifted `KimiCredentialsLockTests` (`TheTreeHold_OutlivesItsOpener_WhileAChildLives`, `AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold`, `TheGateAlone_DoesNotOutliveItsOpener_…`) were green, with `TwoSpellingsOfOneFolder_GiveOneKey_…` (S-K3), `ABindMountedSpelling_IsTheSameKey` (S-K11) and every `KimiLockRetirementTests` arm. The two ubuntu failures of that run were this work's own and are fixed in the next commit: the Linux listing read `ESRCH` from a process that exited mid-read as "unreadable", and `JunctionsUnix.MakeLink` did not make a missing parent folder.
+
+What the hold covers on Linux is unchanged from §29: the shim and `kimi`, the direct child that inherited the descriptor; not a grandchild `kimi` starts the ordinary way (L-K5). That is enough while the refresher is `kimi` itself (L-K4); what the hold cannot see, A3's survivor marker must.
+
+**L-N1 after the join, and L-N2 / L-N3 (E5 integration, 2026-10-17).** The `/proc/locks` pin (`L_N1a_ProcLocks_NamesTheKindOfFlockTheInheritableHoldTook`) read `READ` while .NET took the lock; with `LinuxHeldFile` in the tree it now asserts `WRITE` (`LOCK_EX`), and it is green on Linux.
+
+L-N2 and L-N3 were measured by A3's Linux tests, which run in a CHILD that is the subreaper (`FakeCli supervise-tree`, `FakeCli shim-acp`) because a test host must never become one. On A3's own branch (CI run 38969031489, ubuntu job `build · test · family checks`: 10831 tests, 1 failed, 82 skipped) the ONLY red was the L-N1 test that A2's `LinuxHeldFile` fixes; every `SupervisedTeardownLinuxTests` arm ran (none skipped) and was green:
+
+| Cell | What ran | Result |
+|---|---|---|
+| L-N2, arm 1 | a subreaper shim, a fake agent that starts a same-group child and a `setsid` child and exits first: after the teardown both are gone | green |
+| L-N2, re-listing | a grandchild born AFTER the first listing is found by the re-listing confirmation (deterministic: the spawn is held until the listing is written) | green |
+| L-N2, zombie | a grandchild that exits by itself before the teardown is reaped by the drain, is not a survivor, and leaves no marker | green |
+| L-N2, signals | the shim `SIGTERM`ed while the agent lives ends its tree; the shim `SIGKILL`ed leaves its `running` marker naming the agent | green |
+| L-N3, real-process arms | gone → cleared; alive → ended by identity → cleared | green |
+| L-N3, still-there-at-the-bound | through the reconcile seam only (nothing ignores `SIGKILL`, so no real process can stage a survivor) | green, everywhere |
+
+After the join (this branch, CI run 39028293182, dispatched on `feat/wsl-kimi-e5` with A2, A3 and the port-fix merged): ubuntu 10957 tests, **0 failed**, 81 skipped (Windows-only arms); the Windows, macOS and extension jobs green. The joined seam is exercised on Linux by `OnLinux_TheShimsHold_IsSupervised_WithoutAnyFlag` and by the A2 `KimiShimHold` tests running over the product's own gate.
+
+What the first join run on Linux found (one red, fixed): `JunctionsTests.ATargetOnADrvfsMount_IsRefused_AndNothingIsMade` named a fake mount point, but the port-fix's `MountLocality` now asks the real `statx` for the mount of the path (id 27, not in the stand-in table) and refuses what it cannot prove — correct for the product, wrong for the stand-in. `Junctions.StandInMountInfo` takes the identity the kernel would give; the test passes `NotAsked`.
+
+DL10, re-decided 2026-10-17 on the owner's WSL2 (`systemd` and `(sd-pam)` hide `/proc/<pid>/exe` from their own account): the three shapes are pinned on the fake `/proc` (`LinuxHiddenExeTests`, 10 red before the fix); on the ubuntu job the real listing of the whole runner was readable (`HostProcessListTests.OnLinux_TheWholeMachinesListing…` no longer skips for a hidden `exe`).
+
+## 31. The quota answer over ACP — the CAPTURE STEP (written 2026-10-20, NOT yet run; `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` §5 step 1, S9)
+
+Status: **no real line has been captured yet over ACP.** (A second sighting, 2026-10-21, is from a different road: Kimi 2.3.0 in PROMPT mode — `kimi -p`, which is not the product's road — answered a spent MONTHLY quota, three of three launches, with `provider.api_error: 429 You've reached your monthly usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota` (then exit 127 and a libuv assertion — a prompt-mode crash, not the product's concern). Seen in prompt mode on 2.3.0; the ACP form is still unmeasured. Story 5 of the plan reads it as a spent quota wherever the sentence arrives.) (Since 2026-10-20 the shim also keeps a JSON-RPC error's `data` member in the reason — `message (data: …)`, redacted, capped at 2,000 — so if Kimi puts the 429 detail there, the captured line shows it and S9's "bare `Authentication required`" is no longer possible by omission.) Everything below the line "The record" is empty on purpose. This section is the procedure, so the next person does not have to
+rediscover it, and the place where the answer is written down. The fixture in `KimiAcpProfileTests` and in `ASpentKimiQuotaReadsAsAQuotaTests` (`PromptError`) is CONSTRUCTED:
+the inner sentence is the owner's own CLI line (kimi 2.2.0, 2026-10-19: "You've reached your 5-hour usage limit. Your quota will reset …"), and the wrapper
+`Authentication required: 429 …` is a hypothesis. What Kimi really sends over ACP is unknown.
+
+**When.** The first gate round after stories 1 and 2 ship in a released coai-mcp, in which a Kimi reviewer meets a spent quota. Never spend quota on purpose. Never run a probe
+while any coai session launches Kimi (a probe of `kimi acp` takes no `KimiCredentialsLock`, and two refreshers of one sign-in is the risk M-K14 names).
+**This step is written, not executed: nobody runs `kimi` for it.**
+
+**Who.** The lead of the session that owns that round. If the owner sees the quota first (on the card or in the Rounds block), the owner tells that lead; the lead does the copy.
+
+**Which lines.** Two lines hold the same text, both written by `ReviewerSummaryFactory.DescribeWhole` (the vendor's line whole, up to 4,000 characters, redacted):
+1. the ledger line of that launch — `usage.jsonl` in the data directory of the side that ran the round (the Windows side and the WSL side keep separate data directories), field `outcome`;
+2. the coai-mcp log line `reviewer kimi/<role> FAILED after …s: …` in `<data dir>/<side>/logs/<UTC day>/`.
+The text to copy is what follows ` — the vendor said: `. Copy it with the tool, do not retype it.
+
+**How the first real line is checked against the redaction pattern (the real Moonshot id shape is NOT measured).** The `moonshot-id` pattern (`Redaction.cs` and its twin in
+`src_vs_code/src/notifications.ts`) takes `org-` or `ak-` followed by 8–4096 letters, digits, `_` and `-` with at least one digit in the first 128 (the whole run is masked; widened 2026-10-22 from letters and digits; an id with NO digit is still not matched). Before the line goes anywhere:
+1. Look at the copied line. Anything shaped like an account id (`org-…`, `ak-…`, or any long opaque token next to the word "account") must already read `[redacted]` (`Redaction.Redacted`) — the ledger and the log are
+   written through the redactor, so an id that is still readable there was NOT matched. That is a defect in the pattern, not in the copy.
+2. If an id is readable: write down only its SHAPE in this section (prefix, length, the character classes it uses — letters, digits, `_`, `-`, upper case), never the id. If the real id has no digit,
+   or contains `_` or `-`, the pattern is wrong. Widen it in both halves (C# and TypeScript) with a test in each, in the same change, before anything else is recorded.
+3. If every id is already redacted, write `moonshot-id matched: yes` in the record.
+4. Then replace by hand every remaining account detail in the line with `org-REDACTED` / `<ak-REDACTED>`. **Never write a real id, a token, an e-mail, a name or any credential content into
+   this repository** — not in this section, not in a test, not in a commit message, not in a plan.
+
+**How it becomes the fixture.** (1) Fill "The record" below: date, Kimi version, round id, the redacted line, and the pattern check. (2) Replace the constructed envelope in
+`KimiAcpProfileTests` and `PromptError` in `ASpentKimiQuotaReadsAsAQuotaTests` with the real inner text. (3) Put the real line in the `observed` row of `GateReportingTests` for
+`reached your 5-hour usage limit`. (4) Re-run the Kimi profile tests, `GateReportingTests` and `ASpentKimiQuotaReadsAsAQuotaTests`.
+
+**If the line is S9's outcome** — a bare `Authentication required`, with no 429 text — record exactly that in "The record", do NOT widen the sign-in cure, and say in the plan that D1's quota row never
+fires over ACP: `not_signed_in` is then what the vendor said, and the kept sentence is the only place the truth shows.
+
+**Promotion.** The plan is promoted from `todo/` to `research/` only after this record is filled (plan §7, item 1). Until then its status line says: stories 1–4 shipped, capture pending.
+
+### The record
+
+| Item | Value |
+|---|---|
+| Date (UTC) | *not captured yet* |
+| Kimi version | *not captured yet* |
+| Round id | *not captured yet* |
+| The line (after ` — the vendor said: `, ids redacted by hand) | *not captured yet* |
+| `moonshot-id` matched the real id | *not captured yet* |
+| Outcome (quota text over ACP / S9: bare sign-in) | *not captured yet* |
+
+## 32. Kimi Code 2.2.0 on Windows — what was re-measured, and what was not (2026-10-20)
+
+Asked by the owner on 2026-10-20, because `providers` warned that Kimi 2.2.0 is not a version coai has measured. Kimi Code
+**2.2.0** (self-updated from 2.1.1), Windows 11, the SHIPPED shim `coai-mcp 0.62.0` (the extension's own binary), the same
+default model `kimi-code/k3-256k`. Run in a window with no other `kimi` process on the machine (the refresh token rotates;
+both other sessions held their Kimi rounds). 12 + 52 + 41 launches. Every value below is copied from the probe scripts' own
+result tables of those three runs (kept outside the repository, as for §27).
+
+**Re-measured on 2.2.0 — the same final outcome as 2.1.1 in each cell; intermediate runs differ where the row says so (M-K11's Grep + Glob rung):**
+
+| Cell | Result on 2.2.0 |
+|---|---|
+| M-K15 tree hold (§27), 4 arms × 3 | normal and normal-with-tools: both lock files free 153–164 ms after the shim's exit; shim killed: held while `kimi` lived, free 0–1994 ms after `kimi`'s own exit; killed during `rg`: `kimi` took ~5.1–5.2 s to end, free at once after it. No process of Kimi's outlived it; the credentials folder's names intact, not rotated. |
+| M-K11 owned-home inventory, 3 runs per step | the junction alone → `not_signed_in` (77); + `config` → `model_not_offered` (65); + `config-models` → answered. Grep + Glob inside the working folder on `config` + `config-models`: 2 of 3. The miss was the model's own malformed Grep call (an empty `type` parameter, retried in the answer), not a missing file. The probe's ladder then added the person's `bin` (it placed `rg.exe`/`fd.exe` in the owned home itself) and got 3 of 3. **The needed set is the same as 2.1.1: `config`, `config-models` (§17).** `bin` was admitted by the ladder, not shown to be needed. Kimi wrote no `bin/` into the owned home in any run without it: `rg.exe` came from `PATH`. |
+| M-K11c, 3 runs | 4 files made; unchanged after `kimi --version` (2.2.0); 16 after turn 1, 24 after a second start — Kimi's own session store. |
+| M-K13, 3 launches | with `KIMI_CODE_NO_AUTO_UPDATE=1`: no `updates/`, version 2.2.0 → 2.2.0; the `-p` control without the variable wrote `updates/latest.json` and `rollout.log`. The pin holds. |
+| M-K8b, 3 runs | an owned home whose `credentials` is a junction to the person's answers; nothing copied. |
+| M-K9e (untrusted, no `.git`) | the project's hooks (`config.toml`, `local.toml`) and both project MCP files NOT loaded, 3 of 3; project AGENTS.md, skills and sub-agents ARE loaded, as on 2.1.1. Trusted control: both MCP files load. |
+| M-K7b | `kimi-code/k3` and `kimi-code/kimi-for-coding` answer; `kimi-for-coding-highspeed` → 403 (subscription), as on 2.1.1. |
+| M-K5b, 3 runs | `/usage` after `session/load` prints only `Context: …` and `Session total: …` — cumulative over the session, and no plan-quota line. |
+
+**NOT measured on 2.2.0, so `KimiAcpProfile.MeasuredVersions` stays `["2.1.1"]`:** the write refusals through the shim
+(M-K3, M-K4) and the reads (M-K6). Their shim arms were never given an owned root (`--home`, `--persons-bin`, `--locks`),
+so the shipped shim refuses them by design (`launch failed: no owned root`); only their `-p` positive controls ran — they
+show Kimi writes when nothing refuses, not that coai refuses. M-K12 (the OS-home redirect, writes canaries into the real
+`~/.agents`) needs the owner's permission again. M-K8, M-K9 and M-K10 copy the credentials folder into a scratch home —
+skipped, because a copy duplicates a refresh token that rotates. The script fix is owned by
+`todo/PLAN_vibe_and_kimi_runtimes_E4.md`'s session (planned after the Kimi quota fix); M-K3/M-K4/M-K6 re-run when that
+fix lands, and M-K12 when the owner allows the `~/.agents` canaries again — both in one paid window, asked for together.
+
+**The sign-in survived:** one token refresh rotated the file in place through the junction (M-K11), and one `kimi -p` turn
+on the real home answered afterwards.
+
+## 33. M-K16 — `session/load` as the shim will use it: it announces the model, it REPLAYS the history before it answers, an unknown id is `-32602`, and three turns stay cumulative (2026-10-16)
+
+> Numbered §29 while it lived on `feat/kimi-consultant`; renumbered §33 when that branch merged with main (2026-10-27), where §29–§32 were
+> already taken (§29 is Kimi on WSL2).
 
 E5.1 of [PLAN_vibe_and_kimi_runtimes_E5.md](../todo/PLAN_vibe_and_kimi_runtimes_E5.md), run by a scout with the owner's yes for the 12 paid turns. Branch `feat/kimi-consultant`,
 Windows 11, Kimi Code 2.1.1, model `kimi-code/k3-256k`. The raw rows (two JSON files) stay outside the repository: they hold local paths. This section is their redacted summary.

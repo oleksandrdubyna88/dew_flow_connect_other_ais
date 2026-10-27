@@ -177,7 +177,7 @@ public sealed class VibeHomeTests : IDisposable
         folders.Should().Equal("logs/session/plugins/data/**");
         varying.Should().Equal(ListIn(script, "VARYING"), "the JSON's varying is the script's constant verbatim");
         folders.Should().Equal(ListIn(script, "VARYING_FOLDERS"), "and so is varyingFolders");
-        manifest.GetProperty("versions").EnumerateArray().Single(v => v.GetProperty("version").GetString() == "2.26.1")
+        manifest.GetProperty("versions").EnumerateArray().Single(v => v.GetProperty("version").GetString() == "2.26.1" && v.GetProperty("platform").GetString() == "win32")
             .GetProperty("deepestChild").GetInt32().Should().Be(156, "134 persisted + 22 for Vibe's atomic-write wrapper (RESULTS §27)");
     }
 
@@ -356,6 +356,93 @@ public sealed class VibeHomeTests : IDisposable
         Refusal().Should().Contain("linked").And.Contain("link");
     }
 
+    // ---- the ONE admitted link (DL2 of research/PLAN_kimi_and_vibe_on_linux.md; A1 spec section 3.4; S-V2, S-V3, S-V4)
+
+    private const string Persons = "/home/p/.vibe/.env";
+
+    private static AdmittedLink Admitted => new(".env", Persons);
+
+    /// <summary>A FILE symlink — Windows needs a privilege a test machine often lacks, and the Linux CI job always has.</summary>
+    private static void FileLink(string link, string target)
+    {
+        try
+        {
+            File.CreateSymbolicLink(link, target);
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException)
+        {
+            Assert.Skip($"this OS refuses to make a file symbolic link without privilege: {e.Message}");
+        }
+    }
+
+    [Fact]
+    public void AnEnvLinkToTheAdmittedTarget_IsAdmitted_OnBothChecks()
+    {
+        TheInventoryVibeWrites();
+        FileLink(_home.At(".env"), Persons);
+
+        VibeHome.Refusal(_home, Manifest, Entry, Admitted).Should().BeEmpty("the .env link to the person's Vibe sign-in should be admitted by the hash check");
+        VibeHome.Refusal(_home, Manifest, Admitted).Should().BeEmpty("and by the shape check");
+    }
+
+    /// <summary>S-V3: another target, a relative spelling of the same file, another name, another level, a folder — each refused, with the path.</summary>
+    [Theory]
+    [InlineData(".env", "/elsewhere/.env", "somewhere other than the sign-in file")]
+    [InlineData(".env", "../.vibe/.env", "somewhere other than the sign-in file")]
+    [InlineData(".env", "/home/p/.vibe/../.vibe/.env", "somewhere other than the sign-in file")]
+    [InlineData("logs/.env", Persons, "is a link, and an owned home is never reached through one")]
+    [InlineData("other-name", Persons, "is a link, and an owned home is never reached through one")]
+    public void AnyOtherLink_StaysRefused_NamingThePath(string link, string target, string said)
+    {
+        TheInventoryVibeWrites();
+        Directory.CreateDirectory(Path.GetDirectoryName(_home.At(link.Split('/')))!);
+        FileLink(_home.At(link.Split('/')), target);
+
+        VibeHome.Refusal(_home, Manifest, Entry, Admitted).Should().Contain($"holds {link},", $"a .env link to {target} should refuse the launch, but it was admitted").And.Contain(said);
+        VibeHome.Refusal(_home, Manifest, Admitted).Should().Contain($"holds {link},");
+    }
+
+    [Fact]
+    public void AnEnvLinkToAFolder_StaysRefused_EvenOnAHostThatAdmitsTheSignIn()
+    {
+        TheInventoryVibeWrites();
+        using var outside = TempDir.For("testsToDelete-vibe-outside-");
+        SnapshotTestKit.LinkNow(_home.At(".env"), outside);
+
+        VibeHome.Refusal(_home, Manifest, Entry, Admitted).Should().Contain("holds .env,").And.Contain("link to a folder");
+    }
+
+    [Fact]
+    public void AnEnvThatIsAFile_StaysRefused_EvenOnAHostThatAdmitsTheSignIn()
+    {
+        TheInventoryVibeWrites();
+        Write(".env", "MISTRAL_API_KEY=x\n");
+
+        VibeHome.Refusal(_home, Manifest, Entry, Admitted).Should().Contain("holds .env,", "a copy of the key in the home is never admitted").And.Contain("is not a file Vibe writes");
+    }
+
+    /// <summary>S-V4: Windows admits no link — .env as a link is refused as today, whatever its target is.</summary>
+    [Fact]
+    public void AWindowsHost_WithAnEnvLink_IsStillRefused()
+    {
+        TheInventoryVibeWrites();
+        using var outside = TempDir.For("testsToDelete-vibe-outside-");
+        SnapshotTestKit.LinkNow(_home.At(".env"), outside);
+
+        VibeHome.Refusal(_home, Manifest, Entry).Should().Contain("holds .env,").And.Contain("is a link, and an owned home is never reached through one", "a link in a Windows Vibe home should still refuse");
+        VibeHome.Refusal(_home, Manifest, AdmittedLink.None).Should().Contain("holds .env,");
+    }
+
+    [Fact]
+    public void TheSessionIndex_BesideTheSessionFolders_IsSessionData_OnEveryPlatform()
+    {
+        TheInventoryVibeWrites();
+        Write("logs/session/unified/.session-index.json", "{}");
+
+        Refusal().Should().BeEmpty("L-V-manifest: Vibe writes it on a resumed home (2.26.1 on WSL2)");
+        VibeHome.Refusal(_home, Manifest).Should().BeEmpty();
+    }
+
     [Fact]
     public void AHomeThatIsItselfALink_IsRefused()
     {
@@ -392,10 +479,57 @@ public sealed class VibeHomeManifestTests
         var manifest = VibeHomeManifest.Builtin.Should().BeOfType<VibeManifestLoad.Loaded>().Subject.Manifest;
 
         manifest.PinnedPrefix.Should().Be("logs/session/plugins/");
-        var entry = manifest.For("2.26.1").Should().ContainSingle().Subject;
-        entry.Pinned.Should().HaveCount(12).And.OnlyContain(file => file.Path.StartsWith(manifest.PinnedPrefix, StringComparison.Ordinal) && file.Sha256.Length == 64);
-        manifest.Varying.Should().Contain([".connector_bootstrap_cache.json.lock", "trusted_folders.toml", "logs/session/unified/*/**"]);
+        foreach (var platform in new[] { "win32", "linux" })
+        {
+            var entry = manifest.For("2.26.1", platform).Should().ContainSingle($"one entry for 2.26.1 on {platform}").Subject;
+            entry.Pinned.Should().HaveCount(12).And.OnlyContain(file => file.Path.StartsWith(manifest.PinnedPrefix, StringComparison.Ordinal) && file.Sha256.Length == 64);
+        }
+
+        manifest.Varying.Should().Contain([".connector_bootstrap_cache.json.lock", "trusted_folders.toml", "logs/session/unified/*/**", "logs/session/unified/.session-index.json"],
+            "the session index is session data on every platform (L-V-manifest)");
         manifest.For("2.27.0").Should().BeEmpty("a version nobody ran the script for is not qualified");
+        manifest.Known.Should().Be("2.26.1 (win32), 2.26.1 (linux)", "the warning and the refusal name each measured version with its platform");
+    }
+
+    /// <summary>
+    /// A field the client omitted is NULL whatever its initializer says (doctrine 4a): an explicit <c>"platform": null</c>, a blank one and a
+    /// hand-made entry given null all read as win32 — the normalisation is where the value is READ, not at one call site.
+    /// </summary>
+    [Theory]
+    [InlineData(""" "platform": null, """)]
+    [InlineData(""" "platform": "", """)]
+    [InlineData(""" "platform": "  ", """)]
+    [InlineData("")]
+    public void AnEntryWhosePlatformIsNullBlankOrAbsent_ReadsAsWin32(string field)
+    {
+        var json = $$"""{"pinnedPrefix":"logs/session/plugins/","varying":["vibehistory"],"versions":[{"version":"2.26.1",{{field}}"pinned":[{"path":"a","sha256":"1111111111111111111111111111111111111111111111111111111111111111"}]}]}""";
+
+        var manifest = VibeHomeManifest.Parse(json).Should().BeOfType<VibeManifestLoad.Loaded>().Subject.Manifest;
+
+        manifest.For("2.26.1", "win32").Should().ContainSingle("an entry whose platform is null or blank was not read as win32");
+        manifest.Known.Should().Be("2.26.1 (win32)");
+    }
+
+    [Fact]
+    public void AnEntryHandedANullPlatform_ReadsAsWin32()
+    {
+        new VibeHomeEntry("2.26.1", []) { Platform = null! }.Platform.Should().Be("win32");
+    }
+
+    /// <summary>S-V16 (DL3): an entry with no platform reads as win32, so an older manifest or a hand-made entry keeps its meaning.</summary>
+    [Fact]
+    public void AnEntryWithNoPlatform_ReadsAsWin32_AndTheShippedLinuxHashesDifferFromWindows()
+    {
+        const string json = """{"pinnedPrefix":"logs/session/plugins/","varying":["vibehistory"],"versions":[{"version":"2.26.1","pinned":[{"path":"a","sha256":"1111111111111111111111111111111111111111111111111111111111111111"}]}]}""";
+
+        var manifest = VibeHomeManifest.Parse(json).Should().BeOfType<VibeManifestLoad.Loaded>().Subject.Manifest;
+
+        manifest.For("2.26.1", "win32").Should().ContainSingle("an entry without a platform was not read as win32");
+        manifest.For("2.26.1", "linux").Should().BeEmpty();
+
+        var shipped = VibeHomeManifest.Builtin.Should().BeOfType<VibeManifestLoad.Loaded>().Subject.Manifest;
+        shipped.For("2.26.1", "linux")[0].Pinned.Select(file => file.Sha256).Should().NotEqual(shipped.For("2.26.1", "win32")[0].Pinned.Select(file => file.Sha256),
+            "L-V7: 11 of the 12 plugin files hash differently on Linux; a Linux 2.26.1 checked against the win32 hashes would be refused");
     }
 
     [Theory]

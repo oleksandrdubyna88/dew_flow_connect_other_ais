@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Processes;
+
 namespace CoaiMcp.Runners.Acp;
 
 /// <summary>One turn to ask of an ACP agent: where to start it, what to start it in, which model, the prompt, and how long it has.</summary>
@@ -80,7 +82,7 @@ public sealed record AcpReadRecord(string Path, bool Served, string Reason);
 /// <param name="Refusals">Every permission request, each refused.</param>
 /// <param name="ToolCalls">Every tool call announced, for the trace.</param>
 /// <param name="Reads">Every read asked for, served or refused.</param>
-/// <param name="StdErr">The agent's stderr, bounded — where a CLI writes its own diagnosis.</param>
+/// <param name="StdErr">The agent's stderr, bounded — where a CLI writes its own diagnosis. The head that was kept, with no truncation sentence of ours in it; <see cref="StdErrTruncated"/> says whether it was cut.</param>
 /// <param name="AgentPid">The agent's process id, 0 when it never started — what a test checks is gone, and what a trace names.</param>
 /// <param name="DroppedTraceEntries">How many refusals, tool calls and reads the trace caps dropped — said, never silently lost.</param>
 /// <param name="TruncatedTraceFields">How many retained trace fields were cut to the per-field limit, an ellipsis marking each.</param>
@@ -101,6 +103,12 @@ public sealed record AcpOutcome(
 {
     /// <summary>The session's input/output token totals from <c>/usage</c>, asked after an answered turn only — unknown otherwise.</summary>
     public AcpTokens Tokens { get; init; } = AcpTokens.Unknown;
+
+    /// <summary>True when <see cref="StdErr"/> is a HEAD of what the agent wrote (the capture dropped output, or the pipe was still open at the drain grace): its last line may be incomplete. Carried as state from the capture, never inferred from the text.</summary>
+    public bool StdErrTruncated { get; init; }
+
+    /// <summary>The members of the agent's tree still alive when its teardown's confirmation ended (DL9) — empty for a clean end and for every profile that does not supervise its tree.</summary>
+    public IReadOnlyList<ProcessIdentity> Survivors { get; init; } = [];
 
     /// <summary>A turn that never started an agent: only the reason — and the session a <c>--session</c> turn was asked to continue, so even this exit names it (E5.2 review).</summary>
     public static AcpOutcome NotStarted(string why, string session = "") =>

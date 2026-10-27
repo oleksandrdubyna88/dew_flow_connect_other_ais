@@ -34,7 +34,7 @@ internal static class Schema
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
         WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
-        TheReviewersModel, TheRoundsKey, TheRoundsSize,
+        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource, TheRoundsAuthors,
     ];
 
     internal const string SecurityEvidence = """
@@ -575,7 +575,7 @@ internal static class Schema
 
     /// <summary>
     /// Step 20: which MODEL each reviewer launch ran, and the index the round counter joins on
-    /// (<c>todo/PLAN_every_round_is_counted.md</c>, story 2.1).
+    /// (<c>research/PLAN_every_round_is_counted.md</c>, story 2.1).
     /// </summary>
     /// <remarks>
     /// <para>The reviewers table recorded the provider and the role and never the model, so no count
@@ -600,7 +600,7 @@ internal static class Schema
         """;
 
     /// <summary>
-    /// Step 21: the round's identity across the wire (<c>todo/PLAN_every_round_is_counted.md</c>, story 4.1).
+    /// Step 21: the round's identity across the wire (<c>research/PLAN_every_round_is_counted.md</c>, story 4.1).
     /// </summary>
     /// <remarks>
     /// <para>Thirty-two hex characters the engine mints when a round starts (<c>RoundKeys</c>), carried by every launch of
@@ -617,7 +617,7 @@ internal static class Schema
 
     /// <summary>
     /// Step 22: what a code round CHANGED — its size by scope, coverage and kind — and the effort each reviewer applied
-    /// (<c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>, story E2.S3, contract C2).
+    /// (<c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>, story E2.S3, contract C2).
     /// </summary>
     /// <remarks>
     /// <para><c>round_changes</c> holds one row per (scope, coverage, kind) cell that has at least one file; no path is
@@ -649,5 +649,80 @@ internal static class Schema
         ALTER TABLE rounds ADD COLUMN size_origin TEXT NOT NULL DEFAULT '';
         ALTER TABLE rounds ADD COLUMN size_gitlinks INTEGER NOT NULL DEFAULT -1;
         ALTER TABLE reviewers ADD COLUMN effort TEXT NOT NULL DEFAULT 'not recorded';
+        """;
+
+    /// <summary>
+    /// Step 23: what a PLAN round reviewed — where its text came from, the commit, the blob and the id of the text sent
+    /// (<c>todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md</c>, story E2.S1, contract C1).
+    /// </summary>
+    /// <remarks>
+    /// <para><c>rounds.plan_source</c> holds the JSON of the round's <c>PlanSource</c>, written through
+    /// <c>ServerJsonContext.Default.PlanSource</c> (camelCase, indented). <b>Empty means "not recorded"</b>: every round
+    /// written before this step, every code, document, feature or skipped round, and a plan round that finished before the
+    /// plan gate stamped one. No backfill — the session file keeps its own copy. The projection rewrites the value from the
+    /// record on every re-record, as it does <c>round_key</c> (step 21): there is no separate measurement to protect.</para>
+    /// <para>Appended, never inserted, for the reason step 20 records; a reader opened read-only (<c>--log</c>) runs no step
+    /// and asks the schema whether the column is there instead.</para>
+    /// </remarks>
+    internal const string ThePlanSource = """
+        ALTER TABLE rounds ADD COLUMN plan_source TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>
+    /// Step 24: who wrote the code a round reviewed — the authors snapshot as a table and as columns
+    /// (<c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>, story E5.S2).
+    /// </summary>
+    /// <remarks>
+    /// <para><c>round_authors</c> holds one row per row of the round's snapshot: who (<c>main</c> | <c>subagent</c>), the agent's opaque id
+    /// (<b>empty for main</b> — the one mapping, in <c>RoundAuthorsTable</c>), the model it asked for and the model that answered, the
+    /// effort, the agent type, the association, the window, and the counts and the four token terms. The round's own stage and number are
+    /// its <c>round_id</c>'s. The state, the caller's session, where the id came from and the two versions that produced the rows
+    /// (E3's reader, E4's attribution) live on the round (<c>authors_*</c>), beside the two write counts and the ambiguous totals.</para>
+    /// <para><b>Empty <c>authors_state</c> means "not recorded"</b>: every round written before this step, and every round that is not a
+    /// settled plan or code round. The zero defaults mean nothing without a state — a reader checks the state first. <b>An unknown count is
+    /// <c>-1</c>, never <c>0</c></b>: a round whose attribution never ran, or an unobserved one, holds <c>-1</c> in every <c>ambiguous_*</c>
+    /// column and in the two write counts. <c>authors_id_source</c> is <c>registry</c> | <c>environment</c> | <c>stored</c> | <c>healed</c>; a
+    /// version of <c>0</c> says that component did not run. The lookup index serves the peer query that runs on EVERY round.</para>
+    /// <para>Appended, never inserted, for the reason step 20 records; a reader opened read-only (<c>--round-counts</c>, <c>--log</c>) runs no
+    /// step and asks the schema whether a column is there. An OLDER server runs none of this, its upsert names none of these columns and it
+    /// never touches <c>round_authors</c>: what it re-saves leaves the projected authors where they are (its session-file save does drop the
+    /// snapshot — the limit <c>research/module_server.md</c> states).</para>
+    /// </remarks>
+    internal const string TheRoundsAuthors = """
+        CREATE TABLE IF NOT EXISTS round_authors (
+            round_id              INTEGER NOT NULL REFERENCES rounds(id),
+            ordinal               INTEGER NOT NULL,
+            who                   TEXT NOT NULL DEFAULT '',
+            agent                 TEXT NOT NULL DEFAULT '',
+            requested             TEXT NOT NULL DEFAULT '',
+            model                 TEXT NOT NULL DEFAULT '',
+            effort                TEXT NOT NULL DEFAULT '',
+            agent_type            TEXT NOT NULL DEFAULT '',
+            association           TEXT NOT NULL DEFAULT '',
+            window                TEXT NOT NULL DEFAULT '',
+            launches              INTEGER NOT NULL DEFAULT 0,
+            turns                 INTEGER NOT NULL DEFAULT 0,
+            input_tokens          INTEGER NOT NULL DEFAULT 0,
+            output_tokens         INTEGER NOT NULL DEFAULT 0,
+            cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+            cache_read_tokens     INTEGER NOT NULL DEFAULT 0,
+            write_calls           INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (round_id, ordinal)
+        );
+        ALTER TABLE rounds ADD COLUMN authors_state       TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN authors_session     TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN authors_id_source   TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN authors_reader      INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN authors_attribution INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN submodule_writes    INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN uncovered_writes    INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN ambiguous_agents                 INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN ambiguous_launches               INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN ambiguous_turns                  INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN ambiguous_input_tokens           INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN ambiguous_output_tokens          INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN ambiguous_cache_creation_tokens  INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN ambiguous_cache_read_tokens      INTEGER NOT NULL DEFAULT 0;
+        CREATE INDEX IF NOT EXISTS rounds_by_authors_session ON rounds (authors_session);
         """;
 }

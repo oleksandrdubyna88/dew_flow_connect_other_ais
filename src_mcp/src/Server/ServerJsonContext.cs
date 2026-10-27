@@ -40,7 +40,25 @@ public sealed record ProviderStatus(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Warning { get; init; }
+
+    /// <summary>
+    /// For a Kimi row whose sign-in has a survivor marker standing (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): where it is and which pids it names — what the card's <i>Clear the stuck Kimi marker</i> button
+    /// runs <c>coai-mcp --kimi-clear-marker &lt;path&gt;</c> with. ABSENT when no marker stands, or when the standing one belongs to a turn that is still running; <c>pids</c> is empty for a marker that names nothing
+    /// (a <c>spawning</c> one) or cannot be read. Never a marker of another sign-in. Additive: an older extension ignores the field.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SurvivorMarkerReport? SurvivorMarker { get; init; }
+
+    /// <summary>
+    /// The row's prompt cap in whole KiB, when it has one (PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D7) — how a caller
+    /// learns it BEFORE it sends a round. Absent when unset, so every row without a cap reads exactly as it did.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxPromptKib { get; init; }
 }
+
+/// <summary>A standing Kimi survivor marker, as the providers answer reports it for the card's button: its full path and the pids it names (empty when it names none).</summary>
+public sealed record SurvivorMarkerReport(string Path, IReadOnlyList<int> Pids);
 
 /// <summary>An api row through its module's eyes (the operator's per-model settings, 2026-09-27).</summary>
 /// <param name="Module">The module the row resolved to — <c>xai</c>, <c>qwen</c>, <c>deepseek</c>, <c>glm</c>, or a row's name for the generic module over it.</param>
@@ -343,6 +361,8 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
     WriteIndented = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(PersistedSession))]
+// What a plan round reviewed (E1.S6) — registered by name so the log's column (E2) writes it with the same context.
+[JsonSerializable(typeof(Core.Rounds.PlanSource))]
 
 [JsonSerializable(typeof(ProvidersAnswer))]
 [JsonSerializable(typeof(SessionAnswer))]
@@ -359,6 +379,8 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(List<string>), TypeInfoPropertyName = "ListString")]
 [JsonSerializable(typeof(Store.LoggedLog))]
 [JsonSerializable(typeof(Store.RoundCountsAnswer))]
+[JsonSerializable(typeof(BackfillSummary))]
+[JsonSerializable(typeof(BackupVerdict))]
 [JsonSerializable(typeof(Store.LoggedManyFindings))]
 [JsonSerializable(typeof(Core.Security.SecurityFindingDetails))]
 [JsonSerializable(typeof(List<RoundKeyDto>))]

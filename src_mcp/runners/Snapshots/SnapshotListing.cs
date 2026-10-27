@@ -112,7 +112,7 @@ internal sealed class SnapshotListing(IProcessLauncher launcher)
             return string.Empty;
         }
 
-        if (!SubmodulePopulator.HasGit(at))
+        if (!GitMarker.HasGit(at))
         {
             unavailable.Add(new SnapshotUnavailable(prefix + path, "an unpopulated submodule: nothing is checked out there, so its content is not reviewed source"));
             return string.Empty;

@@ -620,8 +620,8 @@ test('S5.7.2 anOlderServerIsNamedOnTheConsultantSection: 0.57.0 cannot consult o
   const kimi = consultSettingsFrom(reader(ON_KIMI));
 
   assert.equal(consultantRuntimeSkewNote('0.57.0', kimi),
-    'The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.58.0 or later — the MCP server tab.');
-  assert.equal(consultantRuntimeSkewNote('0.58.0', kimi), '', 'the release that consults on kimi is not nagged');
+    'The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.64.0 or later — the MCP server tab.');
+  assert.equal(consultantRuntimeSkewNote('0.64.0', kimi), '', 'the release that consults on kimi is not nagged');
   assert.equal(consultantRuntimeSkewNote('', kimi), '', 'a server nobody has versioned is not behind');
 
   const codex = consultSettingsFrom(reader({ consultants: { claude: { vendor: 'codex', runtime: 'codex', model: '' } }, vendors: [] }));

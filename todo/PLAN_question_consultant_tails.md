@@ -1,8 +1,8 @@
 # PLAN — the question consultant's tails
 
 > Status: **plan only, nothing implemented yet.** Scope: `src_mcp/runners` (the shipped consultant's and
-> reviewer's confinement, the api runtime), `src_mcp/src/Store` (question-consult pruning), `src_mcp/tests` (one flaky
-> test), `shared/runtime-capabilities.json`.
+> reviewer's confinement, the api runtime), `src_mcp/src/Store` (question-consult pruning),
+> `shared/runtime-capabilities.json`.
 >
 > Related docs: [PLAN_question_consultant.md](PLAN_question_consultant.md) §9 (where these were set aside),
 > [RESULTS_question_consultant_capabilities.md](../research/RESULTS_question_consultant_capabilities.md) (the
@@ -10,7 +10,7 @@
 
 ## Goal
 
-The question consultant shipped (stories S1–S5 of its plan) with five things deliberately left out, plus one flaky test
+The question consultant shipped (stories S1–S5 of its plan) with five things deliberately left out, plus one flaky test (moved to another plan, see §6)
 found while building it and one gap the live check found (item 7). Each is small, but none can be done well inside that plan. One of them is a security release in its own
 right: the deny list the **existing** consultant and reviewer rely on was measured leaking.
 
@@ -64,7 +64,12 @@ in the table, or cap it by count, using the store's existing pruning seam if one
 
 ## 6. The flaky round-deadline test
 
-`AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_SoAConversationIsNotCutByAOneTurnBudget`
+> **Moved 2026-10-19** to [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md), which builds all three tests of this section (its C6, C13 and C14,
+> each with its cause); the text below is kept as the record of what was seen. Boundary table: that plan, §7.
+
+> **Closed in code 2026-10-21** (E4 S5 and S4; the 20-run CI watch is still to come): C6 (this section's test — the round deadline) is pinned without wall time by `RoundDeadlineTests`, the scheduler-level test and the wiring arm (the end-to-end test stays a real-process smoke test, its remaining wall-clock exposure stated in its remark); C13 (the conversation-cap tests) runs on the manual clock. See `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` S4/S5 status.
+
+`AFeatureIsReviewedEndToEndTests.AReviewerThatAsksOnEveryTurn_IsReviewedEndToEnd_ARealProcessSmokeTestOfTheWiring`
 (`src_mcp/tests/AFeatureIsReviewedEndToEndTests.cs:424`) fails about 1 run in 3 on a clean `origin/main` as well. It runs
 for 12–20 s and reports "not started … the round reached its limit" before the reviewer launches. It is
 load-sensitive: the deadline is wall-clock. Make the clock injectable for that path, or derive the assertion from
@@ -106,7 +111,7 @@ capability row.
 - [ ] api `web` is either measured for one vendor and allowed, or still blocked, with the reason.
 - [ ] The operator's choice on uncommitted work is recorded and built.
 - [ ] `question_consults` has a retention, tested.
-- [ ] The round-deadline test passes 20 runs in a row.
+- The round-deadline test passes 20 runs in a row — moved to [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md) (C6), 2026-10-19.
 - [ ] An api row reports its cost when the vendor states it.
 - [ ] module docs updated; this plan promoted when done.
 

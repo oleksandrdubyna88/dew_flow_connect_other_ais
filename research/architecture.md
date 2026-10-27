@@ -35,8 +35,8 @@ C4Container
   System_Ext(gem, "agy (Antigravity)", "Reviewer CLI")
   System_Ext(creds, "CredsForDevs", "config entry holding vendor keys")
   System_Ext(api, "OpenAI-compatible API", "a hosted model with no CLI — xAI, Qwen, any /v1 endpoint")
-  System_Ext(kimi, "kimi acp (Kimi Code)", "Reviewer, consultant and question-row CLI over ACP on stdio — Windows only, the person's own Kimi Code sign-in, reached by a junction from a coai-owned home")
-  System_Ext(vibe, "vibe (Mistral Vibe)", "Reviewer and consultant CLI — the Python CLI, Windows only, the person's own Mistral sign-in")
+  System_Ext(kimi, "kimi acp (Kimi Code)", "Reviewer, consultant and question-row CLI over ACP on stdio — Windows and WSL2, the person's own Kimi Code sign-in, reached by a junction (Windows) or a symlink (WSL2) from a coai-owned home")
+  System_Ext(vibe, "vibe (Mistral Vibe)", "Reviewer and consultant CLI — the Python CLI, on Windows and on a WSL2 host (E2, 2026-10-16; a native Linux host is refused), the person's own Mistral sign-in (the OS keyring on Windows; on WSL2 a link from the owned home into ~/.vibe/.env)")
   Rel(main, mcp, "MCP tools over stdio")
   Rel(mcp, api, "--ask-api child: POST /chat/completions (one JSON, or SSE when the row streams), Bearer key from the vault via ENV")
   Rel(mcp, kimi, "--ask-acp child (started by KimiRuntime in a built environment) runs it as the ACP CLIENT: every permission refused, reads served only inside the working folder, in a coai-owned home under the sign-in's tree hold")
@@ -52,7 +52,7 @@ C4Container
   Rel(ext, codex, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, gem, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, mcp, "writes the Team server token file the shim reads")
-  Rel(ext, mcp, "one-shot spawns: --providers, --log, --round-counts, --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove, --close-consult, --cadence, --consultants and --check-consultant (served since epic 4, spawned by the Consultant tab from epic 5)")
+  Rel(ext, mcp, "one-shot spawns: --providers, --log, --round-counts, --backfill-authors (an operator's verified, one-time writer, never the extension), --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove, --close-consult, --cadence, --consultants and --check-consultant (served since epic 4, spawned by the Consultant tab from epic 5)")
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
   Rel(mcp, srv, "and first: which review roles do you run?")
   Rel(ext, srv, "the same question, for the panel's own picture")
@@ -94,7 +94,7 @@ Two crossings changed between the extension and the Team server, both read-only 
   session in an allowed domain — three fields, never a token or an expiry. The admin decision is the
   same one `/api/usage` makes for company scope.
 - **The server counts rounds (2026-10-11, stories 5.1–5.2 of
-  [../todo/PLAN_every_round_is_counted.md](../todo/PLAN_every_round_is_counted.md)).** Every vendor total gains the
+  [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md)).** Every vendor total gains the
   round counts (additive), and a company request from the tab also sends `windows=5h,24h,week`, answered as a trailing
   `windows[]` from the same scan. An older server ignores the parameter and answers 200 without the key — the tab reads
   that SHAPE as *count unavailable*, never 0. The seam suite reads the real server through the extension's own parser.
@@ -365,11 +365,12 @@ answers `initialize` at once*.
 | One migration runner for both databases (`CoaiMcp.Storage`) | [module_server.md](module_server.md) · [PLAN_who_holds_a_key.md](PLAN_who_holds_a_key.md) | **story 1 shipped 2026-09-17.** `SqliteMigrator` — ordered steps, `user_version`, one transaction per step, WAL and a busy timeout — moved out of `RoundsDb` into a project BOTH binaries reference, because `coai-bugs.db` reached a host at `user_version = 0` and the gate ruled against a second copy. Deliberately not in `CoaiMcp.Core`, which is declared pure and holds no filesystem. `coai-bugs` gained `CorpusSchema.Steps` with step 1 frozen against the released SQL, `last_seen_month` and `admin_audit`, a per-KEY rate limit that is a setting, and one-server-per-directory enforced by a lock file; the promise it makes about contributors is now scoped and rewritten in `module_server.md` and `deploy/bugs/README.md` |
 | The rounds log leaves as a file | [module_extension.md](module_extension.md) · [module_server.md](module_server.md) · [PLAN_a_round_leaves_as_a_file.md](PLAN_a_round_leaves_as_a_file.md) | **all six stories shipped, 2026-09-14.** An **Export** button on every round and tick boxes for a bulk one, writing a CSV with the table's own columns plus every finding and its accept/decline mark; the **Took** column showing how long the DECIDING took beside how long the reviewers ran; and a bulk export that is ONE process rather than one per round, through a new one-shot server mode `--findings-many`. Phase 0 fixed a latent defect it found while tracing: `RecordDecisions` bound the ordinal to the loop index, so an out-of-order or partial `resolve` wrote its marks onto the wrong findings — exactly the data the export publishes |
 | The consultant (`consult`, the ninth tool) | [module_server.md](module_server.md) · [module_extension.md](module_extension.md) · [module_core.md](module_core.md) · [PLAN_consultant.md](PLAN_consultant.md) | **all six stories shipped, 2026-09-12 to 2026-09-13.** Story 1: the tool, the consultation record and its sweep, the filesystem invariant, the per-repository lock, the caps, the ledger kind. Story 2: all four routes — codex, claude, antigravity and a local engine — each resolved from a configured vendor row, each measured live for two turns. Story 3: the *Consultant* section — a row per caller kind, the caps, the switch and the prompt override. Story 4: the third live region, the `consultations` table and the log page's fourth tab. Story 5: the five triggers in the pasted snippet (v6, from a rule this repository owns rather than the shared store) and a `consult` MCP prompt. Story 6: `consult_missed` — how often the gate hands back a finding the caller had already ACCEPTED, measured on every round and calling nothing, which is what phase 2's decision waits on. The one open tail is the operator's own measurement, [../todo/PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md) |
-| The sanitised snapshot (`runners/Snapshots/`) | [module_runners.md](module_runners.md) · [../todo/PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) | **built 2026-10-12 (S1, D6); wired at the round's launch directory 2026-10-13 (S2), at the consultant's launch, the question row and the consultant check the same day (S3).** A coai-owned copy of a round's pinned worktree or of the live tree with no project configuration in it (`.git`, `.vibe`, `.agents/skills`, `.kimi-code`, `AGENTS.md`), refusing links, escapes, collisions and over-ceiling trees, transactional refresh in place, an aggregate cap, reads contained by the opened handle (`runners/Files/HandleRead`). A runtime asks for it through `NeedsASanitisedSnapshot` on `IReviewerRuntime` / `IConsultantRuntime`; Vibe sets it on both (`VibeRuntime`, `VibeConsultant`), and it is made at the round's launch directory (S2), the consultant's launch — one stable copy per conversation, refreshed in place — the question row (a copy per granted root) and the consultant check (S3). The consultation beat now also runs the scratch sweep that removes a crashed launch's snapshot |
-| Mistral Vibe as a reviewer (`runners/Vibe/`, runtime `vibe`) | [module_runners.md](module_runners.md) · [module_server.md](module_server.md) · [../todo/PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) · [RESULTS_vibe_confinement.md](RESULTS_vibe_confinement.md) | **server side built 2026-10-13 (S2); the consultant and the question row 2026-10-13 (S3) — a conversation keeps ONE snapshot under `<local data>/coai-vibe/<id>` with its home, refreshed in place each turn, swept with the conversation (D20: over, unknown or idle past `ConsultIdle`, on the consultation beat and at start); a question row copies its granted roots into its own folder; the live rounds and the live consult are owed.** A machine-only CLI runtime on the person's own Mistral sign-in: `--agent plan --enabled-tools read_file`, never `--trust`/`--add-dir`, the prompt on stdin, the answer and usage read from `--output json` and the export. Every launch — review, repair, retry — passes ONE launch control the executor asks first (`IReviewerRuntime.TakeTurnAsync`): Windows only (D18), a BUILT environment (the minimal set plus `VIBE_HOME`, `VIBE_CLI=python`, `VIBE_ACTIVE_MODEL`), a curated model, and a coai-owned home checked against `shared/vibe-home-manifest.json` for the installed version (D17) with one turn at a time. A code round with a checkout gives it the round's sanitised snapshot, disposed with the round, and maps its citations back |
+| The sanitised snapshot (`runners/Snapshots/`) | [module_runners.md](module_runners.md) · [../todo/PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) | **built 2026-10-12 (S1, D6); wired at the round's launch directory 2026-10-13 (S2), at the consultant's launch, the question row and the consultant check the same day (S3).** A coai-owned copy of a round's pinned worktree or of the live tree with no project configuration in it (`.git`, `.vibe`, `.agents/skills`, `.kimi-code`, `AGENTS.md`), refusing links, escapes, collisions and over-ceiling trees, transactional refresh in place, an aggregate cap, reads contained by the opened handle (`runners/Files/HandleRead`). A runtime asks for it through `NeedsASanitisedSnapshot` on `IReviewerRuntime` / `IConsultantRuntime`; Vibe sets it on both (`VibeRuntime`, `VibeConsultant`), and it is made at the round's launch directory (S2), the consultant's launch — one stable copy per conversation, refreshed in place — the question row (a copy per granted root — and, for a granted PARENT folder, a copy per repository found beneath it: `ParentExpansion` walks two levels down, asks git once per candidate through `RepositoryFacts`, leaves out linked worktrees whose main is copied, bounds the row at 50 repositories, and copies each through the one `RepositoryCopier`; the row's scratch holds a lock so the sweep never takes a live row) and the consultant check (S3). The consultation beat now also runs the scratch sweep that removes a crashed launch's snapshot |
+| Mistral Vibe as a reviewer (`runners/Vibe/`, runtime `vibe`) | [module_runners.md](module_runners.md) · [module_server.md](module_server.md) · [../todo/PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) · [RESULTS_vibe_confinement.md](RESULTS_vibe_confinement.md) | **server side built 2026-10-13 (S2); the consultant and the question row 2026-10-13 (S3) — a conversation keeps ONE snapshot under `<local data>/coai-vibe/<id>` with its home, refreshed in place each turn, swept with the conversation (D20: over, unknown or idle past `ConsultIdle`, on the consultation beat and at start); a question row copies its granted roots into its own folder; the live rounds and the live consult are owed.** A machine-only CLI runtime on the person's own Mistral sign-in: `--agent plan --enabled-tools read_file`, never `--trust`/`--add-dir`, the prompt on stdin, the answer and usage read from `--output json` and the export. Every launch — review, repair, retry — passes ONE launch control the executor asks first (`IReviewerRuntime.TakeTurnAsync`): Windows or a WSL2 host (D18, DL1 — a native Linux host and WSL1 are refused; on WSL2 the person's `~/.vibe/.env` is LINKED into the owned home, the one link a home may hold — module_runners.md), a BUILT environment (the minimal set plus `VIBE_HOME`, `VIBE_CLI=python`, `VIBE_ACTIVE_MODEL`), a curated model, and a coai-owned home checked against `shared/vibe-home-manifest.json` for the installed version (D17) with one turn at a time. A code round with a checkout gives it the round's sanitised snapshot, disposed with the round, and maps its citations back |
 | Kimi over ACP (`runners/Acp/`, `coai-mcp --ask-acp`) | [module_runners.md](module_runners.md) · [../todo/PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) | **built 2026-10-12, infrastructure only (S4 part, D15).** A one-shot shim that runs `kimi acp` as its child and is the CLIENT of the Agent Client Protocol: every permission request refused, `fs/read_text_file` served only inside the working folder, no write or terminal capability, `mcpServers: []`, the model set before the prompt, the child tree ended on every path. **E4.3 (2026-10-15):** it runs only on a coai-owned home (`--home`, `--persons-bin`, `--locks`), starts the agent in an environment built from scratch, holds the sign-in with an inheritable tree hold taken immediately before the start (a second Kimi on it waits, then exits 69 — the hold gates, measured with the real Kimi in RESULTS §27), checks the asked model against the session's own list (65 with the list) and reports the session's tokens from `/usage`. `KimiRuntime` (below) is its caller |
-| Kimi as a reviewer (`runners/Kimi/`, runtime `kimi`) | [module_runners.md](module_runners.md) · [module_server.md](module_server.md) · [../todo/PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) · [../todo/PLAN_vibe_and_kimi_runtimes_E4.md](../todo/PLAN_vibe_and_kimi_runtimes_E4.md) · [RESULTS_kimi_confinement.md](RESULTS_kimi_confinement.md) | **server side built 2026-10-15 (E4.1–E4.4); the extension's row (preset, curated models, colour, ▶, install and update per OS, the `crossesTo` gate at 0.57.0 — [module_extension.md](module_extension.md)) built the same day (E4.5); the live rounds and the buttons' real installs are open.** A machine-only CLI runtime on the person's own Kimi Code sign-in. The adapter (`KimiRuntime`) builds the `--ask-acp` shim's request in a built environment (`--home` the owned root, `--persons-bin`, `--locks`, `--executable` absolute), asks ONE launch control before every launch (`KimiLaunch`: Windows only, tools, a curated `kimi-code/*` model, the owned home — a junction to the person's `credentials` plus one coai-written `config.toml` — checked before and after `kimi --version`, the sign-in's gate), and classifies from the shim's REPORT, never from text: a rate limit only for exit 75 with `failure: balance_spent` (hopeless, usage kept). One Kimi launch of a round at a time (`IReviewerRuntime.LaunchesOneAtATime`, until M-K14); the round's scratch disposes its `kh-*` homes junction-first and is kept whole when one is still under a live tree |
+| Kimi as a reviewer (`runners/Kimi/`, runtime `kimi`) | [module_runners.md](module_runners.md) · [module_server.md](module_server.md) · [../todo/PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) · [../todo/PLAN_vibe_and_kimi_runtimes_E4.md](../todo/PLAN_vibe_and_kimi_runtimes_E4.md) · [RESULTS_kimi_confinement.md](RESULTS_kimi_confinement.md) | **server side built 2026-10-15 (E4.1–E4.4); the extension's row (preset, curated models, colour, ▶, install and update per OS, the `crossesTo` gate at 0.57.0 — [module_extension.md](module_extension.md)) built the same day (E4.5); the live rounds and the buttons' real installs are open.** A machine-only CLI runtime on the person's own Kimi Code sign-in. The adapter (`KimiRuntime`) builds the `--ask-acp` shim's request in a built environment (`--home` the owned root, `--persons-bin`, `--locks`, `--executable` absolute), asks ONE launch control before every launch (`KimiLaunch`: Windows — and WSL2 since E6, see the next row — tools, a curated `kimi-code/*` model, the owned home — a junction to the person's `credentials` plus one coai-written `config.toml` — checked before and after `kimi --version`, the sign-in's gate), and classifies from the shim's REPORT, never from text: a rate limit only for exit 75 with `failure: balance_spent` (hopeless, usage kept). One Kimi launch of a round at a time (`IReviewerRuntime.LaunchesOneAtATime`, until M-K14); the round's scratch disposes its `kh-*` homes junction-first and is kept whole when one is still under a live tree |
 | Kimi as a consultant, a consultant check and a question-consultant row (`runners/Kimi/KimiConsultant.cs`) | [module_runners.md](module_runners.md) · [module_server.md](module_server.md) · [module_core.md](module_core.md) · [../todo/PLAN_vibe_and_kimi_runtimes_E5.md](../todo/PLAN_vibe_and_kimi_runtimes_E5.md) | **server side built 2026-10-16 (E5.1–E5.4: the shim's `--session` load, the conversation's owned home kept across turns, junction-first one-shot disposal, `KimiConsultant`) and 2026-10-27 (E5.5–E5.6); the extension's half 2026-10-16 (E5.7); the live runs are owed.** One more crossing between the containers, through a file neither owns: `shared/runtime-capabilities.json` gained three `kimi` rows — `none` and `disk` **unconfined** (Kimi's Grep and Glob read any file by its full path, M-K6), `web` **unmeasured** — so the panel (`runtimeCapabilities.generated.ts`, `capabilityAdmission.ts`) and the server (`RuntimeCapabilities`, `CapabilityMatrix`) admit a Kimi row FLAGGED "can read this machine" and both refuse `web`, held level by `shared/capability-matrix-vectors.json`. Inside `coai-mcp` the planner's `kimi` arm gives a `disk` row a copy of its roots and a `none` row an empty folder, never a flag; `--check-consultant` and a question row each run Kimi on a one-shot home under `<root>\coai-vh\<8>`, disposed junction-first however the launch ended |
+| Kimi on Windows and WSL2 — the lock family (written for Linux, and it works there; the host door still refuses native Linux, DL1), the verified teardown and the survivor marker (`runners/Kimi/`, `runners/Processes/`, `runners/Files/`) | [module_runners.md](module_runners.md) · [module_server.md](module_server.md) · [RESULTS_kimi_confinement.md](RESULTS_kimi_confinement.md) | **shipped in coai-mcp 0.61.0, 2026-10-19, and checked live on WSL2 (built 2026-10-16/17: E5 of `research/PLAN_kimi_and_vibe_on_linux.md`, PR #879; the install button is not yet pressed live without `rg`); the host door (`KimiLaunch.HostRefusal`) was opened for WSL2 only by E6's server half (2026-10-17): one `HostAdmission` shared with Vibe (WSL1 and native Linux refused with their own sentences), Kimi's CLI and `rg`/`fd` found where Linux installers put them (`~/.kimi-code/bin`, `~/.local/bin`) with the host's own install cure, a five-name Linux environment with `XDG_CACHE_HOME` beside `os/`, a sign-in on network storage refused unless `coai.kimiAllowNetworkSignIn` (written by the extension as `COAI_KIMI_ALLOW_NETWORK_SIGNIN` into `settings.json`), and `survivorMarker` on the Kimi row of `--providers` for the panel's button — [module_runners.md](module_runners.md).** One sign-in, one owner for the tree's whole life: an identity key from the folder (`dev:ino` on Linux), an exclusive inheritable hold (the native `flock`, because .NET's is shared — L-N1), a sign-in link judged by its mount type, a process listing read from `/proc` as a closed union (a hidden `exe` falls back to `argv[0]`; an unreadable list is Busy), and, on Linux, a shim that is a child subreaper and ends its own descendants by identity through a pidfd, writing a survivor marker that the next launch, the shim's hold and the home disposal all consult. **Cross-module change:** `ReaderMarker` / `ReaderReconcile` (the reconcile of a marker that names processes that may still live — terminate by identity, confirm, ask each member alive / gone / unknown, clear only on a confirmed-empty tree) MOVED out of `src_server` into `runners/Processes/`, with the tri-state; `SlotRegistry` and the gauge reader in the Team server now call it from there, unchanged in behaviour (`ReaderBarrierTests` and `GaugeReaderCrashHarnessTests` are the proof), and the Kimi survivor marker is its second user. Its answers are fail-closed everywhere: an owner shim that is alive is waited for, never reconciled; a marker, a status, a start time or a lock root that cannot be read keeps the sign-in blocked and the home kept |
 
 ## The gate has an opposite: the agent asking, rather than being judged (2026-09-12)
 
@@ -776,6 +777,20 @@ anything. A second absent value — `null` alongside `''` — was proposed in th
 declined for that reason: two spellings of absence are two things to keep in step, and the first
 place they diverge is a round reported as decided in no time at all.
 
+**One more field, the same rule (2026-10-16): `LoggedRound.PlanSource`.** What a plan round reviewed
+(`rounds.plan_source`, schema step 23, plan-gate E2) rides `--log` as an optional member `planSource`, an init property like
+`Size`, read by a page-scoped reader (`RoundPlanSources`) after `RoundChangesLog`. A round from before the step, one that is not a
+plan round, and a step-22 database all send NO member — never an empty one — and a value that does not parse is dropped, so a
+malformed row cannot fail the page. An older extension ignores it (`parseLog` reads field by field); the extension's own
+rounds-log line reads the SESSION FILE's copy, not this member (`module_extension.md`).
+
+**And a third (2026-10-19): `LoggedRound.AuthorsState`.** The state of who wrote the code a round reviewed (`rounds.authors_state`,
+schema step 24, E5) rides `--log` as an optional member `authorsState` — `observed`, `partial: <reasons>` or `unobserved: <reasons>` — an init
+property read by a page-scoped reader (`RoundAuthorsLog`) after `RoundPlanSources`. A round with no recorded state, every round of a step-23
+database, and a stored value the shared rule refuses (`shared/authors-state-vectors.json`, read by the server and the extension alike) all send
+NO member: the words "not recorded" are never printed. An older extension ignores it (`anOlderExtensionReadsALogPageCarryingASize.test.ts`); the
+extension's own round card reads the SESSION FILE's snapshot, never this member.
+
 ### The second one: the review ROLES (2026-09-12)
 
 The same shape, arrived at the same way. `coai-mcp` held five roles and twenty-five prompts as a C#
@@ -856,7 +871,7 @@ runtime's listed levels, a cap) and the accepted answer names what it dropped or
 or a server that still says 1 — into the reviewer's note, so "sent" is never read as "applied". The minimum stays
 1: nothing an older half reads has changed shape.
 
-**Still contract 2 (2026-10-11, story 4.1 of todo/PLAN_every_round_is_counted.md):** a review also carries the round's
+**Still contract 2 (2026-10-11, story 4.1 of research/PLAN_every_round_is_counted.md):** a review also carries the round's
 identity (`round`, 32 hex characters the engine mints when the round starts — every launch of the round, retries,
 repairs and follow-ups included, sends the same one), what the launch is inside its turn (`attempt`: `first`, `retry`,
 `repair`, `followUp`) and the seconds left on the shim's own deadline at submit (`remainingSeconds`, relative — never
@@ -870,6 +885,26 @@ failure NAME of its own on the wire, `no_budget` (4.3). The shim reads that name
 own exit (`RemoteAsk.NoBudget`, 79); a shim older than the name renders it inside its failure sentence as it renders
 every name, and nothing on either side matches a sentence
 ([module_team_server.md](module_team_server.md), [module_runners.md](module_runners.md)).
+
+**The same key is on the machine's own ledger (2026-10-19, `fix/local-ledger-line-carries-round`).** `coai-mcp` writes the round key
+it minted onto every LOCAL review line of `usage.jsonl` — the same `round` field the Team server writes on its lines, the same on a
+repair, a follow-up and every earlier turn — so a local line joins `rounds.round_key` just as a server line does. It is empty on a launch
+outside a round and on consultation, question, probe and chat lines, which are not rounds; the extension reads an empty `round` as absent
+(`usage.ts`). Nothing crosses a new seam: the field was already a trailing, defaulted `UsageEntry` column, and no diagram labels it
+([module_runners.md](module_runners.md)).
+
+**The ledger-field contract between `coai-mcp` and the extension (E3, 2026-10-21).** E3 added keys to `usage.jsonl` lines, all of them
+trailing and defaulted so an older reader ignores them and an older line reads empty: `consultation` (the id of the consultation a consult
+line belongs to; empty on a check, a refused new consultation and every non-consult line), the **S1 labels** `cli`, `cliVersion`, `effort`,
+`effortFrom`, `tier` (what a consult, check, question or probe line ran with, written from the launch's own record of what it sent,
+`ReviewerInvocation.Sent`, never re-derived by the reader; the extension writes the same five on its chat and probe lines), and the **local
+`endCause`** words `roundClock` and `unknown` (`EndCauses.LocalOnly`) on the last line of a cancelled local turn, beside the server's
+four. An empty value on disk means "not recorded" and the extension's `parseUsageLine` reads it as absent. Each side has its own suite and
+each compares its side against its own idea of the names, so a key spelled differently on the two sides leaves both green while every figure
+built on it reads empty: the leg `scripts/seam-ledger-fields.mjs` (`npm run test:seam`) runs the real `coai-mcp` over stdio against
+`FakeCli` (a consultation that answers and a local round whose reviewer outlives the round's one-minute clock), reads the lines it wrote
+through the extension's own parser, and fails both when a key does not come back equal and when no line wrote it at all. `withdrawn` and
+`hostStopped` cannot be driven live (no review tool takes the request's token) and are pinned by the C# tests only. No diagram labels these fields.
 
 ### A setting whose ABSENCE must mean something (2026-09-08)
 
@@ -925,7 +960,7 @@ What the server writes, and where it is observed:
 | What | Observed at | Code |
 |---|---|---|
 | Every refusal returned to a calling AI | `Refusal.Answer` — the one place an `ErrorAnswer` is built (story 2.1's boundary) | `refused` |
-| Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-cancelled` (the caller's token killed it — story 3.2 of `todo/PLAN_every_round_is_counted.md`), `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
+| Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-cancelled` (the caller's token killed it — story 3.2 of `research/PLAN_every_round_is_counted.md`), `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
 | A setting this build cannot read, and a legacy settings file adopted | `Program` at startup, AND `PanelServiceHost.Build` on every settings RELOAD — which is what a person editing the panel causes | `unrecognised-setting`, `settings-adopted` |
 | What it found on the DISK | `Program` at startup only: the survey stats the data directory, and re-running it on a settings change would stat a configured NAS (issue #115) | `storage-note` |
 | A run that never finished (epic 3, 2026-09-23) | the NEXT start, sweeping `runs/` — nobody else is left to say it | `unclean-exit`, carrying the DEAD run's `run` and `pid` |
@@ -1276,6 +1311,50 @@ hands the row its own snapshot comparison as the tree check `ConsultantTurn` ask
 conditions changes all three ([module_runners.md](module_runners.md), [module_server.md](module_server.md)). Nothing
 reaches the extension: the record, the reply and the ledger keep their shapes; a turn cut short is written `interrupted`.
 
+### A Vibe disk row reads a PARENT folder of repositories (2026-10-19, `research/PLAN_vibe_reads_a_folder_of_repositories.md`)
+
+Inside `coai-mcp`, across modules, not across a container: the Server's consultation flow — `QuestionRowLaunch` asks `ConsultantPlaces.OneShotAsync` for a
+row's place — now EXPANDS a granted root that git does not call a work tree into the repositories beneath it (`ParentExpansion`, with `RepositoryWalk`
+over `FolderListings`, `RepositoryFacts` over git, `RepositoryCopier` for every copy), where it used to refuse such a root. The Server reaches
+into the Runners for four things: the snapshot copier (`ReviewSnapshots`, the one copy method), `RepositoryIdentity` (the key two git dirs are compared by,
+so a linked worktree is told from its main), `HeldFile` / `FolderLock` (a question row's scratch lock: the row holds
+`.coai-question.lock` for its whole life, and the consultation beat's sweep removes a `coai-question-*` folder only past six hours AND when it can take that lock),
+and `Redaction` (every note a place makes is redacted once, where it is made). Nothing reaches the extension except the help sentence; the row's `note` field
+keeps its shape and now also carries what the place skipped. Detail: [module_runners.md](module_runners.md), [module_server.md](module_server.md).
+
+```mermaid
+flowchart LR
+  subgraph Server["Server (src/Server)"]
+    QRL["QuestionRowLaunch: scratch + lock, notes onto the row"]
+    CP["ConsultantPlaces.OneShotAsync"]
+    PE["ParentExpansion"]
+    RW["RepositoryWalk"]
+    RF["RepositoryFacts"]
+    RC["RepositoryCopier"]
+    PS["PanelService: scratch sweep on the consultation beat"]
+  end
+  subgraph Runners["Runners (src_mcp/runners)"]
+    SNAP["ReviewSnapshots: snapshot of the live tree"]
+    RID["RepositoryIdentity: git dir and common dir keys"]
+    FL["HeldFile and FolderLock: the row's scratch lock"]
+  end
+  GIT["git rev-parse"]
+  DISK[("granted parent folder")]
+  QRL --> CP
+  QRL -->|"takes the lock"| FL
+  CP --> PE
+  CP --> RC
+  PE --> RW
+  PE --> RF
+  PE --> RC
+  RW -->|"bounded listing"| DISK
+  RF --> GIT
+  RF --> RID
+  RC --> RF
+  RC --> SNAP
+  PS -->|"removes only when it can take the lock"| FL
+```
+
 ### The reviewer list becomes the model catalog, and the wire does not move (2026-10-04, E1 of `research/PLAN_one_model_catalog.md`)
 
 `coai.vendors` is now the one list of model INSTANCES: a row gains `name`, `uses` (the non-review features it may
@@ -1349,6 +1428,34 @@ flowchart LR
     srv -->|a writer mode, any launcher| w74[exit 74, the folder named, nothing written]
     srv -->|serve, an MCP client's launch| refuse[every tool: McpException naming the folder]
     srv -->|a reader| empty[answers as for an empty store, makes nothing]
+```
+
+### A row's prompt cap crosses by capability, and the cap is decided on the server (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md`)
+
+One optional field, `maxPromptKib` (whole KiB, 1 to 4096; anything else is no cap), joins a `coai.vendors` row. It
+crosses the container boundary the way `timeoutMinutes` does: the model card's number input writes it into the row,
+and `vendorsWire.rowOnTheWire` puts it into `COAI_VENDORS` only for a binary whose `--features` lists `maxPromptKib`
+(an older binary would skip the member and launch the over-cap reviewer while the card said the row was capped; the
+card names that skew instead). coai-mcp reads it into `ProviderSettings.PromptCap` (`Core.Catalog.PromptCap`, which owns
+the range, the KiB-to-bytes unit and the inclusive boundary) and reports it back on `providers`, so a caller learns a cap
+before it sends a round. The decision itself is the server's alone — the extension never sees a prompt: `RosterBuilder`
+measures each reviewer's composed first prompt and leaves an over-cap reviewer out of the round, with the size, the cap
+and the cure in the reply. Nothing else crosses: no new tool, mode or table. The same plan moved the plan-stage
+`PLAN_INCOMPLETE` fold into the scheduler (`BoundedScheduler.RunAllAsync`'s `settle`), which is inside coai-mcp only.
+
+```mermaid
+sequenceDiagram
+    participant Card as Model card (extension)
+    participant Ext as Extension (vendorsWire)
+    participant File as settings.json (COAI_VENDORS)
+    participant Mcp as coai-mcp
+    Ext->>Mcp: --features
+    Mcp-->>Ext: [..., maxPromptKib]
+    Card->>Ext: maxPromptKib typed on the row
+    Ext->>File: row + maxPromptKib (only when listed)
+    Mcp->>File: read on start and on change (PromptCapOf)
+    Mcp->>Mcp: RosterBuilder: first prompt bytes vs cap; over the cap = left out, said in the reply
+    Mcp-->>Ext: providers: maxPromptKib on a capped row
 ```
 
 ## How the Team server is deployed (2026-09-06)

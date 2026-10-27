@@ -44,10 +44,13 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
     private JsonElement RecordFile() =>
         JsonDocument.Parse(File.ReadAllText(Directory.EnumerateFiles(Path.Combine(_data, "consultations"), "*.json").Single())).RootElement;
 
-    [Fact]
-    public async Task TwoTurns_StandInOneSnapshot_RefreshedInPlace_OnOneHome_AndTheCloseTakesTheFolder()
+    /// <summary>The consult flow, as a Windows host and as a WSL2 host (E2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): on WSL2 each turn's home holds the one admitted .env link, and the close takes it with the folder.</summary>
+    [Theory]
+    [InlineData(VibeFlowHost.Windows)]
+    [InlineData(VibeFlowHost.Wsl2)]
+    public async Task TwoTurns_StandInOneSnapshot_RefreshedInPlace_OnOneHome_AndTheCloseTakesTheFolder(string mode)
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows — the launch control's tests pin that refusal");
+        using var flow = VibeFlowHost.Enter(mode, _data);
         using var _ = Runners.Vibe.VibePathBudget.Using(Runners.Vibe.VibePathBudget.None);
         using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
         await BranchConfigurationAsync();
@@ -84,6 +87,7 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
         RecordFile().GetProperty("turns").EnumerateArray().Select(turn => turn.GetProperty("tokensIn").GetInt64())
             .Should().Equal([1200, 1200], "M-V5: a resumed export's usage is that turn's own, so each turn is billed as reported");
 
+        flow.AssertLinked(mode);
         (await Close(service, id, "solved")).TryGetProperty("error", out error).Should().BeFalse(error.ToString());
         Directory.Exists(folder).Should().BeFalse("the conversation's home and snapshot go as it closes (D17, D20)");
     }

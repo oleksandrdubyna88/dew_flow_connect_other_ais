@@ -30,6 +30,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   ],
   localEngines: {},
   server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+  hostKind: 'windows',
   side: '',
   perSide: false,
   questions: [],
@@ -998,9 +999,9 @@ test('S5.7.2 a consultant on a runtime the installed server cannot consult on is
   const known = (version: string): PanelState['server'] => ({ kind: 'known', version, remembered: true, updateOffered: false });
 
   const section = consultantSection(everyPageHtml(state({ settings: onKimi, server: known('0.57.0') }), 'n0nce'));
-  assert.ok(section.includes('The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.58.0 or later'),
+  assert.ok(section.includes('The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.64.0 or later'),
     'the Consultant section does not name the server that cannot consult on kimi');
-  assert.ok(!everyPageHtml(state({ settings: onKimi, server: known('0.58.0') }), 'n0nce').includes('cannot consult on kimi'));
+  assert.ok(!everyPageHtml(state({ settings: onKimi, server: known('0.64.0') }), 'n0nce').includes('cannot consult on kimi'));
 });
 
 /**

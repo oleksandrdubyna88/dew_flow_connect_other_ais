@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Schema step 22: <c>round_changes</c>, the size states on <c>rounds</c> and <c>reviewers.effort</c> (E2.S3 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>, contract C2) — appended after step 21, written
+/// <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>, contract C2) — appended after step 21, written
 /// by <c>RecordRound</c> in its own transaction from the record's <c>Size</c> and <c>Gitlinks</c>, empty on every round
 /// written before it, and reached by every database shape in the field — as step 21 was
 /// (<see cref="TheRoundKeyIsStepTwentyOneTests"/>).

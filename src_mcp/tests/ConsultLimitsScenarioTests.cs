@@ -113,7 +113,14 @@ public sealed class ConsultationSweeperTests : IDisposable
 
     private PanelServiceHost Host()
     {
-        var env = new Dictionary<string, string?> { ["COAI_DATA_DIR"] = _dir, ["COAI_PROVIDERS"] = "codex" };
+        // COAI_CONSULTANT_HOMES keeps the 50 ms beat off the machine's real per-user folders: without it every sweep walked
+        // the person's local application data (the same convention as ConsultScenarioBase's `homes`). E3 S2 (C14).
+        var env = new Dictionary<string, string?>
+        {
+            ["COAI_DATA_DIR"] = _dir,
+            ["COAI_PROVIDERS"] = "codex",
+            ["COAI_CONSULTANT_HOMES"] = Directory.CreateDirectory(Path.Combine(_dir, "homes")).FullName,
+        };
 
         return new PanelServiceHost(
             name => env.GetValueOrDefault(name),
@@ -121,7 +128,8 @@ public sealed class ConsultationSweeperTests : IDisposable
             default,
             new Runners.Processes.ProcessLauncher(),
             Logger.None,
-            Noticing.None);
+            Noticing.None,
+            CancellationToken.None);
     }
 
     /// <summary>An open consultation whose last activity was <paramref name="minutesAgo"/> minutes ago.</summary>

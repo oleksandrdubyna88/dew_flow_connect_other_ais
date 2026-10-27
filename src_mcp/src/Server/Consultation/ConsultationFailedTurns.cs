@@ -19,6 +19,12 @@ internal sealed record TurnConsultant(IConsultantRuntime Runtime, ProviderSettin
     /// <summary>The turn's one refund: whichever failure path claims it first, and none after.</summary>
     public SingleUseTake Refund { get; } = new(Caller.Take);
 
+    /// <summary>
+    /// What this turn's launch RAN WITH, as its ledger line says it (<see cref="RowLaunchOptions.Answering"/>, then the release its launches
+    /// asked) — <see cref="LaunchOptions.None"/> until the launch is built, which is what a turn refused before it bills.
+    /// </summary>
+    public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
+
     /// <summary>What THIS turn consumed and the vendor's counter after it — <see cref="ConsultationBilling.ThisTurnsBill"/>, for this consultant's reporting.</summary>
     public CumulativeShare BillOf(ConsultationRecord record, Usage reported) =>
         ConsultationBilling.ThisTurnsBill(Runtime.UsageIsCumulative, record, reported, Runtime.UsageCounterMayRestart);
@@ -144,8 +150,8 @@ internal sealed class ConsultationFailedTurns(
     }
 
     /// <summary>The turn's ledger row (<see cref="ConsultantTurnBooks.Billed"/>), role <c>consult</c>.</summary>
-    public void Billed(TurnConsultant consultant, string outcome, TimeSpan elapsed, Usage usage, string resetsUtc = "") =>
-        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, outcome, elapsed, usage, resetsUtc);
+    public void Billed(TurnConsultant consultant, string outcome, TimeSpan elapsed, Usage usage, string consultation, string resetsUtc = "") =>
+        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, outcome, elapsed, usage, consultant.RanWith, consultation: consultation, resetsUtc: resetsUtc);
 
     /// <summary>A best-effort write on a path that is already failing — it must not mask what failed.</summary>
     public void Quietly(Action write)
@@ -172,8 +178,8 @@ internal sealed class ConsultationFailedTurns(
         var failure = Kept(consultant, final, ConsultFailures.Classify(consultant.Runtime, final, facts.Record.Runtime, killedAs));
 
         // The ledger's outcome: the vendor's reason whole and redacted, never the summary's unredacted 160-character
-        // cut (story 3.3 of todo/PLAN_every_round_is_counted.md).
-        // And the reset the refusal stated, for the same row (epic 5's code round of todo/PLAN_every_round_is_counted.md).
+        // cut (story 3.3 of research/PLAN_every_round_is_counted.md).
+        // And the reset the refusal stated, for the same row (epic 5's code round of research/PLAN_every_round_is_counted.md).
         return final.Terminal is { } terminal
             ? ConsultationFailing.Terminal(facts, failure, ReviewerSummaryFactory.DescribeWhole(terminal)) with
             {
@@ -186,7 +192,8 @@ internal sealed class ConsultationFailedTurns(
     private string Applied(TurnConsultant consultant, TimeSpan elapsed, ConsultationFailed failed, string unrecorded)
     {
         var gaveBack = GaveBack(consultant, failed.Failure);
-        Billed(consultant, failed.LedgerOutcome, elapsed, failed.Share, failed.ResetsUtc);
+        // The record's id — emptied by RefusedBeforeTheLaunch when no record was ever written, so such a line names no consultation.
+        Billed(consultant, failed.LedgerOutcome, elapsed, failed.Share, failed.Next.Id, failed.ResetsUtc);
         health.Failed(ConsultHealth.FailureOf(failed));
 
         return refuse(ConsultationFailing.Answer(failed, gaveBack, unrecorded), $"consult:{failed.Failure.Kind}");

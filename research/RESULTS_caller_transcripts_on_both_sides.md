@@ -2,7 +2,7 @@
 
 > Status: **predictions written 2026-10-15 before any harness read a transcript or a store; E1.S4's observations
 > added the same day; Q4's probes, the folder facts and the three-round check run the same day on both sides. ONE item stays open: `/clear`, which exists only in an interactive session and needs an attended one.** Epic E1 of
-> [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](../todo/PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 
 - **Subject:** `dew_flow_connect_other_ais` at `6159b7f4` (origin/main when E1 started).
 - **Harnesses:** `scripts/export-code-rounds.py` (one read-only query per store; `COAI_EXPORT_DIR=<folder> py -3 scripts/export-code-rounds.py <db> rounds-win.json 2026-09-30`, the output a bare file name) and `scripts/measure-caller-transcripts.mjs`

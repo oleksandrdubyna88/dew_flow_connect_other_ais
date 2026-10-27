@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.83.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.82.0...extension-v0.83.0) (2026-10-21)
+
+
+### Features
+
+* **authors:** E5 — the round stores who wrote the code ([#863](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/863)) ([bc5b367](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bc5b367df5c80144c0db094c00fab3faa7a12a23))
+
+
+### Bug Fixes
+
+* **kimi:** a spent Kimi quota is not reported as a lost sign-in ([#900](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/900)) ([4dbfba4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4dbfba4d97ae68d022fac4cfd3ab5047fac71699))
+* **rounds:** the Rounds labels say what they count ([#891](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/891)) ([8c9c32d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8c9c32df722970b3ce386ec8300592c9b5c636c2))
+
+## [0.82.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.81.0...extension-v0.82.0) (2026-10-19)
+
+
+### Features
+
+* **consult:** a Vibe disk row reads a folder of repositories ([#887](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/887)) ([38ecd4e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/38ecd4e114f8cdb0ba145b39b936e87e3463dbc2))
+
+## [0.81.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.80.2...extension-v0.81.0) (2026-10-19)
+
+
+### Features
+
+* **kimi:** Kimi Code on a WSL2 host ([#879](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/879)) ([cb9ec8b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cb9ec8b652ec86afda7eac875ba80193eaf7a494))
+
+## [0.80.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.80.1...extension-v0.80.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **ledger:** a local review line carries its round ([#877](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/877)) ([bb279e3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bb279e3dbd7bdeaa49a2aa9d8ba6038415867f0b))
+
+## [0.80.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.80.0...extension-v0.80.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **round-counter:** rounds per 1 % keeps a plateau's rounds and is pooled (story 6.2b) ([#860](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/860)) ([ca9b7c1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ca9b7c1ec5ae706ab10e7d81cb01b4ef25e51d70))
+
+## [0.80.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.79.0...extension-v0.80.0) (2026-10-18)
+
+
+### Features
+
+* **rounds:** a reviewer is not sent more than it can read ([#856](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/856)) ([2b302c6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2b302c65e833a1df3a382fb8991fe89149713951))
+
+## [0.79.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.78.0...extension-v0.79.0) (2026-10-17)
+
+
+### Features
+
+* **vibe:** Vibe on WSL2 — the sign-in link, host admission, extension texts ([#842](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/842)) ([30bdc7c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/30bdc7cc54ab34d7787d0de3d0aea229af480be8))
+
+## [0.78.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.77.0...extension-v0.78.0) (2026-10-16)
+
+
+### Features
+
+* **plan-gate:** the round history, --log and the Rounds page say what each plan round reviewed ([#841](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/841)) ([095ebd6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/095ebd6d4ef843d3b1088b5eae275a8fcfd6539b))
+
 ## [0.77.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.76.0...extension-v0.77.0) (2026-10-16)
 
 

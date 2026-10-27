@@ -25,6 +25,7 @@ internal static class KimiShimScripts
         string answer = CleanReview,
         string reason = "",
         string failure = "",
+        string failureLine = "",
         bool tokens = true,
         IReadOnlyList<AcpReadRecord>? reads = null,
         IReadOnlyList<AcpToolCall>? calls = null,
@@ -36,7 +37,7 @@ internal static class KimiShimScripts
         {
             Tokens = tokens ? new AcpTokens(tokensIn, tokensOut, true) : AcpTokens.Unknown,
         };
-        var diagnosis = failure.Length > 0 ? new AcpDiagnosis(failure, "the cure", AcpFailureKind.Refused) : AcpDiagnosis.None;
+        var diagnosis = failure.Length > 0 ? new AcpDiagnosis(failure, "the cure", AcpFailureKind.Refused, failureLine) : AcpDiagnosis.None;
 
         return AskAcpMode.Report(outcome, diagnosis);
     }
@@ -45,8 +46,8 @@ internal static class KimiShimScripts
     public static ProcessResult Answered(string answer = CleanReview) => new(0, Report(answer: answer), string.Empty, TimedOut: false);
 
     /// <summary>A turn the shim ended with <paramref name="exit"/>, its report on stdout and its sentence on stderr.</summary>
-    public static ProcessResult Ended(int exit, AcpEnd end, string reason, string failure = "", string stderr = "", IReadOnlyList<AcpReadRecord>? reads = null, IReadOnlyList<AcpToolCall>? calls = null) =>
-        new(exit, Report(end, string.Empty, reason, failure, tokens: false, reads, calls), stderr, TimedOut: false);
+    public static ProcessResult Ended(int exit, AcpEnd end, string reason, string failure = "", string stderr = "", IReadOnlyList<AcpReadRecord>? reads = null, IReadOnlyList<AcpToolCall>? calls = null, string failureLine = "") =>
+        new(exit, Report(end, string.Empty, reason, failure, failureLine, tokens: false, reads, calls), stderr, TimedOut: false);
 }
 
 /// <summary>

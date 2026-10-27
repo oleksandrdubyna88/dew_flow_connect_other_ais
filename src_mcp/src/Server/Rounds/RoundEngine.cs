@@ -34,8 +34,10 @@ internal sealed class RoundEngine(
     Store.Projection projection,
     CallerSessions callers,
     RemoteProbe remote,
+    RoundAuthorsStep authors,
     Func<Stage, IReadOnlyList<string>> excludedFrom,
-    Func<Stage, RoundWork, string> noReviewerRefusal)
+    Func<Stage, RoundWork, string> noReviewerRefusal,
+    CancellationToken hostStopping)
 {
     private readonly PanelSettings _settings = settings;
     private readonly Serilog.ILogger _log = log;
@@ -49,9 +51,11 @@ internal sealed class RoundEngine(
     private readonly Store.Projection _projection = projection;
     private readonly CallerSessions _callers = callers;
     private readonly RemoteProbe _remote = remote;
+    private readonly RoundAuthorsStep _authors = authors;
     private readonly RoundCommands _commands = commands;
     private readonly Func<Stage, IReadOnlyList<string>> _excludedFrom = excludedFrom;
     private readonly Func<Stage, RoundWork, string> _noReviewerRefusal = noReviewerRefusal;
+    private readonly CancellationToken _hostStopping = hostStopping;
     private readonly RoundSkips _skips = new(settings, log, store, projection, excludedFrom);
 
     /// <summary>The lenses a round spent: the prompt of every row that was asked.</summary>
@@ -283,8 +287,9 @@ internal sealed class RoundEngine(
         // handed — not `roles × turns` as the reviewer count, which buys nothing when the turns fit in one
         // wave (plan §4.9). Every other stage's follow-ups are zero, so nothing changes for it by a second.
         var budget = RoundDeadline.For(_settings, stage.Stage, stage.RolesPerVendor, stage.FollowUps, _log);
-        using var clock = new CancellationTokenSource(budget);
-        using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
+        // The round's cancellation RECORDS which source fires first (the call's token, the round's own clock, the host's stop) — a
+        // linked source would only say that something fired, and the ledger's endCause is read from what fired FIRST.
+        using var cancellation = new RoundCancellation(_hostStopping, ct, budget);
 
         // ASKED BEFORE THE ROUND IS ASSEMBLED, because assembling it is synchronous and cannot.
         //
@@ -295,7 +300,7 @@ internal sealed class RoundEngine(
         // processes, two caches, and nothing guarantees this one has ever asked. So it asks here,
         // once, where there is still a Task to await on. (gemini and codex, story 4's plan round,
         // both Blocking.)
-        await WarmRemoteRolesAsync(roundClock.Token);
+        await WarmRemoteRolesAsync(cancellation.Token);
 
         try
         {
@@ -316,7 +321,7 @@ internal sealed class RoundEngine(
             // feature-review plan). The counter keeps counting rounds for the budget; this is the
             // round's name.
             var number = RoundNumber.Next(session.Rounds, stage.Stage);
-            // And the identity it carries across the wire (story 4.1 of todo/PLAN_every_round_is_counted.md): minted
+            // And the identity it carries across the wire (story 4.1 of research/PLAN_every_round_is_counted.md): minted
             // here, once per round that RUNS — `again`, the ladder and a person's Continue/Fix each come through here
             // again and so get a new one — stamped on every launch of the round below, and kept on its record.
             var key = RoundKeys.Mint();
@@ -352,7 +357,7 @@ internal sealed class RoundEngine(
             using var scratch = stage.NeedsWorktree ? null : new ScratchDirectory();
             var workingDir = lease?.Path ?? scratch!.Path;
             // Every launch the stage built — the round's reviewers, their repairs, the security lane — in this round.
-            var roundWork = (await stage.MakeWork(session, workingDir, sha, roundClock.Token)).InRound(key);
+            var roundWork = (await stage.MakeWork(session, workingDir, sha, cancellation.Token)).InRound(key);
             // The round's own scratch — its sanitised snapshot and its Vibe homes — goes with the round, however it ends
             // (D6 and D17 of todo/PLAN_vibe_and_kimi_runtimes.md); a crash leaves it to the six-hour scratch sweep.
             using var scratchOfTheRound = roundWork.Scratch;
@@ -391,7 +396,7 @@ internal sealed class RoundEngine(
             // its whole duration instead of nothing at all, and a crash leaves something to sweep.
             // What the round is about, derived from the plan the caller passed — a file name if
             // they handed a path, its title otherwise. Nobody has to remember to name the work.
-            var subject = RoundSubject.From(planText, File.Exists);
+            var subject = PlanSources.SubjectOf(stage, planText);
             var live = new LiveRound(_store, session, number, work, subject, _noticing, key);
             var audit = new RoundAudit(_log, session.State.Stage.ToString(), number);
             // Two kinds of exclusion, one list: a vendor this round cannot run AT ALL — no adapter,
@@ -406,7 +411,9 @@ internal sealed class RoundEngine(
             // legitimately run for a long time while every reviewer inside it behaved, and the
             // operator asked for a bound after one passed ten minutes.
             //
-            var results = await _scheduler.RunAllAsync(work, _executor, roundClock.Token, progress =>
+            // What a plan reviewer's answer is READ AS is settled once, where the reviewer finishes — before the ledger, the
+            // live view, the audit and the stand-down below are told (D8 of research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
+            var results = await _scheduler.RunAllAsync(work, _executor, cancellation.Token, progress =>
             {
                 live.Report(progress);
                 audit.Moved(progress);
@@ -420,24 +427,25 @@ internal sealed class RoundEngine(
                         finished,
                         ModelOf(progress.Provider),
                         session.State.Stage.ToString(),
-                        progress.Elapsed);
+                        progress.Elapsed,
+                        EndCauseOf(finished, cancellation, progress.LandedAt));
                 }
             },
             // Issue #485: with the switch on, the local reviewer stands down once the cloud was quiet.
-            _settings.StopLocalWhenQuiet ? StandDown.For(work) : null);
+            _settings.StopLocalWhenQuiet ? StandDown.For(work) : null,
+            PlanIncomplete.Settler(stage.Stage, planText));
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
             //
-            // The deadline is reported only when IT is what ended the round: `roundClock` fired and
-            // the caller's own token did not. Inferring it from cancelled reviewers would have called
-            // it a deadline the moment a PERSON cancelled a round, which is a different sentence and
-            // a wrong one.
+            // The deadline is reported only when IT is what ended the round: the round's recorded FIRST cause is
+            // `roundClock` — the same word the ledger files, so the sentence and the line cannot disagree. Inferring it
+            // from cancelled reviewers would have called it a deadline the moment a PERSON cancelled a round, which is a
+            // different sentence and a wrong one.
             var summary = ReviewerSummaryFactory.From(results, excluded, roundWork.NotAsked) with
             {
-                // Read from the TIMER, and only when the caller did not also cancel. A person who
-                // cancels at the moment the deadline strikes is reported as a person: the round was
-                // going to end either way, and blaming the clock for their decision is the wrong
-                // half of an ambiguity to keep.
-                EndedByDeadline = WhatEndedIt(clock.Token, ct, budget),
+                // Read from the recorded first cause: a person who cancels at the moment the deadline
+                // strikes is reported as whichever fired FIRST, and one who cancels after it does not
+                // turn the deadline into a withdrawal.
+                EndedByDeadline = WhatEndedIt(cancellation, budget),
             };
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             // The ROLE is stamped here because this is the only place that holds both the invocation
@@ -490,7 +498,11 @@ internal sealed class RoundEngine(
                 // The D23 ground a feature review's second round was admitted on — read from the state this
                 // round BEGAN from, because completing it is what spends the ground.
                 AdmittedBy = FeatureSecondRound.AdmittedBy(session.State),
+                PlanSource = PlanSources.Stamp(stage, planText, sha),
             };
+            // Who wrote what this round reviewed: computed HERE, before the save below and before the projection opens the database, and
+            // never part of the `with` above (its initializer cannot name the record it is building). Null for a round that is not settled.
+            record = record with { Authors = _authors.For(session, record) };
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
             var caller = RoundCommands.CallerFor(session);
@@ -821,16 +833,25 @@ internal sealed class RoundEngine(
     /// The round's own budget when the DEADLINE ended the round, and null for every other ending.
     /// </summary>
     /// <remarks>
-    /// <para>Read from the timer's own token rather than from the linked one, so the answer comes
-    /// from the thing that fired instead of a guess between two.</para>
-    /// <para>Where both fired it resolves toward the PERSON deliberately: they were going to end the
-    /// round either way, and blaming the clock for their decision is the wrong half of an ambiguity
-    /// to keep. Two reviewers raised the race; this is which side of it to land on.</para>
+    /// <para>Read from the round's RECORDED first cause (<see cref="RoundCancellation.CauseNow"/>), the same
+    /// value the ledger's <c>endCause</c> is filed from, so the sentence and the line agree. Flags would
+    /// say "the clock fired and the caller did not", which turns a deadline into silence the moment the
+    /// caller cancels afterwards.</para>
+    /// <para>Where both fired, the one that fired FIRST is the answer: a person who cancels after the clock
+    /// did not end the round, and a clock that strikes after a person did not either.</para>
     /// <para>The WHOLE budget, not what was left of it after setup — "the round reached its 30
     /// minute limit" when the limit is forty is a sentence nobody can act on.</para>
     /// </remarks>
-    private static TimeSpan? WhatEndedIt(CancellationToken deadline, CancellationToken caller, TimeSpan budget) =>
-        deadline.IsCancellationRequested && !caller.IsCancellationRequested ? budget : null;
+    private static TimeSpan? WhatEndedIt(RoundCancellation cancellation, TimeSpan budget) =>
+        cancellation.CauseNow() == EndCauses.RoundClock ? budget : null;
+
+    /// <summary>
+    /// WHY a cancelled reviewer's turn was cancelled — the FIRST of the round's three cancellation sources to fire, if it fired by the
+    /// moment the outcome landed, else <c>unknown</c> — or empty for any other ending (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md,
+    /// <see cref="RoundCancellation"/>).
+    /// </summary>
+    private static string EndCauseOf(ReviewerOutcome finished, RoundCancellation cancellation, long landedAt) =>
+        finished is ReviewerOutcome.Cancelled ? cancellation.CauseAt(landedAt) : string.Empty;
 
     /// <summary>How many reviewers this stage is CONFIGURED to run, before any work is built.</summary>
     /// <remarks>
@@ -896,7 +917,7 @@ internal sealed class RoundEngine(
     {
         var previous = session.Rounds.Count > 0 ? session.Rounds[^1].CompletedUtc : DateTime.MinValue;
         var from = previous > session.OpenedUtc ? previous : session.OpenedUtc;
-        var transcripts = _settings.AgentLogDir.Length > 0 ? _settings.AgentLogDir : Store.AgentLog.DefaultProjectsDir;
+        var transcripts = _settings.TranscriptHome.ProjectsDir;
 
         return from == DateTime.MinValue
             ? string.Empty

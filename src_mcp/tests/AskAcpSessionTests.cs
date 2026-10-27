@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// out of the answer, and ends <c>session_lost</c> (exit 70) when the agent no longer holds the session — in-process, over the scripted agent.
 /// </summary>
 /// <remarks>
-/// What the agent does on a load is what M-K16 measured on Kimi 2.1.1 (<c>research/RESULTS_kimi_confinement.md</c> §29): the load's result
+/// What the agent does on a load is what M-K16 measured on Kimi 2.1.1 (<c>research/RESULTS_kimi_confinement.md</c> §33): the load's result
 /// announces the <c>model</c> option, the history is replayed as <c>session/update</c> BEFORE the load is answered, and an unknown id is a
 /// JSON-RPC error. Nothing here starts a real <c>kimi</c>.
 /// </remarks>
@@ -66,7 +66,7 @@ public sealed class AskAcpSessionTests
         var code = await LoadAsync(agent);
 
         code.Should().Be(0, Stderr);
-        Report().GetProperty("answer").GetString().Should().Be("NEW", "Kimi replays the history before the load answers (RESULTS §29) — the answer is only what follows the prompt");
+        Report().GetProperty("answer").GetString().Should().Be("NEW", "Kimi replays the history before the load answers (RESULTS §33) — the answer is only what follows the prompt");
         Report().GetProperty("toolCalls").EnumerateArray().Select(call => call.GetProperty("id").GetString())
             .Should().NotContain("t-old", "a replayed tool call is history, not this turn's trace");
     }
@@ -86,7 +86,7 @@ public sealed class AskAcpSessionTests
         agent.ReceivedMethods().Should().NotContain("session/set_config_option").And.NotContain("session/prompt", "nothing is spent on a session the agent does not hold");
     }
 
-    /// <summary>Kimi's own refusal quotes the id back (<c>Invalid params: Unknown sessionId: &lt;id&gt;</c>, RESULTS §29): the reason names it once, in coai's words, and the agent's echo of it is not repeated.</summary>
+    /// <summary>Kimi's own refusal quotes the id back (<c>Invalid params: Unknown sessionId: &lt;id&gt;</c>, RESULTS §33): the reason names it once, in coai's words, and the agent's echo of it is not repeated.</summary>
     [Fact]
     public async Task ASessionLostReason_NamesTheIdInItsOwnWords_NotTheAgentsEcho()
     {
@@ -226,7 +226,7 @@ public sealed class AskAcpSessionTests
         Report().TryGetProperty("failure", out _).Should().BeFalse();
     }
 
-    // ---------- S5.2.6 (E5.1 (a) took the first branch: the load announces the model, RESULTS §29) ----------
+    // ---------- S5.2.6 (E5.1 (a) took the first branch: the load announces the model, RESULTS §33) ----------
 
     [Fact]
     public async Task TheModelOnALoad_FollowsWhatTheLoadAnnounced()

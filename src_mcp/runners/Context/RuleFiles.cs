@@ -154,7 +154,7 @@ public static class RuleFiles
         [.. InstructionFiles, .. RuleFolders.Select(f => f.Dir).Distinct(StringComparer.Ordinal)];
 
     /// <summary>
-    /// Rules are text and a prompt is finite. 80 KB is about a dozen and a half real rule files.
+    /// Rules are text and a prompt is finite. 90 KB is about sixteen real rule files.
     /// </summary>
     /// <remarks>
     /// Raised from 40 KB on 2026-09-06, after measuring what this repository actually shows a
@@ -167,8 +167,17 @@ public static class RuleFiles
     /// what keeps `testing.md` and `security.md` out. The whole family set is about 199 KB, so this
     /// stays a budget rather than a fix: what it cannot fit is NAMED in the prompt (the bundle renders
     /// an "omitted for length" note) precisely so a reviewer cannot read an absence as compliance.
+    /// <para><b>Raised again, to 90 KB, on 2026-10-16 — the operator's decision, which supersedes the
+    /// 80 KB one (the earlier "D18" of the feature plan, which named the FULL budget, not its size).</b>
+    /// Why: the instruction files, this repository's own rules and the eight tier rules had grown to
+    /// 79 944 of the 80 000 bytes, leaving 56 — no rule outside the tier could fit, so the new
+    /// `common/test-leftovers.md` (4 706 bytes) could not reach any reviewer on any branch. At 90 000
+    /// the same base and tier leave 9 976 bytes (10 056 until 2026-10-18, when E5's `--kimi-clear-marker` entry in `.agents/PROJECT.md` added 23 characters to the base; 10 033 until 2026-10-19, when E6's `--round-authors` entry added 19; 10 014 until 2026-10-20, when the merge with E6 brought E7's `--backfill-authors` entry (22) onto that base; 9 992 until 2026-10-21, when E1.S2's `--host-facts` entry added 16) for the rotated tail, which takes one to three rules a
+    /// round (mean 1.78 over 3 000 branch names). Measured in
+    /// `research/RESULTS_rules_selection_budget.md`; the canary that pins it is
+    /// `StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules`.</para>
     /// </remarks>
-    public const int DefaultBudgetBytes = 80_000;
+    public const int DefaultBudgetBytes = 90_000;
 
     /// <summary>Somebody else's conventions, vendored or generated, are not this project's rules.</summary>
     private static readonly string[] NotOurs =
@@ -399,7 +408,7 @@ public static class RuleFiles
     /// worse half of this fix, because the budget would then be honest about bytes nobody wanted.</para>
     /// <para><b>Why it went unseen for a day.</b> Every job in <c>ci.yml</c> is
     /// <c>ubuntu-latest</c>; the only Windows legs are the release matrix. So
-    /// <c>TheRotatedTail_CurrentlyFitsAtMostOneRule</c> — the one check that can see this — ran on a
+    /// <c>AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules</c> — the one check that can see this — ran on a
     /// tag and nowhere else, and the release of <c>mcp-v0.29.0</c> is where it surfaced.</para>
     /// </remarks>
     private static string? Read(string path)

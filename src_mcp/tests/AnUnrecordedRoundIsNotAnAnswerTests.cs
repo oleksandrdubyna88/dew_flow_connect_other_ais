@@ -148,6 +148,11 @@ public sealed class AnUnrecordedRoundIsNotAnAnswerTests : IAsyncLifetime
         // reason that had nothing to do with the behaviour. A read-only attribute denies the write
         // on every platform.
         File.SetAttributes(SessionFile(), FileAttributes.ReadOnly);
+        // The session is saved by a temp file and a move over it (E3 S5): a RENAME over a read-only file succeeds on Linux and macOS, where the
+        // attribute is a mode bit that only denies opening it for writing. What denies the save there is a folder nobody may create a file in.
+        var sessions = Path.Combine(_data, "sessions");
+        Assert.SkipUnless(FolderHolds.CanMakeOneUndeletable, "a privileged Unix process writes where the mode forbids");
+        using var folder = FolderHolds.Unwritable(sessions);
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", "a plan worth reviewing"));
 

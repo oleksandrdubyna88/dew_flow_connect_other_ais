@@ -1,15 +1,15 @@
 import { apiSettingsFields } from './apiSettingsView';
 import { type BinarySays, confirmButton, describedBy, type FirstSeen, newTag, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
-import { effortField, fastField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
+import { effortField, fastField, maxPromptField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
 import { rowHasFastTier } from './fastTier';
 import {
-  type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, versionWarningNote, worldButtons,
+  type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, kimiMarkerNote, kimiNetworkSignInField, offMachineNote, verdictBadge, versionWarningNote, worldButtons,
 } from './modelCardWorld';
 import type { TeamServerState } from './teamServerView';
 import { modelsFor, modelsProvenance } from './models';
 import {
-  type CardContext, type CliFieldFacts, cannotRun, dialectField, endpointField, featureBox, modelOptions, modelWords, priceFields, runtimeFields, stageBox,
+  type CardContext, cannotRun, dialectField, endpointField, featureBox, modelOptions, modelWords, priceFields, runtimeFields, stageBox,
 } from './panelView';
 import { vaultKeyOf } from './vaultKey';
 import { executableFor } from './vendorTerminal';
@@ -40,17 +40,17 @@ export interface ModelCardFacts {
   readonly now: number;
   /**
    * `7 days: 214 rounds · 31 consult turns · 5 h: 12` — from the CACHED round counts, never a read per render (story 2.4
-   * of todo/PLAN_every_round_is_counted.md, `cardRoundsLine`); empty before the first read, and then nothing is drawn.
+   * of research/PLAN_every_round_is_counted.md, `cardRoundsLine`); empty before the first read, and then nothing is drawn.
    */
   readonly roundsLine?: string;
   /**
    * `quota out — resets in 89 h (Wed 04:49)` — the reset the row's last refusal stated, from the same cached snapshot
-   * (story 5.3b of todo/PLAN_every_round_is_counted.md, `cardResetLine`); empty when none is ahead, and then nothing is drawn.
+   * (story 5.3b of research/PLAN_every_round_is_counted.md, `cardResetLine`); empty when none is ahead, and then nothing is drawn.
    */
   readonly resetLine?: string;
   /**
    * The vendor's own gauge, a line per reported window — a Team server's reading for a row that runs there, or why this
-   * machine reads none (story 6.2 of todo/PLAN_every_round_is_counted.md, `cardGaugeLines`); none drawn when empty.
+   * machine reads none (story 6.2 of research/PLAN_every_round_is_counted.md, `cardGaugeLines`); none drawn when empty.
    */
   readonly gaugeLines?: readonly string[];
 }
@@ -146,13 +146,14 @@ function actions(vendor: Vendor, id: string, facts: ModelCardFacts, locked: stri
     body: removeBody(vendor, facts.references), ...(locked.length > 0 ? { refused: locked, describedBy: lockLineId(vendor) } : {}),
   });
 
-  return `<div class="actions">${checkButton(id, facts.check)}<button type="button" class="link" data-command="duplicateModel" data-id="${id}" title="Add a copy with its own id">⧉ Duplicate</button>${remove}</div>`;
+  return `<div class="actions">${checkButton(id, vendor.runtime, facts.check)}<button type="button" class="link" data-command="duplicateModel" data-id="${id}" title="Add a copy with its own id">⧉ Duplicate</button>${remove}</div>`;
 }
 
 /** What this side's coai-mcp ignores on a row, asked through the one `skew` road — by capability (E3's plan round). */
 const IGNORED: readonly { readonly feature: string; readonly what: string; readonly set: (vendor: Vendor) => boolean }[] = [
   { feature: 'systemPrompt', what: 'its system prompt', set: (vendor) => (vendor.systemPrompt ?? '').length > 0 },
   { feature: 'timeoutMinutes', what: 'its own time limit', set: (vendor) => vendor.runtime !== 'api' && vendor.timeoutMinutes !== undefined },
+  { feature: 'maxPromptKib', what: 'its prompt cap', set: (vendor) => vendor.maxPromptKib !== undefined },
   { feature: 'cliEffort', what: 'its effort', set: (vendor) => vendor.runtime !== 'api' && (vendor.effort ?? '').length > 0 },
   { feature: 'apiStream', what: 'streaming the answer', set: (vendor) => vendor.runtime === 'api' && vendor.stream === true },
   // A consultation reads the row's settings only from a binary that takes the whole row (C2; the epics 4–5 consultation).
@@ -198,12 +199,13 @@ function top(vendor: Vendor, id: string, facts: ModelCardFacts): string {
     + `<div class="badges"><span class="badge access">${escapeHtml(accessOf(vendor.runtime).label)}</span>${verdictBadge(vendor.id, facts.context)}`
     + `${cannotRun(vendor.id, facts.context.reported)}${cliBadge(vendor, facts.context.cli)}${healthBadge(facts.check)}</div>`
     + `<div class="world">${worldButtons(vendor, id, facts.context)}</div>`
-    + `${versionWarningNote(vendor.id, facts.context.reported)}${offMachineNote(vendor)}${contractNote(vendor, facts.teamServers)}`
+    + `${versionWarningNote(vendor.id, facts.context.reported)}${kimiMarkerNote(vendor, facts.context.reported)}${offMachineNote(vendor)}${contractNote(vendor, facts.teamServers)}`
     + `${ignoredNote(vendor, facts.binary, facts.context.runtimeNote)}</div>`;
 }
 
 function useFor(vendor: Vendor, id: string, facts: ModelCardFacts): string {
-  const on = vendor.enabled && facts.context.runtimeNote.length === 0;
+  // The held RUNTIME switches the boxes off — not any note: a host note (refused on native Linux) leaves the ticks alone.
+  const on = vendor.enabled && !facts.context.runtimeHeld;
   const stage = (kind: 'plan' | 'code', text: string): string => stageBox(kind, id, vendor[kind], on && !facts.lastFor.includes(kind), text, '',
     facts.lastFor.includes(kind) ? lockLineId(vendor) : '');
 
@@ -238,9 +240,9 @@ function tuning(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const context = facts.context;
 
   return vendor.runtime === 'api'
-    ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion) + streamField(vendor, id, newTag('model.stream', facts.firstSeen, facts.now))
+    ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion) + streamField(vendor, id, newTag('model.stream', facts.firstSeen, facts.now)) + maxPromptField(vendor, id)
     : effortField(vendor, id, probedOf(context, vendor.id), newTag('model.effort', facts.firstSeen, facts.now)) + thinkingLine(vendor) + timeoutField(vendor, id)
-      + fastOf(vendor, id, facts);
+      + maxPromptField(vendor, id) + fastOf(vendor, id, facts);
 }
 
 /** The fast-mode select, for a row that has a tier (research/PLAN_fast_mode.md). */
@@ -254,12 +256,12 @@ function answers(vendor: Vendor, id: string, facts: ModelCardFacts): string {
 }
 
 /** How the row is reached: its endpoint, an api row's dialect, the CLI's path where there is a CLI here. */
-function connectionOf(vendor: Vendor, id: string, cli: CliFieldFacts): string {
+function connectionOf(vendor: Vendor, id: string, cli: CardContext): string {
   const remote = vendor.runtime === 'remote';
   const api = vendor.runtime === 'api';
 
   return endpointField(vendor, id, vendor.runtime === 'local', remote, false) + (api ? dialectField(vendor, id, false) : '')
-    + runtimeFields(vendor, remote || api, cli);
+    + runtimeFields(vendor, remote || api, cli) + kimiNetworkSignInField(vendor, cli);
 }
 
 function usedLine(references: readonly string[]): string {

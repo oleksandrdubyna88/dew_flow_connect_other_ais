@@ -24,7 +24,7 @@ import { type BusySnapshot, IDLE } from './busySnapshot';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
-import { runtimeSkewNote } from './runtimeSince';
+import { runtimeOnServer, runtimeSkewNote } from './runtimeSince';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
@@ -85,7 +85,7 @@ import { vaultKeyOf } from './vaultKey';
 import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
-import { hostFamily } from './hostSide';
+import { hostFamily, type HostKind } from './hostSide';
 import { storedForThisSide, type PathFamily } from './pathFamily';
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
@@ -192,6 +192,14 @@ export interface PanelState {
    * test names it, so a page is the same on any machine.
    */
   readonly hostFamily?: PathFamily | undefined;
+  /**
+   * What this window runs on — Windows, WSL2, WSL1, a native Linux host or a Mac — read from the kernel once by the host
+   * (`hostKind`). It decides what a Vibe card says about the host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md): "update
+   * coai-mcp" on WSL2 only, a refusal on WSL1 and a native host. REQUIRED, with no fallback: the one fallback there could be
+   * — this platform's own — maps every Linux platform to a native host, which would draw the refusal on a WSL2 window.
+   * Whoever builds a state says what the window runs on (a test names it, so a page is the same on any machine).
+   */
+  readonly hostKind: HostKind;
   /**
    * The ids of the reviewer rows whose CLI path this side skips as the other side's — `otherSideClis`, decided by the host
    * with the disk (`pathForThisSide`), because this page's modules ask none. Absent draws no note.
@@ -378,13 +386,13 @@ export interface PanelState {
    */
   readonly cardPrices: Readonly<Record<string, ModelPrice>>;
   /**
-   * The rounds each Models card's line counts (story 2.4 of todo/PLAN_every_round_is_counted.md) — the CACHED snapshot,
+   * The rounds each Models card's line counts (story 2.4 of research/PLAN_every_round_is_counted.md) — the CACHED snapshot,
    * never a read of its own (`roundCountsCache.ts`); absent before the first read, and the card then says nothing.
    */
   readonly roundsSnapshot?: RoundsSnapshot | undefined;
   /**
    * The monthly plan prices typed on Setup › Team servers, by `<server>/<vendor>` (story 6.2 of
-   * todo/PLAN_every_round_is_counted.md, `planPrice.ts`) — absent or empty when none is typed.
+   * research/PLAN_every_round_is_counted.md, `planPrice.ts`) — absent or empty when none is typed.
    */
   readonly planPrices?: PlanPrices | undefined;
   /** The last plan price refused at its card, drawn beside the box with what was typed — absent when none was. */
@@ -1149,6 +1157,8 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
   const serverVersion = state.server.kind === 'known' ? state.server.version : '';
   // The host's disk and drive, in the family the page is drawn for (a test names it; absent is this host's).
   const family = state.hostFamily ?? hostFamily();
+  // ONE source for the host, never mixed with the path family (which cannot tell WSL from a desktop Linux or a Mac).
+  const host = state.hostKind;
   const otherSides = state.otherSideClis ?? [];
   // Once for the page: every card draws one field or two by the same decision (E4.1, E2's `twoPathFields`).
   const sides = pathSidesOf(state.sides, family);
@@ -1167,12 +1177,15 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     allowedRemote: allowedModelsFor(v, state.teamServers ?? []),
     reported: state.providers?.reported ?? {},
     // Per card, so the sentence names THIS row (`runtimeOnServer` decides whether there is one).
-    runtimeNote: runtimeSkewNote(serverVersion, [v]),
+    runtimeNote: runtimeSkewNote(serverVersion, [v], host),
+    // WHAT switches the controls off: the server does not know the runtime. A note about the host rides `runtimeNote` too.
+    runtimeHeld: !runtimeOnServer(v.runtime, serverVersion),
     // Per card too: a Team server row and an older server switch the feature box off for different
     // reasons, and the card says which (`featureNote`, story S3.3).
     featureNote: featureNote(v, serverVersion),
     // An api card's per-model settings name the installed server when it is too old for them (S3.8).
     serverVersion,
+    kimiAllowNetworkSignIn: host === 'wsl2' || host === 'linux' ? state.settings.kimiAllowNetworkSignIn : undefined,
     otherSideCli: otherSides.includes(v.id) ? family : undefined,
     family,
     // The mark by THIS side's STORED value — what the box draws and the watch keys its finding on (paths per side,
@@ -1261,12 +1274,19 @@ export interface CardContext {
   /** This vendor's colour, already decided against every other configured vendor. */
   readonly colour: string;
   /**
-   * For a row of a runtime newer than the installed server (`api`, `vibe` — `runtimeSince.ts`): the sentence naming
-   * that server as too old to run it — or empty. Non-empty DISABLES
-   * the card's controls and is shown on it; the writer keeps the same row out of the settings file
-   * (`vendorsEnv`), so the card and the file agree about what the old server will run.
+   * What this card says about the installed server and the host (`runtimeSince.ts`), or empty: for a row of a runtime
+   * newer than the server (`api`, `vibe`) the sentence naming that server as too old to run it, and for a Vibe row on
+   * Linux or WSL the sentence about the HOST (update on WSL2, a refusal on native Linux and WSL1). It is SHOWN on the
+   * card; it does not decide the controls — {@link runtimeHeld} does.
    */
   readonly runtimeNote: string;
+  /**
+   * True when the installed server does not know this row's runtime (`!runtimeOnServer`). Only this DISABLES the card's
+   * controls; the writer keeps the same row out of the settings file (`vendorsEnv`), so the card and the file agree
+   * about what the old server will run. A note about the host is not this: a row that is merely refused at launch keeps
+   * its ticks.
+   */
+  readonly runtimeHeld: boolean;
   /**
    * Why this card's "reviews features" box is off — a Team server row (D10), or an installed server
    * older than `FEATURE_SINCE` — or empty when the box is live. The writer holds the same tick back
@@ -1275,6 +1295,11 @@ export interface CardContext {
   readonly featureNote: string;
   /** The installed `coai-mcp`'s version, or empty when absent or unknown — which is not old. */
   readonly serverVersion: string;
+  /**
+   * The saved `coai.kimiAllowNetworkSignIn` for a Kimi card's *Connection* fold (DL6 of research/PLAN_kimi_and_vibe_on_linux.md), or UNDEFINED where
+   * there is nothing to admit — a Windows, WSL1 or macOS window has no network mount of a Linux home to judge. Absent draws no box.
+   */
+  readonly kimiAllowNetworkSignIn?: boolean | undefined;
   /** The family of THIS side when the row's CLI path is the other side's (the host decided it) — else undefined, no note. */
   readonly otherSideCli: PathFamily | undefined;
   /**
@@ -2518,7 +2543,7 @@ export /**
  * ~$3.00`, because a sum of the two is a number nobody can check. An estimate with no rate behind it
  * is a guess dressed as a number, so that stays a dash. The tilde is load-bearing — it is the
  * difference between what somebody charged and what we worked out — and `≥` says some line could not
- * be priced at all (story 2.5 of todo/PLAN_every_round_is_counted.md).</p>
+ * be priced at all (story 2.5 of research/PLAN_every_round_is_counted.md).</p>
  */
 function spend(row: { costUsd: number | null; estimatedUsd: number | null; floor?: boolean }): string {
   return atLeast(row.floor === true, total(row.costUsd, row.estimatedUsd));
@@ -3405,7 +3430,7 @@ export const PANEL_COMMANDS = [
   'signInTeamServer',
   'signOutTeamServer',
   'removeTeamServer',
-  // Save price on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md): the id is `<server>/<vendor>|<typed>`,
+  // Save price on Setup › Team servers (story 6.2 of research/PLAN_every_round_is_counted.md): the id is `<server>/<vendor>|<typed>`,
   // posted by the page's own handler (it reads the box beside the button); the host validates and refuses at the card.
   'savePlanPrice',
   // The Settings page's Models tab (PLAN_one_model_catalog.md E3.2): a use ticked on a row (id `<row>|<use>`), a
@@ -3413,6 +3438,9 @@ export const PANEL_COMMANDS = [
   'toggleUse',
   'duplicateModel',
   'removeModel',
+  // A Kimi card's *Clear the stuck Kimi marker* (E6 of research/PLAN_kimi_and_vibe_on_linux.md): drawn only while the server reports a
+  // standing marker for the row. Its id is the ROW; the host asks the server again and runs the one-shot mode on the path it names.
+  'clearKimiMarker',
   // ✓ Check on a Models card: one paid turn of that row, asked first by the host (D10), kept as `model-<id>`.
   'checkModel',
   // Try it on the Settings page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).

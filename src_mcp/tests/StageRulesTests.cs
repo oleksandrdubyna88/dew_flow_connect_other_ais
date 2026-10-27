@@ -140,65 +140,208 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// The ROTATED TAIL fits at most one rule once the tier has taken its share of the budget.
+    /// The base and the eight tier rules spend exactly 80 024 characters of the budget — the number every
+    /// other pin in this file stands on.
     /// </summary>
     /// <remarks>
-    /// <para><b>A canary over the real mounted corpus, measured 2026-09-16 — and the answer depends on
-    /// the checkout's line endings.</b> The instruction files, this repository's own rules and all eight
-    /// tier rules come to 78 855 of the 80 000-byte budget on a CRLF checkout and 77 562 under LF,
-    /// leaving 1 145 or 2 438 bytes; the smallest rule outside the tier is
-    /// <c>common/durable-status.md</c> at 2 247 or 2 213. So NOTHING in the tail fits on Windows and
-    /// exactly ONE rule fits on Linux — and it is that same rule on every branch, being the only one
-    /// small enough to be eligible. <c>Collect</c> skips an oversized file and keeps walking, so it
-    /// tries all 24 and omits the rest.</para>
-    /// <para>That is why this asserts a BOUND and not an equality: an equality would have to be
-    /// written per platform, and a canary that passes on the author's machine and fails in CI is the
-    /// defect it is here to catch. The branch rotation orders a queue at most one rule is ever taken
-    /// from, so the claim it was added to support — that different branches read different parts of
-    /// the corpus — is true of the MECHANISM and false of this repository today.</para>
-    /// <para>It asserts the FACT, not an aspiration. A failure here is news, not a defect, and the
-    /// assertion message carries the re-baselining steps for whoever trips it.</para>
+    /// <para><b>The reproduction path, and the drift guard.</b> Measured 2026-10-16 on this repository with
+    /// the pinned conventions (<c>e29883f8</c>): the instruction files and this repository's own rules
+    /// (the "base", 17 883) plus the eight tier rules (62 061) were 79 944. Against the old 80 000 budget that
+    /// left 56 and nothing outside the tier could fit; against 90 000 it left 10 056. <b>Re-baselined twice
+    /// since:</b> 2026-10-18, when <c>.agents/PROJECT.md</c> named E5's <c>--kimi-clear-marker</c> (+23, base
+    /// 17 906, 79 967), and 2026-10-19 on the merged tree of E6, when it also named the one-shot mode
+    /// <c>--round-authors</c> (+19, which that file must do — <c>ARequestFaultIsNotAnOldBinaryTests</c>): base
+    /// 17 925, the pair 79 986, 10 014 left; the three canary tests below were re-run unchanged. To reproduce, run
+    /// this test and read the two numbers in its failure message.</para>
+    /// <para>It goes red when the conventions pin moves a tier rule, or when this repository's own
+    /// instruction files or rules change by one character. That is the point, not a nuisance: the tail
+    /// canaries below are measured against this number, so a change here means they have to be
+    /// re-measured in the same change (<c>research/RESULTS_rules_selection_budget.md</c>, last section).</para>
+    /// <para><b>Re-baselined 2026-10-20 (E7 merged with `main`, which holds E6).</b> The base is 17 947: `.agents/PROJECT.md` must
+    /// name every one-shot mode (`ARequestFaultIsNotAnOldBinaryTests`) and now names both `--round-authors` (E6, +19, 17 925 above) and
+    /// `--backfill-authors` (E7, +22). The total is 80 008, leaving 9 992 of 90 000; the tail canaries below are unaffected (the three smallest
+    /// tail rules are 8 683, the fourth adds 3 460). Measured once on the merged tree from this test's own failure message.</para>
+    /// <para><b>Re-baselined again 2026-10-21 (E1.S2 of the native-Linux plan, merged with `main`).</b> `.agents/PROJECT.md` also names the one-shot mode
+    /// `--host-facts` (+16, which it must — `ARequestFaultIsNotAnOldBinaryTests`). The base is 17 963, the total 80 024, leaving 9 976 of 90 000; the tail
+    /// canaries below ran unchanged and green (the fourth smallest tail rule, 3 460, still does not fit). Measured on the merged tree: the pinned numbers above
+    /// are the ones this test reads back.</para>
+    /// <para>The unit is the one the collector spends: characters of the line-ending-normalised text
+    /// (<c>RuleFile.Text.Length</c>), which is what <c>RuleFiles.DefaultBudgetBytes</c> calls bytes. They
+    /// differ for the non-ASCII characters in these files, and are equal on every platform.</para>
     /// </remarks>
     [Fact]
-    public void TheRotatedTail_CurrentlyFitsAtMostOneRule()
+    public void AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes()
     {
-        var corpus = RequireTheMount("the rotated-tail canary");
+        // No budget in the way, so the whole corpus is in the bundle and the split is ours to make.
+        var everything = CollectTheRealCorpus("canary/the-tail", budget: 10_000_000, out _);
+
+        var baseBytes = everything.Files
+            .Where(file => file.Path.Equals(file.WithinMount, StringComparison.Ordinal))
+            .Sum(file => file.Text.Length);
+        var tierBytes = everything.Files
+            .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
+            .Sum(file => file.Text.Length);
+
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 963 + 62 061 = 80 024 of 90 000, since E1.S2's --host-facts met E7's --backfill-authors on 2026-10-21; 17 947 + 62 061 = 80 008 until then; 17 925 + 62 061 = 79 986 before E7). "
+            + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
+            + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
+
+        tierBytes.Should().Be(62_061, message);
+        baseBytes.Should().Be(17_963, message);
+        (baseBytes + tierBytes).Should().Be(80_024, message);
+    }
+
+    /// <summary>
+    /// At the 90 KB budget the ROTATED TAIL fits at most three rules — and on the canary branch it is exactly
+    /// these three.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A canary over the real mounted corpus, re-measured 2026-10-16 at the operator's 90 000-byte
+    /// budget (it was 80 000, and read zero).</b> Base plus tier came to 79 944 (80 008 since 2026-10-20)
+    /// (<see cref="AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes"/>), leaving 9 992 of 90 000 (it was 10 056);
+    /// the smallest rule outside the tier is <c>common/durable-status.md</c> at 2 197. At 80 000 the leftover
+    /// was 56 and NOTHING in the tail fitted on any branch, so <c>common/test-leftovers.md</c> (4 706) reached
+    /// no reviewer. Now the walk takes whatever fits in the order the branch draws: over 3 000 branch names
+    /// one rule on 30 %, two on 62 %, three on 8 % — never four, because the three smallest rules together
+    /// are 8 683 and the fourth smallest adds 3 460 (12 143 together) against 9 992.</para>
+    /// <para><b>Two assertions.</b> On the canary branch the tail is EXACTLY <c>common/gpu-lease.md</c>,
+    /// <c>csharp/nuget-packages.md</c> and <c>common/durable-status.md</c> in that order (88 730 characters
+    /// in all) — the identities and the count, not a bound, because "at most three" is satisfied by a tail
+    /// of the wrong three. And over one hundred fixed branch names no branch reaches more than three, the
+    /// measured maximum, so a tail that grows — a bigger budget, a shrinking base or tier, a pin that moves a
+    /// rule — fails here as news rather than as a defect.</para>
+    /// <para>The identities are a pure function of (branch, rule name, sizes): the SHA-256 order is the same
+    /// on every machine. They move when the budget, a rule's size or this repository's own files move —
+    /// which the base-and-tier test above turns red first.</para>
+    /// </remarks>
+    [Fact]
+    public void AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules()
+    {
+        var bundle = CollectTheRealCorpus("canary/the-tail", out var corpus);
+
+        AssertTheWholeTierWasShown(bundle, corpus);
+
+        TailOf(bundle).Should().Equal(
+            ["common/gpu-lease.md", "csharp/nuget-packages.md", "common/durable-status.md"],
+            "measured 2026-10-16 at 90 000 bytes: these three, in the order the branch draws them. "
+            + "WHEN THIS FAILS the tail has changed, which is news and not a defect. Re-baseline in the same "
+            + "change: (1) re-measure research/RESULTS_rules_selection_budget.md, (2) update the claim in "
+            + "RuleOrder.ForBranch, RuleFiles.DefaultBudgetBytes and research/module_runners.md, (3) re-pin "
+            + "this list and the bound below.");
+
+        var widest = TailsOfTheFixedBranches.Value.MaxBy(entry => entry.Tail.Count);
+
+        widest.Tail.Should().HaveCountLessThanOrEqualTo(3,
+            $"branch '{widest.Branch}' reached [{string.Join(", ", widest.Tail)}] and at most three rules can "
+            + "fit: the leftover is 9 976 (9 992 before 2026-10-21), and the smallest rules outside the tier are 2 197, 3 065, 3 421 "
+            + "and 3 460. That number is the same on every platform since the collector stopped spending the "
+            + "budget on carriage returns.");
+    }
+
+    /// <summary>
+    /// The room the 90 KB budget bought exists on EVERY branch, not only on the canary one.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the canary above, and the one that would have caught the budget being
+    /// lowered or the base growing back to the brim: a bound of "at most three" is satisfied by zero,
+    /// which is exactly the state at 80 000 bytes — 56 bytes left, nothing eligible, a new rule that no
+    /// reviewer could ever read. Measured 2026-10-16: at least one tail rule on every one of 3 000 branch
+    /// names, so every one of these hundred.
+    /// </remarks>
+    [Fact]
+    public void AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule()
+    {
+        var emptiest = TailsOfTheFixedBranches.Value.MinBy(entry => entry.Tail.Count);
+
+        emptiest.Tail.Should().HaveCountGreaterThanOrEqualTo(1,
+            $"branch '{emptiest.Branch}' reached no tail rule. The tier leaves about 10 KB of a 90 000-byte "
+            + "budget and the smallest rule outside it is 2 197: if nothing fits, the base or the tier grew into "
+            + "the headroom the operator paid for on 2026-10-16 (it was 56 bytes at 80 000, and a rule added to "
+            + "the corpus then reached nobody)");
+    }
+
+    /// <summary>
+    /// <c>common/test-leftovers.md</c> reaches reviewers through the tail — on the branches that draw it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The rule the budget was raised for. It is outside the tier, so it is drawn, not owed: over
+    /// 3 000 branch names it was shown on 9.8 %. Two branches that draw it and two that do not are
+    /// pinned, because "reaches reviewers" is only true while BOTH halves hold — a rule that every
+    /// branch shows belongs in the tier, and one no branch shows is the 80 000-byte state again. The
+    /// branches are arbitrary and the draw is a pure function of (branch, rule), so the answer is the same
+    /// on every machine.</para>
+    /// <para>Fails when the rule is resized, the budget or base moves, or the hash order changes — each is
+    /// news. Re-measure and re-pick the branches in the same change.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("fix/x", true)]
+    [InlineData("feat/e5", true)]
+    [InlineData("main", false)]
+    [InlineData("feat/a", false)]
+    public void AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt(string branch, bool shown)
+    {
+        var bundle = CollectTheRealCorpus(branch, out _);
+
+        TailOf(bundle).Contains("common/test-leftovers.md").Should().Be(shown,
+            $"measured 2026-10-16 at 90 000 bytes: branch '{branch}' {(shown ? "draws" : "does not draw")} "
+            + "common/test-leftovers.md into the rotated tail");
+    }
+
+    /// <summary>
+    /// A fixed, arbitrary set of branch names — the first hundred of the three thousand the measurement
+    /// used (<c>feat/branch-&lt;i&gt;</c> for even i, <c>fix/issue-&lt;i&gt;-thing</c> for odd).
+    /// </summary>
+    private static IEnumerable<string> TheFixedBranches =>
+        Enumerable.Range(0, 100).Select(i => i % 2 == 0 ? $"feat/branch-{i}" : $"fix/issue-{i}-thing");
+
+    /// <summary>
+    /// The tail the PRODUCTION collector selects for each of <see cref="TheFixedBranches"/>, worked out ONCE
+    /// for the class.
+    /// </summary>
+    /// <remarks>
+    /// The bound test and the reachability test both ask the same hundred questions of the same corpus, and
+    /// each question is a full read of every rule file. Neither <c>RuleFiles</c> nor <c>RuleOrder</c> takes
+    /// the files' text from memory, and a production seam added only for a test is the wrong trade, so the
+    /// saving is taken at this level: one pass shared by both tests (a hundred collections instead of two
+    /// hundred) with every assertion unchanged. <c>PublicationOnly</c> so that a failure — or the skip a
+    /// missing mount raises — is not cached for the tests that follow.
+    /// </remarks>
+    private static readonly Lazy<IReadOnlyList<(string Branch, IReadOnlyList<string> Tail)>> TailsOfTheFixedBranches =
+        new(() => [.. TheFixedBranches.Select(branch => (Branch: branch, Tail: TailOf(CollectTheRealCorpus(branch, out _))))],
+            LazyThreadSafetyMode.PublicationOnly);
+
+    /// <summary>
+    /// The real corpus this repository mounts, through the PRODUCTION collector at the default budget.
+    /// </summary>
+    /// <remarks>
+    /// Through the PRODUCTION collector, not a byte-count beside it. Three reviewers made the same
+    /// point and they were right: a parallel calculation certifies its own arithmetic, so if Collect
+    /// ever changes how it measures or skips, a canary could pass while a tail rule really is selected —
+    /// or fail while none is. It also makes the test read whatever the platform reads. The branch name
+    /// decides only WHICH tail rules are drawn; the tier is fixed on every branch.
+    /// <c>TwoBranches_SeeDifferentTails</c> in RuleOrderTests covers the branch-sensitivity of the ORDER.
+    /// </remarks>
+    private static RuleBundle CollectTheRealCorpus(string branch, out string corpus) =>
+        CollectTheRealCorpus(branch, RuleFiles.DefaultBudgetBytes, out corpus);
+
+    /// <summary>The same, at a budget the caller names — the measuring test needs no budget in the way.</summary>
+    private static RuleBundle CollectTheRealCorpus(string branch, int budget, out string corpus)
+    {
+        corpus = RequireTheMount("the rotated-tail canary");
         var repoRoot = Directory.GetParent(corpus)!.Parent!.FullName;
 
-        // Through the PRODUCTION collector, not a byte-count beside it. Three reviewers made the same
-        // point and they were right: a parallel calculation certifies its own arithmetic, so if Collect
-        // ever changes how it measures or skips, this could pass while a tail rule really is selected —
-        // or fail while none is. It also makes the test read whatever the platform reads, which matters
-        // more here than anywhere: the leftover straddles the smallest tail rule between CRLF and LF.
-        // The branch name is arbitrary and the result does not depend on it: the tier is fixed on every
-        // branch, and only ONE rule is small enough to be eligible for what is left, so every branch
-        // reaches the same answer. TwoBranches_SeeDifferentTails in RuleOrderTests is what covers the
-        // branch-sensitivity of the ORDER; this covers the budget.
-        var bundle = RuleFiles.Collect(
-            repoRoot, RuleFiles.DefaultBudgetBytes, RuleOrder.ForBranch("canary/the-tail"));
+        return RuleFiles.Collect(repoRoot, budget, RuleOrder.ForBranch(branch));
+    }
 
-        // "Nothing fits after the tier" says nothing until the tier really was selected — and a bundle
-        // holding one tail rule and no tier rule would have satisfied the NotBeEmpty this replaces.
-        // A code round asked for exactly this, and the expectation is derived from the production
-        // table rather than retyped.
+    /// <summary>
+    /// "Nothing more fits after the tier" says nothing until the tier really was selected — and a bundle
+    /// holding one tail rule and no tier rule would have satisfied a bare NotBeEmpty. The expectation is
+    /// derived from the production table rather than retyped.
+    /// </summary>
+    private static void AssertTheWholeTierWasShown(RuleBundle bundle, string corpus) =>
         MountRulesOf(bundle).Where(RuleOrder.IsTier).Should().BeEquivalentTo(
             RuleOrder.TierRules.Where(entry => File.Exists(Path.Combine(corpus, Native(entry)))),
             "the tier is what spends the budget, so every tier rule present in the corpus must be shown");
-
-        var reachedTail = TailOf(bundle);
-
-        reachedTail.Should().HaveCountLessThanOrEqualTo(1,
-            $"the tail reached [{string.Join(", ", reachedTail)}] and at most one rule can fit today. "
-            + "WHEN THIS FAILS the tail has become genuinely reachable, which is GOOD NEWS and not a "
-            + "defect. Re-baseline in the same change: (1) re-measure "
-            + "research/RESULTS_rules_selection_budget.md, (2) update the claim in RuleOrder.ForBranch "
-            + "and research/module_runners.md, (3) raise this bound. Why a bound and not an equality: "
-            + "the base and the eight tier rules spend nearly the whole 80 000-byte budget and every "
-            + "rule outside the tier is larger than what is left — 1 of 24 fits. That number is the "
-            + "same on every platform since the collector stopped spending the budget on carriage "
-            + "returns; it read 0 under CRLF and 1 under LF until then, which is how a Windows "
-            + "machine came to be handed one rule fewer for the same commit.");
-    }
 
     /// <summary>
     /// The same corpus reaches the same reviewers, whichever line endings the checkout has.
@@ -259,7 +402,7 @@ public sealed class StageRulesTests : IDisposable
     /// </summary>
     /// <remarks>
     /// The other half of the pair a code round asked for. Without this, a green
-    /// <c>TheRotatedTail_CurrentlyFitsAtMostOneRule</c> is equally consistent with "the tail is out of
+    /// <c>AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules</c> is equally consistent with "the tail is out of
     /// budget" and "the tail is never collected at all", and only the first is true.
     /// </remarks>
     [Fact]

@@ -5,7 +5,7 @@ namespace CoaiServer;
 
 /// <summary>The fixed codes a gauge capture is suspended or skipped with — never a vendor's sentence.</summary>
 /// <remarks>
-/// Story 6.1a of todo/PLAN_every_round_is_counted.md: the reader logs allow-listed numbers and fixed codes, never a raw
+/// Story 6.1a of research/PLAN_every_round_is_counted.md: the reader logs allow-listed numbers and fixed codes, never a raw
 /// protocol message, stderr, an account id or a machine name (research/RESULTS_vendor_quota_gauges.md §2.6).
 /// </remarks>
 public static class GaugeCodes
@@ -30,6 +30,9 @@ public static class GaugeCodes
 
     /// <summary>The slot is signed out, blocked, or its capture is suspended — nothing was spawned.</summary>
     public const string SlotNotReadable = "slot-not-readable";
+
+    /// <summary>This vendor's runtime has no gauge the server reads (only codex has one today) — nothing was spawned, and the slot is not at fault.</summary>
+    public const string NoGaugeForRuntime = "no-gauge-for-runtime";
 
     /// <summary>The read answered nothing this parser could read: no result, or a result without a limit.</summary>
     public const string Unreadable = "unreadable";

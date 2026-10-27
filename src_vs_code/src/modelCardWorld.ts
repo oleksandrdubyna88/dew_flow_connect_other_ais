@@ -3,8 +3,11 @@ import { MODEL_CHECK } from './consultantCheckRun';
 import { checkStateOnThisDisk, type CheckRecord, type HealthFile } from './consultantHealth';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { escapeHtml } from './escapeHtml';
+import { CONSULTING } from './featureAvailability.generated';
+import { markerLine } from './kimiMarker';
 import { remoteWarning } from './localEngines';
-import { CLI_RUNTIMES } from './models';
+import { CLI_RUNTIMES, type Runtime } from './models';
+import { help } from './panelControls';
 import { type CardContext, endpointButton, headButtons } from './panelView';
 import { availabilityOf } from './providers';
 import type { TeamServerState } from './teamServerView';
@@ -85,10 +88,32 @@ export function checkFactsOf(health: ConsultantHealthState | undefined, id: stri
     : fromFile(health.thisSide.files?.checks[key], health.nowMs);
 }
 
-/** ✓ Check — one paid turn of this row, asked first by the host (D10); held while one runs. */
-export function checkButton(id: string, check: CheckFacts): string {
+/** The ✓ Check is a consultant check: offered only on a runtime that can hold a consultation (shared/feature-availability.json). */
+export function offersCheck(runtime: Runtime): boolean {
+  return CONSULTING.includes(runtime);
+}
+
+/** Why a row's ✓ Check is not offered — the disabled button's title (D7). The one place the wording lives. */
+export function checkNotOffered(runtime: Runtime): string {
+  return `the consultant check is not offered for ${runtime} — this runtime cannot hold a consultation`;
+}
+
+/**
+ * ✓ Check — on a runtime that can hold a consultation: one paid turn of this row, asked first by the host (D10), held while
+ * one runs. On any other row: drawn disabled with the reason, and bound to nothing — no command, no row, so a press posts
+ * nothing and no paid-turn prompt can open (D7). The server's refusal by name stays the backstop for a stale page.
+ */
+export function checkButton(id: string, runtime: Runtime, check: CheckFacts): string {
+  return offersCheck(runtime) ? offeredCheck(id, check) : refusedCheck(runtime);
+}
+
+function offeredCheck(id: string, check: CheckFacts): string {
   return `<button type="button" class="link" data-command="checkModel" data-id="${id}"`
     + ` title="One real, paid turn of this model in a scratch folder — you are asked first"${check.checking ? ' disabled' : ''}>✓ Check</button>`;
+}
+
+function refusedCheck(runtime: Runtime): string {
+  return `<button type="button" class="link" disabled title="${escapeHtml(checkNotOffered(runtime))}">✓ Check</button>`;
 }
 
 export function healthBadge(check: CheckFacts): string {
@@ -143,6 +168,38 @@ export function versionWarningNote(id: string, reported: CardContext['reported']
   const warning = reported[id]?.warning ?? '';
 
   return warning.length === 0 ? '' : `<p class="skew warned"><b>Runs with a warning:</b> ${escapeHtml(warning)}</p>`;
+}
+
+/**
+ * A Kimi row's STANDING survivor marker, when the server reports one: the line that says what stands and the *Clear the stuck Kimi
+ * marker* button (E6 of research/PLAN_kimi_and_vibe_on_linux.md, DL9). Nothing for any other row, when no marker stands, and from a
+ * server older than the field — the Busy sentence carries the way out by hand either way. The button's id is the ROW; the host asks
+ * the server again at the press and takes the path from that answer (`kimiMarker.ts`).
+ */
+export function kimiMarkerNote(vendor: Vendor, reported: CardContext['reported']): string {
+  const marker = vendor.runtime === 'kimi' ? reported[vendor.id]?.survivorMarker : undefined;
+
+  return marker === undefined
+    ? ''
+    : `<p class="skew warned"><b>A Kimi marker stands.</b> ${escapeHtml(markerLine(marker))} `
+      + `<button type="button" class="link" data-command="clearKimiMarker" data-id="${escapeHtml(vendor.id)}" data-pending-label="Clearing…" `
+      + 'title="Checks every process the marker names; clears it only when all of them are gone. Ends nothing.">Clear the stuck Kimi marker</button></p>';
+}
+
+/**
+ * A Kimi row's tick-box for `coai.kimiAllowNetworkSignIn` (DL6, Q7): admit a sign-in folder on network storage. Drawn only on a Kimi card
+ * on a WSL2 or Linux window (`CardContext.kimiAllowNetworkSignIn` is undefined elsewhere) and written as a PLAIN setting — never a row's
+ * field, so no `data-vendor`. It says the risk beside the box, because the refusal it lifts exists to keep the person signed in.
+ */
+export function kimiNetworkSignInField(vendor: Vendor, context: CardContext): string {
+  const on = context.kimiAllowNetworkSignIn;
+
+  return vendor.runtime !== 'kimi' || on === undefined
+    ? ''
+    : `<div class="field"><div class="check-row"><label class="check"><input type="checkbox" data-setting="kimiAllowNetworkSignIn"${on ? ' checked' : ''}> `
+      + `Allow a Kimi sign-in on network storage</label>${help('kimiAllowNetworkSignIn')}</div>`
+      + '<div class="hint">Off: coai refuses to start Kimi when its sign-in folder is on network storage (NFS, CIFS, sshfs). A Kimi on another machine that shares '
+      + 'this home can refresh the sign-in first and leave you signed out. Tick only if you never run Kimi elsewhere with this home.</div></div>';
 }
 
 /** The contract the row's own Team server last said it speaks — undefined for any other row, or one not heard from. */

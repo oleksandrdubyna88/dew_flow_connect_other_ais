@@ -10,14 +10,23 @@
 // token and, if it does, puts the live pair back where the person's Kimi expects it (RESULTS §12).
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { SYSTEM32, files, fwd, run } from './vibe.mjs';
+import { basename, dirname, join, posix, relative, resolve, sep, win32 } from 'node:path';
+import { dirLink, files, fwd, killTree, pythonCommand, removeDirLink, run } from './vibe.mjs';
 
 export const REAL_HOME = join(homedir(), '.kimi-code');
-/** Where Moonshot's installer puts it on Windows — KimiAcpProfile.InstalledExecutableFor, the shim's own default. */
-export const KIMI_EXE = join(REAL_HOME, 'bin', 'kimi.exe');
+
+/**
+ * Where Moonshot's installer puts `kimi`: on Windows `~/.kimi-code/bin/kimi.exe` (KimiAcpProfile.InstalledExecutableFor, the shim's
+ * own default); elsewhere `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` (DL5 of research/PLAN_kimi_and_vibe_on_linux.md).
+ */
+export function kimiExecutable(platform = process.platform, env = process.env, home = homedir()) {
+  if (platform === 'win32') return win32.join(home, '.kimi-code', 'bin', 'kimi.exe');
+  return posix.join(env.KIMI_INSTALL_DIR || posix.join(home, '.kimi-code'), 'bin', 'kimi');
+}
+
+export const KIMI_EXE = kimiExecutable();
 export const DEFAULT_MODEL = 'kimi-code/k3-256k';
 /** The shim's exit codes (AskAcpMode): the contract the probe reads, never the stdout text. */
 export const EXIT = { ok: 0, badRequest: 65, unavailable: 69, failed: 70, spent: 75, protocol: 76, refused: 77 };
@@ -58,8 +67,33 @@ export const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 export const fileHash = (path) => sha256(readFileSync(path));
 
 /** Every file under `dir` with its SHA-256 — what a before/after comparison of a home is made of. */
-export function manifest(dir) {
-  return Object.fromEntries(files(dir).map((f) => [f, fileHash(join(dir, f))]));
+export const isCredentialPath = (rel) => rel === 'credentials' || rel.startsWith('credentials/');
+
+/** A credential slot's name carries its hex (`kimi-code-env-<16 hex>.json`); the record keeps the shape and drops the slot (DN9: redacted). */
+export const redactSlot = (rel) => rel.replaceAll(/[0-9a-f]{8,}/giu, '<hex>');
+
+/** `lstat:<size>:<mode>:<mtime ms>` — a file recorded WITHOUT opening it; a rotated refresh token moves the size or the time. */
+function lstatShape(path) {
+  const s = lstatSync(path);
+  return `lstat:${s.size}:${s.mode & 0o7777}:${Math.round(s.mtimeMs)}`;
+}
+
+/** `name`, or `name#2`, `name#3`… when two redacted names would collide — the record never loses an entry. */
+const uniqueName = (taken, name) => (name in taken ? uniqueName(taken, `${name.replace(/#\d+$/u, '')}#${Number(/#(\d+)$/u.exec(name)?.[1] ?? 1) + 1}`) : name);
+
+/**
+ * Every file under `dir` with its SHA-256 — what a before/after comparison of a home is made of. Nothing under `credentials/` is EVER opened
+ * (DN5 item 2, gate finding 0: a hash reads the bytes, and those bytes are a refresh token): those paths — and any path `skip(rel)` names —
+ * are recorded by `lstat` alone, credential names with the slot's hex redacted. `hash` is injected so a test proves it is never called for them.
+ */
+export function manifest(dir, { skip = () => false, hash = fileHash } = {}) {
+  const record = {}; // built locally in one pass: a home can hold thousands of files, and a spread per file would be quadratic
+  for (const rel of files(dir)) {
+    const credential = isCredentialPath(rel);
+    if (!credential && !skip(rel)) record[rel] = hash(join(dir, rel));
+    else record[uniqueName(record, credential ? redactSlot(rel) : rel)] = lstatShape(join(dir, rel));
+  }
+  return record;
 }
 
 /** Whether each marker occurs in the session's main wire — the system prompt and tool results — whatever the answer did with it. */
@@ -96,7 +130,9 @@ export function trustInHome(home, workdir) {
 
 /** What a copied home takes from the real one: the sign-in and the config, the device identity, and the bundled rg/fd (never kimi.exe). */
 const HOME_FILES = ['config.toml', 'tui.toml', 'device_id', 'region', 'migrations-effort.json'];
-const HOME_BIN = ['rg.exe', 'fd.exe'];
+/** The tools a person's `~/.kimi-code/bin` may hold beside `kimi`, by the platform's names (L-K1: on WSL `fd` is there and `rg` is not). */
+export const homeBin = (platform = process.platform) => (platform === 'win32' ? ['rg.exe', 'fd.exe'] : ['rg', 'fd']);
+const HOME_BIN = homeBin();
 
 /**
  * A fresh home at `home` copied from `real`. Every copy is verified by hash; the list of what was copied is returned.
@@ -181,8 +217,9 @@ const isInside = (child, parent) => fold(child).startsWith(fold(withoutTrailingS
 
 /**
  * The sensitive files a copied home must not keep once the run is over: the sign-in and the config (it carries an API key).
- * A `credentials` that is a LINK (the shared-sign-in arm, M-K8b) is unlinked with `rmdirSync`, which removes the junction and
- * never what it points at — checked on a throwaway junction before the arm existed; a recursive remove would have followed it.
+ * A `credentials` that is a LINK (the shared-sign-in arm, M-K8b) is removed by its OWN name (lib/vibe.mjs removeDirLink: `rmdir`
+ * of a junction on Windows, `unlink` of a symlink elsewhere — `rmdir` refuses a symlink with ENOTDIR, measured red on WSL first)
+ * and never what it points at; a recursive remove would have followed it.
  */
 export function scrubHome(home) {
   const gone = [];
@@ -190,7 +227,7 @@ export function scrubHome(home) {
     const p = join(home, rel);
     const link = isLink(p);
     if (!existsSync(p) && !link) continue;
-    if (link) rmdirSync(p); else rmSync(p, { recursive: true, force: true });
+    if (link) removeDirLink(p); else rmSync(p, { recursive: true, force: true });
     if (existsSync(p) || isLink(p)) throw new Error(`${p} still exists after the scrub`);
     gone.push(link ? `${rel} (link)` : rel);
   }
@@ -199,11 +236,11 @@ export function scrubHome(home) {
 
 const isLink = (p) => { try { return lstatSync(p).isSymbolicLink(); } catch { return false; } };
 
-/** A directory junction `link` → `target` (a cmd builtin, so cmd.exe by its absolute path); the error text when it could not be made. */
-export function junction(link, target) {
-  const r = run(SYSTEM32('cmd.exe'), ['/d', '/c', 'mklink', '/J', link, target], { encoding: 'utf8', timeout: 30_000 });
-  return r.status === 0 ? '' : `mklink /J failed: ${(r.stdout + r.stderr).trim()}`;
-}
+/**
+ * A folder link `link` → `target`: a directory junction on Windows (mklink /J through cmd.exe by its absolute path), a symlink on
+ * Linux (DL6 of research/PLAN_kimi_and_vibe_on_linux.md) — lib/vibe.mjs's dirLink, one maker for both probes. The error text, or ''.
+ */
+export const junction = (link, target) => dirLink(link, target);
 
 // ------------------------------------------------------------------------------------------------- the credential guard
 
@@ -252,17 +289,20 @@ export function syncCredentials(from, to) {
 export class CredentialGuard {
   #real;
   #last;
+  #read;
   rotates = null; // unknown until a refresh of the real home has been seen
   events = [];
 
-  constructor(real) {
+  /** `read` is injected so a test proves WHEN the person's credential files are opened (S-N2's twin: never for an owned-only run). */
+  constructor(real, { read = credentialFingerprint } = {}) {
     this.#real = real;
-    this.#last = credentialFingerprint(real);
+    this.#read = read;
+    this.#last = read(real);
   }
 
   /** After a launch on the real home: learn whether the refresh token rotated. */
   afterRealRun(tag) {
-    const now = credentialFingerprint(this.#real);
+    const now = this.#read(this.#real);
     const fileMoved = JSON.stringify(now) !== JSON.stringify(this.#last);
     if (fileMoved) {
       this.rotates = !sameRefresh(now, this.#last);
@@ -281,12 +321,12 @@ export class CredentialGuard {
   /** After a launch on a copied home: if it refreshed and rotation is possible, the live pair goes back to the real home. */
   afterCopiedRun(home, tag) {
     if (!existsSync(join(home, 'credentials'))) return false;
-    const copy = credentialFingerprint(home);
+    const copy = this.#read(home);
     if (sameRefresh(copy, this.#last)) return false;
     const refreshedInCopy = Object.keys(copy).length > 0;
     if (refreshedInCopy && (this.rotates ?? true)) {
       this.events.push({ tag, where: 'copy', rotatedInCopy: true, writtenBack: syncCredentials(home, this.#real) });
-      this.#last = credentialFingerprint(this.#real);
+      this.#last = this.#read(this.#real);
       return true;
     }
     this.events.push({ tag, where: 'copy', rotatedInCopy: refreshedInCopy, writtenBack: [] });
@@ -294,12 +334,78 @@ export class CredentialGuard {
   }
 }
 
+/**
+ * A home's credential files by `lstat` ALONE — name, inode, size, mtime; no file is opened (J1 of the Opus judge on E1: an owned launch must not read
+ * the person's refresh token to learn that a refresh happened — a refresh rewrites the file, so its size or time moves). `list`/`stat` are injected.
+ */
+export function credentialShape(home, { list = readdirSync, stat = lstatSync } = {}) {
+  const dir = join(home, 'credentials');
+  if (!existsSync(dir)) return {};
+  return Object.fromEntries(list(dir).filter((n) => n.endsWith('.json')).sort((a, b) => a.localeCompare(b)).map((n) => {
+    const s = stat(join(dir, n));
+    return [n, `${s.ino}:${s.size}:${Math.round(s.mtimeMs)}`];
+  }));
+}
+
+/**
+ * The sign-in watch of one probe run. Every launch is watched by SHAPE (`credentialShape` — nothing opened). The content-reading
+ * `CredentialGuard` — which parses every credential file and hashes its refresh token — is built LAZILY, by `content()`, only when a copied-credentials
+ * (legacy) cell actually runs; once built, real-home runs feed it too, so the rotation is still learned. `read` is injected for the S-N2 twin.
+ */
+export class CredentialWatch {
+  #real;
+  #read;
+  #shape;
+  #last;
+  #content = null;
+  #events = [];
+
+  constructor(real, { read = credentialFingerprint, shape = credentialShape } = {}) {
+    this.#real = real;
+    this.#read = read;
+    this.#shape = shape;
+    this.#last = JSON.stringify(shape(real));
+  }
+
+  /** The content-reading guard — built on the first call, never before. */
+  content() {
+    this.#content ??= new CredentialGuard(this.#real, { read: this.#read });
+    return this.#content;
+  }
+
+  get rotates() { return this.#content?.rotates ?? null; }
+  get events() { return [...this.#events, ...(this.#content?.events ?? [])]; }
+
+  /** After a launch on the real home or an owned home: did the sign-in's files move (by shape)? Whether the token rotated is unknown here. */
+  afterRealRun(tag) {
+    const now = JSON.stringify(this.#shape(this.#real));
+    const moved = now !== this.#last;
+    if (moved) this.#events.push({ tag, where: 'real', refreshed: true, rotated: null });
+    this.#last = now;
+    const contentMoved = this.#content?.afterRealRun(tag) ?? false;
+    return moved || contentMoved;
+  }
+
+  /**
+   * After a launch on a copied home: the content guard may write the live pair BACK into the real home, so the shape baseline is re-read afterwards -
+   * otherwise the next real-home run would be blamed for a write this launch made.
+   */
+  afterCopiedRun(home, tag) {
+    const refreshed = this.content().afterCopiedRun(home, tag);
+    this.#last = JSON.stringify(this.#shape(this.#real));
+    return refreshed;
+  }
+}
+
+/** The refusal of a cell that would COPY the person's sign-in (and so read it): not unless the person passed `--allow-copied-credentials`. */
+export const copiedCredentialsRefusal = (allowed) => (allowed ? '' : 'this cell copies the credentials of the person into a scratch home and reads them to keep the refresh token alive; it is refused unless --allow-copied-credentials is passed (a native-host series never passes it)');
+
 // ----------------------------------------------------------------------------------------------- configs and canaries
 
 /** A fixed Python snippet: the path arrives as argv[1], so nothing about the path is ever Python source (the Vibe probe's rule). */
 export const CANARY_SNIPPET = "import sys; open(sys.argv[1], 'w').write('x')";
 const toml = (s) => JSON.stringify(s); // a JSON string is a valid TOML basic string
-export const canaryCommand = (path) => `python -c "${CANARY_SNIPPET}" "${fwd(path)}"`;
+export const canaryCommand = (path, platform = process.platform) => `${pythonCommand(platform)} -c "${CANARY_SNIPPET}" "${fwd(path)}"`;
 
 /** `[[hooks]]` as Kimi's own docs spell it (customization/hooks): event, command, timeout; nothing else, or the file fails to load. */
 export function hooksToml(canary, event = 'SessionStart') {
@@ -308,7 +414,7 @@ export function hooksToml(canary, event = 'SessionStart') {
 
 /** `mcp.json` as Kimi's own docs spell it (customization/mcp): a stdio server whose command writes the canary and exits. */
 export function mcpJson(canary) {
-  return `${JSON.stringify({ mcpServers: { 'probe-canary': { command: 'python', args: ['-c', CANARY_SNIPPET, fwd(canary)] } } }, null, 2)}\n`;
+  return `${JSON.stringify({ mcpServers: { 'probe-canary': { command: pythonCommand(), args: ['-c', CANARY_SNIPPET, fwd(canary)] } } }, null, 2)}\n`;
 }
 
 // --------------------------------------------------------------------------------------------------------- prompt mode
@@ -386,11 +492,15 @@ function choose(options) {
   return hit && offered.filter((o) => o.optionId === hit.optionId).length === 1 ? { optionId: hit.optionId, kind: hit.kind } : null;
 }
 
-/** FolderReadBoundary's rule, lexically: an absolute path inside `root` whose components hold no excluded name. */
+/**
+ * FolderReadBoundary's rule, lexically: an absolute path inside `root` whose components hold no excluded name. The root prefix
+ * is case-folded on Windows only — on Linux `/w/Repo` and `/w/repo` are two folders; the excluded names stay case-insensitive
+ * everywhere (the stricter reading).
+ */
 function boundaryAnswer(root, requested) {
-  const rootFull = resolve(root).toLowerCase() + sep;
+  const rootFull = fold(resolve(root)) + sep;
   const full = resolve(String(requested ?? ''));
-  if (!full.toLowerCase().startsWith(rootFull)) return { served: false, reason: 'outside the working folder' };
+  if (!fold(full).startsWith(rootFull)) return { served: false, reason: 'outside the working folder' };
   const parts = full.slice(rootFull.length).split(/[\\/]/u).filter(Boolean).map((p) => p.toLowerCase());
   for (const ex of EXCLUSIONS) {
     const exParts = ex.toLowerCase().split('/');
@@ -400,16 +510,6 @@ function boundaryAnswer(root, requested) {
   }
   if (!existsSync(full) || statSync(full).isDirectory()) return { served: false, reason: 'no such file in the working folder' };
   return { served: true, text: readFileSync(full, 'utf8') };
-}
-
-/** The tree by its pid — never by a name: taskkill on Windows (where Kimi runs); on POSIX, where only the unit tests' fake agent runs, its own pid. */
-function killTree(pid) {
-  if (!pid) return;
-  if (process.platform === 'win32') {
-    run(SYSTEM32('taskkill.exe'), ['/PID', String(pid), '/T', '/F'], { encoding: 'utf8', timeout: 15_000 });
-    return;
-  }
-  try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
 }
 
 /**
@@ -451,7 +551,8 @@ const exitedWithin = (exited, ms) => Promise.race([exited, new Promise((done) =>
  */
 export function acpTurn({ exe, args = ['acp'], cwd, env, deadlineMs, model = '', prompt = '', load = '', followUp = '', endLikeTheShim = false }) {
   return new Promise((done) => {
-    const child = spawn(exe, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    // On POSIX the agent leads its own process group, so the end below reaches every descendant that stayed in it (plan §5).
+    const child = spawn(exe, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
     const state = { pid: child.pid, lines: [], answer: '', answer2: '', sessionId: load, refusals: [], reads: [], toolCalls: {}, usage: null,
       sessionResult: null, stopReason: '', error: '', exit: null, stderrTail: '', prompting: false, second: false, loading: false, loadUpdates: [] };
     const pending = new Map();
@@ -569,3 +670,20 @@ export function acpTurn({ exe, args = ['acp'], cwd, env, deadlineMs, model = '',
     })().catch((e) => finish(`client: ${String(e?.message ?? e)}`));
   });
 }
+
+/**
+ * The sentence that refuses an arm which asked for an owned root (`requireOwned`, set by lib/kimi-arms.mjs for the cells of the 2.2.0 window) and has none —
+ * no `<root>/home` beside `<root>/os`, or not marked `owned` — or '' (an arm that never asked is not judged). Checked before anything launches.
+ */
+export function ownedRefusal(spec) {
+  if (!spec.requireOwned) return '';
+  if (spec.owned === true && rootOfHome(spec.home ?? '') !== '') return '';
+  return 'this arm has no owned root (<root>/home beside <root>/os) - it is refused, not run on the real KIMI_CODE_HOME (E4.3)';
+}
+
+/**
+ * Whether a launch is on a home the probe FILLED with the person's credentials (`filled`: the homes `copiedHome` put credentials into). Only those use the
+ * content-reading guard: an owned home, a junctioned one, an empty one and a copy made `credentials: false` carry none, so none of them may build it
+ * (re-check of J1: M-K7's empty-home and no-credentials arms used to, and every later launch then re-read the sign-in).
+ */
+export const launchesOnCopiedCredentials = (spec, filled) => Boolean(spec.home) && filled.has(spec.home);

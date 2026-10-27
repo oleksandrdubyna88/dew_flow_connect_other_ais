@@ -17,7 +17,8 @@ import { DEFAULT_PERIOD, LogPeriod, periodButtonsHtml } from './logPeriod';
 // Moved to a leaf so the sidebar's cadence line can use it without an import cycle; still exported here.
 export { repoNameOf };
 import { Vendor } from './vendors';
-import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, noteOf, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
+import { writtenWith } from './authorsLine';
+import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, noteOf, reviewedFrom, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
 import {
   BlindSpot, countsByRound, DbConsultation, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
@@ -151,6 +152,18 @@ export interface LogRow {
    * not bother to print.</p>
    */
   readonly calledBy: string;
+  /**
+   * What a plan round reviewed, as one line (C3 of `todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`) — from the session
+   * file's `planSource`, never from the database. Empty for a round that has none: a code round, a chat turn, a plan round an
+   * older server wrote. Empty is "not recorded", and the page then draws no line at all.
+   */
+  readonly reviewedFrom: string;
+  /**
+   * Who wrote what this round reviewed, as one line (E5.S6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`) — from the
+   * session file's `authors` snapshot and `size`, never from the database. Empty for a round that recorded none: an older server's, a
+   * skipped one, a chat turn. Empty is "not recorded", and the page then draws no line at all.
+   */
+  readonly writtenWith: string;
   /** Parallel to `reviewers`: the vendor word's colour, so the page needs no palette of its own. */
   readonly reviewerColours: readonly string[];
   /**
@@ -382,6 +395,8 @@ function chatRow(record: ChatTurnRecord, turn: number, priceOf: PriceOfModel): L
     // A chat turn already names its model in `answered`; repeating it as a caller would be a
     // second, quieter claim about the same thing.
     calledBy: '',
+    reviewedFrom: '',
+    writtenWith: '',
     reviewerColours: [],
     found: [],
     foundCount: 0,
@@ -463,6 +478,32 @@ export function askedByHtml(calledBy: string, escape: (value: string) => string)
   return calledBy === '' ? '' : '<div class="reviewer asked">asked by ' + escape(calledBy) + '</div>';
 }
 
+/**
+ * The "reviewed from" line of an opened plan row — the function the PAGE runs, as `askedByHtml` is.
+ *
+ * <p>Exported and embedded by assignment (`var reviewedFromHtml = ${reviewedFromHtml.toString()}`), so it uses ONLY its
+ * parameters: a name from this module would arrive in the minified bundle under another name. The formatting — slicing the
+ * hashes, grouping the bytes — stays host-side in `reviewedFrom`; this only wraps the finished line and escapes it, because the
+ * path is caller-chosen text.</p>
+ *
+ * <p>An empty `reviewedFrom` renders nothing at all: a round that recorded no source is not a round that reviewed nothing.</p>
+ */
+export function reviewedFromHtml(reviewedFrom: string, escape: (value: string) => string): string {
+  return reviewedFrom === '' ? '' : '<div class="reviewer source">reviewed from ' + escape(reviewedFrom) + '</div>';
+}
+
+/**
+ * The "written with" line of an opened round — the function the PAGE runs, as `reviewedFromHtml` is.
+ *
+ * <p>Embedded by assignment, so it uses ONLY its parameters. The sentence itself — models, coders, size — is built host-side by
+ * `writtenWith`; this wraps the finished line and escapes it, because a model id is text a transcript wrote.</p>
+ *
+ * <p>An empty line renders nothing at all: a round that recorded no authors is not a round nobody wrote.</p>
+ */
+export function writtenWithHtml(line: string, escape: (value: string) => string): string {
+  return line === '' ? '' : '<div class="reviewer authors">' + escape(line) + '</div>';
+}
+
 function rowFrom(
   session: SessionFile,
   round: RoundRecord,
@@ -517,6 +558,8 @@ function rowFrom(
     vendors: [...new Set(states.map((s) => s.provider))],
     reviewers: reviewerLines(round),
     calledBy: calledBy(round.caller),
+    reviewedFrom: reviewedFrom(round.planSource),
+    writtenWith: writtenWith(round.authors, round.size),
     reviewerColours: rows.map((r) => colour(r.provider)),
     found,
     foundCount,
@@ -930,7 +973,7 @@ export interface UsageTabExtras {
   readonly teamServers?: readonly TeamServerState[];
   /** The chat's own two ledgers. */
   readonly chat?: ChatLedgers;
-  /** The Rounds block, rendered by the host (`roundsBlock.ts`, story 2.3 of todo/PLAN_every_round_is_counted.md). */
+  /** The Rounds block, rendered by the host (`roundsBlock.ts`, story 2.3 of research/PLAN_every_round_is_counted.md). */
   readonly rounds?: string;
 }
 
@@ -1449,6 +1492,10 @@ ${TEXT_CONTROLS_CSS}
   /* Who ASKED, above the reviewers who answered. Dimmed: it is the same for every round of a
      session, so it is context rather than one of the lines a person is reading down. */
   .reviewer.asked { color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+  /* What a plan round REVIEWED, under who asked for it. The same dimmed context line: it names the input, not a result. */
+  .reviewer.source { color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+  /* Who WROTE what the round reviewed, under what it reviewed. The same dimmed context line: it names the input, not a result. */
+  .reviewer.authors { color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
   .who { font-weight: 600; }
   .badge { display: inline-block; padding: 0 6px; border-radius: 8px; font-size: .88em; }
   .badge.running { background: var(--vscode-charts-blue); color: var(--vscode-editor-background); }
@@ -1472,7 +1519,7 @@ ${TEXT_CONTROLS_CSS}
   .tabs .tab, .windows .tab { background: transparent; color: var(--vscode-foreground); border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px; opacity: .75; }
   .tabs .tab.on, .windows .tab.on { opacity: 1; border-bottom-color: var(--vscode-focusBorder); }
   .windows { display: flex; gap: 6px; margin: 0 0 10px; }
-  /* THE ROUNDS BLOCK (story 2.3 of todo/PLAN_every_round_is_counted.md), FIRST on the tab: its windows are its own
+  /* THE ROUNDS BLOCK (story 2.3 of research/PLAN_every_round_is_counted.md), FIRST on the tab: its windows are its own
      (5 h / 24 h / 7 d, trailing), so it sits above the buttons that choose the chart's. One table, the vendor row in
      bold, its model and kind lines indented under it; wide, so it scrolls sideways rather than squeezing ten columns. */
   .rounds-block { margin: 0 0 16px; }
@@ -1635,6 +1682,8 @@ ${teamSectionHtml(waitingFor())}
   // which is why the page now reports its own errors (0.29.10 found this one in a minute).
   var compareRows = ${compareRows.toString()};
   var askedByHtml = ${askedByHtml.toString()};
+  var reviewedFromHtml = ${reviewedFromHtml.toString()};
+  var writtenWithHtml = ${writtenWithHtml.toString()};
   var rowMatches = ${rowMatches.toString()};
   var money = ${money.toString()};
   var cost3 = ${cost3.toString()};
@@ -1734,7 +1783,7 @@ ${teamSectionHtml(waitingFor())}
     // WHO asked for the round, above the reviewers that answered it. Before the early return on
     // purpose: a session written by an older server has no reviewer detail, and one written by a
     // newer one against an older extension is the case this line exists for.
-    var asked = askedByHtml(row.calledBy, esc);
+    var asked = askedByHtml(row.calledBy, esc) + reviewedFromHtml(row.reviewedFrom, esc) + writtenWithHtml(row.writtenWith, esc);
     // A skip has no reviewers because nobody COULD run — not because an older server wrote it — and
     // nothing to have found. What it has is the server's reason, which is the one thing worth saying.
     if (row.status === 'skipped') {

@@ -22,7 +22,8 @@ namespace CoaiMcp.Runners.Kimi;
 /// one — on EVERY exit that prints a report (E5.2's review). What a consultation continues next turn (E5.4 decision 3); empty when the report
 /// named none or is unreadable.
 /// </param>
-public sealed record KimiReport(string End, string Failure, string Reason, string Answer, Usage Usage, string SessionId = "")
+/// <param name="FailureLine">The line of the agent's stderr that held the matched row's phrase — empty when the reason held it, when nothing matched, and for a report from a shim that predates the field.</param>
+public sealed record KimiReport(string End, string Failure, string Reason, string Answer, Usage Usage, string SessionId = "", string FailureLine = "")
 {
     /// <summary>A stdout that is not the shim's report (a crash before it printed, a launcher's own text).</summary>
     public static KimiReport Unreadable { get; } = new(string.Empty, string.Empty, string.Empty, string.Empty, Usage.Unknown);
@@ -60,7 +61,8 @@ public sealed record KimiReport(string End, string Failure, string Reason, strin
 
         return end.Length == 0
             ? Unreadable
-            : new KimiReport(end, Text(root, "failure"), Text(root, "reason"), Text(root, "answer"), UsageOf(root, end), Text(root, "sessionId"));
+            : new KimiReport(end, Text(root, "failure"), Text(root, "reason"), Text(root, "answer"), UsageOf(root, end), Text(root, "sessionId"),
+                Text(root, "failureLine"));
     }
 
     /// <summary>

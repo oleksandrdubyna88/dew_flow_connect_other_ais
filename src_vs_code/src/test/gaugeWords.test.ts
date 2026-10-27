@@ -5,7 +5,7 @@ import { type GaugeRatio, gaugeLines, ratioLine, windowName } from '../gaugeWord
 import type { GaugeReading } from '../teamServerApi';
 
 /**
- * The vendor's own gauge, as a person reads it (story 6.2 of todo/PLAN_every_round_is_counted.md): one line per reported
+ * The vendor's own gauge, as a person reads it (story 6.2 of research/PLAN_every_round_is_counted.md): one line per reported
  * window — `codex (weekly): 37 % used · resets Thu 07:00 · seen 12 min ago` — and the window's rounds per 1 %, or why
  * there is none. Reset first: a passed reset with no newer reading says so and never infers that the quota is back.
  */
@@ -87,7 +87,7 @@ test('a hidden figure names the consumer coai cannot count', () => {
 test('an unavailable figure says why — never 0 and never infinity', () => {
   const line = ratioLine(ratio({ unavailable: 'percent-did-not-rise' }));
 
-  assert.equal(line, 'rounds per 1 % of acme (weekly): unavailable — the percentage did not rise between the last readings');
+  assert.equal(line, 'rounds per 1 % of acme (weekly): unavailable — the percentage has not risen yet');
   assert.doesNotMatch(line, /Infinity|NaN|≈ 0\b/);
   assert.match(ratioLine(ratio({ unavailable: 'window-reset' })), /the window reset between the last readings/);
   assert.match(ratioLine(ratio({ unavailable: 'missing-reading' })), /a launch between the readings has no reading of its own/);

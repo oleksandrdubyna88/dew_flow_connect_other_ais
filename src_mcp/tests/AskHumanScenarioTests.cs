@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 /// and since 2026-10-03 neither does the AI's own question, which is asked in the AI's conversation. The card and
 /// its wait are covered over the wire by <see cref="McpContractTests"/> on a held session.</para>
 /// <para>In the <c>fakecli-env</c> collection, as every class that starts the fake CLI is; the row's child runs on
-/// the MINIMAL environment, so the fake CLI's steering is the file in the temp directory, as
+/// the MINIMAL environment, so the fake CLI's steering is the file beside its binary (<c>FakeCliSteering</c>), as
 /// <see cref="QuestionConsultScenarioTests"/> explains.</para>
 /// </remarks>
 [Collection("fakecli-env")]
@@ -31,31 +31,25 @@ public sealed class AskHumanScenarioTests : IAsyncLifetime
     private readonly ProcessLauncher _launcher = new();
     private readonly string _data = Directory.CreateTempSubdirectory("coai-askscenario-data-").FullName;
     private TempGitRepo _repo = null!;
+    private IDisposable _steering = FakeCliSteering.Unwritten;
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
-
-    private static string SteeringFile => Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
 
     public async ValueTask InitializeAsync()
     {
         _repo = await TempGitRepo.InitAsync(_launcher, "coai-askscenario-repo-");
         await _repo.WriteAsync("Parser.cs", "int Count() => 3;\n");
         await _repo.CommitAsync("base");
-        File.WriteAllText(SteeringFile, JsonSerializer.Serialize(new Dictionary<string, string>
+        _steering = FakeCliSteering.Write(new Dictionary<string, string>
         {
             ["FAKECLI_STDOUT"] = "{\"type\":\"thread.started\",\"thread_id\":\"0198f2c1-first\"}\n",
             ["FAKECLI_OUTFILE_TEXT"] = Advice,
-        }));
+        });
     }
 
     public async ValueTask DisposeAsync()
     {
-        try
-        {
-            File.Delete(SteeringFile);
-        }
-        catch (IOException) { }
-
+        _steering.Dispose();
         await _repo.DisposeAsync();
         try
         {

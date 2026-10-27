@@ -333,6 +333,17 @@ against the code or a run before it went in here — the question consultant had
   — whether Kimi opens its credentials through a symlink, whether it refuses or re-`chmod`s a linked folder, and whether a
   refresh through the link lands in the person's folder, are unmeasured; the WSL/Linux run of the Kimi probe answers them
   before D18 lifts for Kimi.
+  - **Amended 2026-10-16, shipped 2026-10-19 (Vibe on WSL2 in mcp 0.59.0, Kimi on WSL2 in 0.61.0; native Linux still refused) — the lifting is recorded in [PLAN_kimi_and_vibe_on_linux.md](../research/PLAN_kimi_and_vibe_on_linux.md).**
+    The boundary, the same table there (§10): that plan LIFTED D18 (2026-10-19) for a coai-mcp whose own HOST is WSL2 (a native Linux host stays refused) — Vibe first
+    (measured on WSL2 2026-10-16: on Linux the sign-in is `~/.vibe/.env`, linked into the owned home, never copied), Kimi after
+    its WSL cells; a Windows host starting the Linux side (`HostKinds.RunsInWsl`) and macOS stay refused here. Its DL9 changes
+    S4's Linux mechanism (a child subreaper instead of a process group) and keeps S4's test.
+
+    | Item | Built by | This plan's part |
+    |---|---|---|
+    | D18 lifted for a Linux/WSL host | PLAN_kimi_and_vibe_on_linux.md | states the refusal it lifts |
+    | Kimi's Linux install line with `rg`/`fd` | PLAN_kimi_and_vibe_on_linux.md DL12 | E4.5 wrote it down for that day |
+    | M-K14 | this plan, later | unchanged there |
 - **D19 — every Kimi launch gets a coai-owned `KIMI_CODE_HOME`, a built environment, and the person's sign-in by JUNCTION —
   never by copy** (2026-10-13; evidence RESULTS_kimi_confinement.md §11–§15 and, for D19's own cells recorded the same
   evening, §16–§26 — every cell 3 of 3 on Windows through the shipped shim). Two cells the plan had no block for: the person's own `config.toml` `[[hooks]]` fired under coai's launch
@@ -360,6 +371,8 @@ against the code or a run before it went in here — the question consultant had
     its own Kimi launches per credentials folder (below) and the person's own interactive `kimi` is a stated race; (iii) a
     disposal that walked the junction would delete the person's sign-in — closed below, with a red-first test; (iv) on
     Linux and macOS the junction is a symlink into a `0700` folder — D18 refuses those hosts until the probe runs there.
+    **M-K14 note, 2026-10-20:** the Kimi exit 77s recorded since 2026-10-16 cannot be classified and may be quota answers, so they neither confirm nor clear the
+    refresh-rotation suspicion — see `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` D6.
   - **Making the junction.** The probe used `mklink /J` (`scripts/lib/kimi.mjs:121-124`) — a mount-point reparse point. The
     product makes the same reparse point itself (`DeviceIoControl` with `FSCTL_SET_REPARSE_POINT`, a P/Invoke the AOT build
     takes; no shell, no quoting of the person's profile path, no privilege) — or, if that proves awkward, `cmd.exe` by its

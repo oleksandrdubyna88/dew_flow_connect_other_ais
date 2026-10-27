@@ -352,12 +352,7 @@ internal static class AtomicJson
     /// The turn is not re-entrant: <see cref="Write"/> called while this process holds it cannot take it, waits out
     /// its forty attempts and then writes WITHOUT it, which is the race the turn exists to close.
     /// </remarks>
-    public static void WriteUnderTurn(string path, string content)
-    {
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, content);
-        File.Move(temp, path, overwrite: true);
-    }
+    public static void WriteUnderTurn(string path, string content) => Runners.Files.AtomicFile.Write(path, content, Runners.Files.AtomicFile.SharingRetry);
 }
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]

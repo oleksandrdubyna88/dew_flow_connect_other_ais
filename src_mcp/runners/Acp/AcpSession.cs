@@ -173,7 +173,7 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
 
     /// <summary>
     /// A request whose answer is PRECEDED by a replay of the session's history — <c>session/load</c>: Kimi sends every earlier user and agent
-    /// chunk as <c>session/update</c> before it answers the load (M-K16, RESULTS §29). Every update that arrives while it is open is left out
+    /// chunk as <c>session/update</c> before it answers the load (M-K16, RESULTS §33). Every update that arrives while it is open is left out
     /// of the answer, the usage and the trace, so the turn's answer is only what follows its own prompt and the trace caps are not spent on
     /// history. The pump handles messages in order, so every replayed update has been handled before this request's answer completes it.
     /// </summary>
@@ -356,7 +356,7 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         if (response.Error.ValueKind == JsonValueKind.Object)
         {
             waiting.TrySetException(new AcpAgentException(
-                AcpMessages.Number(response.Error, "code"), AcpMessages.Text(response.Error, "message")));
+                AcpMessages.Number(response.Error, "code"), AcpMessages.ErrorText(response.Error)));
         }
         else
         {

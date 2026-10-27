@@ -1,4 +1,5 @@
 using System.Globalization;
+using CoaiMcp.Core;
 using CoaiMcp.Core.Cadence;
 using CoaiMcp.Core.Commands;
 using CoaiMcp.Core.Consultation;
@@ -140,7 +141,7 @@ public sealed class CadenceDesk(
     /// <summary>The declaration in force, or the reason it cannot be used — nothing read yet.</summary>
     private static (Where Where, string Refusal) Declared(PersistedSession loaded, CadenceArgs args)
     {
-        var named = args.Plan.Trim().Replace('\\', '/');
+        var named = RepoPaths.Canonical(args.Plan);
         if (named.Length > 0 && !ConsultAim.IsRepoRelative(named))
         {
             return (NoWhere, $"plan must be the plan file's repo-relative path, e.g. 'todo/PLAN_x.md' — '{named}' is absolute or climbs out of the repository with '..'.");
@@ -316,7 +317,7 @@ public sealed class CadenceDesk(
     /// <summary>The plan's standing for <c>status</c>, or null when no plan is asked about or held.</summary>
     public async Task<CadenceAnswer?> AnswerAsync(PersistedSession session, string plan, string sha, CancellationToken ct)
     {
-        var named = plan.Trim().Length > 0 ? plan.Trim().Replace('\\', '/') : session.Plan;
+        var named = plan.Trim().Length > 0 ? RepoPaths.Canonical(plan) : session.Plan;
         if (named.Length == 0 || !ConsultAim.IsRepoRelative(named))
         {
             return null;

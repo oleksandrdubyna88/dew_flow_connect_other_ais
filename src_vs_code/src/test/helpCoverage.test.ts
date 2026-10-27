@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import { COPY_ANSWER } from '../chatPage';
+import { REASON_CODES } from '../gaugeWords';
 import { BLOCK_CONTROL_TERMS } from '../renderAnswer';
 import { TEAM_TAB_LABEL } from '../teamServerTabPage';
 import { TEAM_SERVER_WITH_PEOPLE } from '../teamServerTab';
@@ -174,7 +175,7 @@ test('every language says what the Team server tab shows from a newer server —
 });
 
 test('every language says the Team server tab shows the server\'s own rounds, the runs without a round apart, and count unavailable for an older server', () => {
-  // Story 5.2 of todo/PLAN_every_round_is_counted.md: the tab's Vendors column gains a Rounds block counted by the SERVER
+  // Story 5.2 of research/PLAN_every_round_is_counted.md: the tab's Vendors column gains a Rounds block counted by the SERVER
   // over 5 h / 24 h / 7 d. The block's words are English in every language, as every control name here is.
   const article = HELP_ARTICLES.find((one) => one.id === 'the-rounds-log');
   assert.ok(article !== undefined, 'the rounds-log article has been renamed, and this test is now asserting nothing');
@@ -187,7 +188,7 @@ test('every language says the Team server tab shows the server\'s own rounds, th
 });
 
 test('every language says the spending tab prices each line at its own model and marks a floor ≥', () => {
-  // Story 2.5 of todo/PLAN_every_round_is_counted.md: the tab now prices line by line and shows `≥` when a line could not
+  // Story 2.5 of research/PLAN_every_round_is_counted.md: the tab now prices line by line and shows `≥` when a line could not
   // be priced. Same blind spot as above — a translation a release out of date is not a MISSING one — so the one string
   // every language carries, the mark and its example figure, is asked for in all five.
   const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
@@ -201,7 +202,7 @@ test('every language says the spending tab prices each line at its own model and
 });
 
 test('every language says the Rounds block comes first on the spending tab, and that a count nobody has is words, never 0', () => {
-  // Stories 2.2–2.4 of todo/PLAN_every_round_is_counted.md: the tab's FIRST block counts rounds per vendor row over
+  // Stories 2.2–2.4 of research/PLAN_every_round_is_counted.md: the tab's FIRST block counts rounds per vendor row over
   // 5 h / 24 h / 7 d, and a read that failed (an older coai-mcp, a database that would not open) says *count unavailable*
   // rather than drawing a zero. The block's own words are English in every language, as every control name here is.
   const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
@@ -215,7 +216,7 @@ test('every language says the Rounds block comes first on the spending tab, and 
 });
 
 test('every language says a probe sits beside the rounds as its own kind, and that every paid launch is its own ledger line', () => {
-  // Story 3.3 of todo/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per paid completion,
+  // Story 3.3 of research/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per paid completion,
   // shown on the Rounds block as **probe** and never as a round; and a repair, a follow-up, a retry and a rotated
   // Team-server attempt each write a line of their own, so a vendor's runs count them. The command and the kind's name
   // are English in every language, as every control name here is.
@@ -394,6 +395,8 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.qconsultPrompts': 'base prompts',
   'coai.qconsultRoots': 'folders a disk row may read',
   'coai.vibeHomesDirectory': 'vibe and kimi homes folder',
+  // E6 of PLAN_kimi_and_vibe_on_linux.md (DL6): the Kimi card's tick-box, by its own label, said in the choose-reviewers article.
+  'coai.kimiAllowNetworkSignIn': 'allow a kimi sign-in on network storage',
   'coai.qconsultRowMinutes': 'minutes one row may run',
   'coai.qconsultQuestionsPerSession': 'questions per session',
   'coai.qconsultFreeBatches': 'question batches that reach you first',
@@ -531,9 +534,9 @@ test('every language says the logs move, not only English', () => {
   }
 });
 
-test('every language says what a Vibe question row reads, that its web prompt is refused, and that it runs on Windows only (S3 of PLAN_vibe_and_kimi_runtimes.md)', () => {
+test('every language says what a Vibe question row reads, that its web prompt is refused, and that it runs on Windows and WSL2 (S3 of PLAN_vibe_and_kimi_runtimes.md, E3 of PLAN_kimi_and_vibe_on_linux.md)', () => {
   // Vibe reads only its working folder (M-V11): none is an empty folder, disk a COPY of the folders, web unmeasured and so
-  // refused, and every Vibe cell is Windows (D18). bodyFor marks a MISSING translation, not a stale one, so each language
+  // refused, and every Vibe cell is Windows or WSL2 (D18, lifted for WSL2 by DL1). bodyFor marks a MISSING translation, not a stale one, so each language
   // is asked for the names a person meets on the page — English in every language, as every control name here is.
   const article = HELP_ARTICLES.find((one) => one.id === 'the-question-consultant');
   assert.ok(article !== undefined, 'the question consultant article has been renamed, and this test is now asserting nothing');
@@ -541,13 +544,193 @@ test('every language says what a Vibe question row reads, that its web prompt is
     const { body, fallback } = bodyFor(article, language);
     const said = Object.values(body).join(' ');
     assert.equal(fallback, false, `the ${language} question consultant article is missing`);
-    for (const word of ['**Mistral Vibe**', '**none**', '**disk**', '**web**', 'Windows', '`AGENTS.md`']) {
+    for (const word of ['**Mistral Vibe**', '**none**', '**disk**', '**web**', 'Windows', 'WSL2', '`AGENTS.md`']) {
       assert.ok(said.includes(word), `the ${language} question consultant article never says ${word} — a Vibe row is undocumented there`);
     }
   }
 });
 
-test('S5.7.6 theQuestionConsultantHelpNamesKimiInFiveLanguages: a Kimi row, the tick, the disabled web prompt and Windows only', () => {
+/**
+ * The phrase each language's `the-rounds-log` article uses for each reason code the gauge words know
+ * (`REASON_CODES`, from `gaugeWords.ts` — the source of truth). Two codes share a phrase where the article says them as one
+ * clause (a reading is missing or stale). A code with no phrase here fails the test below: a new reason must be written
+ * into every language's article before it ships.
+ */
+const REASON_PHRASES: Record<string, Readonly<Record<string, string>>> = {
+  en: {
+    'too-few-readings': 'fewer than two readings',
+    'percent-did-not-rise': 'the percentage has not risen yet',
+    'window-reset': 'the window reset',
+    'stale-reading': 'a reading is missing or stale',
+    'missing-reading': 'a reading is missing or stale',
+    'run-without-round': 'a launch sent no round id',
+    'no-rounds': 'no round ran between the readings',
+    'local-capture-deferred': 'a local codex card says this machine does not read the gauge',
+  },
+  de: {
+    'too-few-readings': 'weniger als zwei Lesungen',
+    'percent-did-not-rise': 'der Prozentwert ist noch nicht gestiegen',
+    'window-reset': 'das Fenster wurde zurückgesetzt',
+    'stale-reading': 'eine Lesung fehlt oder ist veraltet',
+    'missing-reading': 'eine Lesung fehlt oder ist veraltet',
+    'run-without-round': 'ein Start schickte keine Runden-ID',
+    'no-rounds': 'zwischen den Lesungen lief keine Runde',
+    'local-capture-deferred': 'eine lokale codex-Karte sagt, dass diese Maschine die Anzeige nicht liest',
+  },
+  es: {
+    'too-few-readings': 'menos de dos lecturas',
+    'percent-did-not-rise': 'el porcentaje aún no ha subido',
+    'window-reset': 'la ventana se reinició',
+    'stale-reading': 'falta una lectura o está anticuada',
+    'missing-reading': 'falta una lectura o está anticuada',
+    'run-without-round': 'un lanzamiento no envió id de ronda',
+    'no-rounds': 'no corrió ninguna ronda entre las lecturas',
+    'local-capture-deferred': 'una tarjeta local de codex dice que esta máquina no lee el indicador',
+  },
+  ru: {
+    'too-few-readings': 'меньше двух чтений',
+    'percent-did-not-rise': 'процент ещё не поднялся',
+    'window-reset': 'окно сбросилось',
+    'stale-reading': 'чтения нет или оно устарело',
+    'missing-reading': 'чтения нет или оно устарело',
+    'run-without-round': 'запуск не прислал id раунда',
+    'no-rounds': 'между чтениями не было раунда',
+    'local-capture-deferred': 'локальная карточка codex говорит, что эта машина датчик не читает',
+  },
+  uk: {
+    'too-few-readings': 'менше двох читань',
+    'percent-did-not-rise': 'відсоток ще не зріс',
+    'window-reset': 'вікно скинулося',
+    'stale-reading': 'читання немає або воно застаріле',
+    'missing-reading': 'читання немає або воно застаріле',
+    'run-without-round': 'запуск не надіслав id раунду',
+    'no-rounds': 'між читаннями не було раунду',
+    'local-capture-deferred': 'локальна картка codex каже, що ця машина датчик не читає',
+  },
+};
+
+// The two phrases that are not a reason code: the replacement for "launches from an older extension", and a line the
+// server wrote before it read the round id.
+const ROUNDS_ARTICLE_PHRASES: Record<string, readonly string[]> = {
+  en: ['whose client sent no round id', 'before it read the round id'],
+  de: ['deren Client keine Runden-ID schickte', 'älter als 0.49.0 oder ein anderer Aufrufer der API des Servers oder eine Zeile', 'bevor er die Runden-ID las'],
+  es: ['cuyo cliente no envió id de ronda', 'antes de leer el id de ronda'],
+  ru: ['чей клиент — coai-mcp до 0.49.0', 'до того, как прочитал id раунда'],
+  uk: ['без id раунду', 'ще не прочитавши id раунду'],
+};
+
+// Wordings a back-translation review found ambiguous or wrong. Each must stay gone: the joined clause made the
+// last reason read as part of the one before it, and the old terms named a unit or a version loosely.
+const STALE_ROUNDS_PHRASES: Record<string, readonly string[]> = {
+  en: ['launches from an older extension'],
+  de: ['keine Runde oder ein Start ohne', 'Starts einer älteren Erweiterung'],
+  es: ['lecturas o un lanzamiento sin', 'llamador de la API', 'lo envió sin id de ronda'],
+  ru: ['раунда или запуск без', 'старше 0.49.0', 'запуски от старого расширения', 'клиент его не прислал'],
+  uk: ['раунду або запуск без', 'старший за 0.49.0', 'запуски від старого розширення'],
+};
+
+const STALE_USAGE_PHRASES: Record<string, readonly string[]> = {
+  en: ['a Team server attempt moved to another account each write one', 'is not yet split'],
+  de: ['und ein Versuch des Team servers, der auf ein anderes Konto wechselte, schreiben je eine', 'noch nicht aufgeteilt', 'Die Protokollzeile einer Team-server-Zeile', 'wo eine Zeile mehr als einen Start', 'die mittlere Ausgabe pro Start', 'ihres Jobs'],
+  es: ['y un intento del Team server que pasó a otra cuenta escriben', 'aún no se divide'],
+  ru: ['итог её задания', 'где в строке может быть', 'и попытка Team server, переведённая на другой аккаунт, пишут', 'пока не разделено'],
+  uk: ['підсумок його завдання', 'де в рядку може бути', 'складає виправлення', 'й спроба Team server, переведена на інший обліковий запис, пишуть', 'поки не розділене'],
+};
+
+test('EveryLanguagesRoundsArticle_NamesEveryReasonTheGaugeWordsKnow (the rounds labels plan, story 1.5)', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'the-rounds-log');
+  assert.ok(article !== undefined, 'the rounds article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const phrases = ROUNDS_ARTICLE_PHRASES[language];
+    assert.ok(phrases !== undefined, `the test has no phrases for ${language}, so it would assert nothing there`);
+    const reasons = REASON_PHRASES[language];
+    assert.ok(reasons !== undefined, `the test maps no reason phrases for ${language}, so it would assert nothing there`);
+    const { body, fallback } = bodyFor(article, language);
+    const said = Object.values(body).join(' ');
+    assert.equal(fallback, false, `the ${language} rounds article is missing`);
+    assert.ok(REASON_CODES.length > 0, 'REASON_CODES is empty, so no reason is checked');
+    for (const code of REASON_CODES) {
+      const reason = reasons[code];
+      assert.ok(reason !== undefined, `reason code "${code}" has no ${language} phrase in REASON_PHRASES — a reason the gauge words know is not mapped, so no article can be checked for it — add it to REASON_PHRASES in src_vs_code/src/test/helpCoverage.test.ts`);
+      assert.ok(said.includes(reason), `the ${language} rounds article never says "${reason}" (reason "${code}") — a reader cannot learn that reason; add it to the article, or fix REASON_PHRASES in src_vs_code/src/test/helpCoverage.test.ts`);
+    }
+    for (const phrase of phrases) {
+      assert.ok(said.includes(phrase), `the ${language} rounds article never says "${phrase}" — a reader cannot learn that reason; add it to the article, or fix ROUNDS_ARTICLE_PHRASES in src_vs_code/src/test/helpCoverage.test.ts`);
+    }
+  }
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const stale of STALE_ROUNDS_PHRASES[language] ?? []) {
+      assert.ok(!said.includes(stale), `the ${language} rounds article still says "${stale}" — a wording the back-translation review rejected`);
+    }
+  }
+});
+
+const FOLLOW_UP_PHRASE: Record<string, string> = {
+  en: 'has its own line, but its usage may include the first launch',
+  de: 'hat eine eigene Zeile, doch ihr Verbrauch kann den des ersten Starts',
+  es: 'tiene su propia línea, pero su uso puede incluir el del primer lanzamiento',
+  ru: 'есть своя строка, но её расход может включать расход первого запуска',
+  uk: 'має власний рядок, але його витрата може містити витрату першого запуску',
+};
+
+const PER_LAUNCH_PHRASE: Record<string, string> = {
+  en: 'per launch',
+  de: 'pro Start',
+  es: 'por lanzamiento',
+  ru: 'на запуск',
+  uk: 'на запуск',
+};
+
+test('EveryLanguagesUsageArticle_SaysTheMedianIsPerLaunch (the rounds labels plan, story 1.5)', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the usage article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const phrase = PER_LAUNCH_PHRASE[language];
+    assert.ok(phrase !== undefined, `the test has no phrase for ${language}, so it would assert nothing there`);
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} usage article is missing`);
+    assert.ok(
+      Object.values(body).join(' ').includes(phrase),
+      `the ${language} usage article never says "${phrase}" — it still names the median's unit as the recorded turn only`,
+    );
+    const said = Object.values(body).join(' ');
+    const followUp = FOLLOW_UP_PHRASE[language];
+    assert.ok(followUp !== undefined && said.includes(followUp), `the ${language} usage article never says "${followUp}" — the antigravity follow-up is described as unsplit, or not at all`);
+    for (const stale of STALE_USAGE_PHRASES[language] ?? []) {
+      assert.ok(!said.includes(stale), `the ${language} usage article still says "${stale}" — a wording the back-translation review rejected`);
+    }
+  }
+});
+
+/** The three reasons a consult line carries no id, in each language's own words (E3.S4): the field's arrival, the check, the refusal. */
+const ID_LESS_REASONS: Record<string, readonly string[]> = {
+  en: ['written before the consultation field existed', 'consultant **Check**', 'refused before its launch'],
+  de: ['bevor es das Beratungsfeld gab', '**Check** des Beraters', 'vor ihrem Start abgelehnt'],
+  es: ['antes de que existiera el campo de consulta', '**Check** del consultor', 'rechazada antes de su lanzamiento'],
+  ru: ['до появления поля консультации', '**Check** консультанта', 'отклонённая до запуска'],
+  uk: ['до появи поля консультації', '**Check** консультанта', 'відхилена до запуску'],
+};
+
+test('every language says consultation money is per consultation, and what the label says for older lines', () => {
+  // E3.S4 of todo/PLAN_the_round_counter_tail_E3.md: the Rounds block divides a consult line's money by CONSULTATIONS
+  // (the new `consultation` field), and a window holding a line without one says *per consultation (some lines per turn)*.
+  // The label's words are English in every language, as every control name here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['*per consultation*', '*per consultation (some lines per turn)*']) {
+      assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
+    }
+    assert.ok(!said.includes('older lines per turn'), `the ${language} spending article still says the label is “older lines per turn” — it is false for a check and a refused consultation`);
+    for (const reason of ID_LESS_REASONS[language] ?? []) {
+      assert.ok(said.includes(reason), `the ${language} spending article never names the reason “${reason}” a consult line carries no id`);
+    }
+  }
+});
+
+test('S5.7.6 theQuestionConsultantHelpNamesKimiInFiveLanguages: a Kimi row, the tick, the disabled web prompt, Windows and WSL2', () => {
   // E5.7 decision 5. A Kimi row stands in a copy of each folder (disk) or an empty folder (none), and on BOTH it can read this machine:
   // Grep and Glob read the disk directly (M-K6) — so the tick is on and cannot be taken off. Nothing has measured Kimi on the web. The
   // names a person meets on the page are English in every language, so each language is asked for them inside its Kimi paragraph.
@@ -560,7 +743,7 @@ test('S5.7.6 theQuestionConsultantHelpNamesKimiInFiveLanguages: a Kimi row, the 
     const at = said.indexOf('**Kimi Code**');
     assert.ok(at >= 0, `the ${language} question-consultant article does not mention Kimi`);
     const kimi = said.slice(at, said.indexOf('\n\n', at) < 0 ? undefined : said.indexOf('\n\n', at));
-    for (const word of ['**none**', '**disk**', '**Can read this machine**', '**web**', 'Windows', 'Git']) {
+    for (const word of ['**none**', '**disk**', '**Can read this machine**', '**web**', 'Windows', 'WSL2', 'Vibe']) {
       assert.ok(kimi.includes(word), `the ${language} question-consultant article's Kimi row never says ${word}: ${kimi}`);
     }
   }

@@ -326,7 +326,7 @@ public sealed class AOneShotKimiHomeIsDisposedJunctionFirstTests : IDisposable
         Junctions.StandIn(new ResolvingJunctionShell(before, _person.Credentials, @"\\server\share\.kimi-code\credentials"));
         try
         {
-            _warned.Add(Junctions.ResolvedRefusal(_person.Credentials));
+            _warned.Add(Junctions.Locality(HostKinds.Current, _person.Credentials, allowNetwork: false));
         }
         finally
         {

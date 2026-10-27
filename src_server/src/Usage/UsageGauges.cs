@@ -3,7 +3,7 @@ using CoaiMcp.Runners.Reviewers;
 namespace CoaiServer;
 
 /// <summary>
-/// Rounds per 1 % of each gauge window, as <c>/api/usage</c> answers it (story 6.2 of todo/PLAN_every_round_is_counted.md):
+/// Rounds per 1 % of each gauge window, as <c>/api/usage</c> answers it (story 6.2 of research/PLAN_every_round_is_counted.md):
 /// the server's ledger lines handed to the ONE derivation both halves use, <see cref="RoundsPerPercent"/>.
 /// </summary>
 /// <remarks>
@@ -14,6 +14,10 @@ namespace CoaiServer;
 /// interval older than that belongs to an instance of the window that has already reset.</para>
 /// <para>A budget refusal launched nothing (story 4.3) and is left out; every other line is the derivation's to judge — a
 /// launch with no reading after it makes its interval unusable rather than being skipped.</para>
+/// <para><b>A launch the vendor refused ran no review.</b> A line whose outcome is <c>RateLimited</c> — a requeue line, or a
+/// job that failed because every account was rate-limited — is handed over as a launch that is not a review: it is still
+/// spend and still a bare launch on its account, but it is not one of its round's launches, so the launch that DID run
+/// carries the whole round (<c>JobRunner.Ended</c> writes it, and <c>FailureKind.RateLimited</c> is its only source).</para>
 /// </remarks>
 internal static class UsageGauges
 {
@@ -21,6 +25,8 @@ internal static class UsageGauges
     public static readonly TimeSpan Lookback = TimeSpan.FromDays(8);
 
     private static readonly string NoBudgetOutcome = nameof(FailureKind.NoBudget);
+
+    private static readonly string RefusedOutcome = nameof(FailureKind.RateLimited);
 
     /// <summary>The range the derivation reads, ending now.</summary>
     public static UsageRange Range(DateTimeOffset nowUtc) => new(nowUtc - Lookback, nowUtc.AddTicks(1));
@@ -40,5 +46,8 @@ internal static class UsageGauges
     }
 
     private static GaugeLine AsGaugeLine(UsageLine line) =>
-        new(line.AtUtc, line.Vendor, line.Slot, line.Round, line.Kind == JobKind.Review, line.Gauge);
+        new(line.AtUtc, line.Vendor, line.Slot, line.Round, IsReviewThatRan(line), line.Gauge);
+
+    private static bool IsReviewThatRan(UsageLine line) =>
+        line.Kind == JobKind.Review && !line.Outcome.Equals(RefusedOutcome, StringComparison.Ordinal);
 }

@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { test } from 'node:test';
 
 import { ChatTurnRecord } from '../chatUsage';
 import {
-  chatLedgerLines, LedgerLine, MEDIAN_OUTPUT_LABEL, moneyGroups, perUnit, rollUp, tokenText, unitDivisor,
+  chatLedgerLines, consultationLabel, consultationNote, consultationUnits, isLaunchLine, LedgerLine, medianOutputLabel, medianUnitOf, moneyGroups, NOT_ONE_LAUNCH_ATTEMPTS, ONE_LAUNCH_ATTEMPTS, PER_LAUNCH, perUnit,
+  rollUp, tokenText, unitDivisor,
 } from '../roundMoney';
 import { LineRate, parseUsage } from '../usage';
 
 /**
- * Tokens and money beside every count (story 2.5 of todo/PLAN_every_round_is_counted.md): per vendor row × model × kind,
+ * Tokens and money beside every count (story 2.5 of research/PLAN_every_round_is_counted.md): per vendor row × model × kind,
  * tokens in / cached / out / reasoning with the uncaptured lines counted apart, recorded turns, medians per RECORDED
  * TURN, money reported or estimated with its floor — and the per-round division the Rounds block will show once the
  * round counts arrive (stories 2.1–2.3).
@@ -82,8 +85,77 @@ test('ARepairedTurn_IsOneRecordedTurn_NotOneLaunch — a repair is two launches 
   assert.equal(group?.turns, 3, 'the repaired turn was counted as two launches');
   assert.equal(group?.medianOut, 2_000);
   assert.equal(group?.medianIn, 30_000);
-  assert.match(MEDIAN_OUTPUT_LABEL, /per recorded turn/u);
-  assert.doesNotMatch(MEDIAN_OUTPUT_LABEL, /launch/u, 'a per-launch median cannot be computed from the ledger and must not be claimed');
+  assert.equal(group?.linesAreLaunches, false, 'lines with no attempt are older than one-line-per-launch — they may hold a repair, so the group is not claimed as launches');
+  assert.equal(unitDivisor('review', undefined, group!.turns, group!.linesAreLaunches).per, 'recorded turn', 'the fallback division claimed a launch for an older line');
+});
+
+test('AGroupOfLaunchLines_AreLaunches_AndOneOlderLineIsNot — one line without an attempt takes the whole group back to recorded turns', () => {
+  const launch = (over: Partial<LedgerLine> = {}): LedgerLine => line({ attempt: 'first', cli: 'codex', ...over });
+  const [launches] = moneyGroups([launch(), launch({ attempt: 'retry' }), launch({ attempt: 'repair' })], WINDOW, rateOf);
+  const [mixed] = moneyGroups([launch(), line()], WINDOW, rateOf);
+  const [unCaptured] = moneyGroups([launch(), launch({ tokensIn: 0, usageNote: 'usage not captured' })], WINDOW, rateOf);
+
+  assert.equal(launches?.linesAreLaunches, true);
+  assert.equal(mixed?.linesAreLaunches, false, 'one pre-0.48.0 line in the week was labelled a launch');
+  assert.equal(unCaptured?.linesAreLaunches, true, 'a line that was not captured is still one launch — the rule covers every line, captured or not');
+  assert.equal(rollUp([launches!, unCaptured!]).linesAreLaunches, true);
+  assert.equal(rollUp([launches!, mixed!]).linesAreLaunches, false, 'a roll-up with one group of older lines was claimed as launches');
+  assert.equal(rollUp([]).linesAreLaunches, false, 'an empty roll-up is nothing in this window, not launches');
+});
+
+test('ALineIsALaunch_OnlyWhenItSaysSo — an attempt that is not a follow-up and a cli that is not the Team server', () => {
+  const launch = (over: Partial<LedgerLine>): LedgerLine => line({ attempt: 'first', cli: 'codex', ...over });
+
+  assert.equal(isLaunchLine(launch({})), true);
+  assert.equal(isLaunchLine(launch({ cli: 'remote' })), false, 'a Team-server job line holds the job total');
+  assert.equal(isLaunchLine(launch({ attempt: 'followUp' })), false, 'a follow-up may be cumulative — it is not claimed');
+  assert.equal(isLaunchLine(line({ attempt: 'first' })), false, 'a line that says nothing of where it ran is not claimed');
+  assert.equal(isLaunchLine(launch({ cli: '' })), false);
+  assert.equal(isLaunchLine(line({ cli: 'codex' })), false, 'no attempt is a line from before 0.48.0');
+  assert.equal(isLaunchLine(launch({ attempt: '' })), false);
+  assert.equal(isLaunchLine(launch({ attempt: 'retry' })), true, 'a rate-limit retry is one launch of its own');
+  assert.equal(isLaunchLine(launch({ attempt: 'repair' })), true, 'a repair is one launch of its own');
+  assert.equal(isLaunchLine(launch({ attempt: 'rotated' })), false, 'a Team-server attempt word coai-mcp writes — not a local launch');
+  assert.equal(isLaunchLine(launch({ attempt: 'whatever' })), false, 'an attempt this build does not know is not claimed as one launch');
+});
+
+test('AChatTurn_StaysPerRecordedTurn — a chat turn read into the ledger shape says neither attempt nor cli', () => {
+  const [turn] = chatLedgerLines([{
+    utc: '2026-10-09T10:00:00Z', provider: 'codex', model: 'gpt-6-luna', tokensIn: 10, tokensOut: 5, costUsd: null, seconds: 3,
+    outcome: 'answered', conversation: 'c1', title: 't',
+  }]);
+
+  assert.equal(turn?.attempt, undefined);
+  assert.equal(turn?.cli, undefined);
+  assert.equal(isLaunchLine(turn!), false);
+});
+
+test('unitDivisor answers per launch only for an unknown count whose lines are launches', () => {
+  assert.deepEqual(unitDivisor('review', undefined, 3, true), { per: PER_LAUNCH, count: 3 });
+  assert.deepEqual(unitDivisor('review', undefined, 3, false), { per: 'recorded turn', count: 3 });
+  assert.deepEqual(unitDivisor('review', undefined, 3), { per: 'recorded turn', count: 3 }, 'every existing caller keeps its unit');
+  assert.deepEqual(unitDivisor('review', 4, 3, true), { per: 'round', count: 4 }, 'a known round count still wins');
+});
+
+test('TwoLaunches_ReadAsLaunches_NotLaunchs — the plural of launch has an es', () => {
+  const figure = perUnit({ usd: 0, known: false, floor: false, estimated: false }, { per: PER_LAUNCH, count: 2 });
+
+  assert.equal(figure.note, 'nothing in these 2 launches was priced');
+  assert.equal(perUnit({ usd: 0, known: false, floor: false, estimated: false }, { per: PER_LAUNCH, count: 0 }).note, 'no launches in this window');
+  assert.equal(perUnit({ usd: 4, known: true, floor: false, estimated: false }, { per: 'round', count: 2 }).note, 'over 2 rounds', 'every other unit keeps its plain s');
+});
+
+test('TheMedianLabel_FollowsTheGroupsItHeads — one shared unit is named, mixed units or no groups name none', () => {
+  const launch = (over: Partial<LedgerLine> = {}): LedgerLine => line({ attempt: 'first', cli: 'codex', ...over });
+  const [launches] = moneyGroups([launch()], WINDOW, rateOf);
+  const [older] = moneyGroups([line()], WINDOW, rateOf);
+
+  assert.equal(medianUnitOf(launches!), PER_LAUNCH);
+  assert.equal(medianUnitOf(older!), 'recorded turn');
+  assert.equal(medianOutputLabel([launches!, launches!]), 'median output per launch');
+  assert.equal(medianOutputLabel([older!, older!]), 'median output per recorded turn');
+  assert.equal(medianOutputLabel([launches!, older!]), 'median output', 'a mixed page named a unit half of its cells do not hold');
+  assert.equal(medianOutputLabel([]), 'median output', 'no median to head names no unit');
 });
 
 test('the money is reported where the vendor billed it, estimated per line otherwise, and a floor when a line was unpriced', () => {
@@ -162,4 +234,115 @@ test('a line parsed from the real ledger shape reaches the groups with its cache
 
   assert.equal(group?.kind, 'question');
   assert.equal(group?.tokens.cached, 800_000);
+});
+
+/** The string constants `public const string X = "value";` of one C# static class, comments stripped first. */
+function constantsOf(file: string, klass: string): readonly string[] {
+  const at = path.join(process.cwd(), '..', file);
+  assert.ok(fs.existsSync(at), `${file} has moved — this test is reading nothing`);
+  const code = fs.readFileSync(at, 'utf8').replace(/\/\*[\s\S]*?\*\//gu, ' ').replace(/^\s*\/\/.*$/gmu, '');
+  // The body ends at the first closing brace: the constants come before `Known`, whose `{ get; }` is the first one.
+  const found = new RegExp('public static class ' + klass + '\\s*[{]([^}]*)[}]', 'u').exec(code);
+  assert.ok(found !== null, `${klass} is no longer declared in ${file}`);
+
+  return [...(found[1] ?? '').matchAll(/public const string \w+ = "(\w+)";/gu)].map((one) => one[1] ?? '');
+}
+
+test('EveryAttemptCoaiMcpWrites_IsDecidedHere — one launch or not, and nothing here that coai-mcp no longer writes', () => {
+  const written = constantsOf('src_mcp/runners/Reviewers/LaunchParts.cs', 'LaunchAttempts');
+  const decided = [...ONE_LAUNCH_ATTEMPTS, ...Object.keys(NOT_ONE_LAUNCH_ATTEMPTS)];
+
+  assert.ok(written.length >= 5, `LaunchAttempts read as ${written.length} words (${written.join(', ')}) — the reader is wrong, not the contract`);
+  for (const word of written) {
+    const sides = [ONE_LAUNCH_ATTEMPTS.has(word), word in NOT_ONE_LAUNCH_ATTEMPTS].filter(Boolean).length;
+    assert.equal(sides, 1, `coai-mcp writes the attempt "${word}" and it is in ${sides} of ONE_LAUNCH_ATTEMPTS / NOT_ONE_LAUNCH_ATTEMPTS — decide it in roundMoney.ts`);
+  }
+  for (const word of decided) {
+    assert.ok(written.includes(word), `roundMoney.ts decides the attempt "${word}" but LaunchAttempts no longer has it — a word nothing writes`);
+  }
+});
+
+test('TheTwoAttemptSets_AreDisjoint_AndEachNotOneLaunchWordSaysWhy', () => {
+  for (const [word, why] of Object.entries(NOT_ONE_LAUNCH_ATTEMPTS)) {
+    assert.ok(!ONE_LAUNCH_ATTEMPTS.has(word), `"${word}" is in both attempt sets`);
+    assert.ok(why.length > 0, `"${word}" is not one launch and says nothing of why`);
+  }
+});
+
+// E3.S3 / E3.S4 of todo/PLAN_the_round_counter_tail_E3.md.
+
+test('ChatLedgerLines_CarryTheCli — and a chat line is still not a launch line', () => {
+  const [named, old] = chatLedgerLines([
+    { utc: '2026-10-09T10:00:00Z', provider: 'work-codex', vendor: 'codex', cli: 'codex', model: 'gpt-6-luna', tokensIn: 10, tokensOut: 5, costUsd: null,
+      seconds: 3, outcome: 'answered', conversation: 'c1', title: 't' },
+    { utc: '2026-10-09T10:00:00Z', provider: 'codex', vendor: 'codex', model: 'gpt-6-luna', tokensIn: 10, tokensOut: 5, costUsd: null,
+      seconds: 3, outcome: 'answered', conversation: 'c1', title: 't' },
+  ]);
+
+  assert.equal(named?.cli, 'codex', 'the mapped chat line lost its cli');
+  assert.equal(old?.cli, undefined, 'an old chat line must read no cli — never derived from vendor (D7)');
+  assert.equal(isLaunchLine(named!), false, 'a chat line has no attempt, so it is not a launch whatever its cli says');
+});
+
+const consult = (over: Partial<LedgerLine> = {}): LedgerLine => line({ kind: 'consult', model: 'gpt-6-astra', ...over });
+
+test('PerConsultationMoney_DividesByDistinctConsultations_AndAnOldLineIsItsOwnUnit', () => {
+  const groups = moneyGroups([
+    consult({ consultation: 'A' }), consult({ consultation: 'A' }), consult({ consultation: 'A' }),
+    consult({ consultation: 'B' }), consult(), consult({ consultation: '' }),
+  ], WINDOW, rateOf);
+
+  const units = consultationUnits(groups);
+
+  assert.deepEqual(units, { count: 4, withoutId: 2, kinds: { older: 2, checks: 0, refused: 0 } }, '3 lines of A, 1 of B and 2 with no id are 4 consultations, not 6 turns');
+  assert.deepEqual(unitDivisor('consult', units.count, 6), { per: 'consultation', count: 4 });
+});
+
+test('TheSameConsultationInTwoModelGroups_IsCountedOnce', () => {
+  const groups = moneyGroups([
+    consult({ consultation: 'A' }), consult({ consultation: 'A', model: 'gpt-6-luna' }), consult({ consultation: 'B' }),
+  ], WINDOW, rateOf);
+
+  assert.equal(groups.length, 2);
+  assert.deepEqual(consultationUnits(groups), { count: 2, withoutId: 0, kinds: { older: 0, checks: 0, refused: 0 } });
+});
+
+test('AWindowOfIdentifiedLines_SaysPerConsultation_AndAMixedOne_SaysSomeLinesPerTurn', () => {
+  const identified = moneyGroups([consult({ consultation: 'A' }), consult({ consultation: 'B' })], WINDOW, rateOf);
+  const mixed = moneyGroups([consult({ consultation: 'A' }), consult()], WINDOW, rateOf);
+
+  assert.equal(consultationLabel(consultationUnits(identified)), 'per consultation');
+  assert.equal(consultationLabel(consultationUnits(mixed)), 'per consultation (some lines per turn)',
+    'an id-less line may be a consultant check or a refused consultation, not only an older line — "older lines" would be false for them');
+  assert.match(consultationNote(consultationUnits(mixed)), /1 line without a consultation id counted one each/u,
+    'the tooltip must say how many lines were counted one each');
+  assert.equal(consultationNote(consultationUnits(identified)), '', 'a window of identified lines has nothing to explain');
+});
+
+test('AConsultLine_WithNoId_IsItsOwnUnit_EvenWhenOnlyOldLinesExist — the unit count equals the turn count', () => {
+  const groups = moneyGroups([consult(), consult(), consult()], WINDOW, rateOf);
+
+  assert.deepEqual(consultationUnits(groups), { count: 3, withoutId: 3, kinds: { older: 3, checks: 0, refused: 0 } });
+});
+
+test('TheTooltipNamesWhichKindsOfIdLessLineArePresent — older lines, consultant checks, consultations refused before launch', () => {
+  // What each writes (src_mcp ConsultantCheck / ConsultationFailedTurns, D8 of the plan): a check is role `consult-check` with no id; a
+  // consultation refused before its launch bills LaunchOptions.None (no `cli`) with a failing outcome and an emptied id; a line from before
+  // the field has no id and, when it succeeded, nothing else to tell it by.
+  const older = consult({ outcome: 'ok' });
+  const check = consult({ role: 'consult-check', cli: 'codex', outcome: 'ok' });
+  const refused = consult({ outcome: 'The adapter refused before anything was launched', cli: '' });
+  const identified = consult({ consultation: 'A' });
+  const kinds = (...lines: LedgerLine[]) => consultationUnits(moneyGroups(lines, WINDOW, rateOf)).kinds;
+
+  assert.deepEqual(kinds(older, check, refused, identified), { older: 1, checks: 1, refused: 1 });
+  assert.deepEqual(kinds(check, check), { older: 0, checks: 2, refused: 0 });
+  const note = consultationNote(consultationUnits(moneyGroups([check, refused, identified], WINDOW, rateOf)));
+  assert.match(note, /2 lines without a consultation id counted one each/u);
+  assert.match(note, /consultant checks/u);
+  assert.match(note, /refused before their launch/u);
+  assert.doesNotMatch(note, /written before the consultation field existed/u, 'no older line is present, so the tooltip must not claim one');
+  const olderOnly = consultationNote(consultationUnits(moneyGroups([older], WINDOW, rateOf)));
+  assert.match(olderOnly, /written before the consultation field existed/u);
+  assert.doesNotMatch(olderOnly, /consultant checks|refused/u);
 });

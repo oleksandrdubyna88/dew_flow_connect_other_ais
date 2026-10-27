@@ -1,5 +1,256 @@
 # Changelog
 
+## Team server 0.14.1 — 2026-10-21
+
+**Fixed: a reviewer that exits before its start time is read is not "not started".** The Team server launches reviewers through the same launcher as coai-mcp. A launched process that exited so fast (seen on macOS) that its start time could not be read was reported as "not started"; it is now recorded as the launch it was.
+
+## Extension 0.83.0 — 2026-10-21
+
+**Added: the round card says who wrote the code.** A plan or code round shows one "written with" line: the main agent's model, the subagents that wrote code (counted by model family), and the size of the change. A partial or unobserved result says why, and a write that no agent can be shown to own is marked "size not covered". A round from before this release shows no line until the backfill fills it in.
+
+**Fixed: the Rounds block says *per launch* only where a line is one launch.** Since coai-mcp 0.48.0 a review run on
+this machine writes one ledger line per launch, but the block still called every median and every fallback division
+*per recorded turn*. A line now counts as one launch when its attempt is a first try, a retry or a repair and it ran on
+this machine. A line from before 0.48.0, a Team-server row's line (the job's total) and an antigravity follow-up in the
+same conversation (its usage may include the first launch's) still count as recorded turns. The column header names
+the unit its medians share — *per launch*, *per recorded turn*, or no unit on a mixed page — and a cell names its own
+unit when it differs. "Count unavailable" now says that Team servers count rounds from 0.12.0, and the help, in five
+languages, lists every reason a rounds-per-1 % figure can be unavailable.
+
+**Changed: Check is not offered on a reviewer-only row.** The Models card's ✓ Check button is disabled on a reviewer-only row (kimi, gemini, remote), with the title "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation". It no longer offers a paid turn that the server would refuse.
+
+## Server 0.63.0 — 2026-10-21
+
+**Added: a round records who wrote the code it reviewed, and how much.** A plan or code round now stores its authors: which agent (the main agent or a subagent) wrote each change, on which model, and how many tokens each one spent. coai-mcp reads this from the calling Claude Code session's own transcript on the same computer.
+
+- **The caller's transcript is read, counted and never sent anywhere as text.** The reader skips lines before it decodes them, works under a byte budget and a time limit, and refuses network shares, device paths and automounted network folders before it touches them.
+- **Each message and each file write is given an owner.** Tokens are grouped by the model that answered. A write that no agent can be shown to own is counted as uncovered, never guessed.
+- **The round stores the result.** A new schema step adds the authors table and its columns. `--log` names the state of each round's authors: observed, partial with its reasons, unobserved, or not recorded for rounds that ran before this release.
+- **New report: `coai-mcp --round-authors`.** It puts who wrote the code beside what the reviewers found, by cohort (first or corrective round) and by period. It writes JSON by default, or a table with `--table`. `--add` merges a report from a second store, for example the WSL one, and refuses reports that disagree on what they selected, or that share a session.
+- **New one-shot command: `coai-mcp --backfill-authors`.** It fills in the authors and the size of rounds that ran before this release. It first takes a backup of both stores (the database and the session files) and verifies it, and writes nothing unless the backup verifies. `--dry-run` only reads. A second run changes nothing. A weaker result never replaces a stronger one, a recorded size is never replaced, and nothing is deleted.
+- **A session file keeps what a newer server wrote.** When a server saves a session file that has members it does not know, it now keeps them. Before, an older server dropped them on its next save.
+- **The `--round-authors` output prints no terminal control character.** Text that comes from an `--add` file is filtered in the table and in every refusal sentence, including bidirectional and zero-width characters. A refusal is always one line.
+
+**Fixed: a spent Kimi quota is no longer reported as a lost sign-in.** Kimi prefixes its provider errors with "Authentication required:", so a 429 "5-hour usage limit" used to read as "exit 77: not signed in — run kimi login". Now a spent 5-hour quota (and a spent balance) is a hopeless rate limit for the round: the summary says "the Kimi plan quota is used up — signing in again will not help" and quotes Kimi's own reset clause. Any other "Authentication required: <status>" is shown with the vendor's own words and no cure. A 401 and the bare "Authentication required" still say to sign in. The vendor's sentence is kept after the cure (4,000 characters in the ledger and the log, 160 in the summary). It is redacted before any cut, with a new pattern for Moonshot account ids. The cure is said once on every path, the reason is matched before stderr, and ACP `error.data` is kept.
+
+**Fixed: a child that exits before its start time is read no longer fails a launch.** A launched process that exited so fast (seen on macOS) that coai could not read its start time was reported as "not started"; it is now recorded as the launch it was.
+
+## Extension 0.82.0 · Server 0.62.0 — 2026-10-19
+
+**Added: a Vibe "Projects on this disk" row can read a folder of repositories.** Before, such a row was refused on a
+folder like `d:\rsd` or `~/git`, because it holds many repositories and Vibe has no trustworthy read-only mode, so it may
+read only a clean Git copy of one work tree. Now coai-mcp opens a granted parent folder and finds the Git repositories
+under it. It copies each one into a folder that coai owns, and it removes the copies after the turn.
+
+**Server (coai-mcp 0.62.0):**
+- The walk goes two levels down. It skips hidden folders, `node_modules`, `bin`, `obj`, Windows hidden and system folders,
+  and every link. It never goes into a repository. One Git call confirms each candidate as the top of a work tree.
+- A broken candidate or an unreadable folder is skipped, and a note says so on the row. Any refusal from a copy refuses the
+  whole row and removes every copy.
+- Links are checked from the granted folder down to each repository, right before its copy.
+- A linked worktree whose main checkout is copied in the same row is left out, and the row and the model's prompt both say so.
+- Limits: 10,000 folders per walk, 100,000 entries per listing and 50 repositories per row. Over 50, the row is refused and
+  the refusal names the cure. The walk and the copies share the row's time budget, and a refusal says which one ran out.
+- After a crash, `coai-question-*` scratch folders are swept after six hours, and only when the sweep can take the row's lock.
+
+**Extension (0.82.0):** the help texts for the disk row now describe the folder of repositories, in all five languages.
+## Extension 0.81.0 · Server 0.61.0 — 2026-10-19
+
+**Added: Kimi Code runs as a reviewer on a WSL2 host.** Vibe already ran on WSL2 (server 0.59.0). Kimi now uses the same
+host check. WSL2 is admitted. Native Linux, WSL1, macOS and a `wsl.exe` bridge are refused, and the refusal says why.
+
+**Server (coai-mcp 0.61.0):**
+- The Linux mechanisms are in: an exclusive sign-in lock, a file identity key, a mount-locality check, a `/proc` process
+  listing and a teardown that leaves no child behind.
+- `rg` and `fd` are found in the Kimi bin folder, then on PATH, then in `~/.local/bin`. A missing tool is refused with a
+  cure for `apt-get`, `dnf` or a generic host.
+- On Linux, Kimi gets only the environment it needs: HOME, a private cache folder, `KIMI_CODE_HOME`, the no-update flag
+  and PATH.
+- A sign-in folder on NFS, CIFS or sshfs is refused by default, because a Kimi on another computer could refresh the
+  rotating token and sign the person out. The check runs on every launch.
+- A stuck Kimi leaves a survivor marker. The providers answer now reports it, and `--kimi-clear-marker` clears it under
+  the sign-in lock.
+
+**Extension (0.81.0):**
+- The Kimi card has a *Clear the stuck Kimi marker* button.
+- The setting `coai.kimiAllowNetworkSignIn` lets a person allow a network sign-in folder. It is read from the user layer
+  only: a workspace cannot set it, Settings Sync does not copy it, and a config export never carries it.
+- On Linux the Install button runs only the vendor installer and the `apt-get` or `dnf` install of `ripgrep` and
+  `fd-find`.
+
+## Team server 0.14.0 — 2026-10-19
+
+This release was proposed as 0.13.2 and became 0.14.0 when the Kimi-on-WSL2 work (#879) landed first. Its
+`feat` commit moved the server's line to a minor version, so the release carries both changes below.
+
+**Fixed: a vendor with no quota gauge is logged as such.** After a deploy canary, the log said
+`gauge claude/a: skipped (slot-not-readable)` for a healthy slot of every vendor whose runtime is not codex. Only the
+codex runtime has a gauge the server reads, so the note now says `skipped (no-gauge-for-runtime)` for the others.
+`slot-not-readable` stays for a codex slot that really cannot be read: signed out, blocked, or with capture suspended.
+Nothing is written to the slot for a vendor that has no gauge; a codex reading is still stored, and a suspended capture is still stored as suspended, as before.
+
+**Changed: a gauge reader's marker is cleared only when every process it names is proven gone.** The reader marker
+moved into the shared process code that coai-mcp also uses for Kimi. After the kill and its confirmation, each process
+the marker names is now checked once more. If one is still running, the slot stays blocked with
+`reader-termination-failed`, as before. If one cannot be checked (for example, its status cannot be read), the slot
+now stays blocked with the new code `reader-member-unverifiable`. Before, that process counted as gone and the marker
+was cleared.
+
+## Extension 0.80.2 — 2026-10-19
+
+**No change in what the extension does.** This release ships with coai-mcp 0.60.2, whose local review lines in
+`usage.jsonl` now carry their round. The Usage page already read a line's `round` from either source, so a local line
+keeps the round key the engine stamped, a line with an empty round reads as a line with no round, and the round changes
+no count or total: two launches of one round are still two runs, with their tokens summed once. New tests hold these
+three facts, and the doc comments on the usage entry now describe the local line as it is.
+
+## Server 0.60.2 — 2026-10-19
+
+**Fixed: one bad field in a reviewer row costs that row only.** A hand-edited member of the wrong JSON type in
+`COAI_VENDORS` (for example `"timeoutMinutes":"30"`) used to make the whole list read as empty, so the server quietly
+ran the shipped default reviewers in place of every row the person wrote. A `null` row crashed the server at startup.
+Now the rows are read one by one. A row that does not read is left out on its own, the others still review, and the
+server names the row and the member in `providers`, in the startup and reload notice, and in the panel's toast. If
+every row is refused, no reviewer runs, the same as for an empty list.
+
+**Fixed: a local review line in `usage.jsonl` carries its round.** Every launch of one review turn — the first, a
+repair, a follow-up and every earlier turn of a conversation — now writes the round key the engine stamped, under the
+same `round` field the Team server's lines use, so a local line can be joined to its round. A launch outside a round,
+and consultation, question-row and probe lines, write none.
+
+## Team server 0.13.1 — 2026-10-18
+
+**Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled** (the server's half of the same
+fix as coai-mcp). `/api/usage`'s per-window figure keeps the rounds of readings whose percentage did not change,
+starts a new baseline after a fall, and pools all rounds over the total rise of the last ten intervals. A launch the
+server requeued after a rate-limit refusal is no longer counted as one of its round's launches, so the launch that
+ran carries the whole round. codex stays hidden on every limit of the account.
+
+## Extension 0.80.1 — 2026-10-18
+
+**Changed: the help says how rounds per 1 % is counted now,** in all five languages: from one rise of the
+window's percentage to the next, pooled over the last ten such rises. When a figure is unavailable because the
+percentage has not moved yet, the reason now reads *the percentage has not risen yet*.
+
+## Server 0.60.1 — 2026-10-18
+
+**Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled.** The `gauge` block of
+`--round-counts` and the Team server's `/api/usage` read one shared derivation, and it had two faults:
+- It dropped any pair of readings whose whole-number percentage did not rise, together with the rounds between them.
+  So 10, 10, 10, 11 % with a round between each counted 1 round per 1 % instead of 3, and the figure leaned low.
+- It averaged the intervals' ratios weighted by rounds, which gave 2.375 where the true figure is 4/3.
+
+Now:
+- An interval keeps its starting reading through readings that did not change, adds up their rounds, and closes when
+  the percentage rises.
+- A reading that falls without a reset starts a new baseline.
+- A reset, a stale or missing reading, a launch with no reading, or a review without a round voids the span.
+- A percentage outside 0–100 counts as a missing reading.
+- The figure is pooled: all the rounds over the total rise of the last ten intervals.
+- When there is no figure, the reason is the real one, not "too few readings".
+- codex stays hidden, now on every limit of the account.
+
+## Extension 0.80.0 — 2026-10-18
+
+**Added: the model card sets a row's prompt cap.** The Models card has a new box, "Largest prompt it reads, KiB". It
+writes the row's `maxPromptKib`: a whole number from 1 to 4096. Empty is no cap, and there is no default; you choose the
+cap for each row. coai-mcp then leaves that reviewer out of a round whose prompt is larger than the cap, and says why in
+the reply. The box shows for every runtime. It needs coai-mcp 0.60.0: with an older server the cap is not written, and
+the card says that the server does not take it yet.
+## Server 0.60.0 — 2026-10-18
+
+**Added: a reviewer row can say how much it can read.** A vendor row can now carry `maxPromptKib`: the largest first
+prompt its reviewer is sent, in whole KiB, from 1 to 4096. A reviewer whose prompt is larger than its cap is left out of
+the round before the round starts, so it is not launched and not paid for. The reply names the row, the prompt size, the
+cap in bytes and what to do: send the plan in parts, send a smaller change, or send the document in parts. When every
+reviewer is over its cap, `review_plan` and `review_code` refuse before a round starts, and a feature review records the
+stage as skipped. coai sets no cap by default; you set it per row. Any other value is no cap for that row only, and the
+other rows still load. `providers` shows each row's cap, and `--features` lists `maxPromptKib`.
+
+**Fixed: a plan reviewer that did not read the whole plan is one failure everywhere.** A reviewer that answers only
+`PLAN_INCOMPLETE` already counted as not answered in the verdict. But the ledger still said `ok`, and the local
+reviewer's stand-down counted it as a cloud reviewer that had nothing to say. Now the ledger, the live view, the audit
+line and the stand-down all record it as failed, with the tokens it spent.
+
+**Fixed: round and review trees on Windows survive a long tracked path.** `review_code` on a branch that tracks a long
+path failed on Windows with `Could not reset index file to revision 'HEAD'`. coai now gives each git command on a tree it
+makes `-c core.longpaths=true`, on Windows only. It writes no git config. If git still cannot write a path, the message
+names the path, its length, git's reason and the Windows limit, and says to set `COAI_ROUND_WORKTREES` to a shorter
+folder.
+
+## Extension 0.79.0 — 2026-10-17
+
+**Added: the Vibe card says, for each host, what the server does.** The card now tells you what coai-mcp does with Vibe
+on the host it runs on. On a WSL2 host it runs Vibe. On native Linux and on WSL1 it says that Vibe is refused there.
+Before, the card did not say this per host.
+
+## Server 0.59.0 — 2026-10-17
+
+**Added: Mistral Vibe works on a WSL2 host.** On a WSL2 host, coai-mcp now runs Vibe as a reviewer, as a consultant and
+as a question row. Before, this was not possible on WSL2.
+
+**Added: the Vibe sign-in on WSL2 is your own `~/.vibe/.env` file.** coai links this file into the private Vibe home of
+the run. It never copies the file, so your key stays in one place. coai checks the sign-in again at every turn, so a
+file that was removed or changed is seen at the next turn.
+
+**Added: native Linux and WSL1 are refused with a sentence.** On these hosts coai does not run Vibe. The refusal says
+why, in one sentence, and does not start Vibe.
+
+## Team server 0.13.0 — 2026-10-16
+
+**Added: the server reads the codex quota gauge after each codex job, inside the slot's lease.** It asks
+`codex app-server` for `account/rateLimits/read` and nothing else: no sign-in, no retry, no reset credit. The read can
+refresh the account's token set, so it is contained:
+- The slot's lock is taken first.
+- A fail-closed reader marker is written before the spawn.
+- Every process of the reader's tree is recorded as it appears, killed when the read ends, and confirmed gone by pid
+  and start time before the lease is released.
+- A crash that leaves a marker blocks the slot until the next acquisition or the startup sweep proves the tree is gone.
+  A marker with an incomplete identity blocks it until a person checks.
+- A token that expires within the reader's 20-second lifetime plus a 10-minute margin, or an expiry that cannot be
+  read, spawns nothing.
+- An authentication error or a refresh request suspends capture on that slot only. The slot is not marked as needing
+  sign-in.
+
+The reading — every window of every limit, with its used percent, window length and reset time — is stored on the
+slot and on the job's ledger line. It is served in the catalog (`gauges`, the newest reading per vendor, with no account
+name or email) and in `/api/usage` with rounds per 1 % per window. An older client ignores both.
+
+## Extension 0.78.0 — 2026-10-16
+
+**Added: the Rounds page says what a plan round reviewed.** When you open a plan round, a line under "asked by" now
+says "reviewed from":
+- a committed plan shows its path, the commit, the file's id and its size;
+- a pasted plan shows its size and its id.
+
+A record that is incomplete or malformed shows no line at all, and never a wrong one. It needs coai-mcp 0.58.0; with an
+older server the line is not there.
+
+## Server 0.58.0 — 2026-10-16
+
+**Added: the plan gate can read a committed plan itself.** `review_plan` takes `committedPlan`, a path in the
+repository, in place of `planText`. You can also pass `expectedCommit`. coai reads that file from git at the branch tip
+and checks that the text it sends is exactly the stored file, all of it. Then the reviewers get the whole plan. Before,
+a caller had to paste the plan, and a long plan could be cut on its way, so the reviewers judged part of a plan or none
+of it.
+
+Before any round starts, coai refuses a plan it cannot prove. That includes:
+- a file that is not committed, or is changed in your checkout;
+- a symlink, a submodule, an empty file or a file over 256 KiB;
+- a file that is not UTF-8;
+- a name that looks like a credential;
+- a repository that uses SHA-256 object ids.
+
+Each refusal says how to fix it. `planText` works as before.
+
+**Added: a reviewer that did not get the whole plan counts as failed.** Every plan round now marks the start and the end
+of the plan. A reviewer that says it cannot see both marks is counted as not answered, even if it also sent other
+findings. When no reviewer answered, the verdict is `call_human`.
+
+**Added: the round says what it reviewed.** A plan round records the commit, the path, the file's id and its size for a
+committed plan, or an id for a pasted one. `status` shows it, and `--log` carries it as `planSource`. The database gains
+one column (schema step 23). An older database is upgraded when the new server first opens it.
+
 ## Server 0.57.0 — 2026-10-16
 
 **Added: Kimi Code as a reviewer (Windows).** A `kimi` reviewer row runs Moonshot's Kimi Code CLI on your own sign-in.

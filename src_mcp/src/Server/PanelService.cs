@@ -28,6 +28,10 @@ public sealed class PanelService
     private readonly SessionStore _store;
     private readonly ArtifactStore _artifacts;
     private readonly WorktreeManager _worktrees;
+
+    /// <summary>A test's own answer to "which commit is this branch at" — what proves a plan round runs on the commit the plan was read at.</summary>
+    internal Func<string, string, Task<string>>? TipResolver { get; init; }
+
     private readonly ContextAssembler _context;
     private readonly RosterBuilder _roster;
     private readonly RoundCommands _commands;
@@ -43,14 +47,24 @@ public sealed class PanelService
     private readonly QuestionConsultService _questions;
     private readonly CadenceDesk _cadence;
 
+    /// <summary>
+    /// The host's stopping token — what a local round tells a stopping server's cancellation from a person's withdrawal by
+    /// (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, decision D4). <c>default</c> never fires: a service built directly, as every
+    /// test does, belongs to no host that stops.
+    /// </summary>
+    internal CancellationToken HostStopping { get; }
+
     public PanelService(
         PanelSettings settings,
         VaultKeys keys,
         DateTime vaultReadUtc,
         IProcessLauncher launcher,
         Serilog.ILogger log,
-        Noticing noticing)
+        Noticing noticing,
+        Func<string, string?>? environment = null,
+        CancellationToken hostStopping = default)
     {
+        HostStopping = hostStopping;
         _settings = settings;
         _keys = keys;
         _vaultReadUtc = vaultReadUtc;
@@ -129,7 +143,7 @@ public sealed class PanelService
         _commands = new RoundCommands(settings, prompts, log);
         _engine = new RoundEngine(
             settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, _escalations, ledger,
-            _projection, callers, _remote, ExcludedFrom, NoReviewerRefusal);
+            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
         // The fourth gate, in a file of its own (S2.2b): its inputs, its refs and its pack, over the same
         // engine. The outliner is the in-process tree-sitter one the pack is measured with.
         _feature = new FeatureStage(settings, launcher, _engine, _roster, new Normalizer.TreeSitterOutliner(), log, noticing);
@@ -173,6 +187,7 @@ public sealed class PanelService
         // And the person's cards (A4, S3): answered and expired questions, orphans and temp files older than seven
         // days go; a question a live session still holds is kept. The phase records they count into go after thirty.
         _log.Debug("swept {Count} escalation file(s) and phase record(s)", SweepEscalations());
+        _log.Debug("retired {Count} Kimi lock key(s)", SweepKimiLocks());
 
         // And the reviewers those rounds left RUNNING, which is the more expensive half of the
         // same failure. The timeout kill is performed by the parent, so a server that dies takes
@@ -288,12 +303,27 @@ public sealed class PanelService
         {
             Api = ApiReportOf(provider),
             Fast = FastReportOf(provider),
-            Warning = WarningOf(health),
+            Warning = CardWarningOf(health, RuntimeFor(provider)),
+            SurvivorMarker = SurvivorMarkerOf(RuntimeFor(provider)),
+            MaxPromptKib = provider.PromptCap.IsSet ? provider.PromptCap.Kib : null,
         };
     }
 
-    /// <summary>The health's warning on the wire — absent (null) for a row that has none, so its JSON reads as it did.</summary>
-    private static string? WarningOf(VendorHealth health) => health.Warning.Length > 0 ? health.Warning : null;
+    /// <summary>
+    /// The row's warning on the wire — the health's (an unmeasured CLI version) and, for a Kimi row with <c>coai.kimiAllowNetworkSignIn</c> on, the one line about its network sign-in folder — joined; null when there is none,
+    /// so the JSON reads as it did.
+    /// </summary>
+    private string? CardWarningOf(VendorHealth health, IReviewerRuntime? runtime) =>
+        string.Join("; ", new[] { health.Warning, NetworkWarningOf(runtime) }.Where(warning => warning.Length > 0)) is { Length: > 0 } joined ? joined : null;
+
+    private string NetworkWarningOf(IReviewerRuntime? runtime) =>
+        runtime is Runners.Kimi.KimiRuntime kimi && _settings.KimiAllowNetworkSignIn ? kimi.NetworkSignInWarning() : string.Empty;
+
+    /// <summary>
+    /// The standing survivor marker of a Kimi row's sign-in, for the card's <i>Clear the stuck Kimi marker</i> button — null for every other runtime and when none stands, so the JSON reads as it did.
+    /// </summary>
+    internal static SurvivorMarkerReport? SurvivorMarkerOf(IReviewerRuntime? runtime) =>
+        runtime is Runners.Kimi.KimiRuntime kimi && kimi.StandingMarker() is [var marker] ? new SurvivorMarkerReport(marker.Path, marker.Pids) : null;
 
     /// <summary>
     /// The health's sentence — and, for an Off codex row whose installed release refuses the standard tier, what its
@@ -517,7 +547,7 @@ public sealed class PanelService
     /// own session, which is what every caller before plan 4 meant and still means.
     /// </param>
     public Task<string> StatusAsync(string repoPath, string branch, string document = "") =>
-        StatusAsync(repoPath, branch, document, string.Empty);
+        StatusAsync(repoPath, branch, document, string.Empty, ct: HostStopping);
 
     /// <param name="plan">A plan to report the consultation cadence of — or empty for the one this session holds,
     /// if any (<c>research/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
@@ -616,7 +646,14 @@ public sealed class PanelService
     /// <param name="cadence">What the caller declared about the consultation cadence — the plan, the epic, the
     /// risk answer (<c>research/PLAN_consult_on_a_cadence.md</c>). Checked under the claim; a false declaration is
     /// refused, and the facts shape the orders the reply carries.</param>
-    public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CadenceArgs cadence, CancellationToken ct = default)
+    public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CadenceArgs cadence, CancellationToken ct = default) =>
+        ReviewPlanAsync(repoPath, branch, new PlanInput(planText, string.Empty, string.Empty), cadence, ct);
+
+    /// <summary>The same gate for a plan named either way: its text, or a committed file the server reads itself.</summary>
+    /// <remarks>
+    /// A refusal of the input is answered HERE, before the claim, the begin and any round number — see <see cref="PlanInputs"/>.
+    /// </remarks>
+    internal async Task<string> ReviewPlanAsync(string repoPath, string branch, PlanInput input, CadenceArgs cadence, CancellationToken ct = default)
     {
         var trace = new CadenceTrace();
         // The same guard the code stage has had, for the same reason: a round that launches no
@@ -625,14 +662,20 @@ public sealed class PanelService
         if (_settings.Rounds.EnabledRolesOf(Stage.PlanReview).Count == 0)
         {
             _log.Warning("review_plan refused: every plan role is switched off");
-            return Task.FromResult(Error(NoRolesRefusal(Stage.PlanReview)));
+            return Error(NoRolesRefusal(Stage.PlanReview));
+        }
+
+        var prepared = await PlanInputs.PrepareAsync(input, repoPath, branch, TipResolver ?? _worktrees.ResolveShaAsync, _launcher, ct);
+        if (prepared is not PlanInputOutcome.Ready plan)
+        {
+            return Error(((PlanInputOutcome.Refused)prepared).Sentence);
         }
 
         // No floor here on purpose. A three-line plan is a BAD plan, and saying so is the reviewers'
         // job — refusing it at the gate does their work for them and takes away the one round that
         // would have told the person why. The floor belongs to the code stage, where the scope has
         // something to be checked against.
-        return _engine.RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound,
+        return await _engine.RunStageAsync(repoPath, branch, plan.Text, new StageRun(RoundMachine.BeginPlanRound,
             NeedsWorktree: false, Stage: Stage.PlanReview, ReadsCheckout: false,
             async (session, workingDir, _, roundToken) =>
             {
@@ -648,9 +691,10 @@ public sealed class PanelService
                 // older conventions pin may carry only some of the tier, and a round that matched
                 // none of it must not read like a round that matched all of it.
                 _log.Information(
-                    "context for review: plan {PlanBytes} bytes; rules {RulesBytes} bytes, "
+                    "context for review: plan {PlanBytes} bytes (id {TextId}); rules {RulesBytes} bytes, "
                     + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
-                    System.Text.Encoding.UTF8.GetByteCount(planText),
+                    System.Text.Encoding.UTF8.GetByteCount(plan.Text),
+                    plan.TextId,
                     rules.Bytes,
                     rules.MatchedCount(StageRules.Plan),
                     StageRules.Plan.Length,
@@ -675,7 +719,7 @@ public sealed class PanelService
                     _roster.BuildWork(
                         roles, workingDir,
                         RulesText.Section(rules, rules.TierCoverage(StageRules.Plan))
-                            + $"## The plan under review\n\n{planText}",
+                            + PlanSection.Compose(plan.Text, plan.SourceLine, plan.TextId),
                         round,
                         stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
@@ -683,9 +727,12 @@ public sealed class PanelService
                         deal: _settings.DealPlanLenses,
                         codexTiers: tiers,
                         // The round's own scratch (D17's homes); a plan round mounts no checkout, so no snapshot.
-                        scratch: await _roster.ScratchAsync(_launcher, Stage.PlanReview, workingDir, readsCheckout: false, roundToken)));
+                        scratch: await _roster.ScratchAsync(_launcher, Stage.PlanReview, workingDir, readsCheckout: false, roundToken))).WithUnreviewed(plan.Unreviewed);
             })
         {
+            // The ONE commit the plan was read at: the engine resolves this, so the plan, the cadence outline and the record agree.
+            Head = plan.Head,
+            PlanSource = plan.Source,
             RolesPerVendor = 1,
             Cadence = trace,
             // The plan stage refuses only what the declaration itself gets wrong; which groups are owed
@@ -1340,7 +1387,7 @@ public sealed class PanelService
     /// round rather than an opt-in. Empty directories are cheap; an unbounded count of them is not.
     /// </remarks>
     private static readonly string[] ScratchPrefixes =
-        ["coai-answers-*", "coai-repair-*", "coai-noworkspace-*"];
+        ["coai-answers-*", "coai-repair-*", "coai-noworkspace-*", "coai-question-*"];
 
     /// <summary>Deletes a directory that git has been in — <see cref="Runners.Files.GitScratch"/> says why that needs care.</summary>
     private static void DeleteEvenIfReadOnly(string dir) => Runners.Files.GitScratch.DeleteEvenIfReadOnly(dir);
@@ -1466,11 +1513,27 @@ public sealed class PanelService
     /// </summary>
     private static void DeleteIfDue(string dir, DateTime cutoff, IReadOnlyList<string> except, Action<string>? warn)
     {
-        if (Directory.GetLastWriteTimeUtc(dir) < cutoff && !Kept(dir, except) && KimiHomesDisposed(dir, warn))
+        if (Directory.GetLastWriteTimeUtc(dir) >= cutoff || Kept(dir, except))
+        {
+            return;
+        }
+
+        if (IsAQuestionRowScratch(dir))
+        {
+            // A row's budget has no upper bound, so age cannot say it is dead: it holds a lock for its whole life (D8 of
+            // research/PLAN_vibe_reads_a_folder_of_repositories.md), and a scratch whose lock cannot be taken is kept — the one keep-test
+            // the one-shot Vibe homes use.
+            Runners.Files.FolderLock.RemoveIfFree(dir, QuestionRowLaunch.LockName, Runners.Files.GitScratch.DeleteEntry, () => KimiHomesDisposed(dir, warn));
+        }
+        else if (KimiHomesDisposed(dir, warn))
         {
             DeleteEvenIfReadOnly(dir);
         }
     }
+
+    /// <summary>A question row's own scratch folder (<see cref="QuestionRowLaunch.ScratchPrefix"/>), whose live owner holds a lock in it.</summary>
+    private static bool IsAQuestionRowScratch(string dir) =>
+        Path.GetFileName(dir).StartsWith(QuestionRowLaunch.ScratchPrefix, StringComparison.Ordinal);
 
     /// <summary>
     /// D19's order for a Kimi home in a due scratch (E4.4 review B1): the folder's own home and every <c>kh-*</c> child have their <c>credentials</c> junction
@@ -1803,6 +1866,12 @@ public sealed class PanelService
     public void SweepScratch() => PruneOldAnswerDirs(_settings.ConsultantHomesRoot, _log);
 
     /// <summary>
+    /// The Kimi lock files of a sign-in folder that is gone or is another folder now, retired (DL7 / F15 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): at server start and on every beat. Linux only — elsewhere
+    /// <see cref="Runners.Kimi.KimiLockRetirement.Sweep"/> answers 0 at once — and it never throws: a key it cannot decide about is left and logged.
+    /// </summary>
+    public int SweepKimiLocks() => Runners.Kimi.KimiLockRetirement.Sweep(Runners.Kimi.KimiCredentialsLock.Root, note => _log.Debug("{Note}", note));
+
+    /// <summary>
     /// The twelfth tool (todo/PLAN_question_consultant.md, S2): the question consultant — every active row answers
     /// in parallel before the person is asked. A delegation, like `consult`; what this service adds is which
     /// SESSION the question is filed under, which only it can resolve.
@@ -1864,13 +1933,28 @@ public sealed class PanelService
         session.State.PlanProceeded,
         _settings.Rounds.For(session.State.Stage).Threshold,
         _settings.Rounds.For(session.State.Stage).MaxRounds,
-        session.Rounds)
+        // Without the authors snapshot (E5.S1: its rows would cost the calling AI up to several KB of context per round, on every reply;
+        // the session file and the rounds page keep it) and without the members a newer server wrote (the session-file guard, #868).
+        WithoutUnknownMembers(session.Rounds.Select(round => round with { Authors = null })))
     {
         HumanDecision = CurrentAnswer.WordFor(Escalations.DecisionOf(gatesAnswer)),
         HumanAnswer = gatesAnswer?.Answer ?? string.Empty,
         Consultations = _consultations.OpenIn(session.State.RepoPath),
         Pending = session.State.AwaitingResolve ? session.Pending : [],
     };
+
+    /// <summary>
+    /// The rounds as THIS server knows them: the members a newer server wrote (<c>RoundRecord.Unknown</c>, and each reviewer row's)
+    /// belong to the session file, which keeps them, and not to the answer — the extension reads only the members it was built for.
+    /// </summary>
+    private static IReadOnlyList<RoundRecord> WithoutUnknownMembers(IEnumerable<RoundRecord> rounds) =>
+    [
+        .. rounds.Select(r => r with
+        {
+            Unknown = null,
+            ReviewerStates = [.. r.ReviewerStates.Select(v => v with { Unknown = null })],
+        }),
+    ];
 
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>
         JsonSerializer.Serialize(value, type);

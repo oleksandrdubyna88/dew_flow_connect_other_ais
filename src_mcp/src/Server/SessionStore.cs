@@ -62,6 +62,18 @@ public sealed record ReviewerState(
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? Warning { get; init; }
+
+    /// <summary>
+    /// Members of this reviewer row in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonExtensionData, System.Text.Json.Serialization.JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>
@@ -125,7 +137,7 @@ public sealed record RoundRecord(
 
     /// <summary>
     /// The round's identity across the wire — 32 hex characters minted when it started
-    /// (<see cref="RoundKeys"/>, story 4.1 of todo/PLAN_every_round_is_counted.md), which every launch of the round
+    /// (<see cref="RoundKeys"/>, story 4.1 of research/PLAN_every_round_is_counted.md), which every launch of the round
     /// carries to a Team server. Empty for a round recorded before the field existed, and for a skipped round, which
     /// launched nothing.
     /// </summary>
@@ -211,6 +223,29 @@ public sealed record RoundRecord(
     public int? Gitlinks { get; init; }
 
     /// <summary>
+    /// What a completed PLAN round reviewed: where the text came from, the commit, the blob and the id of the text sent.
+    /// </summary>
+    /// <remarks>
+    /// <b>Nullable, and NOT normalised on the way in</b>, for <see cref="Caller"/>'s reason: a round written before this
+    /// field said nothing, and a getter that materialised an empty one would turn "not recorded" into "recorded as
+    /// nothing" the next time the session is saved — which is on every progress tick. Null for a code, document or
+    /// feature round, for a SKIPPED round (it reviewed nothing), and for every plan round older than the field.
+    /// <see cref="PlanSource.Commit"/> is the engine's own resolved commit, so a pasted plan has one too.
+    /// </remarks>
+    public PlanSource? PlanSource { get; init; }
+
+    /// <summary>Who wrote the code a settled plan or code round reviewed — observed, partial or unobserved, never guessed. Null when not recorded.</summary>
+    /// <remarks>
+    /// <para><b>Nullable, and NOT normalised on the way in</b>, for <see cref="Caller"/>'s reason: a round written before this field,
+    /// a skipped, interrupted or running round and every feature or document round say nothing about authors, and a getter that
+    /// materialised an empty snapshot would turn "not recorded" into "recorded as nothing" the next time the session is saved — on
+    /// every progress tick (<c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c> §3).</para>
+    /// <para>Text-free by construction (ids, closed words, counts, tokens). Kept in the file and in <c>coai.db</c>; the <c>open</c> and
+    /// <c>status</c> answers strip it — the rows would cost the calling AI up to several KB of context per round.</para>
+    /// </remarks>
+    public Core.Authors.AuthorsSnapshot? Authors { get; init; }
+
+    /// <summary>
     /// What this round was ABOUT — the plan's file name or its title.
     /// </summary>
     /// <remarks>
@@ -248,6 +283,18 @@ public sealed record RoundRecord(
     /// <see cref="CostUsd"/>, which are then a FLOOR: the unknown share is not in them, and it is not zero.
     /// </remarks>
     public string UsageNote { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Members of this round in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonExtensionData, System.Text.Json.Serialization.JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>What the store persists: the state machine's state plus the human-readable trail.</summary>
@@ -353,6 +400,18 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
         get => field ??= [];
         init => field = value ?? [];
     }
+
+    /// <summary>
+    /// Members of this session file in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonExtensionData, System.Text.Json.Serialization.JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>
@@ -424,6 +483,12 @@ internal sealed class SessionTurn : IDisposable
 
 public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 {
+    /// <summary>The names a release retired from the types whose file members are kept; the save drops them. A test registers its own.</summary>
+    internal RetiredMembers Retired { get; init; } = RetiredMembers.Shipped;
+
+    /// <summary>The write road of one session file: (file, whole text). <see cref="AtomicFile.Write"/> with its shared window by default; a seam so a test can hold, fail or pause the write.</summary>
+    internal Action<string, string> FileWriter { get; init; } = static (file, json) => Runners.Files.AtomicFile.Write(file, json, Runners.Files.AtomicFile.SharingRetry);
+
     private string SessionsDir => Path.Combine(dataDir, "sessions");
 
     /// <summary>
@@ -509,83 +574,21 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         // save that could be told wrong. It is also what lets the orphan sweep re-save a feature
         // session under its own key without knowing what a feature session is.
         var file = FileFor(session.State.RepoPath, session.State.Branch, session.State.Document, session.State.Feature);
-        // A scratch name per WRITE, and that is a crash fix rather than a nicety. It used to be
-        // `<session>.json.tmp` — one fixed path — and this machine runs several MCP clients at once,
-        // each with a server of its own, sharing a data directory; a nine-reviewer round saves on
-        // every reviewer transition. Two writers therefore wrote the SAME scratch file and both
-        // tried to move it, and the loser died with `UnauthorizedAccessException: Access to the path
-        // is denied` out of `LiveRound.Persist`. Twice in one morning's log before it was understood.
-        var temp = $"{file}.{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}.tmp";
-        var json = JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession);
-        using (var turn = SessionTurn.Take(file))
-        {
-            if (turn.Held)
-            {
-                // IN PLACE, and no rename at all. Temp-and-move exists to keep a reader from seeing
-                // half a file; the turn does that better, because readers take the same turn. Once
-                // the lock is held there is nothing left for the rename to buy — and the rename was
-                // the only operation that could be denied. Serialising happens BEFORE the turn is
-                // taken, so a writer never holds it over work readers do not need.
-                File.WriteAllText(file, json);
-                return;
-            }
-        }
-
-        // Only when the turn could not be taken at all: fall back to the old shape, which at least
-        // cannot show a reader a half-written file.
-        File.WriteAllText(temp, json);
-        try
-        {
-            MoveOverExisting(temp, file);
-        }
-        finally
-        {
-            // Ours alone, so cleaning up can never take another writer's scratch file with it.
-            TryDelete(temp);
-        }
-    }
-
-    /// <summary>
-    /// The move, retried briefly — for what a unique scratch name cannot fix.
-    /// </summary>
-    /// <remarks>
-    /// A reader, an indexer or a virus scanner holding the DESTINATION for a moment is also reported
-    /// as access denied on Windows. Bounded and short: the last attempt is allowed to throw, because
-    /// a save that never lands is a real problem and must surface as one rather than spin.
-    /// </remarks>
-    private static void MoveOverExisting(string temp, string file)
-    {
-        // Ten attempts with a jittered back-off — about half a second of patience in the worst case.
-        // The first version allowed five and a fixed 20 ms step, and a test with four readers in a
-        // hot loop spent the whole budget and failed: on Windows a rename over an open file needs
-        // that file's handle to permit deletion, and while a reader now permits it, the two still
-        // have to miss each other. Real readers poll every few seconds rather than continuously, so
-        // this budget is generous there and merely sufficient under the test's deliberate hostility.
-        // The jitter matters because several writers backing off in lock-step retry in lock-step.
-        const int attempts = 10;
-        for (var attempt = 1; attempt <= attempts; attempt++)
-        {
-            try
-            {
-                File.Move(temp, file, overwrite: true);
-                return;
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt < attempts)
-            {
-                Thread.Sleep(Random.Shared.Next(5, 15) * attempt);
-            }
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
+        // The bags are cleaned on a copy, once, here — the only place a session is serialised (SessionScrub says what it drops).
+        var json = JsonSerializer.Serialize(SessionScrub.Scrubbed(session, Retired), ServerJsonContext.Default.PersistedSession);
+        // ONE road, whether or not the turn could be taken: a temp file beside the session, then the move over it — `AtomicFile`, whose
+        // scratch name is per WRITE (pid and GUID) and whose move is retried for the short, bounded window every record here shares.
+        // The turn is held from before the temp file to after the move, so a reader or a second writer of this process family waits for
+        // the whole file; serialising happened BEFORE it, so a writer never holds it over work readers do not need.
+        //
+        // This used to write IN PLACE when the turn was held (`File.WriteAllText`, no retry). That opens with `FileMode.Create`, which
+        // truncates the session the moment the open succeeds: a writer refused at the open lost nothing, but one that failed AFTER it left
+        // an empty or half-written session, and a retry would only have repeated the risk. Measured 2026-10-20 (Windows 11 26300): one
+        // in-place writer and one mover on one file for 4 s — the in-place writer was refused 273 times (sharing violation,
+        // 0x80070020), the mover 337 times (`UnauthorizedAccessException`, 0x80070005). The move is now the only road, and its retry
+        // lives in `AtomicFile.MoveOver` alone (PLAN_the_suite_is_deterministic_and_leaves_no_temp.md, C25 / S5).
+        using var turn = SessionTurn.Take(file);
+        FileWriter(file, json);
     }
 
     /// <summary>

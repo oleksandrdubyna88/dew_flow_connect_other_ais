@@ -148,6 +148,18 @@ internal static class Program
         AskAcp,
 
         /// <summary>
+        /// The card's *Clear the stuck Kimi marker*: reads ONE survivor marker under the Kimi lock root and deletes it only when every process it names is gone — never ends a process.
+        /// See <see cref="Acp.KimiClearMarkerMode"/> (DL9, S-K18).
+        /// </summary>
+        KimiClearMarker,
+
+        /// <summary>
+        /// The host's facts in one JSON line — host kind, kernel banner, each runtime's admission answer, the keyring-session facts as recorded facts — read-only, no home, no lock, no network, no data folder.
+        /// See <see cref="HostFactsMode"/> (E1.S2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux_E1.md</c>).
+        /// </summary>
+        HostFacts,
+
+        /// <summary>
         /// The measurement behind a vendor dialect: the vault read the product's way, <c>GET /models</c>,
         /// and the S0.5 request matrix, printed as an allowlist of fields.
         /// </summary>
@@ -287,7 +299,7 @@ internal static class Program
 
         /// <summary>
         /// Rounds per vendor row over the trailing 5 h / 24 h / 7 d, by stage, from the rounds database —
-        /// the local counter the Spending tab reads (story 2.1 of <c>todo/PLAN_every_round_is_counted.md</c>).
+        /// the local counter the Spending tab reads (story 2.1 of <c>research/PLAN_every_round_is_counted.md</c>).
         /// </summary>
         /// <remarks>
         /// Its own <c>args[0]</c> for the reason <c>--findings-many</c> is: a flag on <c>--log</c> would
@@ -295,6 +307,20 @@ internal static class Program
         /// of nought where it should say the server is too old. See <see cref="Server.RoundCountsMode"/>.
         /// </remarks>
         RoundCounts,
+
+        /// <summary>
+        /// Who wrote the code a round reviewed, and what the reviewers found, as additive sums over the rounds database
+        /// (E6 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>) — read-only, one document of JSON or a table.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> for the reason <c>--round-counts</c> is. See <see cref="Server.RoundAuthorsMode"/>.</remarks>
+        RoundAuthors,
+
+        /// <summary>
+        /// Gives every settled plan or code round the authors and the size the live path would have written, from what is on disk — one run per side, over
+        /// that side's own store, behind a verified backup and a dry run (E7). See <see cref="Server.BackfillAuthorsMode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs.</remarks>
+        BackfillAuthors,
     }
 
     /// <summary>
@@ -310,7 +336,7 @@ internal static class Program
     internal static readonly IReadOnlySet<Startup> WriterModes = new HashSet<Startup>
     {
         Startup.CheckConsultant, Startup.CheckModel, Startup.Collect, Startup.PairsKeep, Startup.PairsDecide,
-        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants,
+        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors,
     };
 
     /// <summary>Why <paramref name="startup"/> may not run here — empty when it may (not a writer, or its root is there).</summary>
@@ -334,9 +360,13 @@ internal static class Program
                 Runners.Reviewers.AntigravityReadOnly.HookArgument => Startup.AgyHook,
                 "--ask-api" => Startup.AskApi,
                 "--ask-acp" => Startup.AskAcp,
+                "--kimi-clear-marker" => Startup.KimiClearMarker,
+                "--host-facts" => Startup.HostFacts,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
+                "--round-authors" => Startup.RoundAuthors,
+                "--backfill-authors" => Startup.BackfillAuthors,
                 "--findings" => Startup.Findings,
                 "--findings-many" => Startup.FindingsMany,
                 "--bugs-json" => Startup.Bugs,
@@ -427,7 +457,20 @@ internal static class Program
             case Startup.AskAcp:
                 // The prompt is stdin to its end — the launcher closes it after writing — and the agent is this
                 // process's own child, started only after the prompt is whole.
-                return await Acp.AskAcpMode.RunAsync(args, Console.In, Note, Console.Out);
+                // SIGTERM and SIGINT reach the shim's token (S-K16): its own finally ends the agent's tree, which the runtime's default exit on a signal would skip. This process is also the
+                // child subreaper of that tree (DL9) — the first thing the mode does.
+                using (var stopping = new CancellationTokenSource())
+                using (Runners.Processes.StopSignals.Into(stopping))
+                {
+                    return await Acp.AskAcpMode.RunAsync(args, Console.In, Note, Console.Out, Runners.Processes.LinuxSubreaper.Become, ct: stopping.Token);
+                }
+
+            case Startup.KimiClearMarker:
+                return await Acp.KimiClearMarkerMode.RunAsync(args, Note, Console.Out);
+
+            case Startup.HostFacts:
+                // One line on stdout, read-only (no home, lock, network or data folder), exit 0 — never 64.
+                return HostFactsMode.Run(Console.Out);
 
             case Startup.ProbeApi:
                 // The vault is read the way `--providers` reads it: `creds config`, the one child this
@@ -442,6 +485,16 @@ internal static class Program
                 // The clock is the system's here and a `--now` in a test; the data directory is
                 // resolved exactly as `--log` resolves it, and the read is read-only.
                 return Server.RoundCountsMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
+
+            case Startup.RoundAuthors:
+                // Read-only, like the counter: the data directory is resolved as `--round-counts` resolves it, and an `--add` file is read with
+                // File.ReadAllText, which honours a byte-order mark (a report redirected by Windows PowerShell 5.1 is UTF-16).
+                return Server.RoundAuthorsMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System, File.ReadAllText);
+
+            case Startup.BackfillAuthors:
+                // A one-shot WRITER: the summary on stdout and nothing else, a refusal's sentence on stderr. It makes its own verified backup before it opens
+                // the store for writing, and deletes nothing.
+                return await Server.BackfillAuthorsMode.RunAsync(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
 
             case Startup.Findings:
                 return FindingsJson(args);
@@ -2144,7 +2197,12 @@ internal static class Program
                     options.PromptCollection.Add(prompt);
                 }
 
-                await using var transport = new StdioServerTransport(ServerName);
+                // The client closing stdin is the HOST ending: the host's stopping token (startStop) fires BEFORE the SDK sees its input
+                // end and cancels the in-flight requests' own tokens (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md;
+                // InputEndSignallingTransport). That token is only OBSERVED by a round (RoundCancellation): it ends no round by itself and
+                // is filed as a cause (hostStopped) only when a caller's token is wired and fires while the host is stopping. No review
+                // tool passes the request's token today, so a stopping host's rounds simply run to their clock or the process's end.
+                await using var transport = new InputEndSignallingTransport(new StdioServerTransport(ServerName), startStop.CancelAsync, log);
                 // The token alone does not end a blocked stdin read — measured on Linux, RunAsync was still running
                 // three seconds after the signal and the deadline had to end the process, notices undrained. So the
                 // stop also closes the transport, which ends the read. (Found by the signal test's own stderr check.)
@@ -2267,8 +2325,10 @@ internal static class Program
         // builds — the rebuild on a settings change included. A defaulted parameter anywhere on
         // that road is the trap the plan round named: production takes the quiet path while
         // every injected test passes. (gemini and codex, on story 2.3.2's plan round.)
+        // The host's stopping token rides the same road (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, D4): a local round that ends
+        // cancelled can then tell a host stop from a withdrawal.
         var host = new PanelServiceHost(
-            Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log, noticing);
+            Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log, noticing, stop);
         log.Debug("started: the first service is built and its startup sweeps are done");
 
         return host;
@@ -2452,7 +2512,12 @@ internal static class Program
         does not offer, a hold that cannot be taken), 69 ended before an answer (not started, another
         Kimi still holds the sign-in, the deadline, cancelled), 70 the agent failed (end session_lost: the
         agent no longer holds the --session), 75 a known spent
-        sentence, 76 the stream broke, 77 a known sign-in or plan refusal.
+        sentence, 76 the stream broke, 77 a known sign-in or plan refusal. On Linux the shim is the child
+        subreaper of its agent's tree and ends it by identity (pidfd); `survivors` lists what was still alive.
+        `--kimi-clear-marker <path>` deletes ONE Kimi survivor marker (a *.survivors.json file under the Kimi
+        lock root, nothing else) once every process it names is gone, and never ends a process: prints one
+        JSON object on stdout; exits 0 cleared or no marker, 65 not a marker under the lock root, 75 a named
+        process still runs, 74 a process or the file could not be checked.
         `--log --paged [--limit 200] [--before <cursor>]` prints a PAGE of the rounds database as
         JSON, with the totals SQL counted over the whole table; without `--paged` it prints the
         older shape, which carries every listed round's findings inline.
@@ -2461,6 +2526,21 @@ internal static class Program
         rounds launched, and the rounds per reviewer model where the round recorded one — from the rounds
         database alone, read-only, as JSON; `--now` fixes the clock. A missing database is an empty
         answer and exit 0; a bad argument is 65; a database that will not read is 74 — never 64.
+        `--round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stage code|plan] [--cohort first|corrective|all]
+        [--with-before-open] [--kinds <k,…>] [--without-elided] [--with-uncovered] [--add <file.json>]… [--table]` reports who wrote the code
+        the reviewed rounds held — coder mix, effort, main model — against what the reviewers found, per cell and per 100 lines the
+        reviewers read, from the rounds database alone, read-only. By default it prints ONE JSON document of sums (format 1, no figure, no
+        absolute path); `--table` prints the report, header first; `--add` adds the document an earlier run printed (two reports are one
+        population only with the same selection and no shared gate session). An association, never a cause. A missing database is an empty
+        answer and exit 0; a bad argument or an `--add` that cannot be read or added is 65; a database that will not read is 74 — never 64.
+        `--backfill-authors [--since <utc instant>] [--dry-run]` gives every settled plan or code round the authors
+        and the size the live path would have written, from this side's own store and transcripts. A writing run
+        first makes a VERIFIED backup (SQLite's online backup of coai.db and every session file) in a new folder
+        under <data dir>/backfill-backups/ and writes only after it verified; --dry-run reads through a read-only
+        connection, writes nothing and makes no backup. It deletes nothing. The summary is JSON on stdout. Exits 0
+        done (a missing store included), 65 a bad, repeated or unknown argument, 74 a store or session file that
+        will not read or write, a side that has not run the release, or a backup that did not verify, 75 the run
+        completed but something was deferred (run it again) — never 64.
         `--findings --session <id> --stage <stage> --number <n>` prints one round's findings; it
         exits 69 when the database has never heard of that round, which is not the same as finding
         nothing.

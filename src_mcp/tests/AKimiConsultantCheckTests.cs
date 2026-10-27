@@ -63,7 +63,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     private Scopes StandIn() => new(
         WindowsStandIn.Begin(),
         KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks")),
-        KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
+        KimiHost.Using(KimiHost.Of(HostKind.Windows)),
+        KimiSeams.Using(new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
 
     private PanelSettings Settings(string homesRoot) => new()
     {

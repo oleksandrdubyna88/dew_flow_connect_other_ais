@@ -45,7 +45,7 @@ internal sealed record TurnFailure(ConsultationRecord Record, string Vendor, str
 /// </remarks>
 /// <param name="ResetsUtc">
 /// The reset the refusal STATED, for the ledger row — empty unless the turn's final launch was a rate limit that named a
-/// time (epic 5's code round of todo/PLAN_every_round_is_counted.md).
+/// time (epic 5's code round of research/PLAN_every_round_is_counted.md).
 /// </param>
 /// <param name="KeptOpen">
 /// Nothing was launched and the conversation had already gone on, so the record went back to its status: the answer says the conversation is

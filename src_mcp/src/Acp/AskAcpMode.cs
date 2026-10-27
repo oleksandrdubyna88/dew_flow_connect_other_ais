@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using CoaiMcp.Core.Consultation;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Kimi;
+using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Acp;
 
@@ -34,14 +35,14 @@ namespace CoaiMcp.Acp;
 /// built from scratch (<see cref="IAcpProfile.AgentRequest"/>), never by inheritance. <b>The tree hold GATES</b> (decision 10 of E4.2): it is taken
 /// immediately before <see cref="AcpClient.AskAsync"/> — nothing awaited between — and disposed once that has returned; another tree still holding
 /// the sign-in past the deadline is exit 69 with the reason in a sentence, a hold that cannot be taken exit 65. There is no warning-only fallback.</para>
-/// <para><b><c>--session &lt;id&gt;</c> continues a session</b> (E5.2, M-K16 in RESULTS §29): <c>session/load {sessionId, cwd, mcpServers: []}</c> on the same
+/// <para><b><c>--session &lt;id&gt;</c> continues a session</b> (E5.2, M-K16 in RESULTS §33): <c>session/load {sessionId, cwd, mcpServers: []}</c> on the same
 /// <c>--cwd</c> instead of <c>session/new</c>; the model checked against what the LOAD announced, then set; the history the agent replays before it answers the
 /// load is never the answer or the trace. An id that is not a vendor handle is 65 before anything starts; a load the agent refuses is <c>session_lost</c>, 70 —
 /// unless a known failure names it (a load refused for the sign-in is still <c>not_signed_in</c>, 77, and its end is <c>agent_failed</c>). The report's
 /// <c>sessionId</c> is the id asked for, and its <c>/usage</c> totals are the SESSION's, cumulative over every turn so far.</para>
 /// <para><b>The stdout shape</b> (<see cref="Report"/>) is printed on EVERY exit, so a failed turn's trace and usage
 /// cross the process boundary as an answered one's do: <c>answer</c>, <c>end</c>, <c>stopReason</c>, <c>reason</c>,
-/// <c>sessionId</c>, <c>failure</c> (a known failure's name, when one matched), <c>usage</c> in the api shim's
+/// <c>sessionId</c>, <c>failure</c> (a known failure's name, when one matched), <c>failureLine</c> (the stderr line that held its phrase, only when the reason did not), <c>usage</c> in the api shim's
 /// field names — <c>tokensIn</c>/<c>tokensOut</c> are the session's totals from <c>/usage</c>, asked after an answered turn (D15, M-K2), or 0 with
 /// <c>notCaptured: true</c> when it could not be had — never a guessed number; <c>contextUsed</c>/<c>contextSize</c> carry the last <c>usage_update</c> when one
 /// came — and the trace: <c>refusals</c> (tool, kind, option), <c>toolCalls</c> (id, title, kind, status) and
@@ -76,14 +77,36 @@ internal static class AskAcpMode
     /// <param name="note">Stderr: the refusal or the reason, as sentences.</param>
     /// <param name="output">Stdout: the one JSON object.</param>
     /// <param name="profiles">The profiles this run knows — the build's, unless a test hands in a fake agent's.</param>
-    internal static async Task<int> RunAsync(
+    internal static Task<int> RunAsync(
         string[] args,
         TextReader stdin,
         Action<string> note,
         TextWriter output,
         IReadOnlyList<IAcpProfile>? profiles = null,
+        CancellationToken ct = default) =>
+        RunAsync(args, stdin, note, output, static () => new SubreaperResult.NotLinux(), profiles, ct);
+
+    /// <summary>
+    /// The mode as the product runs it. <paramref name="becomeReaper"/> is the FIRST thing asked, before the profile is looked up (DL9): on Linux this process becomes the child subreaper of its own
+    /// tree — every orphan of the agent's tree, <c>setsid</c> or not, comes home to it, whichever profile — and a failure is exit 65 with the written sentence, never a silent fallback. The product
+    /// passes <see cref="LinuxSubreaper.Become"/>; an in-process test passes nothing (its host must never become a subreaper — it would collect every other test's orphans).
+    /// </summary>
+    internal static async Task<int> RunAsync(
+        string[] args,
+        TextReader stdin,
+        Action<string> note,
+        TextWriter output,
+        Func<SubreaperResult> becomeReaper,
+        IReadOnlyList<IAcpProfile>? profiles = null,
         CancellationToken ct = default)
     {
+        if (becomeReaper() is SubreaperResult.Failed failed)
+        {
+            note(LinuxSubreaper.Sentence(failed.Errno));
+
+            return BadRequest;
+        }
+
         var flags = WithBareSession(Program.Flags(args), args);
         var known = profiles ?? AcpProfiles.All;
         // The one "not found" this mode has, and it is answered before anything else is looked at.
@@ -181,7 +204,7 @@ internal static class AskAcpMode
         AcpOutcome outcome;
         using (held.Hold)
         {
-            outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames)).AskAsync(ask with { Deadline = left }, ct);
+            outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames), AcpClient.DefaultUsageBound, held.Supervisor).AskAsync(ask with { Deadline = left }, ct);
         }
 
         return await ReportedAsync(profile, outcome, ask.Session, note, output);
@@ -210,7 +233,7 @@ internal static class AskAcpMode
     /// <summary>The report printed, the exit made from the outcome.</summary>
     private static async Task<int> ReportedAsync(IAcpProfile profile, AcpOutcome outcome, string session, Action<string> note, TextWriter output)
     {
-        var diagnosis = AcpDiagnosis.Of(Diagnosable(outcome, session), profile.KnownFailures);
+        var diagnosis = Diagnose(profile, outcome, session);
         var named = Named(outcome, diagnosis);
         await output.WriteLineAsync(Report(named, diagnosis));
 
@@ -218,11 +241,14 @@ internal static class AskAcpMode
     }
 
     /// <summary>
-    /// The text a known failure is looked for in: the reason and the agent's stderr — without coai's own lead of a lost session (<see cref="AcpClient.LostLead"/>),
-    /// so the id it names can never spell a failure and turn a lost session into a refusal or a spent allowance (E5.2 review).
+    /// The known failure an outcome names, from the text of the turn: its reason and its stderr — the reason without coai's own lead of a lost
+    /// session (<see cref="AcpClient.LostLead"/>), so the id it names can never spell a failure and turn a lost session into a refusal or a
+    /// spent allowance (E5.2 review).
     /// </summary>
-    private static string Diagnosable(AcpOutcome outcome, string session) =>
-        outcome.Reason.Replace(AcpClient.LostLead(session), string.Empty, StringComparison.Ordinal) + "\n" + outcome.StdErr;
+    internal static AcpDiagnosis Diagnose(IAcpProfile profile, AcpOutcome outcome, string session = "") =>
+        AcpDiagnosis.Of(
+            session.Length == 0 ? outcome.Reason : outcome.Reason.Replace(AcpClient.LostLead(session), string.Empty, StringComparison.Ordinal),
+            outcome.StdErr, profile.KnownFailures, outcome.StdErrTruncated);
 
     /// <summary>
     /// A refused load that a known failure names is that failure, not a lost session (E5.2 decision 4): its end is the agent's own failure, so the
@@ -318,7 +344,7 @@ internal static class AskAcpMode
 
         if (Diagnosed(outcome.End, diagnosis))
         {
-            note($"{diagnosis.Name}: {outcome.Reason} — {diagnosis.Cure}");
+            note(DiagnosedNote(outcome, diagnosis));
 
             return DiagnosedExit(diagnosis.Kind);
         }
@@ -332,8 +358,20 @@ internal static class AskAcpMode
     private static bool Diagnosed(AcpEnd end, AcpDiagnosis diagnosis) =>
         diagnosis.Known && end is not (AcpEnd.Deadline or AcpEnd.Cancelled or AcpEnd.ModelNotOffered);
 
-    /// <summary>A known failure's exit: a spent allowance, or a refusal.</summary>
-    private static int DiagnosedExit(AcpFailureKind kind) => kind == AcpFailureKind.Spent ? Spent : Refused;
+    /// <summary>
+    /// A known failure's sentence: its name, the agent's reason, the stderr line the failure was found in (when the reason did not hold it — <see cref="AcpDiagnosis.Said"/>), and the cure — when there is one
+    /// (a known shape with no cure ends at the reason). The cure stays LAST, so <see cref="AcpDiagnosis.WithoutCure"/> reads the note back.
+    /// </summary>
+    private static string DiagnosedNote(AcpOutcome outcome, AcpDiagnosis diagnosis) =>
+        diagnosis.Note(diagnosis.Said(outcome.Reason));
+
+    /// <summary>A known failure's exit: a spent allowance, the agent's own failure in a known shape, or a refusal.</summary>
+    private static int DiagnosedExit(AcpFailureKind kind) => kind switch
+    {
+        AcpFailureKind.Spent => Spent,
+        AcpFailureKind.Failed => Failed,
+        _ => Refused,
+    };
 
     /// <summary>
     /// An undiagnosed end's exit: the agent's own failure, a broken stream, or ended before an answer. Every <see cref="AcpEnd"/> has its own arm
@@ -365,12 +403,19 @@ internal static class AskAcpMode
             ["reads"] = new JsonArray([.. outcome.Reads.Select(r => (JsonNode?)new JsonObject { ["path"] = r.Path, ["served"] = r.Served, ["reason"] = r.Reason })]),
             // The three lists are capped by count (AcpSession.MaxTraceEntries), by field (MaxTraceFieldChars) and by their
             // sum (MaxTraceChars); what they could not hold is counted here, so the report stays inside the same bounds.
+            ["survivors"] = new JsonArray([.. outcome.Survivors.Select(s => (JsonNode?)new JsonObject { ["pid"] = s.Pid, ["startedUtc"] = s.StartedUtc.ToString("O") })]),
             ["droppedTraceEntries"] = outcome.DroppedTraceEntries,
             ["truncatedTraceFields"] = outcome.TruncatedTraceFields,
         };
         if (diagnosis.Known)
         {
             report["failure"] = diagnosis.Name;
+        }
+
+        if (diagnosis.Line.Length > 0)
+        {
+            // The line of the agent's stderr that held the row's phrase — only when the reason itself did not (F1 of story 5's review).
+            report["failureLine"] = diagnosis.Line;
         }
 
         return report.ToJsonString();

@@ -10,7 +10,7 @@ import { roundsLoader } from '../roundCountsRead';
 import { parseUsage } from '../usage';
 
 /**
- * The extension's Claude model probe writes what it spent (story 3.3 of todo/PLAN_every_round_is_counted.md, the
+ * The extension's Claude model probe writes what it spent (story 3.3 of research/PLAN_every_round_is_counted.md, the
  * paid-path census row 8): up to four billed requests a week used to write nothing at all.
  *
  * <p>Its own ledger, `probe-usage.jsonl`, written by the extension's one append helper — the consultation of
@@ -83,4 +83,38 @@ test('the Rounds block reads the probe ledger beside usage.jsonl', async () => {
   assert.deepEqual(loaded.ledger.map((one) => one.kind), ['probe'], 'the probe ledger was not read beside the review ledger');
   assert.equal(loaded.ledgerFailure, '', 'a missing usage.jsonl is still nothing run yet');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('AProbeLine_NamesClaudeAndTheVersionItAsked — E3.S3: cli claude, and the version claudeProbe.ts already read', () => {
+  const written = line(probeLine('haiku', { code: 0, output: ANSWERED }, NOW - 3_400, NOW, '2.1.5'));
+
+  assert.equal(written['cli'], 'claude', 'the probe line does not say which CLI it ran');
+  assert.equal(written['cliVersion'], '2.1.5', 'the probe line does not carry the version the probe already asked');
+});
+
+test('AProbeLine_WhoseVersionWasNeverAsked_HasNoVersion — absent, never an empty string standing for one', () => {
+  const written = line(probeLine('haiku', { code: 0, output: ANSWERED }, NOW - 3_400, NOW));
+
+  assert.equal(written['cli'], 'claude');
+  assert.equal('cliVersion' in written, false);
+});
+
+test('TheRecordingRun_WritesTheVersionItWasGiven_AndParsesBackThroughTheUsageReader', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-probe-ledger-'));
+  try {
+    const run = recordingRun(async () => ({ code: 0, output: ANSWERED }), probeUsagePath(dir), () => NOW, '2.1.5');
+
+    await run(['--model', 'haiku', '-p', 'hi', '--output-format', 'json']);
+    await flushLedgers();
+
+    const [written] = parseUsage(fs.readFileSync(path.join(dir, PROBE_USAGE_FILE), 'utf8'));
+    assert.deepEqual([written?.cli, written?.cliVersion], ['claude', '2.1.5']);
+  } finally {
+    // A cleanup that fails (a held file on Windows) must not replace the test's own outcome.
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // the folder is left in the temp dir; the assertion above is what this test reports
+    }
+  }
 });

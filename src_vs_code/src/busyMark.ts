@@ -57,7 +57,7 @@ export const BUSY_CSS = `
  *   which settles on its own — posts it through `vscode.postMessage` directly.
  */
 export function busyMarkScript(painted: BusySnapshot, tracked: readonly string[] = PANEL_TRACKED): string {
-  return [busyStateScript(painted), busySendScript(tracked), busyWaitScript(), busyHostScript()].join('');
+  return [busyStateScript(painted), busyPendingScript(), busySendScript(tracked), busyWaitScript(), busyHostScript()].join('');
 }
 
 /** What the panel's two pages number (research/PLAN_model_search_and_busy_marks.md §3.7). */
@@ -95,6 +95,42 @@ function busyStateScript(painted: BusySnapshot): string {
 `;
 }
 
+/**
+ * A control that names a pending label (`data-pending-label`) is disabled, and says it, from the press until the host settles the work — a second
+ * press while the first runs would start a second run. Optimistic like the rest of the mark: the host's answer, or a repaint, ends it (L of the
+ * review of 2026-10-18, the Kimi card's *Clear the stuck Kimi marker*).
+ */
+function busyPendingScript(): string {
+  return `
+  function pendingOn(control) {
+    if (control && control.dataset && control.dataset.pendingLabel && control.dataset.pendingWas === undefined) {
+      control.dataset.pendingWas = control.textContent;
+      control.textContent = control.dataset.pendingLabel;
+      control.disabled = true;
+    }
+  }
+  function pendingOff(control) {
+    if (control && control.dataset && control.dataset.pendingWas !== undefined) {
+      control.textContent = control.dataset.pendingWas;
+      delete control.dataset.pendingWas;
+      control.disabled = false;
+    }
+  }
+  // The numbered post: the control says it is pending, and the host is asked.
+  function postNumbered(message, seq, control) {
+    pendingOn(control);
+    vscode.postMessage({ ...message, seq, doc: busyDoc });
+  }
+  // The host settled it: the mark goes, and so does the pending label unless another operation on the same control still runs.
+  function releaseControl(control) {
+    unmarkUnlessHeld(control);
+    if (!Array.from(busyLocal.values()).some((other) => other.control === control)) {
+      pendingOff(control);
+    }
+  }
+`;
+}
+
 /** Numbering a post, marking its control once the delay passes, and clearing both when the host settles it. */
 function busySendScript(tracked: readonly string[]): string {
   return `
@@ -107,7 +143,7 @@ function busySendScript(tracked: readonly string[]): string {
     busySeq += 1;
     const seq = busySeq;
     busyLocal = new Map(busyLocal).set(seq, { control, due: false, waiting: false, timer: setTimeout(() => { markDue(seq); }, busyAfter) });
-    vscode.postMessage({ ...message, seq, doc: busyDoc });
+    postNumbered(message, seq, control);
   }
   // Past its delay: the entry is replaced as due, and its control marked. Not for an entry waiting on the person.
   function markDue(seq) {
@@ -140,7 +176,7 @@ function busySendScript(tracked: readonly string[]): string {
     const next = new Map(busyLocal);
     next.delete(seq);
     busyLocal = next;
-    unmarkUnlessHeld(entry.control);
+    releaseControl(entry.control);
     drawBusy();
   }
 `;

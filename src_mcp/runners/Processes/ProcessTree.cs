@@ -17,7 +17,7 @@ public sealed record ProcessIdentity(int Pid, DateTime StartedUtc);
 /// <remarks>
 /// <para><b>Why this exists.</b> <c>Process.Kill(entireProcessTree: true)</c> walks the tree itself, and that is enough
 /// to END a tree; it says nothing afterwards about whether every member died, and it cannot name the members at all. A
-/// reader of a shared vendor account (story 6.1a of todo/PLAN_every_round_is_counted.md) must CONFIRM that nothing it
+/// reader of a shared vendor account (story 6.1a of research/PLAN_every_round_is_counted.md) must CONFIRM that nothing it
 /// started is still holding the account's token set before the account's lease is released — so the members are
 /// listed BEFORE the kill, written down, and each one checked by pid and start time after it.</para>
 /// <para><b>Platforms are mapped explicitly and an unmeasured one fails closed</b> (common.platform-limits): Linux reads
@@ -38,7 +38,8 @@ public static class ProcessTree
     /// </remarks>
     public static readonly TimeSpan ConfirmationBound = TimeSpan.FromSeconds(2);
 
-    private static readonly TimeSpan ConfirmationStep = TimeSpan.FromMilliseconds(100);
+    /// <summary>How often a confirmation re-checks (and re-kills) — also the re-listing step of the supervised teardown.</summary>
+    internal static readonly TimeSpan ConfirmationStep = TimeSpan.FromMilliseconds(100);
 
     /// <summary>How often the descendants of a child that a request ends itself are listed while it runs.</summary>
     /// <remarks>Short enough that a grandchild that lives for seconds is seen; long enough that listing the process table stays negligible beside a vendor CLI.</remarks>
@@ -148,7 +149,10 @@ public static class ProcessTree
     /// and answers with the ones that survived.
     /// </summary>
     /// <returns>Empty when the whole tree is confirmed gone; otherwise the members still alive at the bound.</returns>
-    public static async Task<IReadOnlyList<ProcessIdentity>> ConfirmGoneAsync(IReadOnlyList<ProcessIdentity> members)
+    public static Task<IReadOnlyList<ProcessIdentity>> ConfirmGoneAsync(IReadOnlyList<ProcessIdentity> members) => ConfirmGoneAsync(members, Terminate);
+
+    /// <summary><see cref="ConfirmGoneAsync(IReadOnlyList{ProcessIdentity})"/> with the kill handed in — the Linux survivor gate ends a member through a pidfd, by identity, where this class's own kill is by handle.</summary>
+    public static async Task<IReadOnlyList<ProcessIdentity>> ConfirmGoneAsync(IReadOnlyList<ProcessIdentity> members, Func<ProcessIdentity, bool> terminate)
     {
         var deadline = DateTime.UtcNow + ConfirmationBound;
         var alive = members.Where(IsAlive).ToList();
@@ -156,7 +160,7 @@ public static class ProcessTree
         {
             foreach (var member in alive)
             {
-                Terminate(member);
+                terminate(member);
             }
 
             await Task.Delay(ConfirmationStep);
@@ -166,29 +170,21 @@ public static class ProcessTree
         return alive;
     }
 
-    /// <summary>Every process on this Linux box, as pid → parent pid, read from <c>/proc</c>.</summary>
+    /// <summary>Every process on this Linux box, as pid → parent pid, read from <c>/proc</c> by the one <see cref="ProcStat"/> reader.</summary>
+    /// <remarks>A process that exited between the directory listing and its read, or one whose line cannot be read, is left out: nothing is known of it.</remarks>
     private static Dictionary<int, int> LinuxParents()
     {
         var parents = new Dictionary<int, int>();
-        foreach (var directory in Directory.EnumerateDirectories("/proc"))
+        foreach (var pid in ProcReads.Real.Pids())
         {
-            if (!int.TryParse(Path.GetFileName(directory), out var pid))
+            if (ProcStat.ReadFor(pid, ProcReads.Real) is ProcStatRead.Read { Line: var line })
             {
-                continue;
-            }
-
-            if (ParentOf(Path.Combine(directory, "stat")) is { } parent)
-            {
-                parents[pid] = parent;
+                parents[pid] = line.ParentPid;
             }
         }
 
         return parents;
     }
-
-    /// <summary>The parent pid in one <c>/proc/&lt;pid&gt;/stat</c> line — the field after the state, which follows the bracketed name.</summary>
-    private static int? ParentOf(string statPath) =>
-        StatFields(statPath) is [_, var field, ..] && int.TryParse(field, out var parent) ? parent : null;
 
     /// <summary>
     /// True when the Linux process <paramref name="pid"/> has exited and only its table entry is left — a zombie
@@ -200,7 +196,7 @@ public static class ProcessTree
     /// still running" it is gone. Always false off Linux, where the start-time read already fails for an exited process.
     /// </remarks>
     private static bool Exited(int pid) =>
-        OperatingSystem.IsLinux() && StatFields($"/proc/{pid}/stat") is [var state, ..] && ExitedEntry(state, ThreadsOf(pid), pid);
+        OperatingSystem.IsLinux() && ProcStat.ReadFor(pid, ProcReads.Real) is ProcStatRead.Read { Line.State: var state } && ExitedEntry(state, ProcReads.Real.Threads(pid), pid);
 
     /// <summary>Whether a process table entry in <paramref name="state"/>, whose thread group lists <paramref name="threads"/>, has exited.</summary>
     /// <remarks>
@@ -209,39 +205,6 @@ public static class ProcessTree
     /// </remarks>
     internal static bool ExitedEntry(string state, IReadOnlyCollection<int> threads, int pid) =>
         state is "Z" or "X" && threads.All(thread => thread == pid);
-
-    /// <summary>The thread ids of <paramref name="pid"/>'s group, from <c>/proc/&lt;pid&gt;/task</c>.</summary>
-    /// <returns><c>[-1]</c> when the listing cannot be read — a thread nobody can rule out, so the entry is not called exited.</returns>
-    private static int[] ThreadsOf(int pid)
-    {
-        try
-        {
-            return [.. Directory.EnumerateDirectories($"/proc/{pid}/task").Select(path => int.TryParse(Path.GetFileName(path), out var thread) ? thread : -1)];
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return [-1];
-        }
-    }
-
-    /// <summary>The fields of one <c>/proc/&lt;pid&gt;/stat</c> line AFTER the bracketed name: state, parent pid, …</summary>
-    /// <remarks>The name may itself hold spaces and brackets, so the fields are counted from the LAST closing bracket.</remarks>
-    /// <returns>Empty when the line is unreadable — the process exited between the listing and this read.</returns>
-    private static string[] StatFields(string statPath)
-    {
-        try
-        {
-            var stat = File.ReadAllText(statPath);
-            var afterName = stat.LastIndexOf(')');
-
-            return afterName < 0 ? [] : stat[(afterName + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A process that exited between the directory listing and this read. Nothing to say about it.
-            return [];
-        }
-    }
 
     private const uint SnapshotOfProcesses = 0x00000002;
 

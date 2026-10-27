@@ -1,9 +1,9 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-27; the live runs (J2, RESULTS §31) still owed.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-27; the live runs (J2, RESULTS §35) still owed.** E5.1: M-K16 recorded as RESULTS §33
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
-> each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
+> each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§34) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
 > its security judgement. The plan gate passed (proceed), and its findings are folded in (§"Plan gate 2026-10-16").
 > The coder of each story follows the gate's command (§0.2): E5.3 on Fable, every other story on Opus.
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
@@ -11,7 +11,7 @@
 > five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
 > **E5.5 and E5.6 implemented 2026-10-27 (Opus)**, from the WIP saved 2026-10-24 (a90fee9b); Opus reviewed it on 2026-10-27, and its fixes are in. The coai
 > plan gate on the branch's slice passed 2026-10-27 (proceed, 4 gating of threshold 6, 2 reviewers); deviations 47–58, *E5.5–E5.6 as built*. The live
-> runs (J2, RESULTS §31) are still owed; M-K17 not run.
+> runs (J2, RESULTS §35) are still owed; M-K17 not run.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -132,7 +132,7 @@ loaded session); E5.6 (the planner arm is a table row; the standing is decided h
   `session/request_permission`, a `none` or `disk` row can send what it read to the network. The rows are `unconfined` either
   way, and the `web` capability stays `unmeasured` (refused) either way, so no code waits. Only the words wait.
 - **Owed AFTER the code** (the parent's §5, not new): one live `consult` of THREE turns through the released binary (so two
-  loads run), one live question row per capability, and one live `--check-consultant`, each recorded in RESULTS §31.
+  loads run), one live question row per capability, and one live `--check-consultant`, each recorded in RESULTS §35.
 
 **J3 — where the home lives, and Kimi's path budget.**
 - **The conversation's home lives at `<homes root>\coai-kimi\<consultation id>\kh-<10 hex>`.** The homes root is
@@ -207,7 +207,7 @@ and through the probe's small client for every load (the shim has no load path y
 - `scripts/lib/kimi.mjs:415-512` — `acpTurn`, the small client: `session/load` at `:491-493`; it adds a chunk to the answer only
   while `state.prompting` (`:453`); it ends by closing stdin, waiting 1.5 s and then killing the tree (`finish`, `:425-436`).
 - `scripts/lib/kimi.test.mjs` — the node unit tests of the client.
-- `research/RESULTS_kimi_confinement.md` — §29 (M-K16) and §30 (M-K17) are new; §25's "not measured" list is updated.
+- `research/RESULTS_kimi_confinement.md` — §33 (M-K16) and §34 (M-K17) are new; §25's "not measured" list is updated.
 
 **Decisions.**
 1. **The small client learns two things, and both are tested before any paid run.** (a) `loadUpdates`: every
@@ -247,7 +247,7 @@ and through the probe's small client for every load (the shim has no load path y
 | | a total FALLS after a turn | stops: the delta floors at 0 (`ConsultationUsage.Less`) and would under-bill. The plan records it and the owner decides before E5.4 |
 | | the session is not found on turn 2 or 3 | stops: the conversation cannot rest on `session/load`. Re-plan S5 with the owner |
 
-**Result (RESULTS §29, 2026-10-16): the FIRST branch of every row.** (a) the load announces the `model` option (the home's one model, 9 of 9 loads) → the in-session check on the load's announcement; (b) Kimi replays the history before the load's response (9 of 9) → the answer is what follows the load; (c) an unknown id is `-32602` `Invalid params: Unknown sessionId: <id>` (3 of 3) → `session_lost` for any refused load no known failure names; (d) the same id, totals that only rise, the delta equal to the turn's own output (6 of 6) → `UsageIsCumulative = true`. Not measured: whether `tool_call` updates are replayed — S5.2.2's fake agent replays one.
+**Result (RESULTS §33, 2026-10-16): the FIRST branch of every row.** (a) the load announces the `model` option (the home's one model, 9 of 9 loads) → the in-session check on the load's announcement; (b) Kimi replays the history before the load's response (9 of 9) → the answer is what follows the load; (c) an unknown id is `-32602` `Invalid params: Unknown sessionId: <id>` (3 of 3) → `session_lost` for any refused load no known failure names; (d) the same id, totals that only rise, the delta equal to the turn's own output (6 of 6) → `UsageIsCumulative = true`. Not measured: whether `tool_call` updates are replayed — S5.2.2's fake agent replays one.
 
 **SCENARIOS** (the client's unit tests are red first; the cells are the measurement).
 
@@ -255,18 +255,18 @@ and through the probe's small client for every load (the shim has no load path y
 |---|---|---|---|---|
 | S5.1.1 `acpTurn records what arrives during session/load` (`kimi.test.mjs`) | a fake agent script (node) that answers `session/load` after sending two `agent_message_chunk` updates `OLD` and one `tool_call` | `acpTurn({ load: 's-1' })` | `state.loadUpdates` lists `agent_message_chunk` ×2 (text `OLD`) and `tool_call`; `state.answer` is empty | `AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal: + actual undefined - expected [ { kind: 'agent_message_chunk', … } ]` |
 | S5.1.2 `endLikeTheShim cancels, waits, kills, then closes stdin` | the fake agent records the order of `session/cancel`, its own kill and its stdin EOF | `acpTurn({ endLikeTheShim: true })` | the order is cancel → kill → (no EOF seen, the process was gone first) | `AssertionError: Expected values to be strictly deep-equal: + actual [ 'eof', 'killed' ] - expected [ 'cancel', 'killed' ]` |
-| S5.1.3 M-K16 `announce` | the shipped shim, a product-shaped owned root, the owner's sign-in through the junction | 3 runs | RESULTS §29 row: what the load announced, what it replayed | UNKNOWN — the measurement is the scenario |
-| S5.1.4 M-K16 `three-turns` | the same, cwd refreshed in place between turns | 3 runs × 3 turns | RESULTS §29: same id 3/3 per turn; totals and deltas; `os/` empty; credentials names kept | UNKNOWN |
-| S5.1.5 M-K16 `unknown` | a fresh owned root | 3 runs | RESULTS §29: Kimi's code and words | UNKNOWN |
-| S5.1.6 M-K17 | the shipped shim | 3 runs | RESULTS §30: asked (refused) or not asked, per tool | UNKNOWN |
+| S5.1.3 M-K16 `announce` | the shipped shim, a product-shaped owned root, the owner's sign-in through the junction | 3 runs | RESULTS §33 row: what the load announced, what it replayed | UNKNOWN — the measurement is the scenario |
+| S5.1.4 M-K16 `three-turns` | the same, cwd refreshed in place between turns | 3 runs × 3 turns | RESULTS §33: same id 3/3 per turn; totals and deltas; `os/` empty; credentials names kept | UNKNOWN |
+| S5.1.5 M-K16 `unknown` | a fresh owned root | 3 runs | RESULTS §33: Kimi's code and words | UNKNOWN |
+| S5.1.6 M-K17 | the shipped shim | 3 runs | RESULTS §34: asked (refused) or not asked, per tool | UNKNOWN |
 
-**Done when** S5.1.1–S5.1.2 are green, the owner said yes to the spend, §29 (and §30 when run) is written with the scratch's
+**Done when** S5.1.1–S5.1.2 are green, the owner said yes to the spend, §33 (and §34 when run) is written with the scratch's
 raw rows kept outside the repository, every owned root was disposed junction-first and the person's credentials folder kept
 its names (the probe's existing guard), and the table above names which branch each E5.2 item takes.
 
 ## E5.2 — The shim's load path: `--session <id>`, `session/load`, the answer marked, `session_lost`
 
-`model: opus` spec (this document) · built on Opus (ordinary, §0.2) · Opus reviews. **Starts only after E5.1's §29 is written.**
+`model: opus` spec (this document) · built on Opus (ordinary, §0.2) · Opus reviews. **Starts only after E5.1's §33 is written.**
 
 **Goal.** `coai-mcp --ask-acp --profile kimi … --session <id>` continues the session `<id>`: `initialize` →
 `session/load {sessionId, cwd, mcpServers: []}` → the model (checked when the load announces it, E5.1 (a)) →
@@ -769,7 +769,7 @@ the model rebound `:252`), `:265-286` (`LaunchAsync`: `OwnedScratch = homeFolder
 | S5.5.3 `ACheckCancelledMidTurn_StillDisposesItsHome` | the played shim blocks; the token cancelled | the check | the record says cancelled; `coai-vh\<8>` gone junction-first | (green after E5.3 g — pins `finally`) |
 | S5.5.4 `ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst` | settings built by hand (empty root) | the check | `--home` under `<scratch>\own\kh-…`; after it, the scratch gone and the recorder never invoked | *Expected the deleter's unlink recorder not to be invoked …* (before E5.3 g) |
 
-**Done when** the four scenarios and the whole suite are green. The live check (J2) is recorded in RESULTS §31.
+**Done when** the four scenarios and the whole suite are green. The live check (J2) is recorded in RESULTS §35.
 
 ## E5.6 — The question consultant's Kimi row: the matrix, the planner arm, the one-shot row
 
@@ -838,7 +838,7 @@ junction-first on success, refusal and cancellation.
 | S5.6.7 `AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` (`QuestionRowLaunch` with `PlayedKimi`; Theory: answered; refused before the launch; cancelled mid-turn) | a `disk` row on a git root in the test's folder | the row runs | the prompt names the copies' paths and never the root; after each ending the row's scratch and `coai-vh\<8>` are gone, the recorder never invoked, the fake person's folder intact | *Expected Directory.Exists("…\coai-vh\<8>") to be False, but found True.* / the recorder red (before E5.3 g) |
 | S5.6.8 TS `kimi rows admit flagged, web refuses naming its record` (`capabilityAdmission.test.ts`; `:143`'s list gains `kimi`) | the regenerated table | `admit('kimi', 'none' / 'disk' / 'web')` | `none`/`disk` admitted with the unconfined caveat; `web` refused with `/not been measured/` and `RESULTS_kimi_confinement.md` | `AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal` on the runtimes list; then *'kimi' is not a runtime the question consultant can launch* for `admit` |
 
-**Done when** both suites and both generators' `--check` are green, and the live question rows (J2) are recorded in RESULTS §31.
+**Done when** both suites and both generators' `--check` are green, and the live question rows (J2) are recorded in RESULTS §35.
 
 ## E5.7 — The extension: the consultant picker, the consultant-runtime gate, and the help in five languages
 
@@ -1048,7 +1048,7 @@ Numbered apart from the list above, so the stories built in parallel do not coll
   two features; `acpTurn` gained them afterwards, unit-tested (S5.1.1–S5.1.2), for the next run. `endLikeTheShim` waits for 250 ms of no output after
   `session/cancel`, at most 1 s — what the driver measured (251–282 ms) — where the shim waits for no PENDING request (at most 1.5 s). The client's tree
   kill is by pid on POSIX too (`SIGKILL`; only the unit tests' fake agent runs there). The probe script is not edited, so item 8's stale "~250" label stays.
-  M-K17 (§30) was not run.
+  M-K17 (§34) was not run.
 - **B10. `KimiReport` gains no `SessionId`** — E5.4 decision 3 owns that. The shim prints `sessionId`; on a `--session` turn it is the asked id on every exit
   that prints a report (fixed in the review: `AcpOutcome.NotStarted(why, session)` at all four sites, and the client reports the asked id when the agent ended
   before the load — `EveryExitOfALoadTurn_NamesTheAskedSession`).
@@ -1057,7 +1057,7 @@ Numbered apart from the list above, so the stories built in parallel do not coll
   the probe's tree kill is sent only while the child is `stillRunning`.
 - **Open tail: no `--cells M-K16` arm in the probe.** M-K16 ran on the scout's scratch driver, outside the repository, so the measurement cannot be re-run from the
   repository. The probe library has the two features it needs (`loadUpdates`, `endLikeTheShim`); the cell itself is owed — before M-K16 is re-run on a new
-  Kimi version, or with the live checks of RESULTS §31.
+  Kimi version, or with the live checks of RESULTS §35.
 
 ### E5.7 as built (Opus, 2026-10-16)
 
@@ -1122,7 +1122,7 @@ true of the code after those fixes.
     middle name matches `^[0-9a-f]{8}$`. Teeth for the canary Then: a played Kimi that answers the canary's word still gives `state: answered`, and the
     canary assertion goes red (`read`, not `not-attempted`).
 55. **Where the reds ran.** The reds and teeth runs of 2026-10-27 (items 48, 51, 52, 54) ran on Linux, through `WindowsStandIn`. There `KimiFixture` makes a
-    symbolic link, not an NTFS junction. So the real junction branch of the disposal is proved only on Windows, and by the live §31 run. The WIP's own reds
+    symbolic link, not an NTFS junction. So the real junction branch of the disposal is proved only on Windows, and by the live §35 run. The WIP's own reds
     in research/module_tests.md do not say on which machine they ran.
 56. **The `web` arm of the Kimi planner is implicit**, as Vibe's: `web` falls to the default `Scratch` arm of `ConfinementPlanner.Kimi`. The matrix refuses
     `unmeasured` before the planner, so the arm is never reached. Not changed.
@@ -1180,14 +1180,14 @@ that touches authentication or security is built on Fable, an ordinary one on Op
 
 ## Definition of Done (this epic)
 
-- [ ] E5.1: §29 (M-K16) written before any E5.2 code, the branch of each E5.2 item named; §30 (M-K17) before any web sentence.
+- [ ] E5.1: §33 (M-K16) written before any E5.2 code, the branch of each E5.2 item named; §34 (M-K17) before any web sentence.
 - [ ] E5.3's spec is final — Opus's decisions a–i, Fable's j–k and judgement R1–R11 (2026-10-16) — and its coder is Fable, every
       other story's Opus (§0.2, the plan gate's command).
 - [ ] Every scenario of E5.2–E5.7 is a test that was watched red with the message in its table, then green; both suites green;
       `dotnet format --verify-no-changes` clean; both generators' `--check` clean.
 - [ ] No test made a junction outside its own `testsToDelete-` folder, and none holds an inheritable handle in the test host.
 - [ ] A Kimi conversation of three turns, a Kimi question row per admitted capability and one `--check-consultant` ran live
-      through the released binary on Windows, recorded in RESULTS §31 — with the person's credentials folder keeping its names
+      through the released binary on Windows, recorded in RESULTS §35 — with the person's credentials folder keeping its names
       and every owned home disposed junction-first.
 - [ ] `research/module_server.md`, `module_runners.md`, `module_core.md`, `module_extension.md` and `module_tests.md` updated.
 - [ ] The parent's S5 block records this document's deviations (§"Where the parent plan and the code disagree") when the

@@ -94,8 +94,9 @@ public static class GitScratch
 
     /// <summary>
     /// One entry of a real directory: a link unlinked (never entered), a directory descended, a file deleted whatever its attribute.
-    /// Public since E5.3 (<c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): a one-shot home's owner and its sweep delete ENTRIES under
-    /// their lock, and an entry that is a file has to be deleted as one — the same three cases, one place.
+    /// Public for a one-shot home's owner and its sweep (E5.3 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>), and for any sweep that
+    /// deletes the entries of a folder one by one around a lock file (<see cref="FolderLock"/>) — unlike <see cref="DeleteEvenIfReadOnly"/>,
+    /// which is for a DIRECTORY and refuses a file.
     /// </summary>
     public static void DeleteEntry(string entry)
     {

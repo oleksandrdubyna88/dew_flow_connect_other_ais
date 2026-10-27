@@ -134,12 +134,12 @@ test('thePresetRoundTrips: Add a model offers Kimi Code on its first curated mod
   assert.equal(back!.code, true);
 });
 
-test('the preset’s hint names the release, the sign-in, Windows-only, and the reviewers that run one after another', () => {
+test('the preset’s hint names the release, the sign-in, Windows and WSL2, and the reviewers that run one after another', () => {
   const hint = VENDOR_PRESETS.find((one) => one.runtime === 'kimi')?.hint ?? '';
 
   assert.ok(KIMI_RUNTIME_SINCE.length > 0 && hint.includes(KIMI_RUNTIME_SINCE), `the hint does not name coai-mcp ${KIMI_RUNTIME_SINCE}: ${hint}`);
   assert.match(hint, /kimi login/u);
-  assert.match(hint, /Windows only/u);
+  assert.doesNotMatch(hint, /Windows only/u, 'the Windows-only sentence is what E6 lifts for WSL2');
   assert.match(hint, /one after another/u, 'D19: a Kimi row’s three reviewers are serialised');
 });
 
@@ -209,14 +209,14 @@ test('the written settings file holds the kimi row back from an older server too
 });
 
 test('the card’s note names the row and the release, and is silent when the row will run', () => {
-  const note = runtimeSkewNote(OLDER, [KIMI]);
+  const note = runtimeSkewNote(OLDER, [KIMI], 'windows');
 
   assert.match(note, /kimi/u);
   assert.ok(note.includes(KIMI_RUNTIME_SINCE), note);
   assert.ok(note.includes(OLDER), note);
-  assert.equal(runtimeSkewNote(KIMI_RUNTIME_SINCE, [KIMI]), '');
-  assert.equal(runtimeSkewNote('', [KIMI]), '', 'an unknown server is not called old');
-  assert.equal(runtimeSkewNote(OLDER, [{ ...KIMI, enabled: false }]), '', 'a switched-off row does not cross anyway');
+  assert.equal(runtimeSkewNote(KIMI_RUNTIME_SINCE, [KIMI], 'windows'), '');
+  assert.equal(runtimeSkewNote('', [KIMI], 'windows'), '', 'an unknown server is not called old');
+  assert.equal(runtimeSkewNote(OLDER, [{ ...KIMI, enabled: false }], 'windows'), '', 'a switched-off row does not cross anyway');
 });
 
 // ---------------------------------------------------------------- the card, RUN (new UI)

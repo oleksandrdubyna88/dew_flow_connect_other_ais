@@ -7,6 +7,10 @@
 > gpt-6-astra`; `claude --model claude-fable-5-1`; the harness's own argv, confined as the product confines a
 > reviewer (no tools, empty working directory).
 >
+> Note 2026-10-16: every "80 000" below is the `RuleFiles` budget the trial MEASURED. The operator has since
+> raised it to 90 000 bytes (`RESULTS_rules_selection_budget.md`, last section); the trial's figures are not
+> re-run and stay as measured.
+>
 > The plan this measures: [PLAN_feature_review.md](../todo/PLAN_feature_review.md) — §2 D15, D18–D22, §4.6–§4.9,
 > §6. Related: [RESULTS_reviewer_input_sizes.md](RESULTS_reviewer_input_sizes.md) (why CLI token columns are not
 > comparable), [RESULTS_findings_that_are_worth_something.md](RESULTS_findings_that_are_worth_something.md) (the

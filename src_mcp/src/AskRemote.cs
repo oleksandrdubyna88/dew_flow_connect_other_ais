@@ -35,7 +35,7 @@ internal static class AskRemote
         // Contract 2 (E2.5): the row's effort, and its system prompt in a file — never argv.
         var effort = flags.GetValueOrDefault("--effort", string.Empty);
         var systemPromptFile = flags.GetValueOrDefault("--system-prompt-file", string.Empty);
-        // Story 4.1 of todo/PLAN_every_round_is_counted.md: which round this launch belongs to and what it is inside its
+        // Story 4.1 of research/PLAN_every_round_is_counted.md: which round this launch belongs to and what it is inside its
         // turn — both from the adapter (RemoteRuntime.ForLaunch); a shim run by hand sends neither.
         var round = flags.GetValueOrDefault("--round", string.Empty);
         var attempt = flags.GetValueOrDefault("--attempt", string.Empty);
@@ -478,7 +478,7 @@ internal static class AskRemote
 
     /// <summary>
     /// A failed review's exit and sentence, read off the failure's NAME: a server that ended the job before anything
-    /// launched because this reviewer could no longer wait (story 4.3 of todo/PLAN_every_round_is_counted.md) is its own
+    /// launched because this reviewer could no longer wait (story 4.3 of research/PLAN_every_round_is_counted.md) is its own
     /// exit, <see cref="RemoteAsk.NoBudget"/>; every other name is the vendor's failure, rendered as it always was — which
     /// is also what a shim older than the name does with it.
     /// </summary>

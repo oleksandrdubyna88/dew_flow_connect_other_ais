@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import {
-  bundledPage, clickInRow, COMPLETED, firstRenderedKey, LOG, PRICED, ROOT, runningPage, STARTED,
+  bundledPage, clickInRow, COMPLETED, firstRenderedKey, LOG, PRICED, ROOT, runningPage, SESSION, STARTED,
   stub, type Stub,
 } from './roundsLogPageHarness';
 
@@ -26,7 +26,7 @@ import {
  */
 
 /** Every function the page embeds by its SOURCE TEXT, and therefore every one this file guards. */
-const EMBEDDED = ['compareRows', 'rowMatches', 'inView', 'money', 'cost3', 'costTitle', 'asInstant'];
+const EMBEDDED = ['compareRows', 'rowMatches', 'inView', 'money', 'cost3', 'costTitle', 'asInstant', 'reviewedFromHtml', 'writtenWithHtml'];
 
 test('the minified bundle still defines the functions the page calls', () => {
   const { script } = bundledPage();
@@ -1211,4 +1211,101 @@ test('the shipped page opens the Questions tab on a press, and a push replaces i
   const table = log.qconsultLogHtml(log.parseLog(JSON.stringify(QUESTIONS_LOG), true).questions ?? []);
   for (const fn of messages) { fn({ data: { type: 'qconsults', html: table } }); }
   assert.equal(seen['qconsults-body']?.innerHTML, table, 'a push of the tab did not reach its body');
+});
+
+/* ------------------------------------------------------------------------------------------------
+ * What a PLAN round reviewed, run rather than matched (E2.S3 of
+ * todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md, contract C3).
+ *
+ * The line is built by `reviewedFromHtml`, embedded in the page by its source text — so only the page as it SHIPS can say
+ * whether the minifier left the function standing and whether opening a row draws it. A round with no recorded source draws
+ * no `source` element at all: an empty "reviewed from" would be a claim about a round that recorded nothing.
+ * --------------------------------------------------------------------------------------------- */
+
+const PLAN_SESSION = {
+  ...SESSION,
+  state: { ...SESSION.state, stage: 'PlanReview' },
+  rounds: [{
+    ...SESSION.rounds[0]!,
+    stage: 'PlanReview',
+    planSource: {
+      origin: 'commit', commit: 'a'.repeat(40), path: 'todo/PLAN_x.md', blob: 'b'.repeat(40), bytes: 98304, textId: '0123456789abcdef',
+    },
+  }],
+};
+
+function openedRows(sessions: unknown[]): string {
+  const page = runningPage(sessions);
+  const key = firstRenderedKey(page.seen['rows']?.innerHTML ?? '');
+  page.click(clickInRow('tr[data-key]', 'data-key', key));
+
+  return page.seen['rows']?.innerHTML ?? '';
+}
+
+test('opening a plan round shows what it reviewed, in the page as it ships', () => {
+  const rows = openedRows([PLAN_SESSION]);
+
+  assert.match(rows, /class="detail"/, 'the row did not open');
+  assert.match(rows, /class="reviewer source">reviewed from todo\/PLAN_x\.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes</,
+    'the line is not on the opened row');
+});
+
+test('opening a round with no recorded source draws no source element at all', () => {
+  const rows = openedRows([SESSION]);
+
+  assert.match(rows, /class="detail"/, 'the row did not open');
+  assert.doesNotMatch(rows, /class="reviewer source"/, 'a round that recorded no source drew a "reviewed from" line');
+});
+
+/* ------------------------------------------------------------------------------------------------
+ * Who WROTE what a round reviewed, run rather than matched (E5.S6 of
+ * research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md).
+ *
+ * The line is built by `writtenWithHtml`, embedded in the page by its source text, and `detail(row)` adds it to the `asked`
+ * expression — so a deleted term there leaves every unit test green and the opened row without the line. Only the page as it
+ * SHIPS can say. A round with no snapshot draws no `authors` element at all, and still shows `asked by`.
+ * --------------------------------------------------------------------------------------------- */
+
+const SNAPSHOT_TOKENS = { input: 1, output: 1, cacheCreation: 0, cacheRead: 0 };
+
+const SNAPSHOT_ROW = (agent: string, model: string): Record<string, unknown> => ({
+  window: 'round', stage: 'CodeReview', number: 1, who: agent === 'main' ? 'main' : 'subagent', agent: { id: agent },
+  agentType: '', requested: 'opus', model, effort: 'high', association: agent === 'main' ? 'same-session' : 'wrote here',
+  launches: 1, turns: 1, tokens: SNAPSHOT_TOKENS, writeCalls: 1,
+});
+
+const SNAPSHOT = (state: string, reasons: readonly string[], rows: readonly unknown[]): Record<string, unknown> => ({
+  stage: 'CodeReview', number: 1, session: 'c1', state, reasons, rows, ambiguous: {}, elsewhere: {}, claimedByPeer: {},
+  unobservedLaunches: 0, windows: [], peerGates: [], idSource: 'registry', reader: 1, attribution: 1, submoduleWrites: 0, uncoveredWrites: 0,
+});
+
+const WITH_AUTHORS = (authors: unknown, extra: Record<string, unknown> = {}) => ({
+  ...SESSION,
+  rounds: [{ ...SESSION.rounds[0]!, caller: { vendor: 'claude', client: 'claude-code', clientVersion: '7.3.1', model: 'claude-opus-5' }, authors, ...extra }],
+});
+
+test('opening a round shows who wrote it — observed, partial and unobserved — in the page as it ships', () => {
+  const observed = openedRows([WITH_AUTHORS(SNAPSHOT('observed', [], [SNAPSHOT_ROW('main', 'claude-opus-5-5'), SNAPSHOT_ROW('a1', 'claude-sonnet-5-5')]))]);
+  assert.match(observed, /class="reviewer authors">written with Opus 5\.5 \(main\) · 1 Sonnet coder</, 'an observed round did not draw its line');
+
+  const partial = openedRows([WITH_AUTHORS(SNAPSHOT('partial', ['peer running'], [SNAPSHOT_ROW('main', 'claude-opus-5-5')]))]);
+  assert.match(partial, /class="reviewer authors">written with Opus 5\.5 \(main\) · main only · partial — peer running</, 'a partial round did not say why');
+
+  const unobserved = openedRows([WITH_AUTHORS(SNAPSHOT('unobserved', ['transcript not found'], []))]);
+  assert.match(unobserved, /class="reviewer authors">authors not observed — transcript not found</, 'an unobserved round did not say why');
+});
+
+test('opening a round with no snapshot draws no authors element, and still says who asked', () => {
+  const rows = openedRows([WITH_AUTHORS(undefined)]);
+
+  assert.match(rows, /class="detail"/, 'the row did not open');
+  assert.match(rows, /class="reviewer asked">asked by claude-code 7\.3\.1 · claude-opus-5</, 'the asked-by line vanished with the authors line');
+  assert.doesNotMatch(rows, /class="reviewer authors"/, 'a round that recorded no authors drew a line anyway');
+});
+
+test('a hostile model id is escaped on the opened row', () => {
+  const rows = openedRows([WITH_AUTHORS(SNAPSHOT('observed', [], [SNAPSHOT_ROW('main', '<img src=x onerror=alert(1)>')]))]);
+
+  assert.match(rows, /written with &lt;img src=x onerror=alert\(1\)&gt; \(main\)/, 'the model id was not escaped');
+  assert.doesNotMatch(rows, /<img src=x/, 'markup from a model id reached the page');
 });

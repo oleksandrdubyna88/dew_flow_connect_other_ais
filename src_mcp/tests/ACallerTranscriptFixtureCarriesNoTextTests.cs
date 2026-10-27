@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The fixtures under <c>fixtures/caller-transcripts</c> are cut from real Claude Code sessions and PUBLISHED, so this class is
-/// the privacy boundary of the repository's tests (todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S5).
+/// the privacy boundary of the repository's tests (research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S5).
 /// EVERY file of every case is classified and validated — transcripts, metas, <c>rounds.json</c>, registry entries and the
 /// manifest — and a file that is none of those fails by name. Every string is the sentinel, an allowlisted shape or an approved
 /// vocabulary; every key is structural or <c>k&lt;n&gt;</c>; every path sits under a fixture root; every instant is on the
@@ -29,7 +29,7 @@ namespace CoaiMcp.Tests;
 public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
 {
     /// <summary>SHA-256 of allowlist.json with CRLF read as LF. Update ONLY after reading what changed and whether it widens what a fixture may carry.</summary>
-    private const string ApprovedAllowlistSha256 = "bb2940e42dad2d9be8a6a81025c8bc81c9f8db5f654e0817efc938c42dcb118b";
+    private const string ApprovedAllowlistSha256 = "138882ddcca376ef4562ac2a1951f6d03a85475dfcfe5b9405c9a06581b3e784";
 
     /// <summary>
     /// The required cases (parent §6, §11 step 0, §12, §16) with the ONLY serves/provenance prose a manifest may carry: this pinned list was
@@ -113,6 +113,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
     private static partial Regex WholeTranscriptPath();
     [GeneratedRegex(@"^2000-01-01T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z\z")] private static partial Regex SyntheticInstant();
     [GeneratedRegex(@"^[0-9a-f]{40}\z")] private static partial Regex ShaForty();
+    [GeneratedRegex(@"^[A-Za-z]:/fixture/(repo-[a-z]|other)(/p[0-9]+)*\z")] private static partial Regex CheckoutShape();
 
     /// <summary>Output forms the cutter produces for remapped ids: lowercase hex after the prefix, so a typed word cannot pass as an id.</summary>
     private static readonly IReadOnlyDictionary<string, Regex> IdOutputForms = new Dictionary<string, Regex>
@@ -172,7 +173,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
 
     // ---- the manifest ------------------------------------------------------------------------------------------------
     private sealed record ManifestCase(string Name, string Dir, string Serves, string Provenance, string Version, string Side, string PathStyle, bool HasTranscript, bool BreaksJoin,
-        IReadOnlyList<string> FixtureRoots, int AssistantLines, int DistinctMessageIds, int AgentFiles, int Metas, int AgentToolUses);
+        IReadOnlyList<string> FixtureRoots, IReadOnlyList<string> Checkouts, int AssistantLines, int DistinctMessageIds, int AgentFiles, int Metas, int AgentToolUses);
 
     private static readonly Node ManifestSchema = new Obj(new Dictionary<string, Node>
     {
@@ -188,6 +189,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
             ["version"] = new Str("manifest-version"),
             ["breaksJoin"] = new Bool(),
             ["fixtureRoots"] = new Arr(new Str("fixture-root")),
+            ["checkouts"] = new Arr(new Str("checkout")),
             ["counts"] = new Obj(new Dictionary<string, Node> { ["assistantLines"] = new Num(), ["distinctMessageIds"] = new Num(), ["agentFiles"] = new Num(), ["metas"] = new Num(), ["agentToolUses"] = new Num() }),
         }))
     });
@@ -201,6 +203,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
             return new ManifestCase(c.GetProperty("name").GetString()!, c.GetProperty("dir").GetString()!, c.GetProperty("serves").GetString()!, c.GetProperty("provenance").GetString()!,
                 c.GetProperty("version").GetString()!, c.GetProperty("side").GetString()!, c.GetProperty("pathStyle").GetString()!, c.GetProperty("hasTranscript").GetBoolean(),
                 c.GetProperty("breaksJoin").GetBoolean(), c.GetProperty("fixtureRoots").EnumerateArray().Select(r => r.GetString()!).ToList(),
+                c.GetProperty("checkouts").EnumerateArray().Select(r => r.GetString()!).ToList(),
                 counts.GetProperty("assistantLines").GetInt32(), counts.GetProperty("distinctMessageIds").GetInt32(), counts.GetProperty("agentFiles").GetInt32(),
                 counts.GetProperty("metas").GetInt32(), counts.GetProperty("agentToolUses").GetInt32());
         }).ToList();
@@ -294,6 +297,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         ["sha40"] = IsShaForty,
         ["manifest-version"] = IsManifestVersion,
         ["fixture-root"] = IsFixtureRoot,
+        ["checkout"] = IsCheckout,
     };
 
     private static bool AnyText(Ctx ctx, string value) => true;
@@ -302,6 +306,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
     private static bool IsShaForty(Ctx ctx, string value) => ShaForty().IsMatch(value);
     private static bool IsManifestVersion(Ctx ctx, string value) => value == "none" || Accepts(ctx.List, "version", value, ctx.Roots);
     private static bool IsFixtureRoot(Ctx ctx, string value) => FixtureRoot.IsMatch(value);
+    private static bool IsCheckout(Ctx ctx, string value) => CheckoutShape().IsMatch(value);
 
     private static bool SideFileShapeAccepts(Ctx ctx, string shape, string value) =>
         SideFileShapes.TryGetValue(shape, out var accepts) ? accepts(ctx, value) : Accepts(ctx.List, shape, value, ctx.Roots);
@@ -641,6 +646,46 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         }
     }
 
+    private static IEnumerable<string> BlockIds(Case c, string file, Func<JsonElement, bool> pick, string idProperty) =>
+        c.Lines(file).SelectMany(d => ContentBlocks(d.RootElement)).Where(pick).Select(b => Prop(b, idProperty)).Where(id => id.Length > 0).ToList();
+
+    private static bool IsWriteCall(JsonElement block) => Prop(block, "type") == "tool_use" && WriteTools.Contains(Prop(block, "name"));
+
+    private static bool IsResult(JsonElement block) => Prop(block, "type") == "tool_result";
+
+    /// <summary>
+    /// The write calls of one transcript file that no tool_result in THE SAME file answers (a call is answered in the file it was made in).
+    /// A write call with no id is reported too: nothing can answer it, so skipping it would pass the very shape this guard refuses.
+    /// </summary>
+    private static IEnumerable<string> UnansweredWrites(Case c, string file)
+    {
+        var answered = BlockIds(c, file, IsResult, "tool_use_id").ToHashSet();
+        var calls = c.Lines(file).SelectMany(d => ContentBlocks(d.RootElement)).Where(IsWriteCall).Select(b => Prop(b, "id")).ToList();
+        return calls.Where(id => !answered.Contains(id)).Select(id => id.Length == 0
+            ? $"{c.Name}/{file}: a write call has no id, so no tool_result can answer it"
+            : $"{c.Name}/{file}: write call {Clip(id)} has no tool_result in its file").ToList();
+    }
+
+    private static string RootOf(string checkout) => string.Join('/', checkout.Split('/').Take(3));
+
+    /// <summary>Why a case's checkout list is not what it should be: a shape other than a fixture root (scratch included) or a path under one, a root the case does not use, or a repository root left out.</summary>
+    private static IEnumerable<string> CheckoutProblems(ManifestCase m)
+    {
+        var badShape = m.Checkouts.Where(p => !CheckoutShape().IsMatch(p)).Select(p => $"{m.Name}: '{Clip(p)}' is not a checkout shape (a repo-<x> or other root, optionally with p<n> segments; scratch is never a checkout)");
+        var foreignRoot = m.Checkouts.Where(p => CheckoutShape().IsMatch(p) && !m.FixtureRoots.Contains(RootOf(p))).Select(p => $"{m.Name}: checkout '{Clip(p)}' is under a root the case does not use");
+        var left = m.FixtureRoots.Where(r => !r.EndsWith("/scratch", StringComparison.Ordinal) && !m.Checkouts.Contains(r)).Select(r => $"{m.Name}: the root '{Clip(r)}' is a checkout and is not listed");
+        return badShape.Concat(foreignRoot).Concat(left).ToList();
+    }
+
+    [Fact]
+    public void EveryCheckoutIsAFixtureRootOrUnderOne() =>
+        LoadManifest().SelectMany(CheckoutProblems).Should().BeEmpty("a checkout is a repo-<x> or other fixture root, or a p<n> path under one (a submodule); scratch is never one");
+
+    [Fact]
+    public void EveryKeptWriteCallHasItsResult() =>
+        LoadCases().SelectMany(c => c.TranscriptFiles.SelectMany(f => UnansweredWrites(c, f))).Should().BeEmpty(
+            "a window that ends between a write call and its answer would show the reader a write it cannot tell from a refused one: the cutter pins the answering line");
+
     [Fact]
     public void TheFixtureRootHoldsExactlyTheAllowlistTheManifestAndTheRequiredCases()
     {
@@ -696,7 +741,8 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         .Select(d => new Line(Prop(d.RootElement, "timestamp"), d.RootElement))
         .Where(l => string.CompareOrdinal(l.At, w.Lo) >= 0 && string.CompareOrdinal(l.At, w.Hi) < 0).ToList();
 
-    private static readonly string[] WriteTools = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
+    /// <summary>The write tools: the cutter's <c>WRITE_TOOLS</c> in <c>scripts/lib/transcript-sanitise.mjs</c> is held equal to this list by <see cref="TheCuttersWriteToolsAreTheGuardsTests"/>.</summary>
+    internal static readonly string[] WriteTools = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
 
     private static IEnumerable<string> WritesIn(IEnumerable<Line> lines) => lines.SelectMany(l => ContentBlocks(l.Json))
         .Where(b => Prop(b, "type") == "tool_use" && WriteTools.Contains(Prop(b, "name")))
@@ -743,6 +789,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         var w = WindowsOf(c).Single();
         var writes = WritesIn(InWindow(c, w)).ToList();
         writes.Should().Contain(p => p.StartsWith(w.Repo + "/p1000/", StringComparison.Ordinal), "a write inside the submodule path of the gated repository");
+        ManifestOf(LoadManifest(), c.Name).Checkouts.Should().Contain(w.Repo + "/p1000", "the submodule is a checkout of its own: the case is named for it");
         writes.Should().Contain(p => RootOfPath(p).EndsWith("/scratch", StringComparison.Ordinal), "a write into the scratchpad, seen by the same window");
     }
 
@@ -779,7 +826,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
     private static readonly string[] PrivateLookingProbes =
     [
         "private-client-canary", "2.1.999", "hello there", "a@b.example", "C:/Users/someone/x.cs", "claude-private-client-canary", "2.1.0+private-client-canary",
-        "opus[private]", "msg_PrivateClientCanary00", "toolu_PrivateClientCanary00", "deadbeefPRIVATE", "2026-10-15T09:00:00.000Z", "mcp__private__tool",
+        "opus[private]", "claude-opus-5-5[1m] please", "D:/x[1m]", "msg_PrivateClientCanary00", "toolu_PrivateClientCanary00", "deadbeefPRIVATE", "2026-10-15T09:00:00.000Z", "mcp__private__tool",
     ];
 
     [Fact]

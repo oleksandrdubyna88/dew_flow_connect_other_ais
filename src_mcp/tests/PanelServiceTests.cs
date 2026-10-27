@@ -31,116 +31,26 @@ public sealed class FakeCliEnvCollection;
 [Collection("fakecli-env")]
 public sealed class PanelServiceTests : IAsyncLifetime
 {
-    /// <summary>
-    /// A scope, not a title. The code gate refuses a bare diff, so every code round in these tests
-    /// carries what the change was supposed to achieve — which is what a real caller sends.
-    /// </summary>
-    private const string Scope = """
-        # SCOPE
+    private const string Scope = CodeRoundHarness.Scope;
 
-        The reviewer's own words must survive a failure. A reviewer that falls over is recorded with
-        an outcome and nothing else, so the round summary says "unparseable" without the text that
-        would not parse, and the same answer replayed by hand goes through cleanly.
+    private const string CleanReview = CodeRoundHarness.CleanReview;
 
-        When it is done: the raw answer is kept beside the session, the refusal names the file, and
-        a failed reviewer still reports what it consumed. Constraint: no new dependency, and the
-        launcher stays the one in v2.Shared.
-        """;
+    private const string OneMajor = CodeRoundHarness.OneMajor;
 
-    private const string CleanReview = """{"findings": []}""";
+    private readonly CodeRoundHarness _h = new();
 
-    private const string OneMajor = """
-        {"findings": [{"severity": "major", "category": "security", "file": "app.cs", "line": 1,
-          "title": "token compared with ==", "why": "timing side channel", "fix": "use FixedTimeEquals"}]}
-        """;
+    public ValueTask InitializeAsync() => _h.InitializeAsync();
 
-    private readonly ProcessLauncher _launcher = new();
-    private string _repo = string.Empty;
-    private string _data = string.Empty;
-
-    private static string FakeCliExe => Path.Combine(
-        AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
-
-    public async ValueTask InitializeAsync()
-    {
-        _repo = Directory.CreateTempSubdirectory("coai-panel-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-panel-data-").FullName;
-        await Git("init", "-b", "main");
-        await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
-        await Git("add", ".");
-        await Git("commit", "-m", "base");
-        await Git("checkout", "-b", "feature");
-        await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v2\n");
-        await Git("add", ".");
-        await Git("commit", "-m", "change");
-
-        Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
-        SetAnswer(CleanReview);
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        foreach (var name in (string[])["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_OUTFILE_TEXT", "FAKECLI_RECORD_DIR", "FAKECLI_EXIT", "FAKECLI_STDERR"])
-        {
-            Environment.SetEnvironmentVariable(name, null);
-        }
-
-        try
-        {
-            Directory.Delete(_repo, recursive: true);
-            Directory.Delete(_data, recursive: true);
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-        return ValueTask.CompletedTask;
-    }
-
-    private static void SetAnswer(string json)
-    {
-        Environment.SetEnvironmentVariable("FAKECLI_STDOUT", json);       // the gemini path
-        Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", json); // the codex path
-    }
-
-    private async Task Git(params string[] args)
-    {
-        var result = await _launcher.RunAsync(new ProcessRequest(
-            "git", ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", .. args], _repo));
-        result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
-    }
-
-    private PanelService Service(
-        int threshold = 2,
-        StagePolicy onExhausted = StagePolicy.Human,
-        int maxRounds = 3,
-        bool deal = false) =>
-        new(
-            new PanelSettings
-            {
-                Providers =
-                [
-                    new("codex") { ExecutablePath = FakeCliExe },
-                    new("gemini") { ExecutablePath = FakeCliExe },
-                ],
-                Rounds = PanelConfig.Uniform(maxRounds, threshold, onExhausted),
-                DataDir = _data,
-                ReviewerTimeout = TimeSpan.FromSeconds(30),
-                RateLimitBackoff = TimeSpan.FromMilliseconds(5),
-                DealPlanLenses = deal,
-                DealCodeLenses = deal,
-            },
-            VaultKeys.None("no vault in tests"),
-            default,
-            _launcher,
-            Logger.None, Noticing.None);
+    public ValueTask DisposeAsync() => _h.DisposeAsync();
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 
     [Fact]
     public async Task Open_IsIdempotentPerRepoAndBranch()
     {
-        var service = Service();
-        var first = Parse(await service.OpenAsync(_repo, "feature"));
-        var second = Parse(await service.OpenAsync(_repo, "feature"));
+        var service = _h.Service();
+        var first = Parse(await service.OpenAsync(_h.Repo, "feature"));
+        var second = Parse(await service.OpenAsync(_h.Repo, "feature"));
 
         second.GetProperty("sessionId").GetString().Should().Be(first.GetProperty("sessionId").GetString());
     }
@@ -148,10 +58,10 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task ReviewCode_BeforePlanProceed_Refuses()
     {
-        var service = Service();
-        await service.OpenAsync(_repo, "feature");
+        var service = _h.Service();
+        await service.OpenAsync(_h.Repo, "feature");
 
-        var answer = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
+        var answer = Parse(await service.ReviewCodeAsync(_h.Repo, "feature", "main", Scope));
 
         answer.GetProperty("error").GetString().Should().Contain("plan gate comes first");
     }
@@ -159,11 +69,11 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task ReviewPlan_MergesTheSameFindingAcrossProviders_IntoOne()
     {
-        SetAnswer(OneMajor);
-        var service = Service(threshold: 0);
-        await service.OpenAsync(_repo, "feature");
+        CodeRoundHarness.SetAnswer(OneMajor);
+        var service = _h.Service(threshold: 0);
+        await service.OpenAsync(_h.Repo, "feature");
 
-        var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", "the plan"));
+        var answer = Parse(await service.ReviewPlanAsync(_h.Repo, "feature", "the plan"));
 
         answer.GetProperty("verdict").GetString().Should().Be("revise");
         var findings = answer.GetProperty("findings");
@@ -175,29 +85,29 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task FullLoop_PlanProceeds_CodePasses_SessionDone()
     {
-        var service = Service();
-        await service.OpenAsync(_repo, "feature");
+        var service = _h.Service();
+        await service.OpenAsync(_h.Repo, "feature");
 
-        Parse(await service.ReviewPlanAsync(_repo, "feature", "the plan"))
+        Parse(await service.ReviewPlanAsync(_h.Repo, "feature", "the plan"))
             .GetProperty("verdict").GetString().Should().Be("proceed");
-        Parse(await service.ResolveAsync(_repo, "feature", "[]"))
+        Parse(await service.ResolveAsync(_h.Repo, "feature", "[]"))
             .GetProperty("instruction").GetString().Should().Contain("review_code");
 
-        Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope))
+        Parse(await service.ReviewCodeAsync(_h.Repo, "feature", "main", Scope))
             .GetProperty("verdict").GetString().Should().Be("proceed");
-        Parse(await service.ResolveAsync(_repo, "feature", "[]"))
+        Parse(await service.ResolveAsync(_h.Repo, "feature", "[]"))
             .GetProperty("stage").GetString().Should().Be("Done");
     }
 
     [Fact]
     public async Task Resolve_RejectionWithoutAReason_RefusesTheWholeCall()
     {
-        SetAnswer(OneMajor);
-        var service = Service(threshold: 0);
-        await service.OpenAsync(_repo, "feature");
-        await service.ReviewPlanAsync(_repo, "feature", "the plan");
+        CodeRoundHarness.SetAnswer(OneMajor);
+        var service = _h.Service(threshold: 0);
+        await service.OpenAsync(_h.Repo, "feature");
+        await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
 
-        var answer = Parse(await service.ResolveAsync(_repo, "feature", """[{"finding": 0, "action": "reject"}]"""));
+        var answer = Parse(await service.ResolveAsync(_h.Repo, "feature", """[{"finding": 0, "action": "reject"}]"""));
 
         answer.GetProperty("error").GetString().Should().Contain("without a reason");
     }
@@ -205,15 +115,15 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task RejectedWithReason_DoesNotGate_TheNextRound()
     {
-        SetAnswer(OneMajor);
-        var service = Service(threshold: 0);
-        await service.OpenAsync(_repo, "feature");
-        await service.ReviewPlanAsync(_repo, "feature", "the plan");
-        await service.ResolveAsync(_repo, "feature",
+        CodeRoundHarness.SetAnswer(OneMajor);
+        var service = _h.Service(threshold: 0);
+        await service.OpenAsync(_h.Repo, "feature");
+        await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
+        await service.ResolveAsync(_h.Repo, "feature",
             """[{"finding": 0, "action": "reject", "reason": "constant time is not required for this token"}]""");
 
         // The reviewers repeat the same remark with the same argument next round.
-        var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", "the plan v2"));
+        var answer = Parse(await service.ReviewPlanAsync(_h.Repo, "feature", "the plan v2"));
 
         answer.GetProperty("verdict").GetString().Should().Be("proceed", "a standing rejection does not count");
         answer.GetProperty("discounted").GetArrayLength().Should().Be(1);
@@ -222,13 +132,13 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task Status_SurvivesAServerRestart()
     {
-        var service = Service();
-        await service.OpenAsync(_repo, "feature");
-        await service.ReviewPlanAsync(_repo, "feature", "the plan");
-        await service.ResolveAsync(_repo, "feature", "[]");
+        var service = _h.Service();
+        await service.OpenAsync(_h.Repo, "feature");
+        await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
+        await service.ResolveAsync(_h.Repo, "feature", "[]");
 
-        var reborn = Service(); // a fresh instance over the same data dir IS the restart
-        var status = Parse(await reborn.StatusAsync(_repo, "feature"));
+        var reborn = _h.Service(); // a fresh instance over the same data dir IS the restart
+        var status = Parse(await reborn.StatusAsync(_h.Repo, "feature"));
 
         status.GetProperty("stage").GetString().Should().Be("CodeReview");
         status.GetProperty("rounds").GetArrayLength().Should().Be(1);
@@ -242,58 +152,58 @@ public sealed class PanelServiceTests : IAsyncLifetime
         // the checkout again invites the same exploration that produced the empty answer — the
         // plan stage learned this at ten minutes a round, and antigravity failed intermittently on
         // the code stage until the repair stopped carrying a workspace.
-        var record = Directory.CreateTempSubdirectory("coai-record-").FullName;
-        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
-        try
-        {
-            var service = Service();
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
-            await service.ResolveAsync(_repo, "feature", "[]");
-            foreach (var file in Directory.GetFiles(record))
-            {
-                File.Delete(file);
-            }
+        var repairs = await RepairLaunchesOfACodeRoundAsync();
 
-            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+        repairs.Should().NotBeEmpty("the first answers were not the schema's JSON, so every reviewer was repaired — a test that saw no repair saw nothing");
+        repairs.Should().OnlyContain(repair => Path.GetFileName(repair.WorkingDirectory).StartsWith("coai-repair-", StringComparison.Ordinal),
+            "the repair launch runs in a directory of its own, never in the checkout it was refused");
+        repairs.Should().OnlyContain(repair => repair.EntriesAtLaunch.Count == 0,
+            "an empty directory is what makes an agentic CLI answer instead of explore");
+    }
 
-            // Every recorded launch is the FIRST attempt here (the fake answers correctly), so the
-            // assertion is on how the repair was BUILT: its working directory is not the worktree.
-            var session = new SessionStore(_data).Load(_repo, "feature");
-            session.Should().NotBeNull();
-            Directory.EnumerateDirectories(Path.GetTempPath(), "coai-repair-*")
-                .Should().NotBeEmpty("the repair launch runs in a directory of its own");
-            foreach (var dir in Directory.EnumerateDirectories(Path.GetTempPath(), "coai-repair-*"))
-            {
-                Directory.EnumerateFileSystemEntries(dir).Should().BeEmpty(
-                    "an empty directory is what makes an agentic CLI answer instead of explore");
-            }
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
-            Directory.Delete(record, recursive: true);
-        }
+    /// <summary>
+    /// The positive control of the repair test must be a control of the CODE round: in a workspace mode where the review launch runs in an
+    /// empty folder, it has to FAIL — and not be satisfied by a plan-round launch made earlier through the same recording launcher
+    /// (code gate, 2026-10-19: the control used to read every review launch since the service was built).
+    /// </summary>
+    [Fact]
+    public async Task TheRepairTestsControl_IsRedWhenTheCodeRoundsReviewsRanInAnEmptyFolder()
+    {
+        var act = () => RepairLaunchesOfACodeRoundAsync(workspace: "none");
+
+        await act.Should().ThrowAsync<Xunit.Sdk.XunitException>("the code round's review launches saw an empty folder, so the control has nothing to prove with");
+    }
+
+    /// <summary>
+    /// A code round whose first answers are not the schema's JSON, so each reviewer is launched a second time with the repair prompt;
+    /// the answers to the repair are clean. Returns the repair launches, each with its folder's entries read BEFORE it started.
+    /// </summary>
+    private async Task<IReadOnlyList<CodeRoundHarness.RepairLaunch>> RepairLaunchesOfACodeRoundAsync(string workspace = "worktree")
+    {
+        var round = await _h.RepairedCodeRoundAsync(workspace);
+        round.Reviews.Should().Contain(review => review.EntriesAtLaunch.Count > 0, "in worktree mode the review launched in the checkout, so the repair folder being empty is a choice and not an accident");
+
+        return round.Repairs;
     }
 
     [Fact]
     public async Task CodeStage_FansOutThreeRolesPerProvider_WithThreeDistinctPrompts()
     {
-        var record = Directory.CreateTempSubdirectory("coai-record-").FullName;
+        using var record = TempDir.For("coai-record-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
-            var service = Service();
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
-            await service.ResolveAsync(_repo, "feature", "[]");
+            var service = _h.Service();
+            await service.OpenAsync(_h.Repo, "feature");
+            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
+            await service.ResolveAsync(_h.Repo, "feature", "[]");
             Directory.GetFiles(record).Should().HaveCount(2, "the plan stage is one reviewer per provider");
             foreach (var file in Directory.GetFiles(record))
             {
                 File.Delete(file);
             }
 
-            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+            await service.ReviewCodeAsync(_h.Repo, "feature", "main", Scope);
 
             var argvs = Directory.GetFiles(record, "*.argv")
                 .Select(f => LaunchRecords.Read(f).Split('\0'))
@@ -317,15 +227,15 @@ public sealed class PanelServiceTests : IAsyncLifetime
     {
         // A ten-minute plan round was an agentic CLI reading the repository it had been handed.
         // The role is to judge the DOCUMENT; only the code stage needs a tree.
-        var record = Directory.CreateTempSubdirectory("coai-cwd-").FullName;
+        using var record = TempDir.For("coai-cwd-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
-            var service = Service();
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            var service = _h.Service();
+            await service.OpenAsync(_h.Repo, "feature");
+            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
 
-            var worktrees = Path.Combine(_data, "worktrees");
+            var worktrees = Path.Combine(_h.Data, "worktrees");
             var created = Directory.Exists(worktrees) ? Directory.GetDirectories(worktrees) : [];
             created.Should().BeEmpty("the plan stage checks out nothing at all");
 
@@ -349,13 +259,13 @@ public sealed class PanelServiceTests : IAsyncLifetime
         // checkout away is not the same as SAYING so. A plan reviewer stood in an empty scratch
         // directory while its prompt claimed a read-only checkout was under it — and an agentic CLI
         // that believes that goes looking, is refused the permission headlessly, and answers nothing.
-        var record = Directory.CreateTempSubdirectory("coai-plan-said-").FullName;
+        using var record = TempDir.For("coai-plan-said-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
-            var service = Service();
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            var service = _h.Service();
+            await service.OpenAsync(_h.Repo, "feature");
+            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
 
             var prompts = Directory.GetFiles(record, "*.argv")
                 .Select(f => LaunchRecords.Read(f).Split('\0')[^1])
@@ -374,11 +284,11 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task MaxRoundsExhausted_YieldsCallHuman_WithTheOpenCount()
     {
-        SetAnswer(OneMajor);
-        var service = Service(threshold: 0, maxRounds: 1);
-        await service.OpenAsync(_repo, "feature");
+        CodeRoundHarness.SetAnswer(OneMajor);
+        var service = _h.Service(threshold: 0, maxRounds: 1);
+        await service.OpenAsync(_h.Repo, "feature");
 
-        var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", "the plan"));
+        var answer = Parse(await service.ReviewPlanAsync(_h.Repo, "feature", "the plan"));
 
         answer.GetProperty("verdict").GetString().Should().Be("call_human");
         answer.GetProperty("instruction").GetString().Should().Contain("do not proceed on your own");
@@ -395,20 +305,20 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task WithDealingOn_ACodeRound_AsksEachRoleOnce_AcrossTheVendors()
     {
-        var record = Directory.CreateTempSubdirectory("coai-deal-").FullName;
+        using var record = TempDir.For("coai-deal-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
-            var service = Service(deal: true);
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
-            await service.ResolveAsync(_repo, "feature", "[]");
+            var service = _h.Service(deal: true);
+            await service.OpenAsync(_h.Repo, "feature");
+            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
+            await service.ResolveAsync(_h.Repo, "feature", "[]");
             foreach (var file in Directory.GetFiles(record))
             {
                 File.Delete(file);
             }
 
-            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+            await service.ReviewCodeAsync(_h.Repo, "feature", "main", Scope);
 
             var argvs = Directory.GetFiles(record, "*.argv").Select(f => LaunchRecords.Read(f).Split((char)0)).ToList();
             argvs.Should().HaveCount(3, "three roles dealt across two vendors, one each");
@@ -423,13 +333,13 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task WithDealingOn_ThePlanRound_SpendsADifferentLensPerVendor()
     {
-        var record = Directory.CreateTempSubdirectory("coai-deal-plan-").FullName;
+        using var record = TempDir.For("coai-deal-plan-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
-            var service = Service(deal: true);
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            var service = _h.Service(deal: true);
+            await service.OpenAsync(_h.Repo, "feature");
+            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
 
             var prompts = Directory.GetFiles(record, "*.argv")
                 .Select(f => LaunchRecords.Read(f).Split((char)0)[^1])
@@ -449,9 +359,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
     /// </summary>
     private void WriteFamilyRules()
     {
-        File.WriteAllText(Path.Combine(_repo, ".gitmodules"),
+        File.WriteAllText(Path.Combine(_h.Repo, ".gitmodules"),
             "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
-        var common = Directory.CreateDirectory(Path.Combine(_repo, ".agents", "conventions", "common")).FullName;
+        var common = Directory.CreateDirectory(Path.Combine(_h.Repo, ".agents", "conventions", "common")).FullName;
         File.WriteAllText(Path.Combine(common, "reuse-first.md"), "Look before you build.");
         File.WriteAllText(Path.Combine(common, "logging-serilog.md"), "Serilog, coloured, one file per run.");
     }
@@ -481,9 +391,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
-            var service = Service();
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            var service = _h.Service();
+            await service.OpenAsync(_h.Repo, "feature");
+            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
 
             var prompt = RecordedPrompt(record);
             prompt.Should().Contain("The rules this project has written down");
@@ -519,9 +429,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
-            var service = Service();
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            var service = _h.Service();
+            await service.OpenAsync(_h.Repo, "feature");
+            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
 
             // WriteFamilyRules carries exactly one rule of the plan tier.
             RecordedPrompt(record).Should().Contain($"1 of the {StageRules.Plan.Length} rules");
@@ -543,9 +453,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
-            var service = Service();
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            var service = _h.Service();
+            await service.OpenAsync(_h.Repo, "feature");
+            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
 
             var prompt = RecordedPrompt(record);
             prompt.Should().Contain("NONE of the");
@@ -571,13 +481,13 @@ public sealed class PanelServiceTests : IAsyncLifetime
     public async Task APlanRound_StillGetsNoWorktree()
     {
         WriteFamilyRules();
-        var service = Service();
-        await service.OpenAsync(_repo, "feature");
+        var service = _h.Service();
+        await service.OpenAsync(_h.Repo, "feature");
 
-        await service.ReviewPlanAsync(_repo, "feature", "the plan");
+        await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
 
-        var worktrees = await _launcher.RunAsync(new ProcessRequest(
-            "git", ["worktree", "list", "--porcelain"], _repo));
+        var worktrees = await _h.Launcher.RunAsync(new ProcessRequest(
+            "git", ["worktree", "list", "--porcelain"], _h.Repo));
         worktrees.StdOut.Split("worktree ", StringSplitOptions.RemoveEmptyEntries)
             .Should().ContainSingle("the plan stage is handed no checkout — that is what keeps an "
                 + "agentic CLI answering instead of exploring, and it is why the rules come from repoPath");
@@ -599,23 +509,23 @@ public sealed class PanelServiceTests : IAsyncLifetime
         // Committed, because the code stage reads its rules from the round's WORKTREE at the
         // reviewed SHA — the rules as of the commit under review, not as of this afternoon. That is
         // the property the plan and document stages deliberately do NOT share: they have no commit.
-        await Git("add", ".");
-        await Git("commit", "-m", "the family rules");
+        await _h.Git("add", ".");
+        await _h.Git("commit", "-m", "the family rules");
 
         var record = Directory.CreateTempSubdirectory("coai-code-rules-").FullName;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
-            var service = Service();
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
-            await service.ResolveAsync(_repo, "feature", "[]");
+            var service = _h.Service();
+            await service.OpenAsync(_h.Repo, "feature");
+            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
+            await service.ResolveAsync(_h.Repo, "feature", "[]");
             foreach (var file in Directory.GetFiles(record))
             {
                 File.Delete(file);
             }
 
-            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+            await service.ReviewCodeAsync(_h.Repo, "feature", "main", Scope);
 
             var prompts = Directory.GetFiles(record, "*.argv")
                 .Select(f => LaunchRecords.Read(f).Split('\0')[^1]);

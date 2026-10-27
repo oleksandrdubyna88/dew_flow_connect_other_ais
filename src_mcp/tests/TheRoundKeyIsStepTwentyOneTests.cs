@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Schema step 21: <c>rounds.round_key</c> (story 4.1 of <c>todo/PLAN_every_round_is_counted.md</c>) — appended after
+/// Schema step 21: <c>rounds.round_key</c> (story 4.1 of <c>research/PLAN_every_round_is_counted.md</c>) — appended after
 /// step 20, filled on every recorded round from the record's own key, empty on every round written before it, and
 /// reached by every database shape in the field — exactly as step 20 was (<see cref="TheReviewersModelIsStepTwentyTests"/>).
 /// </summary>

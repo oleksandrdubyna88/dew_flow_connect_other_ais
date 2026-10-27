@@ -43,13 +43,13 @@ public static class UsageKinds
 
     /// <summary>
     /// The deploy's own check — one real review per vendor the release script sends after a swap (story 3.5 of
-    /// todo/PLAN_every_round_is_counted.md). A Team-server kind: written by the server, never by this machine.
+    /// research/PLAN_every_round_is_counted.md). A Team-server kind: written by the server, never by this machine.
     /// </summary>
     public const string Canary = "canary";
 
     /// <summary>
     /// A MEASUREMENT a person ran from a terminal — <c>coai-mcp --probe-api --model</c>, whose request matrix makes
-    /// ten real completions against a metered key (story 3.3 of todo/PLAN_every_round_is_counted.md). It wrote nothing
+    /// ten real completions against a metered key (story 3.3 of research/PLAN_every_round_is_counted.md). It wrote nothing
     /// before, which is how a probe's spend sat in the vendor's bill and in no record here; it is its own kind rather
     /// than a review, because a probe is not a round and must never be counted as one.
     /// </summary>
@@ -148,7 +148,7 @@ public sealed record UsageEntry(
     /// the Team server rotated onto another account — or empty.
     /// </summary>
     /// <remarks>
-    /// Story 3.3 of todo/PLAN_every_round_is_counted.md: one ledger line per paid launch, and this is what ties them
+    /// Story 3.3 of research/PLAN_every_round_is_counted.md: one ledger line per paid launch, and this is what ties them
     /// back together, so retries, repairs and follow-ups are COUNTED from lines rather than inferred from a folded
     /// sum. Twelve hex characters of a fresh GUID on this machine (a turn lives inside one process, so it only has to
     /// be unique among the lines it sits beside); the job id on a Team server, where a job IS one turn. Empty on a
@@ -165,7 +165,7 @@ public sealed record UsageEntry(
 
     /// <summary>The runtime that ran the launch — <see cref="LaunchOptions.Cli"/> — or empty.</summary>
     /// <remarks>
-    /// <para><b>The eight fields below are story 3.4 of todo/PLAN_every_round_is_counted.md</b>: each line says what its
+    /// <para><b>The eight fields below are story 3.4 of research/PLAN_every_round_is_counted.md</b>: each line says what its
     /// launch RAN WITH. A cross-vendor measurement must say which CLI ran each model and at which effort and tier, and
     /// the ledger could not — the plan's hand-built answer had to reconstruct that a codex row inherited
     /// <c>~/.codex/config.toml</c>'s <c>high</c> effort and, for a while, its <c>priority</c> tier.</para>
@@ -217,12 +217,14 @@ public sealed record UsageEntry(
     /// WHY a launch the caller's token killed was killed — one of <see cref="EndCauses"/> — or empty.
     /// </summary>
     /// <remarks>
-    /// Story 3.2 of todo/PLAN_every_round_is_counted.md. Written by the Team server from the STORE's terminal record
+    /// Story 3.2 of research/PLAN_every_round_is_counted.md. Written by the Team server from the STORE's terminal record
     /// (the store fires the token at the transition and is the only thing that knows why), never from the runner's own
     /// recomputation; the line's <paramref name="Outcome"/> stays the failure's name (<c>Cancelled</c>), so a reader
     /// that groups by outcome is unchanged and one that asks "how many withdrawals against how many backstops" has a
-    /// column to ask. Empty on a line older than the field, on every ending but a cancellation, and on a local line,
-    /// where nothing above the executor records which token fired. Trailing and defaulted like the rest.
+    /// column to ask. Empty on a line older than the field and on every ending but a cancellation. <b>A LOCAL review line carries one too</b>
+    /// (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md): on the cancelled turn's LAST line only, decided by the round engine from which
+    /// token FIRED FIRST, recorded when it fired (<c>RoundCancellation</c>) — <c>hostStopped</c>, <c>withdrawn</c>, <c>roundClock</c> or <c>unknown</c>, the last two
+    /// local-only words. Trailing and defaulted like the rest.
     /// </remarks>
     string EndCause = "",
 
@@ -231,10 +233,12 @@ public sealed record UsageEntry(
     /// of it (retries, repairs and follow-ups included) — or empty.
     /// </summary>
     /// <remarks>
-    /// Story 4.2 of todo/PLAN_every_round_is_counted.md: the Team server writes the round its request carried, so a round
-    /// is counted from the lines as one round however many launches it took. Empty on a line older than the field, on a
-    /// line from a client that sent none, and where a malformed id was dropped — never minted in its place. Trailing and
-    /// defaulted like the rest.
+    /// Story 4.2 of research/PLAN_every_round_is_counted.md: the Team server writes the round its request carried, so a round
+    /// is counted from the lines as one round however many launches it took. A LOCAL review line carries it too: the key
+    /// the round engine stamped on the invocation, the same on the first launch, a repair, a follow-up and every earlier
+    /// turn (<see cref="ReviewerInvocation.Round"/>). Empty on a line older than the field, on a line from a client that
+    /// sent none, where a malformed id was dropped — never minted in its place — on a local launch outside a round, and on
+    /// a consultation, a question row and a probe, which are not rounds. Trailing and defaulted like the rest.
     /// </remarks>
     string Round = "",
 
@@ -254,7 +258,7 @@ public sealed record UsageEntry(
     /// The instant the vendor STATED its quota comes back, in UTC (<c>O</c> format) — or empty.
     /// </summary>
     /// <remarks>
-    /// Story 5.3b of todo/PLAN_every_round_is_counted.md: the last line of a turn that ended rate-limited carries the
+    /// Story 5.3b of research/PLAN_every_round_is_counted.md: the last line of a turn that ended rate-limited carries the
     /// reset its refusal stated — agy's <i>"Resets in 88h49m9s"</i> — read by <see cref="CooldownParser.StatedReset"/>,
     /// the parser the Team server parks a slot on, so the extension shows it without parsing vendor sentences itself.
     /// Empty on every other line, on a refusal that stated no time (never the server's guess), on a line older than the
@@ -267,7 +271,7 @@ public sealed record UsageEntry(
     /// When the vendor's own gauge was read on the account right after this launch, UTC (<c>O</c>) — or empty.
     /// </summary>
     /// <remarks>
-    /// <para><b>The three gauge fields are story 6.1a of todo/PLAN_every_round_is_counted.md</b>: the Team server reads
+    /// <para><b>The three gauge fields are story 6.1a of research/PLAN_every_round_is_counted.md</b>: the Team server reads
     /// <c>codex app-server</c> · <c>account/rateLimits/read</c> inside the slot's lease after each job, and every line of
     /// that job carries the reading (<see cref="GaugeOnLine"/>): when, the plan word, and EVERY window of EVERY limit the
     /// vendor reported, each with its limit, kind, length, use and reset. Story 6.2 derives rounds per 1 % from
@@ -282,7 +286,19 @@ public sealed record UsageEntry(
     string GaugePlan = "",
 
     /// <summary>Every window the reading reported, each with its limit — null (left off the line) when there is no reading.</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<GaugeWindowOnLine>? GaugeWindows = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<GaugeWindowOnLine>? GaugeWindows = null,
+
+    /// <summary>
+    /// The id of the CONSULTATION this consult line's turn belongs to — or empty.
+    /// </summary>
+    /// <remarks>
+    /// E3.S4 of todo/PLAN_the_round_counter_tail_E3.md: a consultation is one line per TURN, and the extension's Rounds block divides
+    /// consultation money by consultations, which it can only do when each line names its own. The id the consultation's record
+    /// carries (<c>ConsultationStore.NewId</c>). Empty on a consultant check (no consultation behind it), on a new consultation refused
+    /// before its launch (its record was never written — an invented id would merge unrelated turns), on every older line and on every
+    /// other kind. Trailing and defaulted like the rest.
+    /// </remarks>
+    string Consultation = "")
 {
     /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
@@ -344,14 +360,18 @@ public sealed class UsageLedger(string dataDir)
     /// whatever the outcome is: a reviewer whose turn 2 timed out, was cancelled or came back unreadable
     /// still cost what turn 1 cost, and a ledger that read only the terminal usage would file that turn
     /// as free — the very under-report this method was first fixed for, one turn over.</para>
-    /// <para><b>One line per launch, since story 3.3 of todo/PLAN_every_round_is_counted.md.</b> A turn that took a
+    /// <para><b>One line per launch, since story 3.3 of research/PLAN_every_round_is_counted.md.</b> A turn that took a
     /// repair, a follow-up or a step of the rate-limit ladder was ONE line, its launches summed into it, so a week's
     /// retries, repairs and follow-ups could not be counted. Each launch is its own line now, naming its attempt and
     /// sharing its turn's id; the lines add up to exactly what the folded line said, and a split that would not is
     /// written as that one line instead (<see cref="LaunchLines.Of"/>). A failure's words are its WHOLE reason
     /// (<see cref="ReviewerSummaryFactory.DescribeWhole"/>), never the summary's 160-character cut.</para>
     /// </remarks>
-    public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed)
+    /// <param name="endCause">
+    /// Why a CANCELLED last turn was cancelled (the first source to fire, <c>RoundCancellation.CauseAt</c>), written on that turn's last line like
+    /// <see cref="UsageEntry.ResetsUtc"/>; the caller passes empty for every other ending (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md).
+    /// </param>
+    public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed, string endCause = "")
     {
         // The model that RAN: an adapter that resolves a default for a row that names none (Kimi, Vibe) put it on the invocation, and the row's own model is
         // empty. Every other adapter copies the row's, so the two agree for them; a CLI on its own default names none and the line says nothing (decision 75).
@@ -373,7 +393,7 @@ public sealed class UsageLedger(string dataDir)
 
         AppendTurn(
             line, outcome.Launches, outcome.LastTurnUsage, last < TimeSpan.Zero ? TimeSpan.Zero : last, LaunchLines.OutcomeOf(outcome),
-            StatedResetOf(outcome, DateTimeOffset.UtcNow));
+            StatedResetOf(outcome, DateTimeOffset.UtcNow), endCause);
     }
 
     /// <summary>
@@ -381,36 +401,38 @@ public sealed class UsageLedger(string dataDir)
     /// the row's own options carry none (research/RESULTS_vibe_confinement.md §26: a Vibe line's <c>cliVersion</c> was empty).
     /// </summary>
     private static ReviewerInvocation VersionedBy(ReviewerInvocation invocation, ReviewerOutcome outcome) =>
-        outcome.CliVersion.Length > 0 && invocation.RanWith.CliVersion.Length == 0
-            ? invocation with { RanWith = invocation.RanWith with { CliVersion = outcome.CliVersion } }
-            : invocation;
+        invocation with { RanWith = invocation.RanWith.VersionedBy(outcome.CliVersion) };
 
     /// <summary>What every line of one reviewer shares: who ran, on which model, at which stage.</summary>
     private sealed record LineOf(ReviewerInvocation Invocation, string Model, string Stage);
 
     /// <summary>
     /// One turn, as its lines: one per launch when they add up to the turn, else the turn as one line — its LAST line
-    /// carrying <paramref name="resetsUtc"/>, the reset the turn's ending stated.
+    /// carrying <paramref name="resetsUtc"/>, the reset the turn's ending stated, and <paramref name="lastLineEndCause"/>, why a cancelled turn was.
     /// </summary>
+    /// <param name="lastLineEndCause">
+    /// Written on the turn's LAST line ONLY — every earlier launch of the turn (a repair, a retry) ended on its own terms and carries none.
+    /// </param>
     private void AppendTurn(
-        LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome, string resetsUtc = "")
+        LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome, string resetsUtc = "", string lastLineEndCause = "")
     {
         var turn = LaunchLines.NewTurn();
         var lines = LaunchLines.Of(launches, usage, elapsed, outcome);
         foreach (var (launch, at) in lines.Select((launch, at) => (launch, at)))
         {
             var entry = Entry(line.Invocation, line.Model, line.Stage, launch.Elapsed, launch.Usage, launch.Outcome);
-            Append(entry with { Turn = turn, Attempt = launch.Attempt, ResetsUtc = at == lines.Count - 1 ? resetsUtc : string.Empty });
+            var last = at == lines.Count - 1;
+            Append(entry with { Turn = turn, Attempt = launch.Attempt, ResetsUtc = last ? resetsUtc : string.Empty, EndCause = last ? lastLineEndCause : string.Empty });
         }
     }
 
     /// <summary>
     /// The reset a rate-limited ending STATED, as a UTC instant — or empty for any other ending, and for a refusal that
-    /// named no time (story 5.3b of todo/PLAN_every_round_is_counted.md). Read by the parser the Team server parks on.
+    /// named no time (story 5.3b of research/PLAN_every_round_is_counted.md). Read by the parser the Team server parks on.
     /// </summary>
     /// <remarks>
     /// Public since epic 5's code round: every LOCAL path that records a refusal — a reviewer's turn here, a consultation,
-    /// a consultant check and a question row through <see cref="RecordJob(string, string, string, string, string, TimeSpan, Usage, string, string, string)"/>
+    /// a consultant check and a question row through <see cref="RecordJob(string, string, string, string, string, TimeSpan, Usage, string, string, LaunchOptions, string)"/>
     /// — reads its reset through this ONE helper. A launch that never ended on a terminal outcome passes null: no reset.
     /// </remarks>
     public static string StatedResetOf(ReviewerOutcome? outcome, DateTimeOffset nowUtc) =>
@@ -435,7 +457,12 @@ public sealed class UsageLedger(string dataDir)
             CostNote: CostNoteOf(usage),
             TokensReasoning: usage.TokensReasoning,
             // Unknown, in words, when the launch ended before its vendor reported anything — never a bare zero.
-            UsageNote: UsageNoteOf(usage)).RanWith(invocation.RanWith);
+            UsageNote: UsageNoteOf(usage),
+            // The round key the engine stamped on the invocation (story 4.1), under the same field name the Team server's lines use, so
+            // a local line joins rounds.round_key. EVERY line of a review turn shares it — the first launch, a repair, a follow-up, an
+            // earlier turn — because they all come off this one invocation. Empty for a launch outside a round, which no reader counts.
+            // Only reviews come through here: a consultation, a question row and a probe go through RecordJob, which carries no round.
+            Round: invocation.Round).RanWith(invocation.RanWith);
 
     /// <summary>Records one job a Team server ran on somebody's behalf.</summary>
     /// <remarks>
@@ -484,31 +511,34 @@ public sealed class UsageLedger(string dataDir)
     /// reported anything was filed as a free 0/0, and the cache and reasoning counts never reached the ledger.
     /// <para><paramref name="turn"/> and <paramref name="attempt"/> are the Team server's, one line per launch of a job
     /// (story 3.3); every other caller of this overload records a kind that has no attempts and leaves them empty.</para>
-    /// <para><paramref name="ranWith"/>, <paramref name="job"/> and <paramref name="slot"/> are the Team server's too
-    /// (story 3.4): what the job's launch ran with, the job, and the account slot by its name. A consultation and a question
-    /// row label nothing yet and leave them empty, which the line then says.</para>
+    /// <para><paramref name="ranWith"/> is what the launch ran with (story 3.4; E3.S1 of todo/PLAN_the_round_counter_tail_E3.md): a
+    /// consultation, a consultant check, a question row and a probe label their lines as a review does and pass it, REQUIRED — a caller
+    /// that has nothing to say passes <see cref="LaunchOptions.None"/> on purpose, as a check refused before its launch does.
+    /// <paramref name="job"/> and <paramref name="slot"/> are the Team server's alone (story 3.4), in the overload below.</para>
     /// <para><paramref name="endCause"/> is the Team server's as well (story 3.2): why the store killed a cancelled job —
     /// one of <see cref="EndCauses"/> — read off the store's own terminal record; empty for every other ending.</para>
+    /// <para><paramref name="consultation"/> is the consultation a consult line's turn belongs to (E3.S4): the id its record carries, or empty for a
+    /// check, a turn refused before any record existed, and every kind that is not a consultation.</para>
     /// <para>An overload rather than defaulted parameters for the Team server's fields, because C# cannot default a
     /// <see cref="LaunchOptions"/> to <see cref="LaunchOptions.None"/> and this repository's rule is that an absent value
     /// is an EMPTY value, never a null (the epic-3 code round).</para>
     /// </remarks>
     /// <param name="resetsUtc">
     /// The reset the turn's refusal STATED — <see cref="StatedResetOf"/> of its terminal outcome — or empty. Epic 5's code
-    /// round of todo/PLAN_every_round_is_counted.md: a consultation, a consultant check and a question row are local
+    /// round of research/PLAN_every_round_is_counted.md: a consultation, a consultant check and a question row are local
     /// refusals like a reviewer's, and only the reviewer path wrote one, so the extension could not say when the vendor
     /// comes back after a consultation met its quota. Never set on a Team-server line: the overload below has no such
     /// parameter, because the server keeps the reset on the slot and says it in its catalog.
     /// </param>
     public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        string resetsUtc = "") =>
-        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(LaunchOptions.None)) with { ResetsUtc = resetsUtc });
+        LaunchOptions ranWith, string consultation = "", string resetsUtc = "") =>
+        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(ranWith)) with { ResetsUtc = resetsUtc, Consultation = consultation });
 
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
     /// <remarks>
     /// <para><paramref name="round"/> and <paramref name="clientAttempt"/> are what the job's REQUEST carried (story 4.2 of
-    /// todo/PLAN_every_round_is_counted.md) — the client's round id and its own word for the request — each empty when the
+    /// research/PLAN_every_round_is_counted.md) — the client's round id and its own word for the request — each empty when the
     /// request sent none or sent one the server dropped.</para>
     /// <para><paramref name="gauge"/> is the vendor's own gauge as read on the account right after the job (story 6.1a),
     /// <see cref="GaugeOnLine.None"/> when nothing was read. Required rather than defaulted, as <paramref name="ranWith"/>

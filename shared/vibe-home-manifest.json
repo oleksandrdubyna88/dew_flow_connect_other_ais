@@ -8,7 +8,10 @@
     "file under it (a plugin per-session data folder), anything else - a hooks.toml, a config.toml, an",
     "agents/ or tools/ folder, a link - refuses the launch with the path named. A Vibe version with no entry here is RUN",
     "with a warning (the owner, 2026-10-13: warn, not refuse) - its plugin files admitted by name, its home's shape still checked;",
-    "re-run this script after every Vibe update to measure it. `seen` is informational."
+    "re-run this script after every Vibe update to measure it. `seen` is informational. One entry per version PER PLATFORM",
+    "(`platform` as node spells it; an entry without it is win32). `staged`: entries measured for a platform the shipped coai-mcp",
+    "does not tell apart yet (it reads `versions` by version alone) - NOT enforced; `--unstage <platform>` moves them into",
+    "`versions` in the change that makes the C# read `platform` (DL3 of research/PLAN_kimi_and_vibe_on_linux.md)."
   ],
   "pinnedPrefix": "logs/session/plugins/",
   "varying": [
@@ -21,6 +24,7 @@
     "logs/vibe.log",
     "logs/session/active/.registry",
     "logs/session/unified/*/**",
+    "logs/session/unified/.session-index.json",
     "logs/session/plugins/tmp/**"
   ],
   "varyingFolders": [
@@ -279,6 +283,415 @@
           "class": "varies"
         }
       ]
+    },
+    {
+      "version": "2.26.1",
+      "measured": "2026-10-16",
+      "platform": "linux",
+      "cli": "python",
+      "harness": "scripts/vibe-home-manifest.mjs",
+      "deepestChild": 156,
+      "deepestPersisted": "logs/session/unified/<id>/chunks/<64 hex>.json",
+      "pinned": [
+        {
+          "path": "logs/session/plugins/blobs/07/07d801f46e338d26ace469b819788b27ef23a98d6600160e452ce874b071dc74",
+          "sha256": "07d801f46e338d26ace469b819788b27ef23a98d6600160e452ce874b071dc74",
+          "bytes": 58465
+        },
+        {
+          "path": "logs/session/plugins/blobs/25/255ed729d7694bf62c2e07f704acf3da357158167e6663a4eba899b8c2ec63ac",
+          "sha256": "255ed729d7694bf62c2e07f704acf3da357158167e6663a4eba899b8c2ec63ac",
+          "bytes": 12373
+        },
+        {
+          "path": "logs/session/plugins/blobs/60/600cc68fb3aa8b3e9b25931a8811c5ef595c414ae4933e04d001854b2e19c853",
+          "sha256": "600cc68fb3aa8b3e9b25931a8811c5ef595c414ae4933e04d001854b2e19c853",
+          "bytes": 2366
+        },
+        {
+          "path": "logs/session/plugins/blobs/60/60b64d55f56212814e1bd704e80ecb9a14f6fcbc1c6d37b54fa6276de9859d24",
+          "sha256": "60b64d55f56212814e1bd704e80ecb9a14f6fcbc1c6d37b54fa6276de9859d24",
+          "bytes": 4825
+        },
+        {
+          "path": "logs/session/plugins/blobs/6c/6c288482b77047b21056653f3264d014090f4b7987ad19deacb0e95b01bf2ce3",
+          "sha256": "6c288482b77047b21056653f3264d014090f4b7987ad19deacb0e95b01bf2ce3",
+          "bytes": 341
+        },
+        {
+          "path": "logs/session/plugins/blobs/78/78087e952889a51fdbfa8e748763ccd9001bec473a9dee5231a69216bc45a91d",
+          "sha256": "78087e952889a51fdbfa8e748763ccd9001bec473a9dee5231a69216bc45a91d",
+          "bytes": 4679
+        },
+        {
+          "path": "logs/session/plugins/manifests/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5",
+          "sha256": "bd82bd5badf4eb8e3cf86534a047ee9cd7c2ceea36784d8a7d3054ef5f8d0d6e",
+          "bytes": 742
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/plugin.json",
+          "sha256": "6c288482b77047b21056653f3264d014090f4b7987ad19deacb0e95b01bf2ce3",
+          "bytes": 341
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/create-plugin/SKILL.md",
+          "sha256": "255ed729d7694bf62c2e07f704acf3da357158167e6663a4eba899b8c2ec63ac",
+          "bytes": 12373
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/skill-creator/SKILL.md",
+          "sha256": "60b64d55f56212814e1bd704e80ecb9a14f6fcbc1c6d37b54fa6276de9859d24",
+          "bytes": 4825
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/vibe/SKILL.md",
+          "sha256": "07d801f46e338d26ace469b819788b27ef23a98d6600160e452ce874b071dc74",
+          "bytes": 58465
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/worktree/SKILL.md",
+          "sha256": "78087e952889a51fdbfa8e748763ccd9001bec473a9dee5231a69216bc45a91d",
+          "bytes": 4679
+        }
+      ],
+      "seen": [
+        {
+          "path": ".connector_bootstrap_cache.json.lock",
+          "bytes": 0,
+          "class": "varies"
+        },
+        {
+          "path": "connector_bootstrap_cache.json",
+          "bytes": 6887,
+          "class": "varies"
+        },
+        {
+          "path": "experiment_eval_cache.json",
+          "bytes": 951,
+          "class": "varies"
+        },
+        {
+          "path": "logs/",
+          "bytes": 0,
+          "class": "admitted-folder"
+        },
+        {
+          "path": "logs/session/",
+          "bytes": 0,
+          "class": "admitted-folder"
+        },
+        {
+          "path": "logs/session/active/",
+          "bytes": 0,
+          "class": "varies-lead"
+        },
+        {
+          "path": "logs/session/active/.registry",
+          "bytes": 0,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/plugins/",
+          "bytes": 0,
+          "class": "admitted-folder"
+        },
+        {
+          "path": "logs/session/plugins/blobs/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/blobs/07/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/blobs/07/07d801f46e338d26ace469b819788b27ef23a98d6600160e452ce874b071dc74",
+          "bytes": 58465,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/blobs/25/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/blobs/25/255ed729d7694bf62c2e07f704acf3da357158167e6663a4eba899b8c2ec63ac",
+          "bytes": 12373,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/blobs/60/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/blobs/60/600cc68fb3aa8b3e9b25931a8811c5ef595c414ae4933e04d001854b2e19c853",
+          "bytes": 2366,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/blobs/60/60b64d55f56212814e1bd704e80ecb9a14f6fcbc1c6d37b54fa6276de9859d24",
+          "bytes": 4825,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/blobs/6c/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/blobs/6c/6c288482b77047b21056653f3264d014090f4b7987ad19deacb0e95b01bf2ce3",
+          "bytes": 341,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/blobs/78/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/blobs/78/78087e952889a51fdbfa8e748763ccd9001bec473a9dee5231a69216bc45a91d",
+          "bytes": 4679,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/data/",
+          "bytes": 0,
+          "class": "admitted-folder"
+        },
+        {
+          "path": "logs/session/plugins/data/4f432c7d-4fef-701a-6aa7-398ff652ef00/",
+          "bytes": 0,
+          "class": "admitted-folder"
+        },
+        {
+          "path": "logs/session/plugins/data/4f432c7d-4fef-701a-6aa7-398ff652ef00/vibe/",
+          "bytes": 0,
+          "class": "admitted-folder"
+        },
+        {
+          "path": "logs/session/plugins/manifests/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/manifests/90/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/manifests/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5",
+          "bytes": 742,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/packages/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/plugin.json",
+          "bytes": 341,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/create-plugin/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/create-plugin/SKILL.md",
+          "bytes": 12373,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/skill-creator/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/skill-creator/SKILL.md",
+          "bytes": 4825,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/vibe/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/vibe/SKILL.md",
+          "bytes": 58465,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/worktree/",
+          "bytes": 0,
+          "class": "pinned-lead"
+        },
+        {
+          "path": "logs/session/plugins/packages/90/908d8430769e2d8d7e222ac2707612ce2bf6087637c50b5106820e92a8f815b5/skills/worktree/SKILL.md",
+          "bytes": 4679,
+          "class": "pinned"
+        },
+        {
+          "path": "logs/session/plugins/tmp/",
+          "bytes": 0,
+          "class": "varies-lead"
+        },
+        {
+          "path": "logs/session/unified/",
+          "bytes": 0,
+          "class": "varies-lead"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/",
+          "bytes": 0,
+          "class": "varies-lead"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/chunks/",
+          "bytes": 0,
+          "class": "varies-lead"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/chunks/00ef632af153872a8d292b68b8a36aca5ab7f8c8d8167e1ee64a262afd97f758.json",
+          "bytes": 182,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/chunks/759bddb84dbfada97902735d22ce43aaf53b63109770f1318441d950f06b9a48.json",
+          "bytes": 521,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/chunks/8de824f0dcd6ae70182457df8c8a7c4db4b835228b7490ae757156f4a8426266.json",
+          "bytes": 1478,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/CURRENT",
+          "bytes": 271,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/",
+          "bytes": 0,
+          "class": "varies-lead"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000001/",
+          "bytes": 0,
+          "class": "varies-lead"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000001/checkpoint.json",
+          "bytes": 114,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000001/manifest.json",
+          "bytes": 800,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000001/projection-state.json",
+          "bytes": 644,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000001/runtime-state.json",
+          "bytes": 7285,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000008/",
+          "bytes": 0,
+          "class": "varies-lead"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000008/checkpoint.json",
+          "bytes": 338,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000008/manifest.json",
+          "bytes": 932,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000008/projection-state.json",
+          "bytes": 1089,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/generations/0000000000000008/runtime-state.json",
+          "bytes": 8244,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/journal/",
+          "bytes": 0,
+          "class": "varies-lead"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/journal/0000000000000001.jsonl",
+          "bytes": 40307,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/journal/0000000000000009.jsonl",
+          "bytes": 0,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/meta.json",
+          "bytes": 760,
+          "class": "varies"
+        },
+        {
+          "path": "logs/session/unified/4f432c7d-4fef-701a-6aa7-398ff652ef00/scheduled-loops.json",
+          "bytes": 57,
+          "class": "varies"
+        },
+        {
+          "path": "logs/vibe.log",
+          "bytes": 0,
+          "class": "varies"
+        },
+        {
+          "path": "trusted_folders.toml",
+          "bytes": 28,
+          "class": "varies"
+        },
+        {
+          "path": "vibehistory",
+          "bytes": 12,
+          "class": "varies"
+        },
+        {
+          "path": "whoami_cache.json",
+          "bytes": 362,
+          "class": "varies"
+        }
+      ]
     }
-  ]
+  ],
+  "staged": []
 }

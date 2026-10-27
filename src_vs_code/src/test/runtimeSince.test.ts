@@ -19,13 +19,13 @@ import {
  */
 
 test('S5.7.1 consultantSinceNamesKimiAtTheNextMinor: vibe at the release that shipped its consultant, kimi at the next minor', () => {
-  assert.deepEqual({ ...CONSULTANT_SINCE }, { vibe: '0.54.0', kimi: '0.58.0' });
+  assert.deepEqual({ ...CONSULTANT_SINCE }, { vibe: '0.54.0', kimi: '0.64.0' });
   assert.equal(CONSULTANT_SINCE['kimi'], KIMI_CONSULTANT_SINCE, 'the table and the named constant say one thing');
 });
 
 test('a server consults on a runtime from its SINCE on — and an unknown server, or a runtime outside the table, is not old', () => {
   assert.equal(consultantOnServer('kimi', '0.57.0'), false, 'the release that reviews with kimi does not consult on it');
-  assert.equal(consultantOnServer('kimi', '0.58.0'), true);
+  assert.equal(consultantOnServer('kimi', '0.64.0'), true);
   assert.equal(consultantOnServer('kimi', '1.0.0'), true);
   assert.equal(consultantOnServer('kimi', ''), true, 'unknown is not old — the runtime gate’s rule');
   assert.equal(consultantOnServer('vibe', '0.53.0'), false, 'Vibe reviewed in 0.53.0 and consulted only from 0.54.0');
@@ -41,8 +41,8 @@ test('the two tables are read by ONE rule: a runtime known to the server is not 
 
 test('the note names the installed version, the runtime and the release to update to — and is silent when there is nothing to say', () => {
   assert.equal(consultantRuntimeNote('0.57.0', 'kimi'),
-    'The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.58.0 or later — the MCP server tab.');
-  assert.equal(consultantRuntimeNote('0.58.0', 'kimi'), '');
+    'The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.64.0 or later — the MCP server tab.');
+  assert.equal(consultantRuntimeNote('0.64.0', 'kimi'), '');
   assert.equal(consultantRuntimeNote('', 'kimi'), '', 'a server nobody has versioned is not behind');
   assert.equal(consultantRuntimeNote('0.57.0', 'codex'), '');
 });

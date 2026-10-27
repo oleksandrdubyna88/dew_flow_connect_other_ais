@@ -1,6 +1,8 @@
 import { CliStatus, updateAvailable } from './cliVersions';
-import { Platform, hostExecutableSide } from './hostSide';
+import { type HostKind, Platform, hostExecutableSide, hostKindOfPlatform } from './hostSide';
+import { KIMI_LINUX_LINE, KIMI_NATIVE_LINUX, KIMI_ON_WSL1, KIMI_OWN_OPEN, KIMI_RUNS_ON_WSL, KIMI_TOOLS_NOTE } from './kimiLinuxLine';
 import { executableOf, type ExecutableSide } from './pathFamily';
+import { VIBE_ON_LINUX_SINCE } from './runtimeSince';
 import { Vendor } from './vendors';
 
 /**
@@ -114,12 +116,12 @@ function vibeTerminalEnv(vendor: Vendor): Readonly<Record<string, string>> {
  *
  * @param installed the version the probe read off the installed CLI, `''` when it could not
  */
-export function vendorUpdate(vendor: Vendor, platform: Platform, installed = ''): VendorInstall {
+export function vendorUpdate(vendor: Vendor, platform: Platform, installed = '', host?: HostKind): VendorInstall {
   const self = SELF_UPDATE[vendor.runtime];
 
   return self !== undefined && updatesItself(vendor.runtime, installed)
     ? selfUpdate(vendor, self, platform)
-    : installAgain(vendor, platform);
+    : installAgain(vendor, platform, host);
 }
 
 /** The CLI's own update subcommand, run through the binary the reviews actually run. */
@@ -134,12 +136,12 @@ function selfUpdate(vendor: Vendor, subcommand: string, platform: Platform): Ven
 }
 
 /** The installer, again — the update for a CLI that cannot update itself, or a version too old or unread to know. */
-function installAgain(vendor: Vendor, platform: Platform): VendorInstall {
+function installAgain(vendor: Vendor, platform: Platform, host?: HostKind): VendorInstall {
   const own = OWN_UPDATE[vendor.runtime];
   if (own !== undefined) {
-    return own(platform);
+    return own(platform, host);
   }
-  const install = vendorInstall(vendor, platform);
+  const install = vendorInstall(vendor, platform, host);
   const npmPackage = PACKAGE[vendor.runtime];
 
   // npm installs the newest by default, but `@latest` says so out loud in a command somebody is
@@ -157,8 +159,8 @@ function installAgain(vendor: Vendor, platform: Platform): VendorInstall {
  */
 export function updateFor(
   status: Readonly<Record<string, CliStatus>>,
-): (vendor: Vendor, platform: Platform) => VendorInstall {
-  return (vendor, platform) => vendorUpdate(vendor, platform, status[vendor.id]?.installed ?? '');
+): (vendor: Vendor, platform: Platform, host?: HostKind) => VendorInstall {
+  return (vendor, platform, host) => vendorUpdate(vendor, platform, status[vendor.id]?.installed ?? '', host);
 }
 
 /** The vendors whose CLI updates ITSELF, and the subcommand that does it. */
@@ -342,10 +344,10 @@ const NODE_PREREQUISITE: Record<Platform, string> = {
  * may only ever offer what the vendor itself publishes — `OFFICIAL_SOURCES` and its test are that
  * rule in a form a future change cannot quietly break.</p>
  */
-export function vendorInstall(vendor: Vendor, platform: Platform): VendorInstall {
+export function vendorInstall(vendor: Vendor, platform: Platform, host?: HostKind): VendorInstall {
   const own = OWN_INSTALLER[vendor.runtime];
   if (own !== undefined) {
-    return own(platform);
+    return own(platform, host);
   }
 
   const runtime = PACKAGE[vendor.runtime] !== undefined ? vendor.runtime : 'codex';
@@ -412,10 +414,13 @@ function antigravityInstall(platform: Platform): VendorInstall {
  * These are the commands `VendorDiagnosis.InstallCure` names when a round finds no Vibe, held level by
  * `vibeRuntime.test.ts`; `vibeWindowsInstall.test.ts` holds the Windows line to PowerShell's own parser.</p>
  */
-function vibeInstall(platform: Platform): VendorInstall {
+function vibeInstall(platform: Platform, host?: HostKind): VendorInstall {
+  // A caller that names no host gets the platform's own: a Linux platform alone is a native host, which only ever refuses.
+  const note = vibeNoteFor(host ?? hostKindOfPlatform(platform));
+
   return platform === 'win32'
-    ? { command: withUv(VIBE_UV_INSTALL), prerequisite: '', docs: DOCS['vibe']!, note: VIBE_NOTE_WINDOWS }
-    : { command: VIBE_SCRIPT, prerequisite: '', docs: DOCS['vibe']!, note: VIBE_NOTE_POSIX };
+    ? { command: withUv(VIBE_UV_INSTALL), prerequisite: '', docs: DOCS['vibe']!, note }
+    : { command: VIBE_SCRIPT, prerequisite: '', docs: DOCS['vibe']!, note };
 }
 
 /**
@@ -423,8 +428,8 @@ function vibeInstall(platform: Platform): VendorInstall {
  * `uv tool upgrade mistral-vibe`, the command that script runs, because `uv tool install` on an installed tool
  * changes nothing. It meets a missing uv the way the install does.
  */
-function vibeUpdate(platform: Platform): VendorInstall {
-  return platform === 'win32' ? { ...vibeInstall(platform), command: withUv(VIBE_UV_UPGRADE) } : vibeInstall(platform);
+function vibeUpdate(platform: Platform, host?: HostKind): VendorInstall {
+  return platform === 'win32' ? { ...vibeInstall(platform), command: withUv(VIBE_UV_UPGRADE) } : vibeInstall(platform, host);
 }
 
 /**
@@ -474,8 +479,16 @@ const UV_INSTALL_WINDOWS = 'powershell -ExecutionPolicy ByPass -c "irm https://a
 const UV_INSTALLED_IN = '$(if ($env:UV_INSTALL_DIR) { $env:UV_INSTALL_DIR } elseif ($env:XDG_BIN_HOME) { $env:XDG_BIN_HOME } '
   + "elseif ($env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME '..\\bin' } else { Join-Path $HOME '.local\\bin' })";
 
-/** Where the sign-in is kept — said in both notes. */
+/** Where the sign-in is kept on Windows — the one host whose keyring every coai launch of Vibe reads. */
 const VIBE_KEYRING = 'The sign-in is kept in the operating system’s keyring, which every coai launch of Vibe reads.';
+
+/**
+ * Where the sign-in is kept on a Linux host (DL2 of research/PLAN_kimi_and_vibe_on_linux.md): a FILE, because WSL has no keyring
+ * and coai's launches carry no desktop session to reach one. coai links the file into its own homes and never copies it.
+ */
+const VIBE_ENV_FILE =
+  ' The sign-in coai uses is the file `~/.vibe/.env`, which `vibe --setup` makes; coai links it into its own homes and '
+  + 'never copies it. A sign-in kept in a keyring is invisible to coai.';
 
 const VIBE_NOTE_WINDOWS =
   'One press: if this machine has no uv, Astral’s own installer runs first (the route Mistral’s README gives for '
@@ -485,12 +498,45 @@ const VIBE_NOTE_WINDOWS =
   + 'or set this row’s CLI path to that folder’s `vibe.exe`. Then sign in, which only you can do: run `vibe --setup` '
   + 'here, or press ▶ after the restart — Vibe asks for its sign-in the first time it starts. ' + VIBE_KEYRING;
 
-const VIBE_NOTE_POSIX =
+/** What WSL2, a native Linux box and macOS share: Mistral's one script, and the sign-in that only the person can make. */
+const VIBE_SCRIPT_NOTE =
   'Mistral’s own installer, from mistral.ai. It is a piped script — read it first if that matters to you. It '
   + 'installs uv itself when it is missing, then Vibe, and prints the PATH line to add if uv’s tool folder is not on '
   + 'yours. Then sign in, which only you can do: press ▶ on this card — Vibe asks for its sign-in the first time it '
-  + 'starts — or run `vibe --setup`. ' + VIBE_KEYRING + ' coai-mcp does not run Vibe on Linux, WSL or macOS yet — none '
-  + 'of them is measured — so a reviewer on this side waits for that.';
+  + 'starts — or run `vibe --setup`.';
+
+const VIBE_NOTE_WSL =
+  VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ` Vibe runs on this side, WSL2, from coai-mcp ${VIBE_ON_LINUX_SINCE}.`;
+
+const VIBE_NOTE_LINUX =
+  VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ' On a native Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only — '
+  + 'so a Vibe row is refused on this side.';
+
+const VIBE_NOTE_MACOS =
+  VIBE_SCRIPT_NOTE + ' coai-mcp does not run Vibe on macOS — nothing is measured there — so a reviewer on this side '
+  + 'waits for that.';
+
+/** WSL1 is not WSL2: a syscall translation layer with no real process tree, so a Vibe row is refused until the distro moves. */
+const VIBE_NOTE_WSL1 =
+  VIBE_SCRIPT_NOTE + ' This is WSL1, and coai-mcp runs Vibe on WSL2 only, so a Vibe row is refused on this side. Move this '
+  + 'distro to WSL2 with `wsl --set-version <distro> 2`, run in Windows.';
+
+/** The note per host. A record over the whole union, so a host kind added later is a compile error here, not a wrong note. */
+const VIBE_NOTES: Readonly<Record<HostKind, string>> = {
+  windows: VIBE_NOTE_WINDOWS,
+  wsl2: VIBE_NOTE_WSL,
+  wsl1: VIBE_NOTE_WSL1,
+  linux: VIBE_NOTE_LINUX,
+  darwin: VIBE_NOTE_MACOS,
+};
+
+/**
+ * Which note ⤓ and ⟳ show for Vibe on this host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md) — pure, and the host is a
+ * REQUIRED argument: WSL2 runs Vibe, WSL1 and a native Linux host are refused, macOS is not measured, Windows is as it was.
+ */
+export function vibeNoteFor(host: HostKind): string {
+  return VIBE_NOTES[host];
+}
 
 /**
  * Kimi Code: Moonshot's own installer, per operating system (todo/PLAN_vibe_and_kimi_runtimes_E4.md E4.5, D16; the owner's
@@ -515,20 +561,24 @@ const VIBE_NOTE_POSIX =
  * github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip); `sharkdp.fd` (10.5.0,
  * David Peter, github.com/sharkdp/fd, installer github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-pc-windows-msvc.zip).
  * Both are portable zips from the project's own GitHub releases — nobody is repackaging. A later version's manifest is
- * checked the same way before this id list is trusted again. Linux and macOS get Moonshot's script alone: D18 refuses a Kimi
- * REVIEW there, so the tools are not needed yet. For the day it lifts, the projects' READMEs give `brew install ripgrep fd`
- * on macOS, `sudo apt-get install -y ripgrep fd-find` on Debian and Ubuntu (where the binary is `fdfind` and Kimi looks for
- * `fd`, so `~/.local/bin/fd` must link to it) and `sudo dnf install ripgrep fd-find` on Fedora; `OFFICIAL_SOURCES` would then
- * need those verbs — a change of that day.</p>
+ * checked the same way before this id list is trusted again.</p>
+ *
+ * <p><b>Linux provisions them too</b> (DL12 of research/PLAN_kimi_and_vibe_on_linux.md, E6 — the day the paragraph that used to
+ * stand here said would come): the projects' READMEs give `sudo apt-get install -y ripgrep fd-find` on Debian and Ubuntu
+ * (where fd's program is `fdfind` and Kimi looks for `fd`, so `~/.local/bin/fd` must link to it) and `sudo dnf install
+ * ripgrep fd-find` on Fedora, and {@link KIMI_LINUX_LINE} (`kimiLinuxLine.ts`) runs exactly those, each step skipped when the
+ * tool is already there. `OFFICIAL_SOURCES` admits those two verbs for those two packages, and `sudo` only in front of them
+ * (`officialSources.ts`). macOS still gets Moonshot's script alone: nothing runs Kimi there.</p>
  *
  * <p>These are the commands `VendorDiagnosis.InstallCure` names when a round finds no Kimi, held level by
  * `kimiWindowsInstall.test.ts`, which also holds the Windows line to PowerShell's own parser; `kimiWindowsInstallRuns.test.ts`
  * runs it against stand-ins.</p>
  */
-function kimiInstall(platform: Platform): VendorInstall {
-  return platform === 'win32'
-    ? { command: KIMI_WINDOWS_LINE, prerequisite: '', docs: DOCS['kimi']!, note: KIMI_NOTE_WINDOWS }
-    : { command: KIMI_SCRIPT, prerequisite: '', docs: DOCS['kimi']!, note: KIMI_NOTE_POSIX };
+function kimiInstall(platform: Platform, host?: HostKind): VendorInstall {
+  const kind = host ?? hostKindOfPlatform(platform);
+  const command = platform === 'win32' ? KIMI_WINDOWS_LINE : (kind === 'darwin' ? KIMI_SCRIPT : KIMI_LINUX_LINE);
+
+  return { command, prerequisite: '', docs: DOCS['kimi']!, note: kimiNoteFor(kind) };
 }
 
 /**
@@ -565,21 +615,48 @@ const KIMI_NOTE_WINDOWS =
   + 'as a .bak. It updates the default install: a row with a CLI path of its own (a Kimi kept in another folder) is NOT what ⟳ '
   + 'reaches — the line puts no path in the command — so update that copy yourself, or clear the CLI path.';
 
-const KIMI_NOTE_POSIX =
+/** WSL2, WSL1 and a native Linux box share the line, the tools and the sign-in; what differs is whether coai-mcp runs the row (DL1). */
+const KIMI_LINUX_SHARED = `${KIMI_TOOLS_NOTE} ${KIMI_SIGN_IN} ⟳ runs this same line.`;
+
+const KIMI_NOTE_WSL = `${KIMI_LINUX_SHARED} ${KIMI_RUNS_ON_WSL} ${KIMI_OWN_OPEN}`;
+
+const KIMI_NOTE_LINUX = `${KIMI_LINUX_SHARED} ${KIMI_NATIVE_LINUX}`;
+
+/** WSL1 is not WSL2 (DL1, F0; S-K20): the install line is the same, the row is refused. */
+const KIMI_NOTE_WSL1 = `${KIMI_LINUX_SHARED} ${KIMI_ON_WSL1}`;
+
+const KIMI_NOTE_MACOS =
   'Moonshot’s own installer, from code.kimi.com. It is a piped script — read it first if that matters to you. It puts Kimi in '
   + '~/.kimi-code/bin and edits one shell rc file so that folder is on your PATH (open a new shell, or restart VS Code). '
-  + KIMI_SIGN_IN + ' coai-mcp does not run Kimi on Linux, WSL or macOS yet — none of them is measured — so a reviewer on '
-  + 'this side waits for that; this line installs Kimi only, not the ripgrep and fd it will need.';
+  + KIMI_SIGN_IN + ' coai-mcp does not run Kimi on macOS — nothing is measured there — so a reviewer on this side waits for '
+  + 'that; this line installs Kimi only, not the ripgrep and fd it would need.';
+
+/** The note per host — a record over the whole union, as Vibe's is (`VIBE_NOTES`): a host kind added later is a compile error here. */
+const KIMI_NOTES: Readonly<Record<HostKind, string>> = {
+  windows: KIMI_NOTE_WINDOWS,
+  wsl2: KIMI_NOTE_WSL,
+  wsl1: KIMI_NOTE_WSL1,
+  linux: KIMI_NOTE_LINUX,
+  darwin: KIMI_NOTE_MACOS,
+};
+
+/**
+ * Which note ⤓ and ⟳ show for Kimi on this host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md) — the same host-kind union Vibe's note
+ * is chosen by (`hostSide.ts`): WSL2 runs the row, WSL1 and a native Linux host are refused, macOS is not measured, Windows is as it was.
+ */
+export function kimiNoteFor(host: HostKind): string {
+  return KIMI_NOTES[host];
+}
 
 /** The CLIs a person installs from their vendor's own installer rather than from npm. */
-const OWN_INSTALLER: Record<string, (platform: Platform) => VendorInstall> = {
+const OWN_INSTALLER: Record<string, (platform: Platform, host?: HostKind) => VendorInstall> = {
   antigravity: antigravityInstall,
   vibe: vibeInstall,
   kimi: kimiInstall,
 };
 
 /** The CLIs whose update is neither a subcommand of their own nor npm's `@latest`. */
-const OWN_UPDATE: Record<string, (platform: Platform) => VendorInstall> = {
+const OWN_UPDATE: Record<string, (platform: Platform, host?: HostKind) => VendorInstall> = {
   vibe: vibeUpdate,
   // Re-running Moonshot's script installs the latest over the old one, and the tool steps skip what is there: the update IS the install.
   kimi: kimiInstall,

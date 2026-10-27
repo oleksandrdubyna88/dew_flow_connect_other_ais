@@ -27,12 +27,13 @@ namespace CoaiMcp.FakeCli;
 ///   "loadable": true,             session/load (E5.2): true or absent — answered with the load's config options; false — answered with loadError
 ///   "loadError": {"code":-32602,"message":"session not found"},   the error a refused load is answered with (absent: this one)
 ///   "loadModels": ["m-1"],        the values the LOAD's result announces for "model" (absent: what "models" says — Kimi announces them on a load
-///                                 as on session/new, RESULTS §29); []: no config option at all
-///   "replay": [ steps ],          run as session/update BEFORE a loadable load is answered — the history Kimi replays (RESULTS §29)
+///                                 as on session/new, RESULTS §33); []: no config option at all
+///   "replay": [ steps ],          run as session/update BEFORE a loadable load is answered — the history Kimi replays (RESULTS §33)
 ///   "usageReply": "…",            the text of the one chunk a session/prompt whose text is exactly "/usage" is answered with (RESULTS §5);
 ///                                 absent: that prompt is answered end_turn at once, with no chunk and none of the steps — as a real agent answers it itself
 ///   "promptErrorOnUsage": "…",    answer the "/usage" prompt with this JSON-RPC error
 ///   "usageHang": false,           true: the "/usage" prompt is never answered (the bound's arm)
+///   "startDelayMs": 0,            on start, before ANYTHING is read (the environment record included): sleeps this long — a cold start, which a test then races a deadline against
 ///   "envFile": "&lt;path&gt;",         on start, before reading anything: this process's whole environment, NAME=value lines sorted, and then
 ///   "probes": ["&lt;path&gt;",…]       one "PROBE &lt;path&gt; Held|Free|Unknown" line per lock file named — what a tree hold looks like from INSIDE the agent
 ///   "steps": [                    run in order while session/prompt is open
@@ -45,11 +46,16 @@ namespace CoaiMcp.FakeCli;
 ///     {"kind":"request","method":"fs/write_text_file","params":{…}}   any other client request; the reply is logged
 ///     {"kind":"stray","text":"not json"}               a line that is not JSON-RPC
 ///     {"kind":"spew","chars":N}                        one line of N characters
+///     {"kind":"stderr","chars":N}                      N characters on STDERR, no newline — what drives the client's stderr capture and its truncation flag
+///     {"kind":"stderrText","text":"…"}             the text on STDERR, as given (put its own line break in it) — what a vendor's own error line is
 ///     {"kind":"awaitCancel"}                           reads stdin until session/cancel arrives, then goes on (the prompt ends cancelled)
 ///     {"kind":"sleep","ms":100}
 ///     {"kind":"hang"}                                  never returns: the kill path
 ///     {"kind":"exit","code":3}                         leaves mid-turn: the premature EOF
 ///     {"kind":"grandchild","pidFile":"…"}              spawns a sleeping FakeCli and writes its pid there
+///     {"kind":"grandchildSetsid","pidFile":"…"}        the same, but the sleeper calls setsid() first — it leaves the agent's session and group (what `rg` does, L-K4)
+///     {"kind":"grandchildLateSetsid","pidFile":"…","trigger":"…"}   a child that polls for the file `trigger` and only THEN starts the setsid sleeper and writes its pid
+///     {"kind":"grandchildExits","pidFile":"…"}         a child that writes its pid and exits 0 at once
 ///   ]
 /// }
 /// </code>
@@ -70,6 +76,7 @@ internal static class AcpAgent
         var script = JsonDocument.Parse(File.ReadAllText(scriptPath)).RootElement.Clone();
         _log = Text(script, "log");
         _sessionId = Text(script, "sessionId") is { Length: > 0 } named ? named : "fake-session";
+        StartSlowly(script);
         WriteEnvironment(script);
 
         while (Console.In.ReadLine() is { } line)
@@ -87,12 +94,39 @@ internal static class AcpAgent
         return 0;
     }
 
-    /// <summary>The script beside the work folder — <c>&lt;cwd&gt;/../agent.json</c>, the place <c>FakeAcpAgent</c> writes it — or empty when there is none.</summary>
+    /// <summary><c>startDelayMs</c>: a start that takes this long before the first line is read — the cold start of a loaded machine, made exact.</summary>
+    private static void StartSlowly(JsonElement script)
+    {
+        if (Number(script, "startDelayMs") is > 0 and var ms)
+        {
+            Thread.Sleep((int)ms);
+        }
+    }
+
+    /// <summary>
+    /// The script beside the work folder — <c>&lt;cwd&gt;/../agent.json</c>, the place <c>FakeAcpAgent</c> writes it — else the one the steering file beside the fake's binary (<see cref="MinimalSteeringFile"/>) names
+    /// (<c>FAKECLI_ACP_SCRIPT</c>, the same file a minimal-environment vendor launch reads: a round's snapshot is a folder no test can name beforehand, and a launch that builds the agent's
+    /// environment from scratch carries no variable) — or empty when there is none.
+    /// </summary>
     public static string ScriptBesideTheWorkFolder()
     {
         var beside = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "agent.json"));
 
-        return File.Exists(beside) ? beside : string.Empty;
+        return File.Exists(beside) ? beside : SteeredScript();
+    }
+
+    private static string SteeredScript()
+    {
+        var steering = MinimalSteeringFile.Location;
+        if (!File.Exists(steering))
+        {
+            return string.Empty;
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(steering));
+        var named = document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("FAKECLI_ACP_SCRIPT", out var script) ? script.GetString() ?? string.Empty : string.Empty;
+
+        return File.Exists(named) ? named : string.Empty;
     }
 
     /// <summary>
@@ -111,6 +145,8 @@ internal static class AcpAgent
             .Order(StringComparer.Ordinal)
             .Concat(Probed(script));
         File.WriteAllLines(path, lines);
+        // The folder the agent was started in, beside the environment record (not in it: that file is read as a set of variables).
+        File.WriteAllText(path + ".cwd", Directory.GetCurrentDirectory());
     }
 
     private static IEnumerable<string> Probed(JsonElement script) =>
@@ -166,7 +202,7 @@ internal static class AcpAgent
 
     /// <summary>
     /// <c>session/load</c> (E5.2): the session named becomes this agent's; a loadable one replays its <c>replay</c> steps BEFORE the answer — the order
-    /// Kimi was measured to use (RESULTS §29) — and is answered with the load's own config options; a refused one is answered with <c>loadError</c>.
+    /// Kimi was measured to use (RESULTS §33) — and is answered with the load's own config options; a refused one is answered with <c>loadError</c>.
     /// </summary>
     private static void Load(JsonElement script, JsonElement id, JsonElement message)
     {
@@ -269,7 +305,7 @@ internal static class AcpAgent
 
         if (Text(script, "promptError") is { Length: > 0 } failure)
         {
-            Error(id, -32000, failure);
+            Error(id, -32000, failure, script.TryGetProperty("promptErrorData", out var data) ? JsonNode.Parse(data.GetRawText()) : null);
 
             return;
         }
@@ -287,76 +323,95 @@ internal static class AcpAgent
         Reply(id, new JsonObject { ["stopReason"] = stopReason });
     }
 
+    /// <summary>One handler per script step kind; a kind with no handler is a step that does nothing.</summary>
+    private static readonly Dictionary<string, Action<JsonElement>> StepHandlers = new()
+    {
+        ["chunk"] = StepChunk,
+        ["usage"] = StepUsage,
+        ["toolCall"] = StepToolCall,
+        ["toolCallUpdate"] = StepToolCallUpdate,
+        ["permission"] = StepPermission,
+        ["read"] = StepRead,
+        ["request"] = StepRequest,
+        ["stray"] = step => Write(Text(step, "text")),
+        // One line of N characters and no newline among them: the shape a line reader must bound.
+        ["spew"] = step => Write(new string('x', (int)Number(step, "chars"))),
+        // Stderr only: the protocol stream stays clean, so the turn still answers.
+        ["stderr"] = step => StdErr(new string('e', (int)Number(step, "chars"))),
+        // Stderr only, the vendor's own sentence as given: the protocol stream stays clean.
+        ["stderrText"] = step => StdErr(Text(step, "text")),
+        ["awaitCancel"] = _ => AwaitCancel(),
+        ["sleep"] = step => Thread.Sleep((int)Number(step, "ms")),
+        ["hang"] = _ => Thread.Sleep(Timeout.Infinite),
+        ["exit"] = StepExit,
+        ["grandchild"] = step => Grandchild(Text(step, "pidFile")),
+        ["grandchildSetsid"] = step => SpawnedInto(Text(step, "pidFile"), "sleep", "--own-session", "600000"),
+        // Not the pid file of the sleeper's own: the late child writes THAT file when it spawns.
+        ["grandchildLateSetsid"] = step => Spawned("late-spawn", Text(step, "trigger"), Text(step, "pidFile")),
+        ["grandchildExits"] = step => SpawnedInto(Text(step, "pidFile"), "exit-after", "0", "0"),
+    };
+
     private static void Step(JsonElement step)
     {
-        switch (Text(step, "kind"))
+        if (StepHandlers.TryGetValue(Text(step, "kind"), out var handler))
         {
-            case "chunk":
-                Update(new JsonObject
-                {
-                    ["sessionUpdate"] = "agent_message_chunk",
-                    ["content"] = new JsonObject { ["type"] = "text", ["text"] = Text(step, "text") },
-                });
-                break;
-            case "usage":
-                Update(new JsonObject { ["sessionUpdate"] = "usage_update", ["used"] = Number(step, "used"), ["size"] = Number(step, "size") });
-                break;
-            case "toolCall":
-                Update(new JsonObject
-                {
-                    ["sessionUpdate"] = "tool_call",
-                    ["toolCallId"] = Text(step, "id"),
-                    ["title"] = Text(step, "title"),
-                    ["kind"] = Text(step, "toolKind"),
-                    ["status"] = Text(step, "status"),
-                });
-                break;
-            case "toolCallUpdate":
-                Update(new JsonObject { ["sessionUpdate"] = "tool_call_update", ["toolCallId"] = Text(step, "id"), ["status"] = Text(step, "status") });
-                break;
-            case "permission":
-                Request("session/request_permission", new JsonObject
-                {
-                    ["sessionId"] = _sessionId,
-                    ["toolCall"] = new JsonObject { ["toolCallId"] = "call-" + _nextId, ["title"] = Text(step, "title"), ["kind"] = Text(step, "toolKind") },
-                    ["options"] = JsonNode.Parse(step.TryGetProperty("options", out var options) ? options.GetRawText() : "[]"),
-                });
-                break;
-            case "read":
-                var reply = Request("fs/read_text_file", ReadParams(step));
-                if (step.TryGetProperty("echo", out var echo) && echo.ValueKind == JsonValueKind.True)
-                {
-                    Update(new JsonObject { ["sessionUpdate"] = "agent_message_chunk", ["content"] = new JsonObject { ["type"] = "text", ["text"] = reply } });
-                }
-
-                break;
-            case "request":
-                Request(Text(step, "method"), (JsonObject)JsonNode.Parse(step.TryGetProperty("params", out var p) ? p.GetRawText() : "{}")!);
-                break;
-            case "stray":
-                Write(Text(step, "text"));
-                break;
-            case "spew":
-                // One line of N characters and no newline among them: the shape a line reader must bound.
-                Write(new string('x', (int)Number(step, "chars")));
-                break;
-            case "awaitCancel":
-                AwaitCancel();
-                break;
-            case "sleep":
-                Thread.Sleep((int)Number(step, "ms"));
-                break;
-            case "hang":
-                Thread.Sleep(Timeout.Infinite);
-                break;
-            case "exit":
-                Console.Out.Flush();
-                Environment.Exit((int)Number(step, "code"));
-                break;
-            case "grandchild":
-                Grandchild(Text(step, "pidFile"));
-                break;
+            handler(step);
         }
+    }
+
+    private static void StepChunk(JsonElement step) =>
+        Update(new JsonObject
+        {
+            ["sessionUpdate"] = "agent_message_chunk",
+            ["content"] = new JsonObject { ["type"] = "text", ["text"] = Text(step, "text") },
+        });
+
+    private static void StepUsage(JsonElement step) =>
+        Update(new JsonObject { ["sessionUpdate"] = "usage_update", ["used"] = Number(step, "used"), ["size"] = Number(step, "size") });
+
+    private static void StepToolCall(JsonElement step) =>
+        Update(new JsonObject
+        {
+            ["sessionUpdate"] = "tool_call",
+            ["toolCallId"] = Text(step, "id"),
+            ["title"] = Text(step, "title"),
+            ["kind"] = Text(step, "toolKind"),
+            ["status"] = Text(step, "status"),
+        });
+
+    private static void StepToolCallUpdate(JsonElement step) =>
+        Update(new JsonObject { ["sessionUpdate"] = "tool_call_update", ["toolCallId"] = Text(step, "id"), ["status"] = Text(step, "status") });
+
+    private static void StepPermission(JsonElement step) =>
+        Request("session/request_permission", new JsonObject
+        {
+            ["sessionId"] = _sessionId,
+            ["toolCall"] = new JsonObject { ["toolCallId"] = "call-" + _nextId, ["title"] = Text(step, "title"), ["kind"] = Text(step, "toolKind") },
+            ["options"] = JsonNode.Parse(step.TryGetProperty("options", out var options) ? options.GetRawText() : "[]"),
+        });
+
+    private static void StepRead(JsonElement step)
+    {
+        var reply = Request("fs/read_text_file", ReadParams(step));
+        if (step.TryGetProperty("echo", out var echo) && echo.ValueKind == JsonValueKind.True)
+        {
+            Update(new JsonObject { ["sessionUpdate"] = "agent_message_chunk", ["content"] = new JsonObject { ["type"] = "text", ["text"] = reply } });
+        }
+    }
+
+    private static void StepRequest(JsonElement step) =>
+        Request(Text(step, "method"), (JsonObject)JsonNode.Parse(step.TryGetProperty("params", out var p) ? p.GetRawText() : "{}")!);
+
+    private static void StepExit(JsonElement step)
+    {
+        Console.Out.Flush();
+        Environment.Exit((int)Number(step, "code"));
+    }
+
+    private static void StdErr(string text)
+    {
+        Console.Error.Write(text);
+        Console.Error.Flush();
     }
 
     private static JsonObject ReadParams(JsonElement step)
@@ -391,8 +446,14 @@ internal static class AcpAgent
         info.ArgumentList.Add("sleep");
         info.ArgumentList.Add("600000");
         var child = Process.Start(info)!;
-        File.WriteAllText(pidFile, child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Serving.WritePidFile(pidFile, [child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
     }
+
+    /// <summary>A FakeCli child with every stream of its own, its pid written to the file.</summary>
+    private static void SpawnedInto(string pidFile, params string[] arguments) =>
+        File.WriteAllText(pidFile, Spawned(arguments).Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    private static Process Spawned(params string[] arguments) => SupervisionVerbs.StartChild(arguments);
 
     /// <summary>Reads stdin, logging every line, until a <c>session/cancel</c> arrives — the prompt then ends <c>cancelled</c>.</summary>
     private static void AwaitCancel()
@@ -453,12 +514,13 @@ internal static class AcpAgent
     private static void Reply(JsonElement id, JsonObject result) =>
         Write(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = JsonNode.Parse(id.GetRawText()), ["result"] = result }.ToJsonString());
 
-    private static void Error(JsonElement id, int code, string message) =>
+    /// <summary>A JSON-RPC error; <paramref name="data"/> is the error's own optional <c>data</c> member, where a server may keep the detail its message leaves out.</summary>
+    private static void Error(JsonElement id, int code, string message, JsonNode? data = null) =>
         Write(new JsonObject
         {
             ["jsonrpc"] = "2.0",
             ["id"] = JsonNode.Parse(id.GetRawText()),
-            ["error"] = new JsonObject { ["code"] = code, ["message"] = message },
+            ["error"] = new JsonObject { ["code"] = code, ["message"] = message, ["data"] = data },
         }.ToJsonString());
 
     private static void Write(string line)

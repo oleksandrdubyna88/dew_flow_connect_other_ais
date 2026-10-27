@@ -14,10 +14,14 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class VersionWarningsTests
 {
-    /// <summary>The sentence <c>VibeLaunch</c> produced for 2.27.0 against a manifest that knows 2.26.1, before this story — pinned as a string.</summary>
+    /// <summary>
+    /// The sentence <c>VibeLaunch</c> produces for 2.27.0 against a manifest that knows 2.26.1 — pinned as a string. Since the manifest is per
+    /// platform (DL3 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>) it names each measured version with the platform it was measured on, so a
+    /// version measured on another platform only says where.
+    /// </summary>
     private const string VibeBefore =
-        "Vibe 2.27.0 is not a version coai has measured (it measured 2.26.1); it is run anyway, but its confinement "
-        + "(research/RESULTS_vibe_confinement.md) and its home's plugin hashes are 2.26.1's, and this version's plugin files are "
+        "Vibe 2.27.0 is not a version coai has measured (it measured 2.26.1 (win32)); it is run anyway, but its confinement "
+        + "(research/RESULTS_vibe_confinement.md) and its home's plugin hashes belong to 2.26.1 (win32); this version's plugin files are "
         + "admitted by name only — re-run `node scripts/vibe-home-manifest.mjs --write` and `node scripts/probe-vibe-confinement.mjs` "
         + "with this Vibe to measure it";
 
@@ -26,10 +30,10 @@ public sealed class VersionWarningsTests
     {
         var manifest = new VibeHomeManifest("logs/session/plugins/", ["logs/**"], [new VibeHomeEntry("2.26.1", [])]);
 
-        VibeLaunch.VersionWarning(manifest, "2.27.0").Should().Be(VibeBefore);
+        VibeLaunch.VersionWarning(manifest, "2.27.0", "win32").Should().Be(VibeBefore);
         VersionWarnings.Unmeasured(
-            "Vibe", "2.27.0", "2.26.1",
-            "its confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes are 2.26.1's, and this version's plugin files are admitted by name only",
+            "Vibe", "2.27.0", "2.26.1 (win32)",
+            "its confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes belong to 2.26.1 (win32); this version's plugin files are admitted by name only",
             "re-run `node scripts/vibe-home-manifest.mjs --write` and `node scripts/probe-vibe-confinement.mjs` with this Vibe to measure it")
             .Should().Be(VibeBefore, "the builder IS the sentence");
     }

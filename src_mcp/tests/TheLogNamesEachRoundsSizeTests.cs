@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// <c>--log</c> carries each round's size (E2.S5 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>,
+/// <c>--log</c> carries each round's size (E2.S5 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>,
 /// contract C3): <c>LoggedRound.Size</c> is read in one grouped query per page from <c>round_changes</c> and the state columns
 /// of schema step 22, absent on a round that has none, and a database written before step 22 is read exactly as before —
 /// read-only, and left at the version it had.
@@ -132,6 +132,26 @@ public sealed class TheLogNamesEachRoundsSizeTests : IDisposable
         {
             round.Size.Should().NotBeNull();
             round.Size!.Whole.Cells.Should().ContainSingle().Which.Added.Should().Be(round.Number, "every round carries its own cells, none of another page's");
+        }
+    }
+
+    [Fact]
+    public void ARoundList_InAnotherOrder_OrFiltered_StillGetsEachSizeOnItsOwnRound()
+    {
+        Record([.. Enumerable.Range(1, 6).Select(n => (Round(n, SizeWithAdded(n)), "origin/main"))]);
+        var page = RoundsQuery.Read(_dir).Rounds.Select(r => r with { Size = null }).ToList();
+        var shuffled = page.Where(r => r.Number != 3).OrderBy(r => r.Number % 2).ThenBy(r => r.Number).ToList();
+
+        using var db = new SqliteConnection($"Data Source={Database};Pooling=False;Mode=ReadOnly");
+        db.Open();
+        var attached = RoundChangesLog.Attach(db, shuffled);
+
+        attached.Select(r => r.Number).Should().Equal(shuffled.Select(r => r.Number), "attaching changes no round and no order");
+        foreach (var round in attached)
+        {
+            round.Size.Should().NotBeNull();
+            round.Size!.Whole.Cells.Should().ContainSingle().Which.Added.Should().Be(round.Number,
+                "each size is found by the round's own id — a list in another order, or one round short, is not paired by position");
         }
     }
 

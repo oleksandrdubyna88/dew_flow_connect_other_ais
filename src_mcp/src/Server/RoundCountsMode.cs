@@ -6,7 +6,7 @@ namespace CoaiMcp.Server;
 /// <summary>
 /// <c>--round-counts [--now &lt;utc instant&gt;]</c>: how many rounds each vendor row ran in the trailing
 /// 5 h, 24 h and 7 d, by stage, from the rounds database — for the extension's Spending tab (story 2.1
-/// of <c>todo/PLAN_every_round_is_counted.md</c>).
+/// of <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>Why a mode.</b> The extension owns no SQLite and never speaks MCP to this binary; it drives

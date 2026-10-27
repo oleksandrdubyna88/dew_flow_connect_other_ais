@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Text.Json;
 using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Processes;
 using FluentAssertions;
 using Xunit;
 
@@ -15,8 +15,8 @@ public sealed class AcpClientUsageTests
 {
     private const string UsageText = "Context: 20004 / 262144 tokens (8%) Session total: 19,973 input, 31 output";
 
-    private static AcpClient ClientFor(FakeAcpAgent agent, TimeSpan? usageBound = null) =>
-        new(agent.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions), usageBound ?? AcpClient.DefaultUsageBound);
+    private static AcpClient ClientFor(FakeAcpAgent agent, TimeSpan? usageBound = null, TimeProvider? clock = null) =>
+        new(agent.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions), usageBound ?? AcpClient.DefaultUsageBound, UnsupervisedTree.Instance, clock);
 
     [Fact]
     public async Task TheTokens_AreTheUsageRepliesTotals()
@@ -30,31 +30,46 @@ public sealed class AcpClientUsageTests
         outcome.Tokens.Should().Be(new AcpTokens(19973, 31, true));
     }
 
+    /// <summary>
+    /// The bound is the CLOCK's: the test waits for both timers (the turn's 30 s deadline and the 1 s usage bound, armed once the answer is in)
+    /// and moves the clock exactly the bound. The wall-time bound this test used to carry (<c>asked.Elapsed &lt; 10 s</c>) is replaced by the
+    /// clock-side proof: the turn ended when the clock had moved the usage bound and no further, so the turn's own deadline was never reached.
+    /// </summary>
     [Fact]
     public async Task AUsagePromptThatNeverAnswers_IsGivenUpOnAtItsBound_AndTheAnswerStands()
     {
         using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("OK")], ""","usageHang":true""");
-        var asked = Stopwatch.StartNew();
+        var clock = new ManualClock(ClockedAcpTurn.Start);
+        var bound = TimeSpan.FromSeconds(1);
 
-        var outcome = await ClientFor(agent, TimeSpan.FromSeconds(1)).AskAsync(agent.Ask(), TestContext.Current.CancellationToken);
+        var outcome = await ClockedAcpTurn.DrivenAsync(ClientFor(agent, bound, clock), agent.Ask(), ClockedAcpTurn.AdvanceOnceArmed(clock, 2, bound), clock, expectedTimers: 2);
 
         outcome.End.Should().Be(AcpEnd.Answered, "the answer was given before /usage was asked: " + outcome.Reason);
         outcome.Answer.Should().Be("OK");
         outcome.Tokens.Should().Be(AcpTokens.Unknown);
-        asked.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "the bound plus the teardown’s grace, not the turn’s 30 seconds");
+        (clock.GetUtcNow() - ClockedAcpTurn.Start).Should().Be(bound, "the turn ended when the clock had moved the usage bound, not the turn's 30 seconds");
+        AcpClientTests.Gone(outcome.AgentPid).Should().BeTrue("the agent is ended on the way out, on the system clock, with nobody advancing anything");
     }
 
+    /// <summary>
+    /// C5 / S12. The agent starts SLOWER than the turn's whole deadline (2.5 s against 2 s) — as a loaded CI machine does — and it no longer
+    /// matters: the deadline is the clock's, and the clock moves only when the test moves it, after the answer is in and <c>/usage</c> is pending.
+    /// The wall-time bound this test used to carry (<c>asked.Elapsed &lt; 12 s</c>) is replaced by the clock-side proof below.
+    /// </summary>
     [Fact]
     public async Task AUsagePromptThatOutlivesTheTurnsDeadline_ReturnsTheAnswerAtTheDeadline_NotAfterTheBound()
     {
-        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("OK")], ""","usageHang":true""");
-        var asked = Stopwatch.StartNew();
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("OK")], FakeAcpAgent.StartDelay(2500) + ""","usageHang":true""");
+        var clock = new ManualClock(ClockedAcpTurn.Start);
+        var deadline = TimeSpan.FromSeconds(2);
 
-        var outcome = await ClientFor(agent, TimeSpan.FromSeconds(60)).AskAsync(agent.Ask(deadline: TimeSpan.FromSeconds(2)), TestContext.Current.CancellationToken);
+        var outcome = await ClockedAcpTurn.DrivenAsync(ClientFor(agent, TimeSpan.FromSeconds(60), clock), agent.Ask(deadline: deadline), ClockedAcpTurn.AdvanceOnceArmed(clock, 2, deadline), clock, expectedTimers: 2);
 
         outcome.End.Should().Be(AcpEnd.Answered, "the deadline struck while /usage was asked, and /usage never changes the end: " + outcome.Reason);
+        outcome.Answer.Should().Be("OK", "the answer received before the deadline is kept");
         outcome.Tokens.Captured.Should().BeFalse();
-        asked.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(12), "the usage bound (60 s) is never longer than what is left of the turn");
+        (clock.GetUtcNow() - ClockedAcpTurn.Start).Should().Be(deadline, "the turn ended when the clock had moved exactly the deadline; the usage bound (60 s) was never reached");
+        AcpClientTests.Gone(outcome.AgentPid).Should().BeTrue("the teardown runs on the system clock after the last advance, and the agent is gone");
     }
 
     [Fact]

@@ -57,7 +57,8 @@ internal static class SnapshotPlanner
     /// <summary>The git-lfs specification caps a pointer file at 1024 bytes; nothing larger is read for the header.</summary>
     private const int LfsPointerUpTo = 1024;
 
-    private static readonly byte[] LfsHeader = "version https://git-lfs.github.com/spec/v1"u8.ToArray();
+    /// <summary>The header is ONE constant, in the core, because the committed-plan reader tests the same line on text.</summary>
+    private static readonly byte[] LfsHeader = System.Text.Encoding.UTF8.GetBytes(Core.Collecting.LfsPointer.Header);
 
     public static Planning Plan(
         string sourceRoot, string destinationRoot, IReadOnlyList<SnapshotEntry> entries, IReadOnlyList<SnapshotUnavailable> unavailable,

@@ -19,7 +19,7 @@ public sealed record ClientOptionsPolicy(bool AcceptSystemPrompt = false, string
 /// <param name="EffortFrom">
 /// What became of the request's effort, in the ledger's words (<see cref="CoaiMcp.Runners.Reviewers.OptionSources"/>):
 /// <c>row</c> taken as asked, <c>server</c> lowered to the cap, <c>dropped</c> refused — empty when the request asked none.
-/// The job carries it to its ledger line (story 3.4 of todo/PLAN_every_round_is_counted.md), because by the time the line
+/// The job carries it to its ledger line (story 3.4 of research/PLAN_every_round_is_counted.md), because by the time the line
 /// is written the notes the client was answered with are long gone.
 /// </param>
 public sealed record TakenOptions(
@@ -60,7 +60,7 @@ public static class ClientOptions
 
     /// <summary>
     /// What became of the request's effort, in the ledger's words — read off the same notes the client is answered with,
-    /// so the line and the answer cannot tell two stories (story 3.4 of todo/PLAN_every_round_is_counted.md).
+    /// so the line and the answer cannot tell two stories (story 3.4 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     private static string EffortFromOf(string asked, FieldNoteDto[] dropped, FieldNoteDto[] clamped) => asked.Length switch
     {

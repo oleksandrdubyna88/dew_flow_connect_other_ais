@@ -453,6 +453,12 @@ it, and S3 deletes it.
   managed identity has failed, or if O0 says no.
 - **The immutable subject (F10) changes nothing about names.** It does change the subject string, so a
   credential copied from a name-based example fails silently at exchange (F8). §6 V1 catches it on day one.
+- **`@azure/msal-node` is overridden to `^7.1.0` (2026-10-27, PR #934, Dependabot alert 41).** `src_vs_code/package.json`'s
+  `overrides` puts msal-node 7.1.1 under `@azure/identity` 4.13.2, which declares `^5.1.5`; no identity release accepted 7
+  that day. Checked: identity loads and builds a credential, `vsce package` builds the `.vsix`. NOT checked: a token
+  acquired through msal-node 7 — the `--azure-credential` road this plan opens is the first that runs it. So the first
+  `env -u VSCE_PAT vsce verify-pat remsoftdev --azure-credential` (§3.5) is also the override's check: if it fails on
+  msal, drop the override (or take an `@azure/identity` that accepts msal-node 7, then drop it) before the Entra publish.
 - **Follow-up, not part of this plan:** when `--oidc` trusted publishing (F14) is announced and released
   in a non-pre-release vsce, evaluate dropping Azure entirely. Open it as its own `todo/` plan then.
 

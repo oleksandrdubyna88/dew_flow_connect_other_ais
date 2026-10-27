@@ -14,5 +14,5 @@ internal sealed class ResolvingJunctionShell(IJunctionShell inner, string folder
 
     public DriveType DriveOf(string root) => inner.DriveOf(root);
 
-    public string SetReparsePoint(string link, string target) => inner.SetReparsePoint(link, target);
+    public string MakeLink(string link, string target) => inner.MakeLink(link, target);
 }

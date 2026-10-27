@@ -5,24 +5,33 @@ import {
 } from './roundCounts';
 import { RoundsSnapshot } from './roundCountsCache';
 import {
-  inside, LedgerLine, MEDIAN_OUTPUT_LABEL, MoneyGroup, moneyGroups, PER_RECORDED_TURN, perUnit, RateOf, rollUp, Rollup,
-  TimeWindow, tokenText, unitDivisor,
+  consultationLabel, consultationNote, consultationUnits, inside, LedgerLine, medianHeaderUnit, medianLabelOfUnit, medianUnitOf, MoneyGroup,
+  moneyGroups, PER_LAUNCH, PER_RECORDED_TURN, PerUnit, perUnit, RateOf, rollUp, Rollup, TimeWindow, tokenText, unitDivisor,
 } from './roundMoney';
 import { cardResetLine } from './statedReset';
 import { costText, shortNumber } from './usage';
 import type { Vendor } from './vendors';
 
 /**
- * The Spending tab's first block: Rounds (story 2.3 of todo/PLAN_every_round_is_counted.md), and the Models card's
+ * The Spending tab's first block: Rounds (story 2.3 of research/PLAN_every_round_is_counted.md), and the Models card's
  * line beside it (story 2.4).
  *
  * <p>Pure: the counts (`--round-counts`, through the cache), the last seven days of the ledger, the chat lines, the
  * price lookup and the store are handed in. Per vendor row: rounds over 5 h / 24 h / 7 d, the 7 d rounds by stage,
- * the consultations, questions and chat that spent the same vendor beside them (as recorded turns — a ledger line is a
- * turn, and one consultation can be several), reviewers per round from the database's history, tokens in / cached /
+ * the consultations, questions and chat that spent the same vendor beside them (questions and chat as recorded turns; consult
+ * money per CONSULTATION, since a ledger line is a turn and one consultation can be several), reviewers per round from the
+ * database's history, tokens in / cached /
  * out / reasoning and the money over 7 d with `roundMoney`'s floors, and ~$ per round. Under each row its MODEL lines —
- * a model change inside a window is two lines — each with its own rounds, the median output per recorded turn, and
- * ~$ per round over the rounds that used it; and its consult / question / chat lines, per recorded turn.</p>
+ * a model change inside a window is two lines — each with its own rounds, the median output, and
+ * ~$ per round over the rounds that used it; and its consult line per consultation (lines without an id counting one each, said in the label and named in the tooltip) and its
+ * question / chat lines per recorded turn.</p>
+ *
+ * <p><b>The median's header follows its cells.</b> A median is per launch when every line of its model group is one launch
+ * and per recorded turn when a line can hold more than one ({@link medianUnitOf}). The header is computed from the groups
+ * the block actually draws a median for ({@link medianHeaderUnit}): *per launch* when all of them are, *per recorded
+ * turn* when none is, a neutral *median output* when they differ or none is drawn. A cell names its unit beside its
+ * number only when that differs from the header's — so a page of Team-server lines, or of lines from before coai-mcp
+ * 0.48.0, never has a header that every cell contradicts, and a mixed page names the unit in every cell.</p>
  *
  * <p><b>Unavailable is never 0.</b> Before the first read the block says it is counting; a read that failed says
  * *count unavailable* in every cell a count would fill, and why, once. A Team-server row is its own row, labelled
@@ -69,7 +78,7 @@ function serverOf(row: Vendor): string {
 /**
  * The kinds that spend a vendor beside its rounds, and what one of their lines is called.
  *
- * <p>`probe` since story 3.3 of todo/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per
+ * <p>`probe` since story 3.3 of research/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per
  * paid completion. Its money is the row's — a row's total holds every kind — and it is said here as its own kind, so it
  * is never read as a round: it has no model line and no round.</p>
  */
@@ -112,8 +121,12 @@ function unavailableNote(read: RoundCountsRead): string {
 }
 
 const FOOTNOTE = '<p class="hint">Tokens and money are the last 7 days, read from this side\'s usage ledger. '
-  + `Consultations, questions and chat are counted in recorded turns, and the median output is per ${PER_RECORDED_TURN}: `
-  + 'one ledger line can hold a repair or a follow-up, so a per-launch figure is not claimed. Reviewers per round is from '
+  + 'Consultations are counted per consultation — a ledger line is one turn and a consultation can take several, '
+  + 'so a line without a consultation id counts as one each. '
+  + `Questions and chat are counted in ${PER_RECORDED_TURN}s. `
+  + 'From coai-mcp 0.48.0 a review run on this machine writes one line per launch, so its median output is per launch. '
+  + 'A line from before 0.48.0, a Team-server row\'s line and a follow-up in the same conversation can hold more than one '
+  + `launch, and a figure that includes such a line says per ${PER_RECORDED_TURN}. Reviewers per round is from `
   + 'the rounds database\'s history. ≥ means some of it could not be priced or its usage was not captured.</p>';
 
 /** What the block draws from one snapshot. */
@@ -121,6 +134,8 @@ interface Facts {
   readonly read: RoundCountsRead;
   readonly window: TimeWindow;
   readonly groups: readonly MoneyGroup[];
+  /** The unit the median header names — empty when it names none, and then every median cell names its own. */
+  readonly medianUnit: string;
   readonly providers: readonly string[];
   readonly input: RoundsBlockInput;
   readonly ledgerFailure: string;
@@ -136,15 +151,26 @@ function body(input: RoundsBlockInput, snapshot: RoundsSnapshot): string {
 
   const rows = facts.providers.map((provider) => rowBlock(facts, provider)).join('');
 
-  return `<div class="table-scroll"><table class="rounds"><thead><tr>${HEADER_CELLS}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="table-scroll"><table class="rounds"><thead><tr>${headerCells(facts)}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-const HEADERS: readonly string[] = [
-  'Vendor row / model', ...WINDOW_NAMES.map((name) => WINDOW_LABEL[name]), 'By stage (7 d)', 'Beside (7 d)',
-  'Reviewers per round', escapeHtml(MEDIAN_OUTPUT_LABEL), 'Tokens (7 d)', 'Money (7 d)', 'Per round (7 d)',
-];
+/**
+ * The model groups the block draws a median for: review groups with a model and a captured line, and none when the ledger
+ * did not read. A group that is never drawn — no model line (`modelsOf`), or no median — must not set the header.
+ */
+function medianGroups(facts: Pick<Facts, 'ledgerFailure' | 'groups'>): readonly MoneyGroup[] {
+  return facts.ledgerFailure.length > 0
+    ? []
+    : facts.groups.filter((one) => one.kind === 'review' && one.model.length > 0 && one.medianOut !== null);
+}
 
-const HEADER_CELLS = HEADERS.map(headerCell).join('');
+/** The header row — its median column carries the unit the facts computed once from the groups drawn under it. */
+function headerCells(facts: Facts): string {
+  return [
+    'Vendor row / model', ...WINDOW_NAMES.map((name) => WINDOW_LABEL[name]), 'By stage (7 d)', 'Beside (7 d)',
+    'Reviewers per round', escapeHtml(medianLabelOfUnit(facts.medianUnit)), 'Tokens (7 d)', 'Money (7 d)', 'Per round (7 d)',
+  ].map(headerCell).join('');
+}
 
 function headerCell(label: string): string {
   return `<th scope="col">${label}</th>`;
@@ -161,7 +187,8 @@ function factsOf(input: RoundsBlockInput, snapshot: RoundsSnapshot): Facts {
   const groups = moneyGroups([...snapshot.ledger, ...input.chat], window, input.rateOf);
 
   return {
-    read: snapshot.read, window, groups, providers: providersOf(snapshot.read, groups), input, ledgerFailure: snapshot.ledgerFailure, snapshot,
+    read: snapshot.read, window, groups, medianUnit: medianHeaderUnit(medianGroups({ ledgerFailure: snapshot.ledgerFailure, groups })),
+    providers: providersOf(snapshot.read, groups), input, ledgerFailure: snapshot.ledgerFailure, snapshot,
   };
 }
 
@@ -292,7 +319,7 @@ function modelLine(facts: Facts, provider: string, model: string, mine: readonly
   return tr('model', [
     `<span class="indent">${escapeHtml(model)}</span>`,
     ...WINDOW_NAMES.map((window) => modelRoundsCell(facts.read, window, provider, model)),
-    '', '', '', spent(facts, () => medianCell(group)), spent(facts, () => tokensCell(part)), spent(facts, () => costText(part.money)),
+    '', '', '', spent(facts, () => medianCell(group, facts.medianUnit)), spent(facts, () => tokensCell(part)), spent(facts, () => costText(part.money)),
     spent(facts, () => modelPerRoundCell(part, modelRounds(facts.read, '7d', provider, model))),
   ]);
 }
@@ -315,31 +342,70 @@ function modelRounds(read: RoundCountsRead, window: WindowName, provider: string
   return read.state === 'counted' ? rowIn(read.answer, window, provider)?.models.find((one) => one.model === model)?.rounds : undefined;
 }
 
-/** A model line divides by the rounds that used it when they are known, else per recorded turn — labelled either way. */
+/**
+ * A model line divides by the rounds that used it when they are known, else by its lines — per launch when every one is
+ * a launch line, else per recorded turn — and names the unit beside the figure whenever it is not a round.
+ */
 function modelPerRoundCell(part: Rollup, rounds: number | undefined): string {
-  const figure = perUnit(part.money, unitDivisor('review', rounds, part.turns));
-  const per = figure.per === PER_RECORDED_TURN ? ` <span class="hint">per ${PER_RECORDED_TURN}</span>` : '';
+  const figure = perUnit(part.money, unitDivisor('review', rounds, part.turns, part.linesAreLaunches));
+  const per = rounds === undefined ? ` <span class="hint">per ${figure.per}</span>` : '';
 
   return `<span title="${escapeHtml(figure.note)}">${escapeHtml(figure.text)}</span>${per}`;
 }
 
-function medianCell(group: MoneyGroup | undefined): string {
-  return group?.medianOut === null || group === undefined ? '—' : shortNumber(group.medianOut);
+const MEDIAN_NOTE = `A line from before coai-mcp 0.48.0, a Team-server row's line or a follow-up can hold more than one launch `
+  + `— so this median is per ${PER_RECORDED_TURN}.`;
+
+/** The tooltip, escaped once — it is the same text in every cell that carries it. */
+const MEDIAN_NOTE_HTML = escapeHtml(MEDIAN_NOTE);
+
+/**
+ * The model line's median output. Its unit ({@link medianUnitOf}) is named beside the number only when it differs from
+ * the header's — and *per recorded turn* then carries the tooltip that says why a line can hold more than one launch.
+ */
+function medianCell(group: MoneyGroup | undefined, headerUnit: string): string {
+  return group?.medianOut === null || group === undefined ? '—' : medianFigure(shortNumber(group.medianOut), medianUnitOf(group), headerUnit);
 }
 
-/** One line per kind that spent the row beside its rounds — every model together, per recorded turn. */
+function medianFigure(figure: string, unit: string, headerUnit: string): string {
+  if (unit === headerUnit) {
+    return figure;
+  }
+
+  return unit === PER_LAUNCH
+    ? `${figure} <span class="hint">per ${PER_LAUNCH}</span>`
+    : `<span title="${MEDIAN_NOTE_HTML}">${figure}</span> <span class="hint">per ${PER_RECORDED_TURN}</span>`;
+}
+
+/** One line per kind that spent the row beside its rounds — every model together; consult per consultation, the rest per recorded turn. */
 function kindLine(mine: readonly MoneyGroup[], kind: string, word: string): string {
   const groups = mine.filter((one) => one.kind === kind);
   if (groups.length === 0) {
     return '';
   }
   const part = rollUp(groups);
-  const figure = perUnit(part.money, unitDivisor(kind, undefined, part.turns));
+  const { figure, label } = kindFigure(kind, groups, part);
 
   return tr('kind', [
     `<span class="indent">${word} · ${part.turns} recorded turns</span>`, '', '', '', '', '', '', '',
-    tokensCell(part), costText(part.money), `<span title="${escapeHtml(figure.note)}">${escapeHtml(figure.text)}</span> <span class="hint">per ${PER_RECORDED_TURN}</span>`,
+    tokensCell(part), costText(part.money), `<span title="${escapeHtml(figure.note)}">${escapeHtml(figure.text)}</span> <span class="hint">${label}</span>`,
   ]);
+}
+
+/**
+ * A kind line's figure and the unit beside it. Consult money divides by the consultations ({@link consultationUnits}) and says
+ * *per consultation*, or *per consultation (some lines per turn)* with a tooltip that counts the lines taken one each and names which kinds they are; every
+ * other kind has no such id and stays per recorded turn.
+ */
+function kindFigure(kind: string, groups: readonly MoneyGroup[], part: Rollup): { readonly figure: PerUnit; readonly label: string } {
+  if (kind !== 'consult') {
+    return { figure: perUnit(part.money, unitDivisor(kind, undefined, part.turns)), label: `per ${PER_RECORDED_TURN}` };
+  }
+  const units = consultationUnits(groups);
+  const figure = perUnit(part.money, unitDivisor(kind, units.count, part.turns));
+  const note = consultationNote(units);
+
+  return { figure: note === '' ? figure : { ...figure, note: `${figure.note}; ${note}` }, label: consultationLabel(units) };
 }
 
 /**

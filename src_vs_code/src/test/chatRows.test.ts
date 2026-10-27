@@ -43,6 +43,7 @@ function reviewRow(over: Partial<LogRow> = {}): LogRow {
     costOutUsd: null, costTotalUsd: null, costIsEstimate: false, costPartial: false,
     answered: 'all 3 reviewers answered', vendors: ['codex'], reviewers: ['codex/Architecture — done'],
     calledBy: 'claude-code 7.3.1 · claude-opus-5',
+    reviewedFrom: '', writtenWith: '',
     reviewerColours: ['#fff'], found: [], foundCount: 0, foundState: 'unasked', origin: 'db',
     dbKey: { sessionId: 's1', stage: 'CodeReview', number: 1 },
     ...over,

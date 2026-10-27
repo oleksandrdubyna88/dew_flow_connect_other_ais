@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 namespace CoaiMcp.Store;
 
 /// <summary>
-/// Reading a page of rounds' sizes for <c>--log</c> (E2.S5 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>,
+/// Reading a page of rounds' sizes for <c>--log</c> (E2.S5 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>,
 /// contract C3): two grouped queries for the whole page, never one per round.
 /// </summary>
 /// <remarks>
@@ -33,12 +33,15 @@ public static class RoundChangesLog
         return states.ToDictionary(state => state.Key, state => SizeOf(state.Key, state.Value, cells));
     }
 
-    /// <summary>The page's rounds, each carrying its own size when it has one — the page's own ids, in the page's own order.</summary>
-    public static List<LoggedRound> Attach(SqliteConnection db, List<LoggedRound> rounds, IReadOnlyList<long> ids)
+    /// <summary>
+    /// The rounds, each carrying its own size when it has one — correlated by the round's OWN id (<see cref="PageIds.Of"/>), never
+    /// by its position, so a reordered or filtered list still attaches each size to its round.
+    /// </summary>
+    public static List<LoggedRound> Attach(SqliteConnection db, List<LoggedRound> rounds)
     {
-        var sizes = Read(db, ids);
+        var sizes = Read(db, [.. rounds.Select(PageIds.Of)]);
 
-        return [.. rounds.Select((round, at) => sizes.TryGetValue(ids[at], out var size) ? round with { Size = size } : round)];
+        return [.. rounds.Select(round => sizes.TryGetValue(PageIds.Of(round), out var size) ? round with { Size = size } : round)];
     }
 
     private sealed record StateRow(string Whole, string Delta, string DeltaFrom, string Origin, string BaseRef);
@@ -51,7 +54,7 @@ public static class RoundChangesLog
             FROM rounds
             WHERE size_state <> '' AND id IN (SELECT value FROM json_each($ids))
             """;
-        BindIds(read, ids);
+        PageIds.Bind(read, ids);
         using var rows = read.ExecuteReader();
         var states = new Dictionary<long, StateRow>();
         while (rows.Read())
@@ -79,7 +82,7 @@ public static class RoundChangesLog
             WHERE round_id IN (SELECT value FROM json_each($ids))
             ORDER BY round_id, rowid
             """;
-        BindIds(read, ids);
+        PageIds.Bind(read, ids);
         using var rows = read.ExecuteReader();
         while (rows.Read())
         {
@@ -114,11 +117,4 @@ public static class RoundChangesLog
 
     private static IReadOnlyList<SizeCell> CellsOf(Dictionary<(long Round, string Scope), List<SizeCell>> cells, long id, string scope) =>
         cells.TryGetValue((id, scope), out var list) ? list : [];
-
-    /// <summary>
-    /// The page's ids as ONE bound parameter, a JSON array of integers that the constant SQL unpacks with
-    /// <c>json_each</c> — no SQL text is ever built from data, and no page can reach SQLite's variable limit.
-    /// </summary>
-    private static void BindIds(SqliteCommand command, IReadOnlyCollection<long> ids) =>
-        command.Parameters.AddWithValue("$ids", "[" + string.Join(',', ids) + "]");
 }

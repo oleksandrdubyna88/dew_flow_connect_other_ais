@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Acp;
 
 namespace CoaiMcp.Runners.Reviewers;
 
@@ -69,7 +70,14 @@ public sealed record ReviewerProgress(
     string Status,
     ReviewerOutcome? Outcome = null,
     TimeSpan Elapsed = default,
-    string Note = "");
+    string Note = "")
+{
+    /// <summary>
+    /// The moment this report was made (a <see cref="System.Diagnostics.Stopwatch.GetTimestamp"/> value) — when an outcome LANDED, which is
+    /// what a cancelled turn's cause is read against: a cancellation source that fires after it did not end the turn (E3.S2).
+    /// </summary>
+    public long LandedAt { get; init; } = System.Diagnostics.Stopwatch.GetTimestamp();
+}
 
 /// <summary>
 /// The fan-out stays logically parallel; the queue is what keeps it survivable. Two providers ×
@@ -97,7 +105,7 @@ public sealed class BoundedScheduler(
 {
     /// <summary>
     /// The clock a stated reset is read against — injected, so a vendor that names a clock time can be tested on a pinned
-    /// one (story 5.3c of todo/PLAN_every_round_is_counted.md). A stated DURATION needs no clock at all.
+    /// one (story 5.3c of research/PLAN_every_round_is_counted.md). A stated DURATION needs no clock at all.
     /// </summary>
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
@@ -206,12 +214,20 @@ public sealed class BoundedScheduler(
     /// Called as each reviewer is queued, starts and ends. Invoked from the fan-out's threads, so
     /// the handler must be thread-safe and quick — a slow one delays the reviewer it reports on.
     /// </param>
+    /// <param name="settle">
+    /// What a finished reviewer's outcome is READ AS — applied once, in <see cref="LaunchAsync"/>, to the outcome the turn loop
+    /// returns and BEFORE it is reported, counted by <paramref name="standDown"/> or returned. Null leaves it as the turn loop
+    /// made it. It is the round's own rule (the plan stage's <c>PLAN_INCOMPLETE</c> fold), passed in because the scheduler knows
+    /// nothing of stages; applying it here, rather than on the results afterwards, is what makes the ledger, the live view, the
+    /// audit, the stand-down and the results one outcome. Pure and quick: it runs on the fan-out's threads.
+    /// </param>
     public async Task<IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)>> RunAllAsync(
         IReadOnlyList<ReviewerWork> work,
         ReviewerExecutor executor,
         CancellationToken ct = default,
         Action<ReviewerProgress>? onProgress = null,
-        StandDown? standDown = null)
+        StandDown? standDown = null,
+        Func<ReviewerOutcome, ReviewerOutcome>? settle = null)
     {
         PeakConcurrency = 0;
         _peakPerProvider.Clear();
@@ -243,13 +259,14 @@ public sealed class BoundedScheduler(
             // A cloud reviewer's outcome is recorded as it finishes, so a local row that reaches the card
             // afterwards can see whether the cloud was quiet (issue #485). Null when the switch is off.
             var cloudProgress = Recording(onProgress, standDown);
+            var settled = settle ?? (outcome => outcome);
             var tasks = work.Select(w =>
             {
                 var engineStandDown = w.IsSecurity ? null : standDown;
                 var progress = w.IsSecurity ? onProgress : cloudProgress;
                 return w.Invocation.IsOnEngine
-                    ? EngineLaneAsync(w, executor, onProgress, engineStandDown, ct)
-                    : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, progress, ct);
+                    ? EngineLaneAsync(w, executor, onProgress, engineStandDown, settled, ct)
+                    : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, progress, settled, ct);
             });
             return await Task.WhenAll(tasks);
         }
@@ -275,6 +292,7 @@ public sealed class BoundedScheduler(
         Dictionary<string, int> runningPerProvider,
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
+        Func<ReviewerOutcome, ReviewerOutcome> settle,
         CancellationToken ct)
     {
         var queued = System.Diagnostics.Stopwatch.StartNew();
@@ -293,7 +311,7 @@ public sealed class BoundedScheduler(
                 Entered(w.Invocation.Provider, runningPerProvider);
                 try
                 {
-                    return await LaunchAsync(w, executor, onProgress, ct);
+                    return await LaunchAsync(w, executor, onProgress, settle, ct);
                 }
                 finally
                 {
@@ -347,6 +365,7 @@ public sealed class BoundedScheduler(
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
         StandDown? standDown,
+        Func<ReviewerOutcome, ReviewerOutcome> settle,
         CancellationToken ct)
     {
         var engine = w.Invocation.SharedResource;
@@ -369,7 +388,7 @@ public sealed class BoundedScheduler(
         EnteredResource(engine);
         try
         {
-            return await LaunchAsync(w, executor, onProgress, ct);
+            return await LaunchAsync(w, executor, onProgress, settle, ct);
         }
         finally
         {
@@ -443,14 +462,17 @@ public sealed class BoundedScheduler(
         ReviewerWork w,
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
+        Func<ReviewerOutcome, ReviewerOutcome> settle,
         CancellationToken ct)
     {
         Report(onProgress, w.Invocation, "running");
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        var loop = new TurnLoop((turn, token) => RunWithLadderAsync(turn, executor, onProgress, token), onProgress);
+        var loop = new TurnLoop((turn, token) => RunWithLadderAsync(turn, executor, onProgress, token), onProgress, _clock);
         try
         {
-            var outcome = await loop.RunAsync(w, ct);
+            // Settled HERE, before anybody is told: the ledger, the live view, the audit, the stand-down count and the
+            // round's results all read this one outcome (D8 of research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
+            var outcome = settle(await loop.RunAsync(w, ct));
             Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed, TurnLoop.Note(outcome));
             return (w.Invocation, outcome);
         }
@@ -603,7 +625,7 @@ public sealed class BoundedScheduler(
         var attempts = 1;
         var outcome = await executor.RunAsync(w.Invocation, w.Repair, ct);
         // Every launch of every step, for the ledger's one line per launch (story 3.3 of
-        // todo/PLAN_every_round_is_counted.md) — set on the outcome only once a step was retried.
+        // research/PLAN_every_round_is_counted.md) — set on the outcome only once a step was retried.
         var launches = LaunchLines.StepOf(outcome, watch.Elapsed, LaunchAttempts.First);
 
         while (outcome is ReviewerOutcome.RateLimited limited && !Hopeless(limited, watch.Elapsed, budget))
@@ -628,7 +650,7 @@ public sealed class BoundedScheduler(
             attempts += 1;
             var started = watch.Elapsed;
             // What is LEFT of the deadline, never the whole of it again — and the launch stamped as the retry it is
-            // (story 4.1 of todo/PLAN_every_round_is_counted.md); its repair stays a repair, which the executor stamps.
+            // (story 4.1 of research/PLAN_every_round_is_counted.md); its repair stays a repair, which the executor stamps.
             var next = await executor.RunAsync(
                 RetryLadder.WithinRemaining(w.Invocation, watch.Elapsed, budget) with { Attempt = LaunchAttempts.Retry },
                 w.Repair is null ? null : RetryLadder.WithinRemaining(w.Repair, watch.Elapsed, budget),
@@ -651,7 +673,7 @@ public sealed class BoundedScheduler(
     /// the vendor STATED beyond what is left of the reviewer's budget (<see cref="RetryLadder.ResetOutlasts"/>).
     /// </summary>
     /// <remarks>
-    /// The second half is story 5.3c of todo/PLAN_every_round_is_counted.md: agy's <i>"Resets in 88h49m9s"</i> said none
+    /// The second half is story 5.3c of research/PLAN_every_round_is_counted.md: agy's <i>"Resets in 88h49m9s"</i> said none
     /// of the spent words, and the ladder climbed four launches into a reset days away. A stated reset inside the budget
     /// is still waited out by the ladder's own steps.
     /// </remarks>
@@ -662,7 +684,7 @@ public sealed class BoundedScheduler(
     /// <summary>
     /// Waits out one step of the ladder; <c>false</c> when the round ended first. Never throws the cancellation — the
     /// launches the turn already paid for live only in the ladder's locals, and a throw would drop them from the ledger
-    /// (the epic-3 code round of todo/PLAN_every_round_is_counted.md).
+    /// (the epic-3 code round of research/PLAN_every_round_is_counted.md).
     /// </summary>
     private static async Task<bool> WaitedOut(TimeSpan wait, CancellationToken ct)
     {
@@ -726,7 +748,7 @@ public static class ReviewerSummaryFactory
 
     /// <summary>
     /// The same sentence with the vendor's line WHOLE — for the ledger's outcome and the log's reason, which are where a
-    /// refusal is read back later (story 3.3 of todo/PLAN_every_round_is_counted.md).
+    /// refusal is read back later (story 3.3 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     /// <remarks>
     /// The cut at <see cref="ReasonLength"/> is right for a cell and was wrong here: agy's weekly refusal reached the
@@ -744,7 +766,7 @@ public static class ReviewerSummaryFactory
     private static string Described(ReviewerOutcome outcome, int cap) => outcome switch
     {
         ReviewerOutcome.TimedOut => "timeout",
-        // Its own word (story 3.2 of todo/PLAN_every_round_is_counted.md): the caller's token killed it, and "timeout"
+        // Its own word (story 3.2 of research/PLAN_every_round_is_counted.md): the caller's token killed it, and "timeout"
         // sent a person to look at a vendor that was never slow.
         ReviewerOutcome.Cancelled => "cancelled",
         // The real number, because after the ladder it is not always one — and a round that says
@@ -788,7 +810,7 @@ public static class ReviewerSummaryFactory
     /// What the vendor's own adapter recovered about its own failure, or empty.
     /// </param>
     /// <remarks>
-    /// <b>The precedence, in one place:</b> a diagnosed cure, then a stderr line that ANNOUNCES a
+    /// <b>The precedence, in one place:</b> a diagnosed cure (WITH the vendor's own line after it — <see cref="VendorSaid"/>), then a stderr line that ANNOUNCES a
     /// failure, then what the adapter recovered, then whatever stderr did say, then the honest
     /// nothing. Announcing beats recovered because a vendor writing `error:` on stderr means it;
     /// recovered beats a non-announcing line because a deprecation warning is not why anything
@@ -799,9 +821,9 @@ public static class ReviewerSummaryFactory
         // A vendor that named a closed door gets its cure quoted instead of its stack trace. The
         // Gemini retirement was mistaken for three different things because the sentence a reader
         // saw was `exit 1` and the sentence that mattered was eight lines inside a node stack.
-        if (VendorDiagnosis.For(stdErrTail) is { } cure)
+        if (VendorDiagnosis.Classify(stdErrTail) is { } known)
         {
-            return $": {cure}";
+            return $": {known.Cure}{VendorSaid(stdErrTail, known.Marker, cap)}";
         }
 
         var lines = stdErrTail
@@ -834,6 +856,31 @@ public static class ReviewerSummaryFactory
     }
 
     /// <summary>
+    /// The vendor's own line that a diagnosis matched, after the cure: ` — the vendor said: …`, or nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>D4 of todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md. A cure alone threw away the one line the capture step
+    /// needs — what Kimi actually said about a spent quota. Only the FIRST line that holds the table's marker is kept (never a
+    /// stack frame or a version banner), without our shim's tag.</para>
+    /// <para><b>Redacted first, cut second.</b> A cut made first can leave the head of an account id that no pattern then matches.
+    /// The cut is plain, not <see cref="Quote"/>: <see cref="Quote"/> never cuts a line our shim tagged, and this line carries
+    /// the vendor's text.</para>
+    /// </remarks>
+    private static string VendorSaid(string text, string marker, int cap) =>
+        FirstLineWith(text, marker) is { Length: > 0 } line
+            ? $" — the vendor said: {Cut(VendorReason.Written(AcpProfiles.WithoutCure(ShimNotes.Message(line))), cap)}"
+            : string.Empty;
+
+    /// <summary>The first line of the text that holds the marker (as <see cref="VendorDiagnosis"/> matches it), or empty.</summary>
+    private static string FirstLineWith(string text, string marker) =>
+        marker.Length == 0
+            ? string.Empty
+            : text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault(l => l.Contains(marker, StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+
+    private static string Cut(string text, int cap) => text.Length <= cap ? text : $"{text[..cap]}…";
+
+    /// <summary>
     /// Every line was scaffolding, so there is no reason to quote — say which kind of nothing.
     /// </summary>
     /// <remarks>
@@ -849,7 +896,7 @@ public static class ReviewerSummaryFactory
             : $": {Quote(lines[^1], cap)}";
 
     /// <summary>
-    /// The line, capped — unless we wrote it.
+    /// The line, redacted and then capped — the cap is not applied to a line we wrote, which is redacted whole.
     /// </summary>
     /// <remarks>
     /// <para><see cref="ReasonLength"/> exists for a VENDOR's line, which can be any length at all.
@@ -859,11 +906,20 @@ public static class ReviewerSummaryFactory
     /// of a 340-character verdict, ending mid-word, with every cure it names past the cut. The plan's
     /// own Definition of Done said "reports <c>QueuedOutMessage</c>, WHOLE", and it did not.
     /// (codex, three findings across two roles.)</para>
+    /// <para><b>Redacted FIRST, cut SECOND, on every road</b> (story 3, deviation 3): a cut made first leaves the head of an account id (`org-0a1b`) that no pattern then matches, and a line we
+    /// wrote (the shim's tagged note) used to reach the summary whole and unredacted.</para>
     /// <para><paramref name="cap"/> is <see cref="ReasonLength"/> for a sentence a person reads in a cell, and
     /// <see cref="VendorReason.SafetyCap"/> for the ledger and the log (<see cref="DescribeWhole"/>).</para>
     /// </remarks>
     private static string Quote(string line, int cap) =>
-        ShimNotes.Ours(line) || line.Length <= cap ? line : $"{line[..cap]}…";
+        ShimNotes.Ours(line) ? QuoteOurs(line, cap) : Cut(VendorReason.Written(line), cap);
+
+    /// <summary>
+    /// A line our shim tagged. Our own sentences are redacted and kept whole (they carry the cures); a note whose row has no cure is the VENDOR's text in our tag
+    /// (<see cref="AcpDiagnosis.CurelessReason"/>, K3 of the code gate), so the tag and the failure name come off and it is cut like any vendor's line.
+    /// </summary>
+    private static string QuoteOurs(string line, int cap) =>
+        AcpProfiles.CurelessReason(ShimNotes.Message(line)) is { Length: > 0 } vendor ? Cut(VendorReason.Written(vendor), cap) : VendorReason.Written(line);
 
     private static bool Announces(string line) =>
         Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));

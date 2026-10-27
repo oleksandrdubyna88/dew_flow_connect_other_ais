@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { after, test } from 'node:test';
 
 import { compareVersions } from '../coaiInstall';
-import { CONSULTANT_SINCE, RUNTIME_SINCE } from '../runtimeSince';
+import { CONSULTANT_SINCE, ON_LINUX_SINCE, RUNTIME_SINCE } from '../runtimeSince';
 
 /**
  * A runtime's "first server that knows it" is a release that must NOT already exist without it (the release-guards family: `releaseAnchors`,
@@ -120,7 +120,7 @@ test('every runtime in RUNTIME_SINCE is either ahead of the newest released coai
 });
 
 test('every runtime in CONSULTANT_SINCE is either ahead of the newest released coai-mcp or named AS A CONSULTANT in its release', () => {
-  // vibe 0.54.0 has shipped, and its section says "Mistral Vibe as a consultant"; kimi 0.58.0 is still a prediction about the future.
+  // vibe 0.54.0 has shipped, and its section says "Mistral Vibe as a consultant"; kimi 0.64.0 is still a prediction about the future.
   assert.ok(Object.keys(CONSULTANT_SINCE).length >= 2, 'the table shrank — the loop would check less than it says');
 
   assert.deepEqual(refusalsOf(CONSULTS), []);
@@ -131,6 +131,15 @@ test('every exemption states its reason, and only a runtime that has actually sh
     assert.ok(reason.length > 20, `${runtime}: an exemption with no reason is a way of turning the guard off`);
     assert.ok(compareVersions(RUNTIME_SINCE[runtime] ?? '999', releasedMcp) <= 0, `${runtime}: not released yet — it has no business being exempt`);
   }
+});
+
+test('every entry of ON_LINUX_SINCE is held to the same guard: ahead of the newest released coai-mcp, or named in its release', () => {
+  const rows = Object.entries(ON_LINUX_SINCE);
+  assert.ok(rows.length >= 1, 'the table is empty — the loop would check nothing');
+
+  const refusals = rows.map(([runtime, since]) => refusal(runtime, since, releasedMcp, sectionOf(since, realChangelog))).filter((said) => said.length > 0);
+
+  assert.deepEqual(refusals, []);
 });
 
 // ---------------------------------------------------------------- the guard's own teeth

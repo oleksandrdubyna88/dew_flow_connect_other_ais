@@ -58,6 +58,7 @@ import {
   versionProbeCandidates,
   versionSourceFor,
 } from './cliVersions';
+import { rememberCliStatus } from './cliVersionMemory';
 import { askVersion, capture } from './versionProbe';
 import { CADENCE_CAP_MS, CadenceProbes } from './cadenceProbe';
 import { ConsultantHealthPanel } from './consultantHealthPanel';
@@ -96,7 +97,7 @@ import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
-import { hostExecutableSide, hostFamily, hostPlatform, Platform } from './hostSide';
+import { hostExecutableSide, hostFamily, hostKind, type HostKind, hostPlatform, Platform } from './hostSide';
 import { cliBoxFamily, cliPathRefusal, vendorFieldWrite } from './cliPathSave';
 import type { DroppedValue } from './cliPathKeep';
 import { otherSideDataDirectories } from './otherSideValues';
@@ -114,6 +115,7 @@ import { askedOrRefused, asksAnEndpoint, type EndpointListing, listingOf } from 
 import { vaultKeyOf } from './vaultKey';
 import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from './apiSettings';
 import { modelsForKey } from './apiModelsProbe';
+import { NOT_INSTALLED, pressClearMarker } from './kimiMarker';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature, settledFeatures } from './binaryFeatures';
 import { collectWithPick } from './bugzCollect';
@@ -381,7 +383,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /**
    * `--round-counts` and the ledger's last seven days, read at most once a minute and sooner when something ended (story
-   * 2.2 of todo/PLAN_every_round_is_counted.md) — what the Models cards' line and the Rounds block draw from.
+   * 2.2 of research/PLAN_every_round_is_counted.md) — what the Models cards' line and the Rounds block draw from.
    */
   private readonly roundCounts: RoundCountsCache;
 
@@ -464,6 +466,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The newest published Team-server version, shown to admins only. Read-only: it is deployed. */
   private latestTeamServer = '';
   private latestCheckedAt = 0;
+  /**
+   * What this window runs on — Windows, WSL2, WSL1, a native Linux host or a Mac — asked of the kernel ONCE, when the panel is
+   * made, and never rejecting (`hostKind`). The Models cards read it through the state (a Vibe card on a native Linux host
+   * says it is refused, never "update coai-mcp"), and ⤓ / ⟳ read it for their note.
+   */
+  private readonly hostKindHere: Promise<HostKind> = hostKind();
   /** Each vendor's installed and published CLI version, and when they were last read. */
   private cliStatus: Record<string, CliStatus> = {};
   private cliCheckedAt = 0;
@@ -841,7 +849,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // Each model at ITS public list price (3.2, D4) — the window's price book; never this person's typed row rates.
       price: listPriceFrom(PRICE_BOOK),
       now: Date.now(),
-      // The plan prices typed on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md) — the share beside a figure.
+      // The plan prices typed on Setup › Team servers (story 6.2 of research/PLAN_every_round_is_counted.md) — the share beside a figure.
       planPrices: planPricesFrom(vscode.workspace.getConfiguration('coai').get(PLAN_PRICES_SETTING)),
     });
   }
@@ -886,7 +894,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       this.usageWindow,
       vendors,
       // Every model the LEDGER names, not only the ones the rows are set to now: a line is priced at the model that
-      // answered it (story 2.5 of todo/PLAN_every_round_is_counted.md), and a row that changed model has history at
+      // answered it (story 2.5 of research/PLAN_every_round_is_counted.md), and a row that changed model has history at
       // the old one, which a map of today's models would leave unpriced.
       await this.modelPrices(vendors, usage.map((line) => line.model)),
       {
@@ -1405,6 +1413,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       claudeProbe: this.claudeProbes.answer(vendors, settings.consult),
       askingClaude: this.claudeProbes.looking,
       server,
+      hostKind: await this.hostKindHere,
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       perSide: this.perSide(config),
       // Read from globalState on EVERY render (E2.2): a side another window stamped appears at the next repaint.
@@ -1425,7 +1434,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       cliStatus: await this.vendorCliStatus(vendors),
       cardPrices: await this.cardPrices(vendors),
       roundsSnapshot: this.roundCounts.current(),
-      // Story 6.2 of todo/PLAN_every_round_is_counted.md: the plan prices as stored, and the last one refused at its card.
+      // Story 6.2 of research/PLAN_every_round_is_counted.md: the plan prices as stored, and the last one refused at its card.
       planPrices: planPricesFrom(config.get(PLAN_PRICES_SETTING)),
       planPriceRefusal: this.planPriceRefusal,
       snippetStatus: await pastedSnippetStatus(),
@@ -1822,6 +1831,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
     const entries = await Promise.all(vendors.map(async (vendor) => [vendor.id, await this.oneCliStatus(vendor)] as const));
     this.cliStatus = Object.fromEntries(entries);
+    // What the chat ledger names as the version a turn ran under — this answer, remembered, so a turn never spawns one.
+    rememberCliStatus(this.cliStatus);
 
     return this.cliStatus;
   }
@@ -1930,7 +1941,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async openCliTerminal(
     id: string,
     verb: 'install' | 'update',
-    commandFor: (vendor: Vendor, platform: Platform) => VendorInstall,
+    commandFor: (vendor: Vendor, platform: Platform, host: HostKind) => VendorInstall,
   ): Promise<void> {
     const vendor = this.vendorsHere().find((v) => v.id === id);
     if (vendor === undefined) {
@@ -1940,7 +1951,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // The extension HOST's platform, which is the one that matters here: the terminal this opens
     // runs on this side, so a WSL window wants the linux instructions. `hostSide.ts` is where that
     // doctrine and its narrowing now live, in one place — this used to be one of three copies.
-    const install = commandFor(vendor, hostPlatform());
+    // WSL is a Linux host to the extension, and Vibe's note differs between WSL2, WSL1 and a native Linux box (DL1 of
+    // research/PLAN_kimi_and_vibe_on_linux.md): the host kind is asked of this window once (`hostKindHere`) and `commandFor`
+    // REQUIRES it, so a dropped argument is a compile error rather than the native-Linux note shown on WSL.
+    const install = commandFor(vendor, hostPlatform(), await this.hostKindHere);
     if (install.command.length === 0) {
       const open = 'Open the instructions';
       const choice = await notifyAndAsk({
@@ -2756,6 +2770,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       case 'trySecurity':
         await this.trySecurity(id ?? '');
         break;
+      case 'clearKimiMarker':
+        await this.clearKimiMarker(id ?? '');
+        break;
       case 'closeConsultation':
         await this.closeConsultation(id ?? '');
         break;
@@ -3452,6 +3469,28 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     await this.render();
   }
 
+  /** How long the clear mode may take: it reads a few `/proc` entries and deletes one file. */
+  private static readonly CLEAR_MARKER_CAP_MS = 20_000;
+
+  /**
+   * The Kimi card's *Clear the stuck Kimi marker* (E6): the server is asked again, the path comes from ITS answer for this row, the
+   * one-shot `--kimi-clear-marker` runs on it, and its exit code is said in words (`kimiMarker.ts`). The state lives in the server's
+   * marker file and is re-read by the providers probe, so a reload shows what is true; the probe is refreshed after the press.
+   */
+  private async clearKimiMarker(rowId: string): Promise<void> {
+    const executable = this.serverExecutable();
+    const said = executable.length === 0
+      ? NOT_INSTALLED
+      : await pressClearMarker(rowId, {
+        providers: () => readProviders(executable),
+        clear: (path) => serverRun(executable)(['--kimi-clear-marker', path], PanelProvider.CLEAR_MARKER_CAP_MS),
+      });
+    await notify({ as: said.as, class: 'outcome', ...said.notice, title: said.title });
+    if (executable.length > 0) {
+      await this.refreshProviders(executable);
+    }
+  }
+
   private async askCheckSecurity(executable: string, sample: string, features: readonly string[]): Promise<SecurityTryResult> {
     const lane = securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane'));
     const { code, output } = await serverRun(executable, undefined, securityTryRequest(sample, lane, features))(['--check-security'], PanelProvider.TRY_SECURITY_CAP_MS);
@@ -3938,7 +3977,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * so deleting them silently is not reversible.</p>
    */
   /**
-   * Save price on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md): stored when it is a price (0
+   * Save price on Setup › Team servers (story 6.2 of research/PLAN_every_round_is_counted.md): stored when it is a price (0
    * takes it away), refused AT ITS CARD with the reason when it is not — and then nothing is stored.
    */
   private async savePlanPrice(id: string): Promise<void> {

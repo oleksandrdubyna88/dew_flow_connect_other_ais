@@ -1,5 +1,81 @@
 # Changelog
 
+## [0.63.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.62.0...mcp-v0.63.0) (2026-10-21)
+
+
+### Features
+
+* **authors:** E3 — the caller's transcript is read, counted and never leaves as text ([#867](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/867)) ([66801bd](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/66801bddadb40d1e41b0b8cefe55574f0a1b6633))
+* **authors:** E4 — attribution: who owns each message and write ([#862](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/862)) ([2e47d99](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2e47d990bd3a863c4c8b7f435f58db82e027c2f7))
+* **authors:** E5 — the round stores who wrote the code ([#863](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/863)) ([bc5b367](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bc5b367df5c80144c0db094c00fab3faa7a12a23))
+* **authors:** E6 — the authors report ([#864](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/864)) ([20c35f0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/20c35f0264d5d866c92730ec12e12778b3a60289))
+* **authors:** E7 — the backfill, backup first ([#865](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/865)) ([42eb3a9](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/42eb3a95a670a7ad4cf1349ec9f4bbbde9e7e934))
+
+
+### Bug Fixes
+
+* **kimi:** a spent Kimi quota is not reported as a lost sign-in ([#900](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/900)) ([4dbfba4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4dbfba4d97ae68d022fac4cfd3ab5047fac71699))
+* **launcher:** a fast macOS child is not 'not started', and no test run sees another ([#893](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/893)) ([e86fe17](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e86fe17f86bfad9e154237141e3c0d4a1819e78b))
+* **report:** --table prints no control character from an --add file ([#896](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/896)) ([9134099](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9134099c02b20d855b8bee2183e8756aed9c4ba7))
+* **store:** a session file keeps what a newer server wrote ([#868](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/868)) ([fbf98e2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fbf98e2a822ec7c9e29b2e8176790901df412e3a))
+
+## [0.62.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.61.0...mcp-v0.62.0) (2026-10-19)
+
+
+### Features
+
+* **consult:** a Vibe disk row reads a folder of repositories ([#887](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/887)) ([38ecd4e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/38ecd4e114f8cdb0ba145b39b936e87e3463dbc2))
+
+## [0.61.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.60.2...mcp-v0.61.0) (2026-10-19)
+
+
+### Features
+
+* **kimi:** Kimi Code on a WSL2 host ([#879](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/879)) ([cb9ec8b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cb9ec8b652ec86afda7eac875ba80193eaf7a494))
+
+## [0.60.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.60.1...mcp-v0.60.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **ledger:** a local review line carries its round ([#877](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/877)) ([bb279e3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bb279e3dbd7bdeaa49a2aa9d8ba6038415867f0b))
+* **settings:** one bad field in a reviewer row costs that row only ([#866](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/866)) ([6c3d913](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6c3d913ad8959937d80aa8531c6672ade2e8d829))
+
+## [0.60.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.60.0...mcp-v0.60.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **round-counter:** rounds per 1 % keeps a plateau's rounds and is pooled (story 6.2b) ([#860](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/860)) ([ca9b7c1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ca9b7c1ec5ae706ab10e7d81cb01b4ef25e51d70))
+
+## [0.60.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.59.0...mcp-v0.60.0) (2026-10-18)
+
+
+### Features
+
+* **rounds:** a reviewer is not sent more than it can read ([#856](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/856)) ([2b302c6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2b302c65e833a1df3a382fb8991fe89149713951))
+
+
+### Bug Fixes
+
+* **review-trees:** round and review trees survive a tracked path longer than Windows' MAX_PATH ([#852](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/852)) ([820a742](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/820a7429b0c7a42ef3deb86ddbd7d127b3021aca))
+
+## [0.59.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.58.0...mcp-v0.59.0) (2026-10-17)
+
+
+### Features
+
+* **rules:** raise the reviewer-rules budget to 90 KB ([#848](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/848)) ([37084e6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/37084e672b91456052cf92404fad3d55bc76e4ae))
+* **vibe:** Vibe on WSL2 — the sign-in link, host admission, extension texts ([#842](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/842)) ([30bdc7c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/30bdc7cc54ab34d7787d0de3d0aea229af480be8))
+
+## [0.58.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.57.0...mcp-v0.58.0) (2026-10-16)
+
+
+### Features
+
+* **plan-gate:** review_plan reads the committed plan itself and proves the reviewers got it whole ([#837](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/837)) ([03ec1c1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/03ec1c1a56d3a6457f278140c46e3e1d04241b9e))
+* **plan-gate:** the round history, --log and the Rounds page say what each plan round reviewed ([#841](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/841)) ([095ebd6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/095ebd6d4ef843d3b1088b5eae275a8fcfd6539b))
+
 ## [0.57.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.56.0...mcp-v0.57.0) (2026-10-16)
 
 

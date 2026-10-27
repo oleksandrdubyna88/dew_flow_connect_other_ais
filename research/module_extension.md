@@ -2729,7 +2729,7 @@ family that answered:
 | `claudeModels.ts` | the pure half: `familyOf`, `answeredAsAsked`, `modelThatAnswered`, `stillGood`, `claudeModels`, `claudeNote` |
 | `claudeProbe.ts` | the run: one small request per candidate, SEQUENTIALLY, through `versionProbe.ts`'s `capture` |
 | `claudeProbeFile.ts` | `claude-models.json` in the data directory — parsed entry by entry, written atomically |
-| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `todo/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
+| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `research/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Since E3.S3 each line also says what it ran with: `cli: claude` and, when the probe already asked one, the `cliVersion` `claudeProbe.ts` read before spending a request (`claudeProbeCache` hands it to `recordingRun`; absent, never empty, when none was asked) Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
 
 **A discovery that cannot run never subtracts.** The three ways the probe fails are all states this
 installation is really in: an allowance that is spent (issue #165 measured four reviewers meeting
@@ -3876,7 +3876,7 @@ empty `models`. Every server string goes through `escapeHtml`.
   prices a dash that makes its total a floor (`≥`). Person, vendor and summary totals add those; the note says the
   server's lines carry no cached count, so cache-heavy input is overstated. ~$ and *last seen* become sorts when the
   answer can serve them (`sorts` in the push; the page disables and labels the others). The figure itself — `Estimate`,
-  `UNKNOWN`, `totalCost`, `costText` — moved to `usage.ts` with story 2.5 of `todo/PLAN_every_round_is_counted.md`, where
+  `UNKNOWN`, `totalCost`, `costText` — moved to `usage.ts` with story 2.5 of `research/PLAN_every_round_is_counted.md`, where
   the spending tab prices each ledger line by the same three states; `teamCost.ts` re-exports them unchanged.
 - *The chart (3.3, D7).* `teamChart.ts`: an inline SVG of the dense 30 UTC days, stacked by vendor, drawn to one scale,
   its axis labelled *launches*, coloured through the vendor palette (theme colours, no hex), the days the server's
@@ -3885,12 +3885,13 @@ empty `models`. Every server string goes through `escapeHtml`.
   the way the cards are, so a push keeps it open; the axis label sits at the plot's left edge, start-anchored, where the
   svg cannot clip it; it says its 30 calendar days are not the Month window.
 
-**The server's own rounds (story 5.2 of `todo/PLAN_every_round_is_counted.md`, 2026-10-11).** A COMPANY request
+**The server's own rounds (story 5.2 of `research/PLAN_every_round_is_counted.md`, 2026-10-11).** A COMPANY request
 (`fetchUsage` → `usageRoute`) also asks `&windows=5h,24h,week` (`ROUND_WINDOWS`), so the rounds come from the same
 request, scan and cached answer as the figures they sit beside, whatever window chip is pressed; a personal request asks
 none. `serverRounds` in `teamServerApi.ts` reads the answer by its SHAPE, never its status: the counts are believed only
 when every round window came back by name and every vendor row in it — people's included — carries every count
-(`ROUND_COUNT_FIELDS`) as a whole number; otherwise `unavailable` with `ROUNDS_UNAVAILABLE`. That is exactly what a server
+(`ROUND_COUNT_FIELDS`) as a whole number; otherwise `unavailable` with `ROUNDS_UNAVAILABLE` (*"this Team server answered
+without the 5 h / 24 h / 7 d windows — Team servers count rounds from 0.12.0"*). That is exactly what a server
 older than story 5.1 produces: it binds only `window` and answers 200 with its own range, no `windows`, no counts. A
 window that came back with no vendor in it is a counted 0. Nothing is cast — every field is read by hand.
 `teamRounds.ts` (pure) draws the **Rounds** block at the end of the Vendors part (no new page part): one line per vendor
@@ -6458,6 +6459,57 @@ Three states, and keeping them apart is the whole of it:
 line and the database column. Two spellings of one sentence is a drift waiting to happen; the tests
 on both sides assert the same strings against the same inputs.
 
+**An opened PLAN round also says what it reviewed (2026-10-16, story E2.S3 of
+`todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract C3).** `RoundRecord.planSource`
+(`PlanSourceRecord` — `origin`, `commit`, `path`, `blob`, `bytes`, `textId`, all optional; `reviewedFrom` takes `unknown` and reads members with `Reflect.get`, so no type assertion stands in for validation) is the
+session file's copy of what E1 stamped on the round. `reviewedFrom(source)` in `rounds.ts` turns it into one line —
+`todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes` for a committed plan, `pasted planText @ ccccccc · text
+fedcba9876543210 · 512 bytes` for a pasted one (the text id is shown whole so two pastes of one size stay apart; `@ commit`
+is left out when the commit is empty) — and `LogRow.reviewedFrom` carries it into the page. The hashes are `slice(0, 7)`
+of a trimmed hex STRING; `bytes` must be a non-negative safe integer and is grouped by three with a plain
+space by a pure function, never `toLocaleString`. **Anything unusable reads as the empty string** — an unknown or missing
+`origin`, a hash that is not hex of seven to sixty-four characters (an EMPTY one is simply left out), bad `bytes`, a committed
+round without a repository-relative path (not rooted, no `..`, no NUL), a hex blob or a text id, a pasted one without its text
+id or with a path or blob — and an empty line renders nothing:
+a round from before the field, a code round and a server this build does not know all say "not recorded", never a
+half-sentence.
+
+**Read from the SESSION FILE only, never the database.** The row is built from the file, so the line shows on a machine whose
+database predates schema step 23 and for a round the database never saw; `--log`'s own `planSource` member
+(`module_server.md`) is ignored by this page — though the two apply ONE rule to what counts as a source
+(`PlanSource.IsWellFormed` on the server, `reviewedFrom` here), as `parseLog` reads field by field. `reviewedFromHtml(reviewedFrom, escape)` is
+exported and embedded by assignment beside `askedByHtml`, uses only its parameters, and returns
+`<div class="reviewer source">reviewed from …</div>` — escaped, because the path is caller-chosen text — or `''`; `detail(row)`
+puts it right after the asked-by line and before the early returns, so a round written without reviewer detail still shows it.
+`.reviewer.source` is dimmed like `.reviewer.asked`. **No CSV column** in this epic — decided: the export's columns
+(`roundsCsv.ts`) are unchanged, and a source in a spreadsheet is a separate question. No new action, so no new button.
+Tests: `rounds.test.ts` (the function), `roundsLog.test.ts` (the row, the line, a hostile path, the embedding),
+`bundledPage.test.ts` (the page as it ships, opened with and without a source); `LogRow` gained a required field, so the five
+fixtures that build one carry `reviewedFrom: ''`.
+
+**The "written with" line — who wrote what a round reviewed** (E5.S6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+An opened round shows one more dimmed line under *asked by* and *reviewed from*: *written with Opus 5.5 (main) · 3 Sonnet coders · +412 −88 in 9
+files*, *… · partial — peer running*, *authors not observed — transcript not found*, and nothing for a round without a snapshot.
+`RoundRecord` gains `authors?: unknown` and `size?: unknown` (E2 added no TypeScript). `writtenWith(authors, size)` lives in `src/authorsLine.ts` — its own
+module, because `rounds.ts` would pass ESLint's 800-line ceiling with it — and reads both through `member()`, every member checked, no type
+assertion: an AUTHORS member of the wrong type, or a state the shared rule refuses (a `state` that already carries its reasons included), makes the
+whole line `''`, never half a sentence; a `size` of the wrong shape (a non-object, a cell with a non-numeric count, a coverage word other than
+`RoundSize.cs`'s `shown`/`elided`/`excluded`/`binary`) only drops the size clause and keeps the author line. **Main** is the distinct
+displayed models of the `who = main` rows (both windows counted; none → *main model unknown*); **coders** are the DISTINCT `agent` ids of subagent rows with
+association `wrote here` (a straddler once), grouped by family — one family *N Family coder(s)* (the noun is *coder* when the TOTAL is 1), two families
+the larger group first with a tie by family NAME (*1 Opus + 1 Sonnet coders*), more than two *N coders (mixed)*, none *main only*; `other` and `unknown`
+are groups of their own, as the report counts them. **Size** is the `delta` scope when its state is `recorded`, else the `whole` scope when it is, else
+no clause: lines of the `shown` and `elided` cells, files of those and the `binary` ones — a binary has files and no lines, never 0, and a measured
+zero reads *+0 −0 in 0 files*. `partial` appends *· partial — <reasons>*, `uncoveredWrites > 0` appends *· size not covered* and `-1` appends nothing. The
+card reads the round roll-up only, never `windows` or `peerGates`. **Two shared files hold it to the server:** `shared/authors-state-vectors.json` (which
+stored state is well formed — `AuthorsSnapshot.IsWellFormed` reads it too) and `shared/model-display-vectors.json` (`claude-<family>-<major>-<minor>[-<date>]`
+is *Family major.minor*, anything else verbatim and family `other`, `""`/`unknown` family `unknown`; the report's family function reads the same rows).
+Read from the SESSION FILE only: `--log`'s `authorsState` (`module_server.md`) is not this page's source. `LogRow` gained `writtenWith`;
+`writtenWithHtml(line, escape)` is embedded by assignment beside `reviewedFromHtml`, uses only its parameters, escapes the line, and `detail(row)` adds it
+to the `asked` expression; `.reviewer.authors` is dimmed like `.reviewer.source`. No CSV column, no new action. Tests: `authorsLine.test.ts` (the function and both
+vectors files), `roundsLog.test.ts` (the row, the line, a hostile model id), `bundledPage.test.ts` (the page as it ships — `writtenWithHtml` joins `EMBEDDED`;
+break-it: the term deleted from `detail` → the two page tests red while every unit test stays green); five fixtures carry `writtenWith: ''`.
+
 ### A reviewer's row is two lines, split at a seam it already had (2026-09-12)
 
 Issue #132. The model name was added to a reviewer's line on 2026-09-08 and doubled its length:
@@ -7735,7 +7787,7 @@ marks. `within('day')` is since local midnight now, by the operator's ruling; we
 stay rolling. A Team server's own block on this tab is this account's spending on it (`scope=me`); the company view is
 the **Team server** tab (2026-10-09), and a window press re-asks the servers for the new window at once.
 
-**Each ledger line is priced at its own model (2026-10-10, story 2.5 of `todo/PLAN_every_round_is_counted.md`).**
+**Each ledger line is priced at its own model (2026-10-10, story 2.5 of `research/PLAN_every_round_is_counted.md`).**
 `totalsByVendor` priced a row's whole history at the row's CURRENT model, all input at the full rate and never at a
 long-context tier — after the Gemini row moved to `flash-medium` on 2026-10-02, every earlier `flash-low` line was
 priced as `flash-medium`. Now:
@@ -7764,17 +7816,22 @@ vendor `chatRowProvider` names, answered/stopped not failures) and a `RateOf` lo
 rows and lists). `moneyGroups(lines, window, rateOf)` answers, inside a trailing window, per vendor row × model × kind
 (review / consult / question / chat; a Team-server row is its own row): tokens in / cached / out / reasoning — an
 uncaptured line adds nothing, marks the totals `≥`, and only-uncaptured is `unknown`, never 0 (`tokenText`) — recorded
-turns, failed, the median input and output **per recorded turn** (`MEDIAN_OUTPUT_LABEL`: a repair or a follow-up is two
-launches on one line until story 3.3, so no per-launch figure is claimed), and the money (`Estimate`). `rollUp` makes
-a vendor row or the window from groups (no medians). `perUnit(money, unitDivisor(kind, count, turns))` divides: a
-MODEL line by the rounds that used it when the caller knows them, else per recorded turn; a vendor row or the total by
-every round in the window; consultations and questions by their own counts. Every unit is the denominator, never only
+turns, failed, the median input and output per ledger line, `linesAreLaunches` (every line is ONE launch by
+`isLaunchLine`: its `attempt` is one of `ONE_LAUNCH_ATTEMPTS` — `first`, `retry`, `repair`, an allow-list, so an
+unknown attempt word is never claimed — and its `cli` is set and not `remote` — a line from before
+coai-mcp 0.48.0, a Team-server row's local line, which is the job's total, and an antigravity follow-up, which may be
+cumulative, are not; the lines decide, never a row looked up; [PLAN_the_rounds_labels_say_what_they_count.md](PLAN_the_rounds_labels_say_what_they_count.md)),
+and the money (`Estimate`). `rollUp` makes a vendor row or the window from groups (no medians; `linesAreLaunches` only
+when every group's is). `perUnit(money, unitDivisor(kind, count, turns, linesAreLaunches))` divides: a MODEL line by the
+rounds that used it when the caller knows them, else by its lines — per launch when they are launches, else per
+recorded turn (`perUnit` pluralises `launch` as `launches`); a vendor row or the total by
+every round in the window; questions by their own count, and consultations by DISTINCT consultations (E3.S4 — see below). Every unit is the denominator, never only
 the priced ones; the floor is carried (`≥ ~$0.31`); nothing priced is a dash; zero units is a dash with *no rounds in
 this window*. How many rounds were FULLY priced is not knowable until a line carries its round (story 4.1), so the note
 says only that some of it was not. The round counts come from `coai-mcp --round-counts` (story 2.1), read as below.
 
 **The counts are read once a minute, and the Spending tab's first block is Rounds (2026-10-10, stories 2.2–2.4 of
-`todo/PLAN_every_round_is_counted.md`).** Four files, pure where the page can import them:
+`research/PLAN_every_round_is_counted.md`).** Four files, pure where the page can import them:
 
 - `roundCounts.ts` — the mode's contract as data (`RoundCountsAnswer`: `nowUtc`, three windows `5h` / `24h` / `7d`
   half-open `(from, to]`, each a row per vendor with rounds by stage, the reviewer rows and the rounds per model;
@@ -7809,8 +7866,11 @@ sidebar-only render spawns nothing — without awaiting (a read that lands repai
 tab's own tick (`usageTab`). The tab's
 FIRST block, above the window buttons — its windows are its own — is `roundsBlock.ts`'s `roundsBlock(input)`, rendered
 by the host and handed to `usageTabHtml` as `extras.rounds`: per vendor row, rounds over 5 h / 24 h / 7 d, the 7 d rounds
-by stage, the consultations / questions / chat beside them as recorded turns, reviewers per round from the database's
-history, the median output per recorded turn, tokens in / cached / out / reasoning and money over 7 d through
+by stage, the consultations / questions / chat beside them (consult money per CONSULTATION, the other two per recorded turn — E3.S4), reviewers per round from the database's
+history, the median output (`medianOutputLabel`: the header names the unit the drawn medians share — *per launch*
+when every one is, *per recorded turn* when none is, no unit on a mixed page or an unread ledger — and a cell whose
+unit differs from the header's names it beside its number, the recorded-turn one with a tooltip), tokens in / cached
+/ out / reasoning and money over 7 d through
 `roundMoney` (its floors, its `perUnit` rules — a window with consultations and no rounds is a dash saying *no rounds in
 this window*); under each row a line per model (a model change inside the window is two lines; rounds per model exist
 only from `modelsKnownSince`, else *not recorded*) and a line per kind beside. A `remote` row is *ran on <server>*
@@ -7848,11 +7908,14 @@ writes a line per paid completion, of kind `probe`; `roundsBlock`'s `BESIDE` nam
 reaches a model line or a round — a row's money still holds every kind. `usage.ts`'s parser reads the two new ledger
 fields, `turn` and `attempt` (`launchFields`: present only when the line says them, so old lines with no turn never read
 as one turn). A repair, a follow-up, a retry and a rotated Team-server attempt are each a line since this story, so the
-spending tab's `runs` count them; the median is still labelled per recorded turn, because a seven-day window holds lines
-from both sides of the change. The help's spending article says both, in five languages
+spending tab's `runs` count them. The median was labelled per recorded turn at first, because a seven-day window held
+lines from both sides of the change; since the labels plan it is per launch whenever every line of the group is a
+launch line (see `isLaunchLine` above). The help's spending article says both, in five languages
 (`helpCoverage.test.ts` asks every language for `**probe**`, `--probe-api --model` and `` `turn` ``).
 The extension's own Claude model probe (`claudeProbe.ts`) still writes nothing — no sanctioned writer fits; see the
 plan's deviations.
+
+**E3 (2026-10-20), the extension half — [PLAN_the_round_counter_tail_E3.md](../todo/PLAN_the_round_counter_tail_E3.md).** *S3, the lines the extension writes name their CLI.* `ChatTurnRecord` gains optional `cli` and `cliVersion` (absent = not recorded, the `vendor?` precedent). `cli` is the row's RUNTIME, written by `chatTurn.ledger` as `turn.vendor.runtime` and never derived from `vendor` by a reader (D7: `vendor` says whose row the line belongs in, `cli` says what ran; an old line reads no `cli`). `cliVersion` is the catalog probe's LAST answer, read from `cliVersionMemory.ts` — `PanelViewProvider.vendorCliStatus` hands its `cliStatus` to `rememberCliStatus`, `cachedCliVersion(vendorId)` answers empty for a row nobody probed — so a chat turn never spawns a process to fill a ledger field (`aChatTurnNamesItsCli.test.ts` pins the source: no `askVersion`/`versionProbe` in `chatTurn.ts`). `chatLedgerLines` carries `cli` onto the ledger line; a chat line is still not a launch line (no `attempt`). The probe ledger's lines carry `cli: claude` and the version (see the `probeUsageFile.ts` row). Effort and tier stay absent on both; nothing displays them, so there is no *not recorded* text. *S4, per-consultation money per consultation.* `UsageEntry` gains `consultation` (`consultationOf`: present only when the line says it; an empty id is absent, so a check cannot group as one phantom consultation). `MoneyGroup` gains `consultations` (the distinct ids of a consult group and the count of lines without one); `consultationUnits(groups)` unions the ids across the row's model groups (one consultation in two model groups is one) and adds each id-less line as its own unit; `unitDivisor('consult', units.count, …)` divides by it. `roundsBlock.kindLine` says *per consultation* when every consult line carries an id, *per consultation (some lines per turn)* when any does not (D9, `consultationLabel`; code round of 2026-10-21: "older lines" was false for the other two reasons an id is empty), with a tooltip sentence counting the lines taken one each and naming which kinds are PRESENT (`consultationNote` over `IdLessKinds`): lines written before the consultation field existed, consultant checks (role `consult-check`), consultations refused before their launch (no `cli` and a failing outcome — an older failed line looks the same, and the tooltip says so); question and chat stay *per recorded turn*; the card's *consult turns* still counts turns; the footnote says so. Help: one sentence in each of the five `what-each-ai-has-used` bodies naming the three reasons (the field's arrival as "written before the consultation field existed", no release number), pinned per language by `helpCoverage.test.ts` (`ID_LESS_REASONS`). `cliVersion` has two spellings: coai-mcp writes the first line of `--version` (`codex-cli 0.131.0`), the extension's own lines the bare number the panel's probe parsed (`0.131.0`), and a chat line's is the panel's LAST probe of that CLI, not proof of the binary that ran (documented on `ChatTurnRecord.cliVersion`, `UsageEntry.cliVersion` and `LaunchOptions.CliVersion`). The live cross-side check is `scripts/seam-ledger-fields.mjs`, a leg of `npm run test:seam`. The `consultation` field is written by the coai-mcp half (E3.S4 C#); until that release every consult line is its own unit, which is exactly the old per-turn division under the qualified label.
 
 **Story 3.4 (2026-10-11): the parser keeps what a launch ran with.** `usage.ts`'s `UsageEntry` gains the eight ledger
 fields `cli`, `cliVersion`, `effort`, `effortFrom`, `tier`, `tierFrom`, `job` and `slot`, and `ranWithFields` reads them —
@@ -11195,7 +11258,7 @@ eight keys and says so.
   life (heartbeat, last write, start) is older than two minutes — the server's `HeartbeatStale` — as
   `interrupted`, its consulting rows too, with the terminal chip and a stage of its own, *Interrupted — its server
   stopped answering*; nothing on disk changes (the server's sweep does that, when a server runs). The watcher asks
-  `nextStaleAt` and reads again at that moment, because no file event announces a server that died.
+  `nextStaleAt` and reads again at that moment, because no file event announces a server that died. **E3 S4:** a server that is alive but whose heartbeat writes the disk refused (a missed beat is now logged and skipped, `module_server.md`) can be shown `interrupted` after those two minutes; the display recovers on the next heartbeat that is written — accepted, and the server's sweep still keeps such a question while its pid is alive. **E3 judge J1:** this extension reads `sessions/*.json` without the server's turn (`extension.ts` and `panelProvider.ts` `readSessions`, `vscode.workspace.fs.readFile`; Node opens share-all), and the server's session save is a move over the file, which Windows refuses whatever the holder's share mode: one extension read held longer than the 500 ms retry window can fail a round's final save ("completed but could not be recorded"). Impossible before the save became atomic; a read of a few kilobytes does not last that long, and the limit is written down in `module_server.md`.
 - **The wait's default is the server's (item 6).** `DEFAULTS.escalationMinutes` and `package.json` say 15, the
   server's `PanelSettings.DefaultEscalationMinutes`; `settingsShape.test.ts` reads the constant out of the C# and
   checks a person's 30 still reaches the server.
@@ -11598,6 +11661,21 @@ sequenceDiagram
 `vendorsEnv` writes a CLI row's `timeoutMinutes` when the binary lists `timeoutMinutes` (`FEATURES.timeoutMinutes`); an
 api row carries none — it keeps `reviewMinutes` (`timeoutOnTheWire.test.ts`).
 
+## A row's prompt cap on its Models card (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S4)
+
+One number input beside the time limit — *Largest prompt it reads, KiB*, empty is no cap — writes `maxPromptKib` through the
+panel's one vendor write (a number box posts a number; an emptied box posts 0, which reads back as no cap). It is a setting, not
+an action: no new button. `promptCap.ts` holds `MAX_PROMPT_KIB` (4096, the number `CatalogLimits.MaxPromptKib` pins in
+coai-mcp) and `isKib`; it is a module of its own because `catalogRules.ts` imports `vendors.ts`, which imports
+`catalogFields.ts` — a limit in `catalogRules.ts` would make a cycle. `catalogFields` keeps the field on EVERY runtime (the server
+leaves an over-cap reviewer out whatever the row runs on). `vendorsEnv` writes it only to a binary that lists
+`maxPromptKib` (`FEATURES.maxPromptKib`; an older one skips the member and would launch the reviewer anyway), and a card whose
+binary lacks it says so through `skew` (`IGNORED`). Tests: `aRowsPromptCapIsSetOnTheModelCard.test.ts` — the card page RUN and read
+as a tree, the typed value through `settingMessageFrom` -> `vendorFieldWrite` -> `vendorsFrom` and drawn again, out-of-range values
+read back as unset, the wire with and without the feature (api row included), the skew sentence. Break-its, each observed red
+and restored: the field written to every binary, and the input dropped from the card. No real-editor (`test:host`) scenario: no
+command or contribution was added; the page is run by `runPanel`.
+
 ## A CLI row's effort crosses only to a binary that takes it (2026-10-05, PLAN_one_model_catalog.md E2.2)
 
 `vendorsEnv` writes a CLI row's `effort` when the binary lists `cliEffort` (`FEATURES.cliEffort`); what it means is
@@ -11715,6 +11793,18 @@ flowchart LR
   `failureWhat` when the record has no reason (a reason still wins) — e.g. "…did not answer: exit 70: the answer
   from the local engine at … was cut at the token limit (max_tokens 8192)" (`modelCheck.test.ts`, over the real
   record parser; research/PLAN_local_effort_reaches_every_local_launch.md, S1.3).
+- **✓ Check is a CONSULTANT check, so it is offered only where a consultation can run (2026-10-20, D7 / S8 of
+  `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`).** `modelCardWorld.offersCheck(runtime)` asks the generated
+  `CONSULTING` list (`shared/feature-availability.json` → `features.consultant`; today codex, claude, antigravity, local,
+  api, vibe). For any other row — today **kimi, gemini and remote** — `checkButton(id, runtime, check)` draws the button
+  `disabled`, WITHOUT `data-command` / `data-id` (nothing is bound, nothing is posted, no paid-turn prompt), with the title
+  `checkNotOffered(runtime)` = "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation".
+  The wording lives in that one function. The button stays on the card; a runtime added to `features.consultant` turns
+  its Check on with no code change. Why: the press used to ask the person to pay for a turn the server then refused by
+  name (`ConsultantCheckMode.CheckRowAsync`), seen on the Kimi card 2026-10-19; that server refusal stays as the backstop
+  for a stale page, and `ConsultantHealthPanel.checkModel` and its paid-turn prompt are unchanged. A reviewer-shaped
+  check of a Kimi/Gemini/remote row (through `KimiRuntime`/`KimiLaunch`, the cross-process gate at `KimiLaunch.cs:134`, a
+  short deadline, asked first) is a named FOLLOW-UP, not built. Tests: `theCheckButtonIsNotOfferedOnAReviewerOnlyRow.test.ts`.
 - coai-mcp's verdict ("coai-mcp will run it", or the current card's "cannot review"), kept apart from the check.
 - The CLI: its version and a newer one (`cliStatusNote`), and the current card's ▶ ⤓ ⟳ / ⟳ ⇄ / ≡ (`headButtons`,
   `endpointButton` — the same commands, by name).
@@ -12542,7 +12632,7 @@ and **Chat** now lay their repeated cards out the way Models does — by the SAM
   reaches a Chat model block while one still reaches a Models card block. Design record:
   [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).
 
-## The vendor's own gauge, rounds per 1 % and a plan's share (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+## The vendor's own gauge, rounds per 1 % and a plan's share (2026-10-12, story 6.2 of `research/PLAN_every_round_is_counted.md`)
 
 The Team server reads the codex account's gauge after each job (story 6.1a, [module_team_server.md](module_team_server.md))
 and derives rounds per 1 % of each window in the shared runners library ([module_runners.md](module_runners.md)). The
@@ -12645,6 +12735,14 @@ flowchart LR
   B --> I{"host platform"}
   I -->|win32| U["one line: Astral's uv installer if uv is missing, uv tool install mistral-vibe, uv tool update-shell"]
   I -->|"linux, darwin"| S["mistral.ai/vibe/install.sh piped to bash"]
+  S --> N{"vibeNoteFor(hostKind)"}
+  N -->|"wsl2"| NW["runs here from 0.59.0; sign-in ~/.vibe/.env, linked, never copied"]
+  N -->|"wsl1"| N1["refused; wsl --set-version <distro> 2"]
+  N -->|"linux"| NL["refused for now; measured on WSL2 only"]
+  N -->|"darwin"| NM["not measured"]
+  R --> L{"cardContextFor: state.hostKind"}
+  L -->|"wsl2 and server < VIBE_ON_LINUX_SINCE 0.59.0"| LN["card: Update coai-mcp to run Vibe here"]
+  L -->|"linux or wsl1, ANY server"| LR["card: the refusal sentence, never update"]
 ```
 
 - **The runtime list.** `RUNTIMES` gains `vibe` (last, so it equals `shared/feature-availability.json`'s `runtimes`,
@@ -12655,8 +12753,11 @@ flowchart LR
   `unmeasured`) instead of being stored and not applied. `KNOWS_ITS_OWN_ENDPOINT` has `vibe` (no base-URL box), and
   `vendorColour.ANCHORED` pins it to slot 2, amber (the manifest's colour 2 says `vibe`).
 - **The preset** (`VENDOR_PRESETS`, D11): `Mistral Vibe`, id `vibe`, model `mistral-medium-3.5`, no endpoint, no key.
-  Never in `DEFAULT_VENDORS`. Its hint names the two limits a person meets first — Windows only for now (D18) and the
-  coai-mcp release that knows the runtime.
+  Never in `DEFAULT_VENDORS`. Its hint names what a person meets first: Windows, and WSL2 from coai-mcp 0.59.0
+  (when coai-mcp itself runs there — a VS Code window attached to WSL; the sign-in there is `~/.vibe/.env`, made by
+  `vibe --setup`, linked by coai and never copied), "On a native Linux host coai-mcp refuses Vibe for now — it is measured on
+  WSL2 only" (E3 of `research/PLAN_kimi_and_vibe_on_linux.md`, which lifted D18 for WSL2), and the coai-mcp release that
+  knows the runtime. Kimi's hint was unchanged then: Windows only (Kimi on WSL2 came with 0.61.0, see *Kimi on Linux and WSL, on the panel's side* below).
 - **The models** (D10): `VIBE_MODELS` is the curated list coai-mcp's `VibeModels.Curated` launches on —
   `mistral-medium-3.5` (Vibe's default) and `glm-5-3`, seen accepted on Vibe 2.26.1 (`VIBE_MODELS_SEEN_ON`).
   `modelsFor('vibe')` offers it (an unknown runtime used to fall to the Gemini list); a typed alias stays in its own
@@ -12720,9 +12821,16 @@ flowchart LR
   handled.
 
   The side is the extension host's (`hostPlatform()`): a WSL window gets the script. The sign-in stays the person's —
-  the note after the command says to run `vibe --setup` or press ▶ (Vibe asks for it on its first start). On Linux,
-  WSL and macOS the note also says coai-mcp does not run Vibe there yet (D18): installing it is what the later
-  measurement needs. `OFFICIAL_SOURCES` is no longer a list of command PREFIXES — a prefix check passes a line of
+  the note after the command says to run `vibe --setup` or press ▶ (Vibe asks for it on its first start). The note
+  is per host since E3: `vendorInstall(vendor, platform, host)` takes the host KIND (`hostSide.hostKind()` — read from the
+  kernel banner once per panel, `panelProvider.hostKindHere`; the panel's `commandFor` REQUIRES it, so a dropped argument
+  is a compile error rather than the native-Linux note shown on WSL), and `vibeNoteFor(host)` — pure, a record over the whole
+  `HostKind` union — picks one of five notes:
+  **WSL2** (Vibe runs on this side from coai-mcp 0.59.0; the sign-in coai uses is the file `~/.vibe/.env`, which
+  `vibe --setup` makes; coai links it into its own homes and never copies it; a sign-in kept in a keyring is invisible to coai),
+  **WSL1** (refused; the cure is `wsl --set-version <distro> 2`), **native Linux** (the same sign-in sentence, then "On a native
+  Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only"), **macOS** (nothing measured). Windows keeps its keyring
+  sentence. The command is one for all of them. `OFFICIAL_SOURCES` is no longer a list of command PREFIXES — a prefix check passes a line of
   several steps on its first one, whatever follows. It is `{ urls, packages }`: the hosts a command may fetch from
   (`https://antigravity.google/`, `https://mistral.ai/vibe/`, and `https://astral.sh/uv/` — the uv installer Mistral's
   README gives for Windows and Mistral's own script runs elsewhere) and the packages `npm install -g`, `uv tool
@@ -12928,6 +13036,136 @@ flowchart LR
   live round through the product with the version warning shown; a `live-kimi-runtime-compat.mjs` beside Vibe's (that a released 0.55.0 refuses a
   kimi row by name is inferred from the Vibe measurement, not measured).
 
+## Vibe on Linux and WSL, on the panel's side (2026-10-16, E3 of `research/PLAN_kimi_and_vibe_on_linux.md`)
+
+The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half is E2 (`module_runners.md`). Kimi's half is the next section. **Shipped in extension 0.79.0 with coai-mcp 0.59.0 (2026-10-17), checked live on WSL2 (2026-10-19).**
+
+- **`VIBE_ON_LINUX_SINCE = '0.59.0'`** (`runtimeSince.ts`), in a second table `ON_LINUX_SINCE` beside `RUNTIME_SINCE`. The first
+  answers "does this server know the runtime", the second "does it run it on THIS host" — a 0.57.0 server on WSL knows `vibe`
+  and refuses the row at launch. `runtimeOnLinuxSide(runtime, serverVersion)` is true for a runtime with no entry and for an unknown
+  server. `runtimeSkewNote(version, vendors, host)` adds a sentence per HOST KIND for a switched-on row whose runtime has an entry:
+  **wsl2** with a server older than the entry — *Update coai-mcp to run Vibe here: …*; **linux** and **wsl1** at ANY server version — a
+  refusal (*coai-mcp refuses a vibe row on a native Linux host for now — Vibe is measured on WSL2 only*; *This is WSL1 … move this
+  distro to WSL2 with `wsl --set-version <distro> 2`*), because 0.59.0 still refuses both and an update would not help; Windows and
+  macOS say nothing. A server that does not know the runtime keeps the old sentence (one note per row). The host kind is ONE source,
+  `PanelState.hostKind` (`hostKindOfState`: else this platform's — Linux alone is a native host), never mixed with the path family;
+  `namesWsl2` (`wslNetwork.ts`: the banner holds `WSL2` or `microsoft-standard`) is the server's `NamesWsl2` rule, so a
+  WSL1 kernel is not WSL2. The card's boxes are switched off by `CardContext.runtimeHeld` (`!runtimeOnServer`) alone, not by any
+  note. The row is NOT withheld from the settings file for this (the Windows side, which
+  shares the file, may run it); only the card says so. `runtimeSinceIsAhead.test.ts` holds `ON_LINUX_SINCE` to the same guard as
+  `RUNTIME_SINCE`.
+- **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`): the choose-reviewers and question-consultant articles say, in all five
+  languages, that Vibe runs on Windows and on WSL2 from 0.59.0, the `~/.vibe/.env` sign-in that coai links and never copies, that a
+  keyring sign-in is invisible to coai, and that on a native Linux host coai-mcp refuses Vibe for now (measured on WSL2 only), and that WSL2 applies when coai-mcp itself
+  runs there (a VS Code window attached to WSL).
+- **`shared/consultant-limitations.json`**: the Vibe `wsl` row is `confined`, *measured* 2026-10-16 on vibe 2.26.1 — L-V9 of
+  `RESULTS_vibe_confinement.md` §31, WSL2, 3 of 3 on every cell (L-V1, the L-V2 read, L-V3 with `write_file`, `bash` and
+  `run_typescript`, L-V4), worded like the Windows row (a copy coai makes of the live tree); the `linux` row stays
+  `unmeasured` and says *measured on WSL2 only*; `windows` and `macos` are as before.
+- **Tests**: `vibeOnLinux.test.ts` (32) — the table, `namesWsl2` over eight banners, the host kind, the card note per host kind
+  against 0.58.0 / 0.59.0 / unknown servers, the note per host kind, the hint, the five languages, the JSON rows;
+  `vibeStageBoxes.test.ts` (2) — a host note does not grey the boxes, a server that does not know Vibe does.
+- **Code-gate follow-ups (2026-10-17).** `runtimeSkewNote(version, vendors, host)` and `PanelState.hostKind` are REQUIRED — no
+  default, no fallback; both are type properties held by `@ts-expect-error` tests (`runtimeSkewNoteHostRequired.test.ts`,
+  `panelStateHostKindRequired.test.ts`), and every `PanelState` fixture names `hostKind`. The host sentences interpolate the row's id and
+  runtime, which come from editable settings; the card draws the note through `escapeHtml` (`modelCard.ignoredNote`), and
+  `vibeNoteEscaped.test.ts` renders an id of `<img src=x onerror=alert(1)>` on WSL2, native Linux and WSL1 and holds that the page carries
+  no raw tag (teeth shown: with the escape removed it fails). `readProcVersion` rejects when `/proc/version` cannot be read
+  (`runningUnderWsl` still answers "not WSL"); `hostKind` logs ONE line through `console.warn` (the extension has no output channel;
+  its host-side diagnostics carry the `ConnectOtherAIs:` prefix into the extension-host log) naming the cause and that the host is treated as
+  native Linux (`hostKindLogsAnUnreadableBanner.test.ts`).
+
+## Kimi on Linux and WSL, on the panel's side (2026-10-17, E6 of `research/PLAN_kimi_and_vibe_on_linux.md`)
+
+The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9, S-K10, S-K17, S-K18); the server's half is E5/E6
+(`module_runners.md`). **Shipped in extension 0.81.0 with coai-mcp 0.61.0 (2026-10-19), checked live on WSL2; the Linux install line was not yet pressed live on a machine without `rg`.** It reuses the Vibe section's host-kind shape above — `HostKind` (`windows | wsl2 | wsl1 | linux | darwin`),
+`PanelState.hostKind`, `hostKindOfPlatform`, `runtimeSkewNote(version, vendors, host)` — and adds no second one.
+
+- **`KIMI_ON_LINUX_SINCE = '0.61.0'`** (`runtimeSince.ts`): 0.58.0 was released from main without either runtime, Vibe-on-Linux shipped in 0.59.0, and main then released 0.60.0 without Kimi, so Kimi on Linux ships in 0.61.0 (DL14, whoever merges second bumps). It joins `ON_LINUX_SINCE`; the
+  per-host-kind sentences of `runtimeSkewNote` therefore apply to a Kimi row with no new code (only the label *Kimi*): *Update coai-mcp
+  to run Kimi here* on WSL2 below 0.61.0, a refusal at any version on a native Linux host and on WSL1. The unreleased Kimi-consultant
+  branch sets `KIMI_CONSULTANT_SINCE` to 0.58.0: whichever of the two merges second bumps its constant (DL14).
+- **`kimiNoteFor(host)`** (`vendorTerminal.ts`) is Vibe's `vibeNoteFor` for Kimi: a `Record<HostKind, string>`, so a host kind added later
+  is a compile error. WSL2 *runs on this side from coai-mcp 0.61.0* and says that while the person's own `kimi` is open coai's turns
+  wait and then answer busy (Q3); native Linux and WSL1 carry Vibe's two refusal sentences with Kimi's name; macOS is not measured;
+  Windows is as it was. `vendorInstall(vendor, platform, host?)` takes the host kind; without one Linux is native (the safe answer).
+- **The Linux ⤓/⟳ line** (`kimiLinuxLine.ts`, DL12) provisions `rg` and `fd` and ends with Moonshot's script and a check. One line,
+  `&&`-joined, each step that holds a `||` wrapped in `{ …; }` (without the braces a failed step handed control to the next step's own
+  `||` and the line walked on — the stand-in run found it): `rg` (skipped when it resolves or `~/.kimi-code/bin/rg` exists, else
+  `sudo apt-get install -y ripgrep` or `sudo dnf install -y ripgrep`, chosen by `command -v`); `fd` likewise for `fd-find`, also skipped
+  when `fdfind` resolves or the line's own link is there (so a second press asks for no password); `mkdir -p ~/.local/bin` and the
+  link `ln -sfn … ~/.local/bin/fd` (`-n`: `-sf` alone follows a planted symlink to a DIRECTORY and writes inside it) only when a usable `fdfind` exists, no usable
+  `fd` does and the path is not already that same file — and never over a regular file (an addition to the plan's text). Every look-up goes
+  into a variable and must be an executable regular FILE (`unalias -a` inside the substitution only): an alias-only `fd` or `rg` is a
+  missing one, as `KimiTools` sees the disk; one generic sentence, once, when a tool was missing and neither
+  manager exists (printed with a capital *Install*, because the official-source check refuses a step carrying the lower-case word);
+  Moonshot's script; and the check, which prints where `rg` and `fd` resolve in the order `KimiTools` looks (Kimi's `bin`,
+  `~/.local/bin`, PATH) or `not found`. A failed package manager stops the line.
+- **`officialSources.ts`** gains `distroPackages: ['ripgrep', 'fd-find']`, the verbs `apt-get install` and `dnf install` (`-y` only,
+  those packages only) and the **`sudo` rule**: a step containing `sudo` — alone, by path, or opening a command substitution or backticks —
+  is admitted only when what follows is one of those two verbs, and only a step-opening shell word (`then`, `else`, `do`, `!`) may stand
+  before it. Red first against the old parser: 18 of the 38 table rows (every `sudo rm -rf`, `sudo chmod`, `sudo -u root …`, `/usr/bin/sudo`,
+  `$(sudo …)`, backtick, `sudo npm install …`, `sudo winget …`, `sudo bash -c "curl … | bash"` ADMITTED; every apt-get/dnf row refused).
+  After the security judge (2026-10-17) `su`, `doas`, `pkexec` and `run0` — by name or by path, anywhere in a step — refuse the step too, and only
+  `sudo` may carry the distro shape. The rule reads a word as PLAINLY spelled: a quote or escape inside the word, `$'sudo'` or a variable that
+  holds it are NOT read, and `officialSourcesLinux.test.ts` pins five such spellings as documented NOT-caught rows. The check runs only over
+  coai's own constants (header of `officialSources.ts`).
+- **The marker button** (`kimiMarker.ts`, `modelCardWorld.kimiMarkerNote`, `panelProvider.clearKimiMarker`): the server's providers
+  answer is read for `providers[].survivorMarker = { path, pids[] }` on a Kimi row (a field A3's spec does not name — proposed here); only
+  while it is reported the Kimi card shows the marker's path and pids and the button *Clear the stuck Kimi marker*. A press asks the
+  server again, takes the path from THAT answer (never from the page) and runs `coai-mcp --kimi-clear-marker <path>`; the exit code is
+  said in words — a providers question that got no answer runs nothing and says that a marker, if one stands, still stands; 0 cleared or none left (an unreadable report says neither); -1 (no answer in 20 s) says nothing is known; 75 a named process still runs (pid named, the marker stays), 74 a process could not be
+  checked (reason named, the marker stays), 65 refused (nothing deleted), anything else (an old coai-mcp's 64, a timeout) says the file the
+  Busy sentence names is still safe to delete by hand. The state is the server's marker file, re-read by the providers probe after the
+  press, so a reload shows what is true.
+- **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`, `choose-reviewers`): Kimi runs on Windows and on WSL2 from 0.61.0 when coai-mcp itself
+  runs there; native Linux is refused for now; WSL1 is refused; the person's own open `kimi` makes coai's turns wait; the Linux ⤓ line.
+- **The network sign-in setting** (`coai.kimiAllowNetworkSignIn`, boolean, default OFF; DL6, Q7). The server half refuses a Kimi sign-in folder on
+  network storage (nfs, cifs, sshfs …), because a Kimi on ANOTHER machine that shares the home can refresh the same rotating token and sign this
+  one out; this setting is the person's way to say they never run Kimi elsewhere. `settingsShape.ts` reads only a stored boolean `true` (a string,
+  a number or null stays OFF) and `envBlock` writes `COAI_KIMI_ALLOW_NETWORK_SIGNIN=true` **only when ON**, like every switch there — the key
+  `PanelSettings.KimiAllowNetworkSignIn` reads from the data directory's `settings.json`. It is in `OVERLAID_SETTINGS` (the home is THIS side's:
+  a WSL home is not a Windows one) and in `NEVER_TRANSFERRED` (a config export must not switch the refusal off on a machine whose home is somebody
+  else's share). The control is a panel tick-box, not only a settings-editor entry: `modelCardWorld.kimiNetworkSignInField`, in the Kimi card's
+  *Connection* fold, drawn only for a `kimi` row in a WSL2 or Linux window (`CardContext.kimiAllowNetworkSignIn` is `undefined` on Windows,
+  WSL1 and macOS — no mount table to judge), a plain `data-setting` with no `data-vendor`, with the sign-out risk written beside it. The help
+  names it in the `choose-reviewers` article in all five languages (`help.ts` key `kimiAllowNetworkSignIn`; `helpCoverage.test.ts`
+  `SETTING_ALIAS`). Needs `coai-mcp` 0.61.0 (the same release that runs Kimi on Linux at all, so no separate skew note).
+- **The review of 2026-10-18 (E6's fix round).** *A — who may switch the override on.* `coai.kimiAllowNetworkSignIn` admits a sign-in folder another machine may refresh, so a cloned repository's `.vscode/settings.json` or a
+  Settings Sync copy must never say yes for the person. Two layers: the manifest declares it `"scope": "machine"` (a workspace cannot set it, Settings Sync does not copy it, and a WSL remote window reads the value of its
+  OWN machine — read from VS Code's documented scopes, not yet observed in a live WSL window), and `modelKeys.ts` has a sibling of `MODEL_KEYS`, `SAFETY_KEYS`, that sends the READ through the same user-layer door
+  (`userLayerReader` answers `USER_LAYER_KEYS`); it raises no "a repository cannot choose a program" notice, because nothing is run. `modelKeysAreReadOnce.test.ts` scans for a direct read of either list. Per side
+  (`perSideSettings`) the overlay is the person's own extension storage, which a workspace cannot write, and an empty overlay falls through to the user layer.
+  *E — the supply-chain guard (`officialSources.ts`, test-only, over coai's constants).* It answers "do the sources come from the list", not "is the command harmless" (`rm -rf ~` without `sudo` is not its job — said in the
+  header). `STEP_BREAK` now also breaks at `&`, `(`, `)` and the backtick, so a command behind `$(…)`, `<(…)`, a subshell or `&` is a step of its own; an escalator is the TOKEN `sudo|su|doas|pkexec|run0` found in the raw
+  step text (`(?<![A-Za-z0-9_.-])…(?![A-Za-z0-9_.-])`), so `x=sudo`, `$'sudo'`, `su'do'` and `"$(sudo id)"` are caught and `pseudo`/`visudo` are not; the ONE exception is the whole construct `[then|do|else|!] sudo
+  apt-get|dnf install …` with the single plain word `sudo`; a step whose first command word is a fetcher (`curl wget fetch git scp rsync aria2c ftp sftp pip pip3 irm iwr`, `python* -m pip`) is refused unless it carries an
+  admitted URL, and the URL pattern is case-insensitive. Still NOT caught, as rows: a word the shell assembles (`s\udo`, `s""udo`, `$(printf sud)o`).
+  *G, H — the Linux line* (`kimiLinuxLine.ts`): the `fd` link is judged by what is at `~/.local/bin/fd` — a real file, or the person's own link that still resolves to a file, is left alone; an absent path, a dangling link
+  or a link to a folder gets `ln -sfn` — with `mkdir -p ~/.local/bin` INSIDE that branch (a host that needs no link gets no empty `~/.local`) and an ABSOLUTE target (`/usr/bin/fdfind` when it is a program, else
+  `command -v`'s answer made absolute with `$PWD`). The closing check looks Kimi's bin, then PATH, then `~/.local/bin`, the server's order. *I* — `KIMI_TOOLS_NOTE` and the help in five languages say: if apt cannot find
+  ripgrep or fd-find, run `sudo apt-get update` once and press the button again, and the tools must be on the PATH the VS Code server sees (system folders or `~/.local/bin`), not only on a PATH `.bashrc` adds.
+  *L — the Clear button*: `capture` (`versionProbe.ts`) answers `ended: 'timeout' | 'not-started' | 'stopped'` beside a `-1`, and `kimiMarker.ts` says each (a program that never started did not "take 20 seconds");
+  every press is said as the notice of its OUTCOME (`kimi-marker-cleared`, `-absent`, `-kept`, `-refused`; one `notify` call, so `notification-sites.json` gains three codes and no site), and the button carries
+  `data-pending-label="Clearing…"`: the busy-mark script (`busyMark.ts`) disables it and relabels it from the press until the host settles that numbered command.
+- **The card's warning and marker** need no new code: the server's network-storage line (admitted by the setting) arrives as the row's generic
+  `providers[].warning`, which `versionWarningNote` already draws as *Runs with a warning:*; the survivor marker is `kimiMarkerNote` above.
+  `kimiNetworkSignInSetting.test.ts` pins that a Kimi row's network line is said on the card.
+- **`shared/consultant-limitations.json`**: Kimi `wsl` is `unconfined` — *measured* 2026-10-16 on kimi 2.2.0, §29 of
+  `RESULTS_kimi_confinement.md`, n = 1 per cell: writes 3 of 3 refused, `Read` served only inside the working folder, but `Grep` and `Glob`
+  read the disk directly (the Windows finding, held on Linux); `linux` is `unmeasured` — *measured on WSL2 only*. Kimi's `windows` and
+  `macos` rows belong to the consultant branch.
+- **Tests**: `officialSourcesLinux.test.ts` (9 since the review of 2026-10-18; the table of 38, the bypass table of 23 rows each tried before and after an admitted URL, the line mutated at every `$(`, the other escalators, the NOT-caught rows), `kimiLinuxInstall.test.ts` (24 since 2026-10-18; a symlink to a directory, alias-only `fd` and `rg`; sealed PATH on Linux and macOS — bash by absolute path) — the line parsed by `bash -n` and RUN in
+  Git Bash / bash against `sudo`/`apt-get`/`dnf`/`curl` stand-ins in a `testsToDelete-` folder with spaces: Debian fresh, a second press,
+  Fedora with `fd` there, no manager (one sentence), the owner's case, a failing manager, a regular file at `~/.local/bin/fd`;
+  `kimiOnLinux.test.ts` (9) — the table, the per-host-kind notes, the hint, the five languages, the JSON rows; `kimiClearMarker.test.ts`
+  (15) — the providers field, the button only while a marker stands, the four exit codes, a press against a fake server;
+  `kimiNetworkSignInSetting.test.ts` (9) — the default and the wire key, only boolean `true` is ON, the per-side and never-transferred lists, the manifest entry, the one card tick-box on WSL2 and Linux (and none on Windows, WSL1, macOS or another row) writing a plain setting, and the server's warning on the card.
+- **Not here / open**: the owner's live press in WSL (the install line against a machine without `rg`) and a recorded run of the
+  marker button against a real marker; whether the providers field is named as proposed (server half); `KimiTools.Refusal` must say the
+  same generic sentence (lower-case first letter); the three texts E3 listed as still Windows-only (`architecture.md:39`,
+  `research/README.md`, the `coai.vibeHomesDirectory` help) are untouched.
+
 ## Kimi Code as a consultant — the extension's half (2026-10-16, E5.7 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
 
 The server's half (`KimiConsultant`, the seed, the question row) is E5.4–E5.6 and is documented in `module_runners.md` /
@@ -12940,16 +13178,17 @@ flowchart LR
   P["a caller's consultant, or a question row, on runtime kimi"] --> W["COAI_CONSULTANTS / COAI_QCONSULT_ROWS: the entry crosses as it is"]
   P --> G{"consultantOnServer('kimi', installed)"}
   G -->|"installed >= 0.58.0, or unknown"| Q["nothing to say"]
-  G -->|"installed < 0.58.0"| N["consultantRuntimeNote: named in the Consultant section and beside the question row"]
+  G -->|"installed < 0.64.0"| N["consultantRuntimeNote: named in the Consultant section and beside the question row"]
   W --> S["an older server refuses it BY NAME (ConsultantResolution.CannotConsult)"]
 ```
 
-- **The consultant table** (`runtimeSince.ts`): `KIMI_CONSULTANT_SINCE = '0.58.0'` and `CONSULTANT_SINCE = { vibe: '0.54.0', kimi }`
+- **The consultant table** (`runtimeSince.ts`): `KIMI_CONSULTANT_SINCE = '0.64.0'` and `CONSULTANT_SINCE = { vibe: '0.54.0', kimi }`
   beside `RUNTIME_SINCE`. Two tables because knowing a runtime and consulting on it ship in different releases: Vibe reviewed from 0.53.0
-  and consulted from 0.54.0 (#811, with no gate); Kimi reviews from 0.57.0. **Why 0.58.0:** the newest released `src_mcp` is 0.57.0 (the
-  manifest), the release that first reviews with Kimi, and release-please bumps the minor for a `feat` — whoever cuts the release keeps it
-  level with the tag. `consultantOnServer` reads it by `runtimeOnServer`'s one rule (`onServer`: a runtime outside the table, or an
-  UNKNOWN server, is never old).
+  and consulted from 0.54.0 (#811, with no gate); Kimi reviews from 0.57.0. **Why 0.64.0:** it was 0.58.0 when E5.7 was written
+  (2026-10-16, the newest release then 0.57.0); main then released 0.58.0–0.63.0 without S5, so at the merge with main (2026-10-27) the
+  first release that can carry the consultant is the next minor, 0.64.0 — release-please bumps the minor for a `feat`, and whoever cuts
+  the release keeps it level with the tag. `consultantOnServer` reads it by `runtimeOnServer`'s one rule (main's `sinceMet`: a runtime
+  outside the table, or an UNKNOWN server, is never old).
 - **A note, never a withheld entry** (decision 2). Unlike the runtime gate, nothing is kept out of the settings file: an older server
   refuses a consultant on a runtime it cannot consult with, by name, while a withheld `COAI_CONSULTANTS` entry would make it consult with
   the shipped default pair, silently. `consultantRuntimeNote(installed, runtime)` says "The coai-mcp you have installed ({version}) cannot

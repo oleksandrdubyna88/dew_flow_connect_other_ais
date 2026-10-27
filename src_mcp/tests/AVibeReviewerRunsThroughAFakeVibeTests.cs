@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// The child gets the MINIMAL environment, so no <c>FAKECLI_*</c> variable reaches it: the fake is steered by the file in
-/// the temp directory (<c>fakecli-minimal.json</c>), which is why this class shares the <c>fakecli-env</c> collection.
+/// the file beside the fake's binary (<c>FakeCliSteering</c>), which is why this class shares the <c>fakecli-env</c> collection.
 /// </remarks>
 [Collection("fakecli-env")]
 public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
@@ -30,9 +30,8 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 
-    private static string SteeringFile => Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
-
     private readonly ProcessLauncher _launcher = new();
+    private IDisposable _steering = FakeCliSteering.Unwritten;
     private readonly TempDir _dir = TempDir.For("coai-answers-vibefake-");
     private string? _parentMcp;
 
@@ -49,7 +48,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
     public ValueTask DisposeAsync()
     {
         Environment.SetEnvironmentVariable("VIBE_MCP_SERVERS", _parentMcp);
-        File.Delete(SteeringFile);
+        _steering.Dispose();
         _dir.Dispose();
 
         return ValueTask.CompletedTask;
@@ -66,7 +65,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         """{"outcome":"finished","usage":{"input_tokens":1200,"output_tokens":34,"cached_input_tokens":0,"total_tokens":1234},"cost_usd":0.01,"config":{"active_model":"{{env:VIBE_ACTIVE_MODEL}}"}}""";
 
     private void Steer(string answer, string envRecord = "", string homeWrite = "", string recordDir = "", string version = "2.26.1") =>
-        File.WriteAllText(SteeringFile, JsonSerializer.Serialize(new Dictionary<string, string>
+        _steering = FakeCliSteering.Write(new Dictionary<string, string>
         {
             ["FAKECLI_STDOUT"] = Array(answer),
             ["FAKECLI_EXPORT_TEXT"] = Export,
@@ -74,7 +73,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
             ["FAKECLI_RECORD_ENV"] = envRecord,
             ["FAKECLI_HOME_WRITE"] = homeWrite,
             ["FAKECLI_RECORD_DIR"] = recordDir,
-        }));
+        });
 
     private ReviewerInvocation Invocation()
     {
@@ -184,14 +183,13 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"), default, _launcher, Logger.None, Noticing.None);
     }
 
-    [Fact]
-    public async Task ACodeRound_StartsTheVibeReviewerInTheSnapshot_AndTheSnapshotIsGoneWithTheRound()
+    /// <summary>The code-round flow, as a Windows host and as a WSL2 host (E2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, §8): the real service, a fake Vibe as a real child process, the .env link made against a fake person's file.</summary>
+    [Theory]
+    [InlineData(VibeFlowHost.Windows)]
+    [InlineData(VibeFlowHost.Wsl2)]
+    public async Task ACodeRound_StartsTheVibeReviewerInTheSnapshot_AndTheSnapshotIsGoneWithTheRound(string mode)
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("D18: Vibe is refused on every host but Windows — VibeLaunchRulesTests pins that refusal");
-        }
-
+        using var flow = VibeFlowHost.Enter(mode, _dir.At("flow"));
         using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var (repo, data) = await RepositoryAsync();
         var record = Directory.CreateDirectory(_dir.At("argv")).FullName;
@@ -220,20 +218,22 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         vibeHome.Should().StartWith(Path.Combine(homes, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar, "D1: never under TEMP");
         (vibeHome.Length - homes.Length).Should().BeLessThanOrEqualTo(24, "what the layout costs beyond the root (`/coai-vh/<8>/<6>`) fits the Windows budget at the default root");
         Directory.EnumerateFileSystemEntries(Path.Combine(homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the round's homes folder was deleted when the round ended");
+        flow.AssertLinked(mode);
     }
 
     /// <summary>
     /// The owner's decision of 2026-10-13: a Vibe version nobody measured is RUN, and the round's record of the reviewer says
     /// so — <c>reviewerStates[].warning</c>, what the rounds view reads — beside an answer counted as any other.
     /// </summary>
-    [Fact]
-    public async Task APlanRoundOnAnUnmeasuredVibe_RunsTheReviewer_AndItsStateCarriesTheWarning()
+    /// <summary>The plan-round flow, as a Windows host and as a WSL2 host (E2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, §8).</summary>
+    [Theory]
+    [InlineData(VibeFlowHost.Windows)]
+    [InlineData(VibeFlowHost.Wsl2)]
+    public async Task APlanRoundOnAnUnmeasuredVibe_RunsTheReviewer_AndItsStateCarriesTheWarning(string mode)
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("D18: Vibe is refused on every host but Windows — VibeLaunchRulesTests pins that refusal");
-        }
-
+        // Not about the home budget: the run folder adds 29 characters to every temp path, and this home sat 6 under the limit on a short profile name.
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
+        using var flow = VibeFlowHost.Enter(mode, _dir.At("flow"));
         var (repo, data) = await RepositoryAsync();
         Steer(Clean, version: "2.27.0");
         var service = Service(data);
@@ -249,5 +249,23 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         reviewer.GetProperty("status").GetString().Should().Be("done");
         reviewer.TryGetProperty("warning", out var warning).Should().BeTrue($"the reviewer's state carries the warning: {reviewer}");
         warning.GetString().Should().Contain("2.27.0").And.Contain("2.26.1");
+        flow.AssertLinked(mode);
+    }
+
+    /// <summary>S-V17 through the whole plan-round flow: a NATIVE Linux host is refused, with the WSL2-only sentence, before the fake Vibe is started — on every machine, the host being given.</summary>
+    [Fact]
+    public async Task APlanRoundOnANativeLinuxHost_IsRefused_NamingWsl2Only_AndNothingIsStarted()
+    {
+        using var linux = VibeHost.Using(new VibeHost(HostKind.Linux, WslGeneration.None, VibeSignIn.None));
+        var (repo, data) = await RepositoryAsync();
+        var record = Directory.CreateDirectory(_dir.At("argv")).FullName;
+        Steer(Clean, recordDir: record);
+        var service = Service(data);
+        await service.OpenAsync(repo, "feature");
+
+        var planned = JsonDocument.Parse(await service.ReviewPlanAsync(repo, "feature", Scope)).RootElement;
+
+        planned.GetProperty("reviewers").GetString().Should().Contain("WSL2 only", "a native Linux host should still be refused with the WSL2-only sentence, but Vibe started");
+        Directory.GetFiles(record, "*.argv").Should().BeEmpty("the refusal comes before any process of Vibe's starts");
     }
 }

@@ -19,6 +19,12 @@ public static class RepoPaths
 {
     private static readonly char[] Separators = ['/', '\\'];
 
+    /// <summary>
+    /// A path a caller typed, made canonical for git: trimmed, and with <c>/</c> for <c>\</c> — a Windows caller's
+    /// <c>todo\PLAN_x.md</c> is the committed <c>todo/PLAN_x.md</c>. Nothing is refused here; <see cref="WhyNotRelative"/> says why not.
+    /// </summary>
+    public static string Canonical(string raw) => raw.Trim().Replace('\\', '/');
+
     public static bool IsRelative(string path) =>
         path.Length > 0 && !path.Contains('\0') && !IsRooted(path) && !Traverses(path);
 

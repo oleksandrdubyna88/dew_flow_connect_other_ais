@@ -159,8 +159,8 @@ evidence of nothing.
   D7 (unverified promises) and D8 (no rollback) are the two that go missing most, and they are the
   two that read as judgement rather than as a rule being broken.
 - **Cost and quality are barely related in this range.** GPT-OSS 120B at $0.002 scores 5.5; Gemini
-  3.1 Pro at $0.100 scores 5.5. Opus costs 80× GPT-5.5's cheapest sibling and scores the same as
-  GPT-5.5.
+  3.1 Pro at $0.100 scores 5.5. Opus costs about 80× GPT-OSS 120B ($0.165 against
+  $0.002), about 41× GPT-5.6-Luna ($0.004) and 2.4× GPT-5.5 ($0.070), and scores the same as GPT-5.5.
 - **Reasoning effort did not order the way its name does.** Gemini 3.7 Flash at LOW effort (5.5)
   beat the same model at MEDIUM (4.0) and matched HIGH (5.0), across four runs. This is the one
   result the second pass strengthened rather than weakened, and it has no explanation here.
@@ -169,8 +169,8 @@ evidence of nothing.
 
 **For the plan gate, two vendors: Claude Sonnet 4.6 and GPT-5.5.**
 
-Sonnet for stability — 7 and 7, no spread, and the highest finding count in the set at a third of
-Opus's price. GPT-5.5 as the second vendor because it is the other model that reached the top and it
+Sonnet for stability — 7 and 7, no spread, and the highest mean score in the set (7.0, tied with Opus
+and GPT-5.5) at about 70 % of Opus's price ($0.114 against $0.165 per run). GPT-5.5 as the second vendor because it is the other model that reached the top and it
 is a genuinely different family; its own instability is the argument for pairing it with a stable
 one rather than for dropping it.
 

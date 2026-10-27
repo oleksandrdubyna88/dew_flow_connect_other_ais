@@ -87,7 +87,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private Scopes StandIn() => new(
         WindowsStandIn.Begin(),
         KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks")),
-        KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
+        KimiHost.Using(KimiHost.Of(HostKind.Windows)),
+        KimiSeams.Using(new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
 
     /// <summary>The two capabilities a Kimi row runs with (E5.6 decision 2) — each with its row id, its prompt and that prompt's title.</summary>
     private static readonly IReadOnlyDictionary<string, (string Id, string Prompt, string Title)> Rows =
@@ -183,7 +184,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             Repo, Directory.CreateDirectory(_dir.At("answers")).FullName, string.Empty, TimeSpan.FromSeconds(30))
         {
             ChangesSoFar = _ => Task.FromResult<IReadOnlyList<Core.Consultation.TreeChange>>([]),
-            PromptNaming = copies => "Which helper retries an outbound send? Read these folders: " + string.Join(" ; ", copies),
+            PromptNaming = copies => "Which helper retries an outbound send? Read these folders: " + string.Join(" ; ", copies.Paths),
         };
     }
 

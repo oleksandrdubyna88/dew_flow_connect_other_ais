@@ -66,6 +66,9 @@ internal sealed class FakeAcpAgent : IDisposable
     /// <summary>The script field that makes the agent answer a <c>/usage</c> prompt with this text as one message chunk.</summary>
     public static string UsageReply(string text) => $$""","usageReply":{{Quote(text)}}""";
 
+    /// <summary>The script field that makes the agent sleep this long on start, before it reads anything — a cold start a deadline can be raced against.</summary>
+    public static string StartDelay(int ms) => $$""","startDelayMs":{{ms}}""";
+
     /// <summary>The script fields that make the agent write its environment to <see cref="EnvFile"/> at start, and the state of each lock file named.</summary>
     public string EnvField(params string[] probes) => $$""","envFile":{{Quote(EnvFile)}},"probes":[{{string.Join(",", probes.Select(Quote))}}]""";
 
@@ -93,14 +96,52 @@ internal sealed class FakeAcpAgent : IDisposable
         throw new TimeoutException("the fake agent never wrote its grandchild's pid");
     }
 
+    /// <summary>
+    /// The log's lines, read WITHOUT holding it against the agent: the agent appends to this file from its own process, and a reader that
+    /// shares nothing (<c>File.ReadAllLines</c> shares read only) makes the agent's next append fail — the agent dies and the turn ends with
+    /// a protocol error. A test that polls the log while the agent runs (<see cref="WhenReceivedAsync"/>) must therefore read it shared.
+    /// </summary>
+    private IEnumerable<string> LogLines()
+    {
+        using var stream = new FileStream(Log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+
+        return reader.ReadToEnd().Split('\n');
+    }
+
     /// <summary>Every logged line, in order: direction and message.</summary>
     public IReadOnlyList<(string Dir, JsonElement Msg)> Entries() =>
         !File.Exists(Log)
             ? []
-            : [.. File.ReadAllLines(Log)
+            : [.. LogLines()
                 .Where(line => line.Length > 0)
                 .Select(line => JsonDocument.Parse(line).RootElement.Clone())
                 .Select(entry => (entry.GetProperty("dir").GetString()!, entry.TryGetProperty("msg", out var msg) ? msg : entry.GetProperty("raw")))];
+
+    /// <summary>
+    /// Completes once the CLIENT has sent <paramref name="method"/> — the agent logs a line when it READS it, so this is "the agent has the request",
+    /// an event a test waits on instead of a clock. The log is read while the agent appends to it, so a read that meets the append is tried again.
+    /// </summary>
+    public async Task WhenReceivedAsync(string method, CancellationToken ct)
+    {
+        while (!ReceivedNow(method))
+        {
+            await Task.Delay(25, ct);
+        }
+    }
+
+    private bool ReceivedNow(string method)
+    {
+        try
+        {
+            return Received(method).Count > 0;
+        }
+        catch (Exception e) when (e is IOException or JsonException)
+        {
+            // A line caught half-written: the next poll reads it whole.
+            return false;
+        }
+    }
 
     /// <summary>The requests and notifications the CLIENT sent, by method, in order.</summary>
     public IReadOnlyList<JsonElement> Received(string method) =>
@@ -151,6 +192,12 @@ internal sealed class FakeAcpAgent : IDisposable
 
     public static string Spew(int chars) => $$"""{"kind":"spew","chars":{{chars}}}""";
 
+    /// <summary><paramref name="chars"/> characters written on the agent's STDERR, no newline — the protocol stream untouched.</summary>
+    public static string StdErr(int chars) => $$"""{"kind":"stderr","chars":{{chars}}}""";
+
+    /// <summary>The text <paramref name="text"/> written on the agent's STDERR as given — a vendor's own error line; end it with a line break for a complete line.</summary>
+    public static string StdErrText(string text) => $$"""{"kind":"stderrText","text":{{Quote(text)}}}""";
+
     public const string AwaitCancel = """{"kind":"awaitCancel"}""";
 
     public static string Sleep(int ms) => $$"""{"kind":"sleep","ms":{{ms}}}""";
@@ -158,6 +205,15 @@ internal sealed class FakeAcpAgent : IDisposable
     public const string Hang = """{"kind":"hang"}""";
 
     public static string Exit(int code) => $$"""{"kind":"exit","code":{{code}}}""";
+
+    /// <summary>A grandchild that calls <c>setsid()</c> first — in its own session and group, as <c>rg</c> is in a Grep turn (L-K4) — its pid in <paramref name="pidFile"/>.</summary>
+    public static string GrandchildSetsid(string pidFile) => $$"""{"kind":"grandchildSetsid","pidFile":{{Quote(pidFile)}}}""";
+
+    /// <summary>A grandchild that waits for the file <paramref name="trigger"/> and only THEN starts a <c>setsid</c> sleeper, writing ITS pid to <paramref name="pidFile"/>.</summary>
+    public static string GrandchildLateSetsid(string trigger, string pidFile) => $$"""{"kind":"grandchildLateSetsid","trigger":{{Quote(trigger)}},"pidFile":{{Quote(pidFile)}}}""";
+
+    /// <summary>A grandchild that writes its pid and exits 0 at once: a zombie until its parent reaps it.</summary>
+    public static string GrandchildExits(string pidFile) => $$"""{"kind":"grandchildExits","pidFile":{{Quote(pidFile)}}}""";
 
     public string Grandchild() => $$"""{"kind":"grandchild","pidFile":{{Quote(PidFile)}}}""";
 

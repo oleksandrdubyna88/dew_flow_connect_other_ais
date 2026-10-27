@@ -678,9 +678,10 @@ public sealed class ConsultationService(
         var ready = (ConsultantPreparation.Ready)prepared;
         // The row's system prompt is redacted from what the child says, as a reviewer's is: a CLI echoes its prompt, and a
         // failing one quotes it into the reason that reaches the record and the reply (research/PLAN_one_model_catalog.md, C2).
-        var launch = consultant.Runtime.Build(ready.Launch) with { Redact = ConsultantTurnInputs.Redacted(record.RowInstruction) };
-        // From here the turn is BILLED and fenced under the model that ran: a row that names none runs on its adapter's default (decision 75).
-        consultant = consultant with { Model = ModelRan.Of(launch.Model, consultant.Model) };
+        var launch = RowLaunchOptions.Answering(consultant.Runtime.Build(ready.Launch), consultant.Row, ready.Launch.Settings) with { Redact = ConsultantTurnInputs.Redacted(record.RowInstruction) };
+        // From here the turn is BILLED and fenced under the model that ran: a row that names none runs on its adapter's default (decision 75),
+        // and says what it ran with (E3.S1 of todo/PLAN_the_round_counter_tail_E3.md).
+        consultant = consultant with { Model = ModelRan.Of(launch.Model, consultant.Model), RanWith = launch.RanWith };
         // What the turn is SENT rides the record from here on, so every ending — answered or failed — carries it.
         var asking = record with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow), Confinement = ready.Confinement };
         if (ready.Note.Length > 0)
@@ -724,6 +725,7 @@ public sealed class ConsultationService(
             // which is what sees a write by the LAST launch.
             var looked = await ConsultationLookups.RunAsync(executor, consultant.Runtime, ready.Launch, launch, t => ChangesSinceAsync(before, repo, t), launched.Add, turn.Token);
             var result = looked.Result;
+            consultant = consultant with { RanWith = consultant.RanWith.VersionedBy(result.Final.CliVersion) };
             var changes = await ChangesOverTheTurnAsync(result, () => ChangesSinceAsync(before, repo, turn.Token));
             decided = FailedTurns.Decided(asking, consultant, result, changes, ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline), record.Status);
 
@@ -846,7 +848,7 @@ public sealed class ConsultationService(
         var spent = bill.Share;
         var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd, turned.FollowedUp, record.Confinement);
         _store.Write(ConsultationAnswering.Answered(ConsultationBilling.Billing(record, bill), turn, handle));
-        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, "ok", elapsed, spent);
+        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, "ok", elapsed, spent, consultant.RanWith, consultation: record.Id);
         _health.Answered(ConsultHealth.AnswerOf(record, turn.Utc));
         log.Information("{Kind} consultation {Id}: answered turn {Turn} in {Seconds}s ({TokensIn}/{TokensOut} tokens)", record.Kind, record.Id, record.Budget.Turn, turn.Seconds, turn.TokensIn, turn.TokensOut);
 

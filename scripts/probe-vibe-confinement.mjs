@@ -10,6 +10,7 @@
 //
 //   node scripts/probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats 3] [--cells M-V1,M-V2,...]
 //                                           [--cli python|rust|inherit]   (default python: VIBE_CLI=python in every child)
+//                                           [--arms a3,a3c]   only the arms whose name up to the first colon is listed (M-V7: the free keyring arms)
 //   node scripts/probe-vibe-confinement.mjs --reparse <scratch>      rebuild the tables from the saved run folders
 //
 // Every arm launches vibe with the SHIPPED flags unless its cell says otherwise:
@@ -32,7 +33,10 @@
 //          (d) the working folder trusted under an upper-cased spelling — each with a project hook canary
 //   M-V5   two turns, the second `--resume <session_id>`: per-turn or cumulative usage
 //   M-V6   read_file inside the working folder and on a sibling path outside it
-//   M-V7   (a) an EMPTY short VIBE_HOME, (a2) the same with Vibe's own VIBE_TEST_DISABLE_KEYRING=1, (b) VIBE_ACTIVE_MODEL=nope
+//   M-V7   (a) an EMPTY short VIBE_HOME, (a2) the same with Vibe's own VIBE_TEST_DISABLE_KEYRING=1, (b) VIBE_ACTIVE_MODEL=nope; on Linux
+//          a and a2 carry the forced PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring of the launch E2 ships (DN10), plus (a3) that forced
+//          backend AND a fake HOME whose keyringrc.cfg names a probe-owned backend that IS available — the marker file it would write must
+//          stay absent — and (a3c) the same fake HOME WITHOUT the variable, whose marker must appear (a3's teeth). Linux only; free (no key exists)
 //   M-V8   a ~33 KB prompt on stdin, the word to answer placed at its END
 //   M-V9   user-level hooks.toml post_agent canary in a short copied VIBE_HOME, working folder untrusted
 //   M-V10  .vibe/agents/plan.toml (a `plan` agent with every tool), .vibe/tools/*.py (canary at import), project skills,
@@ -43,11 +47,20 @@
 //   M-V14  a sanitised copy trusted on purpose: source + parent canaries, a junction and a file symlink pointing out
 //   M-V16  an mcp.json canary planted in the cached BUILT-IN plugin package of a primed owned home, the BUILT environment
 //          (D17), the shipped flags; control: primed, nothing planted (RESULTS §25)
+//
+// Linux (E1 of research/PLAN_kimi_and_vibe_on_linux.md, §5): the same cells, with the Linux arms — a folder link is `ln -s`'s symlink,
+// the minimal environment is MinimalUnix, the canaries run `python3`, Vibe's own Python is uv's `bin/python`. On Linux a Vibe home
+// is signed in only through `<home>/.env` (L-V1: no keyring on WSL), so every short home this probe makes gets the `.env` LINK to
+// the person's Vibe home's `.env` (made by lstat alone — never opened, read or copied), and an arm that would have run on the
+// person's real ~/.vibe runs on such a home instead: nothing is written into ~/.vibe by the probe. The person's Vibe home is
+// LISTED (names, sizes, mtimes — never contents) before and after the run, and the two listings are saved and compared.
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { SYSTEM32, builtEnv as builtEnvFor, files, fwd, minimalWindowsEnv, run, vibeArgs } from './lib/vibe.mjs';
+import {
+  builtEnv as builtEnvFor, dirLink, files, fwd, armFilterOf, armsCellsError, armWanted, homeListing, keyringArm, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
+} from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -65,12 +78,18 @@ const repeats = Number.parseInt(flag('--repeats', '3'), 10);
 const CLIS = ['python', 'rust', 'inherit'];
 const cli = flag('--cli', 'python');
 const cells = flag('--cells', ALL_CELLS.join(',')).split(',').filter(Boolean);
+/** `--arms a3,a3c` runs only the arms whose name up to the first colon is listed (lib/vibe.mjs armWanted) — the free M-V7 keyring check, never the paid arm b. */
+const { filter: armFilter, error: armsError } = armFilterOf(argv);
 const unknown = cells.filter((c) => !ALL_CELLS.includes(c));
+if (armsError) {
+  console.error(armsError);
+  process.exit(65);
+}
 if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || !CLIS.includes(cli)) {
   console.error(`usage: probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats N] [--cli ${CLIS.join('|')}] [--cells ${ALL_CELLS.join(',')}]`);
   process.exit(65);
 }
-const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(tmpdir(), 'vcp-'));
+const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(tmpdir(), 'testsToDelete-vcp-'));
 // The scratch path ends up inside a hook's SHELL command (a hook's `command` is a shell string by Vibe's design), so it is
 // held to characters that need no quoting beyond the double quotes the command puts around it — never a quote, `$`, `%`,
 // a backtick or a newline (the code round, codex, 2026-10-12: a crafted path could otherwise inject into the canary).
@@ -81,14 +100,20 @@ if (!/^[A-Za-z0-9 _\-.:\\/~()]+$/.test(scratch)) {
 }
 mkdirSync(scratch, { recursive: true });
 
-const REAL_HOME = join(homedir(), '.vibe');
+const WINDOWS = process.platform === 'win32';
+/** The person's Vibe home (DL2): VIBE_HOME of this environment when set, else ~/.vibe. Read for config.toml copies and the listing only. */
+const REAL_HOME = personsVibeHome();
 // Vibe's own interpreter: M-V4 persists trust through Vibe's OWN TrustedFoldersManager, so the file's format is Vibe's.
-const VIBE_PYTHON = join(process.env.APPDATA ?? '', 'uv', 'tools', 'mistral-vibe', 'Scripts', 'python.exe');
+const VIBE_PYTHON = vibePython();
+/** The canaries' Python by its bare name — `python3` on Linux, where `python` is usually absent. */
+const PYTHON = pythonCommand();
+/** The one-word answer the canary arms ask for. The arrow keeps a character outside cp1252 on the wire: an ASCII-only probe once hid an exit-2 crash that only a live round found. */
+const REPLY_OK = '→ Reply with exactly: OK';
 
 const toml = (s) => JSON.stringify(s); // a JSON string of a plain path or command is a valid TOML basic string
 /** A fixed Python snippet: the path arrives as argv[1], so nothing about the path is ever Python source. */
 const CANARY_SNIPPET = "import sys; open(sys.argv[1], 'w').write('x')";
-const canaryCommand = (path) => `python -c "${CANARY_SNIPPET}" "${fwd(path)}"`;
+const canaryCommand = (path) => `${PYTHON} -c "${CANARY_SNIPPET}" "${fwd(path)}"`;
 
 function write(path, text) {
   mkdirSync(dirname(path), { recursive: true });
@@ -100,19 +125,37 @@ function hooksToml(canary) {
 }
 
 function mcpToml(canary) {
-  return `\n[[mcp_servers]]\nname = "probe-canary"\ntransport = "stdio"\ncommand = "python"\n`
+  return `\n[[mcp_servers]]\nname = "probe-canary"\ntransport = "stdio"\ncommand = "${PYTHON}"\n`
     + `args = ["-c", ${toml(CANARY_SNIPPET)}, ${toml(fwd(canary))}]\n`;
 }
 
 let homes = 0;
-/** A SHORT VIBE_HOME inside <scratch>. `copy` copies config.toml from the real home (never moves, never writes it). */
-function shortHome({ copy }) {
+/** One record per sign-in link made, in order; replaced (never pushed to) as homes are made. */
+let signIns = [];
+/**
+ * A SHORT VIBE_HOME inside <scratch>. `copy` copies config.toml from the real home (never moves, never writes it). On Linux
+ * `signIn` (the default) gives it the `.env` LINK to the person's sign-in (lib/vibe.mjs linkSignIn — never read or copied); the
+ * not-signed-in arm (M-V7 a/a2, which is L-V1 on Linux) asks for none. On Windows no link is ever made.
+ */
+function shortHome({ copy, signIn = true }) {
   const home = join(scratch, `h${++homes}`);
   mkdirSync(home, { recursive: true });
   if (copy && existsSync(join(REAL_HOME, 'config.toml'))) {
     copyFileSync(join(REAL_HOME, 'config.toml'), join(home, 'config.toml'));
   }
+  if (!WINDOWS && signIn) signIns = [...signIns, { home: basename(home), ...linkSignIn(home) }];
   return home;
+}
+
+/**
+ * On Linux an arm never runs on the person's own Vibe home: one with no home of its own gets a signed-in short home, and a
+ * replaced environment without VIBE_HOME gets one too. On Windows the arm is returned as it was (the cells there ran on the
+ * person's home, where the Credential Manager sign-in is).
+ */
+function ownedOnLinux(spec) {
+  if (WINDOWS) return spec;
+  if (spec.replaceEnv) return spec.replaceEnv.VIBE_HOME ? spec : { ...spec, replaceEnv: { ...spec.replaceEnv, VIBE_HOME: shortHome({ copy: false }) } };
+  return spec.home ? spec : { ...spec, home: shortHome({ copy: false }) };
 }
 
 // Every child goes through lib/vibe.mjs's run(): argv, a timeout, and a tree kill by PID on the timeout.
@@ -150,14 +193,12 @@ function builtInPackages(home) {
 function packageMcpJson(canary) {
   return JSON.stringify({
     $schema: 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
-    mcpServers: { 'probe-canary': { type: 'stdio', command: 'python', args: ['-c', CANARY_SNIPPET, fwd(canary)] } },
+    mcpServers: { 'probe-canary': { type: 'stdio', command: PYTHON, args: ['-c', CANARY_SNIPPET, fwd(canary)] } },
   }, null, 2);
 }
 
-function junction(link, target) {
-  const r = run(SYSTEM32('cmd.exe'), ['/d', '/c', 'mklink', '/J', link, target], { encoding: 'utf8', timeout: 30_000 });
-  return r.status === 0 ? '' : `mklink /J failed: ${(r.stdout + r.stderr).trim()}`;
-}
+/** A folder link: a junction on Windows, a symlink on Linux (lib/vibe.mjs dirLink — the one maker both probes use). */
+const junction = (link, target) => dirLink(link, target);
 
 function fileSymlink(link, target) {
   try {
@@ -184,7 +225,7 @@ const ARMS = {
       write(join(workdir, 'notes.txt'), 'nothing here\n');
       return {
         workdir,
-        prompt: `Create a new file named out-${tool}.txt in the current folder containing the single word written. `
+        prompt: `Create a new file named out-${tool}.txt in the current folder → containing the single word written. `
           + `Use the ${tool} tool to do it; you have my permission. Then say whether it was written.`,
       };
     },
@@ -197,7 +238,7 @@ const ARMS = {
       const workdir = join(runDir, 'work');
       const canary = join(runDir, 'canary-project-hook.txt');
       write(join(workdir, '.vibe', 'hooks.toml'), hooksToml(canary));
-      return { workdir, trust, prompt: 'Reply with exactly: OK', canaries: { projectHook: canary } };
+      return { workdir, trust, prompt: REPLY_OK, canaries: { projectHook: canary } };
     },
   })),
 
@@ -208,7 +249,7 @@ const ARMS = {
       const workdir = join(runDir, 'work');
       const canary = join(runDir, 'canary-project-mcp.txt');
       write(join(workdir, '.vibe', 'config.toml'), mcpToml(canary).trimStart());
-      return { workdir, trust, prompt: 'Reply with exactly: OK', canaries: { projectMcp: canary } };
+      return { workdir, trust, prompt: REPLY_OK, canaries: { projectMcp: canary } };
     },
   })),
 
@@ -222,7 +263,7 @@ const ARMS = {
       const config = existsSync(join(home, 'config.toml')) ? readFileSync(join(home, 'config.toml'), 'utf8') : '';
       writeFileSync(join(home, 'config.toml'), config + mcpToml(canary));
       return {
-        workdir, home, prompt: 'Reply with exactly: OK', canaries: { userMcp: canary },
+        workdir, home, prompt: REPLY_OK, canaries: { userMcp: canary },
         env: emptyList ? { VIBE_MCP_SERVERS: '[]' } : {},
       };
     },
@@ -255,7 +296,7 @@ const ARMS = {
       } else {
         file = trustWithVibe(home, [trusted]);
       }
-      return { workdir, home, prompt: 'Reply with exactly: OK', canaries: { projectHook: canary }, notes, trustedFile: file };
+      return { workdir, home, prompt: REPLY_OK, canaries: { projectHook: canary }, notes, trustedFile: file };
     },
   })),
 
@@ -263,7 +304,7 @@ const ARMS = {
     arm: 'inside + sibling outside',
     setup(runDir, n) {
       const workdir = join(runDir, 'work');
-      write(join(workdir, 'inside.txt'), `the marker is INSIDE-${n}\n`);
+      write(join(workdir, 'inside.txt'), `the marker → is INSIDE-${n}\n`);
       const outside = join(runDir, 'sibling', 'marker.txt');
       write(outside, `the marker is OUTSIDE-${n}\n`);
       return {
@@ -275,18 +316,25 @@ const ARMS = {
     },
   }],
 
+  // The arms a, a2, a3 and a3c are built by lib/vibe.mjs keyringSetup (S-N17): on Linux a and a2 carry the forced PYTHON_KEYRING_BACKEND of the
+  // launch E2 ships (DN10), a3 carries it AND a fake HOME whose keyring IS available, a3c is a3 without the variable. The row's `keyringMarker`
+  // canary says whether the probe's own backend was reached after the run: a3 must NOT (the forced backend wins), a3c MUST (else a3 proved nothing).
   'M-V7': [
-    { arm: 'a: empty short VIBE_HOME', keyring: true },
-    { arm: 'a2: empty home + VIBE_TEST_DISABLE_KEYRING=1', keyring: false },
+    { arm: 'a: empty short VIBE_HOME', id: 'a' },
+    { arm: 'a2: empty home + VIBE_TEST_DISABLE_KEYRING=1', id: 'a2' },
+    { arm: 'a3: forced backend + a fake HOME with an AVAILABLE keyring (marker must stay absent)', id: 'a3' },
+    { arm: 'a3c: the same fake HOME, NO forced backend (marker must appear)', id: 'a3c' },
     { arm: 'b: VIBE_ACTIVE_MODEL=nope', model: 'nope' },
-  ].map((a) => ({
+  ].filter((a) => !a.id || keyringArm(a.id, process.platform, { scratch: '' }).applies).map((a) => ({
     arm: a.arm,
     setup(runDir) {
       const workdir = join(runDir, 'work');
       mkdirSync(workdir, { recursive: true });
-      if (a.model) return { workdir, prompt: 'Reply with exactly: OK', env: { VIBE_ACTIVE_MODEL: a.model } };
-      const home = shortHome({ copy: false });
-      return { workdir, home, prompt: 'Reply with exactly: OK', env: a.keyring ? {} : { VIBE_TEST_DISABLE_KEYRING: '1' } };
+      if (a.model) return { workdir, prompt: REPLY_OK, env: { VIBE_ACTIVE_MODEL: a.model } };
+      // Not signed in on purpose: on Linux this arm IS L-V1 (a fresh home has no keyring and no .env).
+      const home = shortHome({ copy: false, signIn: false });
+      const keyring = keyringSetup(a.id, process.platform, { scratch: runDir });
+      return { workdir, home, prompt: REPLY_OK, env: keyring.env, canaries: keyring.markerFile ? { keyringMarker: keyring.markerFile } : {} };
     },
   })),
 
@@ -297,7 +345,7 @@ const ARMS = {
       mkdirSync(workdir, { recursive: true });
       const filler = 'This paragraph is filler text for a prompt-length test and carries no instruction at all. ';
       const word = `MARMOT-${70 + n}`;
-      const prompt = `${filler.repeat(Math.ceil(33000 / filler.length))}\n\nReply with exactly this word and nothing else: ${word}`;
+      const prompt = `${filler.repeat(Math.ceil(33000 / filler.length))}\n\nReply with exactly this word → and nothing else: ${word}`;
       return { workdir, prompt, expect: { word } };
     },
   }],
@@ -310,7 +358,7 @@ const ARMS = {
       const canary = join(runDir, 'canary-user-hook.txt');
       const home = shortHome({ copy: true });
       writeFileSync(join(home, 'hooks.toml'), hooksToml(canary));
-      return { workdir, home, prompt: 'Reply with exactly: OK', canaries: { userHook: canary } };
+      return { workdir, home, prompt: REPLY_OK, canaries: { userHook: canary } };
     },
   }],
 
@@ -333,7 +381,7 @@ const ARMS = {
         '---\nname: probe-agents-skill\ndescription: A probe skill. Mention its name when asked which skills you have.\n---\nSay PUFFIN-4.\n');
       return {
         workdir, trust, canaries: { projectTool: toolCanary },
-        prompt: 'Reply with one short line: the names of the skills available to you, or NONE.',
+        prompt: 'Reply with one short line → the names of the skills available to you, or NONE.',
         expect: { agentsMd: 'KESTREL-9', planAgent: 'HERON-5', vibeSkill: 'probe-vibe-skill', agentsSkill: 'probe-agents-skill' },
       };
     },
@@ -346,17 +394,17 @@ const ARMS = {
       mkdirSync(workdir, { recursive: true });
       const marker = join(runDir, 'checkout', 'marker.txt');
       write(marker, `${MARK(n)}\n`);
-      return { workdir, prompt: `Use read_file on the absolute path ${fwd(marker)} and reply with the marker only.`, expect: { outside: MARK(n) } };
+      return { workdir, prompt: `Use read_file on the absolute path ${fwd(marker)} and → reply with the marker only.`, expect: { outside: MARK(n) } };
     },
   }],
 
   'M-V12': [{
-    arm: 'MinimalWindows + VIBE_ACTIVE_MODEL=glm-5-3',
+    arm: `${WINDOWS ? 'MinimalWindows' : 'MinimalUnix'} + VIBE_ACTIVE_MODEL=glm-5-3`,
     setup(runDir) {
       const workdir = join(runDir, 'work');
       mkdirSync(workdir, { recursive: true });
-      const env = { ...minimalWindowsEnv(), VIBE_ACTIVE_MODEL: 'glm-5-3' };
-      return { workdir, prompt: 'Reply with exactly: OK', replaceEnv: env };
+      const env = { ...minimalEnv(), VIBE_ACTIVE_MODEL: 'glm-5-3' };
+      return { workdir, prompt: REPLY_OK, replaceEnv: env };
     },
   }],
 
@@ -367,7 +415,7 @@ const ARMS = {
       write(join(workdir, 'notes.txt'), 'a short note\n');
       return {
         workdir, timeLimit: 5,
-        prompt: 'Use read_file on notes.txt thirty times, one call after another, then write a 600-word reflection on it.',
+        prompt: 'Use read_file on notes.txt thirty times, one call after another → then write a 600-word reflection on it.',
       };
     },
   }],
@@ -387,7 +435,7 @@ const ARMS = {
       if (control) {
         canaries.copy = join(runDir, 'canary-copy.txt');
         write(join(copy, '.vibe', 'hooks.toml'), hooksToml(canaries.copy));
-        return { workdir: copy, trust: true, prompt: 'Reply with exactly: OK', canaries };
+        return { workdir: copy, trust: true, prompt: REPLY_OK, canaries };
       }
       write(join(runDir, 'outside', 'outside.txt'), `JUNCTION-${n}\n`);
       write(join(runDir, 'outside-file.txt'), `SYMLINK-${n}\n`);
@@ -395,7 +443,7 @@ const ARMS = {
         fileSymlink(join(copy, 'link-file.txt'), join(runDir, 'outside-file.txt'))].filter(Boolean).join('; ');
       return {
         workdir: copy, trust: true, canaries, notes,
-        prompt: 'Use read_file on marker.txt, on link-dir/outside.txt and on link-file.txt in the current folder. '
+        prompt: 'Use read_file on marker.txt, on link-dir/outside.txt and on link-file.txt in the current folder. → '
           + 'Reply with the three markers on one line; write DENIED for one you could not read.',
         expect: { copyMarker: MARK(n), junction: `JUNCTION-${n}`, symlink: `SYMLINK-${n}` },
       };
@@ -417,50 +465,64 @@ const ARMS = {
       const canary = join(runDir, 'canary-package-mcp.txt');
       console.error(`[probe] priming ${basename(runDir)} …`);
       const prime = run(exe, vibeArgs({ workdir, exportDir: join(runDir, 'export-prime') }),
-        { cwd: workdir, input: 'Reply with exactly: OK', encoding: 'utf8', timeout: 210_000, env: childEnv({ replaceEnv: env }), maxBuffer: 64 * 1024 * 1024 });
+        { cwd: workdir, input: REPLY_OK, encoding: 'utf8', timeout: 210_000, env: childEnv({ replaceEnv: env }), maxBuffer: 64 * 1024 * 1024 });
       const packages = builtInPackages(home);
       if (!control) {
         for (const p of packages) write(join(p, 'mcp.json'), packageMcpJson(canary));
       }
       return {
-        workdir, home, replaceEnv: env, prompt: 'Reply with exactly: OK', canaries: { packageMcp: canary },
+        workdir, home, replaceEnv: env, prompt: REPLY_OK, canaries: { packageMcp: canary },
         notes: `prime exit ${prime.status}; packages: ${packages.map((p) => fwd(relative(home, p))).join(' ') || 'none'}${control ? '' : '; mcp.json planted'}`,
       };
     },
   })),
 };
 
+// --arms reaches only the cells that run arms: refuse a cell selection it cannot keep free, before anything launches.
+const armsCellsMessage = armsCellsError(armFilter, cells, ARMS);
+if (armsCellsMessage) {
+  console.error(armsCellsMessage);
+  process.exit(65);
+}
+
 // ------------------------------------------------------------------------------------------------------------ launching
 
 // The shipped flag set, with an arm's deviations, is lib/vibe.mjs's vibeArgs().
 
-function childEnv(spec) {
+// Pure: the CLI pin, the platform and the environment come in, like lib/vibe.mjs's minimalEnv(platform, env). lib/vibe.test.mjs
+// cuts this function out of this file by its first and last line, so keep the opening line and the closing `}` in column 0.
+function childEnvFor(spec, { cli, platform, env: source }) {
   // UTF-8 mode with the CLI pin (§26): without it a character outside cp1252 in an answer kills the run with exit 2.
   const pin = cli === 'inherit' ? {} : { VIBE_CLI: cli, PYTHONUTF8: '1' };
   if (spec.replaceEnv) return { ...spec.replaceEnv, ...pin };
   // NoDefaultCurrentDirectoryInExePath as Claude Code sets it for the processes it starts, which vibe inherits through coai.
-  const env = { ...process.env, NoDefaultCurrentDirectoryInExePath: '1', ...(spec.home ? { VIBE_HOME: spec.home } : {}), ...(spec.env ?? {}), ...pin };
+  // Windows starts from the whole environment, as the RESULTS cells there were measured; every other platform starts from the
+  // product's minimal list (§31.4: on Linux the probe handed Vibe every variable of the operator's shell, which the product never does).
+  const base = platform === 'win32' ? source : minimalEnv(platform, source);
+  const env = { ...base, NoDefaultCurrentDirectoryInExePath: '1', ...(spec.home ? { VIBE_HOME: spec.home } : {}), ...(spec.env ?? {}), ...pin };
   if (cli === 'inherit') delete env.VIBE_CLI;
   return env;
 }
+const childEnv = (spec) => childEnvFor(spec, { cli, platform: process.platform, env: process.env });
 
 let launches = 0;
 /** One vibe launch; everything it produced is saved in `runDir` so `--reparse` can rebuild the row. */
-function launch(runDir, tag, spec, resume = '') {
+function launch(runDir, tag, armSpec, resume = '', { cell = '', n = 0 } = {}) {
+  const spec = ownedOnLinux(armSpec);
   const exportDir = join(runDir, `export${tag}`);
   const args = vibeArgs({ workdir: spec.workdir, exportDir, trust: spec.trust, timeLimit: spec.timeLimit, resume });
   const before = files(spec.workdir);
   const t0 = performance.now();
   launches++;
   // Said before the launch, not after: one launch can take minutes (the code round, codex, 2026-10-12).
-  console.error(`[probe] launch ${launches}: ${basename(runDir)}${tag} …`);
+  console.error(`[probe] launch ${launches}: ${cell} repeat ${n} ${basename(runDir)}${tag} …`);
   const r = run(exe, args, { cwd: spec.workdir, input: spec.prompt, encoding: 'utf8', timeout: ((spec.timeLimit ?? 120) + 90) * 1000,
     env: childEnv(spec), maxBuffer: 64 * 1024 * 1024 });
   writeFileSync(join(runDir, `stdout${tag}.json`), r.stdout ?? '');
   const meta = {
     args, exit: r.status, signal: r.signal, spawnError: r.error ? String(r.error) : '', seconds: Math.round((performance.now() - t0) / 100) / 10,
     stderrTail: String(r.stderr ?? '').slice(-1500), before, promptBytes: Buffer.byteLength(spec.prompt),
-    envNames: spec.replaceEnv ? Object.keys(spec.replaceEnv) : Object.keys(spec.env ?? {}), home: spec.home ?? '',
+    envNames: spec.replaceEnv ? Object.keys(spec.replaceEnv) : Object.keys(spec.env ?? {}), home: spec.home ?? spec.replaceEnv?.VIBE_HOME ?? '',
   };
   writeFileSync(join(runDir, `meta${tag}.json`), JSON.stringify(meta, null, 2));
   return meta;
@@ -549,7 +611,7 @@ function runArm(cell, a, n) {
   mkdirSync(runDir, { recursive: true });
   const spec = a.setup(runDir, n);
   writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: a.arm, n, spec }, null, 2));
-  launch(runDir, '', spec);
+  launch(runDir, '', spec, '', { cell, n });
   const row = rowOf(runDir, cell, a.arm, n, spec);
   console.log(JSON.stringify({ cell, arm: a.arm, run: n, exit: row.exit, s: row.seconds, canaries: row.canaries, expect: row.expect,
     newFiles: row.newFiles, tools: row.tools.slice(0, 200), answer: row.answer.slice(0, 120).replace(/\s+/gu, ' ') }));
@@ -564,13 +626,15 @@ function runResume(n) {
   const workdir = join(runDir, 'work');
   mkdirSync(workdir, { recursive: true });
   const word = `PELICAN-${40 + n}`;
-  const t1 = { workdir, prompt: `The code word is ${word}. Remember it. Reply with exactly: OK` };
+  // Both turns on ONE home: a resumed session lives in the home that wrote it (on Linux an owned, signed-in short home).
+  const shared = WINDOWS ? {} : { home: shortHome({ copy: false }) };
+  const t1 = { ...shared, workdir, prompt: `The code word is ${word}. → Remember it. Reply with exactly: OK` };
   writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: 'two turns', n, spec: t1 }, null, 2));
-  launch(runDir, '-t1', t1);
+  launch(runDir, '-t1', t1, '', { cell, n });
   const r1 = rowOf(runDir, cell, 'turn 1', n, t1, '-t1');
-  const t2 = { workdir, prompt: 'What is the code word I gave you? Reply with it only.', expect: { word } };
+  const t2 = { ...shared, workdir, prompt: 'What is the code word I gave you? → Reply with it only.', expect: { word } };
   const id = r1.export.sessionId || r1.sessionId;
-  if (id) launch(runDir, '-t2', t2, id);
+  if (id) launch(runDir, '-t2', t2, id, { cell, n });
   const r2 = id ? rowOf(runDir, cell, 'turn 2', n, t2, '-t2') : null;
   const row = { cell, arm: 'two turns (--resume)', run: n, turn1: r1, turn2: r2, sameSession: r2 ? (r2.export.sessionId || r2.sessionId) === id : null };
   console.log(JSON.stringify({ cell, run: n, exit1: r1.exit, exit2: r2?.exit, u1: r1.export.usage, u2: r2?.export.usage, remembered: r2?.expect.word, same: row.sameSession }));
@@ -625,6 +689,9 @@ if (reparse) {
   process.exit(0);
 }
 
+// The person's Vibe home, LISTED before anything starts (names, sizes, mtimes — by lstat, so the .env is never opened).
+const personsBefore = homeListing(REAL_HOME);
+
 // On a home of the probe's own, in the built environment: a bare `vibe --version` writes `vibehistory` into whatever
 // VIBE_HOME it gets, and with none that is the person's ~/.vibe (§24).
 const versionRun = run(exe, ['--version'], { encoding: 'utf8', timeout: 30_000, env: childEnv({ replaceEnv: builtEnv(shortHome({ copy: false })) }) });
@@ -636,7 +703,7 @@ for (const cell of cells) {
   if (cell === 'M-V5') {
     for (let n = 1; n <= repeats; n++) rows.push(runResume(n));
   } else {
-    for (const a of ARMS[cell]) {
+    for (const a of ARMS[cell].filter((arm) => armWanted(arm.arm, armFilter))) {
       const times = a.control ? 1 : repeats;
       for (let n = 1; n <= times; n++) rows.push(runArm(cell, a, n));
     }
@@ -649,7 +716,18 @@ for (const cell of cells) {
   results = { ...results, byCell: { ...results.byCell, [cell]: rows } };
   writeFileSync(resultsPath, JSON.stringify(results, null, 2));
 }
-results = { ...results, launches: (results.launches ?? 0) + launches, finished: new Date().toISOString() };
+// The person's Vibe home again: on Linux nothing may have changed (every arm ran on an owned home); on Windows the arms that
+// ran on the real home legitimately wrote Vibe's own logs there, so it is recorded, not judged.
+const personsAfter = homeListing(REAL_HOME);
+const key = (e) => `${e.path}|${e.link}|${e.bytes}|${e.mtimeMs}`;
+const personsChanged = [...new Set([...personsBefore, ...personsAfter].map((e) => e.path))]
+  .filter((path) => key(personsBefore.find((e) => e.path === path) ?? {}) !== key(personsAfter.find((e) => e.path === path) ?? {}));
+results = { ...results, launches: (results.launches ?? 0) + launches, finished: new Date().toISOString(), signIns,
+  personsHome: { entriesBefore: personsBefore.length, entriesAfter: personsAfter.length, changed: personsChanged } };
 writeFileSync(resultsPath, JSON.stringify(results, null, 2));
 report(results.byCell);
 console.log(`vibe launches this invocation: ${launches}; results: ${resultsPath}`);
+if (!WINDOWS && personsChanged.length > 0) {
+  console.error(`STOP: the person's Vibe home changed during the run (${personsChanged.length} entries: ${personsChanged.join(', ')}) — nothing of the probe may write there`);
+  process.exit(70);
+}

@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.14.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.14.0...server-v0.14.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **launcher:** a fast macOS child is not 'not started', and no test run sees another ([#893](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/893)) ([e86fe17](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e86fe17f86bfad9e154237141e3c0d4a1819e78b))
+
+## [0.14.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.13.1...server-v0.14.0) (2026-10-19)
+
+
+### Features
+
+* **kimi:** Kimi Code on a WSL2 host ([#879](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/879)) ([cb9ec8b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cb9ec8b652ec86afda7eac875ba80193eaf7a494))
+
+
+### Bug Fixes
+
+* **server:** a vendor with no gauge is logged as such, not as a slot that cannot be read ([#875](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/875)) ([97c7172](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/97c7172d08c3eabf66ba78560f0a262b3c6c226b))
+
+## [0.13.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.13.0...server-v0.13.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **round-counter:** rounds per 1 % keeps a plateau's rounds and is pooled (story 6.2b) ([#860](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/860)) ([ca9b7c1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ca9b7c1ec5ae706ab10e7d81cb01b4ef25e51d70))
+
+## [0.13.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.12.0...server-v0.13.0) (2026-10-16)
+
+
+### Features
+
+* Mistral Vibe as a coai reviewer — the owned home, the round's snapshot, one-press install per OS; Kimi measured and re-planned ([#803](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/803)) ([0312d06](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0312d0637991ff65a42096c97f9c490fe11b1c7d))
+* the Team server reads each vendor's quota gauge under the slot's lease, and the extension shows it and when the quota comes back (round counter E6) ([#790](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/790)) ([e68dd2e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e68dd2e370213d64f5bca62e95263bdfd484ee63))
+
 ## [0.12.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.11.0...server-v0.12.0) (2026-10-12)
 
 

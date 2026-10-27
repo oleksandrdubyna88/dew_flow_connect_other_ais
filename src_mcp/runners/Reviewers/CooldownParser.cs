@@ -7,7 +7,7 @@ namespace CoaiMcp.Runners.Reviewers;
 /// How long to leave an account alone, read from the sentence the vendor itself printed.
 /// </summary>
 /// <remarks>
-/// <para><b>One parser, both halves</b> (story 5.3b of todo/PLAN_every_round_is_counted.md). It lived in
+/// <para><b>One parser, both halves</b> (story 5.3b of research/PLAN_every_round_is_counted.md). It lived in
 /// <c>src_server</c>, where the Team server parks a slot on it; the dependency runs server → mcp, so <c>coai-mcp</c>
 /// could not reach it there, and a second copy for the local half is how two readings of one vendor sentence come to
 /// disagree. Here, in the library both halves compile against, the Team server parks a slot on <see cref="Until"/>.</para>
@@ -47,7 +47,7 @@ public static partial class CooldownParser
     /// <remarks>
     /// Longer than any window these vendors state (the longest seen: a weekly window, and agy's 110 h). A duration past
     /// it — or one too large to be an instant at all — is a sentence with nothing usable in it, so the fallback applies
-    /// rather than a throw that would fail the job (story 5.3a of todo/PLAN_every_round_is_counted.md, its plan round).
+    /// rather than a throw that would fail the job (story 5.3a of research/PLAN_every_round_is_counted.md, its plan round).
     /// </remarks>
     public static readonly TimeSpan MaxStatedWait = TimeSpan.FromDays(14);
 
@@ -70,7 +70,7 @@ public static partial class CooldownParser
     /// The instant the vendor NAMED — a duration, a date or a clock time — or null when it named none.
     /// </summary>
     /// <remarks>
-    /// <para>Story 5.3b of todo/PLAN_every_round_is_counted.md: what the LOCAL half reads, where <see cref="Until"/> is
+    /// <para>Story 5.3b of research/PLAN_every_round_is_counted.md: what the LOCAL half reads, where <see cref="Until"/> is
     /// what the Team server parks a slot on. The difference is the guess: <see cref="Until"/> always answers, falling
     /// back to <see cref="Fallback"/>'s policy; this answers only what the vendor said, because the local ledger writes
     /// it down and a card shows it, and a guess in either place would be a claim the vendor never made. Null is the
@@ -131,7 +131,7 @@ public static partial class CooldownParser
     /// How long the vendor said to wait — <c>Resets in 88h49m9s</c> — or null when it said no usable duration.
     /// </summary>
     /// <remarks>
-    /// Story 5.3a of todo/PLAN_every_round_is_counted.md. Believed like any named instant, so <see cref="MaxGuess"/> does
+    /// Story 5.3a of research/PLAN_every_round_is_counted.md. Believed like any named instant, so <see cref="MaxGuess"/> does
     /// not cap it; <see cref="MaxStatedWait"/> does, and anything past it — a number too large to be an instant at all
     /// included — is no duration, never a throw: a malformed refusal must not fail the job (its plan round).
     /// </remarks>

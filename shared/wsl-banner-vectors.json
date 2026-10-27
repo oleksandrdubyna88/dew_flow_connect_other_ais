@@ -1,0 +1,62 @@
+{
+  "why": [
+    "ONE rule for which WSL a Linux kernel is, from the first line of /proc/version (DL1 of research/PLAN_kimi_and_vibe_on_linux.md): the",
+    "banner holds `WSL2` or `microsoft-standard` (case-insensitive) -> wsl2; else it holds `microsoft` or `WSL` -> wsl1; else none.",
+    "Both halves read this file and assert their own predicate against it: the server (WslGenerations.Of, CoaiMcp.Tests) and the extension",
+    "(read by the extension's tests once its side is built). Two self-consistent copies of a rule can disagree and both stay green; one",
+    "file read by both cannot. generation is the answer: none | wsl1 | wsl2."
+  ],
+  "vectors": [
+    {
+      "id": "wsl2-stock-kernel",
+      "banner": "Linux version 5.15.167.4-microsoft-standard-WSL2 (root@1234) (gcc (GCC) 11.2.0, GNU ld (GNU Binutils) 2.37) #1 SMP Tue Nov 5 00:21:55 UTC 2024",
+      "generation": "wsl2"
+    },
+    {
+      "id": "wsl2-lowercase-marker",
+      "banner": "Linux version 6.6.36.3-microsoft-standard-wsl2 (root@build) #1 SMP PREEMPT_DYNAMIC",
+      "generation": "wsl2"
+    },
+    {
+      "id": "wsl2-microsoft-standard-without-the-suffix",
+      "banner": "Linux version 5.10.16.3-microsoft-standard (oe-user@oe-host) #1 SMP",
+      "generation": "wsl2"
+    },
+    {
+      "id": "wsl2-custom-kernel-that-keeps-the-tag",
+      "banner": "Linux version 5.15.90.1-custom-WSL2 (me@box) (gcc 12.2.0) #1 SMP",
+      "generation": "wsl2"
+    },
+    {
+      "id": "wsl1-translation-layer",
+      "banner": "Linux version 4.4.0-19041-Microsoft (Microsoft@Microsoft.com) (gcc version 5.4.0 (GCC) ) #1237-Microsoft Sat Sep 11 14:32:00 PST 2021",
+      "generation": "wsl1"
+    },
+    {
+      "id": "wsl1-uppercase-microsoft-only",
+      "banner": "Linux version 4.4.0-17763-MICROSOFT (Microsoft@Microsoft.com) #379-Microsoft",
+      "generation": "wsl1"
+    },
+    {
+      "id": "native-ubuntu",
+      "banner": "Linux version 6.8.0-45-generic (buildd@lcy02-amd64-001) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.2.0-23ubuntu4) 13.2.0) #45-Ubuntu SMP PREEMPT_DYNAMIC",
+      "generation": "none"
+    },
+    {
+      "id": "native-fedora",
+      "banner": "Linux version 6.10.7-200.fc40.x86_64 (mockbuild@bkernel01) (gcc (GCC) 14.2.1) #1 SMP PREEMPT_DYNAMIC",
+      "generation": "none"
+    },
+    {
+      "id": "wsl2-custom-kernel-without-any-marker",
+      "banner": "Linux version 5.15.90.1-myown (me@box) (gcc 12.2.0) #1 SMP",
+      "generation": "none",
+      "note": "A WSL2 kernel the owner built and tagged with nothing: it is indistinguishable from a native Linux kernel by its banner, so it reads as none and Vibe is refused as a native Linux host. Stated, not solved."
+    },
+    {
+      "id": "empty-banner",
+      "banner": "",
+      "generation": "none"
+    }
+  ]
+}

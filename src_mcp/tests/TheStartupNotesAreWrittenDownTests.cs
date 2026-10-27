@@ -379,7 +379,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
     private PanelServiceHost Hosting() =>
         new(name => name == "COAI_DATA_DIR" ? _dir.Path : null,
             VaultKeys.None("no vault in this test"), default, new ProcessLauncher(),
-            Watching(), Collecting);
+            Watching(), Collecting, CancellationToken.None);
 
     [Fact]
     public void EveryStartupNote_ReachesTheLogAndThePageFromOneCall()

@@ -10,7 +10,7 @@
 |---|---|---|
 | `providers` | `PanelService.ProvidersAsync` — CLI probe + vault state | never; it reports |
 | `open` | `OpenAsync` — resolve branch, prune worktrees, load-or-create session, stamp the caller | repo/branch unresolvable |
-| `review_plan` | `RunStageAsync` with one `PlanCritique` per provider | no session; round awaiting resolve |
+| `review_plan` | `PlanInputs.PrepareAsync`, then `RunStageAsync` with one `PlanCritique` per provider; the plan is `planText` OR `committedPlan` (+ `expectedCommit`) | no session; round awaiting resolve; both plan inputs or neither; `expectedCommit` alone, malformed or stale; any unreadable committed plan (see *The plan gate reads a committed plan*) |
 | `review_code` | `RunStageAsync` with the four code roles per provider — `Conventions` first | **no plan round reached `proceed`** |
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
@@ -96,7 +96,7 @@ boundary both survey. The extension reads `consultants.json` only and never sees
 |---|---|
 | The background start, its failure (`ServerStartFailed`) and stop semantics | `Server/StartingHost.cs`, `Program.StartedAsync` |
 | The sweeper waits for the start through the source (`Ready`), then asks for the current service per beat | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)` |
-| A settings reload publishes the new stamp only with a service that built | `PanelServiceHost.Current` |
+| A settings reload publishes the new stamp only with a service that built. **A reload that cannot be used keeps the last good service AND the old stamp** (E3 S2, C14), so the next call tries again, with one warning per stamp: the file is held open by its writer (`SettingsFile.TryLayer` answers `SettingsLayer.Busy` — ONLY a Windows sharing or lock violation, HResult `0x80070020`/`0x80070021`), or the rebuild threw. `Current` never throws: its stamp read keeps the OLD stamp for any failure to read it (`IOException`, `UnauthorizedAccessException`, and since the E3 code gate `ArgumentException`, `NotSupportedException`, `SecurityException` — a path the platform cannot stamp), because "cannot tell" is not "the file vanished" and the old stamp keeps the last good service serving; a skipped reload is logged with the exception itself, not as text in the message. A permission denial is NOT busy (empty settings, as before, so a file locked down by mistake never pins stale settings), and a malformed or empty file gives the defaults, as before. The values the read returned are the ones the rebuild uses (one read per reload); START (`Start()`) reads as it always did. `SettingsFile.Read` and `Layer`'s eight callers are unchanged. | `PanelServiceHost.Current`/`Reload`/`Kept`, `SettingsFile.TryRead`/`TryLayer`, `SettingsRead.cs` |
 | The held set, its cache and fail-closed answer | `Server/SessionHolds.cs`, `SessionStore.HeldQuestions` |
 | Judged first, held asked once per sweep | `Server/EscalationRetention.cs` |
 | The two settings | `Server/ServerPace.cs` (`PanelSettings.Pace`) |
@@ -1370,6 +1370,8 @@ admits but FLAGS — codex on every capability, agy's disk read — and the flag
 the card and the log. S3 had made it refuse such a row unless it carried `acknowledged: true`; the operator
 dropped the tick, because codex has no setting that limits what it reads, so a tick would confine nothing.
 
+**A heartbeat the disk refuses is said and skipped (E3 S4, C18's product side).** CI run 39325900821 (Windows) ended a question whose rows all answered with `UnauthorizedAccessException` from the beat's write: a faulted `HeartbeatAsync` was rethrown at `LaunchAllAsync`'s `finally` and the settled record was never written. `QuestionFanOut.BeatAsync` now catches `IOException or UnauthorizedAccessException` around ONE beat, logs `question {Id}: a heartbeat could not be written ({Reason}); the next beat tries again` at Warning — ONCE per run of misses (`HeartbeatAsync` announces only the first of consecutive failed beats and resets after a beat that lands) — and the loop goes on. Why it is safe: the sweep ends a question only on a stale heartbeat (two minutes, four beats) AND a dead pid (`QuestionConsultStore.Orphaned`), so a missed beat — or several — never ends a live server's question. A row's settle write and the final write are NOT guarded: a lost answer must reach the caller. `QuestionConsultStore.FileWriter` (`internal`, default `AtomicJson.Write`) is the seam the tests refuse a write through, on every OS.
+
 **The heartbeat, now proved to be WRITTEN.** S2 covered the sweep's reading of a stale beat; nothing ran a
 row past thirty seconds. `QuestionFanOut` takes the interval as a seam (`heartbeatEvery`, the store's thirty
 seconds by default), and `TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval` sees three distinct
@@ -1398,7 +1400,7 @@ read since S2 and are acted on now). An older extension against this server show
 person answers it or the retention takes it; a newer extension against an older server sees no status and
 draws every card, as before.
 
-**Sizes (D12).** `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness`, a static unit every
+**Sizes (D12).** `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness` — since E3 S4 `CoaiMcp.Runners.Processes.ProcessLiveness`, `runners/Processes/ProcessLiveness.cs` — a static unit every
 sweep asks; the gate's wiring and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497
 (the default's constant and its remark paid for by the surplus blank lines beside it).
 
@@ -1447,7 +1449,7 @@ against the code without its fix. What changed on this side, by item:
 | 9 | A live server whose fan-out never settled left `consulting` for ever | past twice the row budget the sweep ends it `interrupted`, naming the deadline | `QuestionConsultStore.Sweep(isAlive, now, deadline)` |
 | 11 | The ~6 s outline was built for every question with any `none` row, before ANY row launched | built only for an api `none` row (A9 names them), awaited by that row alone, cached per repository + HEAD for the last four, a failed build never kept | `QuestionOutlineCache`, `RowInput.AfterOutline` |
 | 13 | Four record directories each carried their own id guard, turn read, stamp, parse and delete-and-warn | one `RecordFiles`, used by `QuestionConsultStore`, `ConsultationStore`, `QuestionPhaseStore` and `EscalationRetention` | `RecordFiles` |
-| 14 | `AtomicJson.Write` takes the turn, so a caller holding it could not use it | `Write` (takes the turn) and `WriteUnderTurn` (temp + move); the phase store and the spend call the latter | `AtomicJson` |
+| 14 | `AtomicJson.Write` takes the turn, so a caller holding it could not use it | `Write` (takes the turn) and `WriteUnderTurn` (the write itself; the phase store and the spend call it). **E3 S4:** `WriteUnderTurn` writes through `AtomicFile.Write` with `AtomicFile.SharingRetry` — a pid-and-GUID temp name (`<id>.json.<pid>.<guid>.tmp`), the move retried for `UnauthorizedAccessException` too, no more fixed `path + ".tmp"` | `AtomicJson`, `AtomicFile` |
 | 15 | The question prompts kept a copy of the prompt-id expression without the Windows device names (`con` was a prompt) | `RoleComposition.IsPromptId`, the whole rule | `QuestionPromptSet` |
 
 Item 6 (the panel's 15-minute default), 10 and 12 (the extension's watchers) are the extension's; see
@@ -1577,6 +1579,160 @@ flowchart LR
 Still in `PanelService` and still over the ceiling: the document stage's entry points, the resolve path
 and the scratch sweeps — steps 5–7 of the same plan.
 
+## The plan gate reads a committed plan (2026-10-16, `todo/PLAN_the_plan_gate_reads_the_committed_plan_E1.md`)
+
+A caller can name a COMMITTED plan file instead of pasting it. The server reads the blob at ONE commit, proves the
+text is that blob, and refuses every wrong read before a round number is taken. The reader is
+`runners/Collecting/CommittedPlanReader.cs`; its pure parts are in `core/`.
+
+```mermaid
+flowchart TD
+    A["PlanPath.Check: trim, backslash to slash, relative, no trailing slash, not a credential name"] --> B["rev-parse --show-toplevel HEAD"]
+    B --> C["ls-tree -l -z, TreeEntries.Parse, PlanEntry.Pick: mode, type, size, one entry, same path"]
+    C -->|accepted only| D["cat-file blob oid"]
+    D --> E["CaptureGate: not Ran, not Ok, Truncated"]
+    E --> F["BlobProof.Prove: SHA-1 of the re-encoded text equals the oid, or BOM plus text does"]
+    F --> G["empty and LFS test on the PROVED text"]
+    G --> H{"HEAD is the commit?"}
+    H -->|yes| I["status --porcelain=v1 -z of the path: edited or staged is refused"]
+    H -->|no| J["Note: the working tree was not compared"]
+    I --> K["Accepted: PlanSource, Text, Note"]
+    J --> K
+```
+
+- **Accepted if and only if the text re-encodes to the blob id.** The launcher decodes stdout as UTF-8 and DROPS a
+  leading BOM (measured), so a BOM blob matches only over `EF BB BF` + the bytes. A literal U+FFFD in a valid blob
+  matches the first id and is accepted; U+FFFD is looked for only after both ids fail. UTF-16/UTF-32 blobs decode
+  without a replacement character and are refused as "differs from the blob", with the cure "save it as UTF-8".
+- **The mode decides before the type**: a committed symlink's `ls-tree` type is `blob`, only mode `120000` says link.
+  Directory, symlink, submodule, odd mode, empty, over `DocumentRules.MaxBytes` and "path differs" (a trailing slash
+  lists what is UNDER a directory) are refused from the entry alone — no `cat-file` runs.
+- **A cut capture is refused on the flag alone** (`GitAnswer.Truncated`), even when the id would match. Order of the
+  gate: did it finish, did it succeed, was it whole — a cut capture of a command that failed is a failed command.
+- **A SHA-256 repository is refused first** (its blob ids are SHA-256; the proof is SHA-1 only): pass `planText` there.
+  `BlobId.Sha1Of` carries a `SuppressMessage` for Sonar S4790 ("use a stronger hashing algorithm"): the SHA-1 there is
+  git's object identity by definition, not a security digest — the repository has no other suppression to follow.
+- **The checkout guard** (`git status`, compared through the clean filters) runs only when HEAD IS the commit read. A
+  checkout written with CRLF under `core.autocrlf=true` is clean. A file re-saved with a different size AFTER the commit
+  is reported as modified by git before it hashes anything (measured: a CRLF rewrite of an LF file under autocrlf), so
+  such a file is refused as "uncommitted". Blind spots, said not fixed: `skip-worktree` / `assume-unchanged` paths read
+  as clean; a branch checked out in ANOTHER worktree is "not compared". A path with BOTH staged and unstaged changes
+  (`MM`) has its own sentence ("git add it again, then git commit"): committing the staged part alone leaves the edit.
+- **One entry point is public**: `CommittedPlanReader.ReadGuardedAsync`. `ReadAsync` (the proof over a canonical path,
+  with no credential refusal) is `internal`, so no caller outside the assembly can read `.env` as a plan.
+- **Credential-shaped names** use the one table in `CredentialFiles` and the one sentence
+  (`CredentialFiles.NamedSentence`, shared with `review_feature`'s `planPath`).
+
+### How `review_plan` takes it (E1.S5)
+
+`Tools.cs` publishes `planText`, `committedPlan` and `expectedCommit` as OPTIONAL (C# defaults — without one the SDK
+makes an argument required); only `repoPath` and `branch` are required. `PanelService.ReviewPlanAsync` has three
+overloads: the two string ones (every older caller) wrap the text in a `PlanInput` and delegate to the third, which runs
+`PlanInputs.PrepareAsync` BEFORE the claim, the begin and any round number:
+
+```mermaid
+sequenceDiagram
+    participant T as Tools.cs review_plan
+    participant P as PanelService.ReviewPlanAsync
+    participant I as PlanInputs.PrepareAsync
+    participant R as CommittedPlanReader
+    participant E as RoundEngine.RunStageAsync
+    T->>P: PlanInput(text, committedPlan, expectedCommit)
+    P->>I: input, branch, resolve seam
+    I->>I: both / neither / expectedCommit alone / malformed → Refused
+    I->>I: resolve branch → tip (WorktreeException → Refused)
+    I->>I: expectedCommit differs from tip → Refused naming both
+    I->>R: ReadGuardedAsync(tip, path)
+    R-->>I: Accepted(PlanSource, Text, Note) or Refused
+    I-->>P: Ready(Text, Head = tip, Source, SourceLine, Unreviewed) or Refused
+    P->>E: StageRun { Head = tip, PlanSource }
+    P-->>T: Refused → Error(sentence), no round
+```
+
+- `committedPlan` made only of whitespace counts as absent; `planText` is judged exactly as before (empty is absent).
+  A pasted plan takes no resolve and no git.
+- The tip is resolved ONCE and becomes the round's `Head`: the engine resolves `stage.Head`, so the plan text, the
+  cadence outline read under the claim and the round's `head_sha` are one commit even if the branch moves.
+  `PanelService.TipResolver` is the test seam that proves it.
+- The preparation runs under ONE overall deadline, `PlanInputs.PreparationDeadline` (45 s), because each git call has its
+  own 30-second budget and the sequence (resolve, root and HEAD, entry, blob, status) could otherwise take minutes with no
+  round yet. On expiry it answers "git did not answer in time — the round was not started". The root-and-HEAD call runs
+  WHILE the proof runs. A stale `expectedCommit` is answered with the cure "check what landed (git log), then pass
+  expectedCommit = <the new tip> or re-read the plan" — never "drop the guard".
+- A committed plan's round subject (the line in the log) is its FILE NAME; a pasted plan keeps the title rule.
+- The prompt's source line is `(read by the server from <path> at commit <sha12>, blob <oid12>, <bytes> bytes)`;
+  the "working tree was not compared" note rides `RoundWork.Unreviewed`, so it lands on the reviewer line.
+
+### What a plan round records (E1.S6)
+
+`RoundRecord.PlanSource` (`core/Rounds/PlanSource.cs`: `Origin` `commit`|`text`, `Commit`, `Path`, `Blob`, `Bytes`,
+`TextId`) is stamped by the engine beside `Sha`/`CadenceNote` through ONE call, `PlanSources.Stamp(stage, planText, sha)`:
+
+| Round | `PlanSource` |
+|---|---|
+| committed plan | the reader's record (path, blob, the blob's byte count, `TextId` of the text sent) with `Commit` = the engine's resolved commit |
+| pasted plan | `Origin = text`, `Commit` = the engine's resolved commit, `Path`/`Blob` empty, `Bytes` = UTF-8 byte count, `TextId` of the text |
+| code, document, feature round | none |
+| a round written before the field | none — **absent, never empty** |
+
+It is nullable and NOT normalised on the way in, as `Caller` is: a getter that made an empty one would turn "not recorded"
+into "recorded as nothing" on the next save, and a session is saved on every progress tick. `status` serialises
+`RoundRecord`s, and the JSON context omits nulls, so a round with none shows no `planSource` property. The type is
+registered in `ServerJsonContext` so E2's `rounds` column writes it with the same context. A skipped round reviewed
+nothing and is recorded by another road, which never stamps one. `TextId` is the id the prompt's `END OF PLAN` line
+carries, so the end line and the record name one text.
+
+### What every plan reviewer is told, and when one does not count (E1.S4)
+
+`PlanSection.Compose(planText, sourceLine, textId)` builds the plan part of EVERY plan prompt — pasted or committed:
+
+```
+<instruction: the plan is marked by BEGIN OF PLAN <id> and END OF PLAN <id>; if you cannot see BOTH, or there is no plan body,
+ answer with exactly one blocking finding titled PLAN_INCOMPLETE <id> and nothing else>
+
+## The plan under review
+BEGIN OF PLAN <id>
+(read by the server from <path> at commit <sha12>, blob <oid12>, <bytes> bytes)    <- committed reads only
+<the plan>
+
+Reminder: if the first line under the heading was not `BEGIN OF PLAN <id>`, answer … PLAN_INCOMPLETE <id> …
+END OF PLAN <id>
+```
+
+`<id>` is `DocumentRules.ArtifactIdOf(plan)` — the hash of the very text that contains it, so a plan cannot forge it. The
+END line catches a cut tail, the BEGIN line (and the reminder just before END) a cut start. A detector, not a proof.
+
+`PlanIncomplete.Settle` is applied to each reviewer's outcome **once, inside the scheduler** — `BoundedScheduler.RunAllAsync`'s
+`settle`, applied in `LaunchAsync` right after the turn loop returns, BEFORE the outcome is reported, counted by the
+stand-down or returned (`RoundEngine` passes `PlanIncomplete.Settler(stage, planText)`; the title is worked out once per
+round, and not at all for a stage with no plan). So the spending ledger, the live view, the audit line, the local
+stand-down count and the round's `results` (summary, merge, decision, notice, spent lenses) all read ONE outcome. The rule,
+as amended after the cadence consultation:
+
+- **ANY finding** whose title equals `PLAN_INCOMPLETE <this round's id>` fails the reviewer — never "exactly one": two
+  identical tokens, or the token beside real findings, are no answer. The outcome becomes
+  `Unparseable("…(PLAN_INCOMPLETE); N other finding(s) set aside")`; those other findings are not merged.
+- **A token wrapped in markdown still counts**: backticks, straight and curly quotes, `*`, `_` and spaces are stripped
+  from both ends, repeatedly, before the exact compare (models copy the backticked title from the instruction). A token
+  for ANOTHER id never folds.
+- **Accounting is kept**: the fold carries `Usage`, `EarlierLaunches`, `EarlierTurns`, `Launches`, the warning and the CLI
+  version, so `TotalUsage` and the ledger still count a retried reviewer's earlier launches.
+- Zero answered after the fold → `call_human`.
+
+**The old "stated mismatch" is gone** (`research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S3, D8–D9). The fold used to
+run on `results` after the fan-out, so the progress callback had already written the ledger line as `ok`, shown the reviewer
+as done, logged it as answered — and the local stand-down (issue #485) had counted its token finding as one quiet remark, so
+a cloud that answered ONLY the token could keep the one reviewer that could still read the plan from starting. Now the ledger
+line reads `unparseable: the plan did not reach this reviewer whole (PLAN_INCOMPLETE)` with every token the reviewer spent
+kept (D9), the live view and the audit say failed, and the stand-down counts a failed cloud row. Tests:
+`APlanReviewerThatDidNotGetThePlanIsOneFailedOutcomeTests` (RED first: the ledger said `ok`, the live view `done`, the audit
+`answered`), `TheLocalReviewerStandsDownTests.ACloudReviewerThatDidNotGetThePlan_IsNotAQuietCloud`.
+
+A round-level stand-down test is not written: a local row starts at once when it is the only one, so the stand-down is only
+reachable with two local rows and a held card, which the scheduler-level harness (`CardLauncher`) does deterministically.
+Breaking the engine's call (`settle` passed as null) is therefore caught by the ledger, live-view and reply tests, not by the
+stand-down test.
+
 ## Flow of one stage
 
 **All three stages are judged against written rules.** The code stage collects from the round's
@@ -1620,7 +1776,7 @@ empty directory and take no switch. Measured on one commit, Fast found MORE from
 models at a fraction of the tokens —
 [RESULTS_findings_that_are_worth_something.md](RESULTS_findings_that_are_worth_something.md).
 
-**The size step — every code round measures itself (E2.S4, `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`).**
+**The size step — every code round measures itself (E2.S4, `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`).**
 In the code stage's `MakeWork` lambda (`PanelService.ReviewCodeAsync`), right after `CollectAsync` and `DiffShaper.Shape`,
 `RoundSizer.MeasureAsync(_context, repoPath, sha, collected, shaped, session.Rounds, _log, roundToken)` builds the round's
 `RoundSize` from the diff it actually built: the whole scope is `ChangePartition.Of` over `collected.Counted`, the unfiltered
@@ -1865,6 +2021,41 @@ the real one, retried briefly (see *A session is saved under its own scratch nam
 reads as a fresh session rather than a locked repo. Round trail (`RoundRecord`) and pending findings ride in the same file — `status`
 survives a server restart, per the durable-status rule.
 
+### A session file keeps what a newer server wrote (`Unknown` bags)
+
+Several `coai-mcp` processes share one data folder, and a window that was not reloaded after an update runs an OLDER binary.
+That binary used to read a session file with a context that skips what it does not know and write back only what it knew, so
+every member a newer release added was gone after one save (plan:
+[PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md)).
+
+- **The bags.** `PersistedSession`, `SessionState`, `PanelConfig`, `RoleGate`, `RoundRecord` and `ReviewerState` each carry
+  `[JsonExtensionData, JsonInclude] Dictionary<string, JsonElement>? Unknown { get; internal set; }` — the members of that record
+  this build does not know, written back as they were; `null` (and not written) when the file had none. The setter is
+  `internal set` on purpose: **`init` builds and then fails at the first load** (`The extension data property 'Unknown' ... cannot
+  bind with a parameter in the deserialization constructor` — the source generator makes an `init` member a constructor
+  parameter), and `private set` does not compile (SYSLIB1038). Nothing mutates the dictionary; `with` copies share it.
+- **The scrub on save.** `SessionStore.Write` serialises `SessionScrub.Scrubbed(session, Retired)`: on a COPY, rebuilt from the
+  reviewer rows up to the session, every bag loses each name of its type's JSON contract (case-insensitive; a known name in a
+  bag would be written twice and the stale copy would win the next read) and each name in `RetiredMembers` (empty today). The
+  caller's snapshot is never changed. A contract's names are worked out once per type (`SessionScrub.KnownNamesOf`), and a bag
+  is copied only when a name has to go. A gate the file never held — a file older than the security lane (2026-10-01) loads
+  `securityLane` as `null`, because the source generator does not run the initializer — is passed through and written as
+  `null`, as before the scrub; the scrub's first version threw `NullReferenceException` there.
+- **The rule for retiring or renaming a member of a bagged type:** add its OLD name to `RetiredMembers.Shipped` and update the
+  committed member list of `EveryBaggedTypesMembers_AreTheListedOnesOrRetired` in the same commit — that test fails the release
+  until both are done. Without it the old name lives in old files' bags for ever; for a rename the old name becomes a bag entry
+  while the new property starts empty.
+- **The answer carries no bag.** `open` and `status` map each round and reviewer row to `Unknown = null`
+  (`PanelService.WithoutUnknownMembers`); the members belong to the file.
+- **What it does not promise.** A record this process builds new has an empty bag (the `SecurityLane` gate the round engine
+  replaces from the settings loses its bag by design). `Finding`, `CallerDeclaration`, `RoundSize` and `PlanSource` are wire
+  types too and have no bag — a member added to one of them is still lost from `pending`, `rejections` and `carried` after an
+  older re-save (an open tail: a persistence projection, a separate plan). The other stores that read and rewrite a JSON
+  record (escalations, consultations, cadence, question-consultant state) have the same exposure and are not fixed here.
+- **Honest limit:** the guard helps only releases AFTER it. A window that still runs an earlier binary strips the file as before.
+- **Checked on the published binary:** the Native AOT `coai-mcp` (win-x64) loaded and saved a planted file through `open` with
+  unknown members at every level: all kept (2026-10-18; before the answer strip the `open` answer still echoed them).
+
 ### The round is written before it runs, not after (`LiveRound`)
 
 A `RoundRecord` is persisted the moment the fan-out is built — `status: running`, `startedUtc`, the
@@ -2071,7 +2262,7 @@ answer through `Api/BoundedBody` — streamed after the headers (`ResponseHeader
 `Content-Length` over 8 MiB refused unread, an undeclared one refused the moment the count passes it —
 because `ReadAsStringAsync` buffered the whole body before any cap ran (epic 1's code round). The shim itself, its exit
 codes and the probe are in [module_runners.md](module_runners.md#a-hosted-api-is-a-direct-call-with-a-vault-key--the-api-runtime-2026-09-25-plan_feature_review-s12).
-**Since story 3.3 of `todo/PLAN_every_round_is_counted.md` (2026-10-10) `--probe-api --model` writes the ledger**: one
+**Since story 3.3 of `research/PLAN_every_round_is_counted.md` (2026-10-10) `--probe-api --model` writes the ledger**: one
 `usage.jsonl` line per completion sent with the real key, as it answers — kind `probe` (`UsageKinds.Probe`, local-only),
 stage `Probe`, the variant as its role, the row it probed and the model it asked, `ok` / `HTTP <status> (refused
 <field>)` / `no answer` as its outcome (the allowlist's words, never the vendor's text) and what the endpoint reported
@@ -2144,10 +2335,15 @@ existed, which is exactly how mirrored lists begin to drift.
 
 ## Settings apply to the next round, not the next restart
 
+
 `PanelServiceHost` stats the panel's settings file on every tool call and rebuilds `PanelService`
 when it has changed. Settings used to be read once at startup, which made every change in the
 sidebar silently ineffective until the MCP client was restarted — a gap invisible from both ends,
 because the panel saves instantly and says so. Environment variables still outrank the file.
+
+**The host's stopping token rides the rebuilds (E3.S2, 2026-10-20).** `PanelServiceHost` takes the server's own stopping token as a REQUIRED parameter (`Program.StartedAsync` passes its `stop`) and hands it to every `PanelService` it builds, the first and every rebuild; the service hands it to `RoundEngine`, which OBSERVES it (never links it, and records nothing itself: it does not cancel a round) beside the call's token and the round's clock, and writes the FIRST source to end the round as a cancelled local turn's `endCause` (the call's token files `hostStopped` instead of `withdrawn` when the host's token is already cancelled) (`RoundCancellation`, [module_runners.md](module_runners.md)). `PanelServiceHostTests.TheHost_HandsItsStopToEveryServiceItBuilds` pins the hand-over.
+
+**A client that closes stdin is the host ending (E3.S2 code round, 2026-10-21).** `Program.ServeAsync` wraps the stdio transport in `InputEndSignallingTransport`: it pumps the real reader's messages through unchanged and in order, and when the input ends — cleanly or with a failure — it cancels `startStop` (the host token `StartedAsync` hands down) and ONLY THEN completes the reader it gave the SDK, so nothing the SDK does as its input ends (cancelling in-flight request tokens) can precede the host's stop. Before it, `startStop` was cancelled only in the `finally` after `server.RunAsync` returned. The hand-off is a BOUNDED channel (`InputEndSignallingTransport.Capacity`, 64, `Wait`): a reader that falls behind makes the pump wait and the rest of the input stays in the pipe; a host callback that throws is logged (`Program` passes its `log`), never faults the pump, and the reader is completed in a `finally`; `DisposeAsync` cancels a pump parked on a full buffer before awaiting it, and a pump ended that way does NOT run the callback (a local disposal is not the client leaving, and signalling would re-enter the host's shutdown); the reader is still completed. **Measured limit, reported rather than fixed:** no review tool (`review_plan`, `review_code`, …) takes the SDK's request `CancellationToken` (only `ask_human` does), so a client's `notifications/cancelled` never reaches a local round — a live `review_plan` kept running and answered nothing for 15 s after the cancel — and the host's stop cancels no round (it is only observed). Today only `roundClock` and `unknown` can therefore be written by a live server (a client closing stdin fires the host's token alone and the round runs on to its clock); `withdrawn` and `hostStopped` are pinned by the C# tests, where the tokens are handed in, and wait for the review tools to pass the request's token (a behaviour change this task did not make).
 
 ## Server notices — what this binary writes down (S8, from 2026-09-21)
 
@@ -2911,6 +3107,19 @@ marker back). `ABeatThatFinishesAfterTheClear_DoesNotBringTheMarkerBack` and
 
 ## The spending ledger
 
+**Consult, check, question and probe lines say what they ran with, and a consult line names its consultation (E3, 2026-10-20,
+`todo/PLAN_the_round_counter_tail_E3.md` S1 and S4's `coai-mcp` half).** `ConsultantTurnBooks.Billed` — the one place all three consult
+writers end (`ConsultationService.Settle`, `ConsultationFailedTurns.Billed`, `ConsultantCheck.Billed`) — takes the turn's `LaunchOptions` and
+a `consultation` id. The consultation labels its launch right after `Build` (`RowLaunchOptions.Answering(…, ready.Launch.Settings)`, which
+carries the codex tier probe's release) onto `TurnConsultant.RanWith`, and adds the final launch's `CliVersion` when the turn returns; the
+check does the same on its private `Turn`; the question row labels its invocation (a ready continuation keeps its first launch's labels) and
+`Record` takes `RanWith.VersionedBy(last launch's CliVersion)`; `--probe-api` labels `api` + the variant's effort. Refused before any
+launch → `LaunchOptions.None`. **`consultation`** (`UsageEntry.Consultation`, trailing) is the record's id on an answered turn
+(`record.Id`) and a failed one (`failed.Next.Id`, so a NEW consultation refused before its launch — whose record was never written, id
+emptied — carries none); a consultant check carries none (decision D8) — no consultation is behind it, and an invented id would merge
+unrelated turns in the extension's division. A local review cancelled mid-round also carries its `endCause` — see *A local cancellation says
+which token fired* in [module_runners.md](module_runners.md). The Team server is unchanged.
+
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,
 stage, seconds, tokens, cost and outcome. It is separate from the session files on purpose —
 sessions are rewritten as rounds advance and hold one repo+branch, while "what has this cost me
@@ -3052,6 +3261,62 @@ had in one reply; the opening instant is recorded on the session rather than rea
 creation time, which a save-by-move destroys on Windows and Linux never had; `COAI_AGENT_LOG_DIR`
 points the reader at another CLI's transcripts; and `Open` catches anything at all, because a
 migration step throwing something unlisted must not take down a review it only records.
+
+**The caller's own transcript, read as a record (E3, `src_mcp/src/Store/CallerTranscript.cs`; nothing is persisted until E5).**
+`CallerTranscript.Read(location, budget, fromUtc)` turns the caller's Claude Code session — its main transcript, every
+`subagents/agent-<id>.jsonl` and every `.meta.json` — into an `ObservedSession`: messages, models, effort, tokens, launches, parent
+links and writes, each counted once. It is keyed by the Claude SESSION id and never by `cwd`:
+`Store/CallerTranscriptLocator.cs` takes the id from the session registry (`~/.claude/sessions/<CLAUDE_PID>.json`, read by name), else
+`CLAUDE_CODE_SESSION_ID`, else a stored `rounds.caller`, and finds `<projects>/*/<id>.jsonl` with one non-recursive listing; a stated
+`COAI_CALLER_SESSION` alone is `unobserved: stated id`, a codex or gemini caller `unobserved: no reader for <vendor>`, a missing file
+`unobserved: transcript not found`. `ClaudeHome.Default` is the one place that names the transcript root, and the tests point it at an
+empty temp folder.
+
+**Four states, all distinguishable:** `observed` (also with zero subagents: `IsObservedZero`), `partial: <reason>[ ×N], …` (read on past a
+gap) and `unobserved: <reason>`. A reason is recorded when something was LOST or a counted value is uncertain — an `Agent` call or a meta with
+no transcript, an agent file with no meta, a torn middle line, a torn meta, a line over the cap, a failed read, the read budget, and the
+layout breaks under `inconsistent transcript` (five triggers, the fourth also catching an assistant line with no usable `message.id`).
+A main file with no stamped line is `unobserved: transcript empty` even when the budget stopped the read. A count in `Diagnostics` is enough when the reader could choose between readings and lost
+nothing: a torn LAST line (the CLI's append racing the read), a synthetic line, a refused or unanswered write, a meta that never named a model,
+a value off its shape. Every reason is a const of `ObservationReasons`; nothing read from a transcript can become one.
+
+**Counting, one sentence each.** A message is one `message.id` across all files, its tokens the per-term MAXIMUM over its lines (the last line
+is not always the largest) and its instant its earliest line; `Model`, `Requested` and `Effort` come from that line through closed shapes
+(`TranscriptShapes`) — `Requested` is the meta's alias when it gave one, `Effort` is `unknown` when absent and is never carried over. A launch
+is one agent file or meta (a resumed agent is one); its parent is the file holding the launching `Agent` call, else the meta's
+`parentAgentId`, else main. A write is an `Edit`/`Write`/`MultiEdit`/`NotebookEdit` call whose `tool_result` is present, not an error and
+stamped (`AnsweredUtc`), at its message's instant, in the checkout its path resolved to (`CheckoutRoots`); a shell command is never a write.
+A result that answers no parsed call is ignored, and a repeated block id is one call. A write path is handed to the file
+system only when it is LOCAL (`Store/LocalPaths.cs`, 2026-10-18 security fixes): a drive-rooted path on Windows or a
+single-`/`-rooted one elsewhere, judged on the raw text AND on the normalised directory, never on a network drive (an
+unknown drive type fails closed), never under the host automounts `/net` or `/Network`; anything else is `Unresolved` with
+an empty key, because asking the disk about `\\host\share` makes Windows offer the user's credentials to that host.
+Not detected, and stated in the code: a custom autofs map on another root, a network file system mounted into a POSIX tree,
+and an existing junction or link under a local path, which the probe follows (its target is the link owner's choice, not
+the transcript's).
+
+**What is read, and what never is.** From a line: `type`, `timestamp`, `agentId`, `isSidechain`, `message.id`, `message.model`, the four usage
+numbers, `requestedModel`, `effort`, a block's `type`, a `tool_use`'s `name` and `id` (and a write tool's one path), a `tool_result`'s
+`tool_use_id` and `is_error`; from a meta `agentType`, `toolUseId`, `parentAgentId` and `model`; from the registry `sessionId`. Never `cwd`, a
+prompt, a description, a message's text, a `toolUseResult`, an object's keys or `tool-results/`. What is KEPT is narrower: every id
+(`message.id`, `agentId`, a block's `id`/`tool_use_id`, a meta's `toolUseId`/`parentAgentId`) only on `TranscriptShapes.Id`, one token of
+letters, digits, `_` and `-` — off it the id reads as absent, and a refused `parentAgentId` leaves the parent unknown. A line is parsed over its raw bytes
+(`TranscriptLine`) and its document disposed before the next line is asked for, so no full-line string exists;
+`NoTextLeavesTheCallerReaderTests` walks every string of every fixture's session for E1's sentinel.
+
+**The bound and the budget.** `fromUtc` bounds a message by its FIRST line. The byte gate (`TranscriptLines.ReadSharedFrom`) skips a line
+stamped before `fromUtc − 3 h` (`StraddleGuard`, 1.5 × the longest message E1 measured) without decoding it; an agent file last written
+before the bound, and one the budget never reached, is read for its head only (off the budget, so every launch keeps its first instant); the main file is always read. `ReadBudget` charges bytes on the SLICE the gate kept and time on
+the whole read. A stop is `partial: read budget`: it drops the stopped file's ids that could still have had a line, lists every launch anyway
+and skips the Agent-count check. `ObservedSession.ReaderVersion` is bumped by any change to a counting rule, and
+`TheReaderVersionIsPinnedToTheFixturesTests` ties it to the fixtures' totals.
+
+`agent_log` is unchanged and still reads through `TranscriptLines.ReadShared`; every property read of a line (`timestamp`, `type`,
+`cwd`, `message`, `content` and its blocks) goes through `JsonText` (2026-10-18; `timestamp` and `message` on 2026-10-19), so a line
+that is valid JSON in the wrong shape never throws out of `AgentLog.Slice`: a non-string field reads empty, and a line whose
+`timestamp` is not a parseable string is skipped. An agent key read from a FILE NAME (`agent-<key>.jsonl`, `.meta.json`) passes the same
+`TranscriptShapes.IsId` gate as every other id; a name that fails it is no agent and is counted in `ValuesOffShape`. The reader has no call site yet: E4 attributes what it reads (the pure core `src_mcp/core/Authors/`, see `module_core.md`, through the one mapping `src/Store/AttributionMapping.cs`)
+and E5 stores it.
 
 **Shape decisions.**
 
@@ -3206,7 +3471,7 @@ apart. Tests: `ALogSplitByPeriodTests` (red first; red again with the period con
 `0000` against `started_utc`, matching nothing — so a malformed cursor answered with an EMPTY page
 instead of the first one, which is the opposite of treating it as absent.
 
-### `--round-counts` — rounds per vendor row over 5 h / 24 h / 7 d (2026-10-10, `todo/PLAN_every_round_is_counted.md` story 2.1)
+### `--round-counts` — rounds per vendor row over 5 h / 24 h / 7 d (2026-10-10, `research/PLAN_every_round_is_counted.md` story 2.1)
 
 The operator's question of 2026-10-09 — *"my plan used to allow ~250 rounds comfortably; now it hits the limit at
 ~150"* — had no surface that counted ROUNDS: the Spending tab counted reviewer launches per row, and a round is one
@@ -3303,7 +3568,7 @@ opened read-only cannot run the step and does not try — `--round-counts` on a 
 byte for byte.
 
 **Schema step 21 — `rounds.round_key`** (`Schema.TheRoundsKey`, appended after step 20; story 4.1 of
-`todo/PLAN_every_round_is_counted.md`). The round's identity across the wire — 32 lower-case hex characters the engine
+`research/PLAN_every_round_is_counted.md`). The round's identity across the wire — 32 lower-case hex characters the engine
 mints when the round starts (`RoundKeys.Mint`) — as `RoundRecord.Key` in the session file and here, written by
 `RoundsDb.RecordRoundRow` from the record (the upsert on `(session, stage, number)` rewrites it with the rest). **Empty
 means "not recorded"**: every row from before the step, and a skipped round (`RoundSkips.Record`), which launched
@@ -3312,7 +3577,7 @@ Reached through both preview-fork shapes as step 20 is (`TheRoundKeyIsStepTwenty
 step-20 file reads and leaves it at twenty — no reader asks for the column.
 
 **Schema step 22 — the round's size and `reviewers.effort`** (`Schema.TheRoundsSize`, appended after step 21; story
-E2.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C2). `round_changes` holds one row
+E2.S3 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C2). `round_changes` holds one row
 per (scope `whole`/`delta`, coverage, kind) cell of the round's `RoundRecord.Size` — counts and lines only, no path — and
 `rounds` gains `size_state`, `delta_state`, `delta_from`, `size_origin` and `size_gitlinks`, because a delta that is
 `unavailable` and one that is an observed zero both have no rows and the state is what tells them apart.
@@ -3327,9 +3592,44 @@ written empty, and the column's default `not recorded` marks every row from befo
 Reached through both preview-fork shapes as step 21 is, and `--round-counts` on a step-21 file reads and leaves it at
 twenty-one (`TheRoundsSizeIsStepTwentyTwoTests`).
 
+**Schema step 23 — `rounds.plan_source`** (`Schema.ThePlanSource`, appended after step 22; story E2.S1 of
+`todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract C1). What a PLAN round reviewed: the JSON of the
+record's `PlanSource` (`origin` `commit`/`text`, `commit`, `path`, `blob`, `bytes`, `textId`), serialised through
+`ServerJsonContext.Default.PlanSource` — camelCase, indented, exactly what the session file holds. `RoundsDb.RecordRoundRow`
+binds it from the record (`$planSource`), and the upsert on `(session, stage, number)` rewrites it with the rest, as it
+does `round_key`: unlike the size there is no separate measurement to protect, so a re-record from the record is correct.
+**Empty means "not recorded"**: every row from before the step, every code/document/feature/skipped round (they carry no
+`PlanSource`), and a plan round that finished before E1 stamped one. No backfill — the session file keeps its own copy.
+Reached through both preview-fork shapes as step 22 is, and a read-only `--log` on a step-22 file reads and leaves it at
+twenty-two (`ThePlanSourceIsStepTwentyThreeTests`). `ThePairsThemselvesTests`' step-12 re-run drops the column with the
+rest.
+
+**Schema step 24 — who wrote the code a round reviewed** (`Schema.TheRoundsAuthors`, appended after step 23; story E5.S2 of
+`research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `round_authors` holds one row per row of the round's
+`AuthorsSnapshot` — `who` (`main` | `subagent`), `agent` (the opaque id, **empty for main**), `requested`, `model`, `effort`,
+`agent_type`, `association`, `window` (`before-open` | `round`), `launches`, `turns`, the four token terms and `write_calls`, keyed
+`(round_id, ordinal)`; the round's own stage and number are its `round_id`'s. Fourteen columns join `rounds`: `authors_state` (the
+card text, `State` or `State: reasons`), `authors_session`, `authors_id_source` (`registry` | `environment` | `stored` | `healed`),
+`authors_reader` and `authors_attribution` (E3's reader version and E4's `RoundAttribution.Version`; `0` = that component did not run),
+`submodule_writes`, `uncovered_writes` and the seven `ambiguous_*` totals; `rounds_by_authors_session` serves the peer lookup
+that runs on EVERY round. **`RoundAuthorsTable.Record(db, roundId, snapshot)`** (its own file, the `RoundChangesTable` shape)
+is called from `RecordRound` inside its transaction and is the second caller E7's backfill joins: it opens **no transaction of its
+own**, and `TheWriterJoinsTheCallersTransaction` / `AFaultAfterTheWriter_LeavesNoAuthors` prove a rollback or a later fault leaves
+nothing behind. It projects FROM `round.Authors`, never a `RoundContext`, so a deleted database re-projected from the session files
+comes back identical; a null snapshot writes NOTHING (a backfilled row survives a live re-record) and the upsert is NOT widened.
+**An unknown is `-1`, never `0`** — the ambiguous totals of an unobserved round, and both write counts of any snapshot no attribution
+produced; `authors_state = ''` means *not recorded* and a reader checks it first. `main` ↔ `''` is `RoundAuthorsTable`'s one
+mapping (`AgentColumn`) and its one inverse (`AgentKeyOf`), which E6's read and E7's heal call. The older-server limit, stated: a
+`coai-mcp` released before step 24 re-saves a session file WITHOUT the snapshot (no session type carries `JsonExtensionData`; measured on
+the released 0.58.0, `open` on a throwaway repository over a data directory whose file carried a snapshot on two rounds: `authors`
+was gone from every round after one `open`, and `open` never opened `coai.db`); the database keeps the projected columns, because its
+upsert names none of them, it runs no step on a file past its own and never touches `round_authors` (`AnOlderServersReSave_LeavesTheProjectedAuthorsInPlace`). What is lost is the card line, the rebuild path and the members the database never held; E7's recompute
+repairs them while the transcript exists. Reached through both preview-fork shapes as step 23 is; `ThePairsThemselvesTests`' step-12
+re-run drops the index first (SQLite refuses `DROP COLUMN` on an indexed column), then the fourteen columns.
+
 **`--log` names each round's size** (story E2.S5, contract C3). `LoggedRound` gains an init property `Size`
 (`RoundSize?`, JSON `size`): `{ whole: { state, from, cells[] }, delta: { … }, origin }`, one cell per (coverage, kind) with
-`files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's ids to `RoundChangesLog.Attach` (its own file, the
+`files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's rounds to `RoundChangesLog.Attach` (which finds each round's id in its own cursor) (its own file, the
 `QuestionConsultLog` shape, on the read-only connection `Read` already opened), which answers with TWO grouped reads per page —
 `rounds` for the states, `round_changes` for the cells — never one per round. **Absent means not recorded:** a round with no
 `size` member predates step 22, is a plan/document round, or never had a size written; a file still at step 21 is asked for
@@ -3339,8 +3639,218 @@ writes no nulls) and a reader treats absent as *no line count*, never 0 — `Rou
 reader, not `Columns.Number`, which would turn the NULL into 0. `whole.from` is `rounds.base_ref` (the resolved base — a
 backfill never recomputes it), `delta.from` is `delta_from`, `origin` is `size_origin` (`live`/`backfill`). The Team server
 reads neither the session file nor `--log`; the extension's parser ignores members it does not know
-(`anOlderExtensionReadsALogPageCarryingASize.test.ts` — `roundsDb.ts`/`roundsLog.ts` are byte-identical to
-`extension-v0.75.0`'s, so that parser is the released one).
+(`anOlderExtensionReadsALogPageCarryingASize.test.ts` — `roundsDb.ts` is byte-identical to `extension-v0.75.0`'s, so that
+parser is the released one).
+
+**`--log` names each plan round's source** (story E2.S2 of `todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract
+C2). `LoggedRound` gains a second init property, `PlanSource` (`Core.Rounds.PlanSource?`, JSON `planSource`: `origin`, `commit`,
+`path`, `blob`, `bytes`, `textId`), absent when null. `RoundsQuery.Rounds` chains `RoundPlanSources.Attach` (its own file, the
+`RoundChangesLog` shape) after `RoundChangesLog.Attach` — one call; the SQL ladder gains no fourth text. It runs ONE query per page,
+`SELECT id, plan_source FROM rounds WHERE plan_source <> '' AND id IN (SELECT value FROM json_each($ids))`, only when the page has
+ids and `HasColumn(db, "rounds", "plan_source")` — a step-22 file is asked, answers with no query, is logged exactly as before
+and stays at twenty-two. The page's ids are bound by `PageIds.Bind`, the helper `RoundChangesLog` used to hold privately and
+both readers now share. **Rounds are matched to what is attached by their OWN id, never by list position:** `Attach(db, rounds)`
+(this reader's and `RoundChangesLog.Attach`'s alike) takes each round's id from its cursor (`PageIds.Of`, `started_utc|id`), so
+a reordered or filtered list still gets each source and size on its own round (`ARoundList_InAnotherOrder_OrFiltered_…`). **Not recorded is never empty:** an empty column, JSON that does not parse (the `JsonException` catch
+wraps each row's deserialise ONLY, never the query, so a missing column is still loud) and a source that is not well-formed (`PlanSource.IsWellFormed`, one rule shared with the page's `reviewedFrom`: a known `origin`, `bytes` ≥ 0, a text id, a commit that is hex or empty; a `commit` source also a repository-relative path and a hex blob, a `text` source neither path nor blob)
+all read as an absent member; a malformed row never fails the page (`TheLogNamesEachPlansSourceTests`). The extension's parser
+ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this
+(`module_extension.md`).
+
+**`--log` names the state of each round's authors** (story E5.S3 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+`LoggedRound` gains a third init property, `AuthorsState` (`string?`, JSON `authorsState`), absent when null. `RoundsQuery.Rounds` chains
+`RoundAuthorsLog.Attach` (its own file, the `RoundPlanSources` shape) after `RoundPlanSources.Attach` — one call, no fourth rung on the SQL
+ladder. It runs ONE query per page, `SELECT id, authors_state FROM rounds WHERE authors_state <> '' AND id IN (SELECT value FROM
+json_each($ids))`, only when the page has ids and `HasColumn(db, "rounds", "authors_state")` — a step-23 file is asked, answers with no
+query, is logged exactly as before and stays at twenty-three; `--round-counts` reads nothing new and leaves it byte for byte
+(`TheLogNamesEachRoundsAuthorsTests`). Rounds are matched by their OWN id (`PageIds`), never by list position. **Not recorded is never a
+word:** an empty column and a value `AuthorsSnapshot.IsWellFormed` refuses read as an absent member, judged per ROW and never around the query
+(a catch around the query would swallow *no such column* and hide what the `HasColumn` guard prevents).
+
+**The authors step — who wrote what a round reviewed, on the answer path** (story E5.S4 of
+`research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `RoundAuthorsStep.For(session, record)` (`src/Server/Rounds/`) runs in
+`RoundEngine` as ONE statement after the record's `with` block — `record = record with { Authors = _authors.For(session, record) }` — before the
+save and before the projection opens the database. It answers null (not recorded) for any round that E4 does not call *settled* (a plan or
+code round, `done`, not `skipped`): a skipped, interrupted or running round and every feature or document round; `Assign` is never
+called for one. The order: **locate** (`CallerTranscriptLocator.Locate`, the vendor from the round's own `Caller`, the identity from the
+step's INJECTED environment — `PanelService` gains one optional `environment` parameter and never reads the process's variables here); a
+refusal ends the step as `AuthorsSnapshot.Unknown(…, "unobserved", [reason])` with no peer query → **the peers and the gate's own timeline**
+(`AuthorPeers.Find`, one read-only connection that waits a second) → `RoundAttribution.ReadFrom` → the reader, bounded by the time left and
+the byte budget → `AttributionMapping` (the one mapping: `Observation`, `Timeline`, `Universe`) → `Assign` → `RoundAuthorsBuilder.Build` →
+`AuthorsSnapshot.From`. `ArgumentException` from `Assign` is `unobserved: invalid input`; any other exception is `unobserved: reader failed`
+(logged with its TYPE only) — the round still answers and is saved. **`Unknown(...)` carries `Reader = 0` / `Attribution = 0` for the component that
+did not run**, and `-1` in every count; an `unobserved` result from E4 itself gets `-1` write counts too.
+
+**`AuthorPeers.Find(connection, lookup, load, deadline, clock)`** is the ONE peer build, called by the live path and by E7's backfill (deadline null =
+unbounded). It asks which OTHER gate sessions hold a plan or code round whose `authors_session` — else, when empty, a UUID `rounds.caller` — is this
+caller, builds each peer's `GateTimeline` from its SESSION FILE (`OpenedUtc` from the file, never `sessions.opened_utc`; a round's completion only when it
+is `done`, so a running row's progress stamp ranks nothing) through `AttributionMapping.Timeline`, and reads the caller of this gate's earlier rounds in
+the same query. A round's caller is its own snapshot's session when the file has one, else `authors_session`, else a UUID `caller`, else empty. **It
+sets `PeersKnown = false`** — peers empty, E4 then says `partial: prior windows unknown` — when the store is absent or locked or has no
+`authors_session` column (older than step 24), when a peer's session file does not load or names another session, or when the deadline passes before a peer
+file is loaded (checked before EACH file). The step logs WHY at Debug (`AuthorPeerSet.Why`: a closed phrase, or an exception's type and SQLite error code — never its message, which may carry a path); the snapshot only says `prior windows unknown`. Two stated limits: a peer whose only same-caller round is still `running` is not found (`RecordRound` never runs
+for a running round; E7's grown-peer-set rule repairs it), and a RUNNING round of a found peer has no caller on disk, so E4's `peer running` cannot name it
+until it is projected. **The budget** (`AuthorsBudget.Default` = 2 s and 64 MiB of the `fromUtc` SLICE, a parameter of the step): one deadline for the whole
+step, checked between phases; the reader's own limits give `partial: read budget` with the rows read so far; a deadline passed before attribution ran gives
+`Unknown(partial, [read budget])`. `Writes into another checkout` are counts only: `UncoveredWrites` every call, `SubmoduleWrites` those whose root is a
+declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` — no process is launched on the answer path. The reader's diagnostics are
+logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
+default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too. Every method of `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`, `RoundAuthorsTable` and `RoundAuthorsLog` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for E4's core).
+
+### `--round-authors` — who wrote the code, against what the reviewers found (2026-10-19, E6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`)
+
+The owner's question is *"is the code better or worse since the coders moved to Sonnet?"*. `--round-authors` can produce the report for it,
+from data the rounds already record: the authors of a round (E3–E5) beside what the reviewers found. **The owner's answer is not available yet.**
+It needs the live backfill, the hand-check and the `RESULTS_` file (see [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md)).
+`coai-mcp --round-authors` reads `coai.db` read-only and
+prints **sums**; the figures, the marks and the header are made from them at render time. **An association, never a cause** — the
+first line of every report says so. The stories are `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md`; its decisions
+D1–D19 are the rules below by reference.
+
+**The contract.** `--round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stage code|plan] [--cohort first|corrective|all]
+[--with-before-open] [--kinds <k,…>] [--without-elided] [--with-uncovered] [--add <file.json>]… [--table]`. Defaults: the epoch, the clock,
+no split, `code`, `first`, `code,test`. Stdout is ONE JSON document (`format` 1: the selection, `sources`, `cells`, `exclusions`,
+`effortMarkerKnown` — integers, sets and counts; no figure, no mark, no header, **no absolute path**) or, with `--table`, the report.
+Exit **0** an answer (an empty one when no database exists; nothing is created), **65** a bad request — an unknown or repeated flag, an
+unparseable instant, `--until` not after `--since`, `--split` outside the window, `--stage plan` with `--kinds` or `--without-elided`, an
+`--add` that cannot be read, parsed or added — an empty or malformed path, a missing file, a report whose source id is not 32 lower-case hex or whose
+branch / requested-to-answered names are not two words joined by one newline (its sentence names the argument as typed) — **74** a database that
+will not read, **never 64**. Every refusal travels as the report's one outcome shape, `Store/Outcome.cs` (`Outcome<T>`: ok, value, why — the C#
+doctrine §5), never a per-call-site tuple.
+
+```mermaid
+flowchart LR
+  db[("coai.db<br/>read-only, one snapshot")] --> q["RoundAuthorsQuery.Read<br/>text-free RoundFacts"]
+  q --> pop["RoundAuthorsPopulation.Of<br/>cohort · D3 state · one exclusion"]
+  pop --> cnt["RoundAuthorsCells.Count<br/>additive CellSums"]
+  cnt --> rep["RoundAuthorsMerge.Report<br/>the answer of one source"]
+  file["--add file.json"] --> parse["RoundAuthorsMerge.Parse"]
+  rep --> add["RoundAuthorsMerge.Add<br/>one population only"]
+  parse --> add
+  add --> out{"--table?"}
+  out -- no --> json["JSON of sums"]
+  out -- yes --> txt["RoundAuthorsText.Render<br/>header · figures · marks · exclusions"]
+```
+
+| Unit (`src_mcp/src/…`) | Job |
+|---|---|
+| `Store/RoundAuthorsQuery.cs` | The read: the rounds of every session the window touches, in ONE deferred read transaction on the counter's read-only open (`RoundCounts.OpenReadOnly`, the one spelling of that connection string for both readers; a writer waits for it, so a round is seen whole or not at all). `HasColumn` per schema step (24 → authors, 22 → size and reviewer effort, 20 → reviewer model); a malformed stored state is *not recorded* per ROW; no text column is selected. The size is `RoundChangesLog.Read`'s |
+| `Store/StoredAuthors.cs` | D18 — the stored columns and rows as E4.S3's `RoundAuthors`, through `RoundAuthorsTable.AgentKeyOf`; `Contributors.Of` is the one union |
+| `Store/RoundAuthorsPopulation.cs`, `RoundAuthorsCoders.cs`, `RoundLines.cs`, `RoundAuthorsSumsOf.cs`, `ModelFamily.cs` | WHO is in: cohorts over E4's *settled* rounds (D1), contributors (D2), the worst state of the union (D3) and the coverage of the union (D12: a contributing round's `uncovered_writes > 0` leaves the round `size not covered`, its `-1` leaves it `size coverage unknown`), coder mix with `unknown` a suffix and never a family (D4), effort and main model (D5), the reviewer set (D6, D7), lines (D10), one exclusion per round in D12's order |
+| `Store/RoundAuthorsCells.cs`, `RoundAuthorsExclusions.cs`, `RoundAuthorsHeader.cs` | HOW they are counted: one-round cells folded by `Add` — the same function `--add` uses — figures as ratios of sums (D16), marks (D14), every exclusion reason listed with its count, the header (D15) |
+| `Store/RoundAuthorsMerge.cs` | The JSON of sums, its own strict context, `Report`, `Parse`, `Add` |
+| `Store/RoundAuthorsText.cs`, `Server/RoundAuthorsMode.cs` | The table (EVERY line — header, sources, tables — goes through `Printable` once, where the lines are joined, so a control, format (bidi override, zero-width, BOM, TAG character), line/paragraph-separator or unassigned CODE POINT (judged per rune, so a character above U+FFFF is not let through as two surrogates; a lone surrogate and U+FFFD show as `?`) of a store row or an `--add` file is printed as `?` and no terminal escape reaches the screen; `Misshapen` also refuses at `--add` (65) a cell or exclusion whose cohort or period is not a word this report writes); the flags and the exit codes — every refusal sentence is written to stderr through `RoundAuthorsMode.Printed` (the same `Printable`, on the whole sentence — a refusal is ONE line, so a line break in quoted input shows as `?` and cannot forge a second line), so a quoted selection word, member name or flag value never carries a terminal escape |
+
+**What the report will not say, and says.** The state it reads for a round is the roll-up over its two windows — per-window states live in the
+session file only and step 24 does not project them — so with `before-open` left out a round whose before-open window alone is partial or
+unobserved is still read partial or excluded; the error goes toward exclusion, never toward a claim (D3; `RoundAuthorsHeader.RollUpLimit`). A
+`peer running` round is counted as partial and provisional until E7's backfill finalises it. `uncovered_writes = -1` is *unknown*, excluded as
+`size coverage unknown`, never read as covered (`--with-uncovered` takes both reasons in) — and both reasons are decided over the round's
+CONTRIBUTING rounds, as its state is: the whole change of round N carries what every earlier window wrote, so a write round 1 made into a submodule
+is one round N's size does not cover either (judge review 2026-10-19). A corrective round whose delta is unavailable stays in
+the whole figures, leaves the delta figures and is counted per reason — its whole lines are never a delta denominator. The label `sonnet+unknown` is
+what a coder row with no model claim adds to a mix; the rank allocation of ambiguous activity is an accounting convention, stated in the header.
+
+**Two halves add only as one population.** The same `format`, the same selection field by field (`kinds` arrives sorted; an unset `--until` is `""`
+and each source keeps its own `readUtc`), and **no shared gate session** — a store added twice, or a copy of one read under another path, would count
+every session twice. That refusal is ONE method (`RoundAuthorsMerge.Overlap`); **the owner confirmed it on 2026-10-19: two `--add` stores that share a gate session are
+REFUSED** (a store added twice is named as that). A source is an opaque id (32 hex of the SHA-256 of the canonical data-directory path), never the path.
+
+**Deviations from the stories, each the smallest change that keeps the intent** (the record is in the stories document, §5): the JSON has its own
+`JsonSerializerContext` (`RoundAuthorsJson`) because strict reading — unknown member, missing member, null — is a per-context switch and the server's
+shared context must stay lenient for old session files; the branch map is keyed by an opaque repository id beside the branch name, because the answer
+carries no absolute path; `NumeratorSums` carries `DeltaTotal` (the per-100-delta figure needs the findings of the rounds whose delta is recorded);
+reviewers, findings and size are read for the in-window rounds only; `ExclusionCount` carries `Because` (the per-word split of `size unavailable`);
+CA1502 (cyclomatic complexity 4) is switched on in `.editorconfig` for the report's files.
+
+### `--backfill-authors` — the authors and the size of the rounds that ran before the live path knew (2026-10-19, `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md` S1–S4)
+
+**What it is.** `coai-mcp --backfill-authors [--since <ISO-8601 UTC instant>] [--dry-run]` gives every settled plan or code round the authors and
+(for a code round with no size) the size the live path would have written, from what is on disk — one run per side, over that side's OWN store and
+transcripts (`Server/Backfill/`). It reuses the live units and adds only the selection, the reconstruction of a stored round's history, the narrow write
+and the mode: E3's reader and `CallerTranscriptLocator.LocateStored(vendor, id, home)`, E4's `RoundAttribution` through THE live `RoundAuthorsStep` (so a
+backfilled snapshot is the live one by construction), E5's `AuthorPeers.Find(…, deadline: null, …)`, `RoundAuthorsTable` and E2's `RoundSizer`. It is a
+WRITER mode (`Program.WriterModes`: a named data folder that is missing is refused with 74 before it runs).
+
+```mermaid
+flowchart TD
+    cli["coai-mcp --backfill-authors"] --> parse{"arguments"}
+    parse -->|bad, repeated, unknown| e65["stderr usage · exit 65"]
+    parse --> presence{"coai.db"}
+    presence -->|absent| zero["empty summary · exit 0 · nothing created"]
+    presence --> ro[("read-only connection<br/>Mode=ReadOnly")]
+    ro -->|user_version below step 24| e74a["this side has not run the release · exit 74"]
+    ro --> dry{"--dry-run"}
+    dry -->|yes| run
+    dry -->|no| backup["BackfillBackup: online backup of coai.db<br/>+ every session file, a NEW folder<br/>integrity · counts before and after · data_version · SHA-256<br/>the folder's own verdict: check.json"]
+    backup -->|a check fails| e74b["nothing written · summary names the check · exit 74"]
+    backup -->|verified| rw[("RoundsDb.OpenExisting<br/>the first read-write open")]
+    rw --> run["BackfillRun: gates in round order<br/>facts → plan reads → RoundBackfill per round"]
+    run --> round["decide (S1) → compute | reproject | heal<br/>→ settle → size → BackfillWriter (S3)"]
+    round --> out["summary JSON · exit 0, or 75 when something was deferred"]
+```
+
+**S1 — `BackfillDecision` (pure).** First rule that matches: *selection* (a settled `PlanReview`/`CodeReview` round at or after `--since`; skipped,
+interrupted, running, feature and document rounds get no state); *deferral* (a session file that exists and does not load); *the transcript is gone* (the
+file holds a snapshot → re-project when the database is empty, older or disagrees, else keep; no snapshot and a filled database → **heal** the file, or
+`keep: no file`; an empty database → compute, which ends `unobserved: <the locator's reason>`); *the transcript is present* — a **provisional** row
+(`peer running` in its state, or `PeerIds ⊄ PeerGates` with a complete lookup and a snapshot that is not `healed`) is recomputed once no named peer round
+overlaps and still runs, held back as `keep: peer still running` while one does, and deferred as `peers unknown` while the lookup did not complete; a
+**snapshot lost** from a file that lists the round (an older server stripped it) over a filled database is recomputed; an equal-or-newer `observed`/`partial`
+row with its snapshot is kept — never an `unobserved` one; a current snapshot over an empty, older or disagreeing database is re-projected; the rest is
+computed. `Settle` then guards the result: **a weaker state never replaces a stronger one, and neither does one an OLDER reader or attribution produced**;
+an equal projection writes nothing (only the FILE, when it lacks its snapshot); `BackfillDecision.CorrectedBelow` (default `0`/`0`) is the one exception J1's
+correcting fix would set. The state's strength, `observed` 3 > `partial` 2 > `unobserved` 1 > empty 0, is read through `AuthorsSnapshot.IsWellFormed` and
+`AuthorsSnapshot.Split` — the one inverse of `Render`, in core beside it, which the heal reads the column back through too (code gate finding 20): a stored
+state the rule refuses counts as empty. **A deferral is the whole round's** (code gate finding 7): a round decided `deferred` is not measured and not written
+on either side — the size waits with the authors — so the two stores never disagree on a size the file could not take. `src_mcp/src/Server/Backfill/*.cs`
+is held to cyclomatic complexity 4 by `CA1502` (`.editorconfig`).
+
+**S2 — a stored round's history.** `StoredHistory` reads every plan/code round and each gate's session file (`Exists` before `Load`, which answers null for a
+torn file too: *gone*, *replaced* by another session, or *unreadable* — deferred, never recorded); the open time is the FILE's `OpenedUtc`, never
+`sessions.opened_utc`, which is the clock of the first projection. A gate whose file is gone is rebuilt from its rows. `StoredFacts` gathers, once per
+round, the transcript location, THE peer lookup and the file's snapshot presence. `BackfillAttribution` runs the live `RoundAuthorsStep` with the stored
+caller id as its injected `CLAUDE_CODE_SESSION_ID`, the peer set it was handed, a 64 MiB / **60 s** budget (never the live 2 s) and `CallerReads` as its
+reader: one read per caller at the lowest bound any of its rounds needs (a planning pass with a probe records the bounds first). The `authors_id_source` is the
+row's own — `stored` only where it had none. `StoredSizer` rebuilds a code round's size from the RECORDED `base_ref` and `head_sha` through `ContextAssembler`
+and `RoundSizer` (so the partition, the delta and the gitlink count are E2's own code), never re-based on a merge-base taken today; a `ComparedAgainst` that is not
+the recorded base is `size: base not an ancestor`, and `repository not found`, `commit not found: base|head` and `git failed` name the rest. The size carries
+`SizeOrigin.Backfill`; a live size is never replaced, and a backfill never re-measures its own.
+
+**S3 — the narrow write.** `BackfillWriter` never calls `RecordRound`: it writes through `RoundAuthorsTable.Record` and `RoundChangesTable.Record` inside ONE
+`BEGIN IMMEDIATE` transaction (`RoundsDb.Transaction()`), under the session's `SessionClaim`. The order: claim (busy → deferred) → begin (busy → deferred) →
+**re-read the round's `RoundFingerprint` inside the lock** — EVERY column of the round's row and every `round_authors` / `round_changes` row, whole
+(`SELECT *`, so a re-recorded `head_sha` under a size measured from the old commits, or a column a later schema step adds, is covered by construction — code
+gate findings 0, 6, 18) — and compare with what the round was selected with (a difference is a live server's write: deferred, nothing written) → load the file, replace ONLY the matching round's
+`Authors`/`Size`/`Gitlinks`, save, load again and verify → the two row writers FROM the verified copy → commit. The file is written first, so a run killed between the
+halves leaves a snapshot the next run re-projects without reading the transcript. A **heal** writes the file only (the snapshot built from the database inside the
+lock, `IdSource = "healed"`, everything the database never held `Unknown`); a gone or replaced file is a **database-only** write; an equal result writes nothing.
+`RoundBackfill` takes one round from facts to counts and gives the gate's in-memory journal what it wrote, so the next round reads its earlier callers and its delta's
+predecessor from it — which is also how a dry run keeps its counts equal to the writing run's.
+
+**S4 — the mode and its safety.** A writing run makes a **verified backup first** (`BackfillBackup`): SQLite's ONLINE backup of `coai.db` and every
+`sessions/session-*.json` copied byte for byte, into a NEW folder `<dataDir>/backfill-backups/<yyyy-MM-ddTHH-mm-ssZ>/` (a second in the same second is `-2`); the
+copy must open read-only, answer `ok` to `integrity_check`, carry the source's `user_version`, hold the source's row count in EVERY table counted before AND
+after (a table whose name is not a plain identifier is never put into SQL and never verifies — S2077), and the source's `PRAGMA data_version` — read twice on the mode's own read-only connection, each an autocommit statement — must be unchanged: SQLite
+changes it when ANY OTHER connection commits, which a count (an `UPDATE` keeps it) cannot show; every session file's SHA-256 equals its source's. Any failure →
+nothing is written, the summary names the check, exit **74**, the folder stays. **Every folder carries its own verdict**, `check.json` (`BackupVerdict`: the checks
+and whether every one held — code gate finding 22), so a refused backup, a run killed mid-copy (no file) and a verified one are told apart on disk a year later;
+a restore treats a folder without `verified: true` as unverified. `RoundsDb.OpenExisting` — which migrates — is the first read-write open and happens
+only after the backup verified. `--dry-run` reads through `Mode=ReadOnly` only, makes no backup, writes no store file (SQLite's `-wal`/`-shm` and the session store's
+`.turn` lock are the named coordination files it may create) and keeps the run's results in the in-memory journal so its counts are the writing run's. **Nothing is ever
+deleted**, on either side. Exit codes: **0** done (a missing store included, nothing created), **65** a bad, repeated or unknown argument, **74** a store or session file
+that will not read or write (or a side below step 24, or a backup that did not verify), **75** the run completed but something was deferred (`deferred.busy`,
+`unreadable`, `changedUnderUs`, `peersUnknown` — the summary says to run again; the exit code is read from the counts' total, and a deferral reason the four
+fields cannot name is refused loudly rather than printed as zeros — code gate finding 19); **never 64**. The summary is JSON on stdout — `readerVersion`,
+`attributionVersion`, `since`, `dryRun`, `backupDir`, `backupCheck`, `selected`, `written` (`computed`, `recomputedProvisional`, `recomputedSnapshotLost`,
+`reprojected`, `databaseOnly`, `corrected`), `healed`, `kept`, `deferred`, `unobserved` (per reason), `size` (`written`, `kept`, `unrecoverable`, `delta`),
+`elapsedMs`, `next` — counts and closed words, no text; `backupDir` is the one path printed.
+
+**A still-running peer round is invisible in production** (E5 §12 deviation 8): it has no row and no snapshot, so it carries no caller on disk and E4's `peer running`
+cannot name it until it is projected. `ANamedPeerRoundStillRuns` therefore holds for a round projected in the database (the tests' state) and the repair of such a row
+leans on the grown-peer-set rule instead; a `peer running` row without its transcript stays provisional for ever.
+
+**Where it stands (2026-10-21).** The mode is built, merged (#865) and tested offline only: every test store is a `testsToDelete-` temporary folder. It has **never run on a live store**, on Windows or in WSL. No `mcp-v*` tag contains it yet (the newest, `mcp-v0.62.0`, is older than E5). The pre-flight script `scripts/backfill-preflight-servers.*`, the judge's dump `scripts/round-authors-dump.mjs` and the `--round-authors` JSON oracle in the S4 scenario are not written. The live runs, the hand-check and the `RESULTS_` file are the open plan [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md). Until they run, rounds recorded before the live path knew show their authors as not recorded, and `--round-authors` reports their cells as empty or provisional.
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
@@ -5201,6 +5711,10 @@ at the move; blocking a round on a lock file would be a worse failure than the o
 The lock file is deliberately NOT named `session-*.json`, so the orphan sweep's own enumeration
 cannot pick it up.
 
+**The session save is atomic on every road (E3 S5, C25, 2026-10-20).** With the turn held, `SessionStore.Write` used to write IN PLACE (`File.WriteAllText`, no retry): `FileMode.Create` truncates the session the moment the open succeeds, so a failure after it lost the previous session, and a writer meeting the file busy was refused with a sharing violation. Measured on Windows 11 26300 (one in-place writer and one mover on one file, 4 s): the in-place writer refused 273 times (HResult 0x80070020), the mover 337 times (`UnauthorizedAccessException`, 0x80070005); `EightWritersOnOneSession_DoNotDenyEachOther` failed 15 of 20 runs beside a loaded suite. Now ONE road, turn or no turn: `using var turn = SessionTurn.Take(file); FileWriter(file, json)` where the default writer is `AtomicFile.Write(file, json, AtomicFile.SharingRetry)` — a pid-and-GUID temp file beside the session, then the move over it, retried for the shared 500 ms window on the monotonic clock, the temp removed on any failure, the previous session byte for byte until the move lands. The turn is held from before the temp file to after the move (the SERVER's readers take the same turn and read through `SharedRead`, which opens, reads to the end and disposes).
+
+**The limit of that turn (E3 judge J1).** The extension is a reader too, and it does NOT take the turn: it lists `sessions/*.json` and reads each file with `vscode.workspace.fs.readFile` (`extension.ts` `readSessions`, `panelProvider.ts` `readSessions`), and Node opens share-all. A move over a file another handle holds is refused whatever the holder's share mode (measured, E3 S4), so one extension read that is held past `AtomicFile.SharingRetry` (500 ms) can fail a round's final save, which then reports "completed but could not be recorded". That could not happen while the save was in place under the turn (an open by name with share-all readers does not collide); it is a cost of the atomic save, accepted because a read of a few kilobytes does not last half a second, and the retry covers a reader that does. A reader that must never collide would have to take the turn. `MoveOverExisting`'s own ten-attempt loop and `TryDelete` are GONE: after S4 they were a second copy of `AtomicFile.MoveOver`. `SessionStore.FileWriter` (`internal`, init) is the seam tests hold, fail or pause the write through. `SessionTurn.Take` (forty tries, then an unheld turn) is untouched — it belongs to `todo/PLAN_a_turn_waits_by_the_clock.md`. The orphan temp rule of `AtomicFile` (`module_runners.md`) now covers a session's killed write as well.
+
 **The order to split is given ONCE, and it is keyed by the CALLER (2026-09-04).** Raised by the
 operator before it could happen: a plan is split into epics, each epic comes back for its own plan
 review — which is the right thing to do — and a gate with no memory tells each one to split into
@@ -6175,10 +6689,33 @@ sweep removed EVERY `coai-wt-*` by prefix, including a round running in another 
 `PanelSettings.RoundTreeRoot` is read as the machine-local root (D4); `COAI_ROUND_WORKTREES`
 overrides it — and must itself be a LOCAL path, since the owner check trusts that every process
 touching the root is on this machine — and a settings object built in a test leaves it empty for
-`{DataDir}/worktrees`. The owner marker is written to a temporary name and renamed over, so a
+`{DataDir}/worktrees`. It is also the operator's way out when a git ignores `core.longpaths`: a shorter
+local root (for example `C:\coai-rt`) buys ceiling unit-for-unit, and `WorktreeFailure` names it in its
+message. It moves the ROUND root only — review trees have their own `COAI_REVIEW_ROOT` (an absolute path
+only), so one variable never moves both. The owner marker is written to a temporary name and renamed over, so a
 sweep never reads a half-written one as a dead owner. Trees
 that older builds left under `{DataDir}/worktrees` are not swept by this one — they block nothing,
 because no path is ever reused.
+
+**A tracked path longer than Windows allows (2026-10-16, `research/PLAN_review_trees_survive_long_paths.md`).**
+On Windows git refuses to write, read or remove a file whose absolute path passes 259 UTF-16 units unless
+`core.longpaths` is on, and it is on nowhere by default. A round tree's root is 82 characters on a normal
+profile, so a branch tracking a 177-character path failed `review_code` with "Could not reset index file to
+revision 'HEAD'" — a sentence that names the index while the cause is the path. `TreeGit.Argv` now leads the
+argv of every git call in `WorktreeManager`, `ReviewTreeRoot.GitAsync` and `SubmodulePopulator` with
+`-c core.longpaths=true` on Windows, for the whole lifecycle of BOTH kinds of tree: without it `status` reads
+a clean tree as dirty (so a review tree could never be removed from the panel), `worktree remove` drops the
+registration and leaves the files, and a submodule's nested clone fails the same way. It is per command —
+no repository, global or system config is written — and Linux and macOS argv is unchanged.
+
+When a round-tree add STILL fails over a path, `WorktreeFailure.Sentence` (used where `AddAsync` throws) reads
+git's own `error: unable to create file …` or `fatal: cannot create directory at …` line and says which path,
+how long it is (UTF-16 units, what Windows counts) and git's reason — e.g. `Invalid argument` for a single
+path component of 256 units, which `core.longpaths` does not lift because NTFS caps a component at 255. For
+`Filename too long` it also names the limit — 259 for a file, 247 for a folder, which Windows refuses 12 units sooner (probed 2026-10-17: a 248-unit folder failed while the file in it was 250) — says coai already asked for long paths, and names
+`COAI_ROUND_WORKTREES`; for any other reason it names no root advice, because a shorter root does not cure
+it. git's closing `fatal:` line follows, as the last word rather than the only one. A failure with no such
+line reads as it always did, and a review tree's add keeps its wire word `git_failed`.
 
 ### A gate can be run again, and a lost reply read back (S3, issue #490)
 
@@ -6476,7 +7013,7 @@ same `DocumentReader.IdentityOf` the review was opened with, under the constant 
 files the question under the feature session's id, which is what lets `Escalations.DecisionFor` find
 the person's answer.
 
-**Rules at the full budget (D18).** `StageRules.Feature` is a code review's tier plus the rules a
+**Rules at the full budget (D18; 90 000 bytes since 2026-10-16).** `StageRules.Feature` is a code review's tier plus the rules a
 feature breaks across epics — reliability, the scenario harness, planning docs, the two contract
 rules — collected from the working tree at `RuleFiles.DefaultBudgetBytes`, and rendered through
 `RulesText.Section`: the rules block moved out of `PanelService` unchanged when the feature stage
@@ -6857,7 +7394,89 @@ Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's 
 `VendorDto.TimeoutMinutes` → `ProviderSettings.TimeoutMinutes`: whole minutes 1 to `CatalogLimits.MaxTimeoutMinutes`
 (1440, the extension's `isMinutes`), anything else unset. `RosterBuilder.TimeoutFor` makes it the launch timeout of a
 CLI row in place of `ReviewerTimeout`; an api row keeps the round's launch timeout, its own limit being the whole review
-(`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first).
+(`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first). A member of the WRONG JSON type (`"timeoutMinutes":"30"`, `30.5`, `30.0`) is not "unset": it
+drops the whole row, and the server says so (the section "One bad field costs its row only", below).
+
+## A row's prompt cap (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S1-S2)
+
+**Symptom it answers.** A reviewer that reads a fixed window loses the end of a long prompt (a measured antigravity row
+answered `PLAN_INCOMPLETE` at 212 KB and 234 KB, normally at 107-157 KB). The sentinel (above) detects it AFTER the launch was
+paid for; the cap keeps the launch from being made.
+
+- **The field.** `VendorDto.MaxPromptKib` (a `JsonElement?`, so a hand-edited `"180"` is no cap and costs the row's neighbours
+  nothing) -> `ProviderSettings.PromptCap` (`Core.Catalog.PromptCap`, `None` = unset): a JSON number that is a whole KiB from 1
+  to `CatalogLimits.MaxPromptKib` (4096), else `None`. The type owns the three facts that must agree — the range
+  (`PromptCap.OfKib`, which never throws), the unit (`Bytes` is exactly KiB x 1024) and the inclusive boundary
+  (`Admits(bytes)`); a bare `int` carried them as conventions of every reader (a code-gate finding). **An operator's number, in bytes,
+  no default and no per-model table** — `DocumentRules.cs:26-29` still defers model windows, and D13 of the committed-plan plan
+  ("no token preflight") stands. Not `maxPromptBytes`: that name already means the row's SYSTEM prompt.
+- **The check, asked in two places** (like `WhyNotCarried`): `RosterBuilder.WhyOverTheCap` compares the UTF-8 bytes of the
+  composed first prompt with the cap (inclusive: exactly KiB x 1024 is read). *Before the deal*, `FitsTheCap` is part of the
+  carrier test — widened from (row, role) to the dealt item (row, role, prompt id) — so a lens goes only to a row that can
+  read it. The carrier test measures nothing for an item whose prompt has NO text: composing it would throw, and the leaf
+  already says the role was not asked and why (the judge's review found the throw; the roster test with an unwritten lens pins
+  it). *In the leaf*, `PlaceOf` refuses the (row, role) when over the cap, ahead of making a launch place, so nothing is
+  built, launched, billed or written to the ledger. The size comes from `RosterBuilder.FirstPrompt`, the one helper that
+  composes the prompt `ReviewerFor` sends (moved out of `ReviewerFor`, not copied), so the number compared is
+  `ReviewerWork.PromptBytes`.
+- **What it says.** The exclusion reaches the reply, the audit's "left out" line and each stage's nobody policy through the
+  existing path: `its prompt is 212,310 bytes and this row reads at most 184,320 bytes (maxPromptKib 180) - send the plan
+  in parts (one epic per round) | send a smaller change | send the document in parts | send less in one round, or raise the
+  row's cap` (the cure follows the stage: plan, code, document, any other).
+  Every reviewer over -> plan and code refuse before any round is recorded; the feature stage records a skip.
+  `Exclude` keeps one line per (vendor, role), so a row holding two lenses of a role is named once, not per lens.
+- **Every stage, first prompt only (D4).** The repair launch (smaller than the review) and a feature follow-up turn (a tail
+  added later) are not checked; the security lane builds its own work and is not capped.
+- **`providers`** carries `maxPromptKib` on a capped row (`ProviderStatus.MaxPromptKib`, absent when unset), so a caller learns
+  a cap before it sends a round. **`--features` lists `maxPromptKib`**, in the commit that made the cap true.
+- **Tests.** `ARowCarriesAPromptCapTests` (parse incl. out of range and a string, bytes = KiB x 1024, `providers`),
+  `ARowIsOnlyGivenAPromptItCanReadTests` (the roster: sizes read back from an uncapped row, the cap inclusive, a lens dealt
+  only to a row that fits over ten seeds, every row over cap names each row and role), `AnOverCapReviewerIsLeftOutOfTheRoundTests`
+  (real rounds against FakeCli: never launched, named in the reply, no ledger line, refused before a round is recorded for
+  plan and code, a roomy cap changes nothing), `AFeatureIsReviewedEndToEndTests` (the feature skip). Break-its, each observed red
+  and restored: `>=` for `>` (the inclusive test), skipping the check for a capped row (the roster and round tests), reading the
+  KiB as bytes (the byte and inclusive tests), and dropping the size from the carrier test (the dealt-lens test).
+
+## One bad field costs its row only (2026-10-18, `research/PLAN_one_bad_field_keeps_the_rows.md`)
+
+**Symptom it answers.** `COAI_VENDORS` was read with one `Deserialize` of the whole list, so ONE member of the wrong JSON
+type in ONE row (`"timeoutMinutes":"30"`, `"plan":"false"`, `"model":5`, `"price":{"in":"3"}`) threw, and the catch returned no
+rows. `VendorListFrom` read "no rows from a non-empty text" as "not configured" and ran `COAI_PROVIDERS` or the shipped pair
+(codex and antigravity) in place of every row the person wrote, with nothing logged. A `null` row threw a
+`NullReferenceException` out of `FromEnvironment` instead.
+
+- **The reader.** `VendorRowReader.Read` (`src_mcp/src/Server/VendorRowReader.cs`) parses the text with `JsonDocument` and
+  deserializes each array element with the SAME generated `SettingsJsonContext.Default.VendorDto`, in its own `try`. It
+  answers `VendorRows(Read, Refused, Complaint)`. A `null` or non-object element is refused by a `ValueKind` check (its
+  sentence says what it is: `it is a number, not a row`). The row is named from the RAW element (`IdOf`, ignoring case,
+  only a non-blank string, never `GetProperty`), else by place: `row 2 of 3`. `MemberOf(JsonException.Path)` turns
+  `$.timeoutMinutes` into `timeoutMinutes`, `$.price.in` into `price.in`, and a null, blank or bare `$` path into
+  `one of its members`. It maps nothing: the one mapping to `ProviderSettings` stays in `PanelSettings.MapVendors`, and
+  `ParseVendors` keeps its signature (about 40 callers).
+- **The rule: a row that does not read fails CLOSED.** It does not review, and the other rows do. This is the rule the
+  consultant row already follows (`ConsultantResolver.OptionsOf` answers null, refused by name; `--check-model` the same):
+  both still call `ParseVendors("[<row>]")` and still get no row for a bad member. The alternative (read each typed member
+  as a `JsonElement?`, as `maxPromptKib` does) was rejected: `plan`/`code` default to TRUE, so `"plan":"false"` would
+  become "reviews plans".
+- **The sentence.** One `UnrecognisedSetting` per refused row, no `Kind`, key `COAI_VENDORS[<id>]` or
+  `COAI_VENDORS[row 2 of 3]`: `COAI_VENDORS: the row "claude" (row 2 of 3) is left out of every round — its member
+  timeoutMinutes has a value of the wrong JSON type, or a number it cannot hold. The other rows still review. Write text in quotes,
+  numbers and true/false without them, and minutes as whole numbers from 1 to 1440, ...`. One cure for every member, because the parser does
+  not say whether text lost its quotes, a number gained them, or a number does not fit (`30.5`, `99999999999`). It reaches `providers`
+  (`unrecognised`), the startup and reload notice and the panel toast with no extension change. The key is per ROW because
+  the notice ledger groups on (code, subject): one shared key would fold two bad rows into one notice.
+- **"Configured" when every row is left out** (`VendorListFrom`): a row was read, OR the text is `[]`, OR any row was
+  REFUSED (whether or not its `id` could be read). Then the provider list is empty and the round refuses with its own
+  sentence, as for `[]`. Rows that READ but carry no usable id (`[{}]`, `[{"id":"  "}]`) are not refused, say nothing and
+  still run the shipped pair (#688).
+- **A text that is not a JSON list** (`[{oops`, `{}`) keeps its fallback (`COAI_PROVIDERS`, or the shipped pair) and is now SAID, once, under the
+  bare key `COAI_VENDORS`, with the parser's position (`PanelSettings.Detail`).
+- **Unchanged on purpose.** `maxPromptKib` stays "no cap, not said" for a bad value; a number of the right type but out of
+  range (`timeoutMinutes` 0 or 1441) stays unset and not said; a blank-id row is dropped without a sentence.
+  `COAI_PROMPTS_PER_ROUND` still loses its whole map silently for one bad value (out of scope, named in the plan).
+- **Tests.** `OneBadFieldCostsItsRowOnlyTests`: wrong types in one row (a theory over nine members), the null row, refused rows
+  with no id, every row left out, a list that is not JSON, two bad rows as two notices, `MemberOf`, the `providers` answer, and
+  the guards (a clean list says nothing, `maxPromptKib`, out-of-range numbers, the consultant row still refused).
 
 ## A CLI row's effort (2026-10-05, PLAN_one_model_catalog.md E2.2)
 
@@ -6940,7 +7559,7 @@ no such sentence. The review stages ask before they build (`RosterBuilder.CodexT
 from `ReviewPlanAsync`, `ReviewCodeAsync`, `ReviewDocumentAsync` and `FeatureStage`); a codex question row asks in
 `QuestionRowLaunch.TierProbedAsync`, which now takes the fan-out's launcher.
 
-## A round is minted its identity when it starts (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
+## A round is minted its identity when it starts (2026-10-11, story 4.1 of `research/PLAN_every_round_is_counted.md`)
 
 `RoundEngine.RunStageAsync` mints `RoundKeys.Mint()` beside `RoundNumber.Next` — once per round that runs, so `again`,
 the escalation ladder and a person's Continue/Fix (each a fresh pass through the engine) start a new round with a new
@@ -7050,6 +7669,18 @@ The server's half of the Vibe reviewer row ([module_runners.md](module_runners.m
   `MakeWork`): the snapshot is disposed (its bytes given back to the budget) and the whole folder deleted — the homes in
   it too. A crash leaves it to the six-hour scratch sweep, which runs on the round's build path and on the consultation
   beat. `RoundWork.Scratch` rides every `with` copy of the work; the two `new RoundWork` in `BuildWork` set it.
+- **The two folders that are always empty** (D4 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, E3 S3, 2026-10-20): the round makes a `coai-repair-` folder (the repair
+  launch's working folder, `RosterBuilder.FrameFor`) and — in the `none` workspace mode, on a code round — a `coai-noworkspace-` folder (the review launch's, `RosterFrame.Directories`;
+  the security lane makes one of its own in `SecurityRoster.Build`). Each is REGISTERED with the round's scratch when it is made (`RoundScratch.Owns(folder)`; `RosterFrame.OwnTheWorkspace`
+  skips the worktree path, which is the person's checkout; the lane reaches the scratch through `ordinary.Scratch`, carried in its `Decided` record) and removed by `RoundScratch.Dispose`
+  — the round's one end, the `using` in `RoundEngine` — after the scratch's own folder and its homes: by the PATH recorded, never a name pattern, **NON-recursive** (`Directory.Delete(folder)`,
+  not `GitScratch.DeleteEvenIfReadOnly`), so only an EMPTY folder goes. A folder that is not empty, is in use or is refused (`IOException`, `UnauthorizedAccessException`) is noted ONCE
+  through the scratch's note ("the round's folder … was not removed (…); the six-hour scratch sweep takes it") and left to the sweep; one already gone is nothing; nothing is ever thrown — a
+  removal failure never fails the round. The registry is one `ConcurrentQueue` passed through the constructor, so `With(...)` carries the SAME one; **`RoundScratch.None` takes no
+  registration** (it is one static object shared by every scratch-less `BuildWork`, and a list on it would grow for ever). **The policy for a surviving descendant:** an EMPTY folder can
+  still be a descendant's working folder; the round that has ended removes it anyway — on Unix that succeeds and the descendant's next relative write fails, on Windows the removal is refused
+  while the folder is some process's working folder and it is left (and said). `coai-answers-*` is unchanged: it keeps the six-hour sweep (`PanelService.PruneOldScratchDirs`,
+  `shared/temp-sweep.json`) — which still collects every folder a round could not remove or a crash left, so its prefixes stay as they were.
 - **A Kimi home in the scratch** (E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`, S4.15): `RoundScratch.Delete` first calls `KimiHome.DisposeAllUnder(Directory, note)` — every `kh-*`
   home (a Kimi reviewer's, `KimiRuntime`) has its `credentials` junction to the person's own folder removed by its own name, the person's names verified, under no live tree — and only
   then `GitScratch.DeleteEvenIfReadOnly`, which meets no link. A `Stopped` home is noted ("the round's scratch … is kept: …") and the whole scratch is KEPT for the six-hour sweep (which asks the same per-home hold before it deletes a due folder, E4.4 review B1), not
@@ -7115,16 +7746,49 @@ handed a PLACE — a coai-owned folder for its home and a sanitised copy to stan
   changing, a full disk) or no homes root configured refuses the TURN before anything is launched —
   `FailedTurns.RefusedBeforeTheLaunch` with `ConsultFailure.VendorRefused` and `ConsultantPlaces.Cure` — and the
   conversation stays open, as every refusal before a launch leaves it.
-- **`ask_consultants` — a question row's one-shot copies (D6).** A row whose plan stands in `CwdKind.Snapshot` (Vibe's disk
-  row): `QuestionRowLaunch` makes, in the row's own `coai-question-*` folder, one copy per GRANTED ROOT
-  (`ConsultantPlaces.OneShotAsync`: the snapshot's live mode, limited to that root — a sub-folder of a repository copies that
-  sub-folder only) under `tree`, and the row stands in `tree`; a root outside any Git work tree is refused with a sentence
-  (the copy lists through git), the row ending `refused`. The prompt names the COPIES' paths: the fan-out composes such a
+- **`ask_consultants` — a question row's one-shot copies (D6; a parent folder is expanded, 2026-10-18).** A row whose plan stands
+  in `CwdKind.Snapshot` (Vibe's disk row): `QuestionRowLaunch` makes, in the row's own `coai-question-*` folder, one copy per
+  GRANTED work-tree ROOT (`ConsultantPlaces.OneShotAsync`: the snapshot's live mode, limited to that root — a sub-folder of a
+  repository copies that sub-folder only) under `tree`, and the row stands in `tree`. A granted root that is NOT a work tree is a
+  parent folder: `ParentExpansion` walks it two levels down (`RepositoryWalk`), asks git once per candidate (`RepositoryFacts`),
+  leaves out a linked worktree whose main checkout is copied in the row (D9), bounds the row at 50 repositories, and copies each
+  one through the same `RepositoryCopier` at `tree/<grant index>/<relative path>/snapshot-<id>`. A candidate git does not confirm
+  is skipped with a note that names the cause (git failed or gave no answer, or the folder is inside another repository's work
+  tree); a folder with no repository, a bound passed (50 repositories, 10,000 folders, 100,000 entries in one listing), or any
+  refused copy refuses the row, ending `refused`; a budget that runs out before the first copy says it ended while reading or
+  confirming, not "0 of 0 copied". A folder Windows hides (Hidden or System attribute) is skipped like a dot folder.
+  What was skipped is carried on the place (`ConsultantPlace.Notes`) into the row's `note` on every arm — each note redacted
+  once, where `OneShotTally.Say` makes it, so the server log reads the same redacted text — and the
+  worktree sentence also reaches the prompt (`ConsultantPlace.Limitations`). Details, the layout and the measured sizes:
+  [module_runners.md](module_runners.md), *A Vibe disk row expands a parent folder into its repositories*. The prompt names the COPIES' paths: the fan-out composes such a
   row's prompt with no roots and hands `RowInput.Launch.NamingCopies` → `RowLaunchInput.PromptNaming`, which the launch
   calls with the copies it made (a row standing in copies with no naming function is a contract violation, never a prompt
   naming the originals). A runtime with a `HomesFolder` keeps its home in the row's folder too (`OwnedScratch`), and its
   none row stands in an EMPTY `cwd` folder beside it, so a cwd never holds its own home. Everything goes in `finally`
   (`GitScratch.DeleteEvenIfReadOnly`) — on an answer, a refusal and a cancellation alike.
+- **`ask_consultants` — a killed server's row scratch is swept, and a live row's is locked (D8, 2026-10-18,
+  `research/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
+  (`PanelService.ScratchPrefixes`) listed only `coai-answers-*`, `coai-repair-*` and `coai-noworkspace-*`, so a row's
+  `coai-question-*` folder — and the repository copies in it — stayed for ever (`shared/temp-sweep.json` keeps it `neverSwept` for the
+  TEST sweep, which says the product sweeps it "on its own clock": it did not). Now `ScratchPrefixes` has `coai-question-*`, and the
+  sweep keeps a folder by its LOCK, not by age alone, because the row budget (`COAI_QCONSULT_ROW_MINUTES`) has no upper bound and a
+  deep write does not move the folder's own time. `QuestionRowLaunch.RunAsync` takes `HeldFile.Take(<scratch>/.coai-question.lock)`
+  (`QuestionRowLaunch.LockName`) right after it makes the scratch and lets go of it in the same `finally`, BEFORE the folder is
+  deleted (a held file keeps the delete from finishing on Windows). `PanelService.DeleteIfDue` asks the age first (taking the lock
+  creates the lock file, which moves the folder's time), then `FolderLock.RemoveIfFree`: a scratch whose lock cannot be taken is kept,
+  and one older than six hours whose lock is free — a killed server's — is emptied around the lock, the lock let go, the folder
+  removed. A lock that cannot be created when the row starts is logged and does not refuse the row; its scratch is then only as safe
+  as the six-hour window. **Two cases the lock does not protect a live row that runs longer than six hours:** (1) a row whose own lock
+  could not be taken (`QuestionRowLaunch.RunAsync` logs it and runs on): to the sweep its scratch looks free, and past six hours it is
+  removed under the row; (2) a live row of an OLDER coai-mcp, which takes no lock, beside a NEW server's sweep: the lock is free by
+  absence, so the same happens. Both are bounded by the six hours and by the row budget (default far under six hours); neither is
+  closed on purpose, and a row that must outlive six hours needs a binary that holds the lock. **No CLI stands next to the lock:** every row whose plan stands in `Scratch` — not only a home-keeping one —
+  gets `ScratchDir = <scratch>/cwd` (`QuestionRowLaunch.StandingFolderIn`, the folder a home-keeping none row already used), because a
+  CLI that reads or indexes its working folder would meet a sharing violation on the held lock on Windows, and the file is noise to the
+  model. `ScratchDir` is read in one place, `ConsultantLaunches.Cwd`, as the child's working directory, so nothing else expected the top. The take-the-lock-or-keep step is `runners/Files/FolderLock.cs`, EXTRACTED from `VibeHomes.SweepOneShot`
+  (reuse-first, step 2.2): the one-shot Vibe homes and the row scratch now use the same code. The test sweep still never touches a
+  `coai-question-*` folder (`neverSwept`). The age is the folder's own last write (the product sweep's rule), so a row that runs
+  past six hours depends on its lock alone.
 - **`--check-consultant` — the check's one-shot copy.** `ConsultantCheckTurn` gives a runtime that asks the same: a copy of
   the scratch repository in the check's own scratch (`own/tree/…`), the home beside it, the prompt naming the copy; gone
   with the check's scratch.
@@ -7159,8 +7823,12 @@ flowchart TD
   held -->|no| makeat["MakeAtAsync(Live(repo), folder/tree) — replaces a tree a previous server left"]
   refresh --> launch["launch: Workdir = tree · OwnedScratch = folder · prompt names tree"]
   makeat --> launch
-  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; no Git work tree: refused"]
+  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; a parent folder expanded into its repositories; none found: refused; the whole bounded by the row budget, a timer on the places clock"]
   copies --> rowlaunch["launch in tree · prompt names the copies · finally: the row folder deleted"]
+  rowlaunch -. "holds .coai-question.lock for the row's life" .-> qlock["row scratch lock"]
+  beat --> qsweep["PruneOldAnswerDirs — coai-question-* older than six hours"]
+  qsweep -->|"lock cannot be taken: a live row"| qkept["kept this beat"]
+  qsweep -->|"lock free: a killed server's row"| qgone["emptied around the lock · lock let go · folder removed"]
   beat["ConsultationService.Sweep — at start and every beat"] --> records["records swept first (idle: closed)"]
   records --> sweep["ConsultantHomeSweep over coai-vibe/ and coai-kimi/"]
   sweep -->|"over, or unknown/idle past ConsultIdle, and no turn held"| gone["snapshot released · folder deleted, links unlinked, never entered"]
@@ -7169,15 +7837,23 @@ flowchart TD
 
 | What | Where |
 |---|---|
-| The place, the one-shot copies, the non-Git refusal | `Server/Consultation/ConsultantPlaces.cs` |
+| The place, the one-shot copies | `Server/Consultation/ConsultantPlaces.cs` (its budget and folder stamp read the injectable `_clock`, `:118`) |
+| The parent-folder expansion (D1–D9): the walk and its listing seam, git's facts, the worktree selection, the tally, the link rule, the one copy method | `Server/Consultation/ParentExpansion.cs`, `RepositoryWalk.cs`, `FolderListing.cs`, `RepositoryFacts.cs`, `LinkedWorktrees.cs`, `OneShotTally.cs`, `GrantedPaths.cs`, `RepositoryCopier.cs` |
+| The row's `note` carrying what the place skipped | `QuestionRowLaunch.PlaceNotes` |
 | The conversation's snapshot registry | `Server/Consultation/ConversationSnapshots.cs` |
 | The home sweep and `RemoveNow` | `Server/Consultation/ConsultantHomeSweep.cs` |
 | The homes root | `PanelSettings.ConsultantHomesRoot` (`COAI_CONSULTANT_HOMES`, else local application data; empty in hand-built settings, so a test never touches the machine's own) |
 | Wiring | `ConsultationService.RunTurnAsync` / `Sweep` / `CloseAsync`; `QuestionRowLaunch.RunAsync`; `QuestionFanOut.CheckedInput`; `ConsultantCheckTurn.TurnAsync` |
 | Tests | `AVibeConsultationKeepsOneSnapshotTests`, `AVibeQuestionRowReadsACopyOfItsRootsTests`, `ConsultantHomeSweepTests`, `ConsultantCheckTests.AVibeCheck_…` — [module_tests.md](module_tests.md) |
+| Tests of the expansion | `RepositoryWalkTests`, `RepositoryFactsTests`, `OneShotTallyTests`, `FolderLockTests`, `AVibeDiskRowExpandsAParentFolderTests`, `AVibeDiskRowSaysWhatItSkippedTests`, `AQuestionRowKeepsWhatItsPlaceSkippedWhateverEndsItTests`, `AVibeDiskRowReadsAParentFolderThroughTheServiceTests` (S15) — [module_tests.md](module_tests.md) |
+| A question row's scratch lock and its sweep (D8) | `QuestionRowLaunch.LockName` / `RunAsync`; `PanelService.ScratchPrefixes`, `DeleteIfDue`; `Runners/Files/FolderLock.cs`; tests `AScratchSweepRunsOnTheConsultationBeatTests`, `AQuestionRowHoldsItsScratchLockWhileItRunsTests` — [module_tests.md](module_tests.md) |
 
 Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the
 step after the release, recorded then in research/RESULTS_vibe_confinement.md and [module_tests.md](module_tests.md).
+**Update 2026-10-20:** one live question row with a real Vibe HAS run through the product (Windows, coai-mcp 0.62.0, root `d:\rsd`): the
+parent folder was expanded and copied (~30 s including git's confirmations, 411 linked worktrees skipped), and the row ended at the
+20-turn cap without an answer — [PLAN_vibe_reads_a_folder_of_repositories.md](PLAN_vibe_reads_a_folder_of_repositories.md). The live
+`consult` and the WSL row are still not run.
 
 ### The home sweep and the place, hardened before the S3 gate (2026-10-13 — the plan round and risk consultation ee1eecf4)
 
@@ -7247,6 +7923,14 @@ step after the release, recorded then in research/RESULTS_vibe_confinement.md an
   turn budget. Past it the place is refused — *"copying the granted folders took longer than the row's budget (N s): k of
   m copied"* — and every copy made, one finished past the budget included, is disposed. The row ends `refused`; Vibe never
   starts. Each root still has its own `snapshot-<id>` under `tree` (the finding that they share one path was rejected).
+- **The places read ONE injectable clock (E4 S3, 2026-10-21).** `ConsultantPlaces` takes `TimeProvider? clock = null` last (`ConsultantPlaces.cs:116`, `_clock` `:118`; the system clock by default, a `ManualClock` in a test).
+  The one-shot budget is its own timer source on that clock, `budgetTimer = new CancellationTokenSource(budget, _clock)`, declared BEFORE the linked source `copying` (`:339-340`) so the link is disposed first;
+  `catch (OperationCanceledException) when (!ct.IsCancellationRequested)` still reads the budget's cancellation as the budget's, and the caller's own cancellation still leaves as one. The conversation folder's
+  wall stamp — what the home sweep reads to age a folder — is `clock.GetUtcNow().UtcDateTime` (`Stamping`, `:290-292`), no longer `DateTime.UtcNow`. A zero budget is out synchronously, before anything is asked of git
+  (the constructor cancels; no product path hands a zero: the row budget comes through `PanelSettings.IntVar`, `> 0`). **Not on the clock, on purpose:** `ReviewSnapshots.BuildOnceAsync`'s 60 s `Stopwatch` (`MaxElapsed`,
+  `runners/Snapshots/ReviewSnapshots.cs:171,214`) is a host safety ceiling per copy — it protects a person's machine from a copy that never ends, a seam on it would have no RED (plan D3), and on a manual clock nobody
+  advances it would turn a runaway copy into a hang; and `TakingTheLock`'s `HeldFile.TakeWithin(…, LockWait)` (10 s, `:121-125`) is a `DateTime.UtcNow` loop already behind its own test seam (E5's C3). The tests cut the slow copy by a
+  handshake — the hook signals, the TEST advances (module_tests.md, *E4 S3*) — and `EveryBudgetInAClockedClassReadsItsClockTests` keeps the file clean of an unclocked `CancelAfter`/`DateTime.UtcNow`.
 
 ## Where the Vibe homes are made, owned and swept (2026-10-15, `research/PLAN_vibe_live_round_fixes.md`)
 
@@ -7348,7 +8032,7 @@ stateDiagram-v2
 - **One sign-in, one shim** (decision k, S5.4.18–S5.4.19): two consultations in two checkouts on one sign-in, started together through the service, never overlap — the
   gate file is the only thing that serialises them (with it keyed apart, the peak is 2) — and a gate another process holds delays the shim until its release.
 
-Not covered by a test: a live three-turn consult through the released binary (the parent's DoD, RESULTS §31).
+Not covered by a test: a live three-turn consult through the released binary (the parent's DoD, RESULTS §35).
 
 ### A Kimi question row and a Kimi consultant check — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-27)
 
@@ -7381,4 +8065,4 @@ sequenceDiagram
   the marker read in the copy, and the folder goes junction-first whatever ended the check (an answer, an agent failure with exit 70, a cancellation). With
   settings built by hand (no homes root) the home sits at `<scratch>\own\kh-*` and `ConsultCheckScratch.Delete` disposes it by name before the scratch.
 
-Not covered by a test: a live question row per admitted capability and a live `--check-consultant` through the released binary (RESULTS §31).
+Not covered by a test: a live question row per admitted capability and a live `--check-consultant` through the released binary (RESULTS §35).

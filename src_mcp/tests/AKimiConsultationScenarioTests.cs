@@ -58,7 +58,8 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
     private static Scopes StandIn(KimiFixture person) => new(
         WindowsStandIn.Begin(),
         KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
-        KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))),
+        KimiHost.Using(KimiHost.Of(HostKind.Windows)),
+        KimiSeams.Using(new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))),
         CallingAs("CLAUDE_CODE_SESSION_ID"));
 
     private PanelService Kimi(PlayedKimi played, Serilog.ILogger? log = null, TimeSpan? timeout = null) =>

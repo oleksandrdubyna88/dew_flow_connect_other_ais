@@ -23,6 +23,15 @@ public sealed record ProviderSettings(string Provider)
     public int TimeoutMinutes { get; init; }
 
     /// <summary>
+    /// The most this row's reviewer is sent in its first prompt (<c>maxPromptKib</c>, whole KiB, 1 to 4096); <see cref="Core.Catalog.PromptCap.None"/>
+    /// is no cap, as it has always been (PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D1). An OPERATOR's number, written
+    /// after the row was seen to lose the end of a long prompt — never a model capability the product guesses (D2: bytes, not
+    /// tokens). The range, the KiB-to-bytes unit and the inclusive boundary live in the type.
+    /// </summary>
+    /// <remarks>Not <c>maxPromptBytes</c>: <c>CatalogLimits.MaxPromptBytes</c> already means this row's SYSTEM prompt.</remarks>
+    public Core.Catalog.PromptCap PromptCap { get; init; }
+
+    /// <summary>
     /// A CLI row's reasoning effort, lower-cased (PLAN_one_model_catalog.md E2.2) — what it means is the runtime's, per
     /// <c>shared/feature-availability.json</c>: claude's levels are passed as <c>--effort</c>, a codex effort is kept and not
     /// sent while codex is unmeasured, a local row's is sent per call. Empty is none. An api row's effort is <c>Api</c>'s.
@@ -421,6 +430,13 @@ public sealed record PanelSettings
     public string AgentLogDir { get; init; } = string.Empty;
 
     /// <summary>
+    /// The Claude home the caller's transcripts are read from: <see cref="Store.ClaudeHome.Default"/> with its transcripts folder moved to
+    /// <see cref="AgentLogDir"/> when that is set. THE one place the default is written — the rounds' window over the caller's own work
+    /// (<c>RoundEngine</c>) and the authors step read it from here, so the two cannot name different folders.
+    /// </summary>
+    public Store.ClaudeHome TranscriptHome => Store.ClaudeHome.Default.With(AgentLogDir);
+
+    /// <summary>
     /// What a LOCAL reviewer is told about thinking: <c>none</c> by default, a level to ask for it,
     /// or <c>engine</c> to say nothing and take the engine's own default.
     /// </summary>
@@ -653,6 +669,13 @@ public sealed record PanelSettings
     /// that cannot be told why. It refuses by name instead.</para>
     /// </remarks>
     public bool ConsultEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Whether a Kimi sign-in folder on network storage (nfs, cifs, sshfs …) may be used — default OFF (DL6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, Q7). The extension's <c>coai.kimiAllowNetworkSignIn</c> writes
+    /// <c>COAI_KIMI_ALLOW_NETWORK_SIGNIN</c> into the data directory's settings file, which this reads like every other <c>COAI_*</c> setting; a variable in the client's config wins over the file. Read through <see cref="Flag"/>:
+    /// an unreadable value stays OFF, which is the safe side of a rotating sign-in.
+    /// </summary>
+    public bool KimiAllowNetworkSignIn { get; init; }
 
     /// <summary>
     /// Whether <c>COAI_CONSULTANTS</c> could not be read at all — in which case consulting refuses.
@@ -978,6 +1001,7 @@ public sealed record PanelSettings
             ConsultantHomesRoot = HomesRootOf(env),
             Pace = ServerPace.From(env),
             ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
+            KimiAllowNetworkSignIn = Flag(env, "COAI_KIMI_ALLOW_NETWORK_SIGNIN"),
             ConsultantsUnreadable = consultants.Unreadable,
             GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
             PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
@@ -1277,18 +1301,22 @@ public sealed record PanelSettings
     /// carry a runtime and a base URL, and a second encoding for those would be a format nobody
     /// could read in a config file. `COAI_PROVIDERS` still works for the simple case.
     /// </summary>
-    private PanelSettings WithProvidersFrom(Func<string, string?> env) => this with
+    private PanelSettings WithProvidersFrom(Func<string, string?> env)
     {
+        var list = VendorListFrom(env);
+
         // The env variable still answers for a vendor the list did not place. It predates the
         // panel, it is what a scripted or containerised run has, and dropping it the moment a
         // vendor list appeared is what made an executable path unsettable from either side.
-        Providers = VendorListFrom(env) is { Configured: true } list
-            ? [.. list.Vendors.Select(v => WithExecutable(v, env))]
-            : DefaultProviders(env),
-    };
+        return this with
+        {
+            Providers = list.Configured ? [.. list.Vendors.Select(v => WithExecutable(v, env))] : DefaultProviders(env),
+            UnrecognisedSettings = [.. UnrecognisedSettings, .. list.Said],
+        };
+    }
 
-    /// <summary>`COAI_VENDORS` as read: whether it configures the reviewers, and the rows it holds.</summary>
-    private sealed record VendorList(bool Configured, IReadOnlyList<ProviderSettings> Vendors);
+    /// <summary>`COAI_VENDORS` as read: whether it configures the reviewers, the rows it holds, and what was said about the rows it left out.</summary>
+    private sealed record VendorList(bool Configured, IReadOnlyList<ProviderSettings> Vendors, IReadOnlyList<UnrecognisedSetting> Said);
 
     /// <summary>
     /// An EMPTY list is empty: a catalog whose rows review nothing arrives as `[]`, and reading that as "not configured"
@@ -1297,14 +1325,16 @@ public sealed record PanelSettings
     /// </summary>
     private static VendorList VendorListFrom(Func<string, string?> env)
     {
-        var json = env("COAI_VENDORS") ?? string.Empty;
+        var json = env(VendorRowReader.Key) ?? string.Empty;
         if (json.Trim().Length == 0)
         {
-            return new VendorList(false, []);
+            return new VendorList(false, [], []);
         }
-        var vendors = ParseVendors(json);
+        var read = ReadVendors(json, SystemPlaces.Current with { Windows = OperatingSystem.IsWindows() }, ExecutablePaths.FilePresenceOf);
 
-        return new VendorList(vendors.Count > 0 || IsEmptyList(json), vendors);
+        // A row that was REFUSED is a row the person wrote: running codex and antigravity in its place is the failure #688
+        // fixed for `[]`. A row that merely names no vendor (`[{}]`) is not refused, and still means not configured.
+        return new VendorList(read.Rows.Count > 0 || read.Raw.Refused.Count > 0 || IsEmptyList(json), read.Rows, VendorRowReader.SaidAbout(read.Raw));
     }
 
     /// <summary>`COAI_PROVIDERS`, or the shipped pair, each with its model and CLI path from its own env variables.</summary>
@@ -1347,66 +1377,69 @@ public sealed record PanelSettings
     /// of the other OS's spelling — injected for a test. THIS side's CLI is decided after the distinct, once per DISTINCT
     /// path: a hundred rows sharing one path probe the disk once (E1's code round).
     /// </summary>
-    internal static List<ProviderSettings> ParseVendors(string json, SystemPlaces places, Func<string, RootPresence> presence)
+    internal static List<ProviderSettings> ParseVendors(string json, SystemPlaces places, Func<string, RootPresence> presence) =>
+        ReadVendors(json, places, presence).Rows;
+
+    /// <summary>The reviewers `COAI_VENDORS` holds, and what the reader left out of it and why.</summary>
+    private sealed record VendorsRead(List<ProviderSettings> Rows, VendorRows Raw);
+
+    private static VendorsRead ReadVendors(string json, SystemPlaces places, Func<string, RootPresence> presence)
     {
-        var cliOf = ExecutablePaths.Memoized(places, presence);
-        try
-        {
-            var vendors = System.Text.Json.JsonSerializer.Deserialize(json, SettingsJsonContext.Default.ListVendorDto);
-            return vendors is null
-                ? []
-                : [.. vendors
-                    .Where(v => !string.IsNullOrWhiteSpace(v.Id))
-                    .Select(v => new ProviderSettings(v.Id!.Trim().ToLowerInvariant())
-                    {
-                        Runtime = RuntimeOf(v.Runtime),
-                        Model = v.Model?.Trim() ?? string.Empty,
-                        BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
-                        // Lower-cased like the runtime: it names a row of a file this build ships,
-                        // and the rows are lower-case. Absent stays empty so the runtime picks.
-                        Dialect = v.Dialect?.Trim().ToLowerInvariant() ?? string.Empty,
-                        // NOT lower-cased, unlike the row's own id: this is the SERVER's spelling
-                        // of its vendor, and a catalog that says `DeepSeek` matches `DeepSeek`. The
-                        // row id is ours to normalise; this one is not. Caught on the code round.
-                        RemoteVendor = v.RemoteVendor?.Trim() ?? string.Empty,
-                        // Trimmed here; THIS side's CLI is decided once, below (WithThisSidesCli).
-                        ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
-                        // Absent is TRUE on both, so a vendor list written by an older extension
-                        // keeps reviewing both stages rather than silently reviewing neither.
-                        Plan = v.Plan != false,
-                        Code = v.Code != false,
-                        // Absence is NAMED here rather than carried on as a null: a missing JSON
-                        // field is legitimately a nullable at this boundary, and one line past it
-                        // the state has to be a value with a name. See `VendorDto.Document`.
-                        Documents = DocumentReviewsOf(v.Document),
-                        // Absent is NO, and only a written `true` is yes: the feature gate is opt-in
-                        // per vendor, and a file written before the stage existed ticked nobody.
-                        Feature = v.Feature == true,
-                        // Lower-cased like the id it stands in for: the vault's names are matched
-                        // case-insensitively (`KeyVault.Parse`), and a name is ours to normalise.
-                        VaultKey = v.Key?.Trim().ToLowerInvariant() ?? string.Empty,
-                        Price = PriceOf(v.Price),
-                        Api = ApiRowOf(v),
-                        Fast = ProviderSettings.FastOf(v.Fast),
-                        // Trimmed at its edges only: the inside is the person's own text, line breaks and all.
-                        SystemPrompt = v.SystemPrompt?.Trim() ?? string.Empty,
-                        // The extension's rule (`isMinutes`): 1 to a day; anything else is unset, the round's timeout.
-                        TimeoutMinutes = v.TimeoutMinutes is { } minutes && minutes is > 0 and <= Core.Catalog.CatalogLimits.MaxTimeoutMinutes ? minutes : 0,
-                        // The same `effort` member an api row's settings read; what it means is the runtime's.
-                        CliEffort = v.Effort?.Trim().ToLowerInvariant() ?? string.Empty,
-                    })
-                    // One id, one vendor — the extension already refuses a duplicate row, and a
-                    // hand-edited settings file is how one reaches the server. The id is the
-                    // provider/role key of every reviewer launch, so two rows sharing it would
-                    // collide in the round's dictionary before any model ran.
-                    .DistinctBy(v => v.Provider)
-                    .Select(v => WithThisSidesCli(v, cliOf))];
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return [];
-        }
+        var raw = VendorRowReader.Read(json);
+
+        return new VendorsRead([.. MapVendors(raw.Read, ExecutablePaths.Memoized(places, presence))], raw);
     }
+
+    /// <summary>The ONE mapping from a row as written to a reviewer: every row that read, the ones with no usable id dropped.</summary>
+    private static IEnumerable<ProviderSettings> MapVendors(IReadOnlyList<VendorDto> vendors, Func<string?, ThisSidePath> cliOf) =>
+        vendors
+            .Where(v => !string.IsNullOrWhiteSpace(v.Id))
+            .Select(v => new ProviderSettings(v.Id!.Trim().ToLowerInvariant())
+            {
+                Runtime = RuntimeOf(v.Runtime),
+                Model = v.Model?.Trim() ?? string.Empty,
+                BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
+                // Lower-cased like the runtime: it names a row of a file this build ships,
+                // and the rows are lower-case. Absent stays empty so the runtime picks.
+                Dialect = v.Dialect?.Trim().ToLowerInvariant() ?? string.Empty,
+                // NOT lower-cased, unlike the row's own id: this is the SERVER's spelling
+                // of its vendor, and a catalog that says `DeepSeek` matches `DeepSeek`. The
+                // row id is ours to normalise; this one is not. Caught on the code round.
+                RemoteVendor = v.RemoteVendor?.Trim() ?? string.Empty,
+                // Trimmed here; THIS side's CLI is decided once, below (WithThisSidesCli).
+                ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
+                // Absent is TRUE on both, so a vendor list written by an older extension
+                // keeps reviewing both stages rather than silently reviewing neither.
+                Plan = v.Plan != false,
+                Code = v.Code != false,
+                // Absence is NAMED here rather than carried on as a null: a missing JSON
+                // field is legitimately a nullable at this boundary, and one line past it
+                // the state has to be a value with a name. See `VendorDto.Document`.
+                Documents = DocumentReviewsOf(v.Document),
+                // Absent is NO, and only a written `true` is yes: the feature gate is opt-in
+                // per vendor, and a file written before the stage existed ticked nobody.
+                Feature = v.Feature == true,
+                // Lower-cased like the id it stands in for: the vault's names are matched
+                // case-insensitively (`KeyVault.Parse`), and a name is ours to normalise.
+                VaultKey = v.Key?.Trim().ToLowerInvariant() ?? string.Empty,
+                Price = PriceOf(v.Price),
+                Api = ApiRowOf(v),
+                Fast = ProviderSettings.FastOf(v.Fast),
+                // Trimmed at its edges only: the inside is the person's own text, line breaks and all.
+                SystemPrompt = v.SystemPrompt?.Trim() ?? string.Empty,
+                // The extension's rule (`isMinutes`): 1 to a day; anything else is unset, the round's timeout.
+                TimeoutMinutes = v.TimeoutMinutes is { } minutes && minutes is > 0 and <= Core.Catalog.CatalogLimits.MaxTimeoutMinutes ? minutes : 0,
+                // The same shape: a whole KiB from 1 to 4096; anything else is unset, no cap.
+                PromptCap = PromptCapOf(v.MaxPromptKib),
+                // The same `effort` member an api row's settings read; what it means is the runtime's.
+                CliEffort = v.Effort?.Trim().ToLowerInvariant() ?? string.Empty,
+            })
+            // One id, one vendor — the extension already refuses a duplicate row, and a
+            // hand-edited settings file is how one reaches the server. The id is the
+            // provider/role key of every reviewer launch, so two rows sharing it would
+            // collide in the round's dictionary before any model ran.
+            .DistinctBy(v => v.Provider)
+            .Select(v => WithThisSidesCli(v, cliOf));
 
     /// <summary>
     /// THIS side's CLI (paths per side, E1.2): a path spelled for the other OS that is no file here is the other side's —
@@ -1472,6 +1505,16 @@ public sealed record PanelSettings
         false => DocumentReviews.No,
         null => DocumentReviews.Unspecified,
     };
+
+    /// <summary>
+    /// A row's <c>maxPromptKib</c>, read as a value: a JSON NUMBER that is a whole KiB, handed to <see cref="Core.Catalog.PromptCap.OfKib"/>
+    /// for its range — anything else is no cap. A string, a fraction, a negative or an absent member is no cap, and never costs the
+    /// row's neighbours (see <see cref="VendorDto.MaxPromptKib"/>).
+    /// </summary>
+    private static Core.Catalog.PromptCap PromptCapOf(System.Text.Json.JsonElement? said) =>
+        said is { ValueKind: System.Text.Json.JsonValueKind.Number } number && number.TryGetInt64(out var kib)
+            ? Core.Catalog.PromptCap.OfKib(kib)
+            : Core.Catalog.PromptCap.None;
 
     /// <summary>
     /// Which runtime a configured vendor drives — every one this build knows, not two of them.
@@ -1543,7 +1586,7 @@ public sealed record PanelSettings
     /// way, so the message is rewritten rather than appended to: telling somebody "line 1" about
     /// what their editor calls line 2 is worse than not telling them at all.
     /// </remarks>
-    private static string Detail(System.Text.Json.JsonException e) =>
+    internal static string Detail(System.Text.Json.JsonException e) =>
         e.LineNumber is { } line
             ? $"{Sentence(e)} (line {line + 1}, character {(e.BytePositionInLine ?? 0) + 1})"
             : Sentence(e);
