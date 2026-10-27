@@ -60,7 +60,7 @@ public sealed record CopiedRoots(IReadOnlyList<string> Paths, IReadOnlyList<stri
 /// <param name="Invocation">The invocation the turn launched — what a lookup continuation is built from.</param>
 internal sealed record RowTurn(IReadOnlyList<ReviewerLaunch> Launches, IReadOnlyList<TreeChange> ChangesBeforeFollowUp, Usage Usage, string Handle, ReviewerInvocation Invocation)
 {
-    /// <summary>The vendor's counter after this turn — what the row's next turn is measured against (the E5.4 review's B1).</summary>
+    /// <summary>The vendor's counter after this turn — what the row's next turn is measured against (E5.4 deviation 31).</summary>
     public ConsultationBilled Counter { get; init; } = new();
 
     public ReviewerLaunch Final => Launches[^1];
@@ -359,7 +359,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// <summary>
     /// This turn's share of the bill, and the vendor's counter after it: a cumulative vendor (agy) reports the whole conversation, so a
     /// continued turn is billed only past the counter as it last reported it — the consultation's own rule (<see cref="ConsultationUsage.Next"/>;
-    /// never the sum of the shares, which a restart billed whole leaves inflated: the E5.4 review's B1).
+    /// never the sum of the shares, which a restart billed whole leaves inflated: E5.4 deviation 31).
     /// </summary>
     private static CumulativeShare Bill(IConsultantRuntime consultant, Usage reported, ConsultationBilled counter) =>
         consultant.UsageIsCumulative ? ConsultationUsage.Next(reported, counter, consultant.UsageCounterMayRestart) : new CumulativeShare(reported, counter);

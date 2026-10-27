@@ -465,4 +465,17 @@ public sealed class ConsultFailureTests
         answered.FailureCure.Should().BeEmpty();
         answered.Evidence.Should().BeEmpty();
     }
+
+    /// <summary>
+    /// E5.4 deviation 32 (the review of 2026-10-27, R8): a deadline that struck before anything was launched names what the launch control was
+    /// waiting on only when the adapter says (Kimi's sign-in gate) — a Vibe or codex turn is never told another Kimi launch held its sign-in.
+    /// </summary>
+    [Fact]
+    public void ADeadlineBeforeAnyLaunch_NamesNoVendorsWaitItDidNotHave()
+    {
+        var failure = new ConsultFailure.Deadline(TimeSpan.FromMinutes(5), NothingLaunched: true);
+
+        failure.What("my-vibe").Should().Contain("before anything was launched").And.NotContain("Kimi");
+        failure.Cure.Should().NotContain("Kimi");
+    }
 }

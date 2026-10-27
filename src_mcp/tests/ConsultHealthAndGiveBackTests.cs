@@ -205,7 +205,7 @@ public sealed class ConsultHealthAndGiveBackTests : IDisposable
     {
         var billed = Record() with { Billed = new ConsultationBilled(100, 10, 0, 40, 5) };
 
-        var share = ConsultationBilling.ThisTurnsShare(true, billed, new Usage(250, 25, null, TokensCached: 90, NoPriceSet: true, TokensReasoning: 12, NotCaptured: true));
+        var share = ConsultationBilling.ThisTurnsBill(true, billed, new Usage(250, 25, null, TokensCached: 90, NoPriceSet: true, TokensReasoning: 12, NotCaptured: true)).Share;
 
         share.Should().Be(new Usage(150, 15, null, TokensCached: 50, NoPriceSet: true, TokensReasoning: 7, NotCaptured: true));
     }

@@ -21,7 +21,7 @@ public static class ConsultationUsage
     /// <para><b>The one subtraction.</b> It was two: a tokens-and-money rule here over a list of earlier
     /// turns, and the cached and reasoning counts floored by hand beside it in the server (epic 2's review).
     /// Now every field of <see cref="Usage"/> goes through this.</para>
-    /// <para><b>Against the vendor's counter, not the sum of the shares</b> (the E5.4 review's B1): the two agree while the
+    /// <para><b>Against the vendor's counter, not the sum of the shares</b> (E5.4 deviation 31): the two agree while the
     /// counter only grows, and part the moment a restarted counter is billed whole — the sum stays inflated and every later
     /// report of the restarted session would read as a restart again. The record keeps both
     /// (<c>ConsultationRecord.LastReported</c> and <c>Billed</c>); <see cref="Next"/> advances the counter.</para>
@@ -48,7 +48,7 @@ public static class ConsultationUsage
     /// Whether a report IS the vendor's counter: captured, and not all zeros. An uncaptured report is zeros that are not a counter; a
     /// captured one of nothing is <see cref="Usage.None"/> — a turn that reached no model (nothing launched, a refused or not-started launch,
     /// a timed-out one), which consumed nothing and says nothing about the counter. Read as one, it would move the counter to 0/0 and bill
-    /// the session's whole total again on the next real report (the E5.4 review of 2026-10-27, R1). A vendor's real report after a turn is
+    /// the session's whole total again on the next real report (E5.4 deviation 31; the review of 2026-10-27, R1). A vendor's real report after a turn is
     /// never zero in both.
     /// </summary>
     public static bool CarriesACounter(Usage reported) =>
@@ -112,7 +112,7 @@ public static class ConsultationUsage
 
 /// <summary>
 /// What a conversation has been billed so far — the sum of its turns' shares — and, in the same shape, a cumulative vendor's counter as it last
-/// reported it (<see cref="CumulativeShare.Counter"/>), which its next report is measured against (the E5.4 review's B1: the two part after a reset).
+/// reported it (<see cref="CumulativeShare.Counter"/>), which its next report is measured against (E5.4 deviation 31: the two part after a reset).
 /// </summary>
 /// <remarks>
 /// <para>Every field a share can carry, so subtracting it (<see cref="ConsultationUsage.Less"/>) loses nothing

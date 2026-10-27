@@ -214,7 +214,7 @@ public sealed class CumulativeUsageTests
     }
 
     /// <summary>
-    /// The review's B1, antigravity's half: only agy's INPUT counter is measured cumulative (research/RESULTS_agy_consult_follow_up.md §3 — its output
+    /// E5.4 deviation 31, antigravity's half: only agy's INPUT counter is measured cumulative (research/RESULTS_agy_consult_follow_up.md §3 — its output
     /// is not settled), so an output below what was billed is no restarted counter: the input is billed as its delta, the output floored.
     /// </summary>
     [Fact]
@@ -230,7 +230,7 @@ public sealed class CumulativeUsageTests
     }
 
     /// <summary>
-    /// The review's B1: three reports of a vendor that declares a restart — a total, a restarted total, the restarted session's next total.
+    /// E5.4 deviation 31: three reports of a vendor that declares a restart — a total, a restarted total, the restarted session's next total.
     /// The third is measured against the SECOND report (the counter), never against the sum of the shares (25 000 / 39), which would bill it whole.
     /// </summary>
     [Fact]
@@ -244,6 +244,26 @@ public sealed class CumulativeUsageTests
         (third.Share.TokensIn, third.Share.TokensOut).Should().Be((4_000L, 6L), "the restarted session's next total is billed its delta");
         third.Counter.Should().Be(new ConsultationBilled(9_000, 15), "the counter is the vendor's own last report");
         ConsultationUsage.Next(Usage.Unknown, third.Counter, mayRestart: true).Counter.Should().Be(third.Counter, "an uncaptured report moves no counter");
+    }
+
+    /// <summary>
+    /// E5.4 deviations 31 and 35: agy declares no restart, and its next report is measured against its LAST report, not the sum of what was billed —
+    /// the rule a question row's agy lookup and a consultation share (both call <see cref="ConsultationUsage.Next"/>). The output of turn 2 is below
+    /// turn 1's (agy's output is not measured cumulative): floored to 0, and turn 3's output is billed past turn 2's report (10), where the sum of the
+    /// shares (1 342) would have floored it to 0 again.
+    /// </summary>
+    [Fact]
+    public void AnAgyCounter_IsMeasuredAgainstItsLastReport_AcrossThreeTurns()
+    {
+        IConsultantRuntime agy = new AntigravityConsultant(new AntigravityRuntime());
+
+        var first = ConsultationUsage.Next(Reported(14_138, 1_342), new ConsultationBilled(), agy.UsageCounterMayRestart);
+        var second = ConsultationUsage.Next(Reported(30_843, 50), first.Counter, agy.UsageCounterMayRestart);
+        var third = ConsultationUsage.Next(Reported(31_000, 60), second.Counter, agy.UsageCounterMayRestart);
+
+        (second.Share.TokensIn, second.Share.TokensOut).Should().Be((16_705L, 0L), "no restart: the input is a delta, the output floored");
+        second.Counter.Should().Be(new ConsultationBilled(30_843, 50), "the counter is agy's own last report");
+        (third.Share.TokensIn, third.Share.TokensOut).Should().Be((157L, 10L), "measured against turn 2's report, never against the sum of the shares");
     }
 
     /// <summary>

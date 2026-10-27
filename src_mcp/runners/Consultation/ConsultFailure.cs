@@ -223,21 +223,28 @@ public abstract record ConsultFailure
 
     /// <summary>The TURN ran past its own deadline — the backstop beyond the launch's timeout.</summary>
     /// <param name="NothingLaunched">
-    /// The deadline struck while coai's launch control was still waiting, before anything was launched — for Kimi, the sign-in's gate, held by
-    /// another coai Kimi launch on the same sign-in (E5.3 decision e; the E5.4 review's B2). Said as what it is; the kind is the same word.
+    /// The deadline struck while coai's launch control was still waiting, before anything was launched (E5.4 deviation 32). Said as what it is; the
+    /// kind is the same word.
     /// </param>
-    public sealed record Deadline(TimeSpan Budget, bool NothingLaunched = false) : ConsultFailure
+    /// <param name="WaitedOn">
+    /// What that wait was for, in the adapter's own words (<see cref="IConsultantRuntime.LaunchWait"/>) — for Kimi, the sign-in's gate, held by
+    /// another coai Kimi launch on the same sign-in (E5.3 decision e); empty for an adapter that names none, which is then told nothing it did not have.
+    /// </param>
+    public sealed record Deadline(TimeSpan Budget, bool NothingLaunched = false, string WaitedOn = "") : ConsultFailure
     {
         public override string Kind => ConsultFailureKinds.Deadline;
 
         public override string What(string vendor) => NothingLaunched
             ? $"the turn with the consultant ({vendor}) waited past its {Budget.TotalMinutes:0.#}-minute deadline before anything was launched — coai's launch "
-              + "check was still waiting; for Kimi, another Kimi launch on the same sign-in (a review round's reviewer, or another consultation) held the sign-in"
+              + "check was still waiting" + (WaitedOn.Length > 0 ? $": {WaitedOn}" : string.Empty)
             : $"the turn with the consultant ({vendor}) ran past its {Budget.TotalMinutes:0.#}-minute deadline without an answer being recorded";
 
-        public override string Cure => NothingLaunched
-            ? "consult again once that launch has ended — a consult turn waits inside its own deadline for the one Kimi a sign-in runs at a time"
-            : "consult again; if it repeats, check `providers` — something around the launch is not finishing";
+        public override string Cure => (NothingLaunched, WaitedOn.Length > 0) switch
+        {
+            (true, true) => "consult again once that launch has ended — a consult turn waits for it inside its own deadline",
+            (true, false) => "consult again; if it repeats, check `providers` — coai's launch check is not finishing",
+            _ => "consult again; if it repeats, check `providers` — something around the launch is not finishing",
+        };
 
         public override bool Transient => true;
     }

@@ -3,7 +3,7 @@
 > Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-27; the live runs (J2, RESULTS §35) still owed.** E5.1: M-K16 recorded as RESULTS §33
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
-> each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§34) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
+> each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30; its review (Opus, 2026-10-27, over E5.4 and the WIP `cb9cd304` saved 2026-10-24) found 9, all fixed or recorded — deviations 31–37. M-K17 (§34) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
 > its security judgement. The plan gate passed (proceed), and its findings are folded in (§"Plan gate 2026-10-16").
 > The coder of each story follows the gate's command (§0.2): E5.3 on Fable, every other story on Opus.
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
@@ -989,12 +989,15 @@ homes live, in all five languages.
     ENDED the record (`failed`). `ConsultationFailing.Terminal` now returns a conversation that had already gone on to the status it had before `asking`
     (`TurnFailure.StatusBefore`, passed from the service's pre-`asking` record through `ConsultationFailedTurns.Decided`) — `open` or `interrupted`, the handle
     kept, the failure kind and cure recorded beside it; a FIRST turn refused so is ended as before (no conversation to keep). The rule
-    `RefusedBeforeTheLaunch` already applied to an adapter's own refusal. The call is given back and the ledger line written as for any failure, and the answer
-    still says "do not retry this consultation" — right for the re-login, whose cure is a new consultation.
+    `RefusedBeforeTheLaunch` already applied to an adapter's own refusal. The call is given back and the ledger line written as for any failure. ~~The answer
+    still says "do not retry this consultation"~~ — **corrected by deviation 33:** a turn that kept the conversation open says it is still open, and never
+    "do not retry".
 23. **A product seam for the service arms: `KimiSeams.Using(host, seams)`**, per async flow (the `VibePathBudget.Using` precedent). The service builds
     `new KimiRuntime(id)` by name, from the real profile and `HostKinds.Current`; the seam lets a test hand it `KimiFixture`'s person and the measured host, so
     the real launch control, a real junction and a real gate file run under `ConsultationService`. `null` in the product. With it the service arms run on every
     OS through `WindowsStandIn` (Vibe's service scenarios run on Windows only); only Windows was run here.
+    **Since the merge with main (2026-10-27)** main's two seams do this: `KimiHost.Using(host)` and `KimiSeams.Using(seams)`, each per async flow; the
+    branch's `KimiStandIn` is gone and the scenario classes open both scopes.
 24. **Decision 12 overturned an existing pin.** `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` asserted a report below what
     was billed bills 0/0 — the very flat row decision 12 forbids. It became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative` (the totals moved on, the
     cached and reasoning counts did not: those are floored). The rule is public, `ConsultationUsage.IsAReset`, beside the floor.
@@ -1014,6 +1017,40 @@ homes live, in all five languages.
     list) changed here, at the coordinator's word; `consultant.test.ts`'s `CONSULTING` list and `kimiRuntime.test.ts` ("neither a consultant") are E5.7's, and
     stay red on this branch until E5.7 merges.
 30. **`KimiReport.SessionId` is a trailing, defaulted field** (one construction site, `From`), so nothing else changed shape (decision 3).
+31. **Billing against the vendor's counter, and a restart only where it is declared** (WIP `cb9cd304`, reviewed 2026-10-27; decision 12 changed). A
+    share is the report less the vendor's counter as it LAST REPORTED it (`ConsultationRecord.LastReported`, `CumulativeShare.Counter`,
+    `ConsultationUsage.Next`), no longer less the sum of the shares (`Billed`, which stays the running total of what was billed): after a restart
+    billed whole the sum stays inflated, and every later report of the restarted session read as a restart again. A record written before
+    `LastReported` existed reads `Billed` as its counter for one turn (`ConsultationBillingTests`). A restart is now **opt-in**:
+    `IConsultantRuntime.UsageCounterMayRestart`, true for Kimi only. antigravity does NOT get decision 12's reading — only its INPUT counter is
+    measured cumulative (research/RESULTS_agy_consult_follow_up.md §3), so an agy output below the last report is floored, never a restart
+    (`CumulativeUsageTests.AnAgyReport_WhoseOutputIsBelowWhatWasBilled_IsNoReset_AndItsInputIsADelta`). **And (the review of 2026-10-27, R1)** only a
+    report that CARRIES a counter moves it (`ConsultationUsage.CarriesACounter`: captured, and not zero in both totals): `Usage.None` — a turn that
+    reached no model — moved it to 0/0 in the WIP and billed turn 1 again inside turn 3. The question row's turns (an agy lookup, an api follow-up)
+    call the same `Next`, so its rule is the consultation's; no row-level test pins it separately (deviation 35).
+32. **A deadline before anything was launched keeps the conversation** (WIP `cb9cd304`). The turn's deadline can strike while the Kimi launch is still
+    waiting for the sign-in's gate (decision e of E5.3): nothing ran, so a FOLLOW-UP returns the record to its status before `asking` (handle kept,
+    the call given back) — `ConsultationFailing.NothingLaunched`, `ConsultFailure.Deadline { NothingLaunched }`; a FIRST turn ends as before. The
+    sentence names what was waited for in the vendor's own terms only for Kimi. S5.4 test
+    `AFollowUpThatWaitsForTheGatePastItsDeadline_LaunchesNothing_AndTheConversationStaysOpen` (the third turn after it pins deviation 31's counter).
+33. **A turn that kept the conversation open never says "do not retry"** (WIP `cb9cd304`; corrects deviation 22). `ConsultationFailed.KeptOpen` holds the
+    caller's next move back: the answer says the conversation is still open. Its teeth are S5.4.16's (`launch-refused` is not transient, so only the
+    guard keeps the sentence out — red without it, 2026-10-27); a deadline is transient and never said it.
+34. **S5.4.19's bound is one gate slice plus four seconds, not two seconds** (WIP `cb9cd304`). The gate is waited for in one-second slices behind a
+    `Task.Run`; on a loaded machine the release is noticed later than one slice, and the claim — the turn went on at the release, well inside the 30 s
+    it would otherwise wait out — holds either way.
+35. **No row-level test for deviation 31's counter.** A question row takes a second turn only for a runtime that continues its own conversation (agy,
+    api); neither declares a restart, so a row cannot meet one. What changed for a row is agy's output being measured against its last report rather
+    than the sum; the rule is pinned once, at `ConsultationUsage.Next` (`CumulativeUsageTests.AnAgyCounter_IsMeasuredAgainstItsLastReport_AcrossThreeTurns`).
+36. **S5.4.11 and S5.4.12 have no test by their own names.** The table's *When* column names the derived tests that cover them, and they do:
+    `ConsultantLimitationsTests` (the per-side rows), `FeatureAvailabilityTests` and `featureAvailability.test.ts` (the seed and its generated list).
+37. **Merged with main, 2026-10-27** (commit `c94811e0`): RESULTS §29 (M-K16) became §33, and the plan's §30/§31 became §34/§35 (main's §29–§32 were taken);
+    `KIMI_CONSULTANT_SINCE` 0.58.0 → 0.64.0; main's `Junctions.Locality` replaced `ResolvedRefusal` (decision j) for the credentials folder and the
+    person's home alike; the consult path now hands a Kimi launch main's network sign-in override (DL6) as the roster and the fan-out do.
+    **A known limit, not fixed here:** main's Models card offers ✓ Check by the generated consultant list alone (D7 of
+    `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`), which now names `kimi` — so an extension newer than its server (a server below
+    `KIMI_CONSULTANT_SINCE`) offers a Kimi check that the server refuses by name. The refusal is the stated backstop for a stale page, and the
+    Consultant section names the server to update (S5.7.2); reading the server's version on the card is left to a follow-up.
 
 ### E5.1–E5.2 as built (Opus, 2026-10-16)
 

@@ -28,10 +28,15 @@ public sealed class ConsultationBillingTests
     private static ConsultantTurnResult Reported(Usage usage) =>
         new([new ReviewerLaunch(null, "advice", usage, "advice")], [], "conv-1", usage);
 
+    /// <summary>The consultant a turn runs on, as the service builds it — the reply's cost is ITS rule (<see cref="TurnConsultant.ReplyCost"/>).</summary>
+    private static TurnConsultant On(bool cumulative) =>
+        new(cumulative ? new AntigravityConsultant(new AntigravityRuntime()) : new ClaudeConsultant(new ClaudeRuntime()), new ProviderSettings("vendor"), "model",
+            new TurnCaller("claude", "caller", string.Empty));
+
     [Fact]
     public void ASecondTurnOfACumulativeVendor_ReportsOnlyItsOwnShare()
     {
-        var cost = ConsultationBilling.ReplyCost(cumulative: true, SecondTurnOf(turnOneCost: 0.40), Reported(new Usage(250, 25, 0.45)));
+        var cost = On(cumulative: true).ReplyCost(SecondTurnOf(turnOneCost: 0.40), Reported(new Usage(250, 25, 0.45)));
 
         cost.Should().BeApproximately(0.05, 0.0001, "the vendor's 0.45 is the conversation's total, and 0.40 of it was turn one");
     }
@@ -39,12 +44,12 @@ public sealed class ConsultationBillingTests
     [Fact]
     public void APerTurnVendor_ReportsWhatItSaid()
     {
-        ConsultationBilling.ReplyCost(cumulative: false, SecondTurnOf(turnOneCost: 0.40), Reported(new Usage(150, 15, 0.45)))
+        On(cumulative: false).ReplyCost(SecondTurnOf(turnOneCost: 0.40), Reported(new Usage(150, 15, 0.45)))
             .Should().Be(0.45);
     }
 
     /// <summary>
-    /// The review's B1, its migration: a record written before <c>LastReported</c> existed measures its next report against <c>Billed</c> — what
+    /// E5.4 deviation 31, its migration: a record written before <c>LastReported</c> existed measures its next report against <c>Billed</c> — what
     /// the old rule measured against, so that turn bills what it always would have, never its whole history — and from then on against the
     /// vendor's own counter, written with the record.
     /// </summary>
@@ -74,7 +79,10 @@ public sealed class ConsultationBillingTests
         var record = SecondTurnOf(turnOneCost: 0.40);
         var turned = Reported(new Usage(250, 25, 0.45));
 
-        ConsultationBilling.ReplyCost(true, record, turned)
-            .Should().Be(ConsultationBilling.ThisTurnsShare(true, record, turned.TurnUsage).CostUsd);
+        var consultant = On(cumulative: true);
+
+        consultant.ReplyCost(record, turned).Should().BeApproximately(
+            ConsultationBilling.Billing(record, consultant.BillOf(record, turned.TurnUsage)).Billed.CostUsd - record.Billed.CostUsd, 0.0001,
+            "the caller is told what the record was billed for this turn");
     }
 }

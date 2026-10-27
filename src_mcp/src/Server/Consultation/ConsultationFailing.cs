@@ -11,7 +11,7 @@ namespace CoaiMcp.Server;
 /// The conversation THIS turn's launches named, or empty. What decides whether the turn is resumable — never
 /// the record's older handle, which says only that an EARLIER turn reached the vendor (epic 2's review).
 /// </param>
-/// <param name="Share">What this turn is billed (<see cref="ConsultationBilling.ThisTurnsShare"/>).</param>
+/// <param name="Share">What this turn is billed (<see cref="ConsultationBilling.ThisTurnsBill"/>).</param>
 /// <param name="NowUtc">The stamp the record is written with.</param>
 internal sealed record TurnFailure(ConsultationRecord Record, string Vendor, string TurnsHandle, Usage Share, string NowUtc)
 {
@@ -28,8 +28,9 @@ internal sealed record TurnFailure(ConsultationRecord Record, string Vendor, str
     public bool WentOn => StatusBefore is ConsultationStatuses.Open or ConsultationStatuses.Interrupted;
 
     /// <summary>
-    /// The vendor's counter after this turn's launches reported (<see cref="CumulativeShare.Counter"/>), or null when none reported one —
-    /// then the record's counter stays where it was (the E5.4 review's B1).
+    /// The vendor's counter after this turn (<see cref="CumulativeShare.Counter"/>) — the old one when its launches reported none
+    /// (<see cref="ConsultationUsage.CarriesACounter"/>) — or null for a turn refused before its launch was built, whose record keeps its counter
+    /// (E5.4 deviation 31).
     /// </summary>
     public ConsultationBilled? Counter { get; init; }
 
@@ -49,7 +50,7 @@ internal sealed record TurnFailure(ConsultationRecord Record, string Vendor, str
 /// </param>
 /// <param name="KeptOpen">
 /// Nothing was launched and the conversation had already gone on, so the record went back to its status: the answer says the conversation is
-/// still open and never "do not retry this consultation" (the E5.4 review's M1).
+/// still open and never "do not retry this consultation" (E5.4 deviation 33).
 /// </param>
 internal sealed record ConsultationFailed(
     ConsultationRecord Next, string LedgerOutcome, ConsultFailure Failure, bool Resumable, string Vendor, Usage Share, string ResetsUtc = "", bool KeptOpen = false);
@@ -110,7 +111,7 @@ internal static class ConsultationFailing
     };
 
     /// <summary>
-    /// The turn's deadline struck before ANYTHING was launched (the E5.4 review's B2) — for Kimi, the wait for the sign-in's gate, which another
+    /// The turn's deadline struck before ANYTHING was launched (E5.4 deviation 32) — for Kimi, the wait for the sign-in's gate, which another
     /// coai Kimi launch on the same sign-in held (E5.3 decision e). Deviation 22's rule: nothing ran, so a conversation that had already gone on
     /// goes back to its status, the failure recorded beside it; a first turn ends as before (<see cref="AfterTheLaunch"/>).
     /// </summary>
@@ -191,7 +192,7 @@ internal static class ConsultationFailing
     private static string Lead(ConsultationFailed failed) =>
         failed.KeptOpen ? StillOpen(failed) : failed.Resumable ? Resumable(failed) : failed.Failure.What(failed.Vendor);
 
-    /// <summary>Nothing ran, and the conversation goes on (the E5.4 review's M1): a neutral sentence, never "do not retry this consultation".</summary>
+    /// <summary>Nothing ran, and the conversation goes on (E5.4 deviation 33): a neutral sentence, never "do not retry this consultation".</summary>
     private static string StillOpen(ConsultationFailed failed) =>
         $"this turn was not started: {failed.Failure.What(failed.Vendor)}; the conversation is still open (consultationId {failed.Next.Id})";
 

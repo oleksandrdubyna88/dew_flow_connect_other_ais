@@ -156,7 +156,7 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
     }
 
     /// <summary>
-    /// The review's B1: after a reset is billed whole, the RESTARTED session's next total is measured against that reset report — the vendor's
+    /// E5.4 deviation 31: after a reset is billed whole, the RESTARTED session's next total is measured against that reset report — the vendor's
     /// last captured total — never against the sum of what was billed, which a reset leaves inflated (every later turn would read as a reset).
     /// </summary>
     [Fact]
@@ -268,7 +268,7 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
         var said = Refusal(await Consult(service, "and now?", id));
 
         said.Should().Contain($"(failure: {ConsultFailureKinds.LaunchRefused})").And.Contain("config.toml is not what coai writes").And.Contain("re-login");
-        // The review's M1 (R3 of 2026-10-27): a launch-refused turn is not transient, so only the kept-open guard keeps "do not retry" out.
+        // E5.4 deviation 33 (R3 of 2026-10-27): a launch-refused turn is not transient, so only the kept-open guard keeps "do not retry" out.
         said.Should().NotContain("do not retry", "the conversation goes on once the person signs in again").And.Contain("still open");
         played.Shims.Should().HaveCount(1, "the refused turn started nothing");
         Record(id).GetProperty("status").GetString().Should().Be(ConsultationStatuses.Open,
@@ -427,7 +427,7 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
         Answered(reply);
         var started = played.Shims.Single().StartUtc;
         started.Should().BeOnOrAfter(released, "Expected the shim to start after the gate was released, not while the gate was held");
-        // The review's M5: the gate is waited for in one-second slices, behind a Task.Run, so a loaded machine may take longer than one slice
+        // E5.4 deviation 34: the gate is waited for in one-second slices, behind a Task.Run, so a loaded machine may take longer than one slice
         // to notice the release; the claim is that the turn went on at the release — well inside the 30 s turn it would otherwise wait out.
         (started - released).Should().BeLessThan(GateSlice + TimeSpan.FromSeconds(4), "the turn starts at the release, not at its deadline");
     }
@@ -435,7 +435,7 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
     /// <summary>The sign-in gate's wait slice (<c>KimiCredentialsLock</c>): a release is noticed within one.</summary>
     private static readonly TimeSpan GateSlice = TimeSpan.FromSeconds(1);
 
-    // ---------- the review's B2: a turn that waited for the gate past its deadline ----------
+    // ---------- E5.4 deviation 32: a turn that waited for the gate past its deadline ----------
 
     /// <summary>The gate taken in this host (another Kimi on the same sign-in) for the rest of the test.</summary>
     private static FileStream HoldTheGate(KimiFixture person)

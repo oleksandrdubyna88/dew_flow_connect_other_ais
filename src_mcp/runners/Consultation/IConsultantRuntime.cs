@@ -206,6 +206,12 @@ public interface IConsultantRuntime : IAnsweringRuntime
     bool UsageCounterMayRestart => false;
 
     /// <summary>
+    /// What this adapter's launch control can wait on before anything is launched, said as the end of a sentence — empty when it waits on
+    /// nothing a caller can act on. A turn whose deadline strikes in that wait names it (<c>ConsultFailure.Deadline.WaitedOn</c>, E5.4 deviation 32).
+    /// </summary>
+    string LaunchWait => string.Empty;
+
+    /// <summary>
     /// What a QUESTION ROW's failure report adds, beyond the launch's own reason, about `reason` — the vendor's sentence for why the launch
     /// stopped. Empty for every vendor but one: only a question has files it was meant to name, so a conversation turn or a check, which
     /// reports the same stop, never carries this advice (D6 of <c>research/PLAN_vibe_live_round_fixes.md</c>).

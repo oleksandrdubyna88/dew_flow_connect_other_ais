@@ -29,7 +29,7 @@ internal sealed record TurnConsultant(IConsultantRuntime Runtime, ProviderSettin
     public CumulativeShare BillOf(ConsultationRecord record, Usage reported) =>
         ConsultationBilling.ThisTurnsBill(Runtime.UsageIsCumulative, record, reported, Runtime.UsageCounterMayRestart);
 
-    /// <summary>What the caller's answer says this turn cost — its share (<see cref="ConsultationBilling.ReplyCost"/>).</summary>
+    /// <summary>What the caller's answer says this turn cost: its SHARE (<see cref="BillOf"/>), the figure the record and the ledger get.</summary>
     public double? ReplyCost(ConsultationRecord record, ConsultantTurnResult turned) => BillOf(record, turned.TurnUsage).Share.CostUsd;
 }
 
@@ -134,17 +134,19 @@ internal sealed class ConsultationFailedTurns(
 
     /// <summary>
     /// The failure a fault IS when the turn had decided none (<see cref="ConsultationFailing.FaultIs"/>) — and, when the turn's deadline struck
-    /// before ANY launch landed (for Kimi: the wait for the sign-in's gate), <see cref="ConsultationFailing.NothingLaunched"/> (the E5.4 review's B2).
+    /// before ANY launch landed (for Kimi: the wait for the sign-in's gate), <see cref="ConsultationFailing.NothingLaunched"/>, naming what the adapter's
+    /// launch control waited on (<see cref="IConsultantRuntime.LaunchWait"/>; E5.4 deviation 32).
     /// </summary>
     /// <param name="statusBefore">The record's status before this turn marked it <c>asking</c> (<see cref="TurnFailure.StatusBefore"/>).</param>
     public static ConsultationFailed Undecided(ConsultationRecord asking, TurnConsultant consultant, IReadOnlyList<ReviewerLaunch> launched, Exception fault, ConsultFailure killedAs, string statusBefore = "")
     {
         var facts = Facts(asking, consultant, ConsultantTurn.SurvivingHandle(consultant.Runtime, launched), consultant.BillOf(asking, ConsultantTurn.UsageOf(consultant.Runtime, launched)))
-            with { StatusBefore = statusBefore };
+            with
+        { StatusBefore = statusBefore };
 
         return ConsultationFailing.FaultIs(killedAs, fault) switch
         {
-            ConsultFailure.Deadline deadline when launched.Count == 0 => ConsultationFailing.NothingLaunched(facts, deadline),
+            ConsultFailure.Deadline deadline when launched.Count == 0 => ConsultationFailing.NothingLaunched(facts, deadline with { WaitedOn = consultant.Runtime.LaunchWait }),
             var failure => ConsultationFailing.AfterTheLaunch(facts, failure),
         };
     }

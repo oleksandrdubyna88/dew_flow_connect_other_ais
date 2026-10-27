@@ -36,6 +36,10 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     /// <summary>Both of Kimi's totals are cumulative (M-K5b, M-K16 (d)), so a captured pair below the last is a restarted counter (decision 12).</summary>
     public bool UsageCounterMayRestart => true;
 
+    /// <summary>The sign-in's gate (E5.3 decision e): one Kimi runs on a sign-in at a time, so a turn can wait behind another coai Kimi launch.</summary>
+    public string LaunchWait =>
+        "another Kimi launch on the same sign-in (a review round's reviewer, or another consultation) held the sign-in, and a sign-in runs one Kimi at a time";
+
     /// <summary>D6: Kimi loads a project <c>.kimi-code</c>, <c>AGENTS.md</c>, skills and <c>.mcp.json</c> from its working folder.</summary>
     public bool NeedsASanitisedSnapshot => true;
 

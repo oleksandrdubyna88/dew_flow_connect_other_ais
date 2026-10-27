@@ -17,8 +17,9 @@ namespace CoaiMcp.Server;
 /// share was rebuilt as <c>new Usage(in, out, cost)</c>, dropping the cached and reasoning counts and the
 /// "no price set" / "not captured" flags the ledger keeps; and it subtracted only the ANSWERED turns, so a
 /// failed or interrupted turn on a cumulative vendor was billed again inside the next answer. It now
-/// subtracts <see cref="ConsultationRecord.Billed"/> — the running total every billing outcome advances —
-/// and carries every field through.</para>
+/// subtracted <see cref="ConsultationRecord.Billed"/> — the running total every billing outcome advances —
+/// and carries every field through. Since E5.4 deviation 31 it subtracts the vendor's counter as it last reported it
+/// (<see cref="ConsultationRecord.LastReported"/>), which a restart billed whole cannot leave inflated.</para>
 /// </remarks>
 internal static class ConsultationBilling
 {
@@ -35,19 +36,11 @@ internal static class ConsultationBilling
     public static CumulativeShare ThisTurnsBill(bool cumulative, ConsultationRecord record, Usage reported, bool mayRestart = false) =>
         cumulative ? ConsultationUsage.Next(reported, record.LastReported, mayRestart) : new CumulativeShare(reported, record.LastReported);
 
-    /// <summary>The share of <see cref="ThisTurnsBill"/>.</summary>
-    public static Usage ThisTurnsShare(bool cumulative, ConsultationRecord record, Usage reported, bool mayRestart = false) =>
-        ThisTurnsBill(cumulative, record, reported, mayRestart).Share;
-
     /// <summary>The record once this turn is billed — the sum of the shares advanced, and the vendor's counter moved to what it reported.</summary>
     public static ConsultationRecord Billing(ConsultationRecord record, CumulativeShare bill) =>
         record with { Billed = record.Billed.Plus(bill.Share), LastReported = bill.Counter };
 
-    /// <summary>The record once a share that reported no counter (nothing launched) is billed — the counter where it was.</summary>
+    /// <summary>The record once a share with no counter of its own is billed — a turn refused before its launch was built — the counter where it was.</summary>
     public static ConsultationRecord Billing(ConsultationRecord record, Usage share) =>
         Billing(record, new CumulativeShare(share, record.LastReported));
-
-    /// <summary>What the caller's answer says this turn cost: its SHARE, the figure the record and the ledger get.</summary>
-    public static double? ReplyCost(bool cumulative, ConsultationRecord record, ConsultantTurnResult turned, bool mayRestart = false) =>
-        ThisTurnsShare(cumulative, record, turned.TurnUsage, mayRestart).CostUsd;
 }

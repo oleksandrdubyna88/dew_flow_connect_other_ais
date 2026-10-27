@@ -231,7 +231,7 @@ public sealed record ConsultationRecord(
     /// is the difference, and <see cref="Billed"/> stays the sum of the shares.
     /// </summary>
     /// <remarks>
-    /// <para>The E5.4 review's B1: measured against <see cref="Billed"/>, a restarted counter billed whole left the sum inflated, and every
+    /// <para>E5.4 deviation 31: measured against <see cref="Billed"/>, a restarted counter billed whole left the sum inflated, and every
     /// later report of the restarted session read as a restart again and was billed whole again.</para>
     /// <para><b>A record written before this field</b> reads <see cref="Billed"/> as its first baseline — exactly what the old rule
     /// measured against, so that turn bills what it always would have, and the counter is the vendor's own from then on. Written on every
