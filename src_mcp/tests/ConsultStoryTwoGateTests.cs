@@ -247,6 +247,27 @@ public sealed class CumulativeUsageTests
     }
 
     /// <summary>
+    /// A turn that reached no model reports <see cref="Usage.None"/> — captured, and all zeros: an empty launch list (the deadline struck in the
+    /// wait for the sign-in's gate), a refused or not-started launch, a timed-out one. That is "this turn consumed nothing", never "the vendor's
+    /// counter is now 0": it moves no counter and is no restart, so the NEXT real report is still measured against the last one (the E5.4 review
+    /// of 2026-10-27, R1 — moving it to 0/0 billed turn 1 again inside turn 3).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AReportOfNothing_MovesNoCounter_AndIsNoReset(bool mayRestart)
+    {
+        var first = ConsultationUsage.Next(Reported(20_000, 30), new ConsultationBilled(), mayRestart);
+        var nothing = ConsultationUsage.Next(Usage.None, first.Counter, mayRestart);
+        var third = ConsultationUsage.Next(Reported(20_004, 42), nothing.Counter, mayRestart);
+
+        (nothing.Share.TokensIn, nothing.Share.TokensOut).Should().Be((0L, 0L), "a turn that reached no model consumed nothing");
+        nothing.Counter.Should().Be(first.Counter, "a report of nothing is not the vendor's counter");
+        ConsultationUsage.IsAReset(Usage.None, first.Counter).Should().BeFalse("nothing reported is no restart");
+        (third.Share.TokensIn, third.Share.TokensOut).Should().Be((4L, 12L), "the next real report is billed its delta, not turn 1 again");
+    }
+
+    /// <summary>
     /// S5.4.14 (decision 12 of E5.4, <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): for a vendor that declares its counters can restart, a CAPTURED
     /// total below its counter's last report is a counter that RESTARTED — this turn is billed what the report said, whole, never a flat zero. Both
     /// totals are judged together (one counter below means the pair restarted); an uncaptured report is zeros that are not a counter, never a reset.

@@ -38,20 +38,30 @@ public static class ConsultationUsage
         mayRestart && IsAReset(reported, counter) ? reported : Subtracted(reported, counter);
 
     /// <summary>
-    /// This turn's share, and the counter the NEXT report is measured against: this report when it was captured, the old counter
-    /// when it was not (an uncaptured report is zeros that are not a counter).
+    /// This turn's share, and the counter the NEXT report is measured against: this report when it carries a counter
+    /// (<see cref="CarriesACounter"/>), the old counter when it does not.
     /// </summary>
     public static CumulativeShare Next(Usage reported, ConsultationBilled counter, bool mayRestart) =>
-        new(Less(reported, counter, mayRestart), reported.NotCaptured ? counter : ConsultationBilled.Of(reported));
+        new(Less(reported, counter, mayRestart), CarriesACounter(reported) ? ConsultationBilled.Of(reported) : counter);
 
     /// <summary>
-    /// The vendor's counter RESTARTED: a CAPTURED report whose input or output total is below the counter's last report — a
-    /// session that was not the one loaded, a vendor-side restart. Both totals are judged together, never per field: a
-    /// per-field mix would subtract one counter and restart the other. An uncaptured report is never a reset (its turn is
-    /// billed unknown, and the next captured share carries its spend).
+    /// Whether a report IS the vendor's counter: captured, and not all zeros. An uncaptured report is zeros that are not a counter; a
+    /// captured one of nothing is <see cref="Usage.None"/> — a turn that reached no model (nothing launched, a refused or not-started launch,
+    /// a timed-out one), which consumed nothing and says nothing about the counter. Read as one, it would move the counter to 0/0 and bill
+    /// the session's whole total again on the next real report (the E5.4 review of 2026-10-27, R1). A vendor's real report after a turn is
+    /// never zero in both.
+    /// </summary>
+    public static bool CarriesACounter(Usage reported) =>
+        !reported.NotCaptured && (reported.TokensIn > 0 || reported.TokensOut > 0);
+
+    /// <summary>
+    /// The vendor's counter RESTARTED: a report that carries a counter (<see cref="CarriesACounter"/>) whose input or output total is
+    /// below the counter's last report — a session that was not the one loaded, a vendor-side restart. Both totals are judged together,
+    /// never per field: a per-field mix would subtract one counter and restart the other. A report that carries none is never a reset
+    /// (an uncaptured turn is billed unknown, and the next captured share carries its spend; a turn of nothing is billed nothing).
     /// </summary>
     public static bool IsAReset(Usage reported, ConsultationBilled counter) =>
-        !reported.NotCaptured && (reported.TokensIn < counter.TokensIn || reported.TokensOut < counter.TokensOut);
+        CarriesACounter(reported) && (reported.TokensIn < counter.TokensIn || reported.TokensOut < counter.TokensOut);
 
     private static Usage Subtracted(Usage reported, ConsultationBilled billed) =>
         reported with

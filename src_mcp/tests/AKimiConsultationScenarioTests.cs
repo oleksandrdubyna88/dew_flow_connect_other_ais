@@ -255,20 +255,31 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
     {
         using var person = new KimiFixture();
         using var stood = StandIn(person);
-        var played = new PlayedKimi(_launcher);
+        var played = new PlayedKimi(_launcher)
+        {
+            Turn = (n, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), n == 0 ? 20_000 : 40_004, n == 0 ? 30 : 72),
+        };
         var service = Kimi(played);
         var first = await Consult(service, "why is the count wrong");
         Answered(first);
         var id = IdOf(first);
         File.WriteAllText(person.PersonsConfig, KimiFixture.OwnerConfig().Replace(KimiFixture.SlotKey, "oauth/kimi-code-env-y"));
-        var before = person.Hash();
 
         var said = Refusal(await Consult(service, "and now?", id));
 
         said.Should().Contain($"(failure: {ConsultFailureKinds.LaunchRefused})").And.Contain("config.toml is not what coai writes").And.Contain("re-login");
+        // The review's M1 (R3 of 2026-10-27): a launch-refused turn is not transient, so only the kept-open guard keeps "do not retry" out.
+        said.Should().NotContain("do not retry", "the conversation goes on once the person signs in again").And.Contain("still open");
         played.Shims.Should().HaveCount(1, "the refused turn started nothing");
         Record(id).GetProperty("status").GetString().Should().Be(ConsultationStatuses.Open,
             "a refused launch is the turn's failure, not the conversation's: nothing was launched");
+
+        // The sign-in back, and the conversation goes on: the turn that launched nothing moved no counter (R1 of 2026-10-27), so the next
+        // report is billed its delta past turn 1 — never turn 1 again.
+        File.WriteAllText(person.PersonsConfig, KimiFixture.OwnerConfig());
+        Answered(await Consult(service, "and now, signed in?", id));
+        Tokens(LedgerLines()[^1]).Should().Be((20_004L, 42L), "the third turn spent 20 004 / 42 past turn 1's report");
+        var before = person.Hash();
         var recorded = new List<string>();
         GitScratch.AfterUnlink = recorded.Add;
         try
@@ -439,11 +450,15 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
     {
         using var person = new KimiFixture();
         using var stood = StandIn(person);
-        var played = new PlayedKimi(_launcher);
+        var played = new PlayedKimi(_launcher)
+        {
+            Turn = (n, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), n == 0 ? 20_000 : 40_004, n == 0 ? 30 : 72),
+        };
         var service = Kimi(played, timeout: TimeSpan.FromSeconds(2));
         var first = await Consult(service, "why is the count wrong");
         Answered(first);
         var id = IdOf(first);
+        var handle = Record(id).GetProperty("handle").GetString();
         using var gate = HoldTheGate(person);
 
         var said = Refusal(await Consult(service, "and now?", id));
@@ -451,8 +466,14 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
         played.Shims.Should().HaveCount(1, "the follow-up launched nothing: it waited for the gate until its deadline");
         Record(id).GetProperty("status").GetString().Should().Be(ConsultationStatuses.Open,
             "nothing ran, so the conversation is still open — a follow-up that never started does not end it");
+        Record(id).GetProperty("handle").GetString().Should().Be(handle, "the session it continues is kept for the next turn");
         said.Should().Contain("before anything was launched").And.Contain("same sign-in").And.Contain("still open");
-        said.Should().NotContain("do not retry this consultation", "the conversation goes on");
+        said.Should().Contain("not counted against your consult cap", "a turn that launched nothing gives its call back");
+
+        // The gate let go, and the conversation goes on: the turn of nothing moved no counter (R1 of 2026-10-27).
+        gate.Dispose();
+        Answered(await Consult(service, "and now, once more?", id));
+        Tokens(LedgerLines()[^1]).Should().Be((20_004L, 42L), "the third turn spent 20 004 / 42 past turn 1's report, and is billed that");
     }
 
     [Fact]
