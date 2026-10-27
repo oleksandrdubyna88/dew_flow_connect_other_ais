@@ -185,13 +185,16 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             var cwd = turn.Arguments[turn.Arguments.ToList().IndexOf("--cwd") + 1];
             var oneShot = Path.GetDirectoryName(turn.Arguments[turn.Arguments.ToList().IndexOf("--home") + 1])!;
 
+            var copy = Path.Combine(cwd, "snapshot-");
+
             if (ending == "answered")
             {
-                turn.StdIn.Should().Contain(cwd, "the prompt names the copy Kimi can read");
+                turn.StdIn.Should().Contain(copy, "the prompt names the copy Kimi can read, in the row's snapshot");
                 turn.StdIn.Should().NotContain(root, "never the original, which it cannot read");
             }
             else
             {
+                turn.StdIn.Should().NotContain(root, "never the original, which it cannot read");
                 turn.Arguments.Should().NotContain(root, "never the original, which it cannot read");
             }
 
