@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-27 (deviations 47–54, *E5.5–E5.6 as built*), not yet reviewed.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -9,6 +9,7 @@
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
 > (`CONSULTANT_SINCE`, a note, never a withheld entry), the guard over both tables, the homes folder naming both CLIs, and the help in
 > five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
+> The live check and question rows (J2, RESULTS §31) are not run.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -1085,6 +1086,57 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (2026-10-27)
+
+Numbered from 47, apart from the lists above, so the stories built in parallel do not collide on a number. Commits `05a73d1a`
+(E5.5), `c9e34503`, `55302503` and `1d1404f5` (E5.6). Not reviewed.
+
+47. **S5.5.1–S5.5.4 went green on arrival** (decision 1: no new branch in the check). Their teeth were temporary breaks, each reverted
+    before its commit: (a) `NeedsASanitisedSnapshot` forced to false. The test went red earlier than its `--cwd` assertion, on the
+    production refusal: `state: failed`, `failureKind: record-failed`, "a Kimi consultant stands in the conversation's sanitised snapshot
+    (Workdir), and none was made — the checkout is never its working folder (D6)". (b) `ConsultCheckScratch.Delete` skipping
+    `KimiHomesDisposed`, and `VibeHomes.EmptiedUnderItsLock` skipping `KimiHome.DisposeAllUnder`: red `Expected _unlinkedByTheDeleter to be
+    empty … but found at least one item … /home/credentials` in the answered, failed, cancelled and rootless arms (the first arm, `--cwd`
+    and home, stayed green, as expected). (c) the `finally` dispose removed from `TurnAsync`: red `Expected
+    Directory.EnumerateFileSystemEntries(OneShotFolder) to be empty … but found … coai-vh/<8>` in the cancelled, answered and failed arms.
+48. **S5.5.1–S5.5.4 run through `ConsultantCheckMode.AnswerAsync` (`--check-consultant`)**, not `ConsultantCheck.RunAsync` directly.
+    S5.5.4's "settings built by hand" is `ConsultantHomesRoot = ""`, which `VibeHomes.ReserveOneShot` answers with `None` (`VibeHomes.cs:43`),
+    so the home is in `<scratch>\own`.
+49. **The check scenarios run on every OS through `WindowsStandIn` + `KimiSeams.Using`**, as E5.4's service arms (deviation 23). The
+    same stand-in is used by the question-row scenarios (S5.6.7). Only Linux was run.
+50. **S5.6.5 and S5.6.6 sit in `ConfinementPlannerTests`** (beside the Vibe question launch, whose helpers they use), not in
+    `KimiConsultantTests`. As built, **S5.6.5 was not green on arrival** (t2's run, not the document's expectation): its `disk` row
+    failed on the planner arm, because without the `Snapshot` arm the planned cwd is `Scratch`. Its `none` row was green before the arm.
+    It went green with the arm, and its teeth were a temporary break of `Cwd` returning `SnapshotOf(launch)` only (red at `none`'s
+    `WorkingDirectory`, index 10). The places argument is the `--home` value itself, `KimiPlaces.ForShim(home, …)`, not its parent: with
+    the parent, `Refusal` reported `KIMI_CODE_HOME` as not the owned home. **S5.6.6's refusal checks `Leading` as well as `Flags`**
+    (`KimiConsultant.MustCarryNoFlags`); the test sets `Flags` only, so the `Leading` arm has no test yet.
+51. **The kimi rows and vectors.** The rows' `measuredWith.date` is 2026-10-13 (E5.4 decision 8). `none` cites M-K6, M-K3 and M-K4;
+    `disk` adds M-K9 and M-K9 (e). The vectors' flag is `unconfined` (the codex-disk spelling), `admitted` true for `none` and `disk`,
+    false for `web`. One addition the document did not name: `EveryRow_CitesTheRecord_…` failed on the kimi rows, so the Records table in
+    `CapabilityMatrixTests.cs` gained `RESULTS_kimi_confinement.md` (2026-10-13, prefix `M-K`). The generated TypeScript table was
+    regenerated, not hand-edited, and `--check` passes.
+52. **S5.6.7 is a Theory of three endings** in `AKimiQuestionRowTests` (answered, refused, cancelled). **The refused arm is RED on this
+    branch.** The document's refused arm changes the sign-in slot key (S5.4.16's way), but a question row makes a fresh home from the
+    current sign-in, and `KimiHome.Config` (`KimiHome.cs:239`) checks `config.toml` only against an EXISTING home. So a key changed before
+    a fresh row's ask does not refuse it, and the row answered. S5.4.16 works because its first turn made the home and the key changed
+    after. Red message: `Expected TheRow(reply).GetProperty("status").GetString() to be "failed" … but "answered" has a length of 8`.
+    The document does not say how a fresh row is refused before its launch. Not changed here: a decision is needed (name another refusal
+    for this arm, or drop it). The answered and cancelled arms are green. Teeth (both reverted): `Release(homes)` commented out in
+    `QuestionRowLaunch`'s `finally` (answered and cancelled red), and the junction-first order broken in `VibeHomes` (answered and cancelled
+    red: `…unlinked to be empty because the junction is unlinked first, never deleted through…`).
+53. **Production changes, by story.** E5.6 (t1): `RuntimeCapabilities.cs` (`Runtimes` gains `kimi`), `shared/runtime-capabilities.json`,
+    `shared/capability-matrix-vectors.json`, and the regenerated `src_vs_code/src/runtimeCapabilities.generated.ts`. E5.6 (t2):
+    `ConfinementPlanner.cs` (the `"kimi" => Kimi(…)` arm, `Kimi`) and `KimiConsultant.cs` (`MustCarryNoFlags`). E5.5 and the E5.6 question
+    row (t3, t4): none — `ConsultantCheck` and `QuestionRowLaunch` unchanged.
+54. **Test runs, as reported by t1–t3 (the merged tree was not run as a whole here).** Whole MCP suite: the two known failures
+    (`KimiRuntimeTests.ALaunchThatNamesItsHome_…`, `KimiHomeTests.AHomeWhoseDataPathPasses260_…`) and
+    `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow`, which is not on the known list (a 1 ms timing test; not
+    checked against a pre-change tree). t3's run also had `QuestionConsultScenarioTests.ACodexQuestionRow_…` and
+    `AskHumanScenarioTests.RequireRefuses…` fail; both pass when their class runs alone. The static recorder `GitScratch.AfterUnlink` is
+    set by `AKimiConsultantCheckTests`, `AKimiQuestionRowTests` and `AOneShotKimiHomeIsDisposedJunctionFirstTests`, which are not in one
+    xUnit collection; no interference was seen.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
