@@ -1096,8 +1096,8 @@ Numbered from 50, apart from the lists above, so the stories built in parallel d
 53. **S5.6.7 is `AKimiQuestionRowTests`, one theory with three arms (answered, refused, cancelled), and NO production change.** Teeth runs (t3, each reverted): `Release(homes)` removed in `QuestionRowLaunch.cs:135` (all three arms red); `KimiConsultant.HomesFolder` set to `string.Empty` (answered and cancelled red; refused stays green, as it refuses before any launch). The answered arm's red reason is the row's `failed` status, not a path assertion.
 54. **Deviations the tasks reported.**
     - t1: the S5.6.4 red reads `Expected type to be …Admission+Admitted, but found …Refused` (no refusal reason); the TypeScript Kimi test's red is its own message, `kimi × none is admitted`. The `EveryRow_CitesTheRecord…` test's `Records` list gained `RESULTS_kimi_confinement.md` (M-K): data only. Teeth run: `kimi × none` set to `confined` made `AdmissionFlagsBothRows` red, then reverted.
-    - t2: the S5.6.5 optional `KimiEnvironment.Refusal` assertion is NOT added (it needs a `KimiFixture`, which the planner tests do not use). The line ~167 test (`AnUnknownRuntime…`) was already green when its expected text gained `, kimi`, because t1 had landed first.
-    - t3: the test's `Other` property is unused (dead code), kept for contract fidelity; a reviewer may ask for its removal.
+    - t2: the S5.6.5 `KimiEnvironment.Refusal` assertion IS added (review fix: `Refusal(request, places)` is pure and needs no `KimiFixture`; the planner test builds `KimiPlaces.ForShim` itself). The line ~167 test (`AnUnknownRuntime…`) was already green when its expected text gained `, kimi`, because t1 had landed first.
+    - t3: the unused `Other` property is removed (review fix). The S5.6.7 "refused" arm does NOT check the `coai-question-*` scratch folder: with no shim request there is no folder path to find, and enumerating the shared temp root would race with parallel tests.
     - t4: fixture folders `_data` and `_temp` are `TempDir`, so one deleter disposes them with `_homes`.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
