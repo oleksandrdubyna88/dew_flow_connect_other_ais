@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
@@ -17,21 +18,14 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class AKimiConsultantCheckTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-kimicheck-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-kimicheck-temp-").FullName;
+    private readonly TempDir _data = TempDir.For("testsToDelete-kimi-check-data-");
+    private readonly TempDir _temp = TempDir.For("testsToDelete-kimi-check-temp-");
     private readonly List<string> _warned = [];
 
     public void Dispose()
     {
-        try
-        {
-            Directory.Delete(_data, recursive: true);
-            Directory.Delete(_temp, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A leftover temp directory is not a failing test.
-        }
+        _data.Dispose();
+        _temp.Dispose();
     }
 
     private PanelSettings Settings(string homesRoot) => new()
@@ -58,12 +52,21 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         },
     };
 
-    private async Task<(int Code, JsonElement Said)> Check(PanelSettings settings, IProcessLauncher launcher)
+    /// <summary>Runs the check; <paramref name="recorded"/> collects every junction the deleter unlinks (S5.5.2: junction first, never entered).</summary>
+    private async Task<(int Code, JsonElement Said)> Check(PanelSettings settings, IProcessLauncher launcher, List<string>? recorded = null, CancellationToken? cancel = null)
     {
-        var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(
-            settings, ["--check-consultant", "--caller", "claude"], launcher, _temp, _warned.Add, Noticing.None, TestContext.Current.CancellationToken);
+        GitScratch.AfterUnlink = recorded is null ? null : (Action<string>)recorded.Add;
+        try
+        {
+            var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(
+                settings, ["--check-consultant", "--caller", "claude"], launcher, _temp, _warned.Add, Noticing.None, cancel ?? TestContext.Current.CancellationToken);
 
-        return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default);
+            return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default);
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
     }
 
     private static string Text(JsonElement element, string name) => element.GetProperty(name).GetString() ?? string.Empty;
@@ -110,7 +113,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
     /// <summary>S5.5.2: when the check ends, its one-shot home is gone junction-first, and the fake person's folder is whole.</summary>
     [Fact]
-    public async Task AfterTheCheck_TheHomeIsGone_AndThePersonsFolderIsIntact()
+    public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst()
     {
         using var person = new KimiFixture();
         using var homes = TempDir.For("testsToDelete-kimi-check-gone-");
@@ -118,11 +121,14 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         var stood = StandIn(person);
         try
         {
-            var (code, said) = await Check(Settings(homes), played);
+            var before = person.Hash();
+            var recorded = new List<string>();
+            var (code, said) = await Check(Settings(homes), played, recorded);
 
             code.Should().Be(0, said.ToString());
             Directory.EnumerateDirectories(Path.Combine(homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends");
-            Directory.Exists(person.Folder).Should().BeTrue("the fake person's folder is never reached by the disposal");
+            recorded.Should().BeEmpty("the home's junction is unlinked by its own name, so the deleter never met it");
+            person.Hash().Should().Equal(before, "the fake person's folder is whole: bytes and attributes");
         }
         finally
         {
@@ -133,23 +139,64 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         }
     }
 
-    /// <summary>S5.5.4: with no homes root, the home stays in the check's own scratch, and goes with it.</summary>
+    /// <summary>S5.5.3: a check cancelled mid-turn still disposes its one-shot home, junction first.</summary>
     [Fact]
-    public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesIt()
+    public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
+    {
+        using var person = new KimiFixture();
+        using var homes = TempDir.For("testsToDelete-kimi-check-cancel-");
+        using var stopping = new CancellationTokenSource();
+        // The turn starts, the token is cancelled while it runs, and the shim's wait ends with that cancellation.
+        var played = new PlayedKimi(new ProcessLauncher())
+        {
+            During = (_, ct) =>
+            {
+                stopping.Cancel();
+
+                return Task.Delay(Timeout.Infinite, ct);
+            },
+        };
+        var stood = StandIn(person);
+        try
+        {
+            var before = person.Hash();
+            var recorded = new List<string>();
+            await Check(Settings(homes), played, recorded, stopping.Token);
+
+            Directory.EnumerateDirectories(Path.Combine(homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the home goes even when the turn was cancelled");
+            recorded.Should().BeEmpty("the junction is unlinked by its own name, so the deleter never met it");
+            person.Hash().Should().Equal(before, "the fake person's folder is whole");
+        }
+        finally
+        {
+            foreach (var scope in stood.Reverse())
+            {
+                scope.Dispose();
+            }
+        }
+    }
+
+    /// <summary>S5.5.4: with no homes root, the home stays in the check's own scratch, and goes with it, junction first.</summary>
+    [Fact]
+    public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
         using var person = new KimiFixture();
         var played = PlayedAsTheCheck(new ProcessLauncher());
         var stood = StandIn(person);
         try
         {
+            var before = person.Hash();
+            var recorded = new List<string>();
             var settings = Settings(string.Empty);
-            var (code, said) = await Check(settings, played);
+            var (code, said) = await Check(settings, played, recorded);
 
             code.Should().Be(0, said.ToString());
             var turn = played.Shims.Should().ContainSingle().Subject;
             var home = turn.Request.Arguments[Array.IndexOf(turn.Request.Arguments.ToArray(), "--home") + 1];
             home.Should().Contain(Path.Combine("own", "kh-"), "a rootless check keeps its home in its own scratch (S5.5.4)");
             Directory.Exists(home).Should().BeFalse("the scratch goes with the check, and so does the home");
+            recorded.Should().BeEmpty("the junction is unlinked by its own name, so the deleter never met it");
+            person.Hash().Should().Equal(before, "the fake person's folder is whole");
         }
         finally
         {

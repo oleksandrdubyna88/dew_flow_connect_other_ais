@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
@@ -22,7 +23,7 @@ namespace CoaiMcp.Tests;
 public sealed class AKimiQuestionRowTests : IAsyncLifetime
 {
     private readonly ProcessLauncher _git = new();
-    private readonly TempDir _dir = TempDir.For("coai-qkimi-");
+    private readonly TempDir _dir = TempDir.For("testsToDelete-qkimi-");
 
     private string Repo => _dir.At("repo");
 
@@ -58,7 +59,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             ReviewerTimeout = TimeSpan.FromSeconds(30),
             QuestionConsult = new QuestionConsultSettings
             {
-                Rows = [new QuestionRow("kimi-disk", "mistral", "kimi", string.Empty, string.Empty, PlayedKimi.Shim, string.Empty, "question-disk", Enabled: true)],
+                Rows = [new QuestionRow("kimi-disk", "my-kimi", "kimi", string.Empty, string.Empty, PlayedKimi.Shim, string.Empty, "question-disk", Enabled: true)],
                 Roots = roots,
                 RowBudget = TimeSpan.FromSeconds(30),
             },
@@ -77,16 +78,19 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))),
     ];
 
-    /// <summary>S5.6.7 (the answered arm): the row's prompt names its copy, never its root, and nothing of the row is left behind.</summary>
+    /// <summary>S5.6.7 (the answered arm): the row's prompt names its copy, never its root, and nothing of the row is left behind, junction first.</summary>
     [Fact]
-    public async Task AKimiDiskRow_ReadsItsCopy_AndLeavesNothingBehind()
+    public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind()
     {
         using var person = new KimiFixture();
         var stood = StandIn(person);
+        var recorded = new List<string>();
         try
         {
             var granted = Path.Combine(Repo, "src");
             var played = new PlayedKimi(_git);
+            var before = person.Hash();
+            GitScratch.AfterUnlink = recorded.Add;
             var reply = JsonDocument.Parse(await Service(played, Homes, granted).AskConsultantsAsync(
                 Repo, "Which helper retries an outbound send?", "I tried a fixed wait.", ct: TestContext.Current.CancellationToken)).RootElement;
 
@@ -104,10 +108,12 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
             Directory.EnumerateFileSystemEntries(Path.Combine(Homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the row's one-shot home goes when it answers");
             Directory.Exists(cwd).Should().BeFalse("the copy goes with the row");
-            Directory.Exists(person.Folder).Should().BeTrue("the fake person's folder is intact");
+            recorded.Should().BeEmpty("the one-shot home's junction is unlinked by its own name, never entered by the deleter");
+            person.Hash().Should().Equal(before, "the fake person's folder is intact: bytes and attributes");
         }
         finally
         {
+            GitScratch.AfterUnlink = null;
             foreach (var scope in stood.Reverse())
             {
                 scope.Dispose();

@@ -377,7 +377,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
       cli: 'kimi',
       version: '2.1.1',
       date: '2026-10-13',
-      resultRef: 'research/RESULTS_kimi_confinement.md §9 M-K6 — `Read` inside the copy served 3 of 3, an outside path refused 3 of 3, but `Grep` and `Glob` read an outside file 3 of 3; §6 M-K3 and §7 M-K4 — writes refused; §12 M-K9 (e) — `.agents/agents/` and project `.mcp.json` load from disk, which is why the roots are COPIED and not granted',
+      resultRef: 'research/RESULTS_kimi_confinement.md §9 M-K6 — `Read` inside the copy served 3 of 3, an outside path refused 3 of 3, but `Grep` and `Glob` read an outside file 3 of 3; §6 M-K3 and §7 M-K4 — writes refused; §12 M-K9 and §21 M-K9 (e) — `.agents/agents/` and project `.mcp.json` load from disk, which is why the roots are COPIED and not granted',
       cells: [
         'M-K6',
         'M-K3',

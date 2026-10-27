@@ -222,7 +222,7 @@ public sealed class CapabilityMatrixTests
 
     /// <summary>S5.6.4: both Kimi rows admit, each FLAGGED unconfined (D13) — the flag is what the data says.</summary>
     [Fact]
-    public void KimiRowsAdmit_BothFlaggedUnconfined()
+    public void AdmissionFlagsBothRows()
     {
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {

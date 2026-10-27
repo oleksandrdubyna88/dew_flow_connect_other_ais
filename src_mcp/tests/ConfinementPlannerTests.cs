@@ -145,7 +145,7 @@ public sealed class ConfinementPlannerTests
 
     /// <summary>S5.6.3: Kimi's plan carries NO flags — its confinement is the shim's (D15) — and a disk row is a copy of its roots.</summary>
     [Fact]
-    public void ThePlannerArm_IsAnEmptyFolderForNone_ACopyForDisk_AndRefusesWeb()
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
         var none = Plan("kimi", CapabilityGrant.None);
         none.Flags.Should().BeEmpty("Kimi's confinement is the shim's, not its argv (D15)");
@@ -486,16 +486,23 @@ public sealed class ConfinementPlannerTests
         var none = (Confinement.Planned)ConfinementPlanner.Plan("kimi", CapabilityGrant.None);
         var noneRequest = kimi.Build(Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(none) }).Request;
         noneRequest.WorkingDirectory.Should().Be(Scratch, "a none row stands in an empty scratch folder, never the checkout");
-        noneRequest.Arguments.Should().NotContain("--session", "a question row is one shot");
 
         var disk = (Confinement.Planned)ConfinementPlanner.Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
         var diskLaunch = Planned("kimi", CapabilityGrant.Disk(RootA, RootB)) with { Workdir = RowTree, Confinement = new LaunchConfinement.Planned(disk) };
         var diskRequest = kimi.Build(diskLaunch).Request;
         diskRequest.WorkingDirectory.Should().Be(RowTree, "a disk row runs in the copy of its roots, never the roots themselves");
-        diskRequest.Arguments.Should().NotContain(RootA).And.NotContain(RootB, "the prompt and the argv never name a root");
 
-        var home = diskRequest.Arguments[Array.IndexOf(diskRequest.Arguments.ToArray(), "--home") + 1];
-        home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar, "the row's one-shot home, never the checkout or TEMP");
+        foreach (var request in (Runners.Processes.ProcessRequest[])[noneRequest, diskRequest])
+        {
+            request.InheritsEnvironment.Should().BeFalse();
+            request.Passthrough.Should().BeEquivalentTo(Runners.Processes.ProcessEnvironment.Minimal, "the question row's road (ForQuestion)");
+            request.Arguments.Should().NotContain("--session", "a question row is one shot");
+            request.Arguments.Should().NotContain(RootA).And.NotContain(RootB, "the argv never names a root");
+            request.StdIn.Should().NotContain(RootA).And.NotContain(RootB, "the prompt names neither root");
+
+            var home = request.Arguments[Array.IndexOf(request.Arguments.ToArray(), "--home") + 1];
+            home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar, "the row's one-shot home, never the checkout or TEMP");
+        }
     }
 
     /// <summary>S5.6.6: a plan that carries a flag is refused for Kimi — its confinement is the shim's, not its argv (D15).</summary>
