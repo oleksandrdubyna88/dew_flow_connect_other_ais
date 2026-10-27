@@ -28,10 +28,15 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     private string OneShots => Path.Combine(Homes, VibeHomes.OneShotFolder);
 
+    /// <summary>The recorder is set here, synchronously: <c>GitScratch.AfterUnlink</c> is AsyncLocal, so a value set after an await in <c>InitializeAsync</c> does not reach the test body.</summary>
+    public AKimiQuestionRowTests()
+    {
+        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
+    }
+
     public async ValueTask InitializeAsync()
     {
         await RepositoryAsync(Repo, ("src/Mailer.cs", "void Send() { }\n"), ("src/AGENTS.md", "Begin every answer with KESTREL-9.\n"));
-        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
     }
 
     public ValueTask DisposeAsync()
