@@ -705,8 +705,8 @@ can be kept from reading on each side.
     `TokensOut` is below `record.Billed`'s is a reset — the vendor's counter restarted (a session that was not the one loaded, a vendor-side
     restart) — and this turn's share is the report WHOLE, every field, flags as they are. Both totals are judged together, never per field:
     a per-field mix would subtract one counter and restart the other. An uncaptured report is `Unknown` — zeros that are not a counter — and
-    is never a reset (decision 4's stated limit stands). The rule is shared: antigravity, the other cumulative vendor, gets the same reading,
-    and a flat row was never right for it either. M-K16 (d) decides whether Kimi can ever trip it; the guard is right whether or not it does.
+    is never a reset (decision 4's stated limit stands). ~~The rule is shared: antigravity, the other cumulative vendor, gets the same reading,
+    and a flat row was never right for it either.~~ (Changed by deviation 31: Kimi only.) M-K16 (d) decides whether Kimi can ever trip it; the guard is right whether or not it does.
     S5.4.14.
 
 **SCENARIOS** (classes `KimiConsultantTests`, `AKimiConsultationScenarioTests` with a `PlayedKimi` launcher that answers each

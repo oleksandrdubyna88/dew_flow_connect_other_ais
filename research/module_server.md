@@ -8015,10 +8015,14 @@ stateDiagram-v2
   failed --> [*]: the next sweep takes the home (D20)
 ```
 
-- **A counter that restarted is billed whole** (decision 12, `ConsultationUsage.IsAReset` in the core, used by `Less`): a CAPTURED report whose input OR output total
-  is below what the record already billed bills the report itself, every field — never the flat zero the floor gave. Both totals are judged together; an uncaptured
-  report (`Usage.Unknown`) is never a reset, so its turn is billed unknown and the next captured share carries its spend (decision 4's stated limit). The rule is shared:
-  antigravity, the other cumulative vendor, reads the same way. `ConsultationBilling.ThisTurnsShare` and `ReplyCost` are unchanged callers.
+- **A counter that restarted is billed whole — for Kimi only** (decision 12 as changed by E5.4 deviation 31; `ConsultationUsage.IsAReset` in the core, used by `Less`
+  only when the adapter declares `IConsultantRuntime.UsageCounterMayRestart`): a report that CARRIES a counter (`ConsultationUsage.CarriesACounter` — captured, and not
+  zero in both totals) whose input OR output total is below the vendor's counter as it last reported it (`ConsultationRecord.LastReported`) bills the report itself,
+  every field — never the flat zero the floor gave. Both totals are judged together. An uncaptured report (`Usage.Unknown`) is never a reset, so its turn is billed
+  unknown and the next captured share carries its spend (decision 4's stated limit); a report of nothing (`Usage.None`, a turn that reached no model) is billed nothing
+  and moves no counter. antigravity declares no restart — only its input is measured cumulative — so its output below the last report is floored. Every share is
+  measured against `LastReported` (`ConsultationUsage.Next`), not against the sum of the shares (`Billed`), through `ConsultationBilling.ThisTurnsBill`
+  and `TurnConsultant.BillOf` / `ReplyCost`.
 - **A launch coai's own control refused leaves a conversation as it was** (E5.3 decision c; S5.4.16). `ConsultationFailing.Terminal` returns a `launch-refused` failure on a
   record that had already gone on (`TurnFailure.StatusBefore` `open` or `interrupted`, passed from the service's pre-`asking` record through
   `ConsultationFailedTurns.Decided`) to that status, with the failure kind and cure recorded beside it and the handle kept — nothing was launched, so nothing about the
