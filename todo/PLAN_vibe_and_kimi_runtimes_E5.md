@@ -1096,6 +1096,7 @@ Numbered from 47. Scenarios and classes as the tables name them, except where a 
     exception was thrown*). S5.6.8's red was not watched. The E5.5 scenarios were green on arrival (see 48); no teeth were run for them.
 48. **E5.5 is green on arrival.** S5.5.1–S5.5.4 pass on this branch. Their table reds ("before E5.4", "before E5.3 g") describe code that
     is already in. Class: `AKimiConsultantCheckTests` (new). S5.5.2 is a Theory: passed, and exit 70 (`PlayedKimi.Lost`, state `failed`).
+    Teeth, run after the review (R7): `KimiHome.DisposeAllUnder` removed at `VibeHomes.EmptiedUnderItsLock` and at `ConsultCheckScratch.KimiHomesDisposed`. Red: S5.5.2 both rows (*Expected _unlinked to be empty … found …/home/credentials*), S5.5.3 (the new cancelled-and-junction-first assertion, same message), S5.5.4, and S5.6.7 (the scenario Theory, three rows). Reverted.
 49. **The record table of the matrix's citation test gained the Kimi record.** `CapabilityMatrixTests.EveryRow_CitesTheRecord_…` lists each
     record with its day and cell prefix; `RESULTS_kimi_confinement.md`, 2026-10-13, `M-K`, was added. It was the one existing test the seed
     turned red (`ContainSingle`).
