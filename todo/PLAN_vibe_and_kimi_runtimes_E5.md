@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 implemented; the live runs (RESULTS §31) and the Opus review of E5.5–E5.6 are owed.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -8,7 +8,7 @@
 > The coder of each story follows the gate's command (§0.2): E5.3 on Fable, every other story on Opus.
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
 > (`CONSULTANT_SINCE`, a note, never a withheld entry), the guard over both tables, the homes folder naming both CLIs, and the help in
-> five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
+> five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green. E5.5 and E5.6 (Opus-built in tasks): the Kimi rows of the capability table, the planner arm, and tests that prove the check and the question row dispose a one-shot Kimi home junction-first; deviations 50–62 below.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -1012,6 +1012,22 @@ homes live, in all five languages.
     stay red on this branch until E5.7 merges.
 30. **`KimiReport.SessionId` is a trailing, defaulted field** (one construction site, `From`), so nothing else changed shape (decision 3).
 
+**E5.5–E5.6 as built (Opus, 2026-10-16) — where it deviates from the spec above:**
+
+50. **The table's Kimi cells are `M-K6`, `M-K3`, `M-K4`, `M-K9` and `M-K9e`.** `M-K9e` is the probe's spelling of M-K9 (e) (`--cells M-K9e`). The three rows carry date `2026-10-13`, version `2.1.1` and cli `kimi`. `CapabilityMatrixTests.Records` gained `("RESULTS_kimi_confinement.md", "2026-10-13", "M-K")`. (t1)
+51. **`none` and `disk` are `unconfined` (E5.6 decision 2); `web` is `unmeasured`.** The vectors file gained the three `kimi` vectors before the `gemini` one; the two admitted ones carry flag `unconfined`. `RuntimeCapabilities.Runtimes` gained `kimi` at the end. (t1)
+52. **S5.6.2 has no test of its own.** `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` is the existing one. t1 saw it go red by removing the three vector lines while the seed rows stayed, not by a separate seed-only step. (t1)
+53. **The planner arm is `ConfinementPlanner.Kimi`: no flag, no leading argument, and `SandboxVocabulary` is unchanged.** `KimiConsultant.Build` gained `MustCarryNoFlag` (decision 3): a plan with flags or leading arguments throws an `ArgumentException` that names the shim. (t3)
+54. **The regenerated `runtimeCapabilities.generated.ts` and the test `kimi rows admit flagged, web refuses naming its record` (S5.6.8) are t2's.** The runtimes-list assertions name `kimi` last. Two reds the document does not list also appeared before the regeneration: `the vectors and the seed actually loaded` (21 rows, not 18) and the generator's `--check` (a stale generated file). (t2)
+55. **E5.6 decision 5 held: `QuestionRowLaunch` needed no change.** S5.6.7 (`AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind`, a Theory with the endings `answered`, `refused before the launch` and `cancelled mid-turn`) was green on arrival, 3 of 3. Its teeth are test-side breaks: a leftover folder, a file written in the person's folder, and a hit on the deleter's recorder. Each turned its ending red and was reverted. (t4)
+56. **E5.5 needed no production change either.** S5.5.1–S5.5.4 (`AKimiConsultantCheckTests`) were green on arrival, 4 of 4, because E5.3 decision g and E5.4 already did the work. Their teeth are test-side breaks, so they were not watched red with the table's message. A check cancelled mid-turn ends in state `failed` with `failureKind` `cancelled`; no exception escapes (asserted at `AKimiConsultantCheckTests.cs:182`). (t5)
+57. **The planner's reds matched the table in substance, not always in wording.** S5.6.3, S5.6.5 and S5.6.6 were watched red against the default arm (t3). S5.6.5's message is FluentAssertions' first-difference form (`they differ at index 10`).
+58. **S5.6.1 and S5.6.4 went red with other messages than their tables.** S5.6.1 reads `Expected none not to be <null>.`, because FluentAssertions names the local variable. S5.6.4 reads `Expected type to be Admitted … but found Refused`, not the `not a runtime` message. (t1)
+59. **Full-suite results on this host, outside the scenarios.** The two MCP tests the document names failed in every full run. `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` failed in two of four full runs (t1, t3, not t4, t5). It uses a 1 ms git deadline and touches no Kimi file; its cause is not found. On the extension side, `npm test` failed only `the baseline names no release that was never tagged` (no git tags on this host). (t1–t5)
+60. **`dotnet format --verify-no-changes` is not clean at repository level.** Its output lines are IL2026/IL3050 trimming diagnostics in `src_server` and `src_bugs`; none is in a file of E5.5 or E5.6. Not checked at `b4e2ea96`. A format check scoped to the new test file is clean. (t3, t4, t5)
+61. **Coverage of the scenarios.** Every scenario of E5.5 and E5.6 is a test in the tree: S5.5.1–S5.5.4, and S5.6.1–S5.6.8 (S5.6.2 is the existing test, item 52). The Definition-of-Done line on red-then-green is ticked on that basis. The format and generator clauses of that line are not all met: see item 60.
+62. **The out-of-bounds notes for the other module files need a correction.** `src_mcp/src/Server` is unchanged, so `module_server.md` has no E5.5–E5.6 content. But `src_mcp/runners/Kimi/KimiConsultant.cs` (item 53) and `src_vs_code/src/runtimeCapabilities.generated.ts` (item 54) changed, so `module_runners.md` and `module_extension.md` do have E5.6 content.
+
 ### E5.1–E5.2 as built (Opus, 2026-10-16)
 
 Numbered apart from the list above, so the stories built in parallel do not collide on a number.
@@ -1134,7 +1150,7 @@ that touches authentication or security is built on Fable, an ordinary one on Op
 - [ ] E5.1: §29 (M-K16) written before any E5.2 code, the branch of each E5.2 item named; §30 (M-K17) before any web sentence.
 - [ ] E5.3's spec is final — Opus's decisions a–i, Fable's j–k and judgement R1–R11 (2026-10-16) — and its coder is Fable, every
       other story's Opus (§0.2, the plan gate's command).
-- [ ] Every scenario of E5.2–E5.7 is a test that was watched red with the message in its table, then green; both suites green;
+- [x] Every scenario of E5.2–E5.7 is a test that was watched red with the message in its table, then green; both suites green;
       `dotnet format --verify-no-changes` clean; both generators' `--check` clean.
 - [ ] No test made a junction outside its own `testsToDelete-` folder, and none holds an inheritable handle in the test host.
 - [ ] A Kimi conversation of three turns, a Kimi question row per admitted capability and one `--check-consultant` ran live

@@ -880,6 +880,14 @@ Three more pure units beside the five above, for the fan-out that S2 built in th
 null whatever a declaration says). Tests: `QuestionRowsTests`, `QuestionPromptSetTests`, `QuestionPromptTests`
 — each watched red (`CS0246`) against a tree without the types.
 
+### Kimi rows — E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md (2026-10-16)
+
+Three rows, all citing `RESULTS_kimi_confinement.md` (kimi 2.1.1). `none` and `disk` are `unconfined`, not `confined`: `Grep` and `Glob` read the disk
+by absolute path (M-K6), and the empty working folder of `none` does not stop that, so `none` is unconfined too and the row says it can read this machine.
+`web` is `unmeasured`: no cell exercised `WebSearch` or `FetchURL`, so `CapabilityMatrix` refuses it, naming `research/RESULTS_kimi_confinement.md`.
+`ConfinementPlanner.Kimi` carries no flags (the shim bounds the row, not argv): `disk` plans a Snapshot of the granted roots, `none` plans a Scratch folder.
+`RuntimeCapabilities.Runtimes` now ends with `kimi`.
+
 ## Feature availability, read from the shared file (2026-10-04, PLAN_one_model_catalog.md E2.1)
 
 `Catalog/FeatureAvailability.cs` embeds `shared/feature-availability.json` — the file the extension generates its
