@@ -7349,3 +7349,36 @@ stateDiagram-v2
   gate file is the only thing that serialises them (with it keyed apart, the peak is 2) — and a gate another process holds delays the shim until its release.
 
 Not covered by a test: a live three-turn consult through the released binary (the parent's DoD, RESULTS §31).
+
+### A Kimi question row and a Kimi consultant check — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-27)
+
+Neither needed a server change: `QuestionRowLaunch` and `ConsultantCheck` were already generic over a runtime that declares `HomesFolder` and
+`NeedsASanitisedSnapshot` (decision 5 of E5.6, decision 1 of E5.5), and E5.3 decision g made every one-shot owner junction-first. What changed is the
+table, the planner arm and `KimiConsultant`'s flag guard ([module_core.md](module_core.md), [module_runners.md](module_runners.md)). The paths, proved
+through the real code with the shim played:
+
+```mermaid
+sequenceDiagram
+  participant F as QuestionFanOut / ConsultantCheck
+  participant V as VibeHomes.ReserveOneShot
+  participant P as ConsultantPlaces.OneShotAsync
+  participant K as KimiConsultant + KimiLaunch
+  participant D as the disposers
+  F->>V: coai-vh\8-hex folder (locked, private) — or none (no root)
+  F->>P: the copy: row → scratch\tree\copy · check → scratch\own\tree\copy
+  F->>K: Build · TakeTurn — the home kh-10-hex made, junction to the sign-in
+  K-->>F: answered · refused (after the home was made) · cancelled
+  F->>D: finally — OneShotHome.Dispose (junction-first, under its lock)
+  F->>D: RemoveScratch / ConsultCheckScratch.Delete (the root-less home junction-first, then the copy)
+```
+
+- **A question row on Kimi** (E5.6): `none` and `disk` are admitted and run FLAGGED `unconfined` — the reply's `flag` and the sidebar say *can read this
+  machine* — and `web` is refused at admission, naming research/RESULTS_kimi_confinement.md. A `disk` row stands among COPIES of its granted roots; the
+  fan-out's prompt names the copies and never the roots. ONE-SHOT: the row's `coai-vh\<8>` folder (home and junction), its scratch and its copies are gone
+  on an answer, on a launch the control refused after the home was made (the row is `failed`), and on a cancellation mid-turn — the deleter never meets the
+  junction (S5.6.7). A `none` row runs the same three endings: its scratch is only the empty `cwd` folder it stands in, and it goes the same way.
+- **`--check-consultant` on a Kimi row** (E5.5): the turn stands in `<scratch>\own\tree\<copy>` on `<root>\coai-vh\<8>\kh-<10 hex>`; the check passes on
+  the marker read in the copy, and the folder goes junction-first whatever ended the check (an answer, an agent failure with exit 70, a cancellation). With
+  settings built by hand (no homes root) the home sits at `<scratch>\own\kh-*` and `ConsultCheckScratch.Delete` disposes it by name before the scratch.
+
+Not covered by a test: a live question row per admitted capability and a live `--check-consultant` through the released binary (RESULTS §31).

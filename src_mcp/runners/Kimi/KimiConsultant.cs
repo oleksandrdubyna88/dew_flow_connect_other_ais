@@ -50,12 +50,27 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
+        MustCarryNoFlags(launch);
         var settings = launch.Settings with { OwnedScratch = OwnedFolder(launch), Model = ModelOf(launch.Settings) };
         var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, Cwd(launch), string.Empty, launch.OutputDir, settings);
         var request = built.Request with { Arguments = [.. built.Request.Arguments, .. SessionOf(launch)] };
         ConsultantLaunches.MustCarryNoLineBreak(request.Arguments);
 
         return built with { Request = launch.Confinement is LaunchConfinement.Planned ? ConsultantLaunches.ForQuestion(request) : request };
+    }
+
+    /// <summary>
+    /// A planned launch whose plan carries a flag is refused (E5.6 decision 3): the planner never gives Kimi one, because its confinement is the
+    /// shim's (D15) — so a flagged plan was not made for kimi, and splicing it would hand the CLI an argument nobody measured. A non-empty
+    /// <c>AddDirs</c> counts too: those are roots spelled as launch flags, which no Kimi plan carries (a disk row's roots are its copy's
+    /// <c>SnapshotSources</c>, never <c>AddDirs</c>).
+    /// </summary>
+    private static void MustCarryNoFlags(ConsultantLaunch launch)
+    {
+        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && plan.Flags.Count + plan.Leading.Count + plan.AddDirs.Count > 0)
+        {
+            throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
+        }
     }
 
     /// <summary>The row's model, or Kimi's default when it names none — resolved here so the shim and the ledger name the same one.</summary>

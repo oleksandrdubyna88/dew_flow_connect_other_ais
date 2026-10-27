@@ -229,6 +229,11 @@ jobs:
       #     Exclude only this generated artifact from CPD; normal analysis still applies.
       #     securityLane.test.ts executes the generated export and compares the whole object
       #     with the shared JSON, so generator drift fails the ordinary extension suite.
+      #   runtimeCapabilities.generated.ts is the same kind of artifact: emitted by
+      #     scripts/generate-runtime-capabilities.mjs from shared/runtime-capabilities.json, one row per
+      #     runtime x capability. A new runtime's rows look like the last one's (the kimi rows of #929 read
+      #     96 % duplicated, 5.7 % of that PR's new lines against a limit of 3 %) - the catalog, not copied
+      #     logic. CPD only; generatedFilesAreCurrent.test.ts runs the generator's --check, so drift still fails.
       - name: Begin
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -240,7 +245,7 @@ jobs:
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**,.agents/conventions/**" \
-            /d:sonar.cpd.exclusions="src_vs_code/src/helpContent.ts,src_vs_code/src/helpRu.ts,src_vs_code/src/helpUk.ts,src_vs_code/src/helpDe.ts,src_vs_code/src/helpEs.ts,src_vs_code/src/securityLane.generated.ts" \
+            /d:sonar.cpd.exclusions="src_vs_code/src/helpContent.ts,src_vs_code/src/helpRu.ts,src_vs_code/src/helpUk.ts,src_vs_code/src/helpDe.ts,src_vs_code/src/helpEs.ts,src_vs_code/src/securityLane.generated.ts,src_vs_code/src/runtimeCapabilities.generated.ts" \
             /d:sonar.issue.ignore.multicriteria="e1,e2" \
             /d:sonar.issue.ignore.multicriteria.e1.ruleKey="typescript:S1523" \
             /d:sonar.issue.ignore.multicriteria.e1.resourceKey="src_vs_code/src/test/**" \

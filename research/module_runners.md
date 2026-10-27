@@ -3634,8 +3634,8 @@ flowchart LR
   holds the per-home file) and its next refresh would sign the person out (E4.2 decision 11). The six-hour scratch sweep (`PanelService.PruneOldScratchDirs`) finishes it once the tree has ended: it calls `KimiHome.DisposeAllUnder` on each due `coai-answers-*` folder BEFORE the deleter, asks the same per-home hold, and on any `Stopped` skips the folder for that beat (warned) — a folder's last-write time cannot say a `kimi` is still running, because writes deep inside a home never move it (E4.4 review B1).
 - **Registered** in `ReviewerRuntimeSelector.Default`, `RuntimeNames` and `Named("kimi", vendorId)`, and in `MachineOnlyRuntimes` (D12: the Team server derives its accepted set as
   `RuntimeNames` minus that one, so it refuses a `kimi` row by name). `shared/feature-availability.json` names it: effort and thinking `unmeasured` (the k3 models announce
-  `low`/`high`/`max`, M-K7; nothing showed one taking effect), fast mode `none`; NOT a consultant, NOT in `runtime-capabilities.json` (S5 — a runtime may not enter it without its
-  own `ConfinementPlanner` arm). The extension's `RUNTIMES` and the two manifest enums name it too (the seed's `runtimes` must equal them); its preset, models, colour, terminal, install and update are E4.5's and are
+  `low`/`high`/`max`, M-K7; nothing showed one taking effect), fast mode `none`; at S4 NOT a consultant and NOT in `runtime-capabilities.json` (a runtime may not enter it without its
+  own `ConfinementPlanner` arm) — S5 made it both: a consultant since E5.4, and a question-consultant runtime with its own planner arm since E5.6 (below). The extension's `RUNTIMES` and the two manifest enums name it too (the seed's `runtimes` must equal them); its preset, models, colour, terminal, install and update are E4.5's and are
   described in [module_extension.md](module_extension.md).
 - **Diagnosis.** `VendorDiagnosis.Known` carries the four NAMES the shim writes (`not_signed_in:`, `subscription_model:`, `balance_spent:`, `model_not_offered`) — the shim files a
   known failure as `<name>: <reason> — <cure>` on stderr — never a phrase of Kimi's trace. `InstallCure("kimi")` is Moonshot's own: `irm https://code.kimi.com/kimi-code/install.ps1 | iex`
@@ -3715,7 +3715,7 @@ scratch driver outside the repository, so it cannot be re-run from the repositor
 
 A `kimi` row answers `consult`. `ConsultantResolution.OnACli` gains `"kimi" => KimiOn(vendor)` — `VibeOn`'s shape: the `KimiRuntime` the row resolves to, else a
 new one, never another runtime — and `features.consultant` names `kimi`, so `Consulting` and `QuestionResolution.Answering` hold it (a question row on Kimi is
-still refused by the capability matrix until E5.6).
+refused by the capability matrix until E5.6 — *The Kimi question row and the consultant check* below).
 
 ```mermaid
 flowchart LR
@@ -3751,3 +3751,41 @@ flowchart LR
 
 Tests: `KimiConsultantTests` (S5.4.1–S5.4.6 and the declarations), `ConfinementPlannerTests` (S5.4.13), `ConsultantLimitationsTests` (S5.4.11), `FeatureAvailabilityTests`
 (S5.4.12), `CumulativeUsageTests` (S5.4.14, pure) and the service arms in `AKimiConsultationScenarioTests` — listed in [module_tests.md](module_tests.md).
+
+## The Kimi question row and the consultant check (2026-10-27, E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+Both are ONE-SHOT Kimi launches through the same `KimiConsultant`, and neither needed a new branch in the server: the question row and the check
+already reserve a one-shot home for a runtime that declares `HomesFolder` (`VibeHomes.ReserveOneShot`) and make a copy for one that declares
+`NeedsASanitisedSnapshot`, and E5.3 decision g already disposes every one-shot folder junction-first. What E5.6 added is the planner arm and the table rows
+(the core's half, [module_core.md](module_core.md)) and one guard here.
+
+```mermaid
+flowchart LR
+  R[question row kimi × none / disk] --> M[CapabilityMatrix: unconfined → admitted FLAGGED]
+  R2[kimi × web] --> M2[unmeasured → refused, naming RESULTS_kimi_confinement.md]
+  M --> P["ConfinementPlanner.Kimi: no flags · none → Scratch · disk → Snapshot of the roots"]
+  P --> B["KimiConsultant.Build (planned)<br/>MustBeLaunchable (no handle) · MustCarryNoFlags<br/>cwd = row's empty cwd / its copy · home = OwnedScratch\kh-&lt;10 hex&gt;"]
+  C["coai-mcp --check-consultant"] --> B2["KimiConsultant.Build (consult role)<br/>cwd = &lt;scratch&gt;\own\tree\&lt;copy&gt; · home = coai-vh\&lt;8&gt;\kh-&lt;10 hex&gt;"]
+  B --> S[the shim, through KimiLaunch]
+  B2 --> S
+  S --> D["finally: OneShotHome.Dispose / ConsultCheckScratch.Delete / QuestionRowLaunch.RemoveScratch — junction-first (E5.3 g)"]
+```
+
+- **A planned Kimi launch** (E5.6 decision 3): the cwd is the plan's (`Scratch` → the row's EMPTY `cwd` folder beside its home; `Snapshot` → the copy of the
+  roots), the home is `KimiHome.HomeFor(OwnedScratch, …)` in the row's one-shot folder (`<root>\coai-vh\<8>\kh-<10 hex>`, or the row's own `coai-question-*`
+  folder with no homes root), there is never a `--session` (`MustBeLaunchable` refuses a handle on a planned launch: one shot), and the request goes through
+  `ConsultantLaunches.ForQuestion` (the minimal environment — a no-op for Kimi, whose `KimiEnvironment.Built` already makes the request minimal and not
+  inherited). **New: `MustCarryNoFlags`** — a plan whose `Flags`, `Leading` or `AddDirs` is not empty is an `ArgumentException` ("a Kimi row's confinement is
+  the shim's; a plan with flags is not one coai made for kimi"): the planner never gives Kimi a flag or a flag-spelled root (a disk row's roots are its copy's
+  `SnapshotSources`), so such a plan was made for another runtime, and splicing it would hand the CLI an argument nobody measured. `SnapshotSources` is not
+  checked: the adapter never reads it — the copy is made by `QuestionRowLaunch` and only its path (`Workdir`) reaches the launch. `QuestionRowLaunch` turns that exception into a
+  `failed` row with the sentence.
+- **The consultant check** (E5.5): `ConsultantCheck` gives Kimi a copy of the scratch repository (`<scratch>\own\tree\<copy>`) and a one-shot home under
+  `<root>\coai-vh\<8>` — or, with no homes root (settings built by hand), at `<scratch>\own\kh-*`, which `ConsultCheckScratch.Delete` disposes by name
+  (`ConsultantCheck.OwnName`, R6) before the root. The confinement recorded on the check is empty: Kimi's does not depend on its CLI's version.
+- **What the rows mean for the person.** `none` and `disk` are admitted FLAGGED `unconfined`: `Read` is bounded by the shim, `Grep` and `Glob` are not (M-K6),
+  so the row's **Can read this machine** tick is on and cannot be taken off. `web` is refused until a cell measures `WebSearch`/`FetchURL` (M-K17 would only
+  say whether they ASK; admitting `web` needs its own cell).
+
+Tests: `CapabilityMatrixTests` (S5.6.1, S5.6.2, S5.6.4), `ConfinementPlannerTests` (S5.6.3, S5.6.5, S5.6.6), `AKimiQuestionRowTests` (S5.6.7 and the service arm),
+`AKimiConsultantCheckTests` (S5.5.1–S5.5.4), `capabilityAdmission.test.ts` (S5.6.8) — listed in [module_tests.md](module_tests.md).

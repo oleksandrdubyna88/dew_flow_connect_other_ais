@@ -274,6 +274,7 @@ public sealed class KimiRuntimeTests : IDisposable
     [Fact]
     public async Task ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn()
     {
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = KimiCredentialsLock.RootFor(_dir.At("locks"));
         Directory.CreateDirectory(Path.Combine(PersonsBin, ".."));
         var launcher = new ScriptedKimi();

@@ -42,13 +42,22 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
     /// <summary>Runs while a shim is "alive", after its start is stamped — a test's seam for what holds at that moment.</summary>
     public Func<ProcessRequest, CancellationToken, Task> During { get; init; } = static (_, _) => Task.CompletedTask;
 
+    /// <summary>
+    /// What <c>kimi --version</c> answers — the measured version by default. The probe runs INSIDE the launch control, on the home it has just
+    /// made (junction and all), so an answer with no version is a launch refused AFTER the home exists (E5.6's S5.6.7).
+    /// </summary>
+    public Func<ProcessRequest, ProcessResult> Version { get; init; } = static _ => Measured;
+
+    /// <summary>The version every Kimi cell was measured on.</summary>
+    public static ProcessResult Measured { get; } = new(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false);
+
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
         if (request.Arguments is ["--version"])
         {
             Versions.Enqueue(request);
 
-            return new ProcessResult(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false);
+            return Version(request);
         }
 
         return string.Equals(request.Executable, Shim, StringComparison.Ordinal) ? await ShimAsync(request, ct) : await inner.RunAsync(request, ct);

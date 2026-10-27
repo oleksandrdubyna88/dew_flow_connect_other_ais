@@ -691,7 +691,10 @@ test('S5.7.7 theHomesFolderNamesBothCLIs: the label, its help, the manifest and 
   // E5.7 decision 6: Kimi's conversation homes (coai-kimi) and one-shot homes (coai-vh) live under the same folder, each holding a LINK to
   // the person's Kimi sign-in. The setting key is unchanged — a rename is a migration, and not this epic's.
   const body = consultantBody(DEFAULT_CONSULT, { vibeHomes: '' }, '');
-  const label = /<label for="vibeHomesDirectory">(?:<[^>]*>[^<]*<\/[^>]*>|<[^>]*>)*([^<]*)<\/label>/u.exec(body)?.[1]?.trim();
+  // The label's own words are the text after its last child tag. Two disjoint alternatives (a non-'<' character, or a '<' that does not
+  // close the label), so the match is linear — the earlier nested alternation was CodeQL alert 34 (js/redos).
+  const inner = /<label for="vibeHomesDirectory">((?:[^<]|<(?!\/label>))*)<\/label>/u.exec(body)?.[1];
+  const label = inner?.slice(inner.lastIndexOf('>') + 1).trim();
   assert.equal(label, 'Vibe and Kimi homes folder');
   assert.match(body, /data-setting="vibeHomesDirectory"/u, 'the setting key is unchanged');
   assert.match(body, /Kimi/u, 'the box’s own hint names Kimi too');
