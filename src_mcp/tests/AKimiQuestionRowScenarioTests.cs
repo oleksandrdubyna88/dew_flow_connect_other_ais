@@ -181,6 +181,7 @@ public sealed class AKimiQuestionRowScenarioTests : IDisposable
             }
 
             Directory.Exists(RowFolderOf(launch)).Should().BeFalse("the row's home and scratch are gone however it ended");
+            Directory.Exists(launch.WorkingDirectory).Should().BeFalse("the row's copies in its TEMP scratch are gone however it ended");
         }
 
         OneShotEntries.Should().Be(0, "coai-vh\\<8> is empty once the row ends, on every way out");

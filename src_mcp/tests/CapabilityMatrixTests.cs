@@ -219,7 +219,7 @@ public sealed class CapabilityMatrixTests
 
     /// <summary>S5.6.4: both Kimi sides are admitted FLAGGED (D13), and web is refused.</summary>
     [Fact]
-    public void KimiRowsAreAdmittedFlagged_AndWebIsRefused()
+    public void AdmissionFlagsBothRows()
     {
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {

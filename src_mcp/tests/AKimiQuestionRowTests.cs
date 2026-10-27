@@ -72,9 +72,9 @@ public sealed class AKimiQuestionRowTests : IDisposable
             request.Arguments.Should().NotContain(AcpWords.SessionFlag, "a question row is one shot: no session to load");
             request.Arguments.Should().NotContain(RootA).And.NotContain(RootB, "the roots are read through their copy, never named to Kimi");
             request.InheritsEnvironment.Should().BeFalse();
-            request.Arguments.Should().ContainInConsecutiveOrder("--home");
             var home = request.Arguments[request.Arguments.ToList().IndexOf("--home") + 1];
             home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar, "the row's home lives in the row's own folder, gone with it");
+            KimiEnvironment.Refusal(request, _person.PlacesAt(home)).Should().BeEmpty("the one launch control admits exactly what the question row builds");
         }
 
         none.Role.Should().Be(ConsultantRoles.Question);

@@ -113,6 +113,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         code.Should().Be(0);
         Text(said, "state").Should().Be("answered", said.ToString());
         said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+        Text(said, "canary").Should().NotBe("read", said.ToString());
+        Text(said, "confinement").Should().BeEmpty("decision 3: the check puts no confinement on the consultant");
         var turn = played.Shims.Should().ContainSingle().Subject.Request;
         ArgumentOf(turn, "--cwd").Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
         var home = ArgumentOf(turn, "--home");
@@ -151,6 +153,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         using var stand = StandIn();
         using var homes = TempDir.For("testsToDelete-kimi-check-cancel-");
         using var cancel = new CancellationTokenSource();
+        GitScratch.AfterUnlink = path => _unlinked.Add(path);
         var played = new PlayedKimi(new ProcessLauncher())
         {
             During = async (_, ct) =>
@@ -162,8 +165,10 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         var (_, said, _) = await Check(Settings(homes), played, cancel.Token);
 
-        Text(said, "state").Should().NotBe("answered", said.ToString());
+        Text(said, "state").Should().Be("failed", said.ToString());
+        Text(said, "failureKind").Should().Be("cancelled", said.ToString());
         OneShotHomesLeft(homes).Should().Be(0, "the check's finally disposes its home whatever ended it");
+        _unlinked.Should().BeEmpty("the home is disposed junction-first, even when the check was cancelled");
     }
 
     /// <summary>S5.5.4: settings built by hand with no homes root keep the home in the check's scratch, and it goes junction-first with the scratch.</summary>
