@@ -3752,7 +3752,7 @@ flowchart LR
 Tests: `KimiConsultantTests` (S5.4.1–S5.4.6 and the declarations), `ConfinementPlannerTests` (S5.4.13), `ConsultantLimitationsTests` (S5.4.11), `FeatureAvailabilityTests`
 (S5.4.12), `CumulativeUsageTests` (S5.4.14, pure) and the service arms in `AKimiConsultationScenarioTests` — listed in [module_tests.md](module_tests.md).
 
-## The Kimi question row and the consultant check (2026-10-16, E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+## The Kimi question row and the consultant check (2026-10-27, E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
 
 Both are ONE-SHOT Kimi launches through the same `KimiConsultant`, and neither needed a new branch in the server: the question row and the check
 already reserve a one-shot home for a runtime that declares `HomesFolder` (`VibeHomes.ReserveOneShot`) and make a copy for one that declares
@@ -3774,9 +3774,11 @@ flowchart LR
 - **A planned Kimi launch** (E5.6 decision 3): the cwd is the plan's (`Scratch` → the row's EMPTY `cwd` folder beside its home; `Snapshot` → the copy of the
   roots), the home is `KimiHome.HomeFor(OwnedScratch, …)` in the row's one-shot folder (`<root>\coai-vh\<8>\kh-<10 hex>`, or the row's own `coai-question-*`
   folder with no homes root), there is never a `--session` (`MustBeLaunchable` refuses a handle on a planned launch: one shot), and the request goes through
-  `ConsultantLaunches.ForQuestion` (the minimal environment). **New: `MustCarryNoFlags`** — a plan whose `Flags` or `Leading` is not empty is an
-  `ArgumentException` ("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi"): the planner never gives Kimi a flag, so a
-  flagged plan was made for another runtime, and splicing it would hand the CLI an argument nobody measured. `QuestionRowLaunch` turns that exception into a
+  `ConsultantLaunches.ForQuestion` (the minimal environment — a no-op for Kimi, whose `KimiEnvironment.Built` already makes the request minimal and not
+  inherited). **New: `MustCarryNoFlags`** — a plan whose `Flags`, `Leading` or `AddDirs` is not empty is an `ArgumentException` ("a Kimi row's confinement is
+  the shim's; a plan with flags is not one coai made for kimi"): the planner never gives Kimi a flag or a flag-spelled root (a disk row's roots are its copy's
+  `SnapshotSources`), so such a plan was made for another runtime, and splicing it would hand the CLI an argument nobody measured. `SnapshotSources` is not
+  checked: the adapter never reads it — the copy is made by `QuestionRowLaunch` and only its path (`Workdir`) reaches the launch. `QuestionRowLaunch` turns that exception into a
   `failed` row with the sentence.
 - **The consultant check** (E5.5): `ConsultantCheck` gives Kimi a copy of the scratch repository (`<scratch>\own\tree\<copy>`) and a one-shot home under
   `<root>\coai-vh\<8>` — or, with no homes root (settings built by hand), at `<scratch>\own\kh-*`, which `ConsultCheckScratch.Delete` disposes by name

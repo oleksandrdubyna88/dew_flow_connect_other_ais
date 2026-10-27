@@ -129,12 +129,16 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         Text(said, "state").Should().Be("answered", $"the check of my-kimi passes: {said}");
         said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+        // The check's own invariant, as its record writes it: a changed scratch repository or canary would be failureKind "tree-changed" (Broken).
+        Text(said, "failureKind").Should().BeEmpty($"the scratch repository and the canary outside it are unchanged after the turn: {said}");
+        Text(said, "canary").Should().Be(CanaryReadings.NotAttempted, "the played Kimi answered CANNOT and recorded no refusal — the canary's word reached nothing it said");
         Text(said, "confinement").Should().BeEmpty("Kimi's confinement does not depend on its CLI's version (E5.5 decision 3)");
         var shim = played.Shims.Should().ContainSingle().Subject.Request;
         After(shim, "--cwd").Should().Be(shim.WorkingDirectory, "the shim's read boundary is where it stands");
         Path.GetDirectoryName(shim.WorkingDirectory).Should().EndWith(Path.Combine(ConsultantCheck.OwnName, "tree"), "a copy in the check's own scratch, never the repository (D6)");
         var home = After(shim, AcpWords.HomeFlag);
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
+        Path.GetFileName(Path.GetDirectoryName(home)).Should().MatchRegex("^[0-9a-f]{8}$", "the one-shot folder is <root>\\coai-vh\\<8 hex> (J3)");
         Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(Path.Combine(_homes, VibeHomes.OneShotFolder), "a one-shot home under <root>\\coai-vh\\<8> (J3)");
         shim.Arguments.Should().NotContain(AcpWords.SessionFlag, "a check is one turn");
         junctions.Should().ContainSingle().Which.Should().BeTrue("the turn stood on a made home, its junction in place");

@@ -825,7 +825,7 @@ flowchart LR
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
-- **Kimi's arm (E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`, 2026-10-16).** `kimi` is the seventh runtime of the table
+- **Kimi's arm (E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`, 2026-10-27).** `kimi` is the seventh runtime of the table
   (`RuntimeCapabilities.Runtimes`, hand-written, and the seed's `runtimes`) and of the planner: `disk` stands in a `Snapshot` of its
   roots (`SnapshotSources` = the roots — a branch's `AGENTS.md`, skills, sub-agents and `.mcp.json` load from disk with no client call,
   M-K9), `none` in an EMPTY `Scratch` folder, and **no flag on either, ever** — Kimi's confinement is coai's ACP shim (D15), not its argv,

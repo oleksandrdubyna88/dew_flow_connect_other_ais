@@ -394,7 +394,8 @@ public sealed class ConfinementPlannerTests
     /// <summary>
     /// S5.6.5 (E5.6 decision 3): a Kimi question row is the shim's request — a none row in its EMPTY folder, a disk row in the copy of its roots,
     /// never a root and never the checkout — on a home inside the row's own folder, one shot (no <c>--session</c>), in the minimal environment
-    /// the question road gives every row, and admitted by the one launch control's environment check.
+    /// Kimi's runtime builds for every launch (<c>KimiEnvironment</c>; the question road's <c>ForQuestion</c> adds nothing to it), and admitted by the one launch
+    /// control's environment check.
     /// </summary>
     [Fact]
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
@@ -416,17 +417,26 @@ public sealed class ConfinementPlannerTests
             Path.GetDirectoryName(home).Should().Be(RowFolder, "the row's home is a kh-* child of the row's own folder, gone with it");
             Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
             request.InheritsEnvironment.Should().BeFalse();
-            request.Passthrough.Should().BeEquivalentTo(Runners.Processes.ProcessEnvironment.Minimal, "the question row's road (ForQuestion)");
+            request.Passthrough.Should().BeEquivalentTo(Runners.Processes.ProcessEnvironment.Minimal,
+                "Kimi's own built environment is minimal and not inherited (KimiEnvironment) — ForQuestion is a no-op for Kimi, so this pins the build, not that road");
             Runners.Kimi.KimiEnvironment.Refusal(request, Runners.Kimi.KimiPlaces.ForShim(home, KimiPersonsBin))
                 .Should().BeEmpty("the one launch control admits exactly what the adapter builds");
         }
     }
 
-    /// <summary>S5.6.6 (E5.6 decision 3): a plan carrying a flag is not one coai made for Kimi — the planner never gives Kimi one — so the adapter refuses it by name.</summary>
-    [Fact]
-    public void APlanWithFlags_IsRefusedForKimi()
+    /// <summary>
+    /// S5.6.6 (E5.6 decision 3): a plan carrying a flag is not one coai made for Kimi — the planner never gives Kimi one — so the adapter refuses it by name.
+    /// Each of the plan's three flag-spelled fields alone is enough: a sandbox flag, a leading flag, or an added root (AddDirs are roots the flags grant).
+    /// </summary>
+    [Theory]
+    [InlineData("flags")]
+    [InlineData("leading")]
+    [InlineData("addDirs")]
+    public void APlanWithFlags_IsRefusedForKimi(string field)
     {
-        var flagged = new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);
+        IReadOnlyList<string> Only(string name, string value) => field == name ? [value] : [];
+        var flagged = new Confinement.Planned("kimi", CapabilityGrant.None, Only("leading", "--search"), Only("flags", "--yolo"), CwdKind.Scratch,
+            Only("addDirs", RootA), AdmissionFlag.Unconfined);
         var launch = new ConsultantLaunch(Repo, "the question", string.Empty, Answers, new ReviewerSettings("kimi") { OwnedScratch = RowFolder })
         {
             Confinement = new LaunchConfinement.Planned(flagged),

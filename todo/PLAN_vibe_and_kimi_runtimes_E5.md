@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-27; the live runs (J2, RESULTS §31) still owed.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -9,6 +9,9 @@
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
 > (`CONSULTANT_SINCE`, a note, never a withheld entry), the guard over both tables, the homes folder naming both CLIs, and the help in
 > five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
+> **E5.5 and E5.6 implemented 2026-10-27 (Opus)**, from the WIP saved 2026-10-24 (a90fee9b); Opus reviewed it on 2026-10-27, and its fixes are in. The coai
+> plan gate on the branch's slice passed 2026-10-27 (proceed, 4 gating of threshold 6, 2 reviewers); deviations 47–58, *E5.5–E5.6 as built*. The live
+> runs (J2, RESULTS §31) are still owed; M-K17 not run.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -1085,6 +1088,52 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Opus, 2026-10-27)
+
+Numbered from 47, after *E5.7 as built*. Built from the WIP saved 2026-10-24 (a90fee9b); Opus reviewed it on 2026-10-27, and the fixes are in. Each item is
+true of the code after those fixes.
+
+47. **S5.6.4 is named `AdmissionFlagsBothKimiRows`**, not `AdmissionFlagsBothRows`, and it also asserts that `kimi × web` is refused, naming
+    research/RESULTS_kimi_confinement.md.
+48. **S5.6.2 adds no new test.** The existing `CapabilityMatrixTests.TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` covers it. Since the review
+    (2026-10-27) it computes the pairs with no vector first, so its red names them: *Expected missing to be empty because every row of the table must have
+    a vector deciding it, and these rows have none, but found "kimi × none, kimi × disk, kimi × web".* Before, the red printed the whole vector list, cut at
+    the assertion library's limit, and did not name a `kimi` pair.
+49. **S5.6.7's prompt Then is a separate Fact.** "The prompt names the copies, never the root" is `AKimiDiskRow_IsToldItsCopies_NeverTheRoot`, on the answered
+    ending. A third test, `AKimiDiskRow_AnswersThroughTheService_FlaggedUnconfined`, drives the whole `ask_consultants` flow: the real fan-out prompt, the
+    flag `unconfined`.
+50. **S5.6.7's "refused before the launch" ending is a `kimi --version` failure** inside the launch control, after the home was made (the seam
+    `PlayedKimi.Version`). The row's status is `failed`, not `refused`.
+51. **The `none` row runs the three endings too** (accepted from the plan gate of 2026-10-27, finding 0). The Theory takes the capability as a second
+    parameter and is renamed `AKimiRow_NoneOrDisk_LeavesNothingBehind` (it was `AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind`). For a `none` row the
+    scratch is the empty `cwd` folder; after each ending it and `coai-vh\<8>` are gone, the unlink recorder is never invoked, and the person's folder is
+    intact. Teeth: with `KimiHome.DisposeAllUnder` removed from `VibeHomes.EmptiedUnderItsLock`, all six arms went red on the recorder.
+52. **`MustCarryNoFlags` refuses `Flags`, `Leading` and `AddDirs`.** A non-empty `AddDirs` is roots spelled as launch flags, and no Kimi plan carries one.
+    S5.6.6 is a Theory over the three fields; the `addDirs` arm was red (*Expected a <System.ArgumentException> to be thrown, but no exception was
+    thrown.*) before the fix. `SnapshotSources` is not checked, and that is harmless: the adapter never reads it, and `QuestionRowLaunch` copies the
+    sources only for a `Snapshot` plan (`PlaceAsync`), so a `Scratch` plan's sources are ignored.
+53. **`ForQuestion` is a no-op for Kimi.** `KimiEnvironment.Built` already makes the request minimal and not inherited, so no test can see
+    `ConsultantLaunches.ForQuestion` on a Kimi launch. S5.6.5 keeps its `Passthrough` assertion, and its reason now says it pins Kimi's own built
+    environment, not that road.
+54. **S5.5.1's red is not the plan's "before E5.4" state.** research/module_tests.md records a teeth run: `ConsultantResolution.OnACli` without its `kimi`
+    arm, and the check said `unavailable` (*… the vendor 'my-kimi' runs on 'kimi', which cannot hold a consultation in this build …*). Since the review,
+    S5.5.1 also asserts the check's own invariant as its record writes it (`failureKind` empty, `canary` `not-attempted`) and that the one-shot folder's
+    middle name matches `^[0-9a-f]{8}$`. Teeth for the canary Then: a played Kimi that answers the canary's word still gives `state: answered`, and the
+    canary assertion goes red (`read`, not `not-attempted`).
+55. **Where the reds ran.** The reds and teeth runs of 2026-10-27 (items 48, 51, 52, 54) ran on Linux, through `WindowsStandIn`. There `KimiFixture` makes a
+    symbolic link, not an NTFS junction. So the real junction branch of the disposal is proved only on Windows, and by the live §31 run. The WIP's own reds
+    in research/module_tests.md do not say on which machine they ran.
+56. **The `web` arm of the Kimi planner is implicit**, as Vibe's: `web` falls to the default `Scratch` arm of `ConfinementPlanner.Kimi`. The matrix refuses
+    `unmeasured` before the planner, so the arm is never reached. Not changed.
+57. **The `none`/`disk` notes keep "WebSearch and FetchURL are announced on this plan and unmeasured"** in shared/runtime-capabilities.json until M-K17 runs
+    (from the plan gate, finding 4, accepted). M-K17 decides whether that sentence stays (open question 4).
+58. **The plan gate of 2026-10-27 — its rejected findings, with the reasons given:**
+    - **"A scenario for a disposal that fails."** Rejected: E5.3 decision g and its tests cover it (a Kimi stop keeps the folder for the sweep, said in its
+      own words).
+    - **"A sweep for `coai-vh` folders a crash left."** Rejected: it exists — `VibeHomes.SweepOneShot` at `PanelService.cs:1397`, for folders older than
+      6 h, junction-first since E5.3 decision g.
+    - **"Carry the unconfined flag in `Planned`."** Rejected: `Planned` already carries `AdmissionFlag Flag` (`ConfinementPlanner.cs:39`).
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

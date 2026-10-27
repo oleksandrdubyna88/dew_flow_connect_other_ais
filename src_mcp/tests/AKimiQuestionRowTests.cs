@@ -19,7 +19,8 @@ namespace CoaiMcp.Tests;
 /// A Kimi question-consultant row (E5.6 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>, S5.6.7): a <c>disk</c> row reads COPIES of its granted
 /// roots (the branch's own kit loads from disk, M-K9), the prompt names the copies and never the root, and the row is ONE-SHOT — its home under
 /// <c>coai-vh\&lt;8&gt;</c>, junction and all, and its scratch with the copies are gone junction-first on an answer, on a launch refused after
-/// the home was made, and on a cancellation mid-turn (decision 5: nothing new in <c>QuestionRowLaunch</c> — E5.3 decision g's disposal).
+/// the home was made, and on a cancellation mid-turn (decision 5: nothing new in <c>QuestionRowLaunch</c> — E5.3 decision g's disposal). A
+/// <c>none</c> row runs the same three endings: its scratch is only the empty <c>cwd</c> folder it stands in (the plan gate of 2026-10-27).
 /// </summary>
 /// <remarks>
 /// <para>The real <see cref="QuestionRowLaunch"/>, the real copies (git runs for real), the real launch control over a fake person's sign-in
@@ -88,8 +89,18 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks")),
         KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
 
-    private static QuestionRow DiskRow() =>
-        new("kimi-disk", "my-kimi", "kimi", KimiModels.Default, string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true);
+    /// <summary>The two capabilities a Kimi row runs with (E5.6 decision 2) — each with its row id, its prompt and that prompt's title.</summary>
+    private static readonly IReadOnlyDictionary<string, (string Id, string Prompt, string Title)> Rows =
+        new Dictionary<string, (string Id, string Prompt, string Title)>
+        {
+            ["disk"] = ("kimi-disk", "question-disk", "Projects on this disk"),
+            ["none"] = ("kimi-none", "question-opinion", "The best developer's opinion"),
+        };
+
+    private static QuestionRow RowOf(string capability) =>
+        new(Rows[capability].Id, "my-kimi", "kimi", KimiModels.Default, string.Empty, string.Empty, string.Empty, Rows[capability].Prompt, Enabled: true);
+
+    private static QuestionRow DiskRow() => RowOf("disk");
 
     /// <summary>What one ending of the row saw: the copies at the moment the shim started, and whether the home's junction was there to dispose.</summary>
     private sealed class Seen
@@ -142,7 +153,18 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             },
         };
 
-    public static TheoryData<string> EndingNames() => [.. Endings.Keys];
+    /// <summary>Every ending, for both capabilities a Kimi row runs with: a none row's empty folder goes the same way as a disk row's copies.</summary>
+    public static TheoryData<string, string> EndingsAndCapabilities()
+    {
+        var data = new TheoryData<string, string>();
+        foreach (var ending in Endings.Keys)
+        {
+            data.Add(ending, "disk");
+            data.Add(ending, "none");
+        }
+
+        return data;
+    }
 
     private QuestionRowLaunch Launch(PlayedKimi played) =>
         new(new ReviewerExecutor(played), new UsageLedger(_dir.At("data")), Logger.None, played, _homes)
@@ -150,10 +172,11 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             MakeScratch = () => Directory.CreateDirectory(Scratch).FullName,
         };
 
-    private RowLaunchInput Input()
+    private RowLaunchInput Input(string capability = "disk")
     {
-        var admitted = QuestionAdmission.Admit(DiskRow(), new QuestionConsultSettings { Roots = [Granted] }, [], Core.Api.ApiOverrides.None)
-            .Should().BeOfType<RowAdmission.Admitted>("a Kimi disk row is admitted, flagged (E5.6 decision 2)").Subject;
+        var admitted = QuestionAdmission.Admit(RowOf(capability), new QuestionConsultSettings { Roots = [Granted] }, [], Core.Api.ApiOverrides.None)
+            .Should().BeOfType<RowAdmission.Admitted>($"a Kimi {capability} row is admitted, flagged (E5.6 decision 2)").Subject;
+        admitted.Plan.Grant.Capability.Spelled().Should().Be(capability, "the row's prompt decides its capability");
 
         return new RowLaunchInput(
             admitted, "Which helper retries an outbound send?", new ReviewerSettings("my-kimi") { Model = KimiModels.Default, Timeout = TimeSpan.FromSeconds(30) },
@@ -164,15 +187,15 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         };
     }
 
-    private static QuestionRowRecord Start() =>
-        new("kimi-disk", "my-kimi", KimiModels.Default, "kimi", "question-disk", "Projects on this disk", "disk", "unconfined");
+    private static QuestionRowRecord Start(string capability) =>
+        new(Rows[capability].Id, "my-kimi", KimiModels.Default, "kimi", Rows[capability].Prompt, Rows[capability].Title, capability, "unconfined");
 
     /// <summary>The row, run to its end — its record, or EMPTY when the caller's cancellation ended it (it propagates, as for every row).</summary>
-    private static async Task<string> RunAsync(QuestionRowLaunch launch, RowLaunchInput input, CancellationToken ct)
+    private static async Task<string> RunAsync(QuestionRowLaunch launch, RowLaunchInput input, CancellationToken ct, string capability = "disk")
     {
         try
         {
-            return (await launch.RunAsync(input, Start(), ct)).Status;
+            return (await launch.RunAsync(input, Start(capability), ct)).Status;
         }
         catch (OperationCanceledException)
         {
@@ -190,9 +213,14 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     // ---------- S5.6.7 ----------
 
+    /// <summary>
+    /// S5.6.7, for a disk row and — accepted from the plan gate of 2026-10-27 — a none row too: whatever ended the row, its scratch (the copies, or
+    /// the empty <c>cwd</c> folder) and its <c>coai-vh\&lt;8&gt;</c> folder are gone, the junction was unlinked by <c>KimiHome</c> before the deleter
+    /// reached it, and the person's folder is untouched.
+    /// </summary>
     [Theory]
-    [MemberData(nameof(EndingNames))]
-    public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
+    [MemberData(nameof(EndingsAndCapabilities))]
+    public async Task AKimiRow_NoneOrDisk_LeavesNothingBehind(string ending, string capability)
     {
         using var stood = StandIn();
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -201,9 +229,9 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         var before = _person.Hash();
         GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
 
-        var status = await RunAsync(Launch(played), Input(), caller.Token);
+        var status = await RunAsync(Launch(played), Input(capability), caller.Token, capability);
 
-        status.Should().Be(StatusOf[ending], $"the row {ending}");
+        status.Should().Be(StatusOf[ending], $"the {capability} row {ending}");
         seen.JunctionThere.Should().ContainSingle().Which.Should().BeTrue("the home's junction was made before this ending, so its disposal had one to unlink");
         // `kimi --version` runs IN <root>\coai-vh\<8>\kh-<10 hex>\home.
         var ownedRoot = Path.GetDirectoryName(played.Versions.Should().ContainSingle().Subject.WorkingDirectory)!;
@@ -268,7 +296,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         row.GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
         row.GetProperty("flag").GetString().Should().Be("unconfined", "D13: a Kimi row can read this machine (M-K6), and every answer says so");
         var shim = played.Shims.Should().ContainSingle().Subject.Request;
-        shim.StdIn.Should().Contain(seen.Copies.Should().ContainSingle().Subject, "the fan-out's prompt names the copy").And.NotContain(Granted);
+        var copy = seen.Copies.Should().ContainSingle("the disk row stood among one copy, of its one granted root").Subject;
+        shim.StdIn.Should().Contain(copy, "the fan-out's prompt names the copy").And.NotContain(Granted);
         Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the row's folder under coai-vh is gone");
     }
 }

@@ -58,11 +58,13 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
 
     /// <summary>
     /// A planned launch whose plan carries a flag is refused (E5.6 decision 3): the planner never gives Kimi one, because its confinement is the
-    /// shim's (D15) — so a flagged plan was not made for kimi, and splicing it would hand the CLI an argument nobody measured.
+    /// shim's (D15) — so a flagged plan was not made for kimi, and splicing it would hand the CLI an argument nobody measured. A non-empty
+    /// <c>AddDirs</c> counts too: those are roots spelled as launch flags, which no Kimi plan carries (a disk row's roots are its copy's
+    /// <c>SnapshotSources</c>, never <c>AddDirs</c>).
     /// </summary>
     private static void MustCarryNoFlags(ConsultantLaunch launch)
     {
-        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && plan.Flags.Count + plan.Leading.Count > 0)
+        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && plan.Flags.Count + plan.Leading.Count + plan.AddDirs.Count > 0)
         {
             throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
         }

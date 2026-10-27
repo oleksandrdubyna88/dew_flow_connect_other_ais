@@ -81,11 +81,14 @@ public sealed class CapabilityMatrixTests
     {
         // Without this every assertion below would pass vacuously over an empty list.
         Vectors.Should().HaveCountGreaterThan(15, "fifteen pairs plus the refusals by name");
-        foreach (var row in Seed)
-        {
-            Vectors.Should().Contain(v => v.Runtime == row.Runtime && v.Capability == row.Capability,
-                $"the table's {row.Runtime} × {row.Capability} row must have a vector deciding it");
-        }
+
+        // The missing pairs first, so a red names them (S5.6.2) — not the whole vector list, cut at the assertion library's limit.
+        // Joined, because a collection's BeEmpty names only its first item.
+        var missing = string.Join(", ", Seed
+            .Where(row => !Vectors.Any(v => v.Runtime == row.Runtime && v.Capability == row.Capability))
+            .Select(row => $"{row.Runtime} × {row.Capability}"));
+
+        missing.Should().BeEmpty("every row of the table must have a vector deciding it, and these rows have none");
     }
 
     [Theory]

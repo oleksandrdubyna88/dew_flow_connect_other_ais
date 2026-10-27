@@ -7350,7 +7350,7 @@ stateDiagram-v2
 
 Not covered by a test: a live three-turn consult through the released binary (the parent's DoD, RESULTS §31).
 
-### A Kimi question row and a Kimi consultant check — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-16)
+### A Kimi question row and a Kimi consultant check — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-27)
 
 Neither needed a server change: `QuestionRowLaunch` and `ConsultantCheck` were already generic over a runtime that declares `HomesFolder` and
 `NeedsASanitisedSnapshot` (decision 5 of E5.6, decision 1 of E5.5), and E5.3 decision g made every one-shot owner junction-first. What changed is the
@@ -7375,7 +7375,8 @@ sequenceDiagram
 - **A question row on Kimi** (E5.6): `none` and `disk` are admitted and run FLAGGED `unconfined` — the reply's `flag` and the sidebar say *can read this
   machine* — and `web` is refused at admission, naming research/RESULTS_kimi_confinement.md. A `disk` row stands among COPIES of its granted roots; the
   fan-out's prompt names the copies and never the roots. ONE-SHOT: the row's `coai-vh\<8>` folder (home and junction), its scratch and its copies are gone
-  on an answer, on a launch the control refused after the home was made, and on a cancellation mid-turn — the deleter never meets the junction (S5.6.7).
+  on an answer, on a launch the control refused after the home was made (the row is `failed`), and on a cancellation mid-turn — the deleter never meets the
+  junction (S5.6.7). A `none` row runs the same three endings: its scratch is only the empty `cwd` folder it stands in, and it goes the same way.
 - **`--check-consultant` on a Kimi row** (E5.5): the turn stands in `<scratch>\own\tree\<copy>` on `<root>\coai-vh\<8>\kh-<10 hex>`; the check passes on
   the marker read in the copy, and the folder goes junction-first whatever ended the check (an answer, an agent failure with exit 70, a cancellation). With
   settings built by hand (no homes root) the home sits at `<scratch>\own\kh-*` and `ConsultCheckScratch.Delete` disposes it by name before the scratch.
