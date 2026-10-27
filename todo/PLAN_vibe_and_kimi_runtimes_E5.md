@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 implemented (E5.5–E5.6 on 2026-10-27); the live runs (J2, RESULTS §31) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -9,6 +9,8 @@
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
 > (`CONSULTANT_SINCE`, a note, never a withheld entry), the guard over both tables, the homes folder naming both CLIs, and the help in
 > five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
+>
+> **E5.5–E5.6 implemented 2026-10-27**, split by Opus into five tasks: the three kimi capability rows (none and disk unconfined — Grep and Glob read the disk, M-K6 — web unmeasured), their vectors and the regenerated table; the planner's kimi arm (a copy for disk, an empty folder for none, no flags) and KimiConsultant refusing a plan with flags; a Kimi disk question row and the Kimi consultant check proved through the service with PlayedKimi. Deviations 31–47, *E5.5–E5.6 as built*. Not yet reviewed.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -1085,6 +1087,48 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (2026-10-27)
+
+Numbered from 31, the numbers E5.4 (21–30) and E5.7 (40–46) left free. Nine numbers were not enough, so the numbering continues from 47.
+
+31. **The check (E5.5) needed no production change.** `ConsultantCheck.cs` and `ConsultCheckScratch.cs` are unchanged since `b4e2ea96`. Its four scenarios
+    were green when written (E5.3 g and E5.4 were in), so they are pins, not reds. `AKimiConsultantCheckTests` holds five cases: S5.5.2 is a theory of two
+    arms (`answered`, `failed`). Three teeth mutations, each restored and confirmed identical: (a) `PlaceAsync` with `turn.Runtime.NeedsASanitisedSnapshot`
+    replaced by `false` — all five red, S5.5.1 expecting `answered` and finding `failed`; (b) `TurnAsync`'s `finally` with `held.Home.Dispose();` made a
+    no-op — three red, the two arms of S5.5.2 and S5.5.3; (c) `ConsultCheckScratch.Delete` with `&& KimiHomesDisposed(root, warn)` removed — one red, S5.5.4,
+    the deleter's unlink recorder invoked on the rootless home's `credentials` link. S5.5.3's table row says the record says `cancelled`; the test asserts
+    state `failed` with `failureKind` `cancelled`.
+32. **The question row (S5.6.7) needed no production change.** `QuestionRowLaunch.cs` is unchanged; t3 added only `AKimiQuestionRowTests.cs`. The `refused`
+    arm does not re-login. The document's re-login refuses only a follow-up turn, and a first launch with the re-login started the shim, so the arm deletes the
+    fake person's credentials folder instead: the launch control refuses in `KimiLaunch.Rendered` ("has no credentials folder") before any shim starts. The
+    row's status is `failed`; the assertion accepts `failed` or `refused`. The `cancelled` arm cancels from inside the played shim (`During`). The teeth
+    mutation: `Release(homes);` commented out in `QuestionRowLaunch.cs`'s `finally` — red on all three arms (the one-shot `coai-vh` folder still exists).
+    Restored; identical.
+33. **S5.6.5 was red before t2's code, not green.** E5.4 had made `KimiConsultant` honour a planned cwd, but the planner's default arm gave a disk row
+    `Scratch`, so the first run failed on the disk arm (`Expected disk.Request.WorkingDirectory … RowTree …, but they differ at index 10`). The planner's
+    `kimi` arm (`eeb39060`) made it green; `KimiConsultant` needed no change for it. No teeth mutation was run for this scenario.
+34. **"Any flag" is read as `Leading`, `Flags` or `AddDirs`.** `KimiConsultant.MustCarryNoFlags` refuses a planned launch when any of the three lists is
+    not empty, with the sentence "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi". Decision 3 said "flags", and
+    `AddDirs` and `Leading` are launch flags too. S5.6.6's red was as the table says: no exception was thrown.
+35. **S5.5.1's "passed" is the check's state `answered`.** `markerRead` is not asserted: the played shim answers without reading `CHECK.md`, so the check's
+    own marker test (`ConsultantCheckTests.ACheck_Answers_ReadsTheMarker_AndTouchesNoConsultation`) covers that reading.
+36. **The rows' dates and record.** All three kimi rows carry `date` 2026-10-13 and version 2.1.1 in `measuredWith`. Each cites
+    `research/RESULTS_kimi_confinement.md` in `resultRef`: none and disk by cell id (M-K6, M-K3, M-K4; disk adds M-K9 and M-K9 (e)) with a short gloss of
+    the evidence; the `web` row cites §7 and §14, the only section numbers. The `why` header of `shared/runtime-capabilities.json` now names the kimi rows'
+    record (`RESULTS_kimi_confinement.md`, Windows, 3 of 3, kimi 2.1.1).
+37. **Adding `kimi` to `RUNTIMES` lets a person pick Kimi for a question row in the extension.** In the extension only `runtimeCapabilities.generated.ts`
+    changed in production code: `kimi` joins `QuestionRuntime` and `RUNTIMES`, and the three rows join the table. The question row's admission
+    (`capabilityAdmission.ts`, called by `qconsultWrite.ts`) reads that list and table. `capabilityAdmission.test.ts` gained S5.6.8 and the list edits.
+    E5.7 covered the consultant picker only.
+38. **Two test edits outside the red list.** `CapabilityMatrixTests.cs`'s `Records` table gained `("RESULTS_kimi_confinement.md", "2026-10-13", "M-K")`, which
+    `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` needed after step 2 (data only, no signature changed). The `:273` list edit made
+    `AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown` red before the production change; the document's red list does not name it.
+39. **Two red messages worded differently from the table.** S5.6.4's (`AdmissionFlagsBothRows`) read `Expected type to be …Admission+Admitted, but found
+    …Admission+Refused.`, because the assertion's message does not show the reason. S5.6.3's read `Expected disk.Cwd to be CwdKind.Snapshot … but found
+    CwdKind.Scratch`, because the test's variable is `disk`, not `plan`. Both are the failures the table names.
+47. **Helpers and the refusal theory.** `ConfinementPlannerTests.cs` gained a private `KimiAdapter()` (the Kimi adapter over the fake person's paths); the
+    `Adapters()` entry for kimi calls it, and S5.6.5 and S5.6.6 use it. The existing refusal theory gained a `kimi` / `web` row. No production code.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
