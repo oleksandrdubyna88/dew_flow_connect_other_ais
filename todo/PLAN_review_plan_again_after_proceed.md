@@ -1,6 +1,6 @@
 # PLAN — A plan that changed after `proceed` is reviewed again as a plan, on its own branch
 
-> Status: **plan only, nothing implemented yet, 2026-10-29.** Scope: `review_plan` gains `again: true`
+> Status: **plan only, nothing implemented yet, 2026-10-29 — plan round 1 `proceed` (2 of 2, gating 4 of 6), its findings folded in (§ Plan round 1).** Scope: `review_plan` gains `again: true`
 > (`src_mcp/src/Tools.cs`, `PanelService.ReviewPlanAsync`), one new transition and one new refusal in
 > `src_mcp/core/Rounds/RoundMachine.cs`, a plan epoch on `SessionState`, on every round record and in `status`, the
 > approved plan's text id kept on the session, two readers of `PlanProceeded` in the question gate, the tool
@@ -63,7 +63,8 @@ the agent must keep by itself.
 3. Reopening gives the plan stage a **fresh round budget**. `review_code` (with or without `again`) is then
    **refused until the new `proceed`**, so the server enforces the halt itself.
 4. On the new `proceed`, the session's stored plan text, which is the scope `review_code` falls back to, is the newly
-   approved plan. The approved plan's text id is recorded with its epoch.
+   approved plan. The approved plan is the session's last completed plan round, which carries its text id and its
+   epoch (D6).
 5. The session carries a **plan epoch**: 1 for the first plan review, plus 1 for each reopening. Every round records
    the epoch it ran under. `status` shows the epoch, and so do the server's log lines and the extension's rounds log.
 6. The cadence arguments (`plan`, `epic`, `riskItems`, `riskNote`) work on an `again` call exactly as on any plan
@@ -80,20 +81,20 @@ the agent must keep by itself.
 | # | Decision | Why — and what was checked |
 |---|---|---|
 | D1 | The argument is **`again`** (optional `bool`, C# default `false`). | It is the word `review_code` (`Tools.cs:125`) and `review_feature` (`Tools.cs:239`) already use for "reopen this finished stage of the same session". `newReview` is `review_document`'s word for a FRESH session that leaves the old one on the record. Here the session continues: its rounds, rejections and cadence keys stay. An optional argument without a C# default is published as required (`Tools.cs:79-82`). |
-| D2 | **`RoundMachine.BeginPlanRoundAgain`**, pure, its refusals in this order: `AwaitingResolve` → `Unresolved`; document session → `ThisIsADocumentSession`; feature session → `ThisIsAFeatureSession`; `HumanGate` → `GateHeld`. Then by stage: `PlanReview` in epoch 1 → refused, *nothing to reopen* (D8); `PlanReview` in epoch ≥ 2 → `Moved(s)` unchanged, the next round of the reopened epoch; `CodeReview` or `Done` with `PlanProceeded` → `Moved` to the reopened state (D3). | This is the shape of `BeginCodeRoundAgain` (`RoundMachine.cs:225-236`): the same holds refuse first, and asking `again` of a stage that is already open changes nothing. The held gate comes BEFORE the stage check here, the reverse of `BeginPlanRound` (`:88-96`). A code stage on `call_human` must answer `GateHeld`, not an epoch sentence. |
+| D2 | **`RoundMachine.BeginPlanRoundAgain`**, pure, its refusals in this order: `AwaitingResolve` → `Unresolved`; document session → `ThisIsADocumentSession`; feature session → `ThisIsAFeatureSession`; `HumanGate` → `GateHeld`. Then by stage: `PlanReview` in epoch 1 → refused, *nothing to reopen* (D8); `PlanReview` in epoch ≥ 2 → `Moved(s)` **unchanged**, i.e. **idempotent** (plan round 1, finding 1): the call runs the next round of the reopened epoch exactly as a plain `review_plan` would. The epoch does not move, the count and escalations are not reset, and D5 is not applied. `CodeReview` or `Done` with `PlanProceeded` → `Moved` to the reopened state (D3). | This is the shape of `BeginCodeRoundAgain` (`RoundMachine.cs:225-236`): the same holds refuse first, and asking `again` of a stage that is already open changes nothing (`:216-218`). **Idempotent, not refused:** an agent keeps `again: true` on every call of its re-review loop, and a refusal there would cost a round trip and teach nothing. **No reset, either:** a repeat `again` that reset the count would be a way to buy fresh rounds without a person, which is the defect `GateHeld` exists for (`RoundMachine.cs:93-95`). T17 pins both. The held gate comes BEFORE the stage check here, the reverse of `BeginPlanRound` (`:88-96`). A code stage on `call_human` must answer `GateHeld`, not an epoch sentence. |
 | D3 | **The reopened state:** `Stage = PlanReview`, `RoundsRunThisStage = 0`, `EscalationsUsed = 0`, `AdvanceOnResolve = false`, **`PlanProceeded = false`**, `PlanEpoch = EpochOf(s) + 1`. A new `SessionState.PlanEpoch` (int, init) is read through `EpochOf(s) = max(1, PlanEpoch)`, so a file written before the field is epoch 1. A derived `HasProceededOnce => PlanProceeded \|\| EpochOf(this) > 1` serves readers that mean "ever". | **`PlanProceeded = false` is the fail-closed half.** Today's `BeginCodeRound` refuses on `{ PlanProceeded: false }` (`RoundMachine.cs:191-192`), and that line is in the released 0.63.0 binary as well. If the flag stayed `true` with `Stage = PlanReview`, an older binary on the same data directory would reach `_ => Moved` (`:195`) and run a code round against the plan stage. `CompleteRound` would then complete the PLAN stage with code findings (`:387-437` reads `s.Stage`). `Resolve` sets the flag again at the new `proceed` (`:691`). The flag's meaning becomes "the current plan epoch proceeded", which is also what `status` should report (`ServerJsonContext.cs:166`). |
 | D4 | **Fresh budget, kept agreement.** Kept: `Rejections` (reasoned rejections stay discounted), `UsedPrompts`, the cadence keys `Plan`/`Epic`, the whole round journal. Not kept: the code stage's in-progress count. `Resolve` restarts it at 0 when the new `proceed` advances (`RoundMachine.cs:687`). | `BeginCodeRoundAgain` keeps exactly what was agreed (`:219-223`). A spent lens pool deals again from the full pool (`Pool`, `PanelService.cs:1331-1340`), so keeping `UsedPrompts` never starves a round. Round NUMBERS continue from the journal (`RoundNumber.Next`, `src/Server/RoundNumber.cs:27-39`), not from the reset counter. The database upserts on (session, stage, number), so epoch 2's first plan round can never overwrite epoch 1's row (`RoundEngine.cs:316-323`). |
-| D5 | **The same plan is refused, and only on the reopening call.** Compared by **text id**: `PlanInputOutcome.Ready.TextId` (`src/Server/Stages/PlanInput.cs:25`; `DocumentRules.ArtifactIdOf`, `core/Rounds/DocumentRules.cs:117-118`) against `PersistedSession.ApprovedPlan.TextId` (D6). Checked under the claim in the plan stage's `RefuseBeforeBuilding(loaded, sha)`, before the cadence's own check (`PanelService.cs:740-744`), and only when `loaded.State.Stage` is not `PlanReview`. | One id serves both inputs. A committed read and a pasted text carry the same id when their text is equal: `PlanSource.TextId` is the id of the text SENT for both origins (`core/Rounds/PlanSource.cs:17`). So a committed file equal to a pasted approval is refused, which is the right answer. The comparison has to read the session loaded under the claim. `RefuseBeforeBuilding` gets exactly that, after the begin and before anything is built (`RoundEngine.cs:310-314`), and a refusal there saves nothing. Inside an epoch that is already reopened, the approved text is allowed: a re-review may conclude that the change was wrong and return to it. **A session approved before D6 existed:** the approved id is the `PlanSource.TextId` of its last plan round (`RoundRecord.PlanSource`, `src/Server/SessionStore.cs:235`). If that is absent too (a round from before #837), nothing is compared and the reply says so in one clause. |
-| D6 | **The approval is stamped at `resolve`.** When `Finish` saves a move from `PlanReview` to `CodeReview` (`PanelService.cs:1782-1787`), the session gains `ApprovedPlan = new PlanApproval(Epoch, Round, TextId, ApprovedUtc)`. That is ONE record on `PersistedSession`, overwritten at each approval. `TextId` comes from the last plan round's `PlanSource` (`RoundEngine.cs:501` stamps one on every plan round). | **"On proceed, the stored plan text is replaced" needs no new write; it holds by construction.** The engine saves `PlanText = planText` with EVERY completed round (`RoundEngine.cs:611`). `AwaitingResolve` refuses any other round between a verdict and its `resolve` (`RoundMachine.cs:88`, `:193`), so the text stored at the advancing `resolve` is the proceeding round's text. During a reopened epoch's `revise` rounds, `PlanText` holds unapproved text, but nothing can read it as scope then: the code round is refused (D7). Test T7 pins the fallback scope (`PanelService.cs:1362-1363`) after the new `proceed`. |
+| D5 | **The same plan is refused, and only on the reopening call.** **First, the input:** `PlanInputs.PrepareAsync` runs before anything else (`PanelService.cs:668-672`). Its refusals answer first and the comparison never sees them (plan round 1, finding 2): both or neither input, an unreadable / dirty / oversized / credential-shaped `committedPlan`, a path not in the commit, an unresolvable branch, a stale `expectedCommit`. **Only a `Ready` input** is compared, by **text id**: `PlanInputOutcome.Ready.TextId` (`src/Server/Stages/PlanInput.cs:25`; `DocumentRules.ArtifactIdOf`, `core/Rounds/DocumentRules.cs:117-118`) against the approved plan's (D6). Checked under the claim in the plan stage's `RefuseBeforeBuilding(loaded, sha)`, before the cadence's own check (`PanelService.cs:740-744`), and only when `loaded.State.Stage` is not `PlanReview`. | One id serves both inputs. A committed read and a pasted text carry the same id when their text is equal: `PlanSource.TextId` is the id of the text SENT for both origins (`core/Rounds/PlanSource.cs:17`). So a committed file equal to a pasted approval is refused, which is the right answer. The comparison has to read the session loaded under the claim. `RefuseBeforeBuilding` gets exactly that, after the begin and before anything is built (`RoundEngine.cs:310-314`), and a refusal there saves nothing. Inside an epoch that is already reopened, the approved text is allowed: a re-review may conclude that the change was wrong and return to it (D2: no comparison there). When the approved round carries no `PlanSource` (a round from before #837, first released in `mcp-v0.58.0`), nothing is compared and the reply says so in one clause. |
+| D6 | **The approved plan is READ from the journal, never stamped** (revised after plan round 1, findings 3 and 4). It is the last round of the session whose `Stage` is `PlanReview` and whose `Status` is `done`, together with its `PlanSource.TextId` and its `PlanEpoch`. `RoundEngine.cs:501` stamps a `PlanSource` on every plan round. Nothing is added to `PersistedSession`: the first draft's `ApprovedPlan` stamp at `resolve` is gone. | **Why the journal decides by construction:** a plan round can only run in the plan stage (`BeginPlanRound` refuses elsewhere, `RoundMachine.cs:91-92`), and the stage leaves `PlanReview` only through the `resolve` of the round just completed (`:679-692`). So when the stage is `CodeReview` or `Done`, the last completed plan round IS the approved one. That holds whichever binary wrote it, whether it went through `proceed`, `good_enough`, `continue_anyway` or a person's override, and an `interrupted` round cannot come after it. **What the stamp would have cost:** an approval recorded by the released 0.63.0, which knows no stamp, would leave it stale (finding 4). It would also need a build order in which the stamp lands before the route (finding 3). Neither problem exists when nothing is stored. **"On proceed, the stored plan text is replaced" needs no new write either; it holds by construction.** The engine saves `PlanText = planText` with EVERY completed round (`RoundEngine.cs:611`). `AwaitingResolve` refuses any other round between a verdict and its `resolve` (`RoundMachine.cs:88`, `:193`), so the text stored at the advancing `resolve` is the proceeding round's text. During a reopened epoch's `revise` rounds, `PlanText` holds unapproved text, but nothing can read it as scope then: the code round is refused (D7). Test T7 pins the fallback scope (`PanelService.cs:1362-1363`) after the new `proceed`. |
 | D7 | **The code gate refuses during a re-review with its own sentence.** In `BeginCodeRound`, `{ Stage: PlanReview } when EpochOf(s) > 1` comes before `{ PlanProceeded: false }`: *"the plan of this session is being reviewed again (plan epoch k) — review_code waits for that review's proceed; finish it with review_plan and resolve"*. `BeginCodeRoundAgain` reaches it through its fall-through (`RoundMachine.cs:235`). | Without this case, the caller would read *"no plan round has reached 'proceed' in this session"* (`:191-192`), which is false for a session with an epoch 1 approval. The scope floor at `PanelService.cs:792-796` is guarded by `PlanProceeded: true` and so does not fire first. |
 | D8 | **The sentences.** (a) `BeginPlanRound`'s refusal (`RoundMachine.cs:91-92`) becomes: *"the plan stage of this session has passed (stage: X). To review a plan that changed after its proceed, call review_plan with again: true — it reopens the plan stage with a fresh set of rounds, and review_code waits for the new proceed"*. (b) Nothing to reopen: *"again: true reopens a plan that already reached proceed, and this session's plan has not — call review_plan without again"*. (c) The same plan: *"this is the plan this session already approved (text id …, plan epoch k) — again: true reviews a plan that CHANGED after proceed; nothing was reopened"*. | The #490 lesson: a refusal that names no way forward is a stall (`GateHeld`'s remark, `RoundMachine.cs:72-76`). Every sentence goes through `Error` → `Refusal.Answer`, the one recorded road (`architecture.md` § *The server became a PRODUCER*). |
 | D9 | **The cadence arguments pass through unchanged** (`Tools.cs:83-87` → `Cadence(plan, epic, riskItems, riskNote)`). The cadence's own check stays in `RefuseBeforeBuilding`, after D5's. | Nothing in the cadence keys a plan round to "first". `FirstCodeRound` asks only about code rounds (`Server/Cadence/CadenceDesk.cs:423-428`). One effect is named rather than changed: `Reconciled`'s catch-up of a missed epic close reads `Stage == Done` (`CadenceDesk.cs:404-406`), so during a re-review a close that was missed is reconciled only once the session is back at `Done`. The record is caught up then, and nothing is lost. |
 | D10 | **The question gate reads "ever proceeded".** `AskGateDesk.cs:58` and `StageRelease.cs:26` read `HasProceededOnce` instead of `PlanProceeded`. | With D3 alone, reopening a plan would turn the question phase back to `Planning` (`AskGateDesk.cs:58`). There the batch count is not read at all (`:61`), so an agent could reopen its plan to send questions straight to the person again: a bypass of the free-batch floor. The work is already under way, so the phase stays `Building`. `StageRelease` without an epic still answers `Stage == Done` (`StageRelease.cs:33-37`), so a reopened session is not released. |
 | D11 | **The canonical snippet's words are not this repository's.** The paste is generated from `.agents/conventions/common/coai-review-gate.md` (`src_vs_code/scripts/prepare-gate.mjs:7`, output `:27` → `src_vs_code/src/generated/gateRule.ts`). This repository owns the tool descriptions (`Tools.cs:92-117`, `:132-170`) and the refusal sentences (D8). | Writing the step into a copy here would be a copy of a shared rule, which `gate-snippet-check.mjs` fails (`common.rule-ownership` § *Where product-specific material goes*). So this plan's part of "the canonical snippet" is: after the conventions release carries the step, bump the `.agents/conventions` pin, regenerate (`npm run prepare:gate`, `src_vs_code/package.json:1331`) and bump `ARTEFACT_VERSION` (`src_vs_code/src/claudeSnippet.ts:68`) if the paste text changed. The boundary table owes the conventions plan this correction (§4). |
-| D12 | **The epoch on records and in `status`.** `RoundRecord.PlanEpoch` (int, init, written only when ≥ 1) on every round of a branch session, plan and code, taken from the state the round BEGAN in, beside `PlanSource` (`RoundEngine.cs:491-502`). It is absent on document and feature rounds and on rounds from before the field. `SessionAnswer` gains `PlanEpoch` (init, `ServerJsonContext.cs:161-169`; filled in `SessionAnswerFor`, `PanelService.cs:1928-1944`) for a branch session. The round's log lines name the epoch, and a reopening logs one line, *"session X: plan stage reopened for plan epoch k (approved text …, round n)"*, when its round completes. | Absent ≠ zero (`common.coding-style` § *Absent is not zero*): a round written before the field says nothing about its epoch. `status` already serialises `RoundRecord`s, so the per-round epoch needs no new member there (`PanelService.cs:1938`). The log line is written at completion, because a refused begin saves nothing. |
+| D12 | **The epoch on records and in `status`.** `RoundRecord.PlanEpoch` (int, init, written only when ≥ 1) on every round of a branch session, plan and code, taken from the state the round BEGAN in, beside `PlanSource` (`RoundEngine.cs:491-502`). It is absent on document and feature rounds and on rounds from before the field. `SessionAnswer` gains `PlanEpoch` (init, `ServerJsonContext.cs:161-169`; filled in `SessionAnswerFor`, `PanelService.cs:1928-1944`) for a branch session. The round's log lines name the epoch, and a reopening logs one line, *"session X: plan stage reopened for plan epoch k (the approved plan: round n, text id …)"*, when its round completes. | Absent ≠ zero (`common.coding-style` § *Absent is not zero*): a round written before the field says nothing about its epoch. `status` already serialises `RoundRecord`s, so the per-round epoch needs no new member there (`PanelService.cs:1938`). The log line is written at completion, because a refused begin saves nothing. |
 | D13 | **No `--log` column and no schema step.** | The rounds log page reads the SESSION FILE for its detail lines, not the database (`roundsLog.ts:157-160`; `reviewedFrom` from the session file's `planSource`, `rounds.ts:98`). So the epoch reaches the page with no column. `--log` rows of a re-review stay distinct: they carry their own stage, a number that continues the journal, and their start time. A column can follow when somebody asks to filter by epoch. |
 | D14 | **Extension: display only.** `RoundRecord` in `rounds.ts` gains optional `planEpoch`. The rounds log shows one detail line, *plan epoch k*, beside `reviewedFrom` (`roundsLog.ts:491-492`), only when k ≥ 2. Nothing is shown for 1 or for absent. | A session that was never reopened looks exactly as it does today. Nothing in `src_vs_code` calls `review_plan` (`PLAN_the_plan_gate_reads_the_committed_plan.md` D16), so no button is added. |
-| D15 | **The older binary on the same data directory** (released coai-mcp 0.63.0) reads a reopened session as an ordinary open plan stage: `Stage PlanReview`, `PlanProceeded false`. Its `review_code` is refused, and a plain `review_plan` from it runs a round of the reopened epoch. It keeps `planEpoch` and `approvedPlan` on save (the session-file guard, #868; `git tag --contains fbf98e2a` → first in `mcp-v0.63.0`). Servers up to 0.62.x drop them on save. This build then reads epoch 1 with `PlanProceeded false`: `again` answers *nothing to reopen* until the next `proceed`, and plain `review_plan` keeps working. A proceed recorded by an older binary leaves `ApprovedPlan` stale, so D5 compares against an older approval. | The failure is closed in every case. The worst case is a `same plan` refusal of a text an older server re-approved; the cure is to update that server, and the refusal names the text id it compared. **Not verified:** whether 0.63.0 refuses or ignores an unknown `again` argument on `review_plan` (the MCP SDK's binding). Step 4 of §6 measures it. |
+| D15 | **The older binary on the same data directory** (released coai-mcp 0.63.0) reads a reopened session as an ordinary open plan stage: `Stage PlanReview`, `PlanProceeded false`. Its `review_code` is refused, and a plain `review_plan` from it runs a round of the reopened epoch. It keeps `planEpoch` on save (the session-file guard, #868; `git tag --contains fbf98e2a` → first in `mcp-v0.63.0`). Servers up to 0.62.x drop it on save. This build then reads epoch 1 with `PlanProceeded false`: `again` answers *nothing to reopen* until the next `proceed`, and plain `review_plan` keeps working. **The reverse sequence** (plan round 1, finding 4): this build reopens epoch 2, then 0.63.0 runs a plan round on text B and resolves it to `proceed`. The stage is then `CodeReview` with `PlanProceeded true`, and `planEpoch` 2 is kept. B's round is the last completed plan round, with a `PlanSource` (0.63.0 writes one). On this build, `again` with B is refused as *the same plan* (correct: B is now the approved plan). `again` with any other text reopens epoch 3. Nothing stored can be stale (D6). That round's record carries no `planEpoch` (0.63.0 does not know the field), so it reads as *not recorded*, never as 1. | The failure is closed in every case, and the reverse sequence needs no recovery sentence: it is decided from the journal. T19 and L1 pin it. **Not verified:** whether 0.63.0 refuses or ignores an unknown `again` argument on `review_plan` (the MCP SDK's binding). Step 4 of §6 measures it. |
 | D16 | **The Team server is untouched.** | The round machine and the session files exist only in coai-mcp (`src_mcp/core/Rounds/`, `src_mcp/src/Server/SessionStore.cs`). The Team server is sent one review prompt per launch, and nothing about a session (`architecture.md` § *A version that rides in both directions*, contract 2). |
 
 ## 4. Boundaries (named on both sides)
@@ -122,7 +123,7 @@ words of the step belong to row 3's change.
    regenerated at the pin bump".
 2. In row 3's change, say which server version first accepts `again` on `review_plan` (this plan's mcp release). Also
    say what an older server answers: its old refusal *"the plan stage is over … open a new session"*, or whatever
-   step 4 of §6 measures for the unknown argument. The interim path stays the fallback for that case.
+   L1's observation 3 records for the unknown argument (§8.1). The interim path stays the fallback for that case.
 3. Note that a re-review of an approved plan on a branch whose plan round passed then goes to `review_plan` with
    `again: true`, and that the server halts `review_code` itself until the new `proceed`. Their plan round 1,
    finding 0, already counted on that (`… PLAN_plan_change_control.md:484`).
@@ -133,7 +134,7 @@ words of the step belong to row 3's change.
 |---|---|---|
 | `committedPlan` / `expectedCommit`, the reader, its refusals, `PlanSource`, the `END OF PLAN` sentinel and its fold | that plan (E1 merged #837, E2 merged #841) | none — an `again` round calls `PlanInputs.PrepareAsync` exactly as any plan round does (`PanelService.cs:668`) |
 | `again: true` accepted with `committedPlan` as well as `planText`; the text-id comparison (D5) | this plan | its `TextId` (`PlanInput.cs:25`, `PlanSource.cs:17`), reused unchanged |
-| The approval stamp (D6) reads the last plan round's `PlanSource.TextId` | this plan | `PlanSources.Stamp` (`Server/Rounds/PlanSources.cs:17-20`), unchanged |
+| The approved plan (D6) is read as the last completed plan round's `PlanSource.TextId` | this plan | `PlanSources.Stamp` (`Server/Rounds/PlanSources.cs:17-20`), unchanged |
 
 **Order:** that plan first. It is merged. **Disjoint:** this plan changes nothing in the reader, the refusals, the
 prompt or the record that plan built. An `again` round records its `PlanSource` like any plan round.
@@ -168,28 +169,34 @@ counted, and is in the session file if a figure ever wants it.
 
 ## 6. Build order (one pull request, commits each green on its own)
 
-1. **Core.** `SessionState.PlanEpoch`, `EpochOf`, `HasProceededOnce`; `RoundMachine.BeginPlanRoundAgain` (D2, D3); the
-   reopened refusal in `BeginCodeRound` (D7); the three sentences (D8). Tests T1–T6 first, each watched RED.
-2. **Server.**
-   - `PlanApproval` on `PersistedSession`, stamped in `Finish` (D6);
+No commit publishes a route that runs without its guards (plan round 1, finding 3). Commit 1 adds transitions that no
+tool reaches. The `again` argument appears only in commit 2, together with D5's comparison and everything D5 reads.
+D5 needs no stored stamp (D6): the journal it reads already exists on `main`. So no build exists in which `again`
+runs without the same-plan refusal, and no intermediate state needs a test of its own beyond T15's (in commit 1,
+`review_plan` publishes no `again`).
+
+1. **Core: reachable by no tool.** `SessionState.PlanEpoch`, `EpochOf`, `HasProceededOnce`;
+   `RoundMachine.BeginPlanRoundAgain` (D2, D3); the reopened refusal in `BeginCodeRound` (D7); the three sentences
+   (D8). Tests T1–T6 and T17's pure half first, each watched RED. T15's commit-1 assertion: the published
+   `review_plan` schema has no `again`.
+2. **Server: the route and its guards, in one commit.**
    - `RoundRecord.PlanEpoch` stamped beside `PlanSource` (D12);
    - `SessionAnswer.PlanEpoch`, with the `ServerJsonContext` registrations;
-   - `ReviewPlanAsync` gains `again`: `again ? BeginPlanRoundAgain : BeginPlanRound`, and D5's comparison ahead of the
-     cadence in `RefuseBeforeBuilding`;
+   - the approved-plan reader over the journal (D6);
+   - `ReviewPlanAsync` gains `again`: `again ? BeginPlanRoundAgain : BeginPlanRound`, and D5's comparison on a
+     `Ready` input, ahead of the cadence in `RefuseBeforeBuilding`;
    - `Tools.cs`: the `again` argument (D1) and both descriptions (§7);
    - `AskGateDesk` and `StageRelease` read `HasProceededOnce` (D10);
    - the reopening log line.
 
-   Tests T7–T15.
+   Tests T7–T15, T17's whole-round half, T18 and T19.
 3. **Server documentation.** `research/module_core.md` (the transition, the epoch) and `research/module_server.md`
-   (the tool, the approval, the refusals).
+   (the tool, the approved plan read from the journal, the refusals).
 4. **The older other side, measured, not argued** (`.agents/PROJECT.md`: a field is measured against the OLD other
-   side before it ships). Add `src_vs_code/scripts/live-plan-again-compat.mjs`, following
-   `live-feature-schema-compat.mjs`, which runs the released coai-mcp 0.63.0 against a data directory this build
-   wrote. It checks four things: 0.63.0's `review_code` on a reopened session is refused; its `review_plan` without
-   `again` runs a round and its save keeps `planEpoch` and `approvedPlan`; what 0.63.0 answers to `again: true`
-   (refused as an unknown argument, or ignored and refused as *"the plan stage is over"*); and the released extension
-   0.83.0 parses the session file. Recorded with versions and dates in `module_tests.md`.
+   side before it ships). Add `src_vs_code/scripts/live-plan-again-compat.mjs` (L1, specified in §8.1) and run it.
+   Recorded with versions and dates in `module_tests.md`. **L1 is a release prerequisite, not a CI step.** It must
+   have answered `0` on the merged tree before the mcp release tag is pushed. An answer of `2` (no released artefact
+   could be obtained) blocks the release, the same as `1`.
 5. **Extension.** `planEpoch?` on `rounds.ts`'s `RoundRecord`; the rounds log's one line (D14); T16; then
    `research/module_extension.md` and one paragraph in `research/architecture.md` § *A field added to the round list*
    (the session file gains a member the extension reads; same rule, absent reads as nothing).
@@ -220,7 +227,7 @@ Run as the MTP executable, never `dotnet test`. Pure transitions go in `tests/Ro
 |---|---|---|
 | T1 | `BeginPlanRoundAgain` from `CodeReview` and from `Done`, `PlanProceeded: true` | `Moved` to `PlanReview`: counts 0, `PlanProceeded false`, epoch 2; again from epoch 2's close → epoch 3 [method absent; `review_plan` refused "the plan stage is over"] |
 | T2 | the same with `AwaitingResolve`, `HumanGate`, a document session, a feature session | `Unresolved`, `GateHeld`, the two session sentences, in D2's order; a held code stage answers `GateHeld`, not an epoch sentence |
-| T3 | `PlanReview` in epoch 1 / in epoch 2 | refused *nothing to reopen* / `Moved(s)` unchanged |
+| T3 | `PlanReview` in epoch 1 / in epoch 2 | refused *nothing to reopen* / `Moved(s)` unchanged, the same instance |
 | T4 | `BeginCodeRound` and `BeginCodeRoundAgain` on a reopened session | refused with D7's sentence naming the epoch ["no plan round has reached 'proceed'"] |
 | T5 | `Resolve` of epoch 2's `proceed` | `CodeReview`, `PlanProceeded true`, epoch 2 kept, code count 0 |
 | T6 | a plain `BeginPlanRound` after `proceed` | the refusal names `again: true` [names "open a new session"] |
@@ -234,7 +241,10 @@ Run as the MTP executable, never `dotnet test`. Pure transitions go in `tests/Ro
 | T14 | `ask_human` facts during a reopened epoch | phase `Building`, batches counted [phase `Planning`] |
 | T15 | the tool schema | `review_plan` publishes `again` as an optional boolean; `TheInstructionsFitWhatAClientKeepsTests` green |
 | T16 | extension: rounds with `planEpoch` 2, 1 and absent, run per `bundledPage.test.ts` | the line for 2; nothing for 1 or absent |
-| L1 | step 4's live script against released 0.63.0 and extension 0.83.0 | the four observations of step 4, recorded |
+| T17 | `again: true` inside a reopened epoch: pure, `PlanReview`, epoch 2, `RoundsRunThisStage` 2; then whole-round, a second `again` call after a `revise` with the APPROVED text | pure: `Moved(s)` with count 2, epoch 2, escalations unchanged; whole-round: the round runs as round 3 of the epoch, not refused as *the same plan*, epoch still 2 [a reset to 0 or an epoch 3] |
+| T18 | `again: true` with a `committedPlan` that is dirty, not in the commit, or behind a stale `expectedCommit`, whose committed text equals the approved one | each answers the reader's own refusal, never *the same plan*; no round, session file byte-identical [the comparison ran first] |
+| T19 | the reverse sequence as a session-file fixture: this build reopens epoch 2; a plan round on text B and its `resolve` to `proceed` are written in 0.63.0's shape (`PlanSource` present, no `planEpoch`); then this build calls `again` with B, then with C | B → refused *the same plan* naming B's text id; C → reopens epoch 3; B's round reads *not recorded* for its epoch [no comparison, or one against the epoch 1 text] |
+| L1 | §8.1's live script against the released coai-mcp and extension | its five observations, recorded with versions and dates |
 
 **Break-its** (mutate production, name the test that goes red, restore, re-run green, report the red text):
 
@@ -247,6 +257,40 @@ Run as the MTP executable, never `dotnet test`. Pure transitions go in `tests/Ro
 | B5 | stamp `PlanEpoch` on plan rounds only | T7's code-round assertion |
 | B6 | the page renders epoch 1 | T16 |
 | B7 | `BeginPlanRoundAgain` checks the stage before `HumanGate` | T2 |
+| B8 | a repeat `again` in a reopened epoch resets the count | T17 |
+| B9 | D5's comparison moved before `PlanInputs.PrepareAsync` (reading the raw file) | T18 |
+| B10 | D6 reads a stored stamp, or the FIRST plan round, instead of the last completed one | T19 |
+
+### 8.1 L1 — the released other side, live (`src_vs_code/scripts/live-plan-again-compat.mjs`)
+
+**How it gets the binaries.** It uses `releasedHalves.mjs` and adds no downloader of its own. The released coai-mcp is
+`releasedServer` (`src_vs_code/scripts/releasedHalves.mjs:87-118`): the newest PUBLISHED `mcp-v*` release (drafts
+excluded), downloaded with `gh release download --repo oleksandrdubyna88/dew_flow_connect_other_ais`. The asset is
+picked for the host's RID: `win-x64`/`win-arm64` `.zip`, `linux-x64`/`linux-arm64` or `osx-*` `.tar.gz`. Overrides:
+`COAI_OLD_SERVER=<path>` or `--tag=mcp-vX.Y.Z`, with `--tag=mcp-v0.63.0` once this change has shipped. The released
+extension is `releasedExtension` (`:161`), BUILT from its tag because the `.vsix` bundle cannot be called function by
+function. This build's binary comes from `newServer()` (`:55`) after `dotnet build`.
+
+**How it runs them.** It starts each server over stdio as an MCP client, as `seam-ledger-fields.mjs` does, against
+FakeCli reviewers (`src_mcp/tests_fakecli`, built first). It uses a temporary git repository and ONE shared
+`COAI_DATA_DIR`, so both binaries read and write the same session file, and every child has the module's deadline.
+
+**What it observes:**
+
+1. this build proceeds and reopens; 0.63.0's `review_code` is refused;
+2. 0.63.0's plain `review_plan` runs a round, and its save keeps `planEpoch`;
+3. what 0.63.0 answers to `review_plan` with `again: true`: refused as an unknown argument, or ignored and refused as
+   *"the plan stage is over"*. Recorded verbatim; either answer is acceptable, and the sentence goes to the
+   conventions plan (§4.1, item 2);
+4. **the reverse sequence:** 0.63.0 completes a round on text B of the reopened epoch and resolves it to `proceed`.
+   Then this build refuses `again` with B as *the same plan* and reopens epoch 3 with C (D15, T19 live);
+5. the released extension's session-file reader parses every file written above.
+
+**What it answers.** Exit `0`: all five hold. `1`: the boundary does not hold, naming which observation. `2`: an
+artefact could not be obtained, meaning no `gh`, no network, no asset for this RID, or a build of the released
+extension failed. It says which and never reports success. It is not in CI (the precedent's reason,
+`live-feature-schema-compat.mjs:28-35`): it needs the network and a released artefact. It is a release prerequisite
+(§6 step 4), so `2` blocks the release until it is run where the artefact can be had.
 
 ## 9. Growth surface
 
@@ -254,7 +298,6 @@ Run as the MTP executable, never `dotnet test`. Pure transitions go in `tests/Ro
 |---|---|---|---|
 | `SessionState.PlanEpoch` — the epoch counter, one int per branch session | ≈ 15 B of JSON per session file; the value grows by 1 per reopening, and a reopening needs a prior `proceed` (each at least one full plan panel round), so a branch session realistically ends at single digits; no cap (§5) | its owner is `SessionStore`; session files are kept for ever today (checked: `SessionStore.cs` and `PanelService.cs` hold no session sweep, only the escalation and phase sweeps, `PanelService.cs:1820-1821`) | the begun state is held in memory until the round's first progress save, which writes it with the running record (`LiveRound.cs:252-257`); a refusal before building saves nothing; a crash after that leaves the plan reopened, which fails closed (code refused, the plan re-review continues), and the running record is swept to `interrupted` as today |
 | `RoundRecord.PlanEpoch` | ≈ 15 B per round; at ~1 500 rounds/month (the promoted round counter's *Growth*, cited by `PLAN_the_round_counter_tail.md:126`) ≈ 22 KB/month across all session files | the session file's owner, as above | written with the round record |
-| `PersistedSession.ApprovedPlan` | ≈ 120 B per session; ONE record, overwritten at each approval, never a list | the session file's owner | written in the same save as the advancing `resolve` |
 
 No table, column, directory, cache or process is added.
 
@@ -265,8 +308,8 @@ No table, column, directory, cache or process is added.
 2. **Reopening as a way round the question floor.** Held by D10. T14 and B4 pin it.
 3. **The refusal sentence of an older server misleads a caller of the new rule.** The conventions change (row 3) names
    the server version and the old sentence (§4.1, owed item 2).
-4. **D5 refuses a legitimately re-approved text** after an older server's `proceed` (D15). The refusal names the text
-   id it compared, and the cure is to update that server.
+4. **D5 compares against the wrong approval.** Held by D6: the approval is read from the journal, which every binary
+   since 0.58.0 writes the same way, so there is no stored copy to go stale. T19, B10 and L1's observation 4 pin it.
 
 ## 11. Post-deploy
 
@@ -274,20 +317,34 @@ The completion question of `common.post-deploy-checks`: does this change somethi
 thing, in a way a green build would hide? **No.** The change is in the stdio server's state machine, and the suite and
 L1 cover it. `POST_DEPLOY.md` runs at the release as always, and no item is added.
 
+## Plan round 1 (2026-10-29) — findings and decisions
+
+`proceed`, 2 of 2 reviewers, gating 4 of threshold 6; the plan as committed in `b9609598`.
+
+| # | Finding | Decision |
+|---|---|---|
+| 0 | During a reopened epoch's `revise` rounds the session stores an unapproved `PlanText`, which could become a code round's scope | **Rejected:** it is never a scope. `review_code` is refused until the new `proceed` (D7), and on `proceed` the last round's text is the approved one, as in epoch 1 (`RoundEngine.cs:611`; D6). T7 pins the fallback scope after the new `proceed` |
+| 1 | What `again: true` means while a reopened epoch is still in `PlanReview` was not stated | Accepted: **idempotent**, with no reset and no new epoch; D5 is not applied (D2). T17, B8 |
+| 2 | D5 could compare before the input was even read | Accepted: `PlanInputs.PrepareAsync`'s refusals answer first, and only a `Ready` input is compared (D5). T18, B9 |
+| 3 | The approval stamp has to exist before the reopening route can be reached | Accepted, and resolved by removing the stamp: the approved plan is read from the journal (D6). The `again` argument is published only in the commit that carries D5 (§6). T15's commit-1 assertion |
+| 4 | The reverse sequence: the released 0.63.0 proceeds after this build stamped an approval | Accepted: with D6 nothing is stored, so nothing can be stale. The new build refuses the text 0.63.0 just approved and reopens for any other (D15). T19, B10, L1 observation 4 |
+| 5 | How L1 obtains and runs the released binaries | Accepted: §8.1 — `releasedHalves.mjs` (`gh`, published releases, the host's RID, `COAI_OLD_SERVER`/`--tag`), stdio with FakeCli on one shared data directory, exit `2` when an artefact is unavailable, and L1 a release prerequisite |
+
 ## Definition of Done
 
 - [ ] `review_plan` takes `again: true` with `planText` or `committedPlan`. It reopens a proceeded plan stage with a fresh
       budget, `PlanProceeded false` and epoch + 1. It refuses (unresolved, held, never proceeded, the same plan,
       document or feature session) and saves nothing when it refuses.
 - [ ] `review_code` refuses during a re-review with D7's sentence. After the new `proceed`, its fallback scope is the
-      newly approved plan, and `ApprovedPlan` names that plan's text id and epoch.
+      newly approved plan, which is the last completed plan round of the journal (D6).
 - [ ] Every round of a branch session records its `planEpoch`. `status` shows the session's epoch, the log names it,
       and the rounds log shows *plan epoch k* for k ≥ 2 and nothing otherwise.
 - [ ] The cadence arguments work on an `again` call. The question gate reads `HasProceededOnce`.
 - [ ] Both tool descriptions and the plain refusal name `again: true`. The server instructions still pass their budget
       test.
-- [ ] T1–T16 green from red; B1–B7 each observed red with its named test, then green. L1 recorded against the
-      released 0.63.0 and extension 0.83.0.
+- [ ] `again: true` inside a reopened epoch is idempotent (no reset, no new epoch). D5 runs only on a `Ready` input.
+- [ ] T1–T19 green from red; B1–B10 each observed red with its named test, then green. L1 answered `0` against the
+      released coai-mcp and extension before the mcp release tag.
 - [ ] `module_core.md`, `module_server.md`, `module_extension.md`, `module_tests.md` and `architecture.md` describe what
       runs.
 - [ ] One coai-mcp release and one extension release, each tag observed. The conventions repository was told the
