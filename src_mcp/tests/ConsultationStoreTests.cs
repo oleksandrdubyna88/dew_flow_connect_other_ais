@@ -452,6 +452,14 @@ public sealed class ConsultCallCounterTests : IDisposable
 /// </remarks>
 public sealed class SameCheckoutTests
 {
+    /// <summary>
+    /// The temp folder as the resolver spells it. The seams below stand a link in for ONE path by comparing the path the resolver asks
+    /// about with the path the test named, as text; on macOS the temp folder is <c>/var/folders/…</c> and the resolver asks about
+    /// <c>/private/var/folders/…</c>, so a seam keyed on the unresolved spelling never matches.
+    /// </summary>
+    private static string ResolvedTemp { get; } = Path.TrimEndingDirectorySeparator(
+        RealPath.Resolve(Path.GetTempPath()) is { Ok: true } real ? real.Path : Path.GetTempPath());
+
     /// <summary>The ordinary case: one spelling, no links, still the same checkout.</summary>
     [Fact]
     public void TheSamePathSpelledTheSameWay_IsTheSameCheckout()
@@ -480,8 +488,8 @@ public sealed class SameCheckoutTests
     [Fact]
     public void ACheckoutReachedThroughALink_IsTheSameCheckout()
     {
-        var said = Path.Combine(Path.GetTempPath(), "coai-checkout-as-said");
-        var real = Path.Combine(Path.GetTempPath(), "coai-checkout-as-resolved");
+        var said = Path.Combine(ResolvedTemp, "coai-checkout-as-said");
+        var real = Path.Combine(ResolvedTemp, "coai-checkout-as-resolved");
 
         Entry Link(string p) =>
             string.Equals(
@@ -509,8 +517,8 @@ public sealed class SameCheckoutTests
     [Fact]
     public void OneCheckoutIsOneOwner_WhicheverSpellingNamesIt()
     {
-        var said = Path.Combine(Path.GetTempPath(), "coai-checkout-as-said");
-        var real = Path.Combine(Path.GetTempPath(), "coai-checkout-as-resolved");
+        var said = Path.Combine(ResolvedTemp, "coai-checkout-as-said");
+        var real = Path.Combine(ResolvedTemp, "coai-checkout-as-resolved");
 
         Entry Link(string p) =>
             string.Equals(

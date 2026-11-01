@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Consultation;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
 using FluentAssertions;
@@ -43,6 +44,8 @@ public sealed class ALinkCannotCarryTheReaderOutsideTests : IDisposable
     public void Dispose() => _work.Dispose();
 
     private string In(string name) => Path.Combine(_root, name);
+
+    private string RealRoot => RealPath.Resolve(_root) is { Ok: true } real ? real.Path : _root;
 
     private void Link(string name, string text, string? at = null)
     {
@@ -255,7 +258,9 @@ public sealed class ALinkCannotCarryTheReaderOutsideTests : IDisposable
             Link($"{name}{i}", $"{name}{i + 1}");
         }
 
-        Link($"{name}{count}", In("docs/spec.md"));
+        // The last link's target is spelled as the resolver spells it: through the root's own links it would spend one more expansion on
+        // them (macOS: /var), and "a chain of exactly forty" would be forty-one.
+        Link($"{name}{count}", Path.Combine(RealRoot, "docs", "spec.md"));
     }
 
     [Fact]

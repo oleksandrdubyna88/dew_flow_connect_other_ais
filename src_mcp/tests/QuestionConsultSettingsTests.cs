@@ -1,4 +1,5 @@
 using CoaiMcp.Core.QuestionConsult;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -474,12 +475,14 @@ public sealed class QuestionConsultSettingsTests : IDisposable
         const string share = @"\\wsl.localhost\Ubuntu\home\jinx\git";
         var reachable = Path.TrimEndingDirectorySeparator(Path.GetFullPath(share));
 
-        var verdict = QuestionRoots.Validate([posix, share], _data, Places with { Windows = true, SystemDrive = "C:" }, full => full == reachable);
+        // The links of the share are stood in for (`read`): the question here is the root's CHECKS, and a share that is not on the runner is
+        // not reachable for the resolver either — which refuses a root it cannot place, as it must.
+        var verdict = QuestionRoots.Validate([posix, share], _data, Places with { Windows = true, SystemDrive = "C:" }, full => full == reachable, read: _ => Entry.Directory);
 
         verdict.OtherSide.Should().Equal([posix], "no folder here, no distro to translate it with: the other side's");
         verdict.Accepted.Should().Equal([reachable], "the explicit WSL share is this side's root, judged and kept as written");
         verdict.Refused.Should().BeEmpty();
-        QuestionRoots.Validate([share], _data, Places with { Windows = true }, _ => false).Refused
+        QuestionRoots.Validate([share], _data, Places with { Windows = true }, _ => false, read: _ => Entry.Directory).Refused
             .Should().ContainSingle("an explicit share that is not reachable is THIS side's mistake, refused by name, never skipped")
             .Which.Should().Contain("not a directory on this machine");
     }

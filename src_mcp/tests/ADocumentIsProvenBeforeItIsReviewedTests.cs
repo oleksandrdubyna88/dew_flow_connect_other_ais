@@ -21,7 +21,12 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
 {
-    private readonly string _repo = Directory.CreateTempSubdirectory("coai-doc-repo-").FullName;
+    /// <summary>
+    /// The repository as the RESOLVER spells it: no link in the temp path (macOS: <c>/var</c> is <c>/private/var</c>). A test that stands a
+    /// link in with the entry seam compares the path the resolver asks about with the path it wrote, as text, so the two have to be the
+    /// spelling the resolver emits — resolved, native separators.
+    /// </summary>
+    private readonly string _repo = Resolved(Directory.CreateTempSubdirectory("coai-doc-repo-").FullName);
 
     /// <summary>
     /// Somewhere that is not the repository, and is this test's own: the documents the refusals point at live here, never at a fixed name in the machine's
@@ -43,9 +48,12 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         }
     }
 
+    private static string Resolved(string folder) => RealPath.Resolve(folder) is { Ok: true } real ? real.Path : folder;
+
+    /// <summary>Writes a file and answers its path as the resolver spells it: native separators (Windows: <c>Path.Combine</c> keeps a <c>/</c>).</summary>
     private string Write(string relative, string text)
     {
-        var path = Path.Combine(_repo, relative);
+        var path = Path.GetFullPath(Path.Combine(_repo, relative));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, text);
         return path;
