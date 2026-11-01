@@ -226,6 +226,18 @@ public sealed class TheSharedResolverFollowsEveryLinkRootDownTests : IDisposable
     }
 
     [Fact]
+    public void ALinkToAFileThenDotDotX_FailsAsGoingBelowAFile()
+    {
+        // Pins a gate claim that was REJECTED: that `link-to-file/../x` slips through. The walk refuses it already, in these words.
+        Link(At("link-to-file"), At("a", "b", "f.txt"));
+
+        var result = RealPath.Resolve(At("link-to-file", "..", "x"));
+
+        result.Ok.Should().BeFalse();
+        result.Why.Should().Contain("goes below a file");
+    }
+
+    [Fact]
     public void AFileAsTheLastName_IsStillResolved()
     {
         RealPath.Resolve(At("a", "b", "f.txt")).Path.Should().Be(At("a", "b", "f.txt"));

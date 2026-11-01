@@ -139,6 +139,24 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
     /// the one an attacker would reach for. The resolver is injected so the rule is a unit test
     /// rather than a privilege the CI runner may not have.
     /// </summary>
+    /// <summary>
+    /// A path the resolver cannot follow is refused with the CHECK first: the caller is told to look at the path and at the links on it, and only
+    /// if the file is the right one is it offered the documentText way round. Offering the copy first teaches the caller to paste around a
+    /// refusal that may have been about a link nobody meant.
+    /// </summary>
+    [Fact]
+    public void APathTheResolverCannotFollow_SaysToCheckThePathAndItsLinksBeforeItOffersDocumentText()
+    {
+        var file = Write("docs/unfollowable.md", Body);
+
+        var sentence = Refusal(Read(new DocumentRequest(Path: file), read: p => p == file ? throw new IOException("the disk would not say") : RealPath.Lstat(p)));
+
+        sentence.Should().Contain("cannot be resolved safely").And.Contain("check");
+        sentence.IndexOf("check", StringComparison.Ordinal).Should().BeLessThan(
+            sentence.IndexOf("documentText", StringComparison.Ordinal), "the check comes first");
+        sentence.Should().Contain("links").And.Contain("right one");
+    }
+
     [Fact]
     public void ASymlinkEscapingTheRepository_IsRefused()
     {
