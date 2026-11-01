@@ -41,19 +41,29 @@ internal static class FeaturePlan
     private static string CredentialNamed(string said, string shape) => CredentialFiles.NamedSentence(said, shape);
 
     /// <summary>The plan where the caller said it is: inside the repository, and a file that exists.</summary>
-    private static FeatureInput<FeaturePlanText> Located(string repoPath, string said, string identity) =>
-        identity.Length == 0 ? Refused($"'{said}' is not inside '{repoPath}' — a feature review is of a plan in the repository it reviews, and its path is the review's identity")
-        : !File.Exists(Path.IsPathRooted(said) ? said : Path.GetFullPath(said, repoPath)) ? Refused($"there is no plan file at '{said}' in '{repoPath}' — planPath is the plan's path inside the repository")
-        : Contents(repoPath, said, identity);
+    private static FeatureInput<FeaturePlanText> Located(string repoPath, string said, Placed plan) =>
+        plan.Identity.Length == 0 ? Refused($"'{said}' is not inside '{repoPath}' — a feature review is of a plan in the repository it reviews, and its path is the review's identity")
+        : !File.Exists(plan.Resolved) ? Refused($"there is no plan file at '{said}' in '{repoPath}' — planPath is the plan's path inside the repository")
+        : Contents(repoPath, said, plan.Identity);
 
-    /// <summary>The plan's repository-relative identity, or empty when it resolves outside the repository.</summary>
-    private static string Inside(string repoPath, string said) =>
-        DocumentId.Of(
-            DocumentReader.CanonicalRoot(repoPath, DocumentReader.FollowLink),
-            DocumentReader.Canonical(repoPath, said, DocumentReader.FollowLink));
+    /// <summary>Where the plan really is, and its repository-relative identity there — both empty when it cannot be resolved or is outside the repository.</summary>
+    private sealed record Placed(string Identity, string Resolved);
+
+    /// <summary>
+    /// The plan's identity and its resolved path. Existence is asked of the RESOLVED path: <c>Path.GetFullPath</c> folds <c>..</c> as text, so
+    /// <c>alias/../plan.md</c> with <c>alias</c> a link was asked about a file the disk never reads.
+    /// </summary>
+    private static Placed Inside(string repoPath, string said)
+    {
+        var root = DocumentReader.CanonicalRoot(repoPath);
+        var plan = DocumentReader.CanonicalUnder(root, said);
+
+        // A path that cannot be resolved (a loop, an over-long one) is not inside: refused, never guessed.
+        return plan.Ok ? new Placed(DocumentId.Of(root.Path, plan.Path), plan.Path) : new Placed(string.Empty, string.Empty);
+    }
 
     private static FeatureInput<FeaturePlanText> Contents(string repoPath, string said, string identity) =>
-        DocumentReader.Read(repoPath, new DocumentRequest(Path: said), DocumentReader.FollowLink) switch
+        DocumentReader.Read(repoPath, new DocumentRequest(Path: said)) switch
         {
             DocumentOutcome.Ready { Text: var text } when text.Trim().Length > 0 => new FeatureInput<FeaturePlanText>.Accepted(new FeaturePlanText(identity, text)),
             DocumentOutcome.Ready => Refused($"'{said}' is empty — a feature review is of a plan, and its reviewers read it first"),

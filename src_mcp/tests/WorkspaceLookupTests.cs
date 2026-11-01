@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Core.Consultation;
 using CoaiMcp.Core.Feature;
 using CoaiMcp.Runners.Processes;
@@ -250,7 +251,7 @@ public sealed class WorkspaceLookupTests : IAsyncLifetime
     {
         // code round, codex + gemini: a request the budget can no longer hold was walked anyway, then thrown away.
         var resolved = 0;
-        var lookup = new WorkspaceLookup([_root], LookupLimits.Default with { TurnBytes = 64 }, path => { resolved++; return DocumentReader.FollowLink(path); });
+        var lookup = new WorkspaceLookup([_root], LookupLimits.Default with { TurnBytes = 64 }, path => { resolved++; return RealPath.Lstat(path); });
 
         var text = Serve(lookup, List("projB"), Search(MarkerOne));
 
