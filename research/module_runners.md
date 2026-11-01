@@ -116,11 +116,11 @@ sequenceDiagram
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
-  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **80 008** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20), which
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 998** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20, 80 008 until 2026-10-21, 80 024 until 2026-11-01, when the conventions pin moved to `105d53c`), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **9 976** now (10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
-  names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
-  `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
+  reviewer) and leave **10 002** now (9 976 until 2026-11-01, 10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
+  names the tail takes one rule on 35 %, two on 58 %, three on 7 % (mean 1.72; 30 / 62 / 8 % and 1.78 at 9 976), and
+  `common/test-leftovers.md` (an 8 403-character core since 2026-11-01) is drawn on 4.9 % (it was 9.8 % at 4 706 bytes) — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
 
   **That number is the same on every platform only since 2026-09-18.** Until then `RuleFiles.Read`

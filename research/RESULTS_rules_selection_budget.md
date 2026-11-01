@@ -297,3 +297,36 @@ The measuring test is renamed `…SpendExactlyTheirPinnedBytes` so the next re-b
 The 2026-09-06 note recorded "all four language doctrines" as starved. There are **three** — `csharp`,
 `rust`, `typescript`. Corrected in the code comments and the plan; the measurement above counts what
 exists.
+
+## RE-MEASURED, 2026-11-01 — the conventions pin moves to release `105d53c` (test-leftovers split into a core and a detail)
+
+> **Subject:** `chore/pin-conventions-115bbf8` with `.agents/conventions` at `105d53c820ca9551830fefc6b99544e4259a1c03` (release; verified with `git rev-parse HEAD` in the mount before measuring).
+> **Harness:** a temporary test, not committed, through the PRODUCTION collector (`RuleFiles.Collect` with `RuleOrder.ForBranch`) at the default 90 000 budget: base and tier at no budget, the tail
+> of the canary branch, the tail of each of the hundred fixed names (`feat/branch-<i>` for even i, `fix/issue-<i>-thing` for odd, i in 0..99) and of 3 000 names of the same shape. Sizes are
+> characters of the line-ending-normalised text, the unit the collector spends.
+
+| | 2026-10-21 (before the `115bbf8` pin; the columns below are the figures the tests last pinned) | 2026-11-01 (pin `105d53c`) |
+|---|---|---|
+| base | 17 963 | **17 963** (unchanged) |
+| the eight tier rules | 62 061 | **62 035** (-26) |
+| base + tier | 80 024 | **79 998** |
+| **free tail**, of 90 000 | 9 976 | **10 002** |
+| the three smallest tail rules together | 8 683 | 8 684 (2 197 + 3 066 + 3 421) |
+| plus the fourth smallest (3 460) | 12 143 | 12 144 |
+| files shown on the canary branch | 16 | 16, 88 721 characters (the same three tail rules) |
+| `common/test-leftovers.md` | one 30 556-byte file (pin `115bbf8`; 4 706 bytes before that), too large for any tail | **8 403 characters (8 483 bytes) core** |
+| `common/test-leftovers-detail.md` | not there (its text was inside the 30 556-byte file) | 30 893 characters — omitted for length on every branch (named in the bundle's omitted note) |
+| `common/plan-change-control.md` | 12 274 bytes, present | 12 204 characters — larger than the free tail, so no branch shows it; **by owner decision it is for agents only, not for reviewers** |
+
+**Reach.** Over the 100 documented fixed names, `common/test-leftovers.md` is in the tail of **7 of 100** (indexes 0, 9, 21, 34, 36, 42, 95), always as the only tail rule, because the core (8 403) leaves
+1 599 of the free tail. Over 3 000 names of the same shape it is drawn on **147 (4.9 %)**, down from 294 (9.8 %) when it was 4 706 bytes. The tail takes one rule on 1 055 names (35 %), two on 1 729 (58 %)
+and three on 216 (7 %); none takes none or four (mean 1.72, it was 1.78). Among the hundred, the widest tail is 3 (`fix/issue-27-thing`) and the narrowest 1 (`feat/branch-0`).
+
+**Reading it.** The free tail grew by 26, which moves no rule across a boundary: the three smallest rules still fit and the fourth added still does not, so the at-most-three and at-least-one canaries are
+true unchanged. What did change is the test-leftovers canary: the rows `fix/x` and `feat/e5` (drawn) and `main` and `feat/a` (not) were arbitrary names from outside the documented population, and `main`
+and `feat/a` were never in it. They are replaced by the two lowest-index names of the population that draw the rule (`feat/branch-0`, `fix/issue-9-thing`) and the two lowest that do not
+(`fix/issue-1-thing`, `feat/branch-2`). `fix/x` and `feat/e5` still draw it and `main` and `feat/a` still do not, so the old rows were also true. Both halves hold, so the rule is neither a tier rule
+(it would be shown on all 100) nor out of reach (it would be shown on none): no owner decision is open.
+
+**Re-pinned:** `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (base 17 963 + tier 62 035 = 79 998). Unchanged and green: `…TheRotatedTail_FitsAtMostThreeRules` (the same
+three identities, maximum 3), `…EveryBranchReachesAtLeastOneTailRule` (minimum 1).
