@@ -487,9 +487,10 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
 
 ## S2 — The sweep, in two halves — **cornerstone, `model: fable`**
 
-- **Models.** Spec by Fable in `todo/PLAN_test_leftovers_E5_S2_spec.md` (its own row in `todo/README.md`; the shape of
-  `PLAN_the_plan_gate_reads_the_committed_plan_E1_S2_spec.md`), covering BOTH halves; code by a Sonnet coder from the
-  spec; review by Opus against the spec, rule §3–§4 and the template's `LeftoversSweep.cs`.
+- **Models.** Spec by Fable in [PLAN_test_leftovers_E5_S2_spec.md](PLAN_test_leftovers_E5_S2_spec.md) (its own row in
+  `todo/README.md`; the shape of `PLAN_the_plan_gate_reads_the_committed_plan_E1_S2_spec.md`), covering BOTH halves —
+  the S2-A half written 2026-11-02, the S2-B half added to the same file after S2-A merges; code by a Sonnet coder from
+  the spec; review by Opus against the spec, rule §3–§4 and the template's `LeftoversSweep.cs`.
 - **Goal.** (A) Neither test runner deletes anything on age any more, and the invariant **every `coai-*` name is
   outside the test sweep** holds structurally — so being wrong here can never delete a live chat, a round's answers, a
   Team server job or a person's credentials behind a junction. (B) Every C# suite and the extension runner starts with
