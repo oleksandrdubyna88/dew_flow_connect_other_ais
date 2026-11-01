@@ -2,7 +2,7 @@
 
 > Status: **plan only, nothing implemented yet, 2026-11-01 — a follow-up; nothing waits for it.** Scope: `WorktreeManager.EraseAsync`
 > (`src_mcp/runners/Worktrees/WorktreeManager.cs`) and `ReviewTreeRoot.EnsureGoneAsync` (`src_mcp/runners/Worktrees/ReviewTreeRoot.cs`) — the two
-> recursive deletes that stand behind `RealPath.ResolveBelow`.
+> recursive deletes that stand behind `RealPath.ResolveBelow` — and, as a second item (§3a), `WorktreePaths.Same`'s case rule.
 >
 > Extracted from the security fix of 2026-11-01 ([SECURITY.md](../SECURITY.md), "Past defects" and "Limits, said plainly"): the resolver
 > change made both deletes act on the REAL path they judged, and recorded that the check and the delete are still two steps.
@@ -38,6 +38,15 @@ the only one that has to be pinned, because git has already removed the register
 2. Cost: the two deletes run on trees of a few thousand files; an `unlinkat` walk in managed code must not be slower than `Directory.Delete`
    by a factor that matters under the 2-minute `Erasing` budget.
 3. Windows: a held file refuses the delete (the existing retry and move-aside stay); does a handle-pinned delete change which files hold?
+
+## 3a. A second follow-up, found by the same review: `WorktreePaths.Same` compares with `OrdinalIgnoreCase` on every OS
+
+`WorktreePaths.Same` (`src_mcp/runners/Worktrees/WorktreePaths.cs`) is old code (#470) and compares the two real paths with
+`StringComparison.OrdinalIgnoreCase` everywhere. On Linux `/x/Repo` and `/x/repo` are two folders, and they count as the same checkout. It only
+matches RECORDS (a worktree git lists against a spelled path, a consultation's repository against a review's) and gates no read and no delete, so
+it was left alone in the resolver change. The follow-up: compare as the file system does — `Ordinal` on Linux, `OrdinalIgnoreCase` on Windows and
+macOS, as `WorktreeManager`'s guard now does — with a RED test on Linux first (`Same("/x/Repo", "/x/repo")` is false for two real folders that
+differ by case), and a look at what the macOS CI job says before it ships.
 
 ## 4. What grows, who retires it
 

@@ -51,6 +51,9 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
 - **A read root** (`HandleRead.Trust`, used by `AcpReadBoundary` and the private-folder check): the root's canonical path is fixed
   when the reader is made, and the opened handle's own name is compared with it. A root the resolver cannot resolve has an EMPTY canonical
   path — never its spelling — and a read under it is refused, saying the root is the reason.
+- **Containment before existence.** The document reader decides containment on the RESOLVED path first and only then asks what is at it:
+  the existence checks follow links, so asked first they would say "is a directory" for a link to an outside folder and tell the caller
+  what an outside path is.
 - **One place keeps the spelling, on purpose:** `ConsultationService.RepoIdentity`, the owner label that filters a caller's own consultations. It
   is not an access decision, and both sides compute it the same way, so they agree whether or not either could resolve the path. Every
   other resolver failure is a refusal, "not ours" or "cannot compare".

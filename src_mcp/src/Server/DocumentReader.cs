@@ -178,14 +178,10 @@ public static class DocumentReader
               + "and two names for one thing would be two sessions for it.");
         }
 
-        // Made absolute against the REPOSITORY before anything looks at the disk, so every later
-        // step — existence, extension, containment, the read itself — is about the same file.
+        // Made absolute against the REPOSITORY, and resolved root-down, before anything asks the disk what is at it: the existence
+        // checks FOLLOW links, so asked of the spelling first they answered "is a directory" for a link to an OUTSIDE folder — telling
+        // the caller what an outside path is. Containment is decided on the resolved path; only a path that is inside is looked at.
         var absolute = Absolute(repoPath, path);
-        if (OnDisk(absolute) is DocumentOutcome.Refused missing)
-        {
-            return missing;
-        }
-
         var resolved = Canonical(repoPath, absolute, read);
         var root = CanonicalRoot(repoPath, read);
         if (!resolved.Ok || !root.Ok)
@@ -194,13 +190,15 @@ public static class DocumentReader
         }
 
         var id = DocumentId.Of(root.Path, resolved.Path);
+        if (id.Length == 0)
+        {
+            return new DocumentOutcome.Refused(Outside(path, absolute, resolved.Path, repoPath));
+        }
 
-        return id.Length == 0
-            ? new DocumentOutcome.Refused(Outside(path, absolute, resolved.Path, repoPath))
-            : Contents(resolved.Path, id);
+        return OnDisk(resolved.Path) is DocumentOutcome.Refused missing ? missing : Contents(resolved.Path, id);
     }
 
-    /// <summary>Three things that are not a readable file, each said as itself.</summary>
+    /// <summary>Three things that are not a readable file, each said as itself — asked of a path already known to be INSIDE the repository, and already resolved.</summary>
     private static DocumentOutcome? OnDisk(string path)
     {
         if (Directory.Exists(path))

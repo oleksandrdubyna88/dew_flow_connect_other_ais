@@ -129,25 +129,11 @@ public static class RealPath
     /// The path as <see cref="Resolve"/> answers it for everything but the LAST name, which is kept as spelled and not followed —
     /// for the question "is the thing at this path a link itself", which a fully resolved path can no longer answer.
     /// </summary>
-    public static RealPathResult ResolveParent(string path, string? baseDirectory = null, EntryReader? read = null)
-    {
-        if (string.IsNullOrEmpty(path))
-        {
-            return Resolve(path, baseDirectory, read);
-        }
-
-        var trimmed = path.TrimEnd(Separators);
-        var cut = trimmed.LastIndexOfAny(Separators);
-        var leaf = trimmed[(cut + 1)..];
-        if (leaf.Length == 0 || leaf is "." or "..")
-        {
-            return Resolve(path, baseDirectory, read);
-        }
-
-        var parent = Resolve(cut < 0 ? "." : trimmed[..(cut + 1)], baseDirectory, read);
-
-        return parent.Ok ? Finished(path, Path.Join(parent.Path, leaf)) : parent;
-    }
+    /// <remarks>A path with no last name to split off — empty, a bare root (<c>/</c>, <c>C:\</c>, a UNC share), <c>.</c>, <c>..</c> — is resolved whole.</remarks>
+    public static RealPathResult ResolveParent(string path, string? baseDirectory = null, EntryReader? read = null) =>
+        Split(path) is { } cut
+            ? Joined(path, Resolve(cut.Folder, baseDirectory, read), cut.Leaf)
+            : Resolve(path, baseDirectory, read);
 
     /// <summary>
     /// The real path of <paramref name="path"/> when it is strictly UNDER <paramref name="root"/> — both resolved root-down — and the last name
@@ -162,25 +148,8 @@ public static class RealPath
     {
         var top = Resolve(root, baseDirectory, read);
         var tree = top.Ok ? ResolveParent(path, baseDirectory, read) : top;
-        if (!tree.Ok)
-        {
-            return tree;
-        }
 
-        Entry last;
-        try
-        {
-            last = (read ?? Lstat)(tree.Path);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return RealPathResult.Fail($"'{Shown(path)}' could not be inspected: {Shown(e.Message)}");
-        }
-
-        return last.Kind == EntryKind.Link ? RealPathResult.Fail($"'{Shown(path)}' is a link itself, and a link is not a tree")
-            : string.Equals(Path.TrimEndingDirectorySeparator(top.Path), Path.TrimEndingDirectorySeparator(tree.Path), comparison)
-                || !IsInside(top.Path, tree.Path, comparison) ? RealPathResult.Fail($"'{Shown(path)}' is not under '{Shown(top.Path)}'")
-            : tree;
+        return tree.Ok ? Placed(top.Path, tree.Path, path, comparison, read ?? Lstat) : tree;
     }
 
     /// <summary>
@@ -210,89 +179,206 @@ public static class RealPath
         });
     }
 
+    // ---------- the folder / last-name split, and the guard's two questions ----------
+
+    private readonly record struct Cut(string Folder, string Leaf);
+
+    /// <summary>The folder part and the last name of a path — or null when there is no last name to keep apart.</summary>
+    private static Cut? Split(string path)
+    {
+        if (string.IsNullOrEmpty(path) || IsRoot(path))
+        {
+            return null;
+        }
+
+        var trimmed = path.TrimEnd(Separators);
+        var at = trimmed.LastIndexOfAny(Separators);
+        var leaf = trimmed[(at + 1)..];
+
+        return leaf is "" or "." or ".." ? null : new Cut(FolderOf(trimmed, at), leaf);
+    }
+
+    private static string FolderOf(string trimmed, int lastSeparator) => lastSeparator < 0 ? "." : trimmed[..(lastSeparator + 1)];
+
+    /// <summary>
+    /// Whether the path is only its own root: <c>/</c>, <c>C:\</c>, <c>\\server\share\</c>. <c>Path.GetPathRoot</c> knows every spelling a root has;
+    /// string arithmetic on separators does not (<c>C:\</c> trims to <c>C:</c>, which is no folder and no name).
+    /// </summary>
+    private static bool IsRoot(string path)
+    {
+        var root = Path.GetPathRoot(path);
+
+        return !string.IsNullOrEmpty(root) && string.Equals(path.TrimEnd(Separators), root.TrimEnd(Separators), StringComparison.Ordinal);
+    }
+
+    private static RealPathResult Joined(string path, RealPathResult folder, string leaf) =>
+        folder.Ok
+            ? Finished(path, Path.Join(folder.Path, leaf))
+            : RealPathResult.Fail($"'{Shown(path)}' could not be resolved: the folder it is in cannot be — {folder.Why}");
+
+    private static RealPathResult Placed(string top, string tree, string said, StringComparison comparison, EntryReader read)
+    {
+        var plain = NotALink(tree, said, read);
+
+        return !plain.Ok ? plain : StrictlyInside(top, tree, said, comparison);
+    }
+
+    private static RealPathResult NotALink(string tree, string said, EntryReader read)
+    {
+        try
+        {
+            return read(tree).Kind == EntryKind.Link
+                ? RealPathResult.Fail($"'{Shown(said)}' is a link itself, and a link is not a tree")
+                : RealPathResult.Of(tree);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return RealPathResult.Fail($"'{Shown(said)}' could not be inspected: {Shown(e.Message)}");
+        }
+    }
+
+    private static RealPathResult StrictlyInside(string top, string tree, string said, StringComparison comparison) =>
+        !string.Equals(Path.TrimEndingDirectorySeparator(top), Path.TrimEndingDirectorySeparator(tree), comparison) && IsInside(top, tree, comparison)
+            ? RealPathResult.Of(tree)
+            : RealPathResult.Fail($"'{Shown(said)}' is not under '{Shown(top)}'");
+
+    // ---------- the walk ----------
+
     private static RealPathResult Walk(string path, string? baseDirectory, EntryReader read)
     {
-        if (path is null || path.Length == 0 || path.Contains('\0') || path.Length > MaxPathChars)
+        if (Refusal(path) is { } refused)
         {
-            return RealPathResult.Fail($"'{Shown(path ?? string.Empty)}' is not a path this gate resolves (empty, a NUL, or over {MaxPathChars} characters)");
+            return refused;
         }
 
         var here = baseDirectory ?? Directory.GetCurrentDirectory();
-        var spelled = NeedsBase(path) ? Path.Join(here, path) : path;
-        if (Anchor(spelled, here) is not { Root.Length: > 0 } start)
+
+        return Anchor(Spelled(path, here), here) is { Root.Length: > 0 } start
+            ? new Walker(path, read, start).Run()
+            : RealPathResult.Fail($"'{Shown(path)}' is drive-relative or has no root, which this gate does not resolve");
+    }
+
+    private static RealPathResult? Refusal(string? path) =>
+        string.IsNullOrEmpty(path) || path.Contains('\0') || path.Length > MaxPathChars ? NotAPath(path) : null;
+
+    private static RealPathResult NotAPath(string? path) =>
+        RealPathResult.Fail($"'{Shown(path ?? string.Empty)}' is not a path this gate resolves (empty, a NUL, or over {MaxPathChars} characters)");
+
+    private static string Spelled(string path, string here) => NeedsBase(path) ? Path.Join(here, path) : path;
+
+    /// <summary>
+    /// One resolution in progress: the real folders found so far (<c>_chain</c>, the last is where the walk stands), the names still to do
+    /// (<c>_pending</c>), the link expansions spent, and whether the walk stands ON a file. Every step answers null to go on or a result to stop.
+    /// </summary>
+    private sealed class Walker(string path, EntryReader read, Anchored start)
+    {
+        private readonly List<string> _chain = [start.Root];
+        private readonly Stack<string> _pending = Seeded(start.Rest);
+        private int _hops;
+        private bool _onFile;
+
+        public RealPathResult Run()
         {
-            return RealPathResult.Fail($"'{Shown(path)}' is drive-relative or has no root, which this gate does not resolve");
+            while (_pending.TryPop(out var segment))
+            {
+                if (Step(segment) is { } done)
+                {
+                    return done;
+                }
+            }
+
+            return Finished(path, _chain[^1]);
         }
 
-        var chain = new List<string> { start.Root };
-        var pending = new Stack<string>();
-        Push(pending, start.Rest);
-        var hops = 0;
-        var onFile = false;
-        while (pending.TryPop(out var segment))
+        private static Stack<string> Seeded(string rest)
+        {
+            var pending = new Stack<string>();
+            Push(pending, rest);
+
+            return pending;
+        }
+
+        private RealPathResult? Step(string segment)
         {
             if (segment == ".")
             {
-                continue;
+                return null;
             }
 
-            if (onFile)
+            if (_onFile)
             {
                 // `file/..` and `file/name` are ENOTDIR on the disk: nothing is below a file, so a pop to its neighbour would read a file nobody named.
-                return RealPathResult.Fail($"'{Shown(path)}' goes below a file ('{Shown(chain[^1])}') — the disk answers 'not a directory'");
+                return RealPathResult.Fail($"'{Shown(path)}' goes below a file ('{Shown(_chain[^1])}') — the disk answers 'not a directory'");
             }
 
-            if (segment == "..")
+            return segment == ".." ? Up() : Enter(segment);
+        }
+
+        /// <summary>The parent of what is resolved SO FAR, and never above the root.</summary>
+        private RealPathResult? Up()
+        {
+            if (_chain.Count > 1)
             {
-                // The parent of what is resolved SO FAR, and never above the root.
-                if (chain.Count > 1)
-                {
-                    chain.RemoveAt(chain.Count - 1);
-                }
-
-                continue;
+                _chain.RemoveAt(_chain.Count - 1);
             }
 
-            var entry = Path.Join(chain[^1], segment);
+            return null;
+        }
+
+        private RealPathResult? Enter(string segment)
+        {
+            var entry = Path.Join(_chain[^1], segment);
             var seen = read(entry);
-            switch (seen.Kind)
-            {
-                case EntryKind.Missing:
-                    return Appended(path, chain[^1], segment, pending);
-                case EntryKind.File:
-                    chain.Add(entry);
-                    onFile = true;
-                    continue;
-                case EntryKind.Directory:
-                    chain.Add(entry);
-                    continue;
-            }
 
-            if (++hops > MaxLinkExpansions)
+            return seen.Kind switch
+            {
+                EntryKind.Missing => Appended(path, _chain[^1], segment, _pending),
+                EntryKind.Link => Follow(seen.LinkText),
+                _ => Descend(entry, seen.Kind),
+            };
+        }
+
+        private RealPathResult? Descend(string entry, EntryKind kind)
+        {
+            _chain.Add(entry);
+            _onFile = kind == EntryKind.File;
+
+            return null;
+        }
+
+        /// <summary>One link expansion: counted against the budget, its RAW text pushed in front of the rest.</summary>
+        private RealPathResult? Follow(string text)
+        {
+            if (++_hops > MaxLinkExpansions)
             {
                 return RealPathResult.Fail($"'{Shown(path)}' passes through more than {MaxLinkExpansions} links — a loop, or a chain nobody wrote on purpose");
             }
 
-            if (seen.LinkText.Length == 0 || seen.LinkText.Contains('\0') || seen.LinkText.Length > MaxPathChars)
+            if (Unusable(text))
             {
                 return RealPathResult.Fail($"'{Shown(path)}' passes through a link whose text is empty, holds a NUL or is over {MaxPathChars} characters");
             }
 
-            if (Anchor(seen.LinkText, chain[^1]) is not { } target)
-            {
-                return RealPathResult.Fail($"'{Shown(path)}' passes through a drive-relative link ('{Shown(seen.LinkText)}'), which this gate does not resolve");
-            }
-
-            if (target.Root.Length > 0)
-            {
-                chain.Clear();
-                chain.Add(target.Root);
-            }
-
-            Push(pending, target.Rest);
+            return Anchor(text, _chain[^1]) is { } target
+                ? Pushed(target)
+                : RealPathResult.Fail($"'{Shown(path)}' passes through a drive-relative link ('{Shown(text)}'), which this gate does not resolve");
         }
 
-        return Finished(path, chain[^1]);
+        private static bool Unusable(string text) => text.Length == 0 || text.Length > MaxPathChars || text.Contains('\0');
+
+        /// <summary>An absolute target restarts at its own root; a relative one continues from the link's directory.</summary>
+        private RealPathResult? Pushed(Anchored target)
+        {
+            if (target.Root.Length > 0)
+            {
+                _chain.Clear();
+                _chain.Add(target.Root);
+            }
+
+            Push(_pending, target.Rest);
+
+            return null;
+        }
     }
 
     /// <summary>
@@ -323,6 +409,8 @@ public static class RealPath
             ? RealPathResult.Fail($"'{Shown(said)}' resolves to a path over {MaxPathChars} characters")
             : RealPathResult.Of(resolved);
 
+    // ---------- where a path text is rooted ----------
+
     private readonly record struct Anchored(string Root, string Rest);
 
     /// <summary>
@@ -330,34 +418,34 @@ public static class RealPath
     /// gate does not resolve: a drive-relative <c>C:x</c>. A Windows <c>\x</c> is rooted WITHOUT a drive, and its drive is the one of the
     /// place the text was found — the link's own volume — never the process's.
     /// </summary>
-    private static Anchored? Anchor(string text, string foundIn)
+    private static Anchored? Anchor(string text, string foundIn) =>
+        Path.IsPathFullyQualified(text) ? Qualified(text)
+        : OperatingSystem.IsWindows() ? WindowsAnchor(text, foundIn)
+        : new Anchored(string.Empty, text);
+
+    private static Anchored Qualified(string text)
     {
-        if (Path.IsPathFullyQualified(text))
-        {
-            var root = (Path.GetPathRoot(text) ?? string.Empty).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        var root = Normalised(Path.GetPathRoot(text));
 
-            return new Anchored(root, text[root.Length..]);
-        }
-
-        if (!OperatingSystem.IsWindows())
-        {
-            return new Anchored(string.Empty, text);
-        }
-
-        if (text.Length > 0 && Array.IndexOf(Separators, text[0]) >= 0)
-        {
-            var volume = (Path.GetPathRoot(foundIn) ?? string.Empty).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-
-            return new Anchored(volume, text.TrimStart(Separators));
-        }
-
-        return text.Length > 1 && char.IsAsciiLetter(text[0]) && text[1] == ':' ? null : new Anchored(string.Empty, text);
+        return new Anchored(root, text[root.Length..]);
     }
+
+    private static Anchored? WindowsAnchor(string text, string foundIn) =>
+        StartsWithSeparator(text) ? new Anchored(Normalised(Path.GetPathRoot(foundIn)), text.TrimStart(Separators))
+        : IsDriveQualified(text) ? null
+        : new Anchored(string.Empty, text);
+
+    private static string Normalised(string? root) => (root ?? string.Empty).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+
+    private static bool StartsWithSeparator(string text) => text.Length > 0 && Array.IndexOf(Separators, text[0]) >= 0;
+
+    /// <summary>A drive letter and a colon: <c>C:x</c>, which names the current folder of drive C and is not resolved.</summary>
+    private static bool IsDriveQualified(string text) => text.Length > 1 && char.IsAsciiLetter(text[0]) && text[1] == ':';
 
     /// <summary>Whether a path must be joined to a base: it is neither fully qualified nor (on Windows) rooted or drive-qualified.</summary>
     private static bool NeedsBase(string path) =>
         !Path.IsPathFullyQualified(path)
-        && !(OperatingSystem.IsWindows() && (path.Length > 0 && Array.IndexOf(Separators, path[0]) >= 0 || path.Length > 1 && path[1] == ':'));
+        && !(OperatingSystem.IsWindows() && (StartsWithSeparator(path) || IsDriveQualified(path)));
 
     private static void Push(Stack<string> pending, string text)
     {
