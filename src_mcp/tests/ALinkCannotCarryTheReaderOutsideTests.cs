@@ -57,7 +57,7 @@ public sealed class ALinkCannotCarryTheReaderOutsideTests : IDisposable
     }
 
     private DocumentOutcome Read(string path) =>
-        DocumentReader.Read(_root, new DocumentRequest(Path: path), DocumentReader.FollowLink);
+        DocumentReader.Read(_root, new DocumentRequest(Path: path));
 
     private static string Said(DocumentOutcome outcome) => outcome switch
     {
@@ -145,7 +145,7 @@ public sealed class ALinkCannotCarryTheReaderOutsideTests : IDisposable
         var spelled = Path.Combine(via, "root");
         Link("inlink", Path.Combine(spelled, "docs", "spec.md"));
 
-        var outcome = DocumentReader.Read(spelled, new DocumentRequest(Path: Path.Combine(spelled, "inlink")), DocumentReader.FollowLink);
+        var outcome = DocumentReader.Read(spelled, new DocumentRequest(Path: Path.Combine(spelled, "inlink")));
 
         outcome.Should().BeOfType<DocumentOutcome.Ready>(Said(outcome));
         ((DocumentOutcome.Ready)outcome).Text.Should().Be(Inside);

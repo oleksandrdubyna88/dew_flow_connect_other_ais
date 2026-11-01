@@ -208,8 +208,13 @@ public static partial class HandleRead
     }
 
     /// <summary>The root as the kernel spells it — the long, link-resolved form on Windows, <c>realpath</c>'s on Unix.</summary>
+    /// <remarks>
+    /// Off Windows this is <see cref="RealPath"/>. A root it cannot resolve (a loop, a chain over the budget) keeps its spelling: the open that
+    /// follows cannot succeed on such a path, and the handle's own name is compared with this one and would not match it.
+    /// </remarks>
     internal static string CanonicalDirectory(string root) =>
-        FinalDirectory(root) is { Length: > 0 } final ? final : WorktreePaths.Real(root);
+        FinalDirectory(root) is { Length: > 0 } final ? final
+        : RealPath.Resolve(root) is { Ok: true } real ? real.Path : Path.GetFullPath(root);
 
     /// <summary>
     /// What the kernel says a DIRECTORY handle really names — the handle's final path, every link on the way resolved and each

@@ -47,13 +47,17 @@ internal static class FeaturePlan
         : Contents(repoPath, said, identity);
 
     /// <summary>The plan's repository-relative identity, or empty when it resolves outside the repository.</summary>
-    private static string Inside(string repoPath, string said) =>
-        DocumentId.Of(
-            DocumentReader.CanonicalRoot(repoPath, DocumentReader.FollowLink),
-            DocumentReader.Canonical(repoPath, said, DocumentReader.FollowLink));
+    private static string Inside(string repoPath, string said)
+    {
+        var root = DocumentReader.CanonicalRoot(repoPath);
+        var plan = DocumentReader.Canonical(repoPath, said);
+
+        // A path that cannot be resolved (a loop, an over-long one) is not inside: refused, never guessed.
+        return root.Ok && plan.Ok ? DocumentId.Of(root.Path, plan.Path) : string.Empty;
+    }
 
     private static FeatureInput<FeaturePlanText> Contents(string repoPath, string said, string identity) =>
-        DocumentReader.Read(repoPath, new DocumentRequest(Path: said), DocumentReader.FollowLink) switch
+        DocumentReader.Read(repoPath, new DocumentRequest(Path: said)) switch
         {
             DocumentOutcome.Ready { Text: var text } when text.Trim().Length > 0 => new FeatureInput<FeaturePlanText>.Accepted(new FeaturePlanText(identity, text)),
             DocumentOutcome.Ready => Refused($"'{said}' is empty — a feature review is of a plan, and its reviewers read it first"),

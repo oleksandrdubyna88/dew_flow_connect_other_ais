@@ -1,5 +1,6 @@
 using System.Text;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -50,9 +51,9 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         return path;
     }
 
-    /// <summary>No link resolution at all — the identity function, for the ordinary case.</summary>
-    private DocumentOutcome Read(DocumentRequest request, Func<string, string>? followLink = null) =>
-        DocumentReader.Read(_repo, request, followLink ?? (p => p));
+    /// <summary>The real disk, unless a test stands a link in with <paramref name="read"/>.</summary>
+    private DocumentOutcome Read(DocumentRequest request, EntryReader? read = null) =>
+        DocumentReader.Read(_repo, request, read);
 
     private static string Refusal(DocumentOutcome outcome) =>
         outcome.Should().BeOfType<DocumentOutcome.Refused>().Subject.Sentence;
@@ -144,7 +145,7 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         var link = Write("docs/innocent.md", Body);
         var elsewhere = Path.Combine(_elsewhere, "secrets.env");
 
-        Refusal(Read(new DocumentRequest(Path: link), followLink: _ => elsewhere))
+        Refusal(Read(new DocumentRequest(Path: link), read: p => p == link ? Entry.Link(elsewhere) : RealPath.Lstat(p)))
             .Should().Contain("inside");
     }
 
@@ -282,10 +283,10 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
 
         // The seam stands in for the link: `docs` resolves outside, `docs/spec.md` does not resolve
         // at all. That is exactly the shape the old code could not see.
-        string Link(string p) =>
-            p.Replace("\\", "/").EndsWith("/docs", StringComparison.Ordinal) ? elsewhere : p;
+        Entry Link(string p) =>
+            p.Replace("\\", "/").EndsWith("/docs", StringComparison.Ordinal) ? Entry.Link(elsewhere) : RealPath.Lstat(p);
 
-        Refusal(Read(new DocumentRequest(Path: Path.Combine(_repo, "docs", "spec.md")), followLink: Link))
+        Refusal(Read(new DocumentRequest(Path: Path.Combine(_repo, "docs", "spec.md")), read: Link))
             .Should().Contain("inside");
     }
 
@@ -316,13 +317,13 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         var real = Directory.CreateTempSubdirectory("coai-checkout-resolved-").FullName;
         var said = Directory.CreateTempSubdirectory("coai-checkout-said-").FullName;
 
-        string Link(string p) =>
+        Entry Link(string p) =>
             string.Equals(
                 Path.TrimEndingDirectorySeparator(p),
                 Path.TrimEndingDirectorySeparator(said),
                 DocumentId.Comparison)
-                ? real
-                : p;
+                ? Entry.Link(real)
+                : RealPath.Lstat(p);
 
         try
         {
@@ -380,12 +381,12 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         var written = Write("docs/spec.md", Body);
         var stored = Ready(Read(new DocumentRequest(Path: written))).Id;
 
-        DocumentReader.IdentityOf(_repo, said, p => p).Should().Be(stored);
-        DocumentReader.IdentityOf(_repo, written, p => p).Should().Be(stored);
+        DocumentReader.IdentityOf(_repo, said).Should().Be(stored);
+        DocumentReader.IdentityOf(_repo, written).Should().Be(stored);
     }
 
     /// <summary>A name given to raw text reaches itself, because it is not a path at all.</summary>
     [Fact]
     public void ANameForRawText_IsItsOwnIdentity() =>
-        DocumentReader.IdentityOf(_repo, "Spec", p => p).Should().Be("Spec");
+        DocumentReader.IdentityOf(_repo, "Spec").Should().Be("Spec");
 }

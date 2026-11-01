@@ -1,4 +1,5 @@
 using CoaiMcp.Core.QuestionConsult;
+using CoaiMcp.Runners.Files;
 
 namespace CoaiMcp.Server;
 
@@ -246,8 +247,8 @@ public static class QuestionRoots
 
     /// <summary>A two-valued disk, as the tests and a caller with only <c>Directory.Exists</c> have it: present or absent.</summary>
     public static Verdict Validate(
-        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory, Func<string, string>? followLink = null) =>
-        Validate(roots, dataDir, places, full => isDirectory(full) ? RootPresence.Present : RootPresence.Absent, followLink);
+        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory, EntryReader? read = null) =>
+        Validate(roots, dataDir, places, full => isDirectory(full) ? RootPresence.Present : RootPresence.Absent, read);
 
     /// <summary>
     /// What the disk says about a path: a folder, CONFIRMED none — not found, not a directory, a file, a name this OS
@@ -291,13 +292,14 @@ public static class QuestionRoots
     }
 
     /// <param name="presence">What the disk says about a qualified root — <see cref="PresenceOf"/> in production, injected in a test.</param>
-    /// <param name="followLink">
-    /// Resolves ONE path entry's link (<see cref="DocumentReader.FollowLink"/> by default): every component of a root,
-    /// and of each refused place, is walked through it (<see cref="DocumentReader.Canonical"/>), so a junction or a
-    /// symlink is judged at its final target (S4b item 2).
+    /// <param name="read">
+    /// How ONE path entry is looked at (<see cref="RealPath.Lstat"/> by default): every component of a root, and of each
+    /// refused place, is walked through <see cref="RealPath"/>, so a junction or a symlink is judged at its real target
+    /// (S4b item 2) — with the directories INSIDE a link's target resolved too. A root that cannot be resolved (a loop, a
+    /// chain over the budget) is REFUSED: this is a deny-list of places, and a root nobody can place is not a root to grant.
     /// </param>
     public static Verdict Validate(
-        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, RootPresence> presence, Func<string, string>? followLink = null)
+        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, RootPresence> presence, EntryReader? read = null)
     {
         // Every root is looked for, judged and kept QUALIFIED: a root-relative Windows root on the system drive, never on
         // whatever drive this process stands on (the code round, 2026-10-09). The other side's list keeps the spelling.
@@ -308,7 +310,7 @@ public static class QuestionRoots
         // Decided ONCE per root: the decision may probe the disk, and its answer serves both lists (the code round).
         var decided = roots.Select(root => (Root: root, OtherSide: TheOtherSides(root))).ToList();
         var otherSide = decided.Where(one => one.OtherSide).Select(one => one.Root.Trim()).Distinct(StringComparer.Ordinal).ToList();
-        var seen = Seen.Of(dataDir, places, followLink ?? DocumentReader.FollowLink);
+        var seen = Seen.Of(dataDir, places, read);
         var accepted = new List<string>();
         var refused = new List<RootRefusal>();
         foreach (var stored in decided.Where(one => !one.OtherSide).Select(one => one.Root))
@@ -423,7 +425,8 @@ public static class QuestionRoots
         var real = seen.Resolved(full);
 
         return Place(full, seen) is { Length: > 0 } place ? new RootRefusal(place)
-            : Place(real, seen) is { Length: > 0 } target ? new RootRefusal($"{target} ('{full}' resolves to it)")
+            : !real.Ok ? new RootRefusal($"{QuestionConsultKeys.Roots}: '{RealPath.Shown(full)}' cannot be resolved safely, so it is not granted — {real.Why}")
+            : Place(real.Path, seen) is { Length: > 0 } target ? new RootRefusal($"{target} ('{full}' resolves to it)")
             : Missing(stored, root, presence(full));
     }
 
@@ -495,11 +498,11 @@ public static class QuestionRoots
         IReadOnlyList<string> Data,
         IReadOnlyList<string> Systems,
         IReadOnlyList<string> Credentials,
-        Func<string, string> FollowLink)
+        EntryReader? Read)
     {
-        public static Seen Of(string dataDir, SystemPlaces places, Func<string, string> followLink)
+        public static Seen Of(string dataDir, SystemPlaces places, EntryReader? read)
         {
-            IReadOnlyList<string> Spellings(string place) => place.Trim().Length == 0 ? [] : [.. new[] { Full(place), Real(place, followLink) }.Distinct(Comparer)];
+            IReadOnlyList<string> Spellings(string place) => place.Trim().Length == 0 ? [] : [.. new[] { Full(place), Real(place, read) is { Ok: true } real ? Full(real.Path) : Full(place) }.Distinct(Comparer)];
             var profile = Spellings(places.UserProfile);
 
             return new Seen(
@@ -507,24 +510,18 @@ public static class QuestionRoots
                 Spellings(dataDir),
                 [.. places.SystemDirectories.SelectMany(Spellings)],
                 [.. profile.SelectMany(home => CredentialDirectories.Select(credentials => Full(Path.Combine(home, credentials))))],
-                followLink);
+                read);
         }
 
         /// <summary>What a root resolves to with every component's link followed.</summary>
-        public string Resolved(string full) => Real(full, FollowLink);
+        public RealPathResult Resolved(string full) => Real(full, Read);
     }
 
-    private static string Real(string path, Func<string, string> followLink)
+    private static RealPathResult Real(string path, EntryReader? read)
     {
-        try
-        {
-            return Full(DocumentReader.Canonical(Full(path), Full(path), followLink));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
-        {
-            // A link that cannot be followed is judged as written; the check on the written path still stands.
-            return Full(path);
-        }
+        var resolved = DocumentReader.Canonical(Full(path), Full(path), read);
+
+        return resolved.Ok ? RealPathResult.Of(Full(resolved.Path)) : resolved;
     }
 
     /// <summary>Whether <paramref name="full"/> is an ANCESTOR of <paramref name="place"/> — reading it reads the place too.</summary>

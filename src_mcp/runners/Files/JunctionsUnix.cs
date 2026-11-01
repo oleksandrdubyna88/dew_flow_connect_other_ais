@@ -9,7 +9,9 @@ internal sealed class JunctionsUnix : IJunctionShell
     public static readonly JunctionsUnix Instance = new();
 
     /// <summary>The real spelling of a folder that exists, or empty — the fallback <c>HandleRead.CanonicalDirectory</c> already uses off Windows.</summary>
-    public string FinalDirectory(string path) => Directory.Exists(path) ? Worktrees.WorktreePaths.Real(path) : string.Empty;
+    /// <remarks>A path that cannot be resolved (a loop, a chain over the budget) is EMPTY too — "cannot be named", which <see cref="Junctions"/> refuses.</remarks>
+    public string FinalDirectory(string path) =>
+        Directory.Exists(path) && RealPath.Resolve(path) is { Ok: true } real ? real.Path : string.Empty;
 
     /// <summary>Never asked on Unix: <c>Junctions.IsLocal</c> takes the Unix rule there.</summary>
     public DriveType DriveOf(string root) => DriveType.Unknown;
