@@ -222,8 +222,10 @@ public static class DocumentReader
 
     /// <summary>A path that could not be resolved is refused, and the sentence says it is the resolution that failed — never "no such file".</summary>
     private static string Unresolvable(string said, RealPathResult failed) =>
-        $"'{RealPath.Shown(said)}' cannot be resolved safely, so it is not read: {failed.Why}. A document reviewed here is read and sent to other "
-      + "vendors' models, so a path this gate cannot follow to its end is refused. Pass it as documentText with a documentName.";
+        $"'{RealPath.Shown(said)}' cannot be resolved safely, so it is not read: {failed.Why}. First check the path and the links on it: a link "
+      + "that loops, that leads through more than 40 links, or that goes where you did not mean is the usual cause. A document reviewed here is read "
+      + "and sent to other vendors' models, so a path this gate cannot follow to its end is refused. Only if the file is the right one, pass its text as "
+      + "documentText with a documentName.";
 
     private static string Outside(string said, string absolute, string resolved, string repoPath)
     {

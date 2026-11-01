@@ -8100,6 +8100,8 @@ the REAL root, and the leaf is not a link; any failure is NOT ours; every erase 
 sibling `/x/Storage` ours). Path comparison: `WorktreePaths.Real` throws `IOException` for a path it cannot resolve; `Same` answers `false`.
 Question-consultant roots: a root that cannot be resolved is refused.
 
+**Gate findings, same day.** A read root the resolver cannot resolve has an EMPTY canonical path (`HandleRead.CanonicalDirectory`; it was `GetFullPath(root)`), and `HandleRead.Read` and the private-folder check refuse under it. The unresolvable-path refusal of the document reader says to check the path and the links on it FIRST and offers `documentText` only for a file that is the right one. `ConsultationService.RepoIdentity` keeps the spelling of an unresolvable checkout on purpose (an owner label, not an access decision). The check-to-use race of the two recursive deletes is a recorded follow-up: `todo/PLAN_a_delete_is_pinned_to_the_folder_it_judged.md`.
+
 **Limits, said.** Hard links and bind mounts are out of reach of any path check. Case is kept as spelled: on a case-insensitive disk a
 comparison differing only by case is a FALSE REFUSAL (fail closed), never a false accept; on macOS the document reader keeps `Ordinal` (open limit,
 not widened here). The check is at one moment; a swap between it and the use is not seen. See `SECURITY.md`.

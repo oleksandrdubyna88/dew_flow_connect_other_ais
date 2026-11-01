@@ -944,7 +944,8 @@ public sealed class ConsultationService(
         var root = DocumentReader.CanonicalRoot(repoPath, read);
 
         // A path this machine cannot resolve (a loop, a NUL) still has to name SOMETHING, and naming it after
-        // itself keeps the two sides agreeing — which is the whole job here.
+        // itself keeps the two sides agreeing — which is the whole job here. The ONE place the spelling stands in for a real
+        // path, on purpose: this is an owner label for filtering a caller's own consultations, not an access decision (SECURITY.md).
         return root.Ok ? $"repo:{Path.TrimEndingDirectorySeparator(root.Path)}" : $"repo:{repoPath}";
     }
 

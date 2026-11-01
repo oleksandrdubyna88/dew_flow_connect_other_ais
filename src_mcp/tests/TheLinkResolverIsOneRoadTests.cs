@@ -61,7 +61,6 @@ public sealed class TheLinkResolverIsOneRoadTests
         ["src_mcp/runners/Acp/AcpReadBoundary.cs"] = "a reader's request is placed lexically, then every component is lstat-ed (LinkOnTheWay refuses ANY link) and the bytes are read by handle whose own name is verified (HandleRead)",
         ["src_mcp/runners/Consultation/FilesystemInvariant.cs"] = "compares two paths git itself printed (absolute, already real) to fingerprint a repository; decides no access",
         ["src_mcp/runners/Files/AtomicFile.cs"] = "names a temp file beside the target; no containment decision, and StartsWith is on a file NAME",
-        ["src_mcp/runners/Files/HandleRead.cs"] = "strips the long-path prefix of a kernel path and falls back to a spelling the handle check then compares; StartsWith is on a prefix, not containment",
         ["src_mcp/runners/Files/Junctions.cs"] = "classifies a link target as local or network by its spelling (and reads back the link the product made); it deletes and reads nothing by it",
         ["src_mcp/runners/Worktrees/SubmoduleMounts.cs"] = "decides which declared mounts of a tree the product made are INSPECTED (read-only git status); nothing is deleted by it, and the tree's removal is guarded by RealPath",
         ["src_mcp/runners/Worktrees/SubmodulePopulator.cs"] = "the clone source IS the folded path it checked: NoLinksBetween lstat-s every directory from the checkout down to it, so no link can sit on the way",

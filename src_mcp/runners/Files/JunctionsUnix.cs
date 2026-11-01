@@ -8,7 +8,7 @@ internal sealed class JunctionsUnix : IJunctionShell
 {
     public static readonly JunctionsUnix Instance = new();
 
-    /// <summary>The real spelling of a folder that exists, or empty — the fallback <c>HandleRead.CanonicalDirectory</c> already uses off Windows.</summary>
+    /// <summary>The real path of a folder that exists, or empty — the same <see cref="RealPath"/> answer <c>HandleRead.CanonicalDirectory</c> uses off Windows, and empty where it cannot resolve.</summary>
     /// <remarks>A path that cannot be resolved (a loop, a chain over the budget) is EMPTY too — "cannot be named", which <see cref="Junctions"/> refuses.</remarks>
     public string FinalDirectory(string path) =>
         Directory.Exists(path) && RealPath.Resolve(path) is { Ok: true } real ? real.Path : string.Empty;

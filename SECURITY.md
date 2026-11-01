@@ -21,7 +21,7 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
   read a file nobody named.
 - A NUL, an empty link text, a drive-relative `C:x`, a path or link text over 32 KiB (`RealPath.MaxPathChars`), a resolved
   path over 32 KiB, and any IO error are a failure. Callers turn the failure into refuse, not ours or cannot compare — never
-  into the spelling. A Windows target `\x` (a root with no drive) resolves against the LINK's volume.
+  into the spelling, with one named exception (`ConsultationService.RepoIdentity`, below). A Windows target `\x` (a root with no drive) resolves against the LINK's volume.
 - Containment compares the resolved path with the equally resolved root: equal, or the root plus a separator. Never a bare
   prefix.
 
@@ -48,6 +48,13 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
 - **`WorktreePaths.Real` and `Same`** (git's `realpath` against a spelled path): `Real` throws `IOException` for a path
   that cannot be resolved; `Same`, a predicate, answers `false`. Neither falls back to the spelling.
 
+- **A read root** (`HandleRead.Trust`, used by `AcpReadBoundary` and the private-folder check): the root's canonical path is fixed
+  when the reader is made, and the opened handle's own name is compared with it. A root the resolver cannot resolve has an EMPTY canonical
+  path — never its spelling — and a read under it is refused, saying the root is the reason.
+- **One place keeps the spelling, on purpose:** `ConsultationService.RepoIdentity`, the owner label that filters a caller's own consultations. It
+  is not an access decision, and both sides compute it the same way, so they agree whether or not either could resolve the path. Every
+  other resolver failure is a refusal, "not ours" or "cannot compare".
+
 ## Lexical sites that remain, and why each is safe
 
 `TheLinkResolverIsOneRoadTests` lists every production file that folds a path with `GetFullPath(` and tests it with `StartsWith(`, and
@@ -56,8 +63,8 @@ fails for a new one. The ones that remain, each with its reason:
 - `AcpReadBoundary` — a request is placed lexically, then every component is lstat-ed (any link on the way is refused) and the bytes are read
   by handle, whose own name is verified.
 - `FilesystemInvariant` — compares two paths git itself printed (absolute, already real) to fingerprint a repository; decides no access.
-- `AtomicFile`, `HandleRead`, `Junctions` — a temp-file name, a long-path prefix, and a local-or-network classification by spelling; none of
-  them reads or deletes by the comparison.
+- `AtomicFile`, `Junctions` — a temp-file name, and a local-or-network classification by spelling; neither reads or deletes by the comparison.
+  (`HandleRead`, which reads by handle, no longer folds a path at all: see "A read root" above.)
 - `SubmoduleMounts` — chooses which declared mounts of a tree the product made are inspected (read-only `git status`); nothing is deleted by it.
 - `SubmodulePopulator` — the clone source IS the folded path it checked, and `NoLinksBetween` lstat-s every directory from the checkout down
   to it, so no link can sit on the way.
@@ -73,7 +80,9 @@ fails for a new one. The ones that remain, each with its reason:
   (the worktree guard); the document reader compares `Ordinal` except on Windows, as `DocumentId.Comparison` says. On a
   case-insensitive disk a comparison that differs only by case is therefore a FALSE REFUSAL (fail closed), never a false
   accept. Open limit on macOS for the document reader; not widened here.
-- **A check at one moment.** A folder swapped for a link between the check and the read or delete that follows is not seen.
+- **A check at one moment.** A folder swapped for a link between the check and the read or delete that follows is not seen. The two
+  recursive deletes (`WorktreeManager`, `ReviewTreeRoot`) act on the real path they judged, which narrows the window and does not close it; a
+  handle-pinned `openat`/`unlinkat` delete would ([todo/PLAN_a_delete_is_pinned_to_the_folder_it_judged.md](todo/PLAN_a_delete_is_pinned_to_the_folder_it_judged.md)).
 - **Length.** A path over 32 KiB is refused at once. A 200,000-segment path took 36 s in a quadratic walk in the sibling
   `dew_flow_mcp`; this resolver does not walk after a missing name and refuses long input first.
 - A Windows reparse point with no link target (a cloud-file placeholder) is read as a plain entry; it redirects no path.

@@ -68,7 +68,7 @@ public readonly record struct RealPathResult(bool Ok, string Path, string Why)
 /// <para><b>Nothing is below a file.</b> <c>file/..</c> and <c>file/name</c> fail: the disk answers ENOTDIR, and a pop would answer the file's neighbour, which nobody named.</para>
 /// <para><b>Everything else fails.</b> Over the budget, a loop (which only the budget ends), a NUL, an empty link text, a drive-relative
 /// <c>C:x</c>, a path over <see cref="MaxPathChars"/> characters, and any IO error are a <see cref="RealPathResult"/> that is not
-/// <see cref="RealPathResult.Ok"/>: every caller turns it into refuse / not ours / cannot compare. None of them falls back to the spelling.</para>
+/// <see cref="RealPathResult.Ok"/>: every caller turns it into refuse / not ours / cannot compare. None of them falls back to the spelling — with ONE named exception: <c>ConsultationService.RepoIdentity</c> keeps the spelling of a checkout it cannot resolve, on purpose. It is an owner LABEL for filtering a caller's own consultations, not an access decision, and both sides compute it the same way, so two callers agree on it whether or not either could resolve the path.</para>
 /// <para><b>Containment is the caller's decision</b> on two resolved paths (<see cref="IsInside"/>), root resolved the same way as the path.</para>
 /// <para><b>What it does not see.</b> Hard links (one file, two names — there is no path to resolve) and bind mounts (the kernel
 /// shows one tree at two places, and no readlink says so). Both are outside what a path check can decide; SECURITY.md says so.

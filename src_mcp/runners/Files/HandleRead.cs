@@ -91,6 +91,11 @@ public static partial class HandleRead
     /// <summary>Why the opened handle is not the expected entry under the root, or empty when it is.</summary>
     private static string Verified(SafeFileHandle handle, ReadRoot root, string relative, string path, StringComparison rule)
     {
+        if (root.Canonical.Length == 0)
+        {
+            return "the root this reader serves from could not be resolved to a real path, so nothing is served under it";
+        }
+
         if (OperatingSystem.IsMacOS())
         {
             return WalkedAgain(handle, root.Path, relative, path);
@@ -209,12 +214,14 @@ public static partial class HandleRead
 
     /// <summary>The root as the kernel spells it — the long, link-resolved form on Windows, <c>realpath</c>'s on Unix.</summary>
     /// <remarks>
-    /// Off Windows this is <see cref="RealPath"/>. A root it cannot resolve (a loop, a chain over the budget) keeps its spelling: the open that
-    /// follows cannot succeed on such a path, and the handle's own name is compared with this one and would not match it.
+    /// Off Windows this is <see cref="RealPath"/>. A root that cannot be resolved (a loop, a chain over the budget, a path over 32 KiB) has
+    /// NO canonical path: the answer is EMPTY, never its spelling — a spelling nothing resolved must not stand where the comparison expects a
+    /// real path (2026-11-01; it was <c>GetFullPath(root)</c>). <see cref="Read(ReadRoot, string, long, StringComparison)"/> refuses under an
+    /// empty one, and the private-folder check refuses too.
     /// </remarks>
     internal static string CanonicalDirectory(string root) =>
         FinalDirectory(root) is { Length: > 0 } final ? final
-        : RealPath.Resolve(root) is { Ok: true } real ? real.Path : Path.GetFullPath(root);
+        : RealPath.Resolve(root) is { Ok: true } real ? real.Path : string.Empty;
 
     /// <summary>
     /// What the kernel says a DIRECTORY handle really names — the handle's final path, every link on the way resolved and each
@@ -225,8 +232,9 @@ public static partial class HandleRead
     /// <remarks>
     /// Also the identity a Kimi sign-in's lock is keyed by, and what the junction maker asks to see where a target really is —
     /// and for those two an unnamed handle is EMPTY, never the spelling (E4.2 decisions 9 and 13 of
-    /// <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>). <see cref="CanonicalDirectory"/> falls back to the spelling and is
-    /// <c>internal</c> for the readers that want that (<see cref="Trust"/>, and the private-folder check).
+    /// <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>). <see cref="CanonicalDirectory"/> adds the <see cref="RealPath"/> answer off
+    /// Windows and is <c>internal</c> for the readers that want that (<see cref="Trust"/>, and the private-folder check); where nothing resolves it
+    /// is EMPTY too, never the spelling.
     /// </remarks>
     internal static string FinalDirectory(string root)
     {
