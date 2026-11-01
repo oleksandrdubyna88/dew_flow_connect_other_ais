@@ -5,8 +5,9 @@ problem to the repository owners privately.
 
 ## A path is resolved by one resolver — `RealPath`
 
-Every decision that depends on where a path REALLY leads goes through `src_mcp/runners/Files/RealPath.cs`. It does what
-`realpath(3)` does, root-down:
+The decisions in "What the sites guarantee" below — what a document reader may read, which root a consultant may be granted, which tree a
+delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other sites still compare paths lexically; each is listed under
+"Lexical sites that remain, and why each is safe". `RealPath` does what `realpath(3)` does, root-down:
 
 - A link is read as the text it stores (never `ResolveLinkTarget(...).FullName`, which folds `..` as a string and never
   resolves the directories inside the target). Its text is pushed in front of the rest of the path.
@@ -16,6 +17,8 @@ Every decision that depends on where a path REALLY leads goes through `src_mcp/r
 - A name that is not there ends the walk and the rest is kept as written. A `..` after such a name FAILS: the disk
   answers "no such file", and a lexical pop would answer a folder nobody looked at. A DANGLING link is a link, not a
   missing name: it costs a hop and its target is walked.
+- **Nothing is below a file.** `file/..` and `file/name` fail (the disk answers ENOTDIR); a pop to the file's neighbour would
+  read a file nobody named.
 - A NUL, an empty link text, a drive-relative `C:x`, a path or link text over 32 KiB (`RealPath.MaxPathChars`), a resolved
   path over 32 KiB, and any IO error are a failure. Callers turn the failure into refuse, not ours or cannot compare — never
   into the spelling. A Windows target `\x` (a root with no drive) resolves against the LINK's volume.
@@ -29,16 +32,38 @@ Every decision that depends on where a path REALLY leads goes through `src_mcp/r
 
 - **The document reader** (`review_document`, `FeaturePlan`, and the list and search a consultant is served by
   `WorkspaceLookup`): a path whose real path is not inside the repository (or a granted root) is refused, and so is a
-  path the resolver cannot follow to its end. The text of a document is sent to three other vendors, so this is the
+  path the resolver cannot follow to its end. A path that resolves to nothing — a dangling link, a file removed since — is
+  refused as "no file", never an unhandled exception. The text of a document is sent to three other vendors, so this is the
   boundary that keeps an outside file out of that. Refusals name the resolution as the reason and never echo more than
   200 characters of a path, with control characters made visible.
 - **The question consultant's roots** (`QuestionConsultSettings`): a root is judged at its real path against the profile,
   the data directory, system directories and credential folders; a root that cannot be resolved is refused.
-- **The `coai-wt-*` worktree deletion guard** (`WorktreeManager.IsUnderOurRoot`, which stands before
+- **The `coai-wt-*` worktree deletion guard** (`WorktreeManager.OurTree`, which stands before
   `git worktree remove -f -f` and a recursive delete): a tree is ours only when its REAL path is strictly under the REAL
   storage root and the last name is not a link. There is no lexical alternative, and a resolution failure means NOT ours.
+  The guard returns the real path and every command (unlock, remove, delete, move aside, owner marker) is aimed at THAT path,
+  never at the spelling it was handed.
+- **The review-tree root's recursive delete** (`ReviewTreeRoot.EnsureGoneAsync`): the same rule, through `RealPath.ResolveBelow`,
+  and the delete runs at the judged path. Its first form compared `GetFullPath` strings.
 - **`WorktreePaths.Real` and `Same`** (git's `realpath` against a spelled path): `Real` throws `IOException` for a path
   that cannot be resolved; `Same`, a predicate, answers `false`. Neither falls back to the spelling.
+
+## Lexical sites that remain, and why each is safe
+
+`TheLinkResolverIsOneRoadTests` lists every production file that folds a path with `GetFullPath(` and tests it with `StartsWith(`, and
+fails for a new one. The ones that remain, each with its reason:
+
+- `AcpReadBoundary` — a request is placed lexically, then every component is lstat-ed (any link on the way is refused) and the bytes are read
+  by handle, whose own name is verified.
+- `FilesystemInvariant` — compares two paths git itself printed (absolute, already real) to fingerprint a repository; decides no access.
+- `AtomicFile`, `HandleRead`, `Junctions` — a temp-file name, a long-path prefix, and a local-or-network classification by spelling; none of
+  them reads or deletes by the comparison.
+- `SubmoduleMounts` — chooses which declared mounts of a tree the product made are inspected (read-only `git status`); nothing is deleted by it.
+- `SubmodulePopulator` — the clone source IS the folded path it checked, and `NoLinksBetween` lstat-s every directory from the checkout down
+  to it, so no link can sit on the way.
+- `KimiClearMarkerMode` — deletes one file whose direct parent string equals the product's own lock root and whose name is 16 hex digits plus
+  `.survivors.json`; a link there is unlinked, never followed.
+- `QuestionConsultSettings` — a deny-list of places; every root is compared as written AND at its real path, and an unresolvable root is refused.
 
 ## Limits, said plainly
 

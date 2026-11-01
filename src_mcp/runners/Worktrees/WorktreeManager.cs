@@ -208,9 +208,12 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
     /// half-made add is locked "initializing"), remove forced twice, delete with a short retry for a
     /// scanner, and as a last resort a rename out of the way so no retry ever meets it.
     /// </summary>
-    private async Task EraseAsync(string repoPath, string path)
+    private async Task EraseAsync(string repoPath, string spelled)
     {
-        if (!IsOurs(path))
+        // The path that was JUDGED is the path that is acted on: resolved once, here, and every command below is aimed at it. The spelling
+        // the caller handed in is never used again — a link component swapped between the check and the delete would otherwise send
+        // `git worktree remove -f -f` and the recursive delete somewhere the guard never looked.
+        if (OurTree(spelled) is not { } path)
         {
             return;
         }
@@ -356,7 +359,10 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
             : [];
 
     /// <summary>Our prefix AND our root — the two independent guards, both required.</summary>
-    private bool IsOurs(string path) => HasOurName(path) && IsUnderOurRoot(path);
+    private bool IsOurs(string path) => OurTree(path) is not null;
+
+    /// <summary>The real path of a tree that is ours — our name AND under our root — or null: the one answer the guard gives, and the one to act on.</summary>
+    private string? OurTree(string path) => HasOurName(path) && UnderOurRoot(path) is { Ok: true } real ? real.Path : null;
 
     private static bool HasOurName(string path)
     {
@@ -365,8 +371,8 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
     }
 
     /// <summary>
-    /// Ours when its REAL path is under the REAL storage root — and it is not a link itself. The deletion guard of
-    /// <see cref="EraseAsync"/>.
+    /// The REAL path of <paramref name="path"/> when it is strictly under the REAL storage root and is not a link itself — the deletion guard
+    /// of <see cref="EraseAsync"/>, answered as the path to act on (<see cref="RealPath.ResolveBelow"/>).
     /// </summary>
     /// <remarks>
     /// <para><b>One question, asked of the real paths.</b> Both sides go through <see cref="RealPath"/>, root-down, so it does not
@@ -383,31 +389,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
     /// disk that is case-insensitive while the spelling differs only by case is still matched, because git and the
     /// configuration spell it the same way.</para>
     /// </remarks>
-    private bool IsUnderOurRoot(string path)
-    {
-        var root = RealPath.Resolve(storageRoot);
-        var tree = RealPath.ResolveParent(path);
-        if (!root.Ok || !tree.Ok || IsLink(tree.Path))
-        {
-            return false;
-        }
-
-        return !string.Equals(Path.TrimEndingDirectorySeparator(root.Path), Path.TrimEndingDirectorySeparator(tree.Path), RootComparison)
-            && RealPath.IsInside(root.Path, tree.Path, RootComparison);
-    }
-
-    /// <summary>A link — or a path that cannot be inspected, which is not ours either.</summary>
-    private static bool IsLink(string path)
-    {
-        try
-        {
-            return RealPath.Lstat(path).Kind == EntryKind.Link;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return true;
-        }
-    }
+    private RealPathResult UnderOurRoot(string path) => RealPath.ResolveBelow(storageRoot, path, RootComparison);
 
     private static StringComparison RootComparison =>
         OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;

@@ -240,15 +240,27 @@ public static class DocumentReader
              + "documentText with a documentName.";
     }
 
+    /// <summary>
+    /// The text of the file the resolver named. Everything that touches the disk — the size too — is inside the one try: the path was
+    /// judged a moment ago, and the file it names may be gone (a dangling link whose target is inside the repository, a file removed
+    /// since), which is "no file", never an unhandled exception.
+    /// </summary>
     private static DocumentOutcome Contents(string resolved, string id)
     {
-        if (DocumentRules.SizeRefusal(new FileInfo(resolved).Length) is { } tooBig)
-        {
-            return new DocumentOutcome.Refused(tooBig);
-        }
-
         try
         {
+            if (!File.Exists(resolved))
+            {
+                return new DocumentOutcome.Refused(
+                    $"there is no file at '{RealPath.Shown(resolved)}' — the path resolves there (through a link, or as written) and nothing is at it. "
+                  + "documentPath is a path on THIS machine, inside the repository you opened the session for.");
+            }
+
+            if (DocumentRules.SizeRefusal(new FileInfo(resolved).Length) is { } tooBig)
+            {
+                return new DocumentOutcome.Refused(tooBig);
+            }
+
             var text = StrictUtf8.GetString(File.ReadAllBytes(resolved));
 
             return new DocumentOutcome.Ready(
@@ -260,6 +272,10 @@ public static class DocumentReader
                 $"'{Path.GetFileName(resolved)}' is not UTF-8 text — its bytes do not decode. Convert "
               + "it and pass the result as documentText with a documentName; reviewing a bad decode "
               + "means three reviewers reading whatever the decoder guessed.");
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return new DocumentOutcome.Refused($"there is no file at '{RealPath.Shown(resolved)}' — it was removed while it was being read.");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

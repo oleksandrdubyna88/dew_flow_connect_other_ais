@@ -8091,12 +8091,12 @@ inside links. `WorktreeManager.ReleaseAsync` deleted a folder OUTSIDE the storag
 
 **The fix is one road, not four walks.** `runners/Files/RealPath.cs`: root-down with a stack of pending segments; a link read RAW and pushed in
 front of the rest; ONE cumulative budget of 40 link expansions (plain segments are free); `..` is the parent of the real path so far and never
-above its root; a name that is not there ends the walk and a `..` after it FAILS (the kernel says ENOENT); a loop, an over-budget chain, a NUL, a
-path over 32 KiB, an empty link text, a drive-relative `C:x` and any IO error are a failure value that each caller turns into refuse / not ours /
+above its root; a name that is not there ends the walk and a `..` after it FAILS (the kernel says ENOENT); a loop, an over-budget chain, a NUL, a name
+below a file (`file/..`, `file/name`), a path over 32 KiB, an empty link text, a drive-relative `C:x` and any IO error are a failure value that each caller turns into refuse / not ours /
 cannot compare. `TheLinkResolverIsOneRoadTests` fails for a second `ResolveLinkTarget` and for an unlisted reader of `.LinkTarget`.
 
-**Per site.** Document reader and lookup: refused, naming the resolution as the reason. Deletion guard: ours only when its REAL path is strictly under
-the REAL root, and the leaf is not a link; any failure is NOT ours; on Linux the comparison is `Ordinal` (it was `OrdinalIgnoreCase`, which called a
+**Per site.** Document reader and lookup: refused, naming the resolution as the reason; a dangling link or a file removed since is "no file", not an exception. Deletion guard: ours only when its REAL path is strictly under
+the REAL root, and the leaf is not a link; any failure is NOT ours; every erase command is aimed at the judged real path, never the spelling; `ReviewTreeRoot.EnsureGoneAsync` follows the same rule; on Linux the comparison is `Ordinal` (it was `OrdinalIgnoreCase`, which called a
 sibling `/x/Storage` ours). Path comparison: `WorktreePaths.Real` throws `IOException` for a path it cannot resolve; `Same` answers `false`.
 Question-consultant roots: a root that cannot be resolved is refused.
 

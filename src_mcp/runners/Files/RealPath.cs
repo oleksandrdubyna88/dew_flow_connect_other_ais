@@ -1,13 +1,16 @@
 namespace CoaiMcp.Runners.Files;
 
-/// <summary>What one path entry is, by lstat-level facts: not there, there and not a link, or a link and its text.</summary>
+/// <summary>What one path entry is, by lstat-level facts: not there, a folder, a file, or a link and its text.</summary>
 public enum EntryKind
 {
     /// <summary>Nothing is at the path (and no link either — a dangling link is <see cref="Link"/>).</summary>
     Missing,
 
-    /// <summary>Something is there and it is not a link.</summary>
-    Plain,
+    /// <summary>A folder, not a link: names may be below it.</summary>
+    Directory,
+
+    /// <summary>Anything else that is there and is not a link: nothing can be below it (the disk answers ENOTDIR).</summary>
+    File,
 
     /// <summary>A link — symbolic link, or a Windows junction — whether or not its target exists.</summary>
     Link,
@@ -20,7 +23,9 @@ public readonly record struct Entry(EntryKind Kind, string LinkText)
 {
     public static Entry Missing { get; } = new(EntryKind.Missing, string.Empty);
 
-    public static Entry Plain { get; } = new(EntryKind.Plain, string.Empty);
+    public static Entry Directory { get; } = new(EntryKind.Directory, string.Empty);
+
+    public static Entry File { get; } = new(EntryKind.File, string.Empty);
 
     public static Entry Link(string text) => new(EntryKind.Link, text);
 }
@@ -60,6 +65,7 @@ public readonly record struct RealPathResult(bool Ok, string Path, string Why)
 /// a lexical pop would answer the folder that holds <c>missing</c> — so a link text <c>nonexistent/../evil</c> would resolve to
 /// <c>root/evil</c> with <c>evil</c> never looked at. Fail, never pop. A DANGLING link is not "missing": it is a link, it costs
 /// a hop, and its target is walked like any other.</para>
+/// <para><b>Nothing is below a file.</b> <c>file/..</c> and <c>file/name</c> fail: the disk answers ENOTDIR, and a pop would answer the file's neighbour, which nobody named.</para>
 /// <para><b>Everything else fails.</b> Over the budget, a loop (which only the budget ends), a NUL, an empty link text, a drive-relative
 /// <c>C:x</c>, a path over <see cref="MaxPathChars"/> characters, and any IO error are a <see cref="RealPathResult"/> that is not
 /// <see cref="RealPathResult.Ok"/>: every caller turns it into refuse / not ours / cannot compare. None of them falls back to the spelling.</para>
@@ -93,7 +99,8 @@ public static class RealPath
 
             // A reparse point with no link target (a cloud placeholder, a dedup stub) is read transparently by the OS and
             // redirects no path: it is a plain entry here.
-            return info.LinkTarget is { } text ? Entry.Link(text) : Entry.Plain;
+            return info.LinkTarget is { } text ? Entry.Link(text)
+                : attributes.HasFlag(FileAttributes.Directory) ? Entry.Directory : Entry.File;
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
         {
@@ -124,6 +131,11 @@ public static class RealPath
     /// </summary>
     public static RealPathResult ResolveParent(string path, string? baseDirectory = null, EntryReader? read = null)
     {
+        if (string.IsNullOrEmpty(path))
+        {
+            return Resolve(path, baseDirectory, read);
+        }
+
         var trimmed = path.TrimEnd(Separators);
         var cut = trimmed.LastIndexOfAny(Separators);
         var leaf = trimmed[(cut + 1)..];
@@ -134,7 +146,41 @@ public static class RealPath
 
         var parent = Resolve(cut < 0 ? "." : trimmed[..(cut + 1)], baseDirectory, read);
 
-        return parent.Ok ? RealPathResult.Of(Path.Join(parent.Path, leaf)) : parent;
+        return parent.Ok ? Finished(path, Path.Join(parent.Path, leaf)) : parent;
+    }
+
+    /// <summary>
+    /// The real path of <paramref name="path"/> when it is strictly UNDER <paramref name="root"/> — both resolved root-down — and the last name
+    /// is not a link; otherwise a failure. The question every guard in front of a delete asks, asked once: the caller acts on the returned
+    /// path, the one that was judged, never on the spelling it was handed.
+    /// </summary>
+    /// <remarks>
+    /// A path that cannot be resolved is not under anything. A link as the last name is not a tree: it is refused rather than followed or
+    /// unlinked. The root itself is not under itself.
+    /// </remarks>
+    public static RealPathResult ResolveBelow(string root, string path, StringComparison comparison, string? baseDirectory = null, EntryReader? read = null)
+    {
+        var top = Resolve(root, baseDirectory, read);
+        var tree = top.Ok ? ResolveParent(path, baseDirectory, read) : top;
+        if (!tree.Ok)
+        {
+            return tree;
+        }
+
+        Entry last;
+        try
+        {
+            last = (read ?? Lstat)(tree.Path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return RealPathResult.Fail($"'{Shown(path)}' could not be inspected: {Shown(e.Message)}");
+        }
+
+        return last.Kind == EntryKind.Link ? RealPathResult.Fail($"'{Shown(path)}' is a link itself, and a link is not a tree")
+            : string.Equals(Path.TrimEndingDirectorySeparator(top.Path), Path.TrimEndingDirectorySeparator(tree.Path), comparison)
+                || !IsInside(top.Path, tree.Path, comparison) ? RealPathResult.Fail($"'{Shown(path)}' is not under '{Shown(top.Path)}'")
+            : tree;
     }
 
     /// <summary>
@@ -182,20 +228,29 @@ public static class RealPath
         var pending = new Stack<string>();
         Push(pending, start.Rest);
         var hops = 0;
+        var onFile = false;
         while (pending.TryPop(out var segment))
         {
-            switch (segment)
+            if (segment == ".")
             {
-                case ".":
-                    continue;
-                case "..":
-                    // The parent of what is resolved SO FAR, and never above the root.
-                    if (chain.Count > 1)
-                    {
-                        chain.RemoveAt(chain.Count - 1);
-                    }
+                continue;
+            }
 
-                    continue;
+            if (onFile)
+            {
+                // `file/..` and `file/name` are ENOTDIR on the disk: nothing is below a file, so a pop to its neighbour would read a file nobody named.
+                return RealPathResult.Fail($"'{Shown(path)}' goes below a file ('{Shown(chain[^1])}') — the disk answers 'not a directory'");
+            }
+
+            if (segment == "..")
+            {
+                // The parent of what is resolved SO FAR, and never above the root.
+                if (chain.Count > 1)
+                {
+                    chain.RemoveAt(chain.Count - 1);
+                }
+
+                continue;
             }
 
             var entry = Path.Join(chain[^1], segment);
@@ -204,7 +259,11 @@ public static class RealPath
             {
                 case EntryKind.Missing:
                     return Appended(path, chain[^1], segment, pending);
-                case EntryKind.Plain:
+                case EntryKind.File:
+                    chain.Add(entry);
+                    onFile = true;
+                    continue;
+                case EntryKind.Directory:
                     chain.Add(entry);
                     continue;
             }
