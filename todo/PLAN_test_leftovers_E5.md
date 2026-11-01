@@ -7,8 +7,10 @@
 > `105d53c`, merged alone (R6 owner decision 1). Every other story is unbuilt. This re-split is the whole re-review
 > the family's change-control rule asks of a plan changed twice after approval. Its coai plan gate, round 1
 > (2026-11-01, session `55ddb13b`): verdict *revise*, eight findings, all accepted and applied below (each marked
-> *[round-1 finding n]*). The producer PR now DEPENDS on a conventions rule change (finding 7): stage A and S5 may
-> start now; the producer stage waits for that rule's release and a pin bump.**
+> *[round-1 finding n]*). Round 2 (same day, same session): verdict **PROCEED**, two findings, both accepted and
+> applied (marked *[round-2 finding n]*); the gate also ruled that this plan is a piece of a split already under way
+> and is NOT split again. The producer PR DEPENDS on a conventions rule change (round-1 finding 7): stage A and S5
+> may start now; the producer stage waits for that rule's release and a pin bump.**
 > Stories of epic E5 of `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` (§ *Epics*, E5; § *Wave 1*).
 > Scope: the run folder both runners already make (`src_mcp/tests/RunTemp.cs`, `RunTempFolder.cs`, `OwnerClaim.cs`;
 > `src_vs_code/scripts/run-tests.mjs`), the two test sweeps (`src_vs_code/scripts/sweepTemp.mjs` through
@@ -327,7 +329,16 @@ present, is unchanged since the listing (same identity — device and inode, or 
 time), is not a protected product prefix or the version cache, and has no live owner (a sibling `.owner` whose record
 is `live` or `unknown` refuses; a `coai-*` name has no record, so the person's pick plus the unchanged check is the
 whole authority there); anything else is REFUSED with one line naming the path and the check that failed, and the
-command goes on to the next pick. S2-A item 5 documents the command in that shape. **Known residual risk** (unchanged): a
+command goes on to the next pick. *[round-2 finding 0]* **A re-check narrows the race but does not close it** (the
+check and the removal are two calls; a folder swapped in between is removed by a name read earlier — the thing rule §4
+forbids). So the removal is the sweep's own shape: an **EXCLUSIVE rename** of the selected folder to a sibling
+quarantine name `.<name>.teststodelete-quarantine-<pid>-<hex8>` (POSIX `renameat2(RENAME_NOREPLACE)` / `renamex_np`,
+Windows `MoveFileEx` with no flags — the reference's `isTakenRename`, never a plain rename), performed ONLY while the
+path still has the listed identity (device + inode, or the Windows file id, re-read on the entry immediately before
+the rename and once more on the quarantined object after it), then the removal of the QUARANTINED object by that
+identity; a changed identity, a taken quarantine name or a failed rename ⇒ the pick is REFUSED and reported, nothing
+removed. S2-A item 5 documents and scripts the command in that shape, with the swap test. **Known residual risk**
+(unchanged): a
 checkout on pre-S2-A code keeps its age-only sweeper; mitigation: update or rebase it, or run with a private temp
 root. The old-grammar claim's
 `<os>` tag `win32|darwin` (`OwnerClaim.cs:38`) is read by the legacy clause of the reference (`<host>@<os>:<pid>[:<start>]`)
@@ -355,7 +366,11 @@ matched by **exact membership plus the content hash of the line** — never by a
 `src_vs_code/src/test/suppressionsOnlyShrink.test.ts` is the record of why a falling total is not enough: one
 entry can be swapped for another under a constant count); **only shrinking** — an entry may be removed, never added
 or changed; the **line number is a hint, not a key** (a line that moves keeps its entry by hash; an entry whose hash
-matches no line of its file is stale and red). The baseline files (`src_mcp/tests/Leftovers/raw-temp-baseline.json`,
+matches no line of its file is stale and red). *[round-2 finding 1]* **The baseline is a MULTISET keyed by file +
+content hash**: an entry carries a COUNT of occurrences (or is repeated once per occurrence); a scan that finds MORE
+occurrences of a key than the baseline holds is red — so a second identical raw-temp line pasted into a file that
+already has a baselined one cannot hide behind the first one's hash; fewer occurrences than the baseline holds is
+the drain (the entry shrinks). The baseline files (`src_mcp/tests/Leftovers/raw-temp-baseline.json`,
 `src_vs_code/src/test/raw-temp-baseline.json`) are the ratchet S7 drains to zero, and a NEW raw temp call is red the
 day it is written. **The producer PR may merge only after that rule is released and coai's pin moved to it** (a pin
 bump alone, R6 decision 1); the C# wrapper and the Node wrapper read the baseline in the form the released rule
@@ -529,8 +544,13 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
      machine; and, NEW, the listing of legacy `testsToDelete-coai-run-*` folders and their `.owner` files with the
      `rm` line the sweep prints. The spec writes the command as a script in `scripts/` with a test over a private
      root (a path changed after the listing ⇒ refused; a product prefix ⇒ refused; a live claim ⇒ refused; an
-     unchanged pick ⇒ removed). Never wired into a runner, never a sweep, never delegated to the janitor. The residual
-     risk of old checkouts recorded.
+     unchanged pick ⇒ removed). *[round-2 finding 0]* The removal step is an EXCLUSIVE rename to a quarantine name
+     while the listed identity still holds, then the removal of the quarantined object (D4); **test: the folder is
+     SWAPPED after the listing** — the listed folder is renamed away and another folder (or a link) is put at the
+     same name between the listing and the removal ⇒ the identity differs ⇒ refused, the swapped-in object keeps its
+     bytes, nothing is renamed; and a quarantine name pre-created at the drawn name ⇒ the exclusive rename fails ⇒
+     refused. RED with a plain `rm -rf`/`Directory.Delete` by name. Never wired into a runner, never a sweep, never
+     delegated to the janitor. The residual risk of old checkouts recorded.
   6. **Break-its**, each observed red then reverted: a `coai-` match restored in either selector ⇒ item 3 red;
      `neverSwept` emptied ⇒ the three product-prefix scans red (the invariant test stays GREEN — that is the point of
      it); the characterization test's cutoff moved ⇒ red.
@@ -759,13 +779,16 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
 - **The baseline** (D6, *[round-1 finding 7]*, in the form the released rule fixes): generated once from the real tree
   (every `raw-temp` finding inside `src_mcp/tests`, `src_server/tests`, `src_bugs/tests`, bench, `src_vs_code/src/test`
   that S3/S4 did not move — trees whose run-folder proof is S3 sc. 2, named in the file), written as `{ file, sha256,
-  line }` where `line` is a HINT; the wrapper passes a finding only when an entry with the same file and the same
-  content hash exists (**exact membership**, never a count — the `suppressionsOnlyShrink.test.ts` lesson: under a
-  constant total one entry can be swapped for another); a test asserts the baseline **only shrinks** against the
-  committed one (no entry added, none changed — a diff of the two sets), that every entry's hash still matches some
-  line of its file (a stale entry is red until removed), and that a moved line keeps its entry (the hint updated, the
-  hash the key). `GetTempPath`/`tmpdir` imports used only to READ the root are migrated, not baselined
-  (`TempDir.Root`/`RunTemp.Real`; October plan-gate item 6).
+  line, count }` where `line` is a HINT and `count` the occurrences *[round-2 finding 1]*; the wrapper passes the
+  findings of a key (file + content hash) only up to the baseline's count for that key — the (count + 1)-th
+  occurrence is a finding (**a multiset, exact membership per occurrence**, never a total — the
+  `suppressionsOnlyShrink.test.ts` lesson: under a constant total one entry can be swapped for another); a test
+  asserts the baseline **only shrinks** against the committed one (no key added, no count raised, none changed — a
+  diff of the two multisets), that every entry's hash still matches at least one line of its file (a stale entry is
+  red until removed), that a moved line keeps its entry (the hint updated, the hash the key), and *[round-2 finding
+  1]* that **a second identical raw-temp line added to a file that already has a baselined one is red** (the
+  multiset holds one; the scan finds two). `GetTempPath`/`tmpdir` imports used only to READ the root are migrated,
+  not baselined (`TempDir.Root`/`RunTemp.Real`; October plan-gate item 6).
 - **Scenarios** (RED first; the template's `LeftoversGuardTests`, `LeftoversGuardScriptsTests`, `LeftoversAuditTests`
   copied give the classes; coai adds): `this repository is clean` on the real tree (RED before S5 with the counts per
   class recorded; GREEN after S5 with the baseline); the twelve planted spellings in C# and in `.mjs` (#2); the
@@ -773,7 +796,8 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
   `src_vs_code/src/test` or in `.github/workflows` ⇒ exit 2 with the sentence); `the token is a registered row and
   written once` (the real mount: `coai` ⇒ none; the C# constant and the Node wrap's token different ⇒ 1; `Coai` ⇒ 1;
   a mount without the detail's table ⇒ the resolver picks by CONTENT, E4 item 41); the baseline's only-shrinks,
-  membership-not-count and stale-entry tests (an entry swapped for another under the same count ⇒ red);
+  membership-not-total and stale-entry tests (an entry swapped for another under the same total ⇒ red; a second
+  identical line beside a baselined one ⇒ red, *[round-2 finding 1]*);
   the frozen exclusion list pinned (the guard's own fixtures; `deploy/**`, `src_server/install-agy.sh`,
   `src_server/install-cli.sh` — product installers, each with its reason); the 29 `worktree add` lines each carry an
   exemption naming the owned folder they live in; `release.yml` ⇒ 0 after S4. **Break-it on the real tree** (by hand,
@@ -843,7 +867,11 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
 - [ ] *[round-1 findings 1–3, 5]* the sweep root is `RunTemp.Real` (tested); each C# suite has its own initializer and
       its first-ordered run-folder test; a run that cannot make its folder fails before any test (both runners); the
       bare `node --test` of `scripts/lib` sweeps first (tested).
-- [ ] *[round-1 finding 6]* the one-off clean-up script re-checks every pick before removal and refuses otherwise.
+- [ ] *[round-1 finding 6, round-2 finding 0]* the one-off clean-up script re-checks every pick, removes only through
+      an exclusive rename to a quarantine name while the listed identity holds, refuses otherwise; the swap test is
+      RED then GREEN.
+- [ ] *[round-2 finding 1]* the `raw-temp` baseline is a multiset by file + content hash; the second-identical-line
+      test is RED then GREEN.
 - [ ] Every must-not-copy row has its RED-GREEN-RED recorded in a PR.
 - [ ] *[round-1 finding 7]* the `raw-temp` baseline rule is released in `dew_flow_conventions` and coai's pin moved to
       it by a pin bump merged alone, BEFORE the producer PR.
@@ -932,6 +960,19 @@ Verdict *revise*; eight findings, ALL accepted and applied (each marked *[round-
    count ceiling — `suppressionsOnlyShrink.test.ts`), only shrinking, the line a hint; the producer PR waits for that
    release and a pin bump alone; stage A and S5 do not — D6, D8 (condition 5), S6, S7, Q1, the stages table, the DoD,
    the status line, the boundary table, note 14.
+
+## Plan-gate round 2 of the re-split (2026-11-01, coai session `55ddb13b`)
+
+Verdict **PROCEED**; two findings, both accepted and applied (marked *[round-2 finding n]*). The gate also ruled: this
+plan is a piece of a split already under way (the rollout's E5), so it is NOT split again.
+
+0. D4's one-off clean-up: a re-check narrows the race but does not close it. The removal is an EXCLUSIVE rename of the
+   selected folder to a quarantine name, only while the path still has the listed identity (device + inode / file id),
+   then the removal of the quarantined object; otherwise it refuses and reports. Test: the folder is swapped after the
+   listing — D4, S2-A item 5, the DoD.
+1. D6's baseline is a MULTISET keyed by file + content hash: a scan with more occurrences of a key than the baseline
+   holds is red; line numbers are hints only. Test: a second identical raw-temp line added to a file that already has a
+   baselined one — D6, S6 (the baseline, the scenarios), the DoD.
 
 ## Plan-gate round 1 (2026-10-17) — kept as the record of the October version
 
