@@ -5,8 +5,10 @@
 > split 2026-10-16; plan-gate round 1 applied 2026-10-17; the risk decision of 2026-10-17 applied; the E1 release it
 > waited for became `115bbf8` (R5) and then `105d53c` (R7). S1, the pin, is DONE: coai #936 (`df375eb`) pinned
 > `105d53c`, merged alone (R6 owner decision 1). Every other story is unbuilt. This re-split is the whole re-review
-> the family's change-control rule asks of a plan changed twice after approval; its coai plan gate runs on this
-> document before any code.**
+> the family's change-control rule asks of a plan changed twice after approval. Its coai plan gate, round 1
+> (2026-11-01, session `55ddb13b`): verdict *revise*, eight findings, all accepted and applied below (each marked
+> *[round-1 finding n]*). The producer PR now DEPENDS on a conventions rule change (finding 7): stage A and S5 may
+> start now; the producer stage waits for that rule's release and a pin bump.**
 > Stories of epic E5 of `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` (§ *Epics*, E5; § *Wave 1*).
 > Scope: the run folder both runners already make (`src_mcp/tests/RunTemp.cs`, `RunTempFolder.cs`, `OwnerClaim.cs`;
 > `src_vs_code/scripts/run-tests.mjs`), the two test sweeps (`src_vs_code/scripts/sweepTemp.mjs` through
@@ -76,7 +78,8 @@ the helper is gone from the test trees (S5, before the producer); the C# library
 the owner-aware sweep runs at the start of every C# suite and of the extension runner, lists legacy names and never
 fails the run (S2-B); every Node runner, script test and the editor-host run wraps the reference and leaks nothing
 (S4); the guard is red on every class of rule §7 and on a scan of nothing, with `owner-blind`, `legacy-name` and
-`raw-worktree` at zero and a `raw-temp` allowlist that only shrinks (S6); the allowlist drains to zero (S7).
+`raw-worktree` at zero and a `raw-temp` baseline in the form a released shared rule authorises — membership plus
+content hash, only shrinking (S6, *[round-1 finding 7]*); the baseline drains to zero (S7).
 
 ## Facts the split rests on
 
@@ -293,8 +296,13 @@ review extension and server"`); its tests (`*Tests.cs`) copied into `src_mcp/tes
 it with their namespace `CoaiMcp.Tests` kept (the 346 `TempDir.For` callers compile unchanged). The template puts its
 helper inside the one test project; coai has four, so one library. *Loses:* linked source files (four compilations,
 and the bench project does not reference `Runners`); four copies — the drift `SweepRule.cs:9-11` was written against.
-The template's `RepositoryRoot` and `GuardFiles` know mcp's layout: `GuardFiles.cs` and `RepositoryRoot.cs` are the
-two files the copy edits beyond the namespace, and S6 lists every edited line in its PR. *Kept from October* in its
+The template's `RepositoryRoot` and `GuardFiles` know mcp's layout: `GuardFiles.cs` and `RepositoryRoot.cs` are
+edit points beyond the namespace, and S6 lists every edited line in its PR. **The edit points, complete** *[round-1
+findings 0 and 1]*: `GuardFiles.cs`, `RepositoryRoot.cs`, and `LeftoversSweepFixture.cs` (its sweep root becomes
+`RunTemp.Real`, finding 1); NOTHING else — `LeftoversGuard.cs`, the scanner, stays byte-identical: `Scan` returns
+findings, and the `raw-temp` baseline filter of D6 lives in coai's OWN wrapper test
+`src_mcp/tests/Leftovers/LeftoversRepositoryGuardTests.cs` (coai's file, not a copy of the template's one-assertion
+test), which calls `Scan`, subtracts the baseline's entries, and asserts the rest is empty. *Kept from October* in its
 shape; *changed*: a copy, not a design.
 
 **D3 — The Node side wraps the reference** (decision 11, R7). `run-tests.mjs`, `run-host.mjs`, every runner in
@@ -313,8 +321,15 @@ claims are **legacy names** under rule §1: the copied C# sweep lists them with 
 never collects a legacy name); the Node reference's sweep collects one only where the kernel owner is the caller AND
 its old-grammar record is `gone` (rule §4, `legacyOwnerState`) — so a killed old run of either runner is collected by
 the next extension run of the same user, and a C# run lists it. The janitor matches `^teststodelete[-_]` names and
-lists legacy ones; nothing is delegated to it. **Known residual risk** (unchanged): a checkout on pre-S2-A code keeps
-its age-only sweeper; mitigation: update or rebase it, or run with a private temp root. The old-grammar claim's
+lists legacy ones; nothing is delegated to it. **The command re-checks before it removes** *[round-1 finding 6]*: the
+person picks names from the listing, and the removing command, just before EACH removal, checks that the path is still
+present, is unchanged since the listing (same identity — device and inode, or the Windows file id — and same last-write
+time), is not a protected product prefix or the version cache, and has no live owner (a sibling `.owner` whose record
+is `live` or `unknown` refuses; a `coai-*` name has no record, so the person's pick plus the unchanged check is the
+whole authority there); anything else is REFUSED with one line naming the path and the check that failed, and the
+command goes on to the next pick. S2-A item 5 documents the command in that shape. **Known residual risk** (unchanged): a
+checkout on pre-S2-A code keeps its age-only sweeper; mitigation: update or rebase it, or run with a private temp
+root. The old-grammar claim's
 `<os>` tag `win32|darwin` (`OwnerClaim.cs:38`) is read by the legacy clause of the reference (`<host>@<os>:<pid>[:<start>]`)
 only when `<os>` is `linux|macos|windows`: a `win32`/`darwin` legacy claim is **unreadable ⇒ `unknown` ⇒ kept** and
 listed — the safe side; the one-off clean-up covers them.
@@ -325,19 +340,28 @@ get the run folder. The follow-up plan `todo/PLAN_the_product_scratch_root_is_a_
 extract is NOT written: there is nothing left for it. The measured count stays: about a thousand per server-suite run
 (`research/module_tests.md:421-423`, 2026-09-23).
 
-**D6 — Two guards, one allowlist that only shrinks.** The C# trees, scripts and workflows are the copied C# guard's
-(`LeftoversGuard`, run by `src_mcp/tests` as `LeftoversRepositoryGuardTests`); the Node trees are the shipped tool's
-under `--profile node`, run by `npm test` through one wrapper test (`src_vs_code/src/test/testLeftovers.test.mjs`)
-that fails on exit 1 and on exit 2 with the tool's own sentence. **`owner-blind`, `legacy-name`, `raw-worktree`
-(exemptions counted), `docker-*`, `shared-store`, `ryuk-off`, `exemption` and `token` are at ZERO when the guard
-lands.** `raw-temp` lands with a **frozen allowlist** of the sites inside the run folder that still call a raw temp
-API — a JSON file of `{ file, line, sha256 }` entries in the shape of the reference's owner-blind allowlist
-(`leftovers-check.mjs:20`, `:835-858`), pinned by a test that it ONLY SHRINKS (the `suppressionsOnlyShrink.test.ts`
-shape this repository already has) and that every entry's hash still matches its line. **This is a documented
-deviation from rule §7** (which grants `raw-temp` an inline exemption per line, not a list): ~1,200 lines of
-inline exemptions would be a second, worse list; the allowlist is the ratchet S7 drains to zero, and a NEW raw temp
-call is red the day it is written. *Withdrawn from October:* one Node guard scanning the whole repository with
-discovery and patterns of its own.
+**D6 — Two guards, one `raw-temp` baseline — authorised by a shared rule change FIRST** *[round-1 finding 7;
+decided with the question consultant, consult `abcaae48`, both answers: change the shared rule first]*. The C# trees,
+scripts and workflows are the copied C# guard's (`LeftoversGuard`, byte-identical — finding 0 — called by coai's own
+wrapper `LeftoversRepositoryGuardTests`); the Node trees are the shipped tool's under `--profile node`, run by `npm
+test` through one wrapper test (`src_vs_code/src/test/testLeftovers.test.mjs`) that fails on exit 1 and on exit 2 with
+the tool's own sentence. **`owner-blind`, `legacy-name`, `raw-worktree` (exemptions counted), `docker-*`,
+`shared-store`, `ryuk-off`, `exemption` and `token` are at ZERO when the guard lands.** `raw-temp`: rule §7 at
+`105d53c` allows ONLY the inline exemption form, so a coai-only allowlist would waive the released rule — it is NOT
+done. Instead this plan **depends on a conventions rule change** (to be written next, in `dew_flow_conventions`,
+as its own plan) that authorises a **`raw-temp` baseline** under exactly these terms: ONLY for sites proven to run
+inside an owned run folder (the proof is the suite's run-folder test of S3 sc. 2, named by the baseline file);
+matched by **exact membership plus the content hash of the line** — never by a count ceiling (coai's own
+`src_vs_code/src/test/suppressionsOnlyShrink.test.ts` is the record of why a falling total is not enough: one
+entry can be swapped for another under a constant count); **only shrinking** — an entry may be removed, never added
+or changed; the **line number is a hint, not a key** (a line that moves keeps its entry by hash; an entry whose hash
+matches no line of its file is stale and red). The baseline files (`src_mcp/tests/Leftovers/raw-temp-baseline.json`,
+`src_vs_code/src/test/raw-temp-baseline.json`) are the ratchet S7 drains to zero, and a NEW raw temp call is red the
+day it is written. **The producer PR may merge only after that rule is released and coai's pin moved to it** (a pin
+bump alone, R6 decision 1); the C# wrapper and the Node wrapper read the baseline in the form the released rule
+fixes. Stage A and S5 do not depend on it. *Withdrawn from October:* one Node guard scanning the whole repository
+with discovery and patterns of its own. *Withdrawn from the first re-split text:* an allowlist as a coai-only
+deviation from §7.
 
 **D7 — Stage A is the retirement of the age-only sweep, nothing else.** The barrier (rule § *The barrier*) names "a
 sweeper that matches the prefix without an owner segment, OR removes on age"; coai's two sweeps remove on age. R6
@@ -348,10 +372,18 @@ rollback). The ported owner-aware sweep lands with the producers (stage B), beca
 
 **D8 — The producer stage is ONE squash-merged PR** (R6 decision 1 as applied by E4 #64 and E3 #58): S3 → S2-B → S4 → S6
 as reviewable commits on one branch `feat/test-leftovers-e5`, never merged apart, after S2-A and S5 are on `main`.
-It merges only when (1) the barrier record of the remainder plan's R6 names every machine that builds or tests coai —
-the operator's WSL machine (open, 2026-10-31) AND the owner's Windows machine (R6: "not tested") — with a clean
-rescan; (2) every consumer's sweep-only stage is recorded (R6 lists all seven); (3) the coai plan gate on this
-document and the code gate on the PR reached `proceed`; (4) the macOS, Windows and Linux legs are green.
+**The invariant** *[round-1 finding 4]*: **no commit on `main` carries the owner-form producer (S3's run folder)
+without the owner-aware sweep (S2-B), or the sweep without the producer** — a producer with no sweep leaves every
+killed run's folder for ever; a sweep with no producer sweeps nothing and hides that. So S3 and S2-B are in the SAME
+squash-merged PR, the merge condition checks that BOTH are present (the PR's own test
+`TheProducerAndTheSweep_LandTogether`: a run folder of the owner form is made AND `LeftoversSweepFixture` is the
+assembly fixture of every suite that makes one), and a revert of the PR reverts both — never one of them. It merges
+only when (1) the barrier record of the remainder plan's R6 names every machine that builds or tests coai — the
+operator's WSL machine (open, 2026-10-31) AND the owner's Windows machine (R6: "not tested") — with a clean rescan;
+(2) every consumer's sweep-only stage is recorded (R6 lists all seven); (3) the coai plan gate on this document and
+the code gate on the PR reached `proceed`; (4) the macOS, Windows and Linux legs are green; (5) *[round-1 finding
+7]* the `raw-temp` baseline rule (D6) is released in `dew_flow_conventions` and coai's pin has moved to that release
+by a pin bump merged alone.
 
 **D9 — The end-of-run audit is copied, and bounded to the run folder.** `LeftoversAudit` (never-disposed,
 disposed-not-removed, claimed-in-temp-root) runs at the end of every C# suite as in the template — but coai's four
@@ -365,7 +397,7 @@ folder per runner invocation (five C# suites and the extension: six per full run
 script, 31 of them, each run by hand) with one claim of ≤ 512 bytes; everything else lives inside them. Retired by
 the run's own teardown on every path; after a kill by the next run of the same user (10 minutes, owner `gone`); by
 `janitor.sh --token coai` (one hour) when no suite runs again. A quarantine `.<name>.testsToDelete-quarantine-<pid>-<hex8>`
-a killed sweep leaves is restored or listed by the next sweep (rule §4). The `raw-temp` allowlist (D6) only shrinks.
+a killed sweep leaves is restored or listed by the next sweep (rule §4). The `raw-temp` baseline (D6) only shrinks.
 The old `coai-` test leftovers retire only through D4's one-off clean-up a person runs — no sweep and not the
 janitor (they never carried the prefix).
 
@@ -376,11 +408,12 @@ janitor (they never carried the prefix).
 | the pin | **S1 — the pin bump to `105d53c`** | — | — | **DONE**, coai #936 (`df375eb`), merged alone 2026-11-01 |
 | A — sweep-only | **S2-A — the age-only `coai-` sweep is retired in both runners (cornerstone, first half)** | **Fable** (spec) · Sonnet · Opus | S1 | first; ONE PR, merges alone; no owner-form producer in it |
 | A — prep | S5 — the bare-prefix literals leave the test trees | Opus · Sonnet · Opus | nothing (no sweep, no producer) | any time before the producer PR; one PR per tree |
-| B — the producer PR | S3 — the C# library (a copy), the run folder on the owner form in all four C# suites, the contract's claim grammar | Opus · Sonnet · Opus | S2-A, S5 on `main`; the barrier record (D8) | commit 1 of the PR |
+| the rule, then the pin *[round-1 finding 7]* | the `raw-temp` baseline rule in `dew_flow_conventions` (its own plan there, written next), released; then coai's pin bump to that release, alone | — (not E5's to build; the pin bump is the main session's commit, as S1 was) | the conventions' release | before the producer PR; stage A and S5 do not wait for it |
+| B — the producer PR | S3 — the C# library (a copy), the run folder on the owner form in all four C# suites, the contract's claim grammar | Opus · Sonnet · Opus | S2-A, S5 on `main`; the baseline rule released and pinned; the barrier record (D8) | commit 1 of the PR — **never merged without S2-B** (D8's invariant, finding 4) |
 | B | **S2-B — the owner-aware sweep at the start of every C# suite and of the extension runner (cornerstone, second half)** | **Fable** (spec) · Sonnet · Opus | S3 | commit 2 |
 | B | S4 — the Node producers wrap the reference: `run-tests.mjs`, `run-host.mjs`, the 31 runner scripts, `http/run-contracts.mjs`, `scripts/lib` tests, `release.yml` | Opus · Sonnet · Opus | S3 (the claim grammar both runners write) | commit 3 |
-| B | S6 — the two guards, the audit, the allowlist, the CI legs | Opus · Sonnet · Opus | S3, S4 | commit 4; the PR squash-merges once |
-| C — the drain | S7 — the `raw-temp` allowlist drains to zero, suite by suite | Opus · Sonnet (one coder per suite) · Opus | S6 merged | after B; one PR per suite; not a producer |
+| B | S6 — the two guards, the audit, the `raw-temp` baseline, the CI legs | Opus · Sonnet · Opus | S3, S4; the baseline rule released and pinned | commit 4; the PR squash-merges once |
+| C — the drain | S7 — the `raw-temp` baseline drains to zero, suite by suite | Opus · Sonnet (one coder per suite) · Opus | S6 merged | after B; one PR per suite; not a producer |
 
 S2's spec decides; where this document and S2's spec differ, the spec wins and the difference is a defect of this
 document. Where this document and the contract differ, the contract wins: report it to the parent, do not resolve it
@@ -392,8 +425,9 @@ names the difference.
 | Item | Built by | The other's part |
 |---|---|---|
 | The contract text, the `## Tokens` table (`coai` row), `tools/janitor.sh`, the Node reference (`owned.mjs`, `leftovers-sweep.mjs`, `leftovers-check.mjs` with its `node` profile), F17–F20 | the conventions (E1, the merged core, R7) | E5 reads them through the mount and RUNS the Node reference; never edits or ports them here |
-| The C# helper, sweep, audit, guard and their tests, the Darwin path, the Windows SID path | E3 (`dew_flow_mcp`) | E5 COPIES them byte-identical except the namespace, rewrites `OwnedToken.cs`, edits `GuardFiles.cs`/`RepositoryRoot.cs` for its layout, and reports every defect it finds back to E3's owner as a note — never fixes it here alone |
-| coai's run folder, its four C# suites' wiring, the Node wrap module, the runners, the allowlist, the CI legs | E5 | — |
+| The C# helper, sweep, audit, guard and their tests, the Darwin path, the Windows SID path | E3 (`dew_flow_mcp`) | E5 COPIES them byte-identical except the namespace, rewrites `OwnedToken.cs`, edits exactly three files for its layout — `GuardFiles.cs`, `RepositoryRoot.cs`, `LeftoversSweepFixture.cs` (sweep root `RunTemp.Real`, *[round-1 finding 1]*) — keeps `LeftoversGuard.cs` byte-identical and puts its `raw-temp` baseline filter in its OWN wrapper `LeftoversRepositoryGuardTests.cs` (*[round-1 finding 0]*), and reports every defect it finds back to E3's owner as a note — never fixes it here alone |
+| The `raw-temp` baseline rule (membership + content hash, only shrinking, run-folder proof) *[round-1 finding 7]* | the conventions (a plan of its own, written next) | E5 waits for its release and pins it; its two baseline files and wrappers read the form that rule fixes |
+| coai's run folder, its four C# suites' wiring, the Node wrap module, the runners, the baseline files, the CI legs | E5 | — |
 | The pin bump | E5 (S1) — done | R7 released |
 | A contract finding from this epic | — | goes back to the parent as a note (§ *Notes for the parent*), not into the mounted copy |
 
@@ -486,11 +520,17 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
      `ConsultCheckSweepTests`, `ConsultantHomeSweepTests`, `AScratchSweepRunsOnTheConsultationBeatTests`,
      `chatStoreSweep.test.ts`). Scope control, not safety: item 3 is the safety.
   5. **The one-off clean-up of old-prefix test leftovers** (D4) written into `research/module_tests.md`: a command a
-     person runs that first LISTS the temp root's `coai-*` directories with their last-write times, leaving out every
-     protected product prefix and the version cache, and a second command that removes only the exact names the person
-     picked, run with no coai session or VS Code window open on that machine; and, NEW, the listing of legacy
-     `testsToDelete-coai-run-*` folders and their `.owner` files with the `rm` line the sweep prints. Never wired into
-     a runner, never a sweep, never delegated to the janitor. The residual risk of old checkouts recorded.
+     person runs that first LISTS the temp root's `coai-*` directories with their last-write times and identities,
+     leaving out every protected product prefix and the version cache, and a second command that removes only the
+     exact names the person picked — and, *[round-1 finding 6]*, **re-checks each pick just before its removal**:
+     still present, unchanged since the listing (identity and last-write time equal to the listing's), not a protected
+     product prefix or the version cache, and no live owner (`.owner` record `live` or `unknown` ⇒ refuse); any failed
+     check REFUSES that path with one line and moves on — run with no coai session or VS Code window open on that
+     machine; and, NEW, the listing of legacy `testsToDelete-coai-run-*` folders and their `.owner` files with the
+     `rm` line the sweep prints. The spec writes the command as a script in `scripts/` with a test over a private
+     root (a path changed after the listing ⇒ refused; a product prefix ⇒ refused; a live claim ⇒ refused; an
+     unchanged pick ⇒ removed). Never wired into a runner, never a sweep, never delegated to the janitor. The residual
+     risk of old checkouts recorded.
   6. **Break-its**, each observed red then reverted: a `coai-` match restored in either selector ⇒ item 3 red;
      `neverSwept` emptied ⇒ the three product-prefix scans red (the invariant test stays GREEN — that is the point of
      it); the characterization test's cutoff moved ⇒ red.
@@ -512,15 +552,29 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
 - **What the Fable spec must settle (B):**
   1. **Where the C# sweep runs and who calls it.** The copied `LeftoversSweepFixture` as an assembly fixture in EACH of
      the four C# suites (rule §4: every run that creates the kind sweeps it at its start — all four make a run folder
-     after S3); it runs on `RunTemp.Real` (the machine's root — the run folder's PARENT, where the run folders of killed
-     runs are), never on the run folder itself; the order with `RunTemp.Start` (the module initializer makes the run
-     folder BEFORE any fixture: the sweep's ten-minute age keeps it off the folder just made, and its claim names a
-     live process — asserted).
+     after S3). *[round-1 finding 1]* **Copied byte-identical it would sweep `Path.GetTempPath()`, which `RunTemp`
+     has already redirected to the run folder — so it would never see a killed run's folder.** `LeftoversSweepFixture.cs`
+     is therefore an EDIT POINT of the copy (D2, the boundary table): its sweep root is `RunTemp.Real` (the machine's
+     root — the run folder's PARENT, where the run folders of killed runs are), never the run folder itself. Test
+     `TheSweepRoot_IsTheMachineTempRoot`: with `TEMP`/`TMP`/`TMPDIR` pointed at a run folder, the fixture's sweep is
+     handed `RunTemp.Real` (asserted through the hooks seam that records the root), and a killed run's folder planted
+     in `RunTemp.Real` is found while one planted inside the run folder is not looked at. RED with the template's
+     unedited root. The order with `RunTemp.Start` (the module initializer makes the run folder BEFORE any fixture: the
+     sweep's ten-minute age keeps it off the folder just made, and its claim names a live process — asserted).
   2. **The Node sweep is the reference.** `run-tests.mjs` calls `sweepLeftovers({ repo: <root>, tmp: <the REAL temp
      root, read before `beginRun` moves the variables>, ... })` with the `coai` wrap's patterns; its report lines go to
      stdout in `sweepFirst`'s place; it never fails the run (a throw is one line, as today's `sweepFirst` catch).
      `run-host.mjs` and the runner scripts do NOT sweep (one sweeper per runner invocation of the main suites is the
-     family's figure; a runner script's own folder is collected by the next `npm test` or C# run).
+     family's figure; a runner script's own folder is collected by the next `npm test` or C# run). *[round-1 finding
+     5]* **The direct `node --test "scripts/**/*.test.mjs"` command of `scripts/lib` (`ci.yml:196-197`, and the same
+     command on a developer machine) DOES sweep**: it is a test run that creates the kind, with no runner in front of
+     it — so it gets a start-of-run sweep through a preload, `node --import ./scripts/lib/leftovers-preload.mjs --test
+     …` (or a tiny runner `scripts/run-lib-tests.mjs` that calls the sweep and then `node --test`; the spec picks one),
+     which calls the reference's `sweepLeftovers` on the REAL temp root before the first test file loads, prints its
+     report, and never fails the run. Test `scriptsLibRun.test.mjs`: a killed run's owner-form folder with a `gone`
+     claim (injected probe) planted in a private root; the command's entry point run with that root; the folder is
+     collected before the first test; the `package.json`/CI command is pinned to carry the preload. RED on `main`
+     (no sweep in front of `node --test`).
   3. **Legacy names** (D4): the C# copy lists `testsToDelete-coai-run-*` of the old grammar with the exact `rm`
      command; the Node reference collects one only on kernel owner AND old-grammar `gone`; a legacy claim whose `<os>`
      is `win32`/`darwin` reads as `unknown` and is kept — asserted in both.
@@ -561,9 +615,13 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
 - **Files.** New `src_mcp/tests_leftovers/` (D2) with the copied helper files; `src_mcp/tests/Leftovers/` with the copied
   tests; `src_mcp/tests/RunTemp.cs`, `RunTempFolder.cs`, `RunTempFixture.cs`, `OwnerClaim.cs`, `TempDir.cs` moved into
   the library; `src_bugs/tests/Scratch.cs` calls into the library's `Removal.Quietly`; the four `.csproj` files and the
-  `.slnx`; `src_server/tests`, `src_bugs/tests`, `src_bench/CoaiBench.Tests` gain the run folder (the module
-  initializer is in the library, so referencing it is enough — the coder confirms a `[ModuleInitializer]` in a
-  referenced assembly runs when that assembly loads, and records when that is relative to the first test);
+  `.slnx`; `src_server/tests`, `src_bugs/tests`, `src_bench/CoaiBench.Tests` gain the run folder — *[round-1 finding
+  2]* **a `[ModuleInitializer]` runs only when its OWN assembly loads**, so a referenced library's initializer is not
+  the test assembly's: EACH of the three suites gets its own one-line `[ModuleInitializer]` (`RunTempStart.cs`) that
+  calls `RunTemp.Start()` (made idempotent: a second call is a no-op), with a test per assembly, first in the
+  assembly's own order, that `TEMP`, `TMP` and `TMPDIR` already name the run folder before the first test
+  (`src_mcp/tests` keeps its own initializer in `RunTemp.cs` the same way); the coai wrapper
+  `src_mcp/tests/Leftovers/LeftoversRepositoryGuardTests.cs` *[round-1 finding 0]*;
   `src_mcp/tests/OwnerClaimTests.cs`, `OwnerClaimVectorsTests.cs`, `RunTempTests.cs`, `RunTempHardeningTests.cs`
   rewritten against the new grammar; `research/module_tests.md`.
 
@@ -589,12 +647,19 @@ helper's; coai adds):
    restore registered → mkdir → variables; the name matches `^testsToDelete-[uw][0-9]{1,10}-coai-run-[A-Za-z0-9]{6}$`;
    the claim parses to this process with the tag of this OS (`linux|macos|windows`). RED on `main` (claim last, legacy
    name, `win32`/`darwin`).
-2. `AllFourSuites_RunInsideARunFolder` — in each of the four suites, one test asserts `Path.GetTempPath()` is a run
-   folder of the owner form inside `RunTemp.Real` and that `TEMP`, `TMP`, `TMPDIR` name it. RED in the three suites
-   that have none today.
+2. `AllFourSuites_RunInsideARunFolder` — in each of the four suites, one test, ordered first in that assembly,
+   asserts `Path.GetTempPath()` is a run folder of the owner form inside `RunTemp.Real` and that `TEMP`, `TMP`,
+   `TMPDIR` name it BEFORE the first test *[round-1 finding 2]*. RED in the three suites that have none today.
 3. `ATakenName_IsNeverAdopted` (#16): a claim pre-created at the drawn name ⇒ redraw; a folder pre-created at the
-   claimed name ⇒ warn once, own claim removed only while unchanged, redraw; after `MaxDraws` ⇒ the run continues
-   WITHOUT isolation with `RunTemp.CreationWarning`'s sentence (E2's never-throw promise kept).
+   claimed name ⇒ warn once, own claim removed only while unchanged, redraw.
+3a. *[round-1 finding 3]* **`ARunThatCannotMakeItsFolder_FailsBeforeAnyTest`** — after `MaxDraws`, or on an
+   unwritable root, the run does NOT continue in the machine's temp: the initializer writes ONE line naming the root
+   and the cause and the suite FAILS before any test runs (a non-zero exit from the entry point, never a throw from
+   the initializer that would look like a crash — the line says what to do). **E2's never-throw machine-temp fallback
+   (`RunTemp.cs:34-47`, `CreationWarning`, "the run CONTINUES … WITHOUT isolation") is WITHDRAWN**: a run without its
+   owned folder is a run whose every leftover is unowned and unsweepable. Test: a private read-only root (Linux: a
+   parent made read-only, the premise asserted; Windows: a root whose ACL denies create) ⇒ the suite's exit is
+   non-zero, zero tests ran, the line is on stderr. RED on `main` (the run continues).
 4. Step 0 on Windows (#6), `Errno.For` (#9), `Require()` first (#10), the helper's tests inside an owned scope (#11).
 5. `OldAndNewClaims_AreReadByBothReaders` (#15): the vectors.
 6. `ALostLinkTarget_StillFailsTheTest` — the existing junction case keeps re-throwing (the E4.1 guarantee of the
@@ -617,7 +682,10 @@ helper's; coai adds):
   through the shipped `owned.mjs` with the token `coai`, in the contract's grammar, and leaks nothing.
 - **Files.** New `src_vs_code/scripts/owned.mjs` (D3: the one `ownedFor` call, re-exported); `run-tests.mjs`
   (`makeRunTemp`/`removeRunTemp`/`claimText`/`linuxStartSeconds` `:114-209` replaced by the wrap: `ownedDir` with a
-  scope whose `after` is the runner's `finally`; `beginRun` keeps its never-throw sentence); `run-host.mjs`; the 31
+  scope whose `after` is the runner's `finally`; `beginRun`'s "the tests share the machine's temp as before" fallback
+  (`:210-220`) is WITHDRAWN *[round-1 finding 3]*: a run that cannot make its folder prints one line and exits
+  non-zero before the first batch — test in `runTests.test.mjs`, RED on `main`); `scripts/lib/leftovers-preload.mjs`
+  (the sweep in front of the bare `node --test`, S2-B item 2, *[round-1 finding 5]*); `run-host.mjs`; the 31
   runner scripts in `src_vs_code/scripts` (one owned folder each, `TMPDIR`/`TEMP`/`TMP` handed to every child, cleanup in
   a `finally` BEFORE any `process.exit` — the reviewer checks every runner for the `then(exit)…finally` order, #14);
   `http/run-contracts.mjs:127`; `scripts/lib/*.test.mjs` (module-level `mkdtempSync` ⇒ `ownedDir(t, …)` inside a
@@ -669,34 +737,43 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
 - **DoD.** Zero bare-prefix lines outside the two helper files per tree; suites green on the three legs; no sweep and
   no producer in the diff (the reviewer asserts the diff touches no `.owner` writer and no sweep).
 
-## S6 — The two guards, the audit, the allowlist, the CI legs (commit 4 of the producer PR)
+## S6 — The two guards, the audit, the `raw-temp` baseline, the CI legs (commit 4 of the producer PR)
 
 - **Models.** Brief by Opus; code by a Sonnet coder; review by Opus against rule §7, D6, D9, must-not-copy #1, #2.
 - **Goal.** One guard per language keeps every tree of the repository so: red on every class of rule §7 outside the
-  helper, red on an unregistered token, red on a scan of nothing; `raw-temp` ratcheted by an allowlist that only
-  shrinks; the end-of-run audit bounded to the run; the three CI legs carry the self-tests.
+  helper, red on an unregistered token, red on a scan of nothing; `raw-temp` ratcheted by the baseline the released
+  rule authorises (D6, *[round-1 finding 7]*) — membership plus content hash, only shrinking; the end-of-run audit
+  bounded to the run; the three CI legs carry the self-tests. **Depends on** the baseline rule's release and the pin
+  bump to it (D8 condition 5).
 - **Files.** The copied `LeftoversGuard*.cs` with `GuardFiles.cs` edited for coai's layout (C# under `src_mcp/tests/`,
   `src_mcp/tests_leftovers/`, `src_mcp/tests_fakecli/`, `src_server/tests/`, `src_bugs/tests/`, `src_bench/CoaiBench.Tests/`;
   workflows; `**/*.sh`, `**/*.ps1`; the `.mjs` under `.github/scripts/` and `http/`) and `RepositoryRoot.cs`;
-  `LeftoversRepositoryGuardTests.cs`; the copied `LeftoversAudit.cs` bounded per D9 and `LeftoversAuditTests.cs`;
-  `src_vs_code/src/test/testLeftovers.test.mjs` (the `node` profile wrapper); `src_mcp/tests/Leftovers/raw-temp-allowlist.json`
-  and `src_vs_code/src/test/raw-temp-allowlist.json` with their only-shrinks tests; `.github/workflows/ci.yml` (the
+  coai's own `LeftoversRepositoryGuardTests.cs` (the wrapper that calls the byte-identical `Scan`, subtracts the
+  baseline, asserts the rest empty — *[round-1 finding 0]*); the copied `LeftoversAudit.cs` bounded per D9 and
+  `LeftoversAuditTests.cs`; `src_vs_code/src/test/testLeftovers.test.mjs` (the `node` profile wrapper, which passes the
+  baseline the same way); `src_mcp/tests/Leftovers/raw-temp-baseline.json` and
+  `src_vs_code/src/test/raw-temp-baseline.json` with their only-shrinks tests (*[round-1 finding 7]*); `.github/workflows/ci.yml` (the
   audit self-test steps on `build-test`, `macos`, `windows`; the `DarwinLayoutTests` step first on `macos`; `npm ci
   --prefix .agents/conventions` on the `macos` and `windows` jobs so the scripts classifier has `node` and the mount —
   the C# guard shells to `sweeper-scan.mjs`); `research/module_tests.md`.
-- **The allowlist** (D6): generated once from the real tree (every `raw-temp` finding inside `src_mcp/tests`,
-  `src_server/tests`, `src_bugs/tests`, bench, `src_vs_code/src/test` that S3/S4 did not move), written as `{ file, line,
-  sha256 }`; the guard passes exactly those; a test asserts every entry still hashes to its line (a moved line is red
-  until the entry is removed) and that the count never grows (the committed count is the ceiling; a PR that lowers it
-  lowers the ceiling). `GetTempPath`/`tmpdir` imports used only to READ the root are migrated, not allowlisted
+- **The baseline** (D6, *[round-1 finding 7]*, in the form the released rule fixes): generated once from the real tree
+  (every `raw-temp` finding inside `src_mcp/tests`, `src_server/tests`, `src_bugs/tests`, bench, `src_vs_code/src/test`
+  that S3/S4 did not move — trees whose run-folder proof is S3 sc. 2, named in the file), written as `{ file, sha256,
+  line }` where `line` is a HINT; the wrapper passes a finding only when an entry with the same file and the same
+  content hash exists (**exact membership**, never a count — the `suppressionsOnlyShrink.test.ts` lesson: under a
+  constant total one entry can be swapped for another); a test asserts the baseline **only shrinks** against the
+  committed one (no entry added, none changed — a diff of the two sets), that every entry's hash still matches some
+  line of its file (a stale entry is red until removed), and that a moved line keeps its entry (the hint updated, the
+  hash the key). `GetTempPath`/`tmpdir` imports used only to READ the root are migrated, not baselined
   (`TempDir.Root`/`RunTemp.Real`; October plan-gate item 6).
 - **Scenarios** (RED first; the template's `LeftoversGuardTests`, `LeftoversGuardScriptsTests`, `LeftoversAuditTests`
   copied give the classes; coai adds): `this repository is clean` on the real tree (RED before S5 with the counts per
-  class recorded; GREEN after S5 with the allowlist); the twelve planted spellings in C# and in `.mjs` (#2); the
+  class recorded; GREEN after S5 with the baseline); the twelve planted spellings in C# and in `.mjs` (#2); the
   audit's sibling scenario (#1); `a scan of nothing is red` (a discovery that finds no file in `src_mcp/tests`, in
   `src_vs_code/src/test` or in `.github/workflows` ⇒ exit 2 with the sentence); `the token is a registered row and
   written once` (the real mount: `coai` ⇒ none; the C# constant and the Node wrap's token different ⇒ 1; `Coai` ⇒ 1;
-  a mount without the detail's table ⇒ the resolver picks by CONTENT, E4 item 41); the allowlist's only-shrinks test;
+  a mount without the detail's table ⇒ the resolver picks by CONTENT, E4 item 41); the baseline's only-shrinks,
+  membership-not-count and stale-entry tests (an entry swapped for another under the same count ⇒ red);
   the frozen exclusion list pinned (the guard's own fixtures; `deploy/**`, `src_server/install-agy.sh`,
   `src_server/install-cli.sh` — product installers, each with its reason); the 29 `worktree add` lines each carry an
   exemption naming the owned folder they live in; `release.yml` ⇒ 0 after S4. **Break-it on the real tree** (by hand,
@@ -706,10 +783,12 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
 - **Commands.** The four executables (`*LeftoversGuard*`, `*LeftoversAudit*` first); `cd src_vs_code && npm test`;
   `node .agents/conventions/tools/leftovers-check.mjs --repo . --profile node --token coai`; `actionlint`.
 - **DoD.** Every class red once and green with a valid exemption; `owner-blind`, `legacy-name`, `exemption`, `token`
-  at zero and `raw-worktree` at zero unexempted on the real tree; the allowlist's count recorded as the ceiling; the
-  audit self-tests green on the three legs; the producer PR's squash merge carries S3, S2-B, S4 and S6 together.
+  at zero and `raw-worktree` at zero unexempted on the real tree; the baseline's entries recorded (membership, hash);
+  the audit self-tests green on the three legs; the producer PR's squash merge carries S3, S2-B, S4 and S6 together,
+  with D8's `TheProducerAndTheSweep_LandTogether` green *[round-1 finding 4]*; the pin at the release that carries the
+  baseline rule.
 
-## S7 — The drain: the `raw-temp` allowlist to zero (stage C, after the producer PR)
+## S7 — The drain: the `raw-temp` baseline to zero (stage C, after the producer PR)
 
 - **Models.** Brief by Opus (one brief per suite, listing the files and the helper call for each shape); code by one
   Sonnet coder per suite, one PR each; review by Opus against the October S4 table of shapes.
@@ -720,12 +799,12 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
   ⇒ inside the test's own `TempDir` (rule §1); `src_bugs` `Scratch.Delete` callers ⇒ `TempDir`; `tests_fakecli`'s fixed
   file names in `GetTempPath()` ⇒ a path from an environment variable the test sets to a file inside its `TempDir`, the
   fake CLI refusing to start without it; `fs.mkdtempSync(path.join(os.tmpdir(), '<x>-'))` in a compiled extension test ⇒
-  the ONE `tmpdir()` read of the test tree lives in a tiny `src/test/tempRoot.ts` that the allowlist names, or the site
+  the ONE `tmpdir()` read of the test tree lives in a tiny `src/test/tempRoot.ts` that the baseline names, or the site
   moves to the wrap where it runs outside the run folder.
-- **Scenarios.** Per suite: the allowlist entries of that suite removed, the guard green, the suite green on the three
+- **Scenarios.** Per suite: the baseline entries of that suite removed, the guard green, the suite green on the three
   legs with the same count; `NoTestLeavesAFolderBehind` (October S4 sc. 1) repeated for a sample of the 43 no-cleanup
   classes inside a private machine temp.
-- **DoD.** The two allowlist files empty and deleted with their only-shrinks tests, the guard then red on ANY raw temp
+- **DoD.** The two baseline files empty and deleted with their only-shrinks tests, the guard then red on ANY raw temp
   call outside the helpers; `module_tests.md` says so.
 
 ## Test plan
@@ -759,28 +838,40 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
 - [ ] S4: every Node runner, script test and the editor-host run owns its folder through the ONE wrap module; nothing
       leaks; `release.yml` uses `RUNNER_TEMP`.
 - [ ] S6: both guards red on every class, on an unregistered token and on a scan of nothing; `owner-blind`,
-      `legacy-name`, `exemption`, `token` at zero; the `raw-temp` allowlist frozen and only shrinking; the audit bounded
-      to the run (#1); the self-tests on the three legs.
+      `legacy-name`, `exemption`, `token` at zero; the `raw-temp` baseline in the released rule's form (membership +
+      hash, only shrinking); the audit bounded to the run (#1); the self-tests on the three legs.
+- [ ] *[round-1 findings 1–3, 5]* the sweep root is `RunTemp.Real` (tested); each C# suite has its own initializer and
+      its first-ordered run-folder test; a run that cannot make its folder fails before any test (both runners); the
+      bare `node --test` of `scripts/lib` sweeps first (tested).
+- [ ] *[round-1 finding 6]* the one-off clean-up script re-checks every pick before removal and refuses otherwise.
 - [ ] Every must-not-copy row has its RED-GREEN-RED recorded in a PR.
-- [ ] The producer PR merged once, squash, after S2-A and S5, the barrier record for both machines, the plan gate and the
-      code gate at `proceed`, and green macOS, Windows and Linux legs.
-- [ ] S7: the allowlist drained to zero and deleted.
+- [ ] *[round-1 finding 7]* the `raw-temp` baseline rule is released in `dew_flow_conventions` and coai's pin moved to
+      it by a pin bump merged alone, BEFORE the producer PR.
+- [ ] The producer PR merged once, squash, with S3 and S2-B both present (`TheProducerAndTheSweep_LandTogether`,
+      *[round-1 finding 4]*), after S2-A and S5, the barrier record for both machines, the plan gate and the code gate
+      at `proceed`, and green macOS, Windows and Linux legs.
+- [ ] S7: the baseline drained to zero and deleted.
 - [ ] `research/module_tests.md` describes the run folder in its owner form, the sweep in two languages, the one-off
-      clean-up, the residual risk, the two guards and the allowlist's drain.
+      clean-up, the residual risk, the two guards and the baseline's drain.
 - [ ] When the last story merges, this document's status becomes `E5 shipped, <date>; promotes with its parent` —
       never *implemented* while it sits in `todo/` — and the parent's E5 entry gets the same sentence. Parent and stories
       documents promote together, after E7. The S2 spec promotes with them.
 
 ## Open questions for the owner (the re-split could not settle these from the sources)
 
+**Decided at plan-gate round 1 (2026-11-01):**
+
+- **Q1 — `raw-temp` over the ~1,200 in-run sites** — DECIDED *[round-1 finding 7]*, with the question consultant
+  (consult `abcaae48`, both answers agreeing): rule §7 allows only the inline exemption form, so a coai-only allowlist
+  would waive the released rule; **the shared rule changes FIRST**. A conventions plan (written next, in
+  `dew_flow_conventions`) authorises a `raw-temp` baseline ONLY for sites proven to run inside an owned run folder,
+  matched by exact membership plus the line's content hash (never a count ceiling), only shrinking, the line number a
+  hint and not a key. The producer PR merges only after that rule is released and coai's pin moved to it (a pin bump
+  alone, R6 decision 1). Stage A and S5 do not depend on it and may start now. D6, D8, S6, S7, the stages table and
+  the DoD carry it. (The first re-split text's "documented deviation from §7" is withdrawn.)
+
 **Blocking** (the producer PR cannot be built as specified without the answer; stage A and S5 can start now):
 
-- **Q1 — `raw-temp` over the ~1,200 in-run sites: an allowlist that only shrinks (D6), or every site migrated inside
-  the producer PR?** Rule §7 grants `raw-temp` only an inline exemption per line; the template's guard has no allowlist
-  (`ExcludedFiles = []`). *Recommended:* the allowlist + S7's drain. ~1,200 inline exemptions would be a second list
-  with no ratchet; a producer PR carrying the migration of 1,200 lines beside the port is unreviewable and outlives the
-  90 KB reviewer budget; the sites are INSIDE the run folder (no leftover, no shared namespace), so the risk the class
-  exists for is not present at those lines. Record it as a deviation from §7 in the promotion, and tell the parent.
 - **Q2 — The barrier record for the owner's Windows machine.** R6 records the operator's WSL machine open (2026-10-31)
   and the owner's Windows machine "not tested"; coai's suites run on it (E2's measurements were on Windows). D8 makes
   the producer merge wait for its scan. *Recommended:* run `tools/sweeper-scan.mjs --root <checkouts>` from Git for
@@ -793,12 +884,15 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
   the one-off clean-up covers the `win32`/`darwin`-tagged claims nobody reads (D4). Reason: a byte-identical copy is
   the whole value of the template; the Node reference already implements the clause with its tests.
 - **Q4 — `src_server/tests`, `src_bugs/tests` and bench get the run folder (S3) rather than per-test owned folders.**
-  *Recommended:* yes — one module initializer in the shared library; it makes D5 true for the Team server's thousand
-  product-named directories per run with no product change. Risk: a `[ModuleInitializer]` in a REFERENCED assembly runs
-  at that assembly's load, which may be after the first type of the test assembly is touched; the coder measures when,
-  and if too late, each suite gets a one-line initializer of its own that calls the library.
-- **Q5 — `scripts/lib/*.test.mjs` run bare under `node --test` in CI with no runner.** *Recommended:* per-test
-  `ownedDir(t, …)` through the wrap inside hooks (rule §2), no runner wrapper; the CI step stays as it is.
+  DECIDED *[round-1 finding 2]*: yes, and **each of the three assemblies gets its OWN `[ModuleInitializer]`** that
+  calls `RunTemp.Start` — a module initializer runs only when its own assembly loads, so the library's cannot serve
+  them — with a test per assembly, ordered first, that `TEMP` points at the run folder before the first test. It makes
+  D5 true for the Team server's thousand product-named directories per run with no product change. (The first
+  re-split text's "referencing the library is enough; the coder measures when" is withdrawn.)
+- **Q5 — `scripts/lib/*.test.mjs` run bare under `node --test` in CI with no runner.** DECIDED in part *[round-1
+  finding 5]*: the command gets a start-of-run sweep in front of it (a `--import` preload or a tiny runner that calls
+  the reference's sweep on the real temp root before the tests; S2-B item 2, tested). Still recommended for the sites
+  themselves: per-test `ownedDir(t, …)` through the wrap inside hooks (rule §2).
 - **Q6 — The Node sweeper on Windows checks the profile only (F16 open for Node; the C# side checks the SID too).**
   *Recommended:* accept and record; on a single-user Windows machine the two agree, and the C# sweep runs on every
   machine the extension's does. Tell the parent that coai has two sweepers of unequal strictness on Windows until F16.
@@ -810,6 +904,34 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
   scenario (#1) rather than re-design it.
 - **Q9 — One PR per tree for S5, or one PR.** *Recommended:* three PRs (the `src_mcp/tests` one alone touches ~160
   lines across dozens of files); each has no sweep and no producer, so the order between them is free.
+
+## Plan-gate round 1 of the re-split (2026-11-01, coai session `55ddb13b`)
+
+Verdict *revise*; eight findings, ALL accepted and applied (each marked *[round-1 finding n]* where it landed):
+
+0. The scanner `LeftoversGuard.cs` stays byte-identical; `Scan` returns findings and the `raw-temp` baseline filter lives
+   in coai's OWN `LeftoversRepositoryGuardTests` wrapper — named as an edit point in D2, S3, S6 and the E3 boundary table.
+1. A byte-identical `LeftoversSweepFixture` would sweep `Path.GetTempPath()`, which `RunTemp` redirects to the run folder;
+   the sweep root becomes `RunTemp.Real` — an edit point in D2 and the boundary table; test `TheSweepRoot_IsTheMachineTempRoot`
+   (S2-B item 1).
+2. A `[ModuleInitializer]` runs only when its own assembly loads: `src_server/tests`, `src_bugs/tests` and
+   `src_bench/CoaiBench.Tests` each get their own, calling `RunTemp.Start`, with a first-ordered test per assembly that
+   `TEMP` names the run folder before the first test — S3 (Files, sc. 2); Q4's answer replaced.
+3. A run that cannot make its owned folder FAILS the suite before any test; E2 (#897)'s never-throw machine-temp
+   fallback is withdrawn in both runners, RED test — S3 sc. 3a, S4 (`beginRun`).
+4. S3 and S2-B land in ONE squash-merged producer PR: the invariant (no producer without the sweep, no sweep without the
+   producer), the merge condition (`TheProducerAndTheSweep_LandTogether`), a revert reverts both — D8, the stages
+   table, S6 DoD, the DoD.
+5. The bare `node --test` of `scripts/lib` gets a start-of-run sweep (a preload or a runner calling the reference's sweep
+   on the real temp root before the tests), with a test — S2-B item 2, S4 (Files), Q5.
+6. D4's one-off clean-up re-checks each pick just before removal (present, unchanged since the listing, not a product
+   prefix, owner not alive) and refuses otherwise; the command is documented and scripted that way — D4, S2-A item 5.
+7. D6/Q1 decided with the question consultant (consult `abcaae48`): rule §7 allows only the inline exemption form, so a
+   coai-only allowlist would waive the released rule; the shared rule changes FIRST — a conventions plan authorises a
+   `raw-temp` baseline only for sites proven inside an owned run folder, by exact membership plus content hash (not a
+   count ceiling — `suppressionsOnlyShrink.test.ts`), only shrinking, the line a hint; the producer PR waits for that
+   release and a pin bump alone; stage A and S5 do not — D6, D8 (condition 5), S6, S7, Q1, the stages table, the DoD,
+   the status line, the boundary table, note 14.
 
 ## Plan-gate round 1 (2026-10-17) — kept as the record of the October version
 
@@ -831,7 +953,8 @@ became in this re-split is in brackets.
    identity checked before and after; S3, #16.]
 6. The guard also refuses importing `tmpdir` from `os`/`node:os` under any alias outside the helper, and
    `Path.GetTempPath` outside the helper library. [The shipped `node` profile and the copied C# guard do; the sites are
-   allowlisted (D6) until S7 — except the read-only-root ones, migrated in S6.]
+   baselined (D6, under the shared rule change of round-1 finding 7) until S7 — except the read-only-root ones,
+   migrated in S6.]
 7. Sweep deletions swallow not-found silently, so two concurrent sweeps never fail. [S2-B item 4; the template's
    `ClaimIfOurs` and `DeleteClaimIfStill` do.]
 
@@ -903,9 +1026,10 @@ The October notes 1–12 are kept below with what changed; 13–18 are new.
 13. **E5's stages for R6:** stage A = S2-A (the age-only `coai-` sweep retired) plus S5 (literals, no producer); the pin
     = #936 (done); the producer PR = S3 + S2-B + S4 + S6 squash-merged once; stage C = S7 (not a producer). The barrier
     record must name the owner's Windows machine before the producer merges (Q2).
-14. **A documented deviation from rule §7 for the parent's record:** `raw-temp` lands with a frozen, only-shrinking
-    allowlist of the in-run sites (D6, Q1) — the way the reference's `owner-blind` allowlist is shaped — instead of
-    ~1,200 inline exemptions; it drains to zero in S7.
+14. **A shared rule change is needed before E5's producer PR** *[round-1 finding 7, consult `abcaae48`]*: rule §7's
+    `raw-temp` class needs a baseline form — only for sites proven inside an owned run folder, exact membership plus
+    content hash, only shrinking, the line number a hint — written as its own plan in `dew_flow_conventions`, released,
+    and pinned here by a pin bump alone; coai's ~1,200 in-run sites drain under it in S7. Not a coai-only deviation.
 15. **The parent's E5 goal sentence** "the startup sweep collects both the new prefix and, for the migration window,
     the old `coai-` test literals" is superseded twice: by the risk decision (no age-only collection) and by `105d53c`
     (a legacy name is listed and collected only on kernel owner AND `gone`).
