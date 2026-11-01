@@ -27,7 +27,8 @@ import { spawnSync } from 'node:child_process';
 import { availableParallelism, hostname, tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { readRule, sweep } from './sweepTemp.mjs';
+import { readRule } from './sweepTemp.mjs';
+import { startOfRun } from './startOfRun.mjs';
 
 /**
  * Every test file under `root`, by extension: compiled ones from `out/test`, source ones from
@@ -96,13 +97,13 @@ function run(files) {
 }
 
 /**
- * What earlier runs left in temp, removed BEFORE this one makes anything (`sweepTemp.mjs`), and
+ * What earlier runs left in temp, removed BEFORE this one makes anything (`startOfRun.mjs`), and
  * said, so a run that starts by removing four thousand directories tells somebody. It never stops
  * the run: housekeeping that fails is reported and stepped over.
  */
 function sweepFirst() {
   try {
-    const { removed, failed } = sweep(tmpdir(), Date.now(), readRule('..'));
+    const { removed, failed } = startOfRun({ dir: tmpdir(), rule: readRule('..') });
     console.log(`run-tests: swept ${removed} leftover temp director${removed === 1 ? 'y' : 'ies'}`
       + (failed > 0 ? `, ${failed} could not be removed` : ''));
   } catch (error) {

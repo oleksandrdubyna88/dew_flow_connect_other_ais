@@ -80,8 +80,7 @@ public sealed class TempDirsAreSwept
             _ = FakeCliSteering.DeleteALeftover(Console.Error.WriteLine);
         }
 
-        PanelService.PruneOldScratchDirs(
-            RunTemp.Real, DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
+        StartOfRun.Run(RunTemp.Real, Rule);
     }
 
     [Fact]
