@@ -136,6 +136,32 @@ public sealed class ALinkCannotCarryTheReaderOutsideTests : IDisposable
     }
 
     [Fact]
+    public void ALinkToAFolderOutsideTheRepository_IsRefusedAsOutside_NotAsAFolderNamedBack()
+    {
+        // The existence check followed the link and said "is a directory" — which told the caller what an OUTSIDE path is.
+        // Containment is decided first, on the resolved path, and only then is the thing at it looked at.
+        Link("outdir", _outside);
+
+        var sentence = Said(Read("outdir"));
+
+        sentence.Should().Contain("inside").And.NotContain("is a directory");
+    }
+
+    [Fact]
+    public void AFolderInsideTheRepository_IsStillNamedAsAFolder()
+    {
+        Said(Read("docs")).Should().Contain("is a directory");
+    }
+
+    [Fact]
+    public void ADanglingLinkInsideTheRepository_StillGetsTheNoFileSentence()
+    {
+        Link("dl2", In("missing2"));
+
+        Said(Read("dl2")).Should().Contain("no file");
+    }
+
+    [Fact]
     public void ADanglingLinkInsideTheRepository_IsRefusedAsNoFile_NeverThrown()
     {
         // The target is inside the root and is not there. SECURITY.md promises a refusal; the size check used to throw

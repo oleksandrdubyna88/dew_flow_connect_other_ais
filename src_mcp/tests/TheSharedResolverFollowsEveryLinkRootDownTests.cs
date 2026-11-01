@@ -253,6 +253,45 @@ public sealed class TheSharedResolverFollowsEveryLinkRootDownTests : IDisposable
     }
 
     [Fact]
+    public void ResolveParent_OfAPathThatIsOnlyARoot_IsTheRoot_OnUnix()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the Windows roots are in the tests below");
+
+        RealPath.ResolveParent("/").Path.Should().Be("/");
+        RealPath.ResolveParent("//").Path.Should().Be("/");
+    }
+
+    [Theory]
+    [InlineData(@"C:\")]
+    [InlineData(@"\\server\share\")]
+    [InlineData(@"\\server\share")]
+    public void ResolveParent_OfAPathThatIsOnlyARoot_IsTheRoot_OnWindows(string root)
+    {
+        // `C:\` trims to `C:`, which was split into the leaf `C:` and the parent `.` — the process folder — and answered `<cwd>\C:`.
+        // RED only on Windows: the Unix root `/` trims to nothing and never met the split.
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "a drive and a UNC share are Windows roots; the same code on Unix has no such spelling");
+        var expected = RealPath.Resolve(root);
+
+        var parent = RealPath.ResolveParent(root);
+
+        parent.Path.Should().Be(expected.Path, "a root has no parent folder to split from");
+        parent.Ok.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ResolveParent_WhenTheParentCannotBeResolved_NamesThePathTheCallerGave()
+    {
+        Link(At("x"), At("y"));
+        Link(At("y"), At("x"));
+        var given = At("x", "leaf");
+
+        var result = RealPath.ResolveParent(given);
+
+        result.Ok.Should().BeFalse();
+        result.Why.Should().Contain(given, "the sentence is about the path that was asked for, not about the folder part of it");
+    }
+
+    [Fact]
     public void ResolveParent_CountsTheLeafAgainstTheLengthCap()
     {
         var result = RealPath.ResolveParent(At("a") + Path.DirectorySeparatorChar + new string('x', RealPath.MaxPathChars + 10));
