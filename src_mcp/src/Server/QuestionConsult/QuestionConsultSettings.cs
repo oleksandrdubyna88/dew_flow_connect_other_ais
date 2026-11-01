@@ -422,10 +422,19 @@ public static class QuestionRoots
         }
 
         var full = Full(root);
+
+        return Place(full, seen) is { Length: > 0 } place ? new RootRefusal(place) : WhereItLeads(stored, root, full, seen, presence);
+    }
+
+    /// <summary>
+    /// The checks on where a root's links LEAD, once its written spelling is no refused place: one that cannot be placed, one that
+    /// resolves into a refused place, or one that is missing. Apart from <see cref="WhyNot"/> to keep each within complexity 4.
+    /// </summary>
+    private static RootRefusal WhereItLeads(string stored, string root, string full, Seen seen, Func<string, RootPresence> presence)
+    {
         var real = seen.Resolved(full);
 
-        return Place(full, seen) is { Length: > 0 } place ? new RootRefusal(place)
-            : !real.Ok ? Unplaced(stored, root, real.Why, presence(full))
+        return !real.Ok ? Unplaced(stored, root, real.Why, presence(full))
             : Place(real.Path, seen) is { Length: > 0 } target ? new RootRefusal($"{target} ('{full}' resolves to it)")
             : Missing(stored, root, presence(full));
     }
