@@ -228,6 +228,25 @@ public sealed class ALinkCannotCarryTheReaderOutsideTests : IDisposable
         Read("k1").Should().BeOfType<DocumentOutcome.Refused>("forty-one expansions is one more than the budget");
     }
 
+    [Fact]
+    public void AChainOfFortyLinks_StillResolves_WhenTheRepositoryIsSpelledThroughALink()
+    {
+        // The macOS temp folder is /var/folders/…, and /var is a link: a request walked through the root's SPELLING spent one of the
+        // forty expansions on /var, so a chain of exactly the budget was refused. The root is resolved FIRST and the request is walked
+        // from it — the spelling's links are the root's business, not the request's.
+        var via = _work.At("via");
+        Link("via", _work.Path, via);
+        var spelled = Path.Combine(via, "root");
+        Chain("h", 40);
+        Chain("k", 41);
+
+        var forty = DocumentReader.Read(spelled, new DocumentRequest(Path: "h1"));
+
+        forty.Should().BeOfType<DocumentOutcome.Ready>(Said(forty));
+        ((DocumentOutcome.Ready)forty).Text.Should().Be(Inside, "forty link expansions is the budget, whichever way the root is spelled");
+        DocumentReader.Read(spelled, new DocumentRequest(Path: "k1")).Should().BeOfType<DocumentOutcome.Refused>("forty-one is still one too many");
+    }
+
     /// <summary>Links <c>{name}1 → {name}2 → … → {name}{count} → docs/spec.md</c>: reading the first expands <paramref name="count"/> links.</summary>
     private void Chain(string name, int count)
     {

@@ -198,6 +198,10 @@ public static class RealPath
         return leaf is "" or "." or ".." ? null : new Cut(FolderOf(trimmed, at), leaf);
     }
 
+    /// <summary>Whether the path is a drive and a name with no separator after the colon (<c>C:child</c>) — only on Windows.</summary>
+    /// <remarks>STUB: the failing test comes first.</remarks>
+    internal static bool IsBareDriveName(string path, bool windows) => false;
+
     private static string FolderOf(string trimmed, int lastSeparator) => lastSeparator < 0 ? "." : trimmed[..(lastSeparator + 1)];
 
     /// <summary>

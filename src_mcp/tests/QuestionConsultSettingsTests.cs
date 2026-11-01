@@ -484,6 +484,25 @@ public sealed class QuestionConsultSettingsTests : IDisposable
             .Which.Should().Contain("not a directory on this machine");
     }
 
+    [Theory]
+    [InlineData(RootPresence.Present, SettingProblemKinds.UnreadableFolder, "cannot be resolved safely")]
+    [InlineData(RootPresence.Unknown, SettingProblemKinds.UnreadableFolder, "could not be checked")]
+    [InlineData(RootPresence.Absent, SettingProblemKinds.MissingFolder, "not a directory on this machine")]
+    public void ARootWhoseLinksCannotBeResolved_IsRefusedWithItsKindAndItsStoredValue_SoThePageCanMarkIt(RootPresence said, string kind, string sentence)
+    {
+        // The refusal carried no kind and no value, so SettingProblems dropped it and the Settings page could not mark the root:
+        // the kind follows what the disk says about the folder, the value is the root as the settings file spells it.
+        var stored = $"  {_projects}  ";
+
+        var verdict = QuestionRoots.Validate([stored], _data, Places, _ => said, _ => throw new IOException("the disk would not say"));
+
+        verdict.Accepted.Should().BeEmpty("a root nobody can place is not granted");
+        var refusal = verdict.Refusals.Should().ContainSingle().Subject;
+        refusal.Sentence.Should().Contain(sentence);
+        refusal.Kind.Should().Be(kind);
+        refusal.Value.Should().Be(stored.Trim(), "the stored value, trimmed, as the page marks it");
+    }
+
     [Fact]
     public void EachRootOfTheOtherSidesSpelling_IsProbedOnce()
     {

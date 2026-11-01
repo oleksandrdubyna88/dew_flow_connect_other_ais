@@ -226,6 +226,38 @@ public sealed class TheSharedResolverFollowsEveryLinkRootDownTests : IDisposable
     }
 
     [Fact]
+    public void ADotAfterAFile_Fails_Too_BecauseTheDiskAnswersNotADirectory()
+    {
+        // POSIX: `file/.` is ENOTDIR, exactly as `file/..` and `file/name` are — the `.` is a name below the file, not nothing.
+        Link(At("tofile"), At("a", "b", "f.txt"));
+
+        RealPath.Resolve(At("tofile", ".")).Ok.Should().BeFalse("`link-to-file/.` is ENOTDIR");
+        RealPath.Resolve(At("a", "b", "f.txt", ".")).Ok.Should().BeFalse("`file/.` is ENOTDIR");
+        RealPath.Resolve(At("a", "b", "f.txt") + Path.DirectorySeparatorChar).Ok.Should().BeTrue("a trailing separator is not a name below the file");
+    }
+
+    [Theory]
+    [InlineData("C:child", true, true)]
+    [InlineData("C:", true, true)]
+    [InlineData("c:child.txt", true, true)]
+    [InlineData(@"C:\child", true, false)]
+    [InlineData(@"C:dir\child", true, false)]
+    [InlineData("C:child", false, false)]
+    [InlineData("child", true, false)]
+    public void ABareDriveRelativeName_IsOneThatResolveParentMustRefuse_OnlyOnWindows(string path, bool windows, bool bare) =>
+        RealPath.IsBareDriveName(path, windows).Should().Be(bare);
+
+    [Fact]
+    public void ResolveParent_OfABareDriveRelativeName_Fails_AsResolveDoes_OnWindows()
+    {
+        // `C:child` names the current folder of drive C: and is not resolved; its parent must not become `<cwd>\C:child`.
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "a 'C:x' name means a drive-relative path only on Windows");
+
+        RealPath.Resolve("C:child").Ok.Should().BeFalse();
+        RealPath.ResolveParent("C:child").Ok.Should().BeFalse("the parent form refuses what the whole form refuses");
+    }
+
+    [Fact]
     public void ALinkToAFileThenDotDotX_FailsAsGoingBelowAFile()
     {
         // Pins a gate claim that was REJECTED: that `link-to-file/../x` slips through. The walk refuses it already, in these words.
