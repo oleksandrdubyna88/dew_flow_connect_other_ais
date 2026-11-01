@@ -425,10 +425,22 @@ public static class QuestionRoots
         var real = seen.Resolved(full);
 
         return Place(full, seen) is { Length: > 0 } place ? new RootRefusal(place)
-            : !real.Ok ? new RootRefusal($"{QuestionConsultKeys.Roots}: '{RealPath.Shown(full)}' cannot be resolved safely, so it is not granted — {real.Why}")
+            : !real.Ok ? Unplaced(stored, root, real.Why, presence(full))
             : Place(real.Path, seen) is { Length: > 0 } target ? new RootRefusal($"{target} ('{full}' resolves to it)")
             : Missing(stored, root, presence(full));
     }
+
+    /// <summary>
+    /// A root whose links cannot be followed to the end is not granted — and, as every refusal about a folder, it names its KIND and the
+    /// STORED value so the Settings page can mark it. The kind follows what the disk says about the folder: confirmed none or unanswerable is
+    /// <see cref="Missing"/> as ever (an unreachable share is no directory here); a folder that IS there but cannot be placed (a loop, a chain
+    /// over the budget) is unreadable, in the resolver's words.
+    /// </summary>
+    private static RootRefusal Unplaced(string stored, string root, string why, RootPresence said) => said == RootPresence.Present
+        ? new RootRefusal(
+            $"{QuestionConsultKeys.Roots}: '{RealPath.Shown(root)}' cannot be resolved safely, so it is not granted — {why}",
+            SettingProblemKinds.UnreadableFolder, stored.Trim())
+        : Missing(stored, root, said);
 
     /// <summary>Why a root that passed every place check still cannot be read: no folder, or a disk that would not say — each its own kind.</summary>
     private static RootRefusal Missing(string stored, string root, RootPresence said) => said switch

@@ -95,6 +95,20 @@ public static class DocumentReader
         RealPath.Resolve(path, repoRoot, read);
 
     /// <summary>
+    /// The real path of <paramref name="path"/> walked from an ALREADY RESOLVED repository root — a relative path is taken against the
+    /// resolved root, so the links in the root's own spelling are not spent again on the request.
+    /// </summary>
+    /// <remarks>
+    /// The budget is one for the whole resolution, and a request walked through the root's SPELLING paid for the root's links too:
+    /// on macOS the temp folder is <c>/var/folders/…</c> and <c>/var</c> is a link, so a chain of exactly <see cref="RealPath.MaxLinkExpansions"/>
+    /// links under a perfectly ordinary repository was one over and refused. The root is resolved once, by <see cref="CanonicalRoot"/>;
+    /// the request starts from what it resolved to. An absolute request is its own spelling and is walked as written.
+    /// The result is the root's failure when the root could not be resolved: nothing is placed under a folder nobody can place.
+    /// </remarks>
+    public static RealPathResult CanonicalUnder(RealPathResult root, string path, EntryReader? read = null) =>
+        root.Ok ? RealPath.Resolve(path, root.Path, read) : root;
+
+    /// <summary>
     /// The session identity a caller's word for a document means — the same one <c>Read</c> derives.
     /// </summary>
     /// <remarks>
@@ -117,7 +131,7 @@ public static class DocumentReader
         // first and falls back to a path.
         // A path that cannot be resolved (a loop, an over-long one) is not a path of this repository: it is tried as a name.
         var root = CanonicalRoot(repoPath, read);
-        var resolved = Canonical(repoPath, trimmed, read);
+        var resolved = CanonicalUnder(root, trimmed, read);
         var asPath = root.Ok && resolved.Ok ? DocumentId.Of(root.Path, resolved.Path) : string.Empty;
 
         return asPath.Length > 0 ? asPath : trimmed;
@@ -181,18 +195,17 @@ public static class DocumentReader
         // Made absolute against the REPOSITORY, and resolved root-down, before anything asks the disk what is at it: the existence
         // checks FOLLOW links, so asked of the spelling first they answered "is a directory" for a link to an OUTSIDE folder — telling
         // the caller what an outside path is. Containment is decided on the resolved path; only a path that is inside is looked at.
-        var absolute = Absolute(repoPath, path);
-        var resolved = Canonical(repoPath, absolute, read);
         var root = CanonicalRoot(repoPath, read);
-        if (!resolved.Ok || !root.Ok)
+        var resolved = CanonicalUnder(root, path, read);
+        if (!resolved.Ok)
         {
-            return new DocumentOutcome.Refused(Unresolvable(path, resolved.Ok ? root : resolved));
+            return new DocumentOutcome.Refused(Unresolvable(path, resolved));
         }
 
         var id = DocumentId.Of(root.Path, resolved.Path);
         if (id.Length == 0)
         {
-            return new DocumentOutcome.Refused(Outside(path, absolute, resolved.Path, repoPath));
+            return new DocumentOutcome.Refused(Outside(path, Absolute(repoPath, path), resolved.Path, repoPath));
         }
 
         return OnDisk(resolved.Path) is DocumentOutcome.Refused missing ? missing : Contents(resolved.Path, id);

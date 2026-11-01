@@ -65,7 +65,7 @@ public readonly record struct RealPathResult(bool Ok, string Path, string Why)
 /// a lexical pop would answer the folder that holds <c>missing</c> — so a link text <c>nonexistent/../evil</c> would resolve to
 /// <c>root/evil</c> with <c>evil</c> never looked at. Fail, never pop. A DANGLING link is not "missing": it is a link, it costs
 /// a hop, and its target is walked like any other.</para>
-/// <para><b>Nothing is below a file.</b> <c>file/..</c> and <c>file/name</c> fail: the disk answers ENOTDIR, and a pop would answer the file's neighbour, which nobody named.</para>
+/// <para><b>Nothing is below a file.</b> <c>file/.</c>, <c>file/..</c> and <c>file/name</c> fail: the disk answers ENOTDIR, and a pop would answer the file's neighbour, which nobody named.</para>
 /// <para><b>Everything else fails.</b> Over the budget, a loop (which only the budget ends), a NUL, an empty link text, a drive-relative
 /// <c>C:x</c>, a path over <see cref="MaxPathChars"/> characters, and any IO error are a <see cref="RealPathResult"/> that is not
 /// <see cref="RealPathResult.Ok"/>: every caller turns it into refuse / not ours / cannot compare. None of them falls back to the spelling — with ONE named exception: <c>ConsultationService.RepoIdentity</c> keeps the spelling of a checkout it cannot resolve, on purpose. It is an owner LABEL for filtering a caller's own consultations, not an access decision, and both sides compute it the same way, so two callers agree on it whether or not either could resolve the path.</para>
@@ -186,7 +186,7 @@ public static class RealPath
     /// <summary>The folder part and the last name of a path — or null when there is no last name to keep apart.</summary>
     private static Cut? Split(string path)
     {
-        if (string.IsNullOrEmpty(path) || IsRoot(path))
+        if (Whole(path))
         {
             return null;
         }
@@ -198,9 +198,14 @@ public static class RealPath
         return leaf is "" or "." or ".." ? null : new Cut(FolderOf(trimmed, at), leaf);
     }
 
-    /// <summary>Whether the path is a drive and a name with no separator after the colon (<c>C:child</c>) — only on Windows.</summary>
-    /// <remarks>STUB: the failing test comes first.</remarks>
-    internal static bool IsBareDriveName(string path, bool windows) => false;
+    /// <summary>Whether the path is a drive and a name with no separator after the colon (<c>C:child</c>) — only on Windows, where both <c>/</c> and <c>\</c> separate.</summary>
+    /// <remarks>The OS fact is a parameter so a test decides it on any machine; <see cref="Split"/> passes this OS's. <c>C:child</c> is the current folder of drive C and is no name to split off: kept whole, <see cref="Resolve"/> refuses it.</remarks>
+    internal static bool IsBareDriveName(string path, bool windows) =>
+        windows && IsDriveQualified(path) && path.AsSpan(2).IndexOfAny('/', '\\') < 0;
+
+    /// <summary>A path with no last name to keep apart: empty, a bare root, or a bare drive-relative name.</summary>
+    private static bool Whole(string path) =>
+        string.IsNullOrEmpty(path) || IsRoot(path) || IsBareDriveName(path, OperatingSystem.IsWindows());
 
     private static string FolderOf(string trimmed, int lastSeparator) => lastSeparator < 0 ? "." : trimmed[..(lastSeparator + 1)];
 
@@ -304,15 +309,16 @@ public static class RealPath
 
         private RealPathResult? Step(string segment)
         {
+            if (_onFile)
+            {
+                // `file/.`, `file/..` and `file/name` are ENOTDIR on the disk: nothing is below a file — not even `.`, which is a name there —
+                // so a skip or a pop to its neighbour would read a file nobody named.
+                return RealPathResult.Fail($"'{Shown(path)}' goes below a file ('{Shown(_chain[^1])}') — the disk answers 'not a directory'");
+            }
+
             if (segment == ".")
             {
                 return null;
-            }
-
-            if (_onFile)
-            {
-                // `file/..` and `file/name` are ENOTDIR on the disk: nothing is below a file, so a pop to its neighbour would read a file nobody named.
-                return RealPathResult.Fail($"'{Shown(path)}' goes below a file ('{Shown(_chain[^1])}') — the disk answers 'not a directory'");
             }
 
             return segment == ".." ? Up() : Enter(segment);
