@@ -138,7 +138,7 @@ sequenceDiagram
   The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
   and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
   `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (the measuring test and drift
-  guard: 17 925 + 62 061 since 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
+  guard: 17 963 + 62 035 since 2026-11-01 (the conventions pin at 105d53c); 17 963 + 62 061 before that; 17 947 + 62 061 before E1.S2's --host-facts; 17 925 + 62 061 from 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
   `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
   the measured maximum elsewhere),
   `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
