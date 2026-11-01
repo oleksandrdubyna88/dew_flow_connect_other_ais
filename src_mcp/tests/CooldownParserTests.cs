@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// Moved here from <c>src_server/tests/SlotTests.cs</c> with the type itself (story 5.3b of
-/// todo/PLAN_every_round_is_counted.md): <see cref="CooldownParser"/> lives in the shared runners library now, and its
+/// research/PLAN_every_round_is_counted.md): <see cref="CooldownParser"/> lives in the shared runners library now, and its
 /// tests live beside its other readers' — the ladder's and the ledger's. The Team server's own use of it (a slot parked
 /// until the stated instant) stays tested where the server is, in <c>AStatedResetParksTheSlotTests</c>.
 /// </remarks>
@@ -81,7 +81,7 @@ public sealed class CooldownParserTests
     public void AWeeklyLimitWithNoDateWaitsADay() =>
         CooldownParser.Fallback("you have reached your weekly limit", 0).Should().Be(CooldownParser.WeeklyWithoutDate);
 
-    // ── a stated DURATION (story 5.3a of todo/PLAN_every_round_is_counted.md) ───────────────────────────────────────
+    // ── a stated DURATION (story 5.3a of research/PLAN_every_round_is_counted.md) ───────────────────────────────────────
     // agy states how long, not when. Until this was read, the server parked an exhausted Gemini slot on its doubling
     // 30-minute guess and asked again into the refusal for the whole ~110 h of a stated reset.
 
@@ -160,7 +160,7 @@ public sealed class CooldownParserTests
         CooldownParser.Until("weekly limit reached. Resets in 9999h", Now).Should().Be(Now + CooldownParser.WeeklyWithoutDate);
     }
 
-    // ── the STATED reset alone (story 5.3b of todo/PLAN_every_round_is_counted.md) ──────────────────────────────────
+    // ── the STATED reset alone (story 5.3b of research/PLAN_every_round_is_counted.md) ──────────────────────────────────
     // What the local half reads: the instant a vendor named, and nothing when it named none — never the guess `Until`
     // parks a slot on, because a guess written into the ledger or shown on a card would be a claim the vendor never made.
 

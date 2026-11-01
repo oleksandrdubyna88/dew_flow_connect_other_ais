@@ -74,7 +74,8 @@ test('an owned root is <root>/home beside an EMPTY <root>/os, and a home is mapp
 test('the shim\'s own environment: KIMI_CODE_HOME the root\'s home, every OS-home name the root\'s os, the person\'s bin FIRST on PATH', () => {
   exported(owned, ['shimEnv']);
   const root = join(base, 'env');
-  const env = owned.shimEnv({ root, personsBin: join(base, 'persons', 'bin') });
+  // The WINDOWS shape, asked for by name: the Linux shape (HOME alone, ':' on PATH — DL11) is kimi-home.test.mjs's.
+  const env = owned.shimEnv({ root, personsBin: join(base, 'persons', 'bin'), platform: 'win32', parent: { PATH: 'C:\\Windows' } });
 
   assert.equal(env.KIMI_CODE_HOME, join(root, 'home'));
   assert.equal(env.KIMI_CODE_NO_AUTO_UPDATE, '1');

@@ -86,7 +86,7 @@ public sealed class SecurityAnswerLimitCharacterizationTests
 
     /// <summary>
     /// A refused answer that took a repair was two paid launches, and the ledger writes each as its own line (story 3.3
-    /// of todo/PLAN_every_round_is_counted.md) — so the refusal keeps the launches the answer carried, or the turn falls
+    /// of research/PLAN_every_round_is_counted.md) — so the refusal keeps the launches the answer carried, or the turn falls
     /// back to one folded line.
     /// </summary>
     [Fact]

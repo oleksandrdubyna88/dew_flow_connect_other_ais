@@ -23,7 +23,7 @@ public sealed class NoGaugeCapture : IGaugeCapture
 }
 
 /// <summary>
-/// The codex gauge read (story 6.1a of todo/PLAN_every_round_is_counted.md): <c>codex app-server</c> ·
+/// The codex gauge read (story 6.1a of research/PLAN_every_round_is_counted.md): <c>codex app-server</c> ·
 /// <c>account/rateLimits/read</c>, run on the slot's own token set — under the lease the caller already holds, with the
 /// containment the epic-6 risk consultation fixed, in its order.
 /// </summary>
@@ -148,7 +148,7 @@ public sealed class GaugeCapture(
     {
         if (!vendor.Runtime.Equals(CodexRuntime, StringComparison.OrdinalIgnoreCase))
         {
-            return new GaugeCaptured.Skipped(GaugeCodes.SlotNotReadable);
+            return new GaugeCaptured.Skipped(GaugeCodes.NoGaugeForRuntime);
         }
 
         var current = slots.Read(slot.Vendor, slot.Name);

@@ -1362,7 +1362,7 @@ test('the bugs deploy wrapper verifies what it downloaded before unpacking it', 
 });
 
 test('the deploy canary says it is the deploy\'s own, and still runs against a server that does not know the word', () => {
-  // Story 3.5 of todo/PLAN_every_round_is_counted.md: the canary was written as an ordinary review, so a spending
+  // Story 3.5 of research/PLAN_every_round_is_counted.md: the canary was written as an ordinary review, so a spending
   // report could not tell the deploy's check from a person's. A server older than the kind refuses it with a 400
   // before any vendor starts — "'canary' is not a kind of job" — so the canary asks once more without it rather than
   // rolling back a release that is fine. Read as the host reads it, like every deploy script here.

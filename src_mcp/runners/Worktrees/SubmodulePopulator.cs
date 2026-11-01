@@ -65,14 +65,14 @@ internal sealed class SubmodulePopulator(IProcessLauncher launcher)
 
         await launcher.RunAsync(new ProcessRequest(
             "git",
-            [
+            TreeGit.Argv([
                 // The mitigation this lifts (CVE-2022-39253) is about a submodule URL the REPOSITORY
                 // supplies; the URL below is one we computed and contained. It is set for this one
                 // invocation, never for a repository.
                 "-c", "protocol.file.allow=always",
                 "-c", $"submodule.{mount.Name}.url={source}",
                 "submodule", "update", "--init", "--", mount.Path,
-            ],
+            ]),
             worktreePath)
         {
             Timeout = Budget,
@@ -94,7 +94,7 @@ internal sealed class SubmodulePopulator(IProcessLauncher launcher)
         var candidate = Path.GetFullPath(Path.Combine(root, mount.Path));
         var inside = candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
-        return inside && NoLinksBetween(root, candidate) && HasGit(candidate)
+        return inside && NoLinksBetween(root, candidate) && GitMarker.HasGit(candidate)
             ? candidate.Replace('\\', '/')
             : string.Empty;
     }
@@ -127,9 +127,4 @@ internal sealed class SubmodulePopulator(IProcessLauncher launcher)
 
     private static bool IsNotLink(DirectoryInfo dir) =>
         !dir.Exists || !dir.Attributes.HasFlag(FileAttributes.ReparsePoint);
-
-    /// <summary>A populated submodule carries a <c>.git</c> file; an empty mount carries nothing.</summary>
-    /// <remarks>Internal rather than private since the sanitised snapshot (<c>Snapshots/SnapshotListing</c>) asks the same question of a gitlink — one answer to "populated".</remarks>
-    internal static bool HasGit(string path) =>
-        File.Exists(Path.Combine(path, ".git")) || Directory.Exists(Path.Combine(path, ".git"));
 }

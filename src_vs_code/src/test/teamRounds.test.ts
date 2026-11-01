@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { ROUND_WINDOWS, serverRounds, Usage } from '../teamServerApi';
+import { ROUND_WINDOWS, ROUNDS_UNAVAILABLE, serverRounds, Usage } from '../teamServerApi';
 import { teamRoundsBlock } from '../teamRounds';
 import { pageTree } from './pageTree';
 
 /**
- * The Team server's own round counts, read and drawn (story 5.2 of todo/PLAN_every_round_is_counted.md).
+ * The Team server's own round counts, read and drawn (story 5.2 of research/PLAN_every_round_is_counted.md).
  *
  * <p>An older server is judged by the SHAPE of its answer, never its status: today's server binds only `window`, so it
  * answers `?windows=5h,24h,week` with 200 and today's range — no `windows`, no count fields. Every test of "unavailable"
@@ -81,8 +81,14 @@ test('AnOlderServer_ShowsUnavailable_NotZero — a 200 with today\'s range and n
 
   assert.equal(read.kind, 'unavailable');
   assert.match(text, /count unavailable/);
-  assert.doesNotMatch(text, /\b0\b/, 'a server that cannot count rounds drew a zero');
-  assert.match(text, /does not count rounds/, 'the reason is said, not left to guess');
+  assert.doesNotMatch(text.replace(ROUNDS_UNAVAILABLE, ''), /\b0\b/, 'a server that cannot count rounds drew a zero (the reason names the version 0.12.0 — that is not a count)');
+  assert.match(text, /answered without the 5 h \/ 24 h \/ 7 d windows — Team servers count rounds from 0\.12\.0/, 'the reason is said, not left to guess');
+});
+
+test('ACountlessServer_IsToldTheVersionThatCounts — the message names 0.12.0 and does not claim the answering server is older', () => {
+  assert.match(ROUNDS_UNAVAILABLE, /0\.12\.0/);
+  assert.doesNotMatch(ROUNDS_UNAVAILABLE, /does not count rounds yet/, 'the old text names no version to upgrade to');
+  assert.equal(ROUNDS_UNAVAILABLE, 'this Team server answered without the 5 h / 24 h / 7 d windows — Team servers count rounds from 0.12.0');
 });
 
 test('a window missing among the three is unavailable, not a row of zeroes', () => {

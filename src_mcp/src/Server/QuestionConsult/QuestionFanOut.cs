@@ -202,10 +202,11 @@ public sealed class QuestionFanOut(
         var looking = WithLookup(row);
         var toolbox = looking.Runtime is AntigravityConsultant agy ? agy.LookupToolbox : string.Empty;
 
-        return CliLaunch(looking, roots => QuestionPrompt.Compose(new QuestionPromptInput(
-            instruction, row.Prompt.Capability, input.Question, clean.Context, string.Empty, roots, input.Nonce)
+        return CliLaunch(looking, copied => QuestionPrompt.Compose(new QuestionPromptInput(
+            instruction, row.Prompt.Capability, input.Question, clean.Context, string.Empty, copied.Paths, input.Nonce)
         {
             Toolbox = toolbox,
+            Limitations = copied.Limitations,
         }));
     }
 
@@ -213,10 +214,10 @@ public sealed class QuestionFanOut(
     /// A CLI row's launch, its prompt composed over the roots it is told: a disk row its roots — or, standing in a COPY of
     /// them (Vibe, D6), the copies' paths, which its launch makes; never the originals it cannot read (M-V11).
     /// </summary>
-    private static RowInput.Launch CliLaunch(RowAdmission.Admitted looking, Func<IReadOnlyList<string>, string> composed) =>
+    private static RowInput.Launch CliLaunch(RowAdmission.Admitted looking, Func<CopiedRoots, string> composed) =>
         looking.Plan.Cwd == CwdKind.Snapshot
-            ? new RowInput.Launch(looking, composed([])) { NamingCopies = composed }
-            : new RowInput.Launch(looking, composed(looking.Plan.Grant.Capability == Capability.Disk ? looking.Plan.Grant.Roots : []));
+            ? new RowInput.Launch(looking, composed(CopiedRoots.None)) { NamingCopies = composed }
+            : new RowInput.Launch(looking, composed(CopiedRoots.Of(looking.Plan.Grant.Capability == Capability.Disk ? looking.Plan.Grant.Roots : [])));
 
     /// <summary>
     /// An antigravity DISK row, able to ask coai to list and search its granted roots — it cannot do either itself in plan
@@ -298,14 +299,16 @@ public sealed class QuestionFanOut(
     }
 
     /// <summary>D14 (d): the heartbeat the sweep reads, rewritten every thirty seconds while anything runs.</summary>
-    private static async Task HeartbeatAsync(Current current, TimeSpan every, CancellationToken stop)
+    private async Task HeartbeatAsync(Current current, TimeSpan every, CancellationToken stop)
     {
+        var missing = false;
         try
         {
             while (!stop.IsCancellationRequested)
             {
                 await Task.Delay(every, stop);
-                await current.UpdateAsync(record => record with { HeartbeatUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) });
+                // One warning per RUN of misses (code gate G3): a disk that refuses for ten minutes is one sentence, not twenty.
+                missing = !await BeatAsync(current, announce: !missing);
             }
         }
         catch (OperationCanceledException)
@@ -314,8 +317,34 @@ public sealed class QuestionFanOut(
         }
     }
 
+    /// <summary>
+    /// One beat; answers whether it landed. A write the disk refuses (<see cref="UnauthorizedAccessException"/> on Windows for a move over a file a reader holds, past
+    /// <c>AtomicFile</c>'s retry window; an <see cref="IOException"/>) is a MISSED beat: said at Warning when <paramref name="announce"/> and skipped, because the sweep ends a
+    /// question only on a stale heartbeat AND a dead pid (two minutes, four beats), so one missed beat is harmless and a faulted heartbeat task would
+    /// end a question whose rows all answered (CI run 39325900821). Only the beat is guarded — a row's settle write and the final write still throw:
+    /// a lost answer must reach the caller.
+    /// </summary>
+    private async Task<bool> BeatAsync(Current current, bool announce)
+    {
+        try
+        {
+            await current.UpdateAsync(record => record with { HeartbeatUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) });
+
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            if (announce)
+            {
+                log.Warning(e, "question {Id}: a heartbeat could not be written ({Reason}); the next beat tries again", current.Record.Id, e.Message);
+            }
+
+            return false;
+        }
+    }
+
     /// <summary>One row's launch settings — the roster's shape (<c>RosterBuilder.SettingsFor</c>), with the row's own budget.</summary>
-    private ReviewerSettings SettingsFor(RowAdmission.Admitted row)
+    internal ReviewerSettings SettingsFor(RowAdmission.Admitted row)
     {
         var provider = row.Provider;
         var settings = new ReviewerSettings(provider.Provider)
@@ -334,6 +363,8 @@ public sealed class QuestionFanOut(
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(env),
             // The row's fast mode, as for a reviewer (research/PLAN_fast_mode.md).
             Fast = provider.Fast,
+            // Only KimiRuntime reads it: whether a sign-in folder on network storage may be used (DL6, coai.kimiAllowNetworkSignIn).
+            KimiAllowNetworkSignIn = panel.KimiAllowNetworkSignIn,
         };
         // The row's CLI effort and the local ceiling by the reviewers' own road (research/PLAN_one_model_catalog.md, C2;
         // research/PLAN_local_effort_reaches_every_local_launch.md) — a local row's own effort, else the panel's; an api row's
@@ -495,7 +526,7 @@ public abstract record RowInput
     public sealed record Launch(RowAdmission.Admitted Row, string Prompt) : RowInput
     {
         /// <summary>For a row standing in a copy of its roots: the prompt naming the copies (<see cref="RowLaunchInput.PromptNaming"/>).</summary>
-        public Func<IReadOnlyList<string>, string> NamingCopies { get; init; } = RowLaunchInput.NamesNoCopies;
+        public Func<CopiedRoots, string> NamingCopies { get; init; } = RowLaunchInput.NamesNoCopies;
     }
 
     /// <summary>An api <c>none</c> row: composed with the outline when it arrives — the other rows do not wait for it.</summary>

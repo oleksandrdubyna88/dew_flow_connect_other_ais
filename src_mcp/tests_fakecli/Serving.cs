@@ -4,7 +4,7 @@ using System.Text.Json;
 /// <summary>
 /// The stand-in for a CLI that is a SERVER: it answers one request over stdio and goes on living — the shape of
 /// <c>codex app-server</c>, which the Team server's gauge reader starts and must end itself (story 6.1a of
-/// todo/PLAN_every_round_is_counted.md).
+/// research/PLAN_every_round_is_counted.md).
 /// </summary>
 /// <remarks>
 /// <para>Two doors into the same behaviour. The <c>serve</c> VERB takes everything on argv, for the launcher's own
@@ -40,7 +40,7 @@ static class Serving
     /// </summary>
     public static int RunShy(string pidFile, int answerAfterMs, string answer)
     {
-        File.WriteAllLines(pidFile, [Environment.ProcessId.ToString()]);
+        WritePidFile(pidFile, [Environment.ProcessId.ToString()]);
         using var asked = new ManualResetEventSlim();
         using var eof = new ManualResetEventSlim();
         var reading = new Thread(() =>
@@ -92,11 +92,47 @@ static class Serving
             started.Add(Process.Start(info)!.Id.ToString());
         }
 
-        File.WriteAllLines(pidFile, started);
+        WritePidFile(pidFile, started);
         Thread.Sleep(quitAfterMs);
 
         return 0;
     }
+
+    /// <summary>
+    /// Writes a pid file WHOLE OR NOT AT ALL: the lines go to a sibling temp name, and only the finished file is moved onto the
+    /// real one — so a test polling <c>File.Exists</c> and then reading can never meet it half-written. One
+    /// <c>File.WriteAllLines</c> straight to the name held it open for write while it existed: on Windows the poll's
+    /// <c>File.ReadAllLines</c> then threw a sharing violation (CI run 38853192407, <c>TheDescendantsOfALiveServer_AreListedWithTheirStartTimes</c>,
+    /// about 1 run in 90), and on Linux the same poll could read half the file.
+    /// </summary>
+    /// <remarks>
+    /// The move REPLACES an existing file: the ACP agent replays its steps on every prompt, so its <c>grandchild</c> step writes the same
+    /// pid file again (and the plain <c>File.Move</c> refused it — the agent died on the second prompt). On Windows a replace fails with
+    /// a sharing violation while a reader holds the destination open (the tests read it with <c>FileShare.Read</c>, no delete share), so
+    /// ONLY the move is retried — <see cref="MoveTries"/> times, <see cref="MoveRetryMs"/> ms apart — and the last failure is rethrown.
+    /// </remarks>
+    internal static void WritePidFile(string pidFile, IEnumerable<string> lines)
+    {
+        var writing = pidFile + ".tmp-" + Environment.ProcessId;
+        File.WriteAllLines(writing, lines);
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(writing, pidFile, overwrite: true);
+
+                return;
+            }
+            catch (IOException) when (attempt < MoveTries)
+            {
+                Thread.Sleep(MoveRetryMs);
+            }
+        }
+    }
+
+    private const int MoveTries = 40;
+
+    private const int MoveRetryMs = 25;
 
     /// <summary>The <c>app-server</c> argv: steered by the file in the temp directory, or the defaults.</summary>
     public static int AppServer()
@@ -120,7 +156,7 @@ static class Serving
 
         if (steering.PidFile.Length > 0)
         {
-            File.WriteAllLines(steering.PidFile, started);
+            WritePidFile(steering.PidFile, started);
         }
 
         if (steering.AuthRewrite.Length > 0 && Environment.GetEnvironmentVariable("CODEX_HOME") is { Length: > 0 } home)

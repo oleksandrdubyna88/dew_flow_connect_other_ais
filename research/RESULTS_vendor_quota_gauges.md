@@ -1,6 +1,6 @@
 # RESULTS — where each vendor states its quota gauge, who shares each account, and which paid paths write a ledger line
 
-> Status: **record, 2026-10-10.** Story 1.1 of [PLAN_every_round_is_counted.md](../todo/PLAN_every_round_is_counted.md)
+> Status: **record, 2026-10-10.** Story 1.1 of [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md)
 > (epic E1), with the three fixtures of story 1.2 beside it under `src_server/tests/fixtures/usage/`. Read-only on the
 > Team server; on this machine one trivial launch per vendor per side was the accepted cost, and a 2 GB copy of the
 > codex profile was made, read and deleted. Previous record: [RESULTS_what_spends_the_subscription_2026-10-09.md](RESULTS_what_spends_the_subscription_2026-10-09.md).
@@ -334,7 +334,24 @@ continued turns, **10**'s follow-up. Doubled: **6**.
   the sample. **agy in WSL** was not launched (the Windows refusal is the same account's).
 - **`codex doctor`** was not run: it "diagnoses auth" and might touch the token set; the plan asked for the
   app-server read, which was enough.
-- The Team server's slot was never touched; its directory names were listed read-only, its ledger read read-only.
+- The Team server's slot was never touched **by this record (2026-10-10)**; its directory names were listed read-only, its ledger read read-only. It was read later, by the product — see §7.1.
+
+### 7.1 The first live read of the Team server's slot (2026-10-19, server 0.13.1)
+
+Recorded by the promotion of [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md); it is the product's own
+capture (story 6.1a, inside the slot's lease), not a run of this record's method.
+
+| What was observed | Value |
+|---|---|
+| When | 2026-10-19, after the codex job of server 0.13.1's deploy canary — the reading came one second after that job |
+| The read | limit `codex`, the primary window: **10 %** of **10 080 minutes**, resets **2026-10-25T08:09:15Z**; plan `prolite`; not stale |
+| The slot | the reader marker cleared and the slot unblocked — nothing was left running on the token set |
+| The ledger | the canary's own line carries `gaugeWindows` |
+| The server log | numbers and fixed codes only — no raw message, no stderr, no token |
+
+**What this settles, and what it does not.** Story 1.1's item *"the Team server slot was not read"* is settled: the slot was
+read, by 6.1a's capture, inside its lease. **Still unmeasured:** agy in WSL was not launched, and the read with an
+EXPIRED access token was not run.
 
 ## 8. Fixtures — story 1.2
 

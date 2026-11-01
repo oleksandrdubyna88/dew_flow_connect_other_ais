@@ -42,7 +42,7 @@ public sealed class SessionStoreConcurrencyTests : IDisposable
         }
     }
 
-    private static PersistedSession SessionFor(string repo, int rounds) =>
+    internal static PersistedSession SessionFor(string repo, int rounds) =>
         new(
             new SessionState("abc12345", repo, "main", PanelConfig.Uniform(3, 2)),
             [.. Enumerable.Range(1, rounds).Select(n => new RoundRecord(

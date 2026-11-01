@@ -9,7 +9,7 @@ import { bubbled, pageTree } from './pageTree';
 import { runPageHtml } from './pageScriptHarness';
 
 /**
- * Where a plan price is typed (story 6.2 of todo/PLAN_every_round_is_counted.md): Setup › Team servers, once per vendor
+ * Where a plan price is typed (story 6.2 of research/PLAN_every_round_is_counted.md): Setup › Team servers, once per vendor
  * account the server serves — one box and one Save price button each (every action a panel button). A refused price is
  * said AT ITS CARD, with what was typed kept in the box, and nothing is stored.
  */

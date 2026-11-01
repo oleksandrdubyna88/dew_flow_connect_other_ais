@@ -189,7 +189,10 @@ public sealed class EndToEndTests : IAsyncLifetime
         await service.OpenAsync(_repo, "feature");
 
         Script(Clean);
-        await service.ReviewPlanAsync(_repo, "feature", "a plan nobody objects to");
+        // Asserted before anything about what was kept: a reviewer that was "not started" kept nothing, and without this line the
+        // failure read as a missing file with no reason (C2 — a reviewer that exited before its start time was read).
+        var plan = Parse(await service.ReviewPlanAsync(_repo, "feature", "a plan nobody objects to"));
+        plan.GetProperty("reviewers").GetString().Should().Contain("all 2 reviewers answered", "2 providers on the plan round");
         // The sink's own `{Message:lj}` rendering, never `RenderMessage()`: the latter quotes every
         // string property, so the test would be asserting against an artefact of itself instead of
         // the line that lands in the log file.
@@ -200,7 +203,8 @@ public sealed class EndToEndTests : IAsyncLifetime
 
         await service.ResolveAsync(_repo, "feature", "[]");
         Script(Clean);
-        await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+        var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
+        code.GetProperty("reviewers").GetString().Should().Contain("all 6 reviewers answered", "3 roles x 2 providers");
 
         // What it ASSEMBLED. Every number was already computed before this change and thrown away,
         // which is why "did they see the diff" had to be answered by subtracting a rules byte count

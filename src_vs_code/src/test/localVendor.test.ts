@@ -40,6 +40,7 @@ function html(vendors: readonly Vendor[], engine: LocalEngine): string {
     codexModels: [], agyModels: [],
     localEngines: Object.fromEntries(vendors.filter((v) => v.runtime === 'local').map((v) => [v.id, engine])),
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+    hostKind: 'windows',
     side: '',
     perSide: false,
     latestServerVersion: '',

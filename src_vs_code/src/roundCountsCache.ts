@@ -9,7 +9,7 @@ export function finishedRounds(sessions: readonly SessionFile[]): number {
 
 /**
  * The rounds a card line and the Rounds block draw from — read at most once a minute, and sooner when something ended
- * (story 2.2 of todo/PLAN_every_round_is_counted.md).
+ * (story 2.2 of research/PLAN_every_round_is_counted.md).
  *
  * <p><b>Never a spawn per render.</b> A render takes {@link current}, which never reads anything; it then asks
  * {@link refresh}, which reads only when the snapshot is older than its bound or something it counts has ended since,

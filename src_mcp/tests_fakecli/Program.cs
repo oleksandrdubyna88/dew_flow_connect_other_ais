@@ -106,6 +106,20 @@ if (args is ["acp-agent", var acpScript])
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScript);
 }
 
+// A descendant that outlives its round inside a folder (D4 / S7 of the temp plan): its working folder is wherever it was started. It says
+// `ready <pid>` — the EVENT its parent waits for, never a sleep — closes all three pipes and waits to be killed by that pid. BEFORE the vendor
+// mode, for the same reason as the ACP stand-in: a FAKECLI_MODE another test left in the process environment must not turn it into a reviewer.
+if (args is ["cwd-hold"])
+{
+    Console.Out.WriteLine($"ready {Environment.ProcessId}");
+    Console.Out.Flush();
+    Console.Out.Close();
+    Console.Error.Close();
+    Console.In.Close();
+    Thread.Sleep(120_000);
+    return 0;
+}
+
 // The script comes from the environment, else from beside the working folder (`<cwd>/../agent.json`): a launch that builds the
 // agent's environment from scratch (E4.3, the Kimi shim) carries no FAKECLI_* variable, and the fake agent's folder is the one place the
 // test and the agent both already know.
@@ -252,6 +266,32 @@ switch (args0)
         Thread.Sleep(int.Parse(ms));
         return 0;
 
+    // The Linux teardown (DL9, A3), in real processes. `sleep --own-session` calls setsid() first — what rg does in a Grep turn (L-K4); `exit-after` is a managed child that exits with its
+    // own code; the others make orphans for a subreaper, and `supervise-tree` / `shim-acp` ARE that subreaper (a test host must never become one).
+    case ["sleep", "--own-session", var ownMs]:
+        CoaiMcp.FakeCli.SupervisionVerbs.OwnSession();
+        Thread.Sleep(int.Parse(ownMs));
+        return 0;
+
+    case ["exit-after", var afterMs, var afterCode]:
+        Thread.Sleep(int.Parse(afterMs));
+        return int.Parse(afterCode);
+
+    case ["orphan-maker", var orphanDir]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.OrphanMaker(orphanDir);
+
+    case ["spawn-then-exit", var childPidFile, var childMs]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.SpawnThenExit(childPidFile, childMs);
+
+    case ["late-spawn", var trigger, var latePidFile]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.LateSpawn(trigger, latePidFile);
+
+    case ["supervise-tree", var superviseMode, var superviseDir]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.SuperviseTree(superviseMode, superviseDir).GetAwaiter().GetResult();
+
+    case ["shim-acp", var shimScript, var shimMarker, var shimCwd, var shimDeadline]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.ShimAcp(shimScript, shimMarker, shimCwd, int.Parse(shimDeadline)).GetAwaiter().GetResult();
+
     // Reads all of stdin and writes it back, byte for byte. The POSITIVE companion to `sleep`: one
     // proves a child that never reads is still killed on time, this one proves the launcher still
     // delivers every byte to a child that does. Raw streams on both sides, because a decoder in the
@@ -301,6 +341,16 @@ switch (args0)
     // test host itself NEVER holds an inheritable handle: the hold would be inherited by every process the suite starts.
     case ["tree-hold", var mode, var locks, var target, var home]:
         return CoaiMcp.FakeCli.TreeHoldVerb.Run(mode, locks, target, home);
+
+    // S-K3: the PRODUCT's `KimiCredentialsLock.KeyFor` of one path, asked in a child — a `/proc/self/cwd` spelling is only another folder's name from inside its own process.
+    case ["lock-key", var folder]:
+        Console.Out.WriteLine(CoaiMcp.Runners.Kimi.KimiCredentialsLock.KeyFor(folder));
+        return 0;
+
+    // L-N1: the PRODUCT's `HeldFile.Take(path, inheritable: true)` on one file, in a child — `hold` keeps it and starts a sleeping grandchild AFTER the take, `try` takes it
+    // once and says what came back. The test host never takes an inheritable handle itself.
+    case ["hold-file", var mode, var file]:
+        return CoaiMcp.FakeCli.HoldFileVerb.Run(mode, file);
 
     // Takes the REAL EngineLease in its own process, holds it, and prints the window it held it
     // for. Five of these are how the cross-process claim is measured rather than asserted: two
@@ -449,7 +499,9 @@ sealed class Steering
 
 /// <summary>
 /// The vendor mode's steering for a child that was started with a MINIMAL environment: a JSON object of
-/// the same `FAKECLI_*` names, in the temp directory — the one place such a child can still find.
+/// the same `FAKECLI_*` names, BESIDE THE FAKE'S OWN BINARY (<see cref="CoaiMcp.FakeCli.MinimalSteeringFile"/>) — the one place such a child can
+/// still find whatever its environment says, and one no other run of the suite shares. It is not in the user's temp folder: that is every
+/// run's, and one run's file steered another's.
 /// </summary>
 /// <remarks>
 /// Read ONLY when the environment carries no mode and the argv is a vendor's shape (codex's `exec` or
@@ -459,8 +511,6 @@ sealed class Steering
 /// </remarks>
 static class MinimalSteering
 {
-    public const string FileName = "fakecli-minimal.json";
-
     public static Dictionary<string, string>? Load(string[] args)
     {
         if (Environment.GetEnvironmentVariable("FAKECLI_MODE") is { Length: > 0 } || args.Length == 0 || !IsVendorShape(args))
@@ -468,7 +518,7 @@ static class MinimalSteering
             return null;
         }
 
-        var path = Path.Combine(Path.GetTempPath(), FileName);
+        var path = CoaiMcp.FakeCli.MinimalSteeringFile.Location;
         if (!File.Exists(path))
         {
             return null;

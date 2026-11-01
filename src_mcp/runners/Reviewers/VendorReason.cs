@@ -6,7 +6,7 @@ namespace CoaiMcp.Runners.Reviewers;
 /// How much of a vendor's own reason the ledger and the log keep: all of it, redacted, up to a safety cap.
 /// </summary>
 /// <remarks>
-/// <para>Story 3.3 of todo/PLAN_every_round_is_counted.md. A refusal is read back from the ledger and the log long after
+/// <para>Story 3.3 of research/PLAN_every_round_is_counted.md. A refusal is read back from the ledger and the log long after
 /// the round, and both used to carry the summary's cut — 160 characters of agy's
 /// <c>AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429): … Resets in 110h12m4…</c>, which is exactly the half
 /// the plan's measurement needed. A table cell may still shorten what it SHOWS; what is WRITTEN is whole.</para>

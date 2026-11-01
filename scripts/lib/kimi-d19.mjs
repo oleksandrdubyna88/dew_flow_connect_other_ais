@@ -1,5 +1,5 @@
 // lib/kimi-d19.mjs — the cells D19 adds to scripts/probe-kimi-confinement.mjs (plan §5, 2026-10-13): M-K11 (a)(b)(c),
-// M-K12, M-K13, M-K9 (e), M-K7b, M-K5b. Each runs on an OWNED home (lib/kimi-home.mjs) in the BUILT environment through
+// M-K12 (now lib/kimi-arms.mjs's), M-K13, M-K9 (e), M-K7b, M-K5b. Each runs on an OWNED home (lib/kimi-home.mjs) in the BUILT environment through
 // the shipped shim, 3 of 3 unless the plan's row says why not. M-K14 (the refresh race) is NOT here — it runs later.
 //
 // The arms take the probe's helpers by injection (`write`, `ownedHome`, `projectKit`, …) so this file holds the cells and
@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { files, fwd } from './vibe.mjs';
 import { mcpJson, trustInHome } from './kimi.mjs';
 import { inventory, modelAlias, outputTokens, parseUsageLine } from './kimi-home.mjs';
+import { ownedSpecFor } from './kimi-arms.mjs';
 
 export const D19_CELLS = ['M-K11', 'M-K11c', 'M-K12', 'M-K13', 'M-K9e', 'M-K7b', 'M-K5b', 'M-K11b'];
 
@@ -34,8 +35,7 @@ export function d19Arms(ctx) {
         arm: 'owned home: junction + admitted, OK',
         setup(runDir) {
           const workdir = workWithNotes(runDir);
-          const home = ownedHome(runDir);
-          return { workdir, home: home.path, owned: true, ...OK, notes: home.notes };
+          return { workdir, ...ownedSpecFor(ownedHome(runDir)), ...OK };
         },
       },
       {
@@ -43,9 +43,8 @@ export function d19Arms(ctx) {
         setup(runDir, n) {
           const workdir = join(runDir, 'work');
           write(join(workdir, 'notes.txt'), `the marker is GULL-${n}0${n}\n`);
-          const home = ownedHome(runDir);
           return {
-            workdir, home: home.path, owned: true, expect: { grepMarker: `GULL-${n}0${n}`, globName: 'notes.txt' }, notes: home.notes,
+            workdir, ...ownedSpecFor(ownedHome(runDir)), expect: { grepMarker: `GULL-${n}0${n}`, globName: 'notes.txt' },
             prompt: 'Use the Grep tool with pattern GULL in the current folder and output_mode content; then use the Glob tool with pattern *.txt '
               + 'in the current folder. Reply on one line with the text Grep found and the file names Glob found; write FAILED for a tool that errored.',
           };
@@ -62,32 +61,6 @@ export function d19Arms(ctx) {
       },
     }],
 
-    // ~/.agents/* under an owned home: (a) with the real OS home, (b) with the OS home redirected to an empty folder.
-    'M-K12': [
-      ...[false, true].map((redirect) => ({
-        arm: redirect ? '(b) ~/.agents canary, USERPROFILE/HOME redirected to an empty folder' : '(a) ~/.agents canary, the real OS home',
-        setup(runDir) {
-          const workdir = workWithNotes(runDir);
-          const home = ownedHome(runDir);
-          const profile = join(runDir, 'profile');
-          if (redirect) mkdirSync(profile, { recursive: true });
-          return {
-            workdir, home: home.path, owned: true, profile: redirect ? profile : '', notes: home.notes,
-            prompt: 'Reply with one short line: the names of the skills available to you, or NONE.',
-            expect: { skill: ctx.agentsCanary.skillName, agentsMd: ctx.agentsCanary.word },
-          };
-        },
-      })),
-      {
-        arm: 'control -p: ~/.agents canary on the real home',
-        control: true,
-        setup(runDir) {
-          return { workdir: workWithNotes(runDir), kind: 'prompt', prompt: 'Reply with one short line: the names of the skills available to you, or NONE.',
-            expect: { skill: ctx.agentsCanary.skillName, agentsMd: ctx.agentsCanary.word } };
-        },
-      },
-    ],
-
     // the auto-update pin: one owned home across three launches with the variable; a control home without it.
     'M-K13': [
       {
@@ -96,7 +69,7 @@ export function d19Arms(ctx) {
         setup(runDir, n, shared) {
           const workdir = workWithNotes(runDir);
           const home = shared.home ?? (shared.home = ownedHome(runDir));
-          return { workdir, home: home.path, owned: true, versionAround: true, ...OK, notes: `${home.notes}; launch ${n} on the same home` };
+          return { workdir, ...ownedSpecFor(home), versionAround: true, ...OK, notes: `${home.notes}; launch ${n} on the same home` };
         },
       },
       {
@@ -104,8 +77,7 @@ export function d19Arms(ctx) {
         control: true,
         setup(runDir) {
           const workdir = workWithNotes(runDir);
-          const home = ownedHome(runDir);
-          return { workdir, home: home.path, owned: true, pin: false, versionAround: true, ...OK, notes: home.notes };
+          return { workdir, ...ownedSpecFor(ownedHome(runDir)), pin: false, versionAround: true, ...OK };
         },
       },
       // Under `kimi acp` the preflight did not run at all (the first pass, 2026-10-13: `updates/` absent with AND without the
@@ -116,8 +88,7 @@ export function d19Arms(ctx) {
         control: true,
         setup(runDir) {
           const workdir = workWithNotes(runDir);
-          const home = ownedHome(runDir);
-          return { workdir, home: home.path, owned: true, pin, kind: 'prompt', versionAround: true, ...OK, notes: home.notes };
+          return { workdir, ...ownedSpecFor(ownedHome(runDir), { realOsHome: true }), pin, kind: 'prompt', versionAround: true, ...OK };
         },
       })),
     ],
@@ -134,7 +105,7 @@ export function d19Arms(ctx) {
         const canaries = { ...projectKit(workdir, runDir), ...extendedKit(workdir, runDir, write) };
         const home = ownedHome(runDir);
         const notes = a.trust ? `${home.notes}; trust entry ${trustInHome(home.path, workdir).split(/[\\/]/u).at(-1)}` : home.notes;
-        return { workdir, home: home.path, owned: true, prompt: KIT_PROMPT, expect: { ...KIT_EXPECT, ...EXTENDED_EXPECT }, canaries, notes };
+        return { workdir, ...ownedSpecFor(home), prompt: KIT_PROMPT, expect: { ...KIT_EXPECT, ...EXTENDED_EXPECT }, canaries, notes };
       },
     })),
 
@@ -146,7 +117,7 @@ export function d19Arms(ctx) {
         const workdir = workWithNotes(runDir);
         // The home's coai-written config carries THIS id's model block — a home written for k3-256k refuses any other id (exit 70).
         const home = ownedHome(runDir, [], id);
-        return { workdir, home: home.path, owned: true, model: id, deadline: 180, ...OK, notes: home.notes };
+        return { workdir, ...ownedSpecFor(home), model: id, deadline: 180, ...OK };
       },
     })),
   };
@@ -275,3 +246,18 @@ export const namesIn = (dir) => (existsSync(dir) ? readdirSync(dir).join(' ') : 
 
 /** Whether an owned home holds `updates/` and what — M-K13's column. */
 export const updatesIn = (home) => files(join(home, 'updates')).map((f) => fwd(f)).join(' ') || 'absent';
+
+/** The cells every arm of which runs on an OWNED home (`owned: true`, `requireOwned`): the rest launch directly on the person's real `~/.kimi-code` and `~/.cache`. */
+export const OWNED_CELLS = ['M-K3', 'M-K4', 'M-K5', 'M-K6', 'M-K11', 'M-K11c', 'M-K12', 'M-K13', 'M-K9e', 'M-K7b', 'M-K5b'];
+
+/**
+ * Which cells run: `requested` (from --cells), else every cell on Windows and the OWNED ones elsewhere. Off Windows a cell that is not owned is refused unless
+ * `allowRealHome` (--allow-real-home, a flag the series template can never pass). `{ cells, refusal }`.
+ */
+export function cellsPlan({ requested, all, platform = process.platform, allowRealHome = false }) {
+  const windows = platform === 'win32';
+  const cells = requested.length > 0 ? requested : all.filter((c) => windows || OWNED_CELLS.includes(c));
+  const real = cells.filter((c) => !OWNED_CELLS.includes(c));
+  const refused = !windows && !allowRealHome && real.length > 0;
+  return { cells, refusal: refused ? `refusing ${real.join(', ')} without --allow-real-home: these cells launch directly on your real ~/.kimi-code and ~/.cache` : '' };
+}

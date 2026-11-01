@@ -10,7 +10,7 @@ import { KIMI_RUNTIME_SINCE } from '../runtimeSince';
  * owned home never receiving code: M-K12 (c) is unrecorded (parent D19).
  */
 
-test('every language’s choose-reviewers article names Kimi Code, that it is Windows-only for now, and how it is signed in and updated', () => {
+test('every language’s choose-reviewers article names Kimi Code, where it runs (Windows, WSL2), and how it is signed in and updated', () => {
   const article = HELP_ARTICLES.find((one) => one.id === 'choose-reviewers');
   assert.ok(article !== undefined, 'the reviewers article has been renamed, and this test is now asserting nothing');
 

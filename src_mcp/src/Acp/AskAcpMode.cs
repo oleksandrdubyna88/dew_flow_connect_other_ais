@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
+using CoaiMcp.Core.Consultation;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Kimi;
+using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Acp;
 
@@ -24,7 +26,7 @@ namespace CoaiMcp.Acp;
 /// request that is not coai's own environment, a hold that cannot be taken, a model the session does not offer — and <b>never 64</b>, which means "this binary has never heard
 /// of that mode" (<c>.agents/PROJECT.md</c>); 69 ended before an answer — the agent could not be started, another
 /// Kimi still holds the sign-in past the deadline, the deadline struck, or the caller cancelled — read by the parent as "usage not captured"; 70 the agent refused or
-/// failed in its own words; 75 a known SPENT sentence (an allowance, D14); 76 (EX_PROTOCOL) the stream broke — the
+/// failed in its own words, among them <c>session_lost</c>: the agent no longer holds the session <c>--session</c> named (E5.2); 75 a known SPENT sentence (an allowance, D14); 76 (EX_PROTOCOL) the stream broke — the
 /// agent closed its output early, stopped listening, or wrote something that is not an answer; 77 a known REFUSED
 /// sentence — not signed in, or a plan without the model (the 401 of RESULTS §2).</para>
 /// <para><b>A profile that needs a home (Kimi) runs only on one</b> (D19, E4.3): <c>--home</c> is the coai-owned ROOT holding <c>home/</c> and <c>os/</c>,
@@ -33,9 +35,14 @@ namespace CoaiMcp.Acp;
 /// built from scratch (<see cref="IAcpProfile.AgentRequest"/>), never by inheritance. <b>The tree hold GATES</b> (decision 10 of E4.2): it is taken
 /// immediately before <see cref="AcpClient.AskAsync"/> — nothing awaited between — and disposed once that has returned; another tree still holding
 /// the sign-in past the deadline is exit 69 with the reason in a sentence, a hold that cannot be taken exit 65. There is no warning-only fallback.</para>
+/// <para><b><c>--session &lt;id&gt;</c> continues a session</b> (E5.2, M-K16 in RESULTS §33): <c>session/load {sessionId, cwd, mcpServers: []}</c> on the same
+/// <c>--cwd</c> instead of <c>session/new</c>; the model checked against what the LOAD announced, then set; the history the agent replays before it answers the
+/// load is never the answer or the trace. An id that is not a vendor handle is 65 before anything starts; a load the agent refuses is <c>session_lost</c>, 70 —
+/// unless a known failure names it (a load refused for the sign-in is still <c>not_signed_in</c>, 77, and its end is <c>agent_failed</c>). The report's
+/// <c>sessionId</c> is the id asked for, and its <c>/usage</c> totals are the SESSION's, cumulative over every turn so far.</para>
 /// <para><b>The stdout shape</b> (<see cref="Report"/>) is printed on EVERY exit, so a failed turn's trace and usage
 /// cross the process boundary as an answered one's do: <c>answer</c>, <c>end</c>, <c>stopReason</c>, <c>reason</c>,
-/// <c>sessionId</c>, <c>failure</c> (a known failure's name, when one matched), <c>usage</c> in the api shim's
+/// <c>sessionId</c>, <c>failure</c> (a known failure's name, when one matched), <c>failureLine</c> (the stderr line that held its phrase, only when the reason did not), <c>usage</c> in the api shim's
 /// field names — <c>tokensIn</c>/<c>tokensOut</c> are the session's totals from <c>/usage</c>, asked after an answered turn (D15, M-K2), or 0 with
 /// <c>notCaptured: true</c> when it could not be had — never a guessed number; <c>contextUsed</c>/<c>contextSize</c> carry the last <c>usage_update</c> when one
 /// came — and the trace: <c>refusals</c> (tool, kind, option), <c>toolCalls</c> (id, title, kind, status) and
@@ -70,15 +77,37 @@ internal static class AskAcpMode
     /// <param name="note">Stderr: the refusal or the reason, as sentences.</param>
     /// <param name="output">Stdout: the one JSON object.</param>
     /// <param name="profiles">The profiles this run knows — the build's, unless a test hands in a fake agent's.</param>
-    internal static async Task<int> RunAsync(
+    internal static Task<int> RunAsync(
         string[] args,
         TextReader stdin,
         Action<string> note,
         TextWriter output,
         IReadOnlyList<IAcpProfile>? profiles = null,
+        CancellationToken ct = default) =>
+        RunAsync(args, stdin, note, output, static () => new SubreaperResult.NotLinux(), profiles, ct);
+
+    /// <summary>
+    /// The mode as the product runs it. <paramref name="becomeReaper"/> is the FIRST thing asked, before the profile is looked up (DL9): on Linux this process becomes the child subreaper of its own
+    /// tree — every orphan of the agent's tree, <c>setsid</c> or not, comes home to it, whichever profile — and a failure is exit 65 with the written sentence, never a silent fallback. The product
+    /// passes <see cref="LinuxSubreaper.Become"/>; an in-process test passes nothing (its host must never become a subreaper — it would collect every other test's orphans).
+    /// </summary>
+    internal static async Task<int> RunAsync(
+        string[] args,
+        TextReader stdin,
+        Action<string> note,
+        TextWriter output,
+        Func<SubreaperResult> becomeReaper,
+        IReadOnlyList<IAcpProfile>? profiles = null,
         CancellationToken ct = default)
     {
-        var flags = Program.Flags(args);
+        if (becomeReaper() is SubreaperResult.Failed failed)
+        {
+            note(LinuxSubreaper.Sentence(failed.Errno));
+
+            return BadRequest;
+        }
+
+        var flags = WithBareSession(Program.Flags(args), args);
         var known = profiles ?? AcpProfiles.All;
         // The one "not found" this mode has, and it is answered before anything else is looked at.
         if (AcpProfiles.Find(known, flags.GetValueOrDefault("--profile", string.Empty)) is not { } profile)
@@ -90,6 +119,15 @@ internal static class AskAcpMode
 
         return await TurnAsync(profile, flags, stdin, note, output, ct);
     }
+
+    /// <summary>
+    /// <c>--session</c> with no value after it (the last word, or another flag next) is kept as an EMPTY session, which <see cref="Refusal"/> refuses:
+    /// a continuation that lost its id must never quietly become a new session.
+    /// </summary>
+    private static Dictionary<string, string> WithBareSession(Dictionary<string, string> flags, string[] args) =>
+        args.Contains(AcpWords.SessionFlag, StringComparer.Ordinal) && !flags.ContainsKey(AcpWords.SessionFlag)
+            ? new Dictionary<string, string>(flags, StringComparer.Ordinal) { [AcpWords.SessionFlag] = string.Empty }
+            : flags;
 
     /// <summary>The request checked, the prompt read, the turn run and reported — for the profile <see cref="RunAsync"/> found.</summary>
     private static async Task<int> TurnAsync(
@@ -114,7 +152,8 @@ internal static class AskAcpMode
 
         var ask = new AcpAsk(
             Executable(flags, profile), Path.GetFullPath(cwd), model, prompt, Deadline(flags),
-            flags.GetValueOrDefault(AcpWords.HomeFlag, string.Empty), flags.GetValueOrDefault(AcpWords.PersonsBinFlag, string.Empty));
+            flags.GetValueOrDefault(AcpWords.HomeFlag, string.Empty), flags.GetValueOrDefault(AcpWords.PersonsBinFlag, string.Empty),
+            flags.GetValueOrDefault(AcpWords.SessionFlag, string.Empty));
         using var rooted = LocksScope(flags);
 
         return await AskedAsync(profile, ask, note, output, ct);
@@ -133,7 +172,7 @@ internal static class AskAcpMode
     {
         if (profile.AgentRefusal(profile.AgentRequest(ask), ask) is { Length: > 0 } refused)
         {
-            return await NotStartedAsync(refused, BadRequest, note, output);
+            return await NotStartedAsync(refused, BadRequest, ask, note, output);
         }
 
         var waiting = Stopwatch.StartNew();
@@ -142,7 +181,7 @@ internal static class AskAcpMode
         {
             var (sentence, exit) = Declined(holding);
 
-            return await NotStartedAsync(sentence, exit, note, output);
+            return await NotStartedAsync(sentence, exit, ask, note, output);
         }
 
         return await HeldAsync(profile, ask, held, ask.Deadline - waiting.Elapsed, note, output, ct);
@@ -159,16 +198,16 @@ internal static class AskAcpMode
         {
             held.Hold.Dispose();
 
-            return await NotStartedAsync(LateSentence(ask.Deadline), Unavailable, note, output);
+            return await NotStartedAsync(LateSentence(ask.Deadline), Unavailable, ask, note, output);
         }
 
         AcpOutcome outcome;
         using (held.Hold)
         {
-            outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames)).AskAsync(ask with { Deadline = left }, ct);
+            outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames), AcpClient.DefaultUsageBound, held.Supervisor).AskAsync(ask with { Deadline = left }, ct);
         }
 
-        return await ReportedAsync(profile, outcome, note, output);
+        return await ReportedAsync(profile, outcome, ask.Session, note, output);
     }
 
     private static string LateSentence(TimeSpan deadline) =>
@@ -182,31 +221,58 @@ internal static class AskAcpMode
         _ => ("the sign-in hold came to an answer this shim has no word for — refused rather than started without it (D19)", BadRequest),
     };
 
-    /// <summary>A turn that never started an agent, said as every other end is: the report on stdout, the sentence on stderr, the exit.</summary>
-    private static async Task<int> NotStartedAsync(string sentence, int exit, Action<string> note, TextWriter output)
+    /// <summary>A turn that never started an agent, said as every other end is: the report on stdout (naming the asked session, if any), the sentence on stderr, the exit.</summary>
+    private static async Task<int> NotStartedAsync(string sentence, int exit, AcpAsk ask, Action<string> note, TextWriter output)
     {
         note(sentence);
-        await output.WriteLineAsync(Report(AcpOutcome.NotStarted(sentence), AcpDiagnosis.None));
+        await output.WriteLineAsync(Report(AcpOutcome.NotStarted(sentence, ask.Session), AcpDiagnosis.None));
 
         return exit;
     }
 
     /// <summary>The report printed, the exit made from the outcome.</summary>
-    private static async Task<int> ReportedAsync(IAcpProfile profile, AcpOutcome outcome, Action<string> note, TextWriter output)
+    private static async Task<int> ReportedAsync(IAcpProfile profile, AcpOutcome outcome, string session, Action<string> note, TextWriter output)
     {
-        var diagnosis = AcpDiagnosis.Of(outcome.Reason + "\n" + outcome.StdErr, profile.KnownFailures);
-        await output.WriteLineAsync(Report(outcome, diagnosis));
+        var diagnosis = Diagnose(profile, outcome, session);
+        var named = Named(outcome, diagnosis);
+        await output.WriteLineAsync(Report(named, diagnosis));
 
-        return Exit(outcome, diagnosis, note);
+        return Exit(named, diagnosis, note);
     }
+
+    /// <summary>
+    /// The known failure an outcome names, from the text of the turn: its reason and its stderr — the reason without coai's own lead of a lost
+    /// session (<see cref="AcpClient.LostLead"/>), so the id it names can never spell a failure and turn a lost session into a refusal or a
+    /// spent allowance (E5.2 review).
+    /// </summary>
+    internal static AcpDiagnosis Diagnose(IAcpProfile profile, AcpOutcome outcome, string session = "") =>
+        AcpDiagnosis.Of(
+            session.Length == 0 ? outcome.Reason : outcome.Reason.Replace(AcpClient.LostLead(session), string.Empty, StringComparison.Ordinal),
+            outcome.StdErr, profile.KnownFailures, outcome.StdErrTruncated);
+
+    /// <summary>
+    /// A refused load that a known failure names is that failure, not a lost session (E5.2 decision 4): its end is the agent's own failure, so the
+    /// host — which reads <c>session_lost</c> as "the conversation is gone" — keeps a conversation that only needs its sign-in back.
+    /// </summary>
+    private static AcpOutcome Named(AcpOutcome outcome, AcpDiagnosis diagnosis) =>
+        outcome.End == AcpEnd.SessionLost && Diagnosed(outcome.End, diagnosis) ? outcome with { End = AcpEnd.AgentFailed } : outcome;
 
     /// <summary>Why this shim will not even start the agent — or empty when it will. Every one of these is 65.</summary>
     internal static string Refusal(IAcpProfile profile, IReadOnlyDictionary<string, string> flags, string cwd, string model) =>
-        new[] { FolderRefusal(cwd), ModelRefusal(model), DeadlineRefusal(flags), PlacesRefusal(profile, flags) }.FirstOrDefault(static reason => reason.Length > 0) ?? string.Empty;
+        new[] { FolderRefusal(cwd), ModelRefusal(model), DeadlineRefusal(flags), SessionRefusal(flags), PlacesRefusal(profile, flags) }.FirstOrDefault(static reason => reason.Length > 0) ?? string.Empty;
 
     private static string FolderRefusal(string cwd) =>
         cwd.Length == 0 || !Directory.Exists(cwd)
             ? $"{Mode} needs --cwd <an existing folder the agent works in>" + (cwd.Length == 0 ? string.Empty : $" — '{cwd}' is not one")
+            : string.Empty;
+
+    /// <summary>
+    /// Given, <c>--session</c> must be a vendor handle (<see cref="ConsultantHandle.IsWellFormed"/>): the shim is a process boundary and checks its own
+    /// argv, as the adapter does before it writes one. The value is not repeated — a refused one is not a sentence to print.
+    /// </summary>
+    private static string SessionRefusal(IReadOnlyDictionary<string, string> flags) =>
+        flags.TryGetValue(AcpWords.SessionFlag, out var session) && !ConsultantHandle.IsWellFormed(session)
+            ? $"{Mode}: {AcpWords.SessionFlag} must be the id an earlier turn's report named — a letter or digit, then letters, digits, '_' or '-', at most 100"
             : string.Empty;
 
     private static string ModelRefusal(string model) =>
@@ -278,7 +344,7 @@ internal static class AskAcpMode
 
         if (Diagnosed(outcome.End, diagnosis))
         {
-            note($"{diagnosis.Name}: {outcome.Reason} — {diagnosis.Cure}");
+            note(DiagnosedNote(outcome, diagnosis));
 
             return DiagnosedExit(diagnosis.Kind);
         }
@@ -292,15 +358,32 @@ internal static class AskAcpMode
     private static bool Diagnosed(AcpEnd end, AcpDiagnosis diagnosis) =>
         diagnosis.Known && end is not (AcpEnd.Deadline or AcpEnd.Cancelled or AcpEnd.ModelNotOffered);
 
-    /// <summary>A known failure's exit: a spent allowance, or a refusal.</summary>
-    private static int DiagnosedExit(AcpFailureKind kind) => kind == AcpFailureKind.Spent ? Spent : Refused;
+    /// <summary>
+    /// A known failure's sentence: its name, the agent's reason, the stderr line the failure was found in (when the reason did not hold it — <see cref="AcpDiagnosis.Said"/>), and the cure — when there is one
+    /// (a known shape with no cure ends at the reason). The cure stays LAST, so <see cref="AcpDiagnosis.WithoutCure"/> reads the note back.
+    /// </summary>
+    private static string DiagnosedNote(AcpOutcome outcome, AcpDiagnosis diagnosis) =>
+        diagnosis.Note(diagnosis.Said(outcome.Reason));
 
-    /// <summary>An undiagnosed end's exit: the agent's own failure, a broken stream, or ended before an answer.</summary>
-    private static int EndExit(AcpEnd end) => end switch
+    /// <summary>A known failure's exit: a spent allowance, the agent's own failure in a known shape, or a refusal.</summary>
+    private static int DiagnosedExit(AcpFailureKind kind) => kind switch
     {
-        AcpEnd.AgentFailed => Failed,
+        AcpFailureKind.Spent => Spent,
+        AcpFailureKind.Failed => Failed,
+        _ => Refused,
+    };
+
+    /// <summary>
+    /// An undiagnosed end's exit: the agent's own failure, a broken stream, or ended before an answer. Every <see cref="AcpEnd"/> has its own arm
+    /// (E5.2 decision 9): the default is only for a value nobody named, and <c>EveryEnd_HasItsOwnWordAndExit_NoneFallsToADefaultArm</c> fails on one.
+    /// </summary>
+    internal static int EndExit(AcpEnd end) => end switch
+    {
+        AcpEnd.Answered => Ok,
+        AcpEnd.AgentFailed or AcpEnd.SessionLost => Failed,
         AcpEnd.Protocol => Protocol,
         AcpEnd.ModelNotOffered => BadRequest,
+        AcpEnd.NotStarted or AcpEnd.Deadline or AcpEnd.Cancelled => Unavailable,
         _ => Unavailable,
     };
 
@@ -320,12 +403,19 @@ internal static class AskAcpMode
             ["reads"] = new JsonArray([.. outcome.Reads.Select(r => (JsonNode?)new JsonObject { ["path"] = r.Path, ["served"] = r.Served, ["reason"] = r.Reason })]),
             // The three lists are capped by count (AcpSession.MaxTraceEntries), by field (MaxTraceFieldChars) and by their
             // sum (MaxTraceChars); what they could not hold is counted here, so the report stays inside the same bounds.
+            ["survivors"] = new JsonArray([.. outcome.Survivors.Select(s => (JsonNode?)new JsonObject { ["pid"] = s.Pid, ["startedUtc"] = s.StartedUtc.ToString("O") })]),
             ["droppedTraceEntries"] = outcome.DroppedTraceEntries,
             ["truncatedTraceFields"] = outcome.TruncatedTraceFields,
         };
         if (diagnosis.Known)
         {
             report["failure"] = diagnosis.Name;
+        }
+
+        if (diagnosis.Line.Length > 0)
+        {
+            // The line of the agent's stderr that held the row's phrase — only when the reason itself did not (F1 of story 5's review).
+            report["failureLine"] = diagnosis.Line;
         }
 
         return report.ToJsonString();
@@ -359,6 +449,8 @@ internal static class AskAcpMode
         AcpEnd.Deadline => "deadline",
         AcpEnd.Protocol => "protocol",
         AcpEnd.ModelNotOffered => AcpWords.ModelNotOfferedWord,
+        AcpEnd.SessionLost => AcpWords.SessionLostWord,
+        AcpEnd.Cancelled => "cancelled",
         _ => "cancelled",
     };
 

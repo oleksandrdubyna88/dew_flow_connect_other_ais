@@ -89,7 +89,7 @@ const MOVED_SECTIONS: Readonly<Record<string, (state: PanelState) => string>> = 
  */
 const AFTER: Readonly<Record<string, (state: PanelState) => string>> = {
   'setup/keys': (state) => cliTableHtml(state.catalogRows ?? state.vendors, state.cliStatus, cliButtons),
-  // Each vendor account's monthly plan price, typed once (story 6.2 of todo/PLAN_every_round_is_counted.md).
+  // Each vendor account's monthly plan price, typed once (story 6.2 of research/PLAN_every_round_is_counted.md).
   'setup/team': (state) => planPricesHtml(state.teamServers ?? [], state.planPrices ?? {}, state.planPriceRefusal),
   'setup/mcp': (state) => `${movedFromHtml(state.lastDataMove)}\n${mcpClientsHtml(state.mcpClients ?? [])}`,
 };

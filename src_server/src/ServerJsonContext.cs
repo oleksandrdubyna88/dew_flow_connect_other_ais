@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CoaiMcp.Runners.Processes;
 
 namespace CoaiServer;
 
@@ -53,14 +54,14 @@ public sealed record VendorHealthDto(bool CliFound, string Version, string Note)
 /// <param name="NeedsSignIn">Signed out. These never come back on their own — a human runs `login`.</param>
 /// <param name="ResetsUtc">
 /// When the FIRST parked account of this vendor comes back — the earliest <c>CooldownUntilUtc</c> among the accounts
-/// cooling down, in UTC (<c>O</c> format) — or empty when none is. Story 5.3b of todo/PLAN_every_round_is_counted.md: the
+/// cooling down, in UTC (<c>O</c> format) — or empty when none is. Story 5.3b of research/PLAN_every_round_is_counted.md: the
 /// slot is parked until the instant its vendor stated (5.3a), and this is that instant said where a client can read it.
 /// An instant and nothing else: never an account's name, never an email. Trailing and defaulted, so a client older than
 /// the field reads the answer unchanged.
 /// </param>
 /// <param name="Gauge">
 /// The LATEST reading of the vendor's own gauge among this vendor's accounts — by observation time, whichever account
-/// read it — or omitted when none was ever captured (story 6.1a of todo/PLAN_every_round_is_counted.md). Numbers, the
+/// read it — or omitted when none was ever captured (story 6.1a of research/PLAN_every_round_is_counted.md). Numbers, the
 /// vendor's own words and instants only: never an account's name, never an email. Nullable AND omitted when null, as
 /// <c>UsageDto.Daily</c> is: a client older than the field never sees the key, and a server older than it never sends
 /// one — the same absence either way, which story 6.2 renders as <i>unavailable</i>, never 0 %.
@@ -140,7 +141,7 @@ public sealed record ReviewRequestDto(
     /// <summary>Contract 2: the person's instruction for the row — taken only when the operator allows it, never logged.</summary>
     string? SystemPrompt = null,
     /// <summary>
-    /// Story 4.2 of todo/PLAN_every_round_is_counted.md: the client's id for the ROUND this review belongs to — 32 hex
+    /// Story 4.2 of research/PLAN_every_round_is_counted.md: the client's id for the ROUND this review belongs to — 32 hex
     /// characters, minted at random per round. Bound as raw JSON and read by <see cref="RoundFields"/>, never by the
     /// binder: a typed field refuses <c>"oops"</c> or <c>{}</c> with an error before anything runs, and a counting field
     /// must never fail a review — a malformed value is DROPPED with a note instead (risk amendment 3).
@@ -171,13 +172,13 @@ public sealed record ReviewAcceptedDto(string Id, int Position, IReadOnlyList<Fi
 /// WHY a <c>cancelled</c> job was cancelled — one of <c>EndCauses</c> (<c>withdrawn</c>, <c>abandoned</c>,
 /// <c>backstop</c>, <c>queueExpired</c>, <c>hostStopped</c>) — and empty for every other ending. Trailing and
 /// defaulted, so a client older than the field deserialises the answer unchanged: it reads <c>status</c> and renders
-/// <c>failure</c> in a sentence, and never reads this (story 3.2 of todo/PLAN_every_round_is_counted.md).
+/// <c>failure</c> in a sentence, and never reads this (story 3.2 of research/PLAN_every_round_is_counted.md).
 /// </param>
 /// <param name="Waiting">
 /// Why a QUEUED job cannot start now, when no account of its vendor can take it — <c>SlotSelector.Explain</c>'s sentence:
 /// <i>every account is rate-limited; the first comes back at …</i>, or that every account is signed out and the cure.
 /// Empty for a job that is not queued, and for a queued job an account could take (it waits only for its turn, which
-/// <c>position</c> already says). Story 5.3b of todo/PLAN_every_round_is_counted.md. Its own field rather than
+/// <c>position</c> already says). Story 5.3b of research/PLAN_every_round_is_counted.md. Its own field rather than
 /// <c>reason</c>, which is the FAILURE's own words: a shipped client renders <c>reason</c> inside a failure sentence, and a
 /// queued job has failed at nothing. Trailing and defaulted, so an older client reads the answer unchanged.
 /// </param>
@@ -218,7 +219,7 @@ public sealed record UsageEntryDto(
     string? UsageNote = null,
     string? Turn = null,
     string? Attempt = null,
-    // What the launch ran with (story 3.4 of todo/PLAN_every_round_is_counted.md) — absent on every older line.
+    // What the launch ran with (story 3.4 of research/PLAN_every_round_is_counted.md) — absent on every older line.
     string? Cli = null,
     string? CliVersion = null,
     string? Effort = null,
@@ -284,7 +285,7 @@ public sealed record UsageDto(
     /// </remarks>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<UsageWindowDto>? Windows = null,
     /// <summary>
-    /// Rounds per 1 % of each gauge window the ledger's readings name (story 6.2 of todo/PLAN_every_round_is_counted.md) —
+    /// Rounds per 1 % of each gauge window the ledger's readings name (story 6.2 of research/PLAN_every_round_is_counted.md) —
     /// the shared library's <see cref="CoaiMcp.Runners.Reviewers.RoundsPerPercent"/> over the server's own lines.
     /// </summary>
     /// <remarks>
@@ -317,7 +318,7 @@ public sealed record UsageWindowDto(
 /// <param name="CooldownUntilUtc">Null when it is not rate-limited.</param>
 /// <param name="NeedsSignIn">Set when a CLI said so; cleared only by a successful `login`.</param>
 /// <param name="Reader">
-/// The fail-closed "a gauge reader may exist" marker (story 6.1a of todo/PLAN_every_round_is_counted.md) — present from
+/// The fail-closed "a gauge reader may exist" marker (story 6.1a of research/PLAN_every_round_is_counted.md) — present from
 /// before the reader is spawned until its tree is confirmed gone, and after a crash until the next holder reconciles it.
 /// Null on every older file and whenever no reader is in flight.
 /// </param>

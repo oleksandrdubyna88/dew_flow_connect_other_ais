@@ -19,7 +19,7 @@
 
 | Item | Which plan builds it | What the other one's part is |
 |---|---|---|
-| `JobStore` Finish / Cancel / Expire classes (withdrawn, abandoned, backstop) and a budget end at claim | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), stories 3.1, 3.2 and 4.3 | this plan (declined) bounds the prompt and forgets it at the end; if it reopens it rebases on those terminal paths |
+| `JobStore` Finish / Cancel / Expire classes (withdrawn, abandoned, backstop) and a budget end at claim | [PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md), stories 3.1, 3.2 and 4.3 | this plan (declined) bounds the prompt and forgets it at the end; if it reopens it rebases on those terminal paths |
 
 ## The symptom, with the arithmetic
 

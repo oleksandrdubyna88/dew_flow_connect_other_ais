@@ -73,6 +73,15 @@ const SHAPES: readonly string[] = [
   'github_pat_abcdefghijklmnop',
   'xoxb-abcdefghijklmnop',
   'xoxp-abcdefghijklmnop',
+  // A Moonshot account id (org-… / ak-…): redacted when the body holds a digit, left alone when it is an ordinary word.
+  'Your account org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s> is suspended',
+  'the org-wide setting and org-settings-panel',
+  // The same ids with an underscore or a hyphen inside the body (the real shape is not measured): masked whole; a digitless run with them stays.
+  'Your account org-0a1b_2c3d_4e5f <ak-9z8y-7x6w-5v4u> is suspended',
+  'Your account org-0a1b2c3d4e5f_6a7b8c9d is suspended',
+  'the org-settings_panel and ak-sorted-words',
+  // An id past the old 128 bound: masked whole, no readable suffix.
+  `Your account org-1${'a'.repeat(139)}_b-c is suspended`,
   // PARAMETER: the name decides, and these two are the pair that matters.
   '?access_token=xyzabcdef',
   '?api-version=2024-02-01',

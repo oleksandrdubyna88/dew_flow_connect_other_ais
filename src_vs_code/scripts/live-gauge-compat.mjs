@@ -1,5 +1,5 @@
 /**
- * An older client against the new server (E6's plan round, todo/PLAN_every_round_is_counted.md): the previously RELEASED
+ * An older client against the new server (E6's plan round, research/PLAN_every_round_is_counted.md): the previously RELEASED
  * extension's own parsers against the answers this tree's server gives once they carry the gauge fields (story 6.1a).
  *
  * <p>What a shipped extension reads from a Team server is the catalog (`fetchCatalog`, with its per-vendor slot counts),

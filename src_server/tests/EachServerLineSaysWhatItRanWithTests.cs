@@ -11,7 +11,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// Each ledger line says what its launch RAN WITH — story 3.4 of <c>todo/PLAN_every_round_is_counted.md</c>, the Team
+/// Each ledger line says what its launch RAN WITH — story 3.4 of <c>research/PLAN_every_round_is_counted.md</c>, the Team
 /// server's half: the CLI and its version, the effort and the tier as the launch actually sent them with their sources,
 /// and the job and the account slot — by the slot's NAME, never an email.
 /// </summary>

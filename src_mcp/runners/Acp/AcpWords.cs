@@ -23,6 +23,9 @@ public static class AcpWords
     /// <summary>The lock folder the shim's tree hold lives in — the runtime's own, never one derived from a profile the shim does not have.</summary>
     public const string LocksFlag = "--locks";
 
+    /// <summary>The session an earlier turn's report named, to continue with <c>session/load</c> instead of starting one (E5.2) — the shim's own flag, parsed apart from <c>--findings</c>'s.</summary>
+    public const string SessionFlag = "--session";
+
     /// <summary>The shim's exit for a known SPENT sentence (EX_TEMPFAIL) — written by <c>AskAcpMode</c>, read by the profile's runtime.</summary>
     public const int SpentExit = 75;
 
@@ -34,4 +37,7 @@ public static class AcpWords
 
     /// <summary>The end word of a turn whose session did not offer the asked model — found out before any prompt.</summary>
     public const string ModelNotOfferedWord = "model_not_offered";
+
+    /// <summary>The end word of a turn whose <c>--session</c> the agent no longer holds: its <c>session/load</c> was answered with an error no known failure names (E5.2 decision 4).</summary>
+    public const string SessionLostWord = "session_lost";
 }

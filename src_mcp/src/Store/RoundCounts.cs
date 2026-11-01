@@ -16,7 +16,7 @@ namespace CoaiMcp.Store;
 /// </param>
 /// <param name="Gauge">
 /// Rounds per 1 % of each vendor gauge window, from the ONE derivation both halves use (story 6.2 of
-/// todo/PLAN_every_round_is_counted.md). On this machine it is always <see cref="RoundsPerPercent.NotReadHere"/>: local
+/// research/PLAN_every_round_is_counted.md). On this machine it is always <see cref="RoundsPerPercent.NotReadHere"/>: local
 /// capture (story 6.1b) is deferred, so no local line carries a reading — the extension shows a Team server's observation
 /// only for a row that runs on that server, and says <i>not read on this machine</i> for any other. Trailing, so an older
 /// extension reads the answer unchanged.
@@ -49,7 +49,7 @@ public sealed record ModelRounds(string Model, int Rounds);
 
 /// <summary>
 /// The local round counter: distinct rounds per vendor row and stage over three trailing windows, read
-/// from <c>coai.db</c> and nothing else (story 2.1 of <c>todo/PLAN_every_round_is_counted.md</c>).
+/// from <c>coai.db</c> and nothing else (story 2.1 of <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>What a round is here.</b> One <c>rounds</c> row, counted for a provider when at least one of
@@ -89,6 +89,27 @@ public static class RoundCounts
     /// here — <c>Mode=ReadOnly</c> refuses to, and the existence check keeps that refusal from reading
     /// as a disk that would not answer.
     /// </remarks>
+    /// <summary>
+    /// The read-only open of an existing <c>coai.db</c> that the readers of the counter and the round-authors report share: <c>Mode=ReadOnly</c> (a
+    /// reader never migrates, and never creates a file), unpooled, and a five-second busy wait. Opened; the caller disposes it.
+    /// </summary>
+    internal static SqliteConnection OpenReadOnly(string file)
+    {
+        var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
+        try
+        {
+            db.Open();
+
+            return db;
+        }
+        catch
+        {
+            db.Dispose();
+
+            throw;
+        }
+    }
+
     public static RoundCountsAnswer Read(string dataDir, DateTime nowUtc)
     {
         var file = Path.Combine(dataDir, RoundsDb.FileName);
@@ -97,8 +118,7 @@ public static class RoundCounts
             return new RoundCountsAnswer(Stamp(nowUtc), [.. Windows.Select(window => Cut(window, nowUtc, []))], null);
         }
 
-        using var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
-        db.Open();
+        using var db = OpenReadOnly(file);
         var modelsRecorded = RoundsQuery.HasColumn(db, "reviewers", "model");
         var launches = Launches(db, Stamp(nowUtc - Windows[^1].Length), Stamp(nowUtc), modelsRecorded);
 

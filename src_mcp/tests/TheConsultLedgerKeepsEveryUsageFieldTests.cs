@@ -38,7 +38,7 @@ public sealed class TheConsultLedgerKeepsEveryUsageFieldTests : IDisposable
     }
 
     private void Billed(Usage usage, string role = ConsultantRoles.Consult) =>
-        ConsultantTurnBooks.Billed(new UsageLedger(_data), new ProviderSettings("antigravity"), "gemini-3.1-pro-high", role, "timeout", TimeSpan.FromSeconds(3), usage);
+        ConsultantTurnBooks.Billed(new UsageLedger(_data), new ProviderSettings("antigravity"), "gemini-3.1-pro-high", role, "timeout", TimeSpan.FromSeconds(3), usage, LaunchOptions.None);
 
     [Fact]
     public void ATurnWhoseUsageWasNeverReported_IsWrittenAsNotCaptured_NotAsAFreeZero()

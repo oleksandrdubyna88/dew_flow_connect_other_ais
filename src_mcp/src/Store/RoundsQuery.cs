@@ -114,6 +114,13 @@ public sealed record LoggedRound(
 
     /// <summary>What a PLAN round reviewed (step 23; an init property like <see cref="Size"/>); null is "not recorded".</summary>
     public Core.Rounds.PlanSource? PlanSource { get; init; }
+
+    /// <summary>
+    /// The state of who wrote the code this round reviewed — <c>observed</c>, <c>partial: …</c> or <c>unobserved: …</c> (step 24; an init property like
+    /// <see cref="Size"/> and <see cref="PlanSource"/>, so the positional constructor and every call site stay as they are). Null is "not recorded"
+    /// and is ABSENT from the JSON — the rule <c>size</c> and <c>planSource</c> follow — never the words "not recorded".
+    /// </summary>
+    public string? AuthorsState { get; init; }
 }
 
 
@@ -542,7 +549,7 @@ public static class RoundsQuery
                 Text(rows, "note")));
         }
 
-        return RoundPlanSources.Attach(db, RoundChangesLog.Attach(db, rounds));
+        return RoundAuthorsLog.Attach(db, RoundPlanSources.Attach(db, RoundChangesLog.Attach(db, rounds)));
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 import { isMinutes } from './apiSettings';
+import { isKib } from './promptCap';
 import { saidText } from './saidText';
 import { rowHasFastTier } from './fastTier';
 
@@ -22,6 +23,7 @@ export interface CatalogFields {
   uses?: readonly CatalogUse[];
   systemPrompt?: string;
   timeoutMinutes?: number;
+  maxPromptKib?: number;
   chatStartingPrompt?: string;
   stream?: boolean;
   fast?: FastSetting;
@@ -40,6 +42,7 @@ export function catalogFields(v: Record<string, unknown>): CatalogFields {
     ...(uses.length === 0 ? {} : { uses }),
     ...promptField('systemPrompt', v['systemPrompt']),
     ...timeoutField(v['runtime'], v['timeoutMinutes']),
+    ...maxPromptField(v['maxPromptKib']),
     ...promptField('chatStartingPrompt', v['chatStartingPrompt']),
     ...streamField(v['runtime'], v['stream']),
     ...fastField(v),
@@ -86,4 +89,9 @@ function streamField(runtime: unknown, raw: unknown): CatalogFields {
 /** A CLI row's own limit; an api row has `reviewMinutes`, its module's calibrated value, instead. */
 function timeoutField(runtime: unknown, raw: unknown): CatalogFields {
   return runtime !== 'api' && isMinutes(raw) ? { timeoutMinutes: raw } : {};
+}
+
+/** A row's prompt cap, kept on every runtime: the server leaves an over-cap reviewer out whatever the row runs on. */
+function maxPromptField(raw: unknown): CatalogFields {
+  return isKib(raw) ? { maxPromptKib: raw } : {};
 }

@@ -58,7 +58,7 @@ public sealed class LiveRound
     /// </param>
     /// <summary>
     /// The round's identity across the wire — minted by the engine with the number, written with the running record
-    /// from the first save (<see cref="RoundKeys"/>, story 4.1 of todo/PLAN_every_round_is_counted.md).
+    /// from the first save (<see cref="RoundKeys"/>, story 4.1 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     private readonly string _key;
 

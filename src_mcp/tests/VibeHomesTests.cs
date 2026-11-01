@@ -10,6 +10,12 @@ namespace CoaiMcp.Tests;
 /// The one-shot homes' folder, its owner and its sweep (D1, D3 of <c>research/PLAN_vibe_live_round_fixes.md</c>; scenarios A12 and B1–B5).
 /// Every root is a <c>testsToDelete-vh-*</c> folder, never the machine's own.
 /// </summary>
+/// <remarks>
+/// <para>In the serial <c>fakecli-env</c> collection: it calls <c>PanelService.ForgetTheLastSweep</c>, which resets a static of the PROCESS, and the next
+/// <c>BuildWork</c> anywhere then walks the real temp folder — inside whatever round deadline that call runs under (C6 of
+/// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).</para>
+/// </remarks>
+[Collection("fakecli-env")]
 public sealed class VibeHomesTests : IDisposable
 {
     private readonly TempDir _root = TempDir.For("testsToDelete-vh-sweep-");
@@ -298,7 +304,7 @@ public sealed class VibeHomesTests : IDisposable
         var folder = Directory.CreateDirectory(VibeHomes.OneShotIn(_root, "c0ffee00")).FullName;
         var warnings = new List<string>();
         var released = false;
-        var home = new OneShotHome(folder, new Pin(), warnings.Add) { Remove = _ => throw new IOException("in use") };
+        var home = new OneShotHome(folder, new Pin(), warnings.Add) { Io = HomeIo.Real with { Delete = _ => throw new IOException("in use") } };
 
         var ending = () =>
         {

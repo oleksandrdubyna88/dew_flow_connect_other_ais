@@ -3,10 +3,10 @@ import { chatRowProvider, ChatVendorOf } from './chatSpendRows';
 import { costText, Estimate, LineRate, lineCost, shortNumber, totalCost, uncaptured, UNKNOWN, UsageEntry } from './usage';
 
 /**
- * Tokens and money beside every count (story 2.5 of todo/PLAN_every_round_is_counted.md).
+ * Tokens and money beside every count (story 2.5 of research/PLAN_every_round_is_counted.md).
  *
  * <p>Per vendor row × model × kind — review, consult, question, chat — inside one window: tokens in / cached / out /
- * reasoning, the recorded turns and the failed ones, the median input and output per RECORDED TURN, and the money. And
+ * reasoning, the recorded turns and the failed ones, the median input and output per ledger line, and the money. And
  * the division the Rounds block (story 2.3) shows beside them: ~$ per round, per consultation, per question, given the
  * counts `coai-mcp --round-counts` answers (story 2.1) — this module is handed them and never reads `coai.db` itself.</p>
  *
@@ -24,15 +24,57 @@ import { costText, Estimate, LineRate, lineCost, shortNumber, totalCost, uncaptu
  *       priced, and over zero rounds says *no rounds in this window* rather than dividing by nothing.</li>
  * </ul>
  *
- * <p><b>A ledger line is a recorded TURN, not a launch — for the lines written before story 3.3.</b> Those hold a repair
- * or a follow-up as two launches summed on one line; lines written since are one per launch, linked by their `turn`
- * (`usage.ts` reads it). A seven-day window can hold both, so a per-launch figure is still not claimed — the medians say
- * *per recorded turn*.</p>
+ * <p><b>A ledger line is one LAUNCH only when it says so.</b> Since coai-mcp 0.48.0 (story 3.3) a review run on this
+ * machine writes one line per launch — a first try, a retry, a repair and a follow-up each get their own, linked by
+ * their `turn` and carrying their `attempt` (`usage.ts` reads both). A line from before that has no `attempt` and may
+ * hold a repair or a follow-up summed with its first launch; a Team-server row's local line (`cli: remote`) is the
+ * job's total; a follow-up in the same conversation may be cumulative; a line with no `cli` says nowhere it ran. What
+ * is claimed is decided by the lines themselves ({@link isLaunchLine}), never by a row looked up: a group whose EVERY
+ * line is a launch line says *per launch* ({@link Rollup.linesAreLaunches}), any other says *per recorded turn*.
+ * Consultation, question, chat and probe lines stay one line per turn. A consult line written since the coai-mcp release that added the field carries its
+ * `consultation` (E3.S4 of todo/PLAN_the_round_counter_tail_E3.md), so consult money divides by DISTINCT consultations
+ * ({@link consultationUnits}); a line without one is its own unit. Question, chat and probe stay *per recorded turn*. The
+ * median column's header follows the groups it heads ({@link medianOutputLabel}): one shared unit is named, mixed units are not.</p>
  */
 
 /** One ledger line as this module reads it — a parsed `usage.jsonl` line, or a chat turn read into the same shape. */
 export type LedgerLine = Pick<UsageEntry, 'utc' | 'provider' | 'model' | 'tokensIn' | 'tokensOut' | 'costUsd' | 'outcome'
-  | 'usageNote' | 'tokensCached' | 'tokensReasoning' | 'kind'>;
+  | 'usageNote' | 'tokensCached' | 'tokensReasoning' | 'kind' | 'attempt' | 'cli' | 'consultation'> & Partial<Pick<UsageEntry, 'role'>>;
+
+/**
+ * The attempts coai-mcp writes for ONE local launch (`LaunchAttempts`, `src_mcp/runners/Reviewers/LaunchParts.cs:22–37`): the
+ * turn's first launch, a rate-limit retry and a repair — each its own paid launch on its own ledger line.
+ *
+ * <p>`followUp` is OUT on purpose: an antigravity follow-up continues one conversation, and antigravity may report usage
+ * cumulatively in it, so the line may include the first launch (todo/PLAN_the_reviewer_follow_up_is_billed_once.md
+ * measures that). `rotated` is a Team-server attempt, which also says `cli: remote`.</p>
+ *
+ * <p>An allow-list, not a deny-list: an attempt word this build does not know — a newer coai-mcp's, a typo — is NOT
+ * claimed as one launch. The safe answer to "is this one launch?" is no, which only costs the label *per recorded turn*.
+ * Together with {@link NOT_ONE_LAUNCH_ATTEMPTS} it must name every word of `LaunchAttempts`: a contract test reads that
+ * class, so a word coai-mcp adds fails the suite until somebody decides which side of the line it is on.</p>
+ */
+export const ONE_LAUNCH_ATTEMPTS: ReadonlySet<string> = new Set(['first', 'retry', 'repair']);
+
+/** The attempts coai-mcp names that are NOT one launch, each with why — the other half of the contract test's vocabulary. */
+export const NOT_ONE_LAUNCH_ATTEMPTS: Readonly<Record<string, string>> = {
+  followUp: 'an antigravity follow-up continues one conversation and its usage may be cumulative, so the line may include the first launch',
+  rotated: "the Team server's own attempt word (a job that took more than one account), written with `cli: remote` — never a local line",
+};
+
+/**
+ * Whether one ledger line is ONE launch: its attempt is one of {@link ONE_LAUNCH_ATTEMPTS} (so not a follow-up, not a word
+ * this build does not know, and not absent), and it names the runtime it ran on, which is not `remote` (a Team-server job
+ * is written locally as one line holding the whole job). A line from before coai-mcp 0.48.0, a chat turn and anything that
+ * says nothing of where it ran are not claimed.
+ */
+export function isLaunchLine(line: Pick<LedgerLine, 'attempt' | 'cli'>): boolean {
+  return ONE_LAUNCH_ATTEMPTS.has(line.attempt ?? '') && says(line.cli) && line.cli !== 'remote';
+}
+
+function says(value: string | undefined): boolean {
+  return (value ?? '') !== '';
+}
 
 /** A trailing window, both ends inclusive, in epoch milliseconds — the caller picks 5 h, 24 h or 7 d from one clock. */
 export interface TimeWindow {
@@ -63,6 +105,39 @@ export interface Rollup {
   readonly failed: number;
   readonly tokens: TokenTotals;
   readonly money: Estimate;
+  /**
+   * True when EVERY line behind this is a launch line ({@link isLaunchLine}), captured or not. False for an empty set —
+   * an empty set is not claimed as launches — so a label falls back to the safe *per recorded turn*.
+   */
+  readonly linesAreLaunches: boolean;
+}
+
+/**
+ * WHY a consult line carries no `consultation` (E3.S4, D8): three writers leave the field empty, and a line says which only as far as its
+ * own fields go. `checks` is read from the role (`consult-check`); `refused` is a line with no `cli` and a failing outcome — the
+ * line a consultation refused before its launch bills (nothing was labelled, the id was emptied), which an older FAILED line also is,
+ * for nothing tells them apart; `older` is the rest, so a successful line with no id is certainly from before the field.
+ */
+export interface IdLessKinds {
+  readonly older: number;
+  readonly checks: number;
+  readonly refused: number;
+}
+
+/** The consultations behind a consult group's lines: each distinct id once, and the lines that carry none. */
+export interface ConsultationIds {
+  readonly ids: readonly string[];
+  /** Lines with no `consultation` — a line older than the field, a consultant check, a refused consultation — each its own unit. */
+  readonly withoutId: number;
+  /** Which of those they are; sums to {@link withoutId}. */
+  readonly kinds: IdLessKinds;
+}
+
+/** What a consult figure is divided by: the distinct consultations plus the lines without an id, one each. */
+export interface ConsultationUnits {
+  readonly count: number;
+  readonly withoutId: number;
+  readonly kinds: IdLessKinds;
 }
 
 /** One vendor row × model × kind inside the window. */
@@ -70,10 +145,12 @@ export interface MoneyGroup extends Rollup {
   readonly provider: string;
   readonly model: string;
   readonly kind: string;
-  /** The median input per recorded turn over the captured lines, or null when none was captured. */
+  /** The median input per ledger line over the captured lines, or null when none was captured. */
   readonly medianIn: number | null;
-  /** The median output per recorded turn over the captured lines, or null when none was captured. */
+  /** The median output per ledger line over the captured lines, or null when none was captured. */
   readonly medianOut: number | null;
+  /** The consultations behind a consult group; empty for every other kind. */
+  readonly consultations: ConsultationIds;
 }
 
 /** What a figure is divided by, and what one of it is called. */
@@ -92,8 +169,44 @@ export interface PerUnit {
 /** The unit of a figure that could not be divided by what the kind counts: one ledger line. */
 export const PER_RECORDED_TURN = 'recorded turn';
 
-/** The medians' label — a recorded turn, never a launch: one line can hold a repair or a follow-up (story 3.3). */
-export const MEDIAN_OUTPUT_LABEL = `median output per ${PER_RECORDED_TURN}`;
+/** The unit of a figure whose every line is one launch ({@link isLaunchLine}) — a review line written since coai-mcp 0.48.0. */
+export const PER_LAUNCH = 'launch';
+
+/**
+ * The unit a group's median output is in: per launch when every line of the group is one launch
+ * ({@link Rollup.linesAreLaunches}), else per recorded turn — a line of it can hold more than one launch.
+ */
+export function medianUnitOf(group: Pick<Rollup, 'linesAreLaunches'>): string {
+  return unitOfLines(group.linesAreLaunches);
+}
+
+/**
+ * The unit the median column's header names, from the groups the block actually draws a median for: the one unit they
+ * all share, or an empty string when they differ — or when there are none, so nothing is claimed about a cell that is
+ * not drawn. A cell names its own unit only when it differs from this one.
+ */
+export function medianHeaderUnit(groups: readonly Pick<Rollup, 'linesAreLaunches'>[]): string {
+  const units = new Set(groups.map(medianUnitOf));
+
+  return units.size === 1 ? [...units][0]! : '';
+}
+
+/** The median column's header for one header unit ({@link medianHeaderUnit}): *median output per launch*, or the neutral one for ''. */
+export function medianLabelOfUnit(unit: string): string {
+  return unit === '' ? 'median output' : `median output per ${unit}`;
+}
+
+/** The median column's header: *per launch*, *per recorded turn*, or the neutral *median output* ({@link medianHeaderUnit}). */
+export function medianOutputLabel(groups: readonly Pick<Rollup, 'linesAreLaunches'>[]): string {
+  return medianLabelOfUnit(medianHeaderUnit(groups));
+}
+
+/** Plurals that are not `+s`. */
+const PLURAL_OF: Readonly<Record<string, string>> = { [PER_LAUNCH]: 'launches' };
+
+function plural(unit: string): string {
+  return PLURAL_OF[unit] ?? `${unit}s`;
+}
 
 /** The order a report reads best in — `UsageKinds.Known` in `src_mcp`, with anything newer after them. */
 const KIND_ORDER: readonly string[] = ['review', 'consult', 'question', 'chat', 'probe'];
@@ -143,7 +256,37 @@ function group(members: readonly LedgerLine[], rateOf: RateOf): MoneyGroup {
     medianIn: median(captured.map((one) => one.tokensIn)),
     medianOut: median(captured.map((one) => one.tokensOut)),
     money: totalCost(members.map((one) => lineCost(one, rateOf(one.provider, one.model)))),
+    linesAreLaunches: members.length > 0 && members.every(isLaunchLine),
+    consultations: kindOf(first) === 'consult' ? consultationsOf(members) : NO_CONSULTATIONS,
   };
+}
+
+const NO_ID_LESS: IdLessKinds = { older: 0, checks: 0, refused: 0 };
+const NO_CONSULTATIONS: ConsultationIds = { ids: [], withoutId: 0, kinds: NO_ID_LESS };
+
+/** The role a consultant check bills under (`ConsultantRoles.Check`, `src_mcp/runners/Consultation/IConsultantRuntime.cs`). */
+const CONSULT_CHECK_ROLE = 'consult-check';
+
+function consultationsOf(members: readonly LedgerLine[]): ConsultationIds {
+  const idLess = members.filter((one) => !says(one.consultation));
+
+  return {
+    ids: [...new Set(members.map((one) => one.consultation ?? '').filter(says))],
+    withoutId: idLess.length,
+    kinds: {
+      checks: idLess.filter(isCheck).length,
+      refused: idLess.filter((one) => !isCheck(one) && isRefused(one)).length,
+      older: idLess.filter((one) => !isCheck(one) && !isRefused(one)).length,
+    },
+  };
+}
+
+function isCheck(line: LedgerLine): boolean {
+  return line.role === CONSULT_CHECK_ROLE;
+}
+
+function isRefused(line: LedgerLine): boolean {
+  return !says(line.cli) && line.outcome !== 'ok';
 }
 
 function byRowModelKind(a: MoneyGroup, b: MoneyGroup): number {
@@ -182,6 +325,7 @@ export function rollUp(parts: readonly Rollup[]): Rollup {
     failed: sum(parts.map((one) => one.failed)),
     tokens: tokensOf(parts.map((one) => one.tokens)),
     money: parts.length === 0 ? UNKNOWN : totalCost(parts.map((one) => one.money)),
+    linesAreLaunches: parts.length > 0 && parts.every((one) => one.linesAreLaunches),
   };
 }
 
@@ -208,11 +352,57 @@ export function tokenText(tokens: TokenTotals, field: 'in' | 'cached' | 'out' | 
 
 /**
  * What a figure of this kind is divided by: the count the caller knows — the rounds that used a model, every round of
- * a vendor row or of the window, the consultations, the questions — or, when it knows none, the recorded turns, so the
- * figure is labelled per recorded turn rather than per something it is not.
+ * a vendor row or of the window, the consultations, the questions — or, when it knows none, the lines it holds: per
+ * launch when every one of them is a launch line (`linesAreLaunches`, off by default), else per recorded turn, so the
+ * figure is never labelled per something it is not.
  */
-export function unitDivisor(kind: string, count: number | undefined, turns: number): Divisor {
-  return count === undefined ? { per: PER_RECORDED_TURN, count: turns } : { per: UNIT_OF[kind] ?? PER_RECORDED_TURN, count };
+export function unitDivisor(kind: string, count: number | undefined, turns: number, linesAreLaunches = false): Divisor {
+  return count === undefined ? { per: unitOfLines(linesAreLaunches), count: turns } : { per: UNIT_OF[kind] ?? PER_RECORDED_TURN, count };
+}
+
+function unitOfLines(linesAreLaunches: boolean): string {
+  return linesAreLaunches ? PER_LAUNCH : PER_RECORDED_TURN;
+}
+
+/**
+ * What the consult groups of one vendor row are divided by (E3.S4 of todo/PLAN_the_round_counter_tail_E3.md): every DISTINCT
+ * consultation once — the same id in two model groups is one consultation — plus each line that carries no id, which is
+ * its own unit because nothing says it belongs to another. `count` is the divisor; `withoutId` is what the label and its
+ * tooltip say was counted one each.
+ */
+export function consultationUnits(groups: readonly Pick<MoneyGroup, 'consultations'>[]): ConsultationUnits {
+  const withoutId = sum(groups.map((one) => one.consultations.withoutId));
+  const kinds = (pick: (one: IdLessKinds) => number): number => sum(groups.map((one) => pick(one.consultations.kinds)));
+
+  return {
+    count: new Set(groups.flatMap((one) => one.consultations.ids)).size + withoutId,
+    withoutId,
+    kinds: { older: kinds((one) => one.older), checks: kinds((one) => one.checks), refused: kinds((one) => one.refused) },
+  };
+}
+
+/**
+ * The unit beside a consult figure: *per consultation*, or *per consultation (some lines per turn)* when any line of the window
+ * carries no id (D9). "Older lines" would be false: a consultant check and a consultation refused before its launch carry none either.
+ */
+export function consultationLabel(units: Pick<ConsultationUnits, 'withoutId'>): string {
+  return units.withoutId > 0 ? 'per consultation (some lines per turn)' : 'per consultation';
+}
+
+/** The tooltip's extra sentence: how many lines were counted one each and which kinds of line they are — empty when every line carried an id. */
+export function consultationNote(units: Pick<ConsultationUnits, 'withoutId' | 'kinds'>): string {
+  const lines = units.withoutId === 1 ? '1 line' : `${units.withoutId} lines`;
+
+  return units.withoutId === 0 ? '' : `${lines} without a consultation id counted one each — ${idLessReasons(units.kinds)}`;
+}
+
+/** Only the kinds that are PRESENT in the window, so the tooltip never claims a reason it did not see. */
+function idLessReasons(kinds: IdLessKinds): string {
+  return [
+    kinds.older > 0 ? 'lines written before the consultation field existed' : '',
+    kinds.checks > 0 ? 'consultant checks' : '',
+    kinds.refused > 0 ? 'consultations refused before their launch (or failed lines written before the field)' : '',
+  ].filter(says).join(', ');
 }
 
 /**
@@ -222,7 +412,7 @@ export function unitDivisor(kind: string, count: number | undefined, turns: numb
  * carries its round (story 4.1), so the tooltip says that some of it was not, rather than a count it does not have.
  */
 export function perUnit(money: Estimate, divisor: Divisor): PerUnit {
-  const units = `${divisor.per}s`;
+  const units = plural(divisor.per);
   if (divisor.count <= 0) {
     return { text: '—', per: divisor.per, note: `no ${units} in this window` };
   }
@@ -256,6 +446,7 @@ export function chatLedgerLines(turns: readonly ChatTurnRecord[], vendorOf: Chat
     tokensCached: 0,
     tokensReasoning: 0,
     kind: 'chat',
+    ...(turn.cli === undefined ? {} : { cli: turn.cli }),
   }));
 }
 

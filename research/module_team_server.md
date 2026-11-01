@@ -520,7 +520,7 @@ sequenceDiagram
   too early spends quota against a live limit, which on some plans extends it. So an unzoned time is
   never allowed to resolve to less than the 30-minute fallback, repeats double to a 5 h ceiling, and
   every pattern in the parser matches a line somebody actually captured from the VM.
-- **A stated DURATION is believed (2026-10-11, story 5.3a of `todo/PLAN_every_round_is_counted.md`).** agy says how
+- **A stated DURATION is believed (2026-10-11, story 5.3a of `research/PLAN_every_round_is_counted.md`).** agy says how
   long, not when — `… Individual quota reached. … Resets in 88h49m9s.` — and no form read it, so an exhausted Gemini
   slot sat on the doubling 30-minute guess and was asked again into the refusal for the whole ~110 h. The duration
   form (`Resets in <h>h<m>m<s>s`, any part may be absent, one space allowed inside — `2h 30m`) is read FIRST, so
@@ -687,7 +687,7 @@ sequenceDiagram
 - **One ledger, not two.** `UsageLedger` gained an email column and a `RecordJob` overload rather
   than `src_server` growing its own JSONL writer — a second writer is how two spending records come
   to disagree.
-- **The whole usage travels (2026-10-10, story 3.1 of `todo/PLAN_every_round_is_counted.md`).** Every one of the 4 091
+- **The whole usage travels (2026-10-10, story 3.1 of `research/PLAN_every_round_is_counted.md`).** Every one of the 4 091
   lines on the live server held 0 cached and 0 reasoning tokens, and a crashed vendor's tokens were dropped: two longs
   carried the usage from the launcher to the ledger. Now `ReviewAttempt.Answered` and `ReviewAttempt.Failed` carry the
   launch's whole `Usage` — after a follow-up, both launches together, a terminal outcome included — `JobRecord.Usage`
@@ -696,7 +696,7 @@ sequenceDiagram
   `RecordJob`'s `Usage` overload — cached, reasoning, *no price set* and *usage not captured* as a local line writes
   them. `UsageReader` reads the three fields back (`UsageEntryDto`, `UsageLine`); a line from before them reads 0 / 0 /
   empty, which is what it always meant. A `Failed` built from an outcome alone carries `ReviewerOutcome.TotalUsage`.
-- **Every launch is a line (2026-10-10, story 3.3 of `todo/PLAN_every_round_is_counted.md`).** Row 10 of the paid-path
+- **Every launch is a line (2026-10-10, story 3.3 of `research/PLAN_every_round_is_counted.md`).** Row 10 of the paid-path
   census (`research/RESULTS_vendor_quota_gauges.md` §5.1): a follow-up folded into the first launch's line, and an
   attempt a rate-limited slot handed back to the queue wrote NOTHING (`RateLimited` returned null and `Record` returned
   before the ledger). Now:
@@ -716,7 +716,7 @@ sequenceDiagram
   Still NOT written: a job ended by an infrastructure throw (the runner's broad catch — `NotStarted`, no line), and the
   cumulative difference of an agy follow-up (each line carries its own launch's report —
   `todo/PLAN_the_reviewer_follow_up_is_billed_once.md`). A job ended by the host stopping IS written since story 3.2 (below).
-- **Each line says what it ran with (2026-10-11, story 3.4 of `todo/PLAN_every_round_is_counted.md`).** A server line
+- **Each line says what it ran with (2026-10-11, story 3.4 of `research/PLAN_every_round_is_counted.md`).** A server line
   said who, which vendor and model and what it cost — not which CLI release ran it, whether the request's effort was
   applied, what tier the launch was told, or which account carried it. Now every line of a job carries:
   - `cli` — the vendor's runtime — and `cliVersion`: the first line of what that CLI last said to the catalog's health
@@ -737,7 +737,7 @@ sequenceDiagram
   writes it on every line of the attempt — a requeued one's included — through `RecordJob`'s new `ranWith`, `job`
   and `slot`. `UsageEntryDto` and `UsageLine` (`RanWith`, `Job`, `Slot`) read the eight fields back; a line older than
   them reads `LaunchOptions.None` and empty.
-- **How a job ended is said, not guessed (2026-10-11, story 3.2 of `todo/PLAN_every_round_is_counted.md`).** The
+- **How a job ended is said, not guessed (2026-10-11, story 3.2 of `research/PLAN_every_round_is_counted.md`).** The
   deployed server's own ledger line for a review its client withdrew after 8.4 s said `TimedOut` and a free 0/0
   (`tests/fixtures/usage/timed-out-withdrawal.jsonl`): the executor read only the launcher's `TimedOut` flag
   ([module_runners.md](module_runners.md)); `JobStore.Cancel` and `JobStore.Expire` both stored `FailureKind.Cancelled`,
@@ -776,7 +776,7 @@ sequenceDiagram
   round's clock and the MCP client's own cancellation reach it as one token); `ReviewerOutcome.TimedOut`'s launch usage
   stays `Usage.None` on the server's attempt (a deadline line still reads 0/0 — not this story's defect, listed in the
   plan's open tail).
-- **Each line names its round (2026-10-11, story 4.2 of `todo/PLAN_every_round_is_counted.md`).** Every line of a job
+- **Each line names its round (2026-10-11, story 4.2 of `research/PLAN_every_round_is_counted.md`).** Every line of a job
   carries the `round` its request sent and the client's own word for the request (`clientAttempt`) beside the server's
   `attempt` — see *The round on the wire, as the server records it* below for how the request's fields are read.
 
@@ -1349,7 +1349,7 @@ total answers neither. **A line with no kind folds as a review**, because everyt
 the field existed was one — and a kind from a server NEWER than this one is also counted as a
 review rather than dropped, since that line already happened and already cost money.
 
-**`canary` (2026-10-10, story 3.5 of `todo/PLAN_every_round_is_counted.md`).** The release script's canary — one real
+**`canary` (2026-10-10, story 3.5 of `research/PLAN_every_round_is_counted.md`).** The release script's canary — one real
 `PlanCritique` review per vendor after a swap — was written as an ordinary `review`, told apart from a person's only by
 its token's email. It now says `"kind":"canary"`: `JobKind.Canary` is judged exactly as a review (a role is required),
 `UsageKinds.Canary` keeps the ledger's vocabulary level with the server's (the parity test), and `UsageDto.kinds`
@@ -1458,7 +1458,7 @@ flowchart LR
   D --> A["202: dropped / clamped"]
 ```
 
-## The round on the wire, as the server records it (2026-10-11, story 4.2 of `todo/PLAN_every_round_is_counted.md`)
+## The round on the wire, as the server records it (2026-10-11, story 4.2 of `research/PLAN_every_round_is_counted.md`)
 
 A request may carry three more fields, all optional and additive — **`ContractVersion` stays 2**, and a server older
 than them skips them as unknown members (`ServerJsonContext` sets no `UnmappedMemberHandling`):
@@ -1513,7 +1513,7 @@ flowchart LR
   J -->|"story 4.3"| B["ClientDeadlineUtc — the budget rule below"]
 ```
 
-## No start without budget (2026-10-11, story 4.3 of `todo/PLAN_every_round_is_counted.md`)
+## No start without budget (2026-10-11, story 4.3 of `research/PLAN_every_round_is_counted.md`)
 
 A job was claimed whenever an account came free, however long its caller had been gone: the shim gives up on its own
 deadline and DELETEs, but a launch that won a slot a second before that DELETE ran on the company's account for an answer
@@ -1596,7 +1596,7 @@ flowchart TD
   W --> H["shim: exit 79 by NAME<br/>(an old shim: 70, the name in its sentence)"]
 ```
 
-## The server counts rounds (2026-10-11, story 5.1 of `todo/PLAN_every_round_is_counted.md`)
+## The server counts rounds (2026-10-11, story 5.1 of `research/PLAN_every_round_is_counted.md`)
 
 `/api/usage` answers how many ROUNDS each vendor ran, not only how many launches, from the `round` and `clientAttempt`
 story 4.2 put on every ledger line. Additive only: nothing an older client reads moved.
@@ -1642,7 +1642,7 @@ Tests: `RoundCountsTests`, `SeveralWindowsTests`, `RoundCountsEndpointTests`, `T
 `http/usage/usage.http` requests over the round lines `http/run-contracts.mjs` seeds, and the seam suite's usage-counts
 leg that reads the real server through the extension's parser — listed in [module_tests.md](module_tests.md).
 
-## The vendor's own gauge, read inside the lease — and contained (2026-10-11, story 6.1a of `todo/PLAN_every_round_is_counted.md`)
+## The vendor's own gauge, read inside the lease — and contained (2026-10-11, story 6.1a of `research/PLAN_every_round_is_counted.md`)
 
 The Team server reads the codex gauge — `codex app-server` · `account/rateLimits/read`, the source story 1.1 found
 (`RESULTS_vendor_quota_gauges.md` §2.2) — on each codex slot, after each job, INSIDE the job's own lease, and stores
@@ -1725,7 +1725,8 @@ it is answered first and nothing the reader does changes what it is told; then t
 carrying the reading. A requeued attempt (rate-limited, rotated) is not the job's end: no read. The pre-spawn guards,
 each a fixed `GaugeCodes` word in the log:
 
-- a codex slot (`vendor.Runtime`), not signed out, not blocked, capture not suspended (`slot-not-readable`);
+- a codex slot (`vendor.Runtime`): any other runtime has no gauge the server reads and is skipped as `no-gauge-for-runtime` — never as a slot that cannot be read, which is a different thing — before anything else is looked at;
+- a slot not signed out, not blocked, capture not suspended (`slot-not-readable`);
 - a platform that can list descendants — Linux and Windows; macOS refuses to spawn (`platform-unsupported`);
 - **the expiry guard** (`CodexAuthExpiry.Of` → `GaugeCapture.Guard`): the access token's JWT `exp`, read from
   `<slot>/.codex/auth.json` — the one claim decoded, the token never kept or logged — must exceed now by more than
@@ -1765,7 +1766,7 @@ notification and `remoteControl/status/changed`, which names the machine (RESULT
 | the job's ledger lines (`usage.jsonl`, every line of the job) | `gaugeObservedUtc`, `gaugePlan`, `gaugeWindows[]` — EVERY window of EVERY limit the reading reported, each `{limitId, kind, mins, usedPercent, resetsUtc}` (`GaugeOnLine` / `GaugeWindowOnLine`, `UsageEntry.WithGauge`, `GaugeReadingDto.OnLine`) | three trailing fields; the list is left off the line when empty (`JsonIgnore WhenWritingNull`), so an absent window is absent and an old line reads none; mirrored in `UsageEntryDto` (`GaugeWindowEntryDto`), `UsageLine.Gauge` and the extension's `usage.ts` (`gaugeWindowsOf`, which reads only a WHOLE window and never coerces a missing number to 0). Epic 6's code round replaced the first shape — one limit's two windows in nine flat fields — because a codex answer with several limits in `rateLimitsByLimitId` lost all but one on the line, and `RoundsPerPercent` could not derive the rest; nothing had shipped, so the shape changed in place |
 | `GET /api/catalog` → `vendors[].slots.gauge` | the LATEST reading among the vendor's accounts by `observedUtc` — the reading only, never which account | nullable AND omitted when null, as `UsageDto.Daily`: an older server and a server that never read are the same absence, which story 6.2 renders as unavailable |
 
-Story 6.2 derives rounds per 1 % from consecutive readings of one window instance and renders all of this; 6.1a
+Story 6.2 derives rounds per 1 % from a baseline reading and the first later reading of one window instance whose percentage rose (6.2b: a plateau keeps its rounds) and renders all of this; 6.1a
 stores and serves it. Growth: one object per slot, overwritten; ~+150 bytes per server ledger line that carries a reading.
 
 ```mermaid
@@ -1800,7 +1801,7 @@ listed with their RED messages in [module_tests.md](module_tests.md). The older-
 `npm run test:gauge-compat` (`scripts/live-gauge-compat.mjs`, needs the network — the released extension's own
 `fetchCatalog` and `parseUsage` against this tree's server).
 
-## Rounds per 1 % of a gauge window (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+## Rounds per 1 % of a gauge window (2026-10-12, story 6.2 of `research/PLAN_every_round_is_counted.md`)
 
 `/api/usage` answers, beside the round windows a client asked for, **`gauges[]`** — for each vendor and each gauge
 window its ledger's readings name, how many rounds 1 % of that window bought. The figure is computed ONCE, in the shared
@@ -1810,10 +1811,10 @@ runners library (`RoundsPerPercent`, [module_runners.md](module_runners.md)); th
 | Field | Meaning |
 |---|---|
 | `vendor`, `limitId`, `windowMins` | the window — identified by the vendor's limit identity AND its length, never by where the vendor filed it |
-| `roundsPerPercent` | the rounds-weighted mean of the last 10 usable intervals — or `null`, never 0 or infinity |
+| `roundsPerPercent` | pooled — Σ rounds ÷ Σ rise over the last 10 usable intervals (story 6.2b; a plateau keeps its rounds) — or `null`, never 0 or infinity |
 | `intervals` | how many usable intervals the figure was taken over (0 when null) |
 | `unavailable` | empty when shown; else a fixed code: `too-few-readings`, `percent-did-not-rise`, `window-reset`, `stale-reading`, `missing-reading`, `run-without-round`, `no-rounds`, `consumer-not-counted` |
-| `missingConsumer` | the known consumer coai cannot count that hides the figure — `direct-codex-use` for the `codex` limit today — else empty |
+| `missingConsumer` | the known consumer coai cannot count that hides the figure — `direct-codex-use` for a codex account today (every window of it) — else empty |
 
 - **Over every caller's lines, whatever the scope.** A gauge is the ACCOUNT's; every launch on it spent it, so counting
   one person's rounds against the account's whole rise would be a figure about nobody. The answer names a vendor, a
@@ -1823,7 +1824,7 @@ runners library (`RoundsPerPercent`, [module_runners.md](module_runners.md)); th
   reports; an older interval belongs to an instance that has already reset.
 - **Absent unless asked.** Nullable AND omitted when null, exactly as `windows` is: an answer to `?window=` alone — every
   client older than story 5.2 — is today's shape; a request that asked windows over a ledger with no readings gets `[]`.
-- **For codex the figure is hidden today.** Direct use of the account outside coai spends the same limit and writes no
+- **For codex the figure is hidden today — every window of the account.** Direct use of the account outside coai spends the same limit and writes no
   ledger line (RESULTS_vendor_quota_gauges.md §2.4, §6.3), so `roundsPerPercent` is null with `missingConsumer:
   direct-codex-use`. The observed gauge and its reset are still served — by the catalog (`slots.gauge`, story 6.1a) —
   and still shown. Showing the figure as an upper bound instead is the owner's call, not this story's.
@@ -1839,7 +1840,7 @@ flowchart LR
   C --> T
 ```
 
-Tests: `RoundsPerPercentServedTests` (4) and `RoundsPerPercentEndpointTests` (1), server; `RoundsPerPercentTests` (19),
+Tests: `RoundsPerPercentServedTests` (6) and `RoundsPerPercentEndpointTests` (1), server; `RoundsPerPercentTests` (49),
 mcp; `http/usage/usage.http` (+3 assertions); the seam's gauge leg (`scripts/seam-gauge.mjs`, the real server over a
 seeded slot and ledger, read and DRAWN by the extension's own code). The older-client check now also asks the released
 client's `fetchUsage(company)`: `extension-v0.69.0` asks no windows and gets no `gauges`; `extension-v0.70.0` asks them,

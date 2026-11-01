@@ -1,5 +1,5 @@
 /**
- * The zero-spend probe of the review body a NEW client sends (story 4.1 of todo/PLAN_every_round_is_counted.md, decided at
+ * The zero-spend probe of the review body a NEW client sends (story 4.1 of research/PLAN_every_round_is_counted.md, decided at
  * epic 4's plan round): `round`, `attempt`, `remainingSeconds` and one deliberately unknown member, POSTed to a REAL Team
  * server with `"kind":"probe-no-such-kind"`.
  *

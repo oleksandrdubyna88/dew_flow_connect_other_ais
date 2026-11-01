@@ -12,7 +12,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The shipping proof of story 6.1a (<c>todo/PLAN_every_round_is_counted.md</c>, the epic-6 risk consultation): the
+/// The shipping proof of story 6.1a (<c>research/PLAN_every_round_is_counted.md</c>, the epic-6 risk consultation): the
 /// REAL server binary, run as a child, with a fake <c>codex app-server</c> on its PATH that survives the parent that
 /// started it, over disposable fake credentials — killed mid-read, and what the containment does about it.
 /// </summary>

@@ -9,7 +9,7 @@ namespace CoaiServer.Tests;
 /// <summary>
 /// The barrier in the slot: a previous holder's reader marker is reconciled under the lock before the lease is usable —
 /// what it names is killed, pid AND start time matched, and confirmed gone; what it cannot name blocks the slot (story
-/// 6.1a of <c>todo/PLAN_every_round_is_counted.md</c>, the epic-6 risk consultation's order).
+/// 6.1a of <c>research/PLAN_every_round_is_counted.md</c>, the epic-6 risk consultation's order).
 /// </summary>
 /// <remarks>
 /// <para>Against REAL processes where a process is what is at stake: the fake CLI's <c>serve</c> verb stands in for a

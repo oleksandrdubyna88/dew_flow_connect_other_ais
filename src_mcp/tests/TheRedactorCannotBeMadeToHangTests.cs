@@ -46,6 +46,9 @@ public sealed class TheRedactorCannotBeMadeToHangTests
             // A vendor prefix followed by a run longer than its bound.
             { "sk-" + new string('k', 200_000), "a vendor key past its bound" },
             { string.Concat(Enumerable.Repeat("sk-abcdefg", 20_000)), "twenty thousand short vendor keys" },
+            // A Moonshot id prefix with a run past its bound and no digit: the digit lookahead must stay bounded.
+            { "org-" + new string('a', 200_000), "a Moonshot id with no digit, past its bound" },
+            { string.Concat(Enumerable.Repeat("ak-abcdefgh", 20_000)), "twenty thousand digitless Moonshot ids" },
             // The two NonBacktracking patterns, for completeness: they cannot backtrack at all, and
             // a case that proves the suite would notice if one lost the flag.
             { "?" + new string('n', 60) + "=" + new string('v', 200_000), "a parameter value past its bound" },

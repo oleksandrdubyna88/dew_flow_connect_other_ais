@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { copyWouldReplace, ignoredWorkspaceValues, Inspected, MODEL_KEYS, userLayerReader } from '../modelKeys';
+import { copyWouldReplace, ignoredWorkspaceValues, Inspected, MODEL_KEYS, SAFETY_KEYS, userLayerReader } from '../modelKeys';
 
 /**
  * The settings that name a model — and therefore a program to run — are read from the person's own
@@ -58,6 +58,14 @@ test('the guarded settings are every key that names a model or a program to run'
   assert.deepEqual([...MODEL_KEYS].sort(), [
     'bugzModel', 'chatModel', 'chatModelName', 'chatModelPresets', 'chatPresetsMoved', 'consultants', 'qconsultRows', 'securityLane', 'vendors',
   ]);
+});
+
+test('the safety keys are the overrides that switch a server refusal off — here only kimiAllowNetworkSignIn — and they raise no model notice', () => {
+  assert.deepEqual([...SAFETY_KEYS], ['kimiAllowNetworkSignIn']);
+  const layers = { kimiAllowNetworkSignIn: { defaultValue: false, workspaceValue: true } };
+
+  assert.equal(userLayerReader(() => true, inspector(layers))('kimiAllowNetworkSignIn'), false);
+  assert.deepEqual(ignoredWorkspaceValues(inspector(layers)), [], 'no "a repository cannot choose a program" notice for it: nothing is run');
 });
 
 test('a repository cannot redirect the chat through the move\'s record or the chat\'s model name', () => {

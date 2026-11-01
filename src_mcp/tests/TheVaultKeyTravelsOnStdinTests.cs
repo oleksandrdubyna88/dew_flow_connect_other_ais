@@ -176,6 +176,7 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
 /// fake CLI cannot stage: a cancelled probe, a binary that vanishes between probe and read, and the
 /// exact shape of each request.
 /// </summary>
+[Collection("fakecli-env")]
 public sealed class TheVaultsRequestsAreShapedForTheKeyTests
 {
     private const string FakeKey = "cfgk_FAKEFAKEFAKEFAKEFAKEFAKEFAKE";
@@ -301,24 +302,6 @@ public sealed class TheVaultsRequestsAreShapedForTheKeyTests
 
         keys.Unavailability.Should().Contain("could not be started for the read").And.NotContain("not installed");
         launcher.Requests.Select(r => r.Executable).Should().OnlyContain(e => e == "creds");
-    }
-}
-
-/// <summary>
-/// Clears every <c>FAKECLI_*</c> variable this process holds. The vault's probe made several more of them
-/// matter to the vault tests, so a class that sets only its own and inherits the rest from whichever test
-/// ran before can see a "--help exited 3" it never asked for (own review).
-/// </summary>
-internal static class FakeCliSteering
-{
-    public static void Reset()
-    {
-        foreach (var name in Environment.GetEnvironmentVariables().Keys.Cast<string>()
-                     .Where(name => name.StartsWith("FAKECLI_", StringComparison.Ordinal))
-                     .ToList())
-        {
-            Environment.SetEnvironmentVariable(name, null);
-        }
     }
 }
 

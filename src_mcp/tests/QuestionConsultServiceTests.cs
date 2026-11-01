@@ -224,7 +224,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Epic 5's code round (gating finding) of todo/PLAN_every_round_is_counted.md: a QUESTION row refused with a stated
+    /// Epic 5's code round (gating finding) of research/PLAN_every_round_is_counted.md: a QUESTION row refused with a stated
     /// reset wrote its ledger line without <c>resetsUtc</c> — only the reviewer path read the reset. The refusal here is
     /// agy's verbatim line, on a claude row: the classification reads the words, and the scripted launcher answers claude.
     /// </summary>

@@ -44,9 +44,21 @@ public sealed class KimiAcpProfileTests
             "a bare name is what ExecutableResolver walks the PATH for at launch");
     }
 
+    /// <summary>DL5: on a Linux or WSL host Moonshot's installer put it in <c>~/.kimi-code/bin/kimi</c> — measured there on WSL2 (E4) — so that path is taken when it is there, else the bare name.</summary>
     [Theory]
     [InlineData(HostKind.Linux)]
     [InlineData(HostKind.Wsl)]
+    public void OnLinuxAndWsl_TheInstallersPathIsTakenWhenItIsThere_ElseTheBareName(HostKind host)
+    {
+        var installed = "/home/someone/.kimi-code/bin/kimi";
+
+        KimiAcpProfile.InstalledExecutableFor(host, "/home/someone", "/usr/bin", path => path == installed).Should().Be(installed,
+            "the server's PATH often lacks the installer's folder, and only a shell that started after the install has it");
+        KimiAcpProfile.InstalledExecutableFor(host, "/home/someone/", "/usr/bin", path => path == installed).Should().Be(installed, "a trailing separator is the same folder");
+        KimiAcpProfile.InstalledExecutableFor(host, "/home/someone", "/usr/bin", _ => false).Should().Be("kimi", "a bare name is what the operating system walks the PATH for at launch");
+    }
+
+    [Theory]
     [InlineData(HostKind.MacOs)]
     [InlineData(HostKind.Other)]
     public void ElsewhereNothingIsGuessed(HostKind host)

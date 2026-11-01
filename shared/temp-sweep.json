@@ -13,7 +13,11 @@
     "directory, and a consultant check's scratch repository (coai-check-, which the product removes after a day).",
     "A live chat can sit for an hour writing nothing, so its directory is older than any",
     "window a test sweep could use; the product sweeps these itself, on its own clock. A downloaded",
-    "server, coai-<version>, is a cache and is never swept either."
+    "server, coai-<version>, is a cache and is never swept either.",
+    "",
+    "Since D2 of todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md both runners walk the machine's REAL temp directory",
+    "(RunTemp.Real; the extension sweeps before it moves TEMP), and what a run makes lives inside its own testsToDelete-coai-run-<6>",
+    "folder, which this prefix never matches and the run removes itself."
   ],
   "prefix": "coai-",
   "keepMinutes": 10,

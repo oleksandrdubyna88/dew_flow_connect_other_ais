@@ -263,7 +263,9 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // saved value", with **Restore** (`cli-path-value-dropped`, an offer); and a Restore that finds the row changed since the
 // offer writes nothing and says why (`cli-path-restore-refused`). Two places, because they are two kinds: an offer and a
 // refusal. The restore never runs on its own — a missing value looks the same whoever removed it.
-const PLACES_THIS_SPEAKS = 166;
+// 166 -> 167 on 2026-10-17 (E6 of research/PLAN_kimi_and_vibe_on_linux.md): the Kimi card's *Clear the stuck Kimi marker* says what its one-shot
+// mode answered (`kimi-marker-cleared`, class outcome) — one outcome, routed through `notify`; the press is the only thing that speaks.
+const PLACES_THIS_SPEAKS = 167;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

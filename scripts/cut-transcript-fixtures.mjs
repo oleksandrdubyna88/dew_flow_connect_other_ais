@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Cuts a WINDOW of one real caller session into a sanitised fixture directory
-// (todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S3). Every string that is not on the shape-checked
+// (research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S3). Every string that is not on the shape-checked
 // allowlist (src_mcp/tests/fixtures/caller-transcripts/allowlist.json) becomes the sentinel, ids are remapped through one
 // map so joins survive, and every path is rewritten under a fixture root. The rules live in scripts/lib/transcript-sanitise.mjs.
 //

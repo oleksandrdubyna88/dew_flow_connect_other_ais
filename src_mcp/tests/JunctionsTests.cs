@@ -2,6 +2,7 @@ using System.Text;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Worktrees;
 using FluentAssertions;
 using Xunit;
 
@@ -275,18 +276,93 @@ public sealed class JunctionsTests : IDisposable
     [Theory]
     [InlineData(HostKind.Linux)]
     [InlineData(HostKind.Wsl)]
+    public void ALinuxOrWslHost_MakesASymlink_ThatReadsBackAsTheTarget(HostKind host)
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the product's Unix shell and the mount table of the machine it runs on: Linux's (the host's door is HostAdmitted, S-K1)");
+        Directory.CreateDirectory(Target);
+
+        var made = Junctions.Make(host, Link, Target);
+
+        made.Should().BeEmpty($"a sign-in link is made on a {HostKinds.Word(host)} host (S-K1)");
+        Junctions.Target(Link).Should().Be(Target, "read back through the link's own target");
+        OwnedPaths.IsLinkIfThere(Link).Should().BeTrue("a symbolic link is what the deleter treats as a link: unlinked by its own name, never entered");
+    }
+
+    [Theory]
     [InlineData(HostKind.MacOs)]
     [InlineData(HostKind.Other)]
-    public void ANonWindowsHost_IsRefusedWithTheD18Sentence(HostKind host)
+    public void AMacOsOrOtherHost_IsStillRefused_AndNothingIsMade(HostKind host)
     {
         Directory.CreateDirectory(Target);
 
         var refusal = Junctions.Refusal(host, Link, Target);
         var made = Junctions.Make(host, Link, Target);
 
-        refusal.Should().Contain("D18").And.Contain(HostKinds.Word(host));
+        refusal.Should().Contain("D18").And.Contain(HostKinds.Word(host)).And.Contain("a sign-in link is made only on a host that admits Kimi").And.NotContain("hosts only");
         made.Should().Be(refusal);
         NothingIsAt(Link).Should().BeTrue("nothing is made on a host Kimi is refused on");
+    }
+
+    [Theory]
+    [InlineData(HostKind.Linux)]
+    [InlineData(HostKind.Wsl)]
+    public void ALinuxOrWslHost_AsksTheMountTable_AndATableItCannotReadRefuses(HostKind host)
+    {
+        using var standIn = WindowsStandIn.Begin();
+        Directory.CreateDirectory(Target);
+        Junctions.StandInMountInfo(() => throw new IOException("no /proc here"));
+        try
+        {
+            var refusal = Junctions.Refusal(host, Link, Target);
+
+            refusal.Should().Contain("/proc/self/mountinfo").And.Contain("cannot tell which filesystem").And.Contain("refused", "a table coai could not read was read as 'local'");
+            NothingIsAt(Link).Should().BeTrue();
+        }
+        finally
+        {
+            Junctions.StandInMountInfo(null);
+        }
+    }
+
+    [Fact]
+    public void AWindowsHost_NeverAsksTheMountTable()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        Directory.CreateDirectory(Target);
+        Junctions.StandInMountInfo(() => throw new IOException("a Windows host must not read a Unix mount table"));
+        try
+        {
+            Junctions.Refusal(HostKind.Windows, Link, Target).Should().BeEmpty();
+        }
+        finally
+        {
+            Junctions.StandInMountInfo(null);
+        }
+    }
+
+    // ---------- S-K2 ----------
+
+    [Fact]
+    public void ATargetOnADrvfsMount_IsRefused_AndNothingIsMade()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the mount table is Unix's, and a Windows run judges the real path as a drive path; MountLocalityTests (S-K12) run the rule everywhere");
+        Directory.CreateDirectory(Target);
+        var mountPoint = WorktreePaths.Real(_dir.Path);
+        using var standIn = WindowsStandIn.Begin();
+        Junctions.StandInMountInfo(() => $"36 25 0:32 / {mountPoint} rw,noatime - 9p C:\\134 rw,aname=drvfs;path=C:\\134;uid=1000\n25 1 8:1 / / rw - ext4 /dev/sda1 rw", _ => new MountIdentity.NotAsked());
+        try
+        {
+            var refusal = Junctions.Refusal(HostKind.Wsl, Link, Target);
+            var made = Junctions.Make(HostKind.Wsl, Link, Target);
+
+            refusal.Should().Contain("Windows filesystem", "a sign-in folder on the Windows drives should be refused on wsl").And.Contain("9p");
+            made.Should().Be(refusal);
+            NothingIsAt(Link).Should().BeTrue("nothing is made on a refused filesystem");
+        }
+        finally
+        {
+            Junctions.StandInMountInfo(null);
+        }
     }
 
     // ---------- S1.5 / S1.6 ----------
@@ -557,5 +633,39 @@ public sealed class JunctionsTests : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the Unix rule is the one a non-Windows host applies; Windows applies the drive rule above");
 
         Junctions.IsLocal(path, _ => DriveType.Fixed).Should().Be(local);
+    }
+
+    /// <summary>C of the review of 2026-10-18: the D19 SPELLING check and the network override say one thing. With <c>coai.kimiAllowNetworkSignIn</c> on, a Linux or WSL host also admits the automount spellings a network home has; a Windows host never does (UNC stays refused), and a bare '//' share never is one.</summary>
+    [Theory]
+    [InlineData(HostKind.Wsl, "/net/server/share/k", true, true)]
+    [InlineData(HostKind.Linux, "/misc/x", true, true)]
+    [InlineData(HostKind.Wsl, "/Network/x", true, true)]
+    [InlineData(HostKind.Wsl, "/net/server/share/k", false, false)]
+    [InlineData(HostKind.Windows, "/net/server/share/k", true, false)]
+    [InlineData(HostKind.Wsl, "//server/share/k", true, false)]
+    [InlineData(HostKind.Wsl, "relative/x", true, false)]
+    public void TheSpellingCheck_FollowsTheOverride_OnALinuxOrWslHostOnly(HostKind host, string path, bool allow, bool local) =>
+        Junctions.IsLocalSpelling(host, path, _ => DriveType.Fixed, allow).Should().Be(local);
+
+    /// <summary>
+    /// E6 gate finding 11: a home under an automount spelling (<c>/net/</c>, <c>/misc/</c>) is refused by its SPELLING before the mount table is read, and that sentence carries the same cure as the mount refusal (DL6) — a person whose
+    /// <c>KIMI_CODE_HOME</c> is under <c>/net/</c> never reaches the mount refusal, so the cure has to be here.
+    /// </summary>
+    [Theory]
+    [InlineData(HostKind.Linux, "/net/server/share/k")]
+    [InlineData(HostKind.Wsl, "/misc/x")]
+    public void AnAutomountSpelling_IsRefusedWithTheCure_OnALinuxOrWslHost(HostKind host, string target)
+    {
+        var refusal = Junctions.Refusal(host, Link, target, _ => DriveType.Fixed);
+
+        refusal.Should().Contain("not a local drive path").And.Contain("KIMI_CODE_HOME").And.Contain("kimi login").And.Contain("coai.kimiAllowNetworkSignIn");
+    }
+
+    [Fact]
+    public void AUncHome_OnAWindowsHost_KeepsItsOwnSentence_WithNoOverrideToOffer()
+    {
+        var refusal = Junctions.Refusal(HostKind.Windows, Link, @"\server\share\k", _ => DriveType.Fixed);
+
+        refusal.Should().Contain("not a local drive path").And.NotContain("coai.kimiAllowNetworkSignIn", "an override a Windows host never has is not offered");
     }
 }

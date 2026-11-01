@@ -27,6 +27,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   codexModels: [], agyModels: [],
   localEngines: {},
   server: { kind: 'known', version: '0.6.0', remembered: false, updateOffered: true },
+  hostKind: 'windows',
   side: '',
   perSide: false,
   latestServerVersion: '0.6.0',

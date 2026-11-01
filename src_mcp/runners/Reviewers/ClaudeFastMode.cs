@@ -30,7 +30,7 @@ public static class ClaudeFastMode
 
     /// <summary>
     /// The tier the arguments <see cref="Args"/> built tell the CLI, in codex's words so one ledger column compares across
-    /// vendors (story 3.4 of todo/PLAN_every_round_is_counted.md): <c>fast</c> for the On file, <c>default</c> — the standard
+    /// vendors (story 3.4 of research/PLAN_every_round_is_counted.md): <c>fast</c> for the On file, <c>default</c> — the standard
     /// tier — for the Off one, empty when no file was sent.
     /// </summary>
     public static string TierOf(IReadOnlyList<string> args, FastMode fast) =>

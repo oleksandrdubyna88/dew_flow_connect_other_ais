@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The budget rule against the REAL request — story 4.3 of <c>todo/PLAN_every_round_is_counted.md</c>, the wire half:
+/// The budget rule against the REAL request — story 4.3 of <c>research/PLAN_every_round_is_counted.md</c>, the wire half:
 /// the deadline is stamped from this server's clock alone, and every launch a healthy client makes still launches.
 /// </summary>
 /// <remarks>

@@ -44,6 +44,7 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--tree-at", "--id", "1" },
         new[] { "--trees" },
         new[] { "--round-counts" },
+        new[] { "--round-authors" },
         new[] { "--features" },
         new[] { "--version" },
         // Launched on a person's act, but it reads stdin and answers stdout only (research/PLAN_names_and_a_missing_root.md 3.3).

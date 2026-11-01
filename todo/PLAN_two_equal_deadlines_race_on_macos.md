@@ -61,3 +61,15 @@ reviewer is told "git timed out on B, ask again next turn" when the truth is "th
 - [ ] The rule (which deadline names an interrupted file) is stated in `SecuritySources.cs` and `module_server.md`.
 - [ ] The characterization test no longer depends on two equal timers; the suite is ~30 s faster.
 - [ ] The macOS leg green on the PR.
+
+## Boundary with [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md) (2026-10-19)
+
+| Item | Built by | The other plan's part |
+|---|---|---|
+| The collection deadline vs the per-file read deadline (this plan, all of it) | **this plan** | that plan orders it (its §9): **step 1 starts at once, beside its E1** — step 1 is deterministic on the system clock and needs no seam; step 3 waits for that plan's C13 story, which lands the `SourceResolver` clock (`SourceResolver.cs:200`) and the shared manual clock, and then adds the deterministic order test: fire the per-file timer BEFORE the collection timer on the manual clock |
+| **The clock seam on `SecuritySources.cs:32`** (`CollectionBudget`, `:14`) — an optional `TimeProvider? clock = null` constructor parameter on `SecuritySources`, `BoundedScheduler.cs:96-102`'s shape | **this plan**, in step 3, with its own RED (that plan's S21) | that plan's E4 adds the clock to `SourceResolver` (its C13) and never to `SecuritySources`; its D3 rule is that a seam lands with the RED that needs it, and the first test that needs this one is step 3 here (2026-10-19, judge finding J14 of that plan's gate) |
+| The evidence since 2026-10-04 | — | recorded there (§3, C8): **43** failed CI runs to 2026-10-19, 37 macOS and **6 Windows**, one a `main` push — this is not a macOS-only race any more; the cited lines moved by one (`ef2a39199`): `SecuritySources.cs:32`, `:85`, `:88`, `SourceResolver.cs:200`, `:206`, `:210` |
+| A correction to step 3 | **this plan** | when the budgets are injected small, the per-file deadline stays LONGER than the collection budget in the characterization test, or "git timed out" becomes the right answer and the test pins the wrong sentence |
+
+Disjoint: that plan builds nothing in `SecuritySources`; in `SourceResolver` it builds only the clock seam (its C13),
+which this plan reuses and never duplicates.

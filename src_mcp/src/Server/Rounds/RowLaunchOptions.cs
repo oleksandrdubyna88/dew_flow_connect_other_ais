@@ -5,7 +5,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// What a review launch of one ROW ran with, labelled for its ledger line — story 3.4 of
-/// todo/PLAN_every_round_is_counted.md, the local half.
+/// research/PLAN_every_round_is_counted.md, the local half.
 /// </summary>
 /// <remarks>
 /// <para><b>Here, and not in the adapters.</b> An adapter's <c>Build</c> knows what it put on the argv
@@ -24,9 +24,20 @@ internal static class RowLaunchOptions
         ReviewerInvocation built, ProviderSettings provider, IReviewerRuntime runtime, ReviewerSettings launch) =>
         built with { RanWith = Of(built.Sent, provider, runtime, launch, Environment.GetEnvironmentVariable) };
 
+    /// <summary>
+    /// A CONSULTANT's invocation (a consultation turn, a consultant check, a question row) with its <see cref="ReviewerInvocation.RanWith"/>
+    /// filled, for <paramref name="row"/> — E3.S1 of todo/PLAN_the_round_counter_tail_E3.md, decision D1: the SAME labeller as a review's.
+    /// </summary>
+    /// <remarks>An <c>IConsultantRuntime</c> is not an <see cref="IReviewerRuntime"/>, but every consultant carries the reviewer adapter it
+    /// wraps (<see cref="ReviewerInvocation.Adapter"/>), and that is what decides whether the CLI's own configuration is read.</remarks>
+    /// <param name="launch">The settings the launch was built with — the codex tier probe's answer in them names the CLI's release.</param>
+    public static ReviewerInvocation Answering(ReviewerInvocation built, ProviderSettings row, ReviewerSettings launch) =>
+        built with { RanWith = Of(built.Sent, row, built.Adapter, launch, Environment.GetEnvironmentVariable) };
+
     /// <summary>The labels themselves, from what was sent, the row, and the environment the launch inherits — pure but for the file read.</summary>
+    /// <param name="runtime">The adapter that built the launch — null for an invocation built without one, which reads no CLI configuration.</param>
     internal static LaunchOptions Of(
-        SentOptions sent, ProviderSettings provider, IReviewerRuntime runtime, ReviewerSettings launch, Func<string, string?> env)
+        SentOptions sent, ProviderSettings provider, IReviewerRuntime? runtime, ReviewerSettings launch, Func<string, string?> env)
     {
         var cli = RuntimeResolution.NameOf(provider.Identity());
         var hasTier = FeatureAvailability.Builtin.RowHasFastTier(cli, provider.Model, provider.BaseUrl);

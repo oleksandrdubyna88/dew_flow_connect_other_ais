@@ -94,6 +94,7 @@ function pages(reported: Readonly<Record<string, ProviderHealth>>): string {
   const state: PanelState = {
     settings: DEFAULTS, vendors: [VIBE], codexModels: [], agyModels: [], localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+    hostKind: 'windows',
     side: '', perSide: false, questions: [], sessions: [], openSections: ['reviewers'], usage: [], usageWindow: 'day',
     latestServerVersion: '', cliStatus: {}, cardPrices: {}, snippetStatus: { kind: 'absent', current: 0 }, teamServers: [],
     providers: { reported, asked: true, answered: true, notes: NO_NOTES },

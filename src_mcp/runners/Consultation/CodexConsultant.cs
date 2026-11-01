@@ -83,9 +83,14 @@ public sealed class CodexConsultant(CodexRuntime inner, string vendor = "codex")
             Timeout = launch.Settings.Timeout,
         };
 
+        // The tier the argv carries, said the way the reviewer's own Build says it (CodexRuntime.Build), so a consultation's line reads
+        // "sent" and not "not sent" (E3.S1 of todo/PLAN_the_round_counter_tail_E3.md). No effort: codex is never told one.
         return new ReviewerInvocation(
             vendor, role, launch.Confinement is LaunchConfinement.Planned ? ConsultantLaunches.ForQuestion(request) : request,
-            outputFile, inner, Model: launch.Settings.Model);
+            outputFile, inner, Model: launch.Settings.Model)
+        {
+            Sent = new(Tier: SentOptions.TierIn(inner.TierArgs(launch.Settings))),
+        };
     }
 
     /// <summary>The checkout for the stuck consultant; the plan's directory for a question row.</summary>

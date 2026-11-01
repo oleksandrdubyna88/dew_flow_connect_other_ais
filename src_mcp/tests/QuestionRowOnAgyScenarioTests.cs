@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 /// the stuck consultant was cured of exactly this by E1.3, and the question row never reached that cure.</para>
 /// <para>The streams are the real ones <see cref="ConsultAntigravityDenialScenarioTests"/> uses: the 2026-10-02 denied
 /// consultation and an answering follow-up re-keyed to its conversation id. The fake CLI runs as a REAL child with the
-/// question row's MINIMAL environment, so it is steered by the temp-directory file (it learned agy's <c>--print=</c> argv
+/// question row's MINIMAL environment, so it is steered by the file beside its binary (<c>FakeCliSteering</c>) (it learned agy's <c>--print=</c> argv
 /// for this), and it tells the follow-up apart by <see cref="AntigravityFollowUps.StaysDenied"/> on stdin.</para>
 /// </remarks>
 [Collection("fakecli-env")]
@@ -37,10 +37,9 @@ public sealed class QuestionRowOnAgyScenarioTests : IAsyncLifetime
     private string _repo = string.Empty;
     private string _data = string.Empty;
     private string _record = string.Empty;
+    private IDisposable _steering = FakeCliSteering.Unwritten;
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
-
-    private static string SteeringFile => Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
 
     private static string Fixture(string name) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "antigravity", name));
@@ -60,11 +59,7 @@ public sealed class QuestionRowOnAgyScenarioTests : IAsyncLifetime
 
     public ValueTask DisposeAsync()
     {
-        try
-        {
-            File.Delete(SteeringFile);
-        }
-        catch (IOException) { }
+        _steering.Dispose();
 
         foreach (var dir in (string[])[_repo, _data, _record])
         {
@@ -110,7 +105,7 @@ public sealed class QuestionRowOnAgyScenarioTests : IAsyncLifetime
             pairs["FAKECLI_TURN1_REPAIR_SLEEP_MS"] = followUpSleepMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        File.WriteAllText(SteeringFile, JsonSerializer.Serialize(pairs));
+        _steering = FakeCliSteering.Write(pairs);
     }
 
     private PanelService Service() => new(

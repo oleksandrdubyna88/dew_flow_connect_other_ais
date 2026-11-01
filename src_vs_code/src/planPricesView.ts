@@ -3,7 +3,7 @@ import { planPriceKey, type PlanPriceRefusal, type PlanPrices } from './planPric
 import type { TeamServerState } from './teamServerView';
 
 /**
- * Where a monthly plan price is typed (story 6.2 of todo/PLAN_every_round_is_counted.md): Setup › Team servers, once per
+ * Where a monthly plan price is typed (story 6.2 of research/PLAN_every_round_is_counted.md): Setup › Team servers, once per
  * vendor account a server this side is signed in to serves — one subscription serves every model on it, so the price lives
  * with the account, never on a model card. One box and one Save price button each: every action is a panel button.
  *

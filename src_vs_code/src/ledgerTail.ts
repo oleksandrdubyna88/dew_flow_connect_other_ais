@@ -4,7 +4,7 @@ import { missingRatherThanBroken } from './notificationsFile';
 
 /**
  * The END of an append-only ledger, read back to an instant and no further (story 2.2 of
- * todo/PLAN_every_round_is_counted.md).
+ * research/PLAN_every_round_is_counted.md).
  *
  * <p>The Rounds block needs the last seven days of `usage.jsonl` and nothing before them, and refreshes at most once a
  * minute. Parsing a year of history for a week's tokens on every refresh is what the code round refused, so the file

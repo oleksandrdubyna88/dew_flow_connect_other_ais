@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A review queued behind a parked Team-server account hears when it can run — story 5.3b of
-/// <c>todo/PLAN_every_round_is_counted.md</c>, the shim's half.
+/// <c>research/PLAN_every_round_is_counted.md</c>, the shim's half.
 /// </summary>
 /// <remarks>
 /// <para>The server now says, in its status's optional <c>waiting</c> field, why a queued job cannot start —

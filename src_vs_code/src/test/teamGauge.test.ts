@@ -6,7 +6,7 @@ import type { CatalogVendor, GaugeReading } from '../teamServerApi';
 import { pageTree } from './pageTree';
 
 /**
- * The Team server tab's gauge block (story 6.2 of todo/PLAN_every_round_is_counted.md): per vendor whose account the
+ * The Team server tab's gauge block (story 6.2 of research/PLAN_every_round_is_counted.md): per vendor whose account the
  * server read, the vendor's own windows from the CATALOG, and beside them each window's rounds per 1 % from the USAGE
  * answer — the figure, or why there is none — and, when a price is typed and the figure is shown, the plan's share.
  * Both answers are a stranger's: every field is read by hand, and absent is never zero.

@@ -43,7 +43,7 @@ Authorization: Bearer {{token}}
     assert.strictEqual(typeof response.parsedBody.answer, 'string');
     assert.strictEqual(typeof response.parsedBody.failure, 'string');
     assert.strictEqual(typeof response.parsedBody.reason, 'string');
-    // Story 3.2 of todo/PLAN_every_round_is_counted.md: the cause is a string field, empty until a cancellation.
+    // Story 3.2 of research/PLAN_every_round_is_counted.md: the cause is a string field, empty until a cancellation.
     assert.strictEqual(response.parsedBody.endCause, '');
     assert.ok(Number.isInteger(response.parsedBody.tokensIn));
   });
@@ -118,7 +118,7 @@ Authorization: Bearer {{token}}
 
 ###
 
-# Story 4.2 of todo/PLAN_every_round_is_counted.md: a request may carry the client's round id, its word for the
+# Story 4.2 of research/PLAN_every_round_is_counted.md: a request may carry the client's round id, its word for the
 # request and the seconds left on its own deadline. They are bound as raw JSON and read by hand — through THIS
 # server's source-generated binding, which no in-process test reaches — so a well-formed set is taken silently and a
 # malformed one is dropped with a note, never refused.
@@ -200,7 +200,7 @@ Authorization: Bearer {{token}}
 
 ###
 
-# @uncovered `failure: "no_budget"` on GET /api/reviews/{id} (story 4.3 of todo/PLAN_every_round_is_counted.md) — the
+# @uncovered `failure: "no_budget"` on GET /api/reviews/{id} (story 4.3 of research/PLAN_every_round_is_counted.md) — the
 #            server ends a job whose caller can no longer wait AT CLAIM, and a claim needs a signed-in account, which
 #            this suite's stack deliberately has none of (nothing may reach a vendor). The in-process host proves the
 #            name on the wire: `TheCallerCanStillWaitTests.TheConfiguredAllowance_IsWhatTheClaimReads`.

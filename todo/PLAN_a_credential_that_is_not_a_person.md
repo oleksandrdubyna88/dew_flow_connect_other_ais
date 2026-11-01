@@ -11,7 +11,7 @@
 
 | Item | Which plan builds it | What the other one's part is |
 |---|---|---|
-| The canary's request says `"kind":"canary"`, and `/api/usage` keeps it out of rounds | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), story 3.5 | disjoint from the credential |
+| The canary's request says `"kind":"canary"`, and `/api/usage` keeps it out of rounds | [PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md), story 3.5 | disjoint from the credential |
 | What the canary authenticates WITH | **this plan** | — |
 
 Disjoint; whichever lands second keeps the other's line in `deploy/systemd-release.sh`.

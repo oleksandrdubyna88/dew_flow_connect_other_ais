@@ -124,6 +124,13 @@ public sealed class GateReportingTests
     }
 
     [Fact]
+    public void AKimiPlanQuotaThatIsSpent_IsNotWaitedOn()
+    {
+        RateLimit.Hopeless("kimi_quota_spent: Authentication required: 429 You've reached your 5-hour usage limit. Your quota will reset …")
+            .Should().BeTrue("the vendor says the 5-hour allowance is used up, and no wait inside this ladder clears it");
+    }
+
+    [Fact]
     public void ATransientLimitThatMENTIONSUpgrading_IsStillRetried()
     {
         // The first draft of the vocabulary had `upgrade` and `purchase` as bare words, and this is
@@ -209,6 +216,11 @@ public sealed class GateReportingTests
             ["insufficient balance"] = "error: failed to run prompt: provider.api_error: 429 Your account org-REDACTED "
                 + "<ak-REDACTED> is suspended due to insufficient balance, please recharge your account or check your plan "
                 + "and billing details",
+            // The owner's kimi 2.2.0 CLI, 2026-10-19 (§1 of PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md); the ellipsis is the owner's —
+            // the capture step replaces this line.
+            ["reached your 5-hour usage limit"] = "Error: [provider.api_error] 429 You've reached your 5-hour usage limit. Your quota will reset …",
+            // Kimi 2.3.0 in PROMPT mode, three of three launches on a spent MONTHLY quota, 2026-10-21 (story 5 of the same plan); the ACP form is still unmeasured.
+            ["reached your monthly usage limit"] = KimiMonthlyQuotaTests.MonthlyLine,
         };
 
         RateLimit.Spent.Should().OnlyContain(

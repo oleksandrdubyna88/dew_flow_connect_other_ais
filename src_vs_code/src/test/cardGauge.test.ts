@@ -12,7 +12,7 @@ import { panelState } from './panelPageHarness';
 import { pageTree } from './pageTree';
 
 /**
- * The vendor's own gauge on a model card (story 6.2 of todo/PLAN_every_round_is_counted.md). Local capture is deferred
+ * The vendor's own gauge on a model card (story 6.2 of research/PLAN_every_round_is_counted.md). Local capture is deferred
  * (6.1b), so a card shows a Team server's observation ONLY for a row that runs on that server — the explicit match of
  * an account — naming the server; a local codex row says the gauge is not read on this machine, from the local answer's
  * own reason; every other row says nothing.

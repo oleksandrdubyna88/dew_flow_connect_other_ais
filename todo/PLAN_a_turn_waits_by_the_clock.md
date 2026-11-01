@@ -1,7 +1,7 @@
 # PLAN — a file turn waits by the clock, not by a count of tries
 
 > Status: **plan only, nothing implemented yet, 2026-10-03.** Scope: `src_mcp/src/Server/SessionStore.cs`
-> (`SessionTurn.Take`), its callers (`CadenceStore`, `ConsultationStore`, `Escalations`, `SessionStore`), and the
+> (`SessionTurn.Take`), its callers (`CadenceStore`, `Escalations`, `RecordFiles`, `QuestionConsultStore`, `QuestionPhaseStore`, and `SessionStore` itself), and the
 > review-tree setup's git timeout in the test harness.
 >
 > Related docs: [module_server.md](../research/module_server.md); found while building
@@ -50,3 +50,14 @@ under load lose one. A user's gate call on a loaded machine can meet the same se
 
 - [ ] No retry loop in the turn counts attempts instead of time.
 - [ ] Three consecutive whole-suite runs clean.
+
+## Boundary with [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md) (2026-10-19)
+
+| Item | Built by | The other plan's part |
+|---|---|---|
+| `SessionTurn.Take` waits to a deadline (this plan, all of it) | **this plan** | that plan orders it (§9: any time, no clock seam needed) and keeps its CI evidence (§3, C19) |
+| The evidence since 2026-10-03 | — | `CadenceStoreTests.ManyClosesAtOnce_AllLand` failed in CI on 2026-09-28 (Linux), 2026-10-13 (Linux) and **2026-10-19 on `main`** (Windows) |
+| Two corrections | **this plan** | the caller list was stale — `ConsultationStore` does not call `Take` directly (removed from the scope line above); `RecordFiles.cs:51`, `QuestionConsultStore.cs:104` and `QuestionPhaseStore.cs:87`, `:108` do, next to `CadenceStore.cs:53`, `:66`, `Escalations.cs:272`, `:299`, `:343` and `SessionStore.cs:534`, `:572`; and the clock-based wait already exists — `HeldFile.TakeWithin` (`src_mcp/runners/Files/HeldFile.cs:167-180`), so the fix calls it rather than writing a second one |
+
+Disjoint until 2026-10-20: that plan builds nothing in `SessionStore`. **Amended 2026-10-20:** its E3 story S5 (case C25)
+replaced `SessionStore.Write`'s two roads (the in-place write under the turn, and the temp file with `MoveOverExisting`'s ten-attempt loop) with ONE atomic road through `AtomicFile.Write`; `MoveOverExisting` is deleted, and `SessionTurn.Take` is untouched. **Constraint for this plan:** a save now holds the turn up to about 0.55 s (a temp write plus the move's 500 ms retry window, `AtomicFile.SharingRetry`), so `Take`'s deadline must stay ABOVE `AtomicFile.SharingRetry`, or a writer gives up while another is still legitimately inside its retry. The two changes touch different methods of one file; whichever merges second rebases.

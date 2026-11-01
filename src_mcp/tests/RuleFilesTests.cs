@@ -35,6 +35,20 @@ public sealed class RuleFilesTests : IDisposable
         File.WriteAllText(path, content);
     }
 
+    /// <summary>
+    /// The budget a round's rules are collected under is the operator's 90 KB, not the 80 KB before it.
+    /// </summary>
+    /// <remarks>
+    /// Pinned as a number on purpose: the budget is a decision, and a decision that can drift by a
+    /// refactor is not one. The operator raised it from 80 000 to 90 000 bytes on 2026-10-16 because the
+    /// base and the tier had left ~56 characters of headroom, so a new non-tier rule
+    /// (<c>common/test-leftovers.md</c>) could not reach any reviewer.
+    /// </remarks>
+    [Fact]
+    public void TheDefaultBudget_IsTheOperatorsNinetyKilobytes() =>
+        RuleFiles.DefaultBudgetBytes.Should().Be(90_000,
+            "the operator raised the rules budget from 80 KB to 90 KB on 2026-10-16");
+
     private static string Filler(string marker, int bytes) => marker + new string('x', bytes);
 
     [Fact]

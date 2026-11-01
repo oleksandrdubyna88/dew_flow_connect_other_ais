@@ -60,7 +60,7 @@ specification for the screen; what it cannot show is fixed here.
 
 **What the mockup shows that this plan does not build**, each with the plan that does: rounds, retries, repairs,
 cancelled and budget refusals, cached share, the 5 h / 24 h windows and the vendor quota gauge are
-[PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md)'s (its epics 3, 5 and 6) — this tab is where they
+[PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md)'s (its epics 3, 5 and 6) — this tab is where they
 appear when that plan's fields arrive. Until then the tab counts **launches** and says so: the ledger has no round id,
 and grouping launches by day or person yields launches, not rounds (the question consultant, 2026-10-09).
 
@@ -81,7 +81,7 @@ and grouping launches by day or person yields launches, not rounds (the question
 
 | Item | Built by | The other plan's part |
 |---|---|---|
-| Rounds, retries, repairs, cancelled, budget refusals, cached share, 5 h / 24 h windows, vendor gauges | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) (epics 3, 5, 6) | this plan builds the tab they render into; its 5.2 targets this tab, not the old Team-server block |
+| Rounds, retries, repairs, cancelled, budget refusals, cached share, 5 h / 24 h windows, vendor gauges | [PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) (epics 3, 5, 6) | this plan builds the tab they render into; its 5.2 targets this tab, not the old Team-server block |
 | What a token column means per vendor | [PLAN_usage_that_compares.md](PLAN_usage_that_compares.md) | this plan prices per model from the server's breakdown and compares nothing across vendors |
 | The tab strip's ARIA | [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) | the new tab button follows the strip as that plan leaves it; neither waits for the other |
 | Team-server state (`catalogs`, `teamCheckedAt`, `refreshTeamServers`) and `usageScope` leaving `PanelProvider` | [PLAN_the_panel_provider_is_too_big.md](PLAN_the_panel_provider_is_too_big.md) clusters 3 and 6 | **this plan** extracts only the usage cache and its refresher into a `vscode`-free module (1.1) and deletes `usageScope` (1.2); that plan moves the rest of cluster 3 and finds cluster 6 one field smaller |

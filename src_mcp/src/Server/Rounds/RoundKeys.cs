@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 namespace CoaiMcp.Server;
 
 /// <summary>
-/// The identity a round carries across the wire (story 4.1 of todo/PLAN_every_round_is_counted.md): 128 random bits
+/// The identity a round carries across the wire (story 4.1 of research/PLAN_every_round_is_counted.md): 128 random bits
 /// as 32 lower-case hex characters, minted once at the round's start, persisted on the round (the session file and
 /// <c>rounds.round_key</c>) and sent to a Team server on every launch of the round — retries, repairs and follow-ups
 /// included — so the server can count a round as ONE round however many launches it took.

@@ -3,7 +3,7 @@ namespace CoaiMcp.Runners.Processes;
 /// <summary>
 /// What a launch has learned about the descendants of a child it ends itself: every one it ever saw, recorded as it
 /// appeared, and the confirmation that they are gone (the CodeRabbit finding on PR #790 against story 6.1a of
-/// <c>todo/PLAN_every_round_is_counted.md</c>).
+/// <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>Why a watch rather than one listing before the kill.</b> A root that EXITS BY ITSELF can no longer name its

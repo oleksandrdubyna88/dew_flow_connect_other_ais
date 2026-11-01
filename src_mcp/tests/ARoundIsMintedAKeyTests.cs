@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// At a round's start the engine mints its identity, persists it on the round — the session file and the
 /// <c>rounds.round_key</c> column — and a round that starts over (<c>again</c>) is a new round with a new identity
-/// (story 4.1 of <c>todo/PLAN_every_round_is_counted.md</c>).
+/// (story 4.1 of <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para>Driven end to end through the real <see cref="PanelService"/> with FakeCli, like

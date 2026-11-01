@@ -23,8 +23,8 @@ namespace CoaiMcp.Tests;
 /// <para><b>The child is started with the MINIMAL environment</b> (S1 acceptance 6), so it sees no
 /// <c>FAKECLI_*</c> variable — the first run of this test found exactly that: <c>exit 64: fake-cli: unknown
 /// verb [exec …]</c>, the stand-in falling through to its verb mode. The fake CLI therefore also reads its
-/// steering from a file in the temp directory, which IS on the minimal list, and this test writes that
-/// file (<c>MinimalSteering</c>) rather than the environment.</para>
+/// steering from a file beside its own binary (a minimal child can still find its own folder), and this test writes that
+/// file (<c>FakeCliSteering</c>) rather than the environment.</para>
 /// </remarks>
 [Collection("fakecli-env")]
 public sealed class QuestionConsultScenarioTests : IAsyncLifetime
@@ -35,10 +35,9 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
     private string _repo = string.Empty;
     private string _data = string.Empty;
     private string _record = string.Empty;
+    private IDisposable _steering = FakeCliSteering.Unwritten;
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
-
-    private static string SteeringFile => Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
 
     public async ValueTask InitializeAsync()
     {
@@ -59,16 +58,12 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
     }
 
     /// <summary>The fake CLI's steering, by FILE: a minimal-environment child never sees this process's variables.</summary>
-    private static void Steer(params (string Name, string Value)[] pairs) =>
-        File.WriteAllText(SteeringFile, JsonSerializer.Serialize(pairs.ToDictionary(p => p.Name, p => p.Value)));
+    private void Steer(params (string Name, string Value)[] pairs) =>
+        _steering = FakeCliSteering.Write(pairs.ToDictionary(p => p.Name, p => p.Value));
 
     public ValueTask DisposeAsync()
     {
-        try
-        {
-            File.Delete(SteeringFile);
-        }
-        catch (IOException) { }
+        _steering.Dispose();
 
         foreach (var dir in (string[])[_repo, _data, _record])
         {

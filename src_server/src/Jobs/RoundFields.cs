@@ -8,14 +8,14 @@ namespace CoaiServer;
 /// <param name="Attempt">The client's word for the request inside its turn (<see cref="RoundFields.ClientAttempts"/>) — empty likewise.</param>
 /// <param name="Budget">
 /// What the client said about the seconds left on its own deadline at submit — absent, stated, or dropped with its reason
-/// (<see cref="StatedBudget"/>). Nothing here caps it or acts on it (story 4.3 of todo/PLAN_every_round_is_counted.md).
+/// (<see cref="StatedBudget"/>). Nothing here caps it or acts on it (story 4.3 of research/PLAN_every_round_is_counted.md).
 /// </param>
 /// <param name="Dropped">One note per field that was SENT and not taken — never one for a field that was absent.</param>
 public sealed record TakenRound(string Round, string Attempt, StatedBudget Budget, IReadOnlyList<FieldNoteDto> Dropped);
 
 /// <summary>
 /// The server's reading of a request's counting fields — <c>round</c>, <c>attempt</c>, <c>remainingSeconds</c> — story 4.2
-/// of <c>todo/PLAN_every_round_is_counted.md</c>.
+/// of <c>research/PLAN_every_round_is_counted.md</c>.
 /// </summary>
 /// <remarks>
 /// <para><b>A counting field never fails a review.</b> The three are bound as raw JSON (<see cref="JsonElement"/>) and

@@ -41,6 +41,12 @@ type Launch =
    * and is refused by the server too — a terminal or an older extension made the folder (the code round's own review).
    */
   | 'survey, held by the extension'
+  /**
+   * Launched on a person's act, and it never reads or writes the DATA directory at all: it deletes one survivor marker under the Kimi lock
+   * root (`--kimi-clear-marker`, DL9 of research/PLAN_kimi_and_vibe_on_linux.md) and nothing else. It is not a `WriterModes` member, so
+   * neither generic server test runs it against a missing named root; `KimiClearMarkerModeTests.cs` holds it, and a test below checks that.
+   */
+  | 'a person acts, outside the data directory'
   /** The literal names a mode but launches no `coai-mcp` (another program's flag). */
   | 'not a coai-mcp launch';
 
@@ -68,6 +74,7 @@ const LAUNCHES: Readonly<Record<string, Launch>> = {
   '--check-consultant': 'a person acts, held by the extension',
   '--check-model': 'a person acts, held by the extension',
   '--check-security': 'touches no data directory',
+  '--kimi-clear-marker': 'a person acts, outside the data directory',
   '--probe-api': 'a person acts, refused by the server',
   '--consultants': 'survey, held by the extension',
   '--help': 'not a coai-mcp launch',
@@ -132,11 +139,24 @@ test('every writer a person starts is refused by the server under a missing root
   }
 });
 
+test('the Kimi marker mode is held by its own server test and is no WriterModes member — it deletes one file under the Kimi lock root, never the data directory', () => {
+  // reads-another-program: A3's spec (§7) says the mode never touches the data directory, so it is outside both generic tests; its own
+  // test names it, and Program.cs does not list it as a writer.
+  const own = fs.readFileSync(path.join(REPO, 'src_mcp', 'tests', 'KimiClearMarkerModeTests.cs'), 'utf8');
+  const program = fs.readFileSync(path.join(REPO, 'src_mcp', 'src', 'Program.cs'), 'utf8');
+  const at = program.indexOf('WriterModes = new HashSet<Startup>');
+  const writers = at < 0 ? '' : program.slice(at, program.indexOf('};', at));
+
+  assert.ok(writers.includes('Startup.'), 'the WriterModes list was not read — the check below would pass for anything');
+  assert.ok(!writers.includes('KimiClearMarker'), '--kimi-clear-marker became a writer of the data directory: classify it again');
+  assert.ok(own.includes('KimiClearMarkerMode'), 'KimiClearMarkerModeTests.cs no longer exercises the mode');
+});
+
 test('no mode a person starts is left unmeasured — each is held by the reader test or the writer test', () => {
   // The coordinator's follow-up of 2026-10-11: "a person acts" used to be a kind no test held. Every launch now names
   // which server test holds it, so a new person's mode is red here until it is measured.
   const unheld = Object.entries(LAUNCHES)
-    .filter(([, launch]) => !HELD_BY_THE_READER_TEST.has(launch) && !HELD_BY_THE_WRITER_TEST.has(launch))
+    .filter(([, launch]) => !HELD_BY_THE_READER_TEST.has(launch) && !HELD_BY_THE_WRITER_TEST.has(launch) && launch !== 'a person acts, outside the data directory')
     .map(([mode]) => mode);
 
   assert.deepEqual(unheld.sort(), ['--help'], 'a mode is held by neither server test — measure it against a missing root');

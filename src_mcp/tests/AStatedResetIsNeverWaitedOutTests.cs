@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A stated reset is never waited out locally — story 5.3c of <c>todo/PLAN_every_round_is_counted.md</c>, as E5's plan
+/// A stated reset is never waited out locally — story 5.3c of <c>research/PLAN_every_round_is_counted.md</c>, as E5's plan
 /// round narrowed it.
 /// </summary>
 /// <remarks>

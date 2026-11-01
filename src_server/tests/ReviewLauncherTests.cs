@@ -340,7 +340,7 @@ public sealed class ReviewLauncherTests
     [Fact]
     public async Task AFollowUpCancelled_IsTheAttemptsOwnEnding_KeepingTheFirstLaunch_AndTheDirectoryIsStillDeleted()
     {
-        // Changed with story 3.2 of todo/PLAN_every_round_is_counted.md, on purpose: this test was
+        // Changed with story 3.2 of research/PLAN_every_round_is_counted.md, on purpose: this test was
         // `AFollowUpCancelled_Propagates_AndTheDirectoryIsStillDeleted` and pinned the cancellation ESCAPING — which took
         // the denied, billed first launch's usage with it, so the runner's catch could write a line for the kill and
         // none for the launch that preceded it. The thrown shape now becomes the same `Cancelled` launch the real
@@ -402,7 +402,7 @@ public sealed class ReviewLauncherTests
 
     /// <summary>
     /// A continuation that ends in a terminal outcome is that outcome — and BOTH launches were billed, so the attempt
-    /// keeps the first launch's usage beside it (story 3.1 of todo/PLAN_every_round_is_counted.md). The terminal arm
+    /// keeps the first launch's usage beside it (story 3.1 of research/PLAN_every_round_is_counted.md). The terminal arm
     /// used to read the outcome alone, and the first launch's tokens were never recorded.
     /// </summary>
     [Fact]

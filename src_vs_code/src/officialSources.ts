@@ -12,6 +12,14 @@
  * vendor scripts, one PowerShell line of several steps); a recipe check would vouch for the recipe and stay silent
  * about a renderer that wrote something else. So the artefact itself is held to the list, step by step, and refused
  * whole on anything it cannot read as an official step.</p>
+ *
+ * <p><b>What it is run over.</b> This check runs only in tests, over coai's own constants (the lines `vendorTerminal.ts` builds). A
+ * command composed from RUNTIME data — a path a person typed, a value read from settings — would not be checked by it at all.</p>
+ *
+ * <p><b>What it is FOR: sources, not harm.</b> It answers one question — does every URL and every package this command draws on come
+ * from the list below — and refuses a privilege escalator, because root is how a source gets to be anything it likes. It is not a
+ * shell parser and it does not judge what a command DOES: `rm -rf ~` without `sudo` is not its job (a review of the constants is),
+ * and a fetcher step is read for one thing only — that it carries an admitted URL (a second, bare host after it is not read).</p>
  */
 
 export const OFFICIAL_SOURCES = {
@@ -35,12 +43,24 @@ export const OFFICIAL_SOURCES = {
    * own, 10.5.0). Their installers are the projects' own GitHub release assets — nobody's repackaging.
    */
   wingetIds: ['Git.Git', 'BurntSushi.ripgrep.MSVC', 'sharkdp.fd'],
+  /**
+   * What `apt-get install` and `dnf install` may be handed — the Linux Kimi line provisions the same two tools the Windows
+   * line does (DL12 of research/PLAN_kimi_and_vibe_on_linux.md), from the distribution's OWN packages, named as the projects'
+   * READMEs name them: `ripgrep`, and `fd-find` (Debian and Ubuntu install its program as `fdfind`, Fedora as `fd`). Nothing
+   * else: a package of the caller's own, a local `.deb` and a pinned release are each outside the list.
+   */
+  distroPackages: ['ripgrep', 'fd-find'],
 } as const;
 
-const URL_IN_A_COMMAND = /https?:\/\/[^\s"'|;)]+/gu;
+/** A URL in a command, in any case of its scheme — `HTTPS://evil.example/x` is a URL a shell fetches, and is not admitted by a prefix of the list. */
+const URL_IN_A_COMMAND = /https?:\/\/[^\s"'|;)]+/giu;
 
-/** Where one step of a command line ends and the next begins — in PowerShell, cmd and bash alike. */
-const STEP_BREAK = /;|&&|\|\||\||\{|\}|\r?\n/u;
+/**
+ * Where one step of a command line ends and the next begins — in PowerShell, cmd and bash alike. Every character that can open a
+ * command is a break: `;` `&` `|` `{` `}` newline, and the ones a substitution or a subshell hides one behind — `(` `)` (`$(…)`, `<(…)`,
+ * a subshell) and the backtick. A command the splitter does not see a break in is a command the check does not read as one.
+ */
+const STEP_BREAK = /[;&|(){}`]|\r?\n/u;
 
 /**
  * The install verbs this check can read, each with the flags it admits and the shape of one package argument.
@@ -49,12 +69,15 @@ const STEP_BREAK = /;|&&|\|\||\||\{|\}|\r?\n/u;
  * which npm reads as ALIASES of other code. uv: `name` or `name==1.2.3`, and no flag at all — `--from`, `--with`,
  * `--index-url` each bring in code from somewhere else.</p>
  */
+/** A distribution package argument: a plain name — never `name=version`, `name/release`, a path or a URL. */
+const DISTRO_PACKAGE = /^([a-z0-9][a-z0-9.+-]*)$/u;
+
 const VERBS: readonly {
   readonly words: readonly [string, string];
   readonly flags: readonly string[];
   readonly spec: RegExp;
   /** Which list of {@link OFFICIAL_SOURCES} the verb's arguments are drawn from. */
-  readonly admitted: 'packages' | 'wingetIds';
+  readonly admitted: 'packages' | 'wingetIds' | 'distroPackages';
   /** The most arguments one step may carry — one for winget, whose second id is a second thing to install. */
   readonly most: number;
   /** Flag-and-value pairs admitted EXACTLY as written: `--source winget` pins winget's community repository, any other value is a different source. */
@@ -71,6 +94,11 @@ const VERBS: readonly {
   // more than one. --id itself is a flag here; its value is the one argument.
   { words: ['winget', 'install'], flags: ['--id', '-e', '--exact', '--accept-source-agreements', '--accept-package-agreements', '--silent', '-h'], spec: /^([A-Za-z0-9][A-Za-z0-9.+-]*)$/u, admitted: 'wingetIds', most: 1,
     pairs: [['--source', 'winget']], required: [['-e', '--exact']] },
+  // The distribution's own package manager, for the two tools Kimi needs (DL12): `-y` is the only flag, and the arguments are the
+  // package names of `distroPackages` — a version pin (`ripgrep=1.0`, `ripgrep/unstable`), a local file or URL, `-o`,
+  // `--allow-unauthenticated`, `--nogpgcheck` and `--repofrompath` are each outside the list by construction, as winget's flags are.
+  { words: ['apt-get', 'install'], flags: ['-y'], spec: DISTRO_PACKAGE, admitted: 'distroPackages', most: 2, pairs: [], required: [] },
+  { words: ['dnf', 'install'], flags: ['-y'], spec: DISTRO_PACKAGE, admitted: 'distroPackages', most: 2, pairs: [], required: [] },
 ];
 
 /** A word that means "install something" — a step carrying one that no verb above reads is refused, not skipped. */
@@ -84,7 +112,7 @@ const INSTALL_WORDS: ReadonlySet<string> = new Set(['install', 'i', 'add', 'upgr
  */
 export function fromOfficialSources(command: string): boolean {
   const urls = [...command.matchAll(URL_IN_A_COMMAND)].map((match) => match[0]);
-  const steps = command.split(STEP_BREAK).map(wordsOf).map(stepPackages);
+  const steps = command.split(STEP_BREAK).map(stepPackages);
 
   return urls.length + steps.reduce((sum, step) => sum + Math.max(step, 0), 0) > 0
     && urls.every(urlIsAdmitted)
@@ -127,11 +155,101 @@ function quotesFrom(word: string, from: number, step: 1 | -1, limit: number): nu
 
 type Verb = (typeof VERBS)[number];
 
-/** How many official packages a step installs: 0 for a step that installs nothing, -1 for one this check refuses. */
-function stepPackages(words: readonly string[]): number {
+/**
+ * How many official packages a step installs: 0 for a step that installs nothing, -1 for one this check refuses.
+ *
+ * <p>A step that names a privilege escalator ANYWHERE in its text is read by {@link privilegedStep} instead, and that is a rule of
+ * its own: until it existed `sudo` was invisible here, because a step is refused only when it carries an install word — so `sudo rm -rf …` or
+ * `sudo chmod …` beside one admitted URL was ADMITTED (S-K10 of research/PLAN_kimi_and_vibe_on_linux.md, red against that parser). A step
+ * whose first command is a fetcher is refused unless it carries an admitted URL ({@link fetchesFromAdmittedUrl}).</p>
+ */
+function stepPackages(step: string): number {
+  const words = wordsOf(step);
+  if (!fetchesFromAdmittedUrl(step, words)) {
+    return -1;
+  }
+
+  const escalators = [...step.matchAll(ESCALATOR)].length;
+
+  return escalators === 0 ? unprivilegedStep(words) : privilegedStep(words, escalators);
+}
+
+/**
+ * A privilege escalator as a TOKEN of the raw step text — `sudo`, `su`, `doas`, `pkexec` or `run0`, with a character that cannot be part
+ * of a word's name on each side (anything but a letter, a digit, `_`, `.` or `-`). Read over the text as written, not over the words a
+ * splitter hands back: `x=sudo`, `$'sudo'`, `su'do'`, `su""do`, `"$(sudo id)"` and `/usr/bin/sudo` each spell the token, and `pseudo`, `visudo` and
+ * `sudo_x` do not.
+ *
+ * <p><b>The honest boundary.</b> A token the shell ASSEMBLES — a backslash inside the word (`s\udo`), `s""udo` split by an
+ * empty string in the middle of the letters, a variable built from pieces — is not spelled in the text, and this check does not read it;
+ * `officialSourcesLinux.test.ts` pins those as documented NOT-caught rows. What stands behind the rule is where the text comes from: the
+ * check runs only over coai's own constants.</p>
+ */
+const ESCALATOR = /(?<![A-Za-z0-9_.-])(?:sudo|su|doas|pkexec|run0)(?![A-Za-z0-9_.-])/gu;
+
+/** The commands that fetch from somewhere: a step that begins with one must carry an admitted URL, or it is fetching from a place nobody can read. */
+const FETCHERS: ReadonlySet<string> = new Set(['curl', 'wget', 'fetch', 'git', 'scp', 'rsync', 'aria2c', 'ftp', 'sftp', 'pip', 'pip3', 'irm', 'iwr']);
+
+/** Words that stand in front of a command without being one — shell keywords and the wrappers that run what follows. */
+const BEFORE_THE_COMMAND: ReadonlySet<string> = new Set(['then', 'else', 'do', '!', 'if', 'elif', 'while', 'until', 'time', 'command', 'exec', 'env', 'nohup']);
+
+/** `NAME=value` in front of a command. */
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/u;
+
+/** The first command word of a step, by its last path segment, lower-case — `/usr/bin/curl` is `curl`. */
+function firstCommand(words: readonly string[]): string {
+  const word = words.find((one) => !BEFORE_THE_COMMAND.has(one) && !ASSIGNMENT.test(one)) ?? '';
+
+  return (word.split('/').pop() ?? '').toLowerCase();
+}
+
+/** `python3 -m pip …`: python is a fetcher only when it is asked to be pip. */
+function isPythonPip(command: string, words: readonly string[]): boolean {
+  return /^python[0-9.]*$/u.test(command) && words.some((word, at) => word === '-m' && words[at + 1] === 'pip');
+}
+
+/**
+ * A step that begins with a fetcher is held to its URL: it must carry one under an admitted prefix. `curl evil.example/x`,
+ * `curl ftp://…`, `curl $U//…` (the scheme in a variable), an upper-case scheme and `git clone git@github.com:…` each carry NO admitted URL, and
+ * were read as "nothing to refuse" when a step was refused only for an install word. A step that begins with anything else is not asked.
+ */
+function fetchesFromAdmittedUrl(step: string, words: readonly string[]): boolean {
+  const command = firstCommand(words);
+
+  return !(FETCHERS.has(command) || isPythonPip(command, words))
+    || [...step.matchAll(URL_IN_A_COMMAND)].some((match) => urlIsAdmitted(match[0]));
+}
+
+/** A step with no `sudo` in it: an install verb this check reads, or nothing it needs to read. */
+function unprivilegedStep(words: readonly string[]): number {
   const at = VERBS.map((verb) => ({ verb, index: verbAt(words, verb.words) })).find((found) => found.index >= 0);
 
   return at === undefined ? unknownInstall(words) : packagesAfter(words.slice(at.index + 2), at.verb);
+}
+
+/** The shell words that may open a step without being a command: `then sudo …` inside an `if`, `do sudo …` inside a loop. */
+const OPENS_A_STEP: ReadonlySet<string> = new Set(['then', 'else', 'do', '!']);
+
+/**
+ * A step with an escalator in its text: refused unless it is the ONE admitted shape, whole — the plain word `sudo`, exactly once in the step
+ * (`escalators` counts every token the text spells), followed by the two distribution package words (`apt-get install` or `dnf
+ * install`) for the packages of {@link OFFICIAL_SOURCES}, with nothing but a step-opening shell word in front of it. Everything else is a different
+ * construct and is refused: `sudo -u root …`, `sudo rm …`, `sudo npm install …`, a second `sudo`, a `$(sudo id)` inside the step, a path
+ * (`/usr/bin/sudo`), `su`, `doas`, `pkexec`, `run0`. The exception matches the construct, never a substring of it.
+ */
+function privilegedStep(words: readonly string[], escalators: number): number {
+  const at = words.indexOf('sudo');
+
+  return escalators === 1 && isDistroShape(words, at) ? unprivilegedStep(words.slice(at + 1)) : -1;
+}
+
+/** `[step-opening word…] sudo apt-get install …` / `… dnf install …`: the plain word `sudo` at `at`, a distribution package verb right after it, nothing else in front. */
+function isDistroShape(words: readonly string[], at: number): boolean {
+  const rest = words.slice(at + 1);
+
+  return at >= 0
+    && VERBS.some((verb) => verb.admitted === 'distroPackages' && rest[0] === verb.words[0] && rest[1] === verb.words[1])
+    && words.slice(0, at).every((word) => OPENS_A_STEP.has(word));
 }
 
 /** A step no verb above reads: refused when it still says "install", nothing otherwise. */

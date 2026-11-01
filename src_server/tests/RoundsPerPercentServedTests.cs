@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// <c>/api/usage</c> answers rounds per 1 % of each gauge window (story 6.2 of todo/PLAN_every_round_is_counted.md) — the
+/// <c>/api/usage</c> answers rounds per 1 % of each gauge window (story 6.2 of research/PLAN_every_round_is_counted.md) — the
 /// shared library's figure over the server's own ledger, beside the round windows it is asked with.
 /// </summary>
 public sealed class RoundsPerPercentServedTests
@@ -85,7 +85,22 @@ public sealed class RoundsPerPercentServedTests
 
         var acme = answer.Gauges.Should().ContainSingle().Subject;
         (acme.Vendor, acme.LimitId, acme.WindowMins, acme.Intervals, acme.Unavailable).Should().Be(("acme", "acme", 10080L, 2, string.Empty));
-        acme.RoundsPerPercent.Should().BeApproximately(5.0 / 3, 1e-9, "two rounds over 1 %, then one over 1 % — weighted by rounds, (2 × 2 + 1 × 1) / 3");
+        // Story 6.2b (owner 2026-10-16): pooled, (2 + 1) rounds over (1 + 1) %. This used to expect the rounds-weighted mean, 5 / 3.
+        acme.RoundsPerPercent.Should().BeApproximately(3.0 / 2, 1e-9, "two rounds over 1 %, then one over 1 % — pooled, (2 + 1) / (1 + 1)");
+    }
+
+    [Fact]
+    public void ARoundRefusedOnOneAccountAndRunOnAnother_IsOneWholeRoundOnTheAccountThatRanIt()
+    {
+        // Round R was refused on account a (a requeue line: RateLimited, rotated, no reading) and then ran on account b,
+        // which read 10 % → 11 %. The refused launch ran nothing: R is ONE round over 1 %, not half of one.
+        var refused = Line(20, "R", 0) with { Slot = "a", Outcome = "RateLimited", Attempt = "rotated", Gauge = GaugeOnLine.None };
+
+        var answer = Answer("5h,24h,week", UsageScope.Company,
+            Line(30, "r0", 10) with { Slot = "b" }, refused, Line(10, "R", 11) with { Slot = "b", Attempt = "rotated" });
+
+        var acme = answer.Gauges.Should().ContainSingle().Subject;
+        acme.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9, "the launch that was refused is not one of the round's launches that ran");
     }
 
     [Fact]

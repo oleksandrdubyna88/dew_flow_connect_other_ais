@@ -117,7 +117,7 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
                 // A reviewer that did not review is the thing worth finding in a log later, so it
                 // is a warning even though the round survives it. Its reason WHOLE and redacted — the
                 // summary's 160-character cut is how agy's weekly refusal lost its reset (story 3.3 of
-                // todo/PLAN_every_round_is_counted.md).
+                // research/PLAN_every_round_is_counted.md).
                 _log.Warning(
                     "reviewer {Provider}/{Role} FAILED after {Seconds:0.0}s: {Reason}{Uncaptured}",
                     progress.Provider, progress.Role, progress.Elapsed.TotalSeconds,

@@ -43,13 +43,19 @@ internal static class ConsultantTurnBooks
     /// <remarks>
     /// The WHOLE usage reaches the line — a usage the vendor never reported as <c>usage not captured</c>, not a free 0/0
     /// (the whole-branch review, C) — for a consultation (<c>consult</c>) and a check (<c>consult-check</c>) alike.
+    /// <para><paramref name="ranWith"/> is what the turn's launch ran with — <see cref="RowLaunchOptions.Answering"/>'s labels, with the release the
+    /// turn's launches already asked (<see cref="LaunchOptions.VersionedBy"/>); <see cref="LaunchOptions.None"/> for a turn refused before any
+    /// launch (E3.S1 of todo/PLAN_the_round_counter_tail_E3.md).</para>
+    /// <para><paramref name="consultation"/> is the id of the consultation the turn belongs to (E3.S4): empty for a check and for a turn refused
+    /// before its record existed (decision D8 of todo/PLAN_the_round_counter_tail_E3.md).</para>
     /// <para><paramref name="resetsUtc"/> is the reset a refused turn STATED (<see cref="UsageLedger.StatedResetOf"/>), or
-    /// empty — epic 5's code round of todo/PLAN_every_round_is_counted.md: a consultation refused with
+    /// empty — epic 5's code round of research/PLAN_every_round_is_counted.md: a consultation refused with
     /// <i>Resets in 88h49m9s</i> wrote no reset, so the extension could not say when the vendor comes back.</para>
     /// </remarks>
     public static void Billed(
-        UsageLedger ledger, ProviderSettings row, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string resetsUtc = "") =>
-        ledger.RecordJob(string.Empty, row.Provider, model, role, outcome, elapsed, usage, UsageKinds.Consult, stage: "Consultation", resetsUtc);
+        UsageLedger ledger, ProviderSettings row, string model, string role, string outcome, TimeSpan elapsed, Usage usage,
+        LaunchOptions ranWith, string consultation = "", string resetsUtc = "") =>
+        ledger.RecordJob(string.Empty, row.Provider, model, role, outcome, elapsed, usage, UsageKinds.Consult, stage: "Consultation", ranWith, consultation: consultation, resetsUtc: resetsUtc);
 
     /// <summary>The reset the turn's final launch STATED, now — empty for an answer, and for a refusal that named no time.</summary>
     public static string StatedResetOf(ReviewerLaunch final) => UsageLedger.StatedResetOf(final.Terminal, DateTimeOffset.UtcNow);

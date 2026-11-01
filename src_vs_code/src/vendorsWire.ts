@@ -141,6 +141,7 @@ export function rowOnTheWire(
     ...apiSettingsOnTheWire(v, installedServerVersion),
     ...promptOnTheWire(v, features),
     ...timeoutOnTheWire(v, features),
+    ...maxPromptOnTheWire(v, features),
     ...cliEffortOnTheWire(v, features),
     ...streamOnTheWire(v, features),
     ...fastOnTheWire(v, features),
@@ -174,6 +175,14 @@ function cliEffortOnTheWire(v: Vendor, features: readonly string[]): { effort?: 
 /** A CLI row's own timeout, to a binary that lists `timeoutMinutes` — an api row has none (it keeps `reviewMinutes`). */
 function timeoutOnTheWire(v: Vendor, features: readonly string[]): { timeoutMinutes?: number } {
   return features.includes(FEATURES.timeoutMinutes) && v.timeoutMinutes !== undefined ? { timeoutMinutes: v.timeoutMinutes } : {};
+}
+
+/**
+ * A row's prompt cap, to a binary that lists `maxPromptKib` — and to no other: an older one skips the member and would launch
+ * the over-cap reviewer, while the card said the row was capped. Every runtime (the server leaves out any over-cap reviewer).
+ */
+function maxPromptOnTheWire(v: Vendor, features: readonly string[]): { maxPromptKib?: number } {
+  return features.includes(FEATURES.maxPromptKib) && v.maxPromptKib !== undefined ? { maxPromptKib: v.maxPromptKib } : {};
 }
 
 /**

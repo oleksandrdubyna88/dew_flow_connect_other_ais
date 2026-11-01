@@ -26,7 +26,7 @@ public static class VendorLogin
 
     /// <summary>
     /// The account is unavailable until recovery proves it safe: a gauge reader of a crashed server could not be proved
-    /// gone (story 6.1a of todo/PLAN_every_round_is_counted.md). Distinct from busy — waiting does not help.
+    /// gone (story 6.1a of research/PLAN_every_round_is_counted.md). Distinct from busy — waiting does not help.
     /// </summary>
     public const int BlockedExitCode = 76;
 

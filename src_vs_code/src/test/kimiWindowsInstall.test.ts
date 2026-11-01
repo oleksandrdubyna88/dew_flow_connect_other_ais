@@ -63,14 +63,16 @@ const skip = SHELL === '' ? 'no PowerShell on this machine — the parse needs p
 
 // ---------------------------------------------------------------- S5.7 install is Moonshot's per OS
 
-test('installIsMoonshotsPerOs: Linux and macOS get Moonshot’s script alone; Windows gets the tools first, then Moonshot’s', () => {
-  for (const platform of ['linux', 'darwin'] as const) {
-    const install = vendorInstall(KIMI, platform);
+test('installIsMoonshotsPerOs: macOS gets Moonshot’s script alone; Linux the tools first (kimiLinuxInstall.test.ts runs it); Windows the tools first, then Moonshot’s', () => {
+  const mac = vendorInstall(KIMI, 'darwin');
 
-    assert.equal(install.command, MOONSHOT_SH, platform);
-    assert.equal(install.prerequisite, '', `${platform}: the script needs nothing run first`);
-    assert.equal(install.docs, 'https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started');
-  }
+  assert.equal(mac.command, MOONSHOT_SH);
+  assert.equal(mac.prerequisite, '', 'the script needs nothing run first');
+  assert.equal(mac.docs, 'https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started');
+  const linux = vendorInstall(KIMI, 'linux', 'wsl2');
+  assert.ok(linux.command.includes(MOONSHOT_SH), 'the Linux line still ends in Moonshot’s script');
+  assert.notEqual(linux.command, MOONSHOT_SH, 'and provisions ripgrep and fd before it (DL12)');
+  assert.equal(linux.docs, mac.docs);
 
   const windows = vendorInstall(KIMI, 'win32');
   assert.equal(windows.prerequisite, '', 'nothing is left for the person to run first');
@@ -110,7 +112,7 @@ test('⤓ for Kimi says where it lands, that VS Code must restart, and that the 
     const note = vendorInstall(KIMI, platform).note;
     assert.match(note, /shell rc file|rc file/iu, `${platform}: the script edits one rc file`);
     assert.match(note, /\/login/u, platform);
-    assert.match(note, /does not run Kimi on Linux, WSL or macOS yet/u, `${platform}: D18 — the button installs, a review waits`);
+    assert.match(note, platform === 'darwin' ? /does not run Kimi on macOS/u : /measured on WSL2 only/u, `${platform}: the button installs; where a review waits, the note says why`);
     assert.match(note, /▶/u, platform);
   }
 });

@@ -1,7 +1,7 @@
 namespace CoaiServer;
 
 /// <summary>
-/// The two numbers the budget rule is configured by — story 4.3 of <c>todo/PLAN_every_round_is_counted.md</c>.
+/// The two numbers the budget rule is configured by — story 4.3 of <c>research/PLAN_every_round_is_counted.md</c>.
 /// </summary>
 /// <param name="SafetyMargin">
 /// <c>Coai:DeadlineSafetyMarginSeconds</c>: taken off every caller's stated budget at receipt. It is the TRANSIT allowance

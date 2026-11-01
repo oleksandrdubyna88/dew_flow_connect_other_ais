@@ -2,7 +2,7 @@ namespace CoaiMcp.Runners.Processes;
 
 /// <summary>
 /// The tracker could not write a descendant of a child the launcher was ending — raised only AFTER the whole tree was
-/// killed and its exit confirmed (epic 6's code round on story 6.1a of todo/PLAN_every_round_is_counted.md).
+/// killed and its exit confirmed (epic 6's code round on story 6.1a of research/PLAN_every_round_is_counted.md).
 /// </summary>
 /// <remarks>
 /// A tracker that writes a slot's reader marker can fail on the disk or a permission. Ending the tree first means no

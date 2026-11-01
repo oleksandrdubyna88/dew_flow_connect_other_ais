@@ -14,4 +14,14 @@ public static class CatalogLimits
 
     /// <summary>A CLI row's own timeout, in whole minutes — a day, as the extension's <c>MAX_REVIEW_MINUTES</c>.</summary>
     public const int MaxTimeoutMinutes = 1440;
+
+    /// <summary>
+    /// A row's own prompt cap, in whole KiB — 4 MiB, far past the 256 KiB document ceiling, so every operator-written value
+    /// that could ever bind is inside it; the extension's <c>MAX_PROMPT_KIB</c> says the same.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="MaxPromptBytes"/>: that is the row's SYSTEM prompt. The two are named apart on purpose — one name with
+    /// two meanings on one row is a trap.
+    /// </remarks>
+    public const int MaxPromptKib = 4096;
 }

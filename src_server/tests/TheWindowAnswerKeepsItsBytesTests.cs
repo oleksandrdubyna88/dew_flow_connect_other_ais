@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// An old client that asks <c>?window=</c> reads TODAY's answer (story 5.1 of todo/PLAN_every_round_is_counted.md): every key
+/// An old client that asks <c>?window=</c> reads TODAY's answer (story 5.1 of research/PLAN_every_round_is_counted.md): every key
 /// the answer had before the round counts, in the same order, with the same values — the counts are ADDED to each vendor
 /// row, and the several-window block is absent unless it was asked for.
 /// </summary>

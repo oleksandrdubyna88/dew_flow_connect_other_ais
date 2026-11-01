@@ -21,7 +21,7 @@ public enum SubmitRefusal
 
 /// <summary>
 /// What one claim pass decided: the job it started, if any, and the jobs it ENDED on the way because their callers could
-/// no longer wait for a launch (story 4.3 of todo/PLAN_every_round_is_counted.md).
+/// no longer wait for a launch (story 4.3 of research/PLAN_every_round_is_counted.md).
 /// </summary>
 /// <param name="Job">The job moved to Running, or null when nothing on this vendor could be started.</param>
 /// <param name="Token">The claimed job's own token — the one a cancel or the deadline sweep fires; <see cref="CancellationToken.None"/> when nothing was claimed.</param>
@@ -95,7 +95,7 @@ public sealed class JobStore(
     /// </remarks>
     public int PerCallerRunning { get; } = perCallerRunning;
 
-    /// <summary>The budget rule's two numbers (story 4.3 of todo/PLAN_every_round_is_counted.md), from configuration.</summary>
+    /// <summary>The budget rule's two numbers (story 4.3 of research/PLAN_every_round_is_counted.md), from configuration.</summary>
     public ClientBudgetPolicy Budget { get; } = budget ?? ClientBudgetPolicy.Default;
 
     /// <summary>
@@ -150,7 +150,7 @@ public sealed class JobStore(
             }
 
             // When the caller's stated budget ends, on this clock — the record's receipt stamp plus the stated seconds,
-            // capped at the job's own lifetime, less the margin (story 4.3 of todo/PLAN_every_round_is_counted.md).
+            // capped at the job's own lifetime, less the margin (story 4.3 of research/PLAN_every_round_is_counted.md).
             // Stamped HERE, where the rule that reads it lives, and from the server's receipt alone: nothing a client
             // sends about its own clock is ever read. A request that stated none keeps none.
             var stamped = job with { ClientDeadlineUtc = ClientBudget.DeadlineOf(job, Budget.SafetyMargin) };
@@ -260,7 +260,7 @@ public sealed class JobStore(
     /// <param name="ct">The host's token. The job's own token is linked to it and returned.</param>
     /// <returns>The claimed job and the token its vendor process must observe, if one was claimed; and what was refused.</returns>
     /// <remarks>
-    /// <para><b>No start without budget</b> (story 4.3 of todo/PLAN_every_round_is_counted.md). A candidate whose
+    /// <para><b>No start without budget</b> (story 4.3 of research/PLAN_every_round_is_counted.md). A candidate whose
     /// caller's deadline, after the margin, cannot hold even a launch's start-up (<see cref="ClientBudgetPolicy.MinStart"/>)
     /// is ENDED here — <see cref="FailureKind.NoBudget"/>, nothing launched, its poller woken — and the pass moves on to
     /// the next queued job, so a free account is not left idle for a tick on a review nobody will collect. Decided under
@@ -340,7 +340,7 @@ public sealed class JobStore(
     /// or an expiry ended the job first, that earlier record carrying what the late attempt reported it cost.
     /// </summary>
     /// <remarks>
-    /// <para>The job's ending is the store's to say (story 3.2 of todo/PLAN_every_round_is_counted.md): a cancel and
+    /// <para>The job's ending is the store's to say (story 3.2 of research/PLAN_every_round_is_counted.md): a cancel and
     /// an expiry write their cause AT the transition, under this lock, before they fire the token the runner is
     /// awaiting on — so by the time the runner arrives here with its own reading of the kill, the store's record is
     /// the truth about WHY, and the ledger must be written from it rather than from the runner's recomputation.
@@ -552,7 +552,7 @@ public sealed class JobStore(
         // a poll arriving together are safe. (local, code round.)
         Stop(job.Id);
         // The clock that ran out, as the record's cause and its sentence from one decision (story 3.2 of
-        // todo/PLAN_every_round_is_counted.md): abandoned, the queue window, or the server's backstop.
+        // research/PLAN_every_round_is_counted.md): abandoned, the queue window, or the server's backstop.
         var (cause, reason) = JobTransitions.Expiry(job, nowUtc);
         var ended = JobTransitions.Cancel(job, cause, reason, nowUtc);
         _jobs[job.Id] = ended;

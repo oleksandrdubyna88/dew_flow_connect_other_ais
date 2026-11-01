@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Schema step 20: <c>reviewers.model</c> and the <c>reviewers(round_id)</c> index (story 2.1 of
-/// <c>todo/PLAN_every_round_is_counted.md</c>) — appended, filled on every recorded round, empty on
+/// <c>research/PLAN_every_round_is_counted.md</c>) — appended, filled on every recorded round, empty on
 /// every reviewer row written before it, and reached by every database shape in the field.
 /// </summary>
 /// <remarks>

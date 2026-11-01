@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A request that ends its child on an answer ends the WHOLE tree and confirms it gone — the launcher's half of the
-/// gauge reader's containment (story 6.1a of <c>todo/PLAN_every_round_is_counted.md</c>).
+/// gauge reader's containment (story 6.1a of <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para>Against a REAL child, like <see cref="ProcessLauncherTests"/>: the fake CLI's <c>serve</c> verb answers the

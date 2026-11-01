@@ -49,25 +49,63 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
     /// <summary>The name of the spent-allowance failure — the field of the shim's report that <c>KimiRuntime</c> classifies a rate limit from, never the text.</summary>
     public const string BalanceSpent = "balance_spent";
 
-    /// <summary>The sentences measured on 2026-10-12 (RESULTS §2), the specific one first.</summary>
-    private static readonly AcpKnownFailure[] Failures =
+    /// <summary>The name of the spent-plan-quota failure — Kimi's own: markers are matched against every vendor's stderr, so the name says whose it is.</summary>
+    public const string QuotaSpent = "kimi_quota_spent";
+
+    /// <summary>The name of a sign-in-prefixed provider error that is none of the others — quoted in the vendor's own words, no cure.</summary>
+    public const string ProviderError = "provider_error";
+
+    private const string NotSignedIn = "not_signed_in";
+
+    private const string SignInCure = "run `kimi login` in a terminal and try again";
+
+    /// <summary>
+    /// The sentences Kimi is known to write, in the order they are matched — FIRST match wins (<see cref="AcpDiagnosis.Of"/>), so every row stands before the
+    /// more general one it contains. Kimi puts the same <c>Authentication required:</c> prefix on a 401, on a spent 5-hour quota (429) and on a spent balance,
+    /// so the prefix says nothing about which it is: the words after it decide, and only a bare prefix is a lost sign-in.
+    /// </summary>
+    /// <remarks>
+    /// <para>1 the plan lacks the model (measured 2026-10-12, RESULTS §2 — it begins with the sign-in words, hence first). 2 the 5-hour plan quota is spent (the
+    /// owner's kimi 2.2.0, 2026-10-19) — before the sign-in rows it hides behind; its phrase is in neither codex's "hit your usage limit" nor the sales footer
+    /// "rate limit reached; upgrade", so it takes nothing of theirs. 2b the MONTHLY quota (kimi 2.3.0, 2026-10-21; seen in prompt mode — the ACP form is unmeasured, the row
+    /// matches the sentence wherever it arrives): the same name and the same words, beside its 5-hour twin. 3 a spent balance — before the sign-in rows, so the wrapped sample reaches it.</para>
+    /// <para>4 a 401 keeps the login cure, listed before 5 because its phrase contains 5's. 5 <b>the colon is the discriminator</b>: any
+    /// <c>Authentication required: &lt;status&gt; …</c> the rows above did not claim is the vendor's own failure — quoted in its words, no cure, the agent's own exit (70);
+    /// a 503 or a plain "Too Many Requests" is not a lost sign-in and not a spent allowance. 6 the bare form (RESULTS §2: no colon) is the one sign-in refusal measured.</para>
+    /// </remarks>
+    public static readonly IReadOnlyList<AcpKnownFailure> Failures =
     [
         new(
             "Your current subscription does not have access to",
             "subscription_model",
             "the Kimi Code plan does not include this model — pick one the plan has (kimi-code/k3-256k answered on this one) or upgrade the plan",
             AcpFailureKind.Refused),
-        new(
-            "Authentication required",
-            "not_signed_in",
-            "run `kimi login` in a terminal and try again",
-            AcpFailureKind.Refused),
+        new("reached your 5-hour usage limit", QuotaSpent, KimiQuotaWords.Fixed, AcpFailureKind.Spent),
+        new("reached your monthly usage limit", QuotaSpent, KimiQuotaWords.Fixed, AcpFailureKind.Spent),
         new(
             "insufficient balance",
             BalanceSpent,
             "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset",
             AcpFailureKind.Spent),
+        new("Authentication required: 401", NotSignedIn, SignInCure, AcpFailureKind.Refused),
+        new("Authentication required:", ProviderError, string.Empty, AcpFailureKind.Failed),
+        new("Authentication required", NotSignedIn, SignInCure, AcpFailureKind.Refused),
     ];
+
+    /// <summary>
+    /// The names of the rows that say an allowance is spent — DERIVED from <see cref="Failures"/>, never a second hand-kept list. Declared after the table:
+    /// static initialisers run in textual order.
+    /// </summary>
+    public static readonly IReadOnlySet<string> SpentNames =
+        Failures.Where(failure => failure.Kind == AcpFailureKind.Spent).Select(failure => failure.Name).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The phrases of the Spent rows called <paramref name="name"/>, as the table writes them, joined by " or " — empty for a name that is not a Spent row. A name can cover
+    /// several rows (<c>kimi_quota_spent</c>: the 5-hour and the monthly window), so this never stands for the ONE the vendor wrote: only the report's matched line does that.
+    /// It is the fallback for a report that carries no line.
+    /// </summary>
+    public static string SpentPhrasesOf(string name) =>
+        string.Join(" or ", Failures.Where(failure => failure.Kind == AcpFailureKind.Spent && failure.Name == name).Select(failure => failure.Phrase));
 
     /// <summary>
     /// The Kimi versions coai has measured. Every number in <c>research/RESULTS_kimi_confinement.md</c> — the write refusals, the
@@ -94,8 +132,12 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
     /// </summary>
     public ProcessRequest AgentRequest(AcpAsk ask) => KimiEnvironment.Built(new ProcessRequest(ask.Executable, Arguments, ask.Cwd), PlacesOf(ask));
 
-    /// <summary>The launch control's own check (<see cref="KimiEnvironment.Refusal"/>) on the request about to start, against the places the argv named.</summary>
-    public string AgentRefusal(ProcessRequest request, AcpAsk ask) => KimiEnvironment.Refusal(request, PlacesOf(ask));
+    /// <summary>
+    /// The launch control's own check (<see cref="KimiEnvironment.Refusal"/>) on the request about to start, against the places the argv named — then the kernel's: a Linux with no pidfd cannot have
+    /// its tree ended by identity, so nothing is held or started (<see cref="PidfdLayer.Refusal"/>, S-K21; empty off Linux). Never a kill by number as a fallback.
+    /// </summary>
+    public string AgentRefusal(ProcessRequest request, AcpAsk ask) =>
+        KimiEnvironment.Refusal(request, PlacesOf(ask)) is { Length: > 0 } refused ? refused : PidfdLayer.Refusal();
 
     /// <summary>The sign-in's tree hold and the home's (<see cref="KimiShimHold"/>), taken immediately before the agent starts — once the person's own Kimi is not running (decision 74).</summary>
     public AcpHolding Hold(AcpAsk ask, TimeSpan within) => KimiShimHold.Taken(PlacesOf(ask), within, Watch);
@@ -115,7 +157,7 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
             HostKinds.Current,
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             Environment.GetEnvironmentVariable("PATH"),
-            File.Exists);
+            ExecutableResolver.IsInstalledFile);
 
     /// <summary>
     /// <see cref="InstalledExecutable"/> for a given host, home and file test.
@@ -125,9 +167,11 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
     /// (RESULTS header) — when it is there, else bare <c>kimi</c>, which <see cref="ExecutableResolver"/> walks the
     /// PATH for at launch. The same rule <c>agy</c> follows on Windows: an MCP server is usually started by an editor
     /// whose PATH predates the install.</para>
-    /// <para>Every other host gets bare <c>kimi</c> and no guess: nothing here has run Kimi on Linux, WSL or a Mac,
-    /// and a path nobody observed is not one to start a process from (the <c>agy</c> precedent for macOS). The WSL
-    /// cells of S4 lift this when they run.</para>
+    /// <para>Linux and WSL (DL5 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, measured on WSL2 by E4): <c>~/.kimi-code/bin/kimi</c> when it is there and
+    /// executable — the VS Code server's <c>PATH</c> often lacks it, and only a shell started after Moonshot's installer edited an rc file has it —
+    /// else bare <c>kimi</c> for the operating system's own <c>PATH</c> walk. (<c>KIMI_INSTALL_DIR</c> is <see cref="KimiPlaces"/>'s.)</para>
+    /// <para>Every other host (macOS, anything else) gets bare <c>kimi</c> and no guess: nothing here has run Kimi there,
+    /// and a path nobody observed is not one to start a process from (the <c>agy</c> precedent for macOS).</para>
     /// <para>Pure over <paramref name="host"/>, which means the Windows path is spelled with Windows separators
     /// whatever OS runs this: <c>Path.Combine</c> spelled it with the RUNNING OS's separator, so on Linux and macOS CI
     /// (2026-10-12) the path never equalled the one the file test was given and the answer was bare <c>kimi</c>.</para>
@@ -136,6 +180,7 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
         host switch
         {
             HostKind.Windows => IfThere($@"{home.TrimEnd('\\', '/')}\.kimi-code\bin\kimi.exe", exists),
+            HostKind.Linux or HostKind.Wsl => IfThere($"{home.TrimEnd('/')}/.kimi-code/bin/kimi", exists),
             _ => ProfileName,
         };
 
@@ -151,6 +196,23 @@ public static class AcpProfiles
 {
     /// <summary>The profiles, in the order a refusal lists them.</summary>
     public static readonly IReadOnlyList<IAcpProfile> All = [new KimiAcpProfile()];
+
+    /// <summary>
+    /// <paramref name="note"/> without the cure the shim appended (<see cref="AcpDiagnosis.Note"/>), looked up in the rows of every profile of <paramref name="profiles"/> — the one
+    /// way a reader outside this layer (the reviewers' summary) strips it, so a second profile needs a row here and nothing in the reader.
+    /// </summary>
+    public static string WithoutCure(string note, IReadOnlyList<IAcpProfile> profiles) =>
+        AcpDiagnosis.WithoutCure(note, [.. profiles.SelectMany(profile => profile.KnownFailures)]);
+
+    /// <summary>The vendor's own words out of a cure-less note of any of <paramref name="profiles"/> (<see cref="AcpDiagnosis.CurelessReason"/>), or empty.</summary>
+    public static string CurelessReason(string note, IReadOnlyList<IAcpProfile> profiles) =>
+        AcpDiagnosis.CurelessReason(note, [.. profiles.SelectMany(profile => profile.KnownFailures)]);
+
+    /// <summary><see cref="CurelessReason(string, IReadOnlyList{IAcpProfile})"/> over the profiles this build ships.</summary>
+    public static string CurelessReason(string note) => CurelessReason(note, All);
+
+    /// <summary><see cref="WithoutCure(string, IReadOnlyList{IAcpProfile})"/> over the profiles this build ships.</summary>
+    public static string WithoutCure(string note) => WithoutCure(note, All);
 
     /// <summary>The names, for a refusal that says what this build knows.</summary>
     public static IEnumerable<string> Names(IReadOnlyList<IAcpProfile> profiles) => profiles.Select(profile => profile.Name);

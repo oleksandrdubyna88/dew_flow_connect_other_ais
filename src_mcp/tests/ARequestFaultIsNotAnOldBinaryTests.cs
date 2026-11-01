@@ -27,7 +27,11 @@ namespace CoaiMcp.Tests;
 /// sent somebody to update a server that was fine. Its own cases live with that mode's scenario
 /// test, where the process is really run; this is where the RULE is written down.
 /// (codex SecurityReliability, issue #309's code round.)</para>
+/// <para><b>In the serial <c>fakecli-env</c> collection</b> because it sets <c>COAI_DATA_DIR</c>, a variable of the PROCESS: outside a collection it ran beside every other
+/// class, changed what they read, and its restore (captured in a field initializer) could put back a value another class had set in the meantime
+/// (C11 of <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).</para>
 /// </remarks>
+[Collection("fakecli-env")]
 public sealed class ARequestFaultIsNotAnOldBinaryTests : IDisposable
 {
     private readonly string _dir =

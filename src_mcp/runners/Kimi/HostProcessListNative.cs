@@ -5,19 +5,18 @@ namespace CoaiMcp.Runners.Kimi;
 /// <summary>
 /// The Windows-only NATIVE SHELL of <see cref="HostProcessList"/>: the toolhelp calls, and nothing that decides. Excluded from Sonar's coverage
 /// (<c>.github/workflows/sonarcloud.yml</c> says why); <c>ForeignKimiTests</c> run it against this machine's real process table in the
-/// <c>windows-latest</c> job. The buffer's layout and its parse are <see cref="HostProcessList"/>'s and are tested on any OS.
+/// <c>windows-latest</c> job. The buffer's layout, its parse and what a finished walk says are <see cref="HostProcessList"/>'s and are tested on any OS.
 /// </summary>
 internal static partial class HostProcessListNative
 {
     private const uint SnapProcess = 0x2;
-    private const int NoMoreFiles = 18;
 
-    internal static List<ProcessEntry> Read()
+    internal static ProcessListing Read()
     {
         var snapshot = CreateToolhelp32Snapshot(SnapProcess, 0);
         if (snapshot is -1 or 0)
         {
-            return [];
+            return HostProcessList.Failed(Marshal.GetLastWin32Error());
         }
 
         try
@@ -30,7 +29,7 @@ internal static partial class HostProcessListNative
         }
     }
 
-    private static List<ProcessEntry> Walk(nint snapshot)
+    private static ProcessListing Walk(nint snapshot)
     {
         var found = new List<ProcessEntry>();
         var entry = HostProcessList.FreshEntry();
@@ -39,7 +38,7 @@ internal static partial class HostProcessListNative
             found.Add(HostProcessList.Parsed(entry));
         }
 
-        return Marshal.GetLastWin32Error() is NoMoreFiles or 0 ? found : [];
+        return HostProcessList.Walked(found, Marshal.GetLastWin32Error());
     }
 
     [LibraryImport("kernel32.dll", SetLastError = true)]

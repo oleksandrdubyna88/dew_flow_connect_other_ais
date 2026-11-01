@@ -2,7 +2,7 @@ import { ModelPrice } from './modelPrices';
 import { ModelUsage, VendorUsage } from './teamServerApi';
 import { Estimate, totalCost, UNKNOWN } from './usage';
 
-// The figure, its sum and its text moved to `usage.ts` with story 2.5 of todo/PLAN_every_round_is_counted.md, where the
+// The figure, its sum and its text moved to `usage.ts` with story 2.5 of research/PLAN_every_round_is_counted.md, where the
 // spending tab prices each ledger line by the same three states; re-exported so this tab's callers are unchanged.
 export { costText, totalCost, UNKNOWN } from './usage';
 export type { Estimate } from './usage';

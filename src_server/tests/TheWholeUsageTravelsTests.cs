@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The whole usage travels (story 3.1 of <c>todo/PLAN_every_round_is_counted.md</c>): what a launch reported reaches
+/// The whole usage travels (story 3.1 of <c>research/PLAN_every_round_is_counted.md</c>): what a launch reported reaches
 /// the job and the server's ledger line whole — cached and reasoning included, and on a failure as well as an answer.
 /// </summary>
 /// <remarks>

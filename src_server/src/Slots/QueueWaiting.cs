@@ -4,7 +4,7 @@ namespace CoaiServer;
 /// Why a queued job cannot start now — the sentence its status carries in <c>waiting</c>.
 /// </summary>
 /// <remarks>
-/// <para>Story 5.3b of todo/PLAN_every_round_is_counted.md, owed by 5.3a's code round: since 5.3a a slot is parked until
+/// <para>Story 5.3b of research/PLAN_every_round_is_counted.md, owed by 5.3a's code round: since 5.3a a slot is parked until
 /// the instant its vendor stated, and a job queued behind it heard nothing about when it could run. The sentence is
 /// <see cref="SlotSelector.Explain"/>'s — written for exactly this and called by no status path until now — so the
 /// catalog, the runner and a polling client read one account state in one vocabulary.</para>

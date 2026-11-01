@@ -7,7 +7,7 @@ import { cardRoundsLine } from '../roundsBlock';
 import { counted, usageLine } from './roundCountsFixtures';
 
 /**
- * Bounded freshness (story 2.2 of todo/PLAN_every_round_is_counted.md), on a fake clock: a render never spawns, a read
+ * Bounded freshness (story 2.2 of research/PLAN_every_round_is_counted.md), on a fake clock: a render never spawns, a read
  * is at most once a minute, an ending — a round, a consultation, a question — brings the next read forward, and a
  * trailing window falls while nothing at all happens.
  */

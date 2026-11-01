@@ -9,7 +9,7 @@ namespace CoaiServer.Tests;
 /// enough for the shim to finish cleanly: 202 to a submit, a <c>done</c> status to a poll, 204 to a cancel.
 /// </summary>
 /// <remarks>
-/// <para>What it is for: the budget rule (story 4.3 of <c>todo/PLAN_every_round_is_counted.md</c>) is judged against
+/// <para>What it is for: the budget rule (story 4.3 of <c>research/PLAN_every_round_is_counted.md</c>) is judged against
 /// the POST the real shim builds — the shim's own ten-second margin and its five-second floor are in that body and in
 /// nothing a test writes by hand — and the body is then replayed to the REAL in-process server, which has no socket for
 /// the shim's <see cref="HttpClient"/> to reach. Capture here, replay there.</para>

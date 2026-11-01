@@ -182,7 +182,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     /// <param name="shaped">
     /// What the executor decides after <c>Build</c> and before the launch — the round, the attempt, a shortened
     /// timeout — applied to the built invocation; the adapter's <c>ForLaunch</c> then rebuilds the argv as the
-    /// executor would (story 4.1 of todo/PLAN_every_round_is_counted.md). Null runs the invocation as built.
+    /// executor would (story 4.1 of research/PLAN_every_round_is_counted.md). Null runs the invocation as built.
     /// </param>
     private async Task<(int Exit, string StdOut, string StdErr, ReviewerInvocation Invocation)> RunAsync(
         TimeSpan timeout, ReviewerSettings? row = null, Func<ReviewerInvocation, ReviewerInvocation>? shaped = null)
@@ -271,7 +271,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     [Fact]
     public async Task TheRoundTheAttemptAndTheSecondsLeft_GoOut_WithTheRealBinary()
     {
-        // Story 4.1 of todo/PLAN_every_round_is_counted.md, through the real binary: a repair of a round, launched with
+        // Story 4.1 of research/PLAN_every_round_is_counted.md, through the real binary: a repair of a round, launched with
         // forty seconds of its reviewer's six hundred left, tells the server its round, what it is, and the seconds left on
         // the shim's OWN deadline — thirty less the start-up, never the five hundred and ninety it was built with.
         SignIn();

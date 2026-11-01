@@ -11,7 +11,7 @@ import { BundledLog, bundledLogModule, runningDomPage } from './roundsLogPageHar
 import { counted, hoursAgo, NO_CHAT, NOW, snapshot, usageLine } from './roundCountsFixtures';
 
 /**
- * A stated reset is read locally (story 5.3b of todo/PLAN_every_round_is_counted.md): the ledger line's `resetsUtc` —
+ * A stated reset is read locally (story 5.3b of research/PLAN_every_round_is_counted.md): the ledger line's `resetsUtc` —
  * written by `coai-mcp` from the refusal, through the one parser both halves use — becomes
  * `gemini: quota out — resets in 89 h (Wed 04:49)` on the Spending tab's Rounds block and on the row's model card. It is
  * shown only while it is ahead, and only while the row's LAST line is that refusal: a later answer means the account

@@ -43,19 +43,14 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
          "title": "the second step is vague", "why": "it names no owner", "fix": "name one"}
         """;
 
-    private static ReviewerInvocation Anyone => new("codex", "plan", new ProcessRequest("x", [], "."));
-
     private static Finding Titled(string title) =>
         new(Severity.Blocking, Category.Completeness, string.Empty, 0, title, "why", "fix", ["codex"]);
 
     private static ReviewerOutcome.Ok Answered(params Finding[] findings) =>
         new(new NormalisedReview([.. findings], ImmutableArray<RejectedEntry>.Empty), false, Usage.None);
 
-    private static IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> One(ReviewerOutcome outcome) =>
-        [(Anyone, outcome)];
-
     private static ReviewerOutcome Folded(Stage stage, ReviewerOutcome outcome, string plan = Plan) =>
-        PlanIncomplete.Fold(stage, plan, One(outcome)).Single().Outcome;
+        PlanIncomplete.Settle(stage, PlanIncomplete.TitleOf(plan), outcome);
 
     private PanelService TwoVendors() =>
         ServiceFor(Defaults() with

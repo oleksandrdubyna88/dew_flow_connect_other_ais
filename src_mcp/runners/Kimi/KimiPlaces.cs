@@ -34,6 +34,12 @@ public sealed record KimiPlaces(string OwnedRoot, string PersonsHome, string Per
     /// <summary>The empty OS home the redirected <c>USERPROFILE</c>/<c>HOME</c> point at.</summary>
     public string Os => Path.Combine(OwnedRoot, "os");
 
+    /// <summary>
+    /// The cache folder <c>XDG_CACHE_HOME</c> points at on Linux and WSL (DL11 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): beside <c>os/</c> and NOT inside <c>home/</c> (whose shape <see cref="KimiHome"/> judges), so Kimi's
+    /// native-file extraction (about 2 MB per launch, measured by L-K3) lands here and <c>os/</c> stays empty. Made <c>0700</c> with the home, deleted with the owned root.
+    /// </summary>
+    public string Cache => Path.Combine(OwnedRoot, "cache");
+
     /// <summary>The junction to the person's <c>credentials</c>, inside the owned home.</summary>
     public string Link => Path.Combine(Home, "credentials");
 
@@ -53,13 +59,14 @@ public sealed record KimiPlaces(string OwnedRoot, string PersonsHome, string Per
         var installer = Join(windows, userProfile, ".kimi-code");
         var home = NonEmpty(env("KIMI_CODE_HOME"), installer);
         var bin = Join(windows, NonEmpty(env("KIMI_INSTALL_DIR"), installer), "bin");
+        var localBin = windows ? string.Empty : Join(false, Join(false, userProfile, ".local"), "bin");
 
         return new KimiPlaces(
             ownedRoot,
             home,
             bin,
-            KimiTools.FoldersFor(windows, bin, env("PATH"), env("PATHEXT"), fileExists),
-            KimiTools.Refusal(windows, bin, env("PATH"), env("PATHEXT"), fileExists),
+            KimiTools.FoldersFor(windows, bin, env("PATH"), env("PATHEXT"), fileExists, localBin),
+            KimiTools.Refusal(windows, bin, env("PATH"), env("PATHEXT"), fileExists, localBin),
             ExecutableOf(host, bin, userProfile, env("PATH"), fileExists));
     }
 
@@ -71,7 +78,7 @@ public sealed record KimiPlaces(string OwnedRoot, string PersonsHome, string Per
     private static string ExecutableOf(HostKind host, string bin, string userProfile, string? path, Func<string, bool> fileExists)
     {
         var windows = host == HostKind.Windows;
-        var inBin = windows ? Join(true, bin, "kimi.exe") : string.Empty;
+        var inBin = InstallersExecutable(host, bin);
         Func<string>[] ways =
         [
             () => fileExists(inBin) ? inBin : string.Empty,
@@ -84,7 +91,18 @@ public sealed record KimiPlaces(string OwnedRoot, string PersonsHome, string Per
 
     private static string NonEmpty(string? value, string fallback) => value is { Length: > 0 } ? value : fallback;
 
-    /// <summary>A path joined with Windows separators when the host is Windows — whatever machine is asking, like <see cref="KimiAcpProfile.InstalledExecutableFor"/>.</summary>
+    /// <summary>Where Moonshot's installer puts <c>kimi</c> inside the person's bin: <c>kimi.exe</c> on Windows, <c>kimi</c> on Linux and WSL (DL5), and nowhere on a host nothing was measured on.</summary>
+    private static string InstallersExecutable(HostKind host, string bin) => host switch
+    {
+        HostKind.Windows => Join(true, bin, "kimi.exe"),
+        HostKind.Linux or HostKind.Wsl => Join(false, bin, Bare),
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// A path joined with the HOST's separator — backslashes for Windows, <c>/</c> for everything else — whatever machine is asking, like <see cref="KimiAcpProfile.InstalledExecutableFor"/>:
+    /// never <c>Path.Combine</c>, which spells the RUNNING operating system's, so a Linux path is judged the same on a Windows test host.
+    /// </summary>
     private static string Join(bool windows, string folder, string name) =>
-        windows ? $"{folder.TrimEnd('\\', '/')}\\{name}" : Path.Combine(folder, name);
+        windows ? $"{folder.TrimEnd('\\', '/')}\\{name}" : folder.Length == 0 ? name : $"{folder.TrimEnd('/')}/{name}";
 }

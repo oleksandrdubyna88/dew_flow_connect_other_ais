@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Processes;
+
 namespace CoaiMcp.Runners.Acp;
 
 /// <summary>
@@ -11,10 +13,20 @@ public abstract record AcpHolding
     }
 
     /// <summary>Nothing to hold — the profile has no sign-in of its own to protect.</summary>
-    public static AcpHolding Nothing { get; } = new Held(new NoHold());
+    public static AcpHolding Nothing { get; } = new Held(new NoHold(), UnsupervisedTree.Instance);
 
     /// <summary>Held: dispose it once the agent is over — the shim does, after <see cref="AcpClient.AskAsync"/> has returned.</summary>
-    public sealed record Held(IDisposable Hold) : AcpHolding;
+    /// <remarks>
+    /// <paramref name="Supervisor"/> ends the agent's tree: <see cref="UnsupervisedTree"/> (today's end) unless the profile owns the tree under a subreaper — Kimi on Linux, DL9. The one-argument
+    /// form keeps every existing holder as it was.
+    /// </remarks>
+    public sealed record Held(IDisposable Hold, ITreeSupervisor Supervisor) : AcpHolding
+    {
+        public Held(IDisposable hold)
+            : this(hold, UnsupervisedTree.Instance)
+        {
+        }
+    }
 
     /// <summary>Another tree holds the sign-in still and did not let go within the time given: the shim's exit 69, with this sentence.</summary>
     public sealed record Busy(string Sentence) : AcpHolding;

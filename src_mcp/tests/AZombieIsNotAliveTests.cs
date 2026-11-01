@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A killed process whose parent has not reaped it yet — a zombie — holds nothing any more, so the tree confirmation
-/// must count it as gone (story 6.1a of <c>todo/PLAN_every_round_is_counted.md</c>).
+/// must count it as gone (story 6.1a of <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para>Found on Linux CI: a reader's grandchild, killed with the tree, kept its <c>/proc</c> entry until something

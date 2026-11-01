@@ -28,8 +28,11 @@ namespace CoaiMcp.Runners.Acp;
 /// session exists, stdin closed, a short wait, the tree kill by pid, the wait. A test with a fake agent that spawns
 /// a heartbeat grandchild checks both pids are gone on each of those paths.</para>
 /// </remarks>
-public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, TimeSpan usageBound)
+public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, TimeSpan usageBound, ITreeSupervisor supervisor, TimeProvider? clock = null)
 {
+    /// <summary>The one clock the turn's budgets read (E4 plan §5.1): a test hands a manual one; the product is on the system clock.</summary>
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+
     /// <summary>The prompt that asks the agent for the session's token totals — its own command, answered without a model call.</summary>
     private const string UsagePrompt = "/usage";
 
@@ -54,27 +57,48 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
     {
     }
 
+    /// <summary>The client with today's end of the agent's tree (<see cref="UnsupervisedTree"/>).</summary>
+    public AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, TimeSpan usageBound)
+        : this(profile, boundary, usageBound, UnsupervisedTree.Instance)
+    {
+    }
+
     public async Task<AcpOutcome> AskAsync(AcpAsk ask, CancellationToken ct = default)
     {
         var request = profile.AgentRequest(ask);
         if (Refusal(ask, request) is { Length: > 0 } refused)
         {
-            return AcpOutcome.NotStarted(refused);
+            return AcpOutcome.NotStarted(refused, ask.Session);
         }
 
         AcpTransport transport;
         try
         {
-            transport = AcpTransport.Start(request);
+            transport = AcpTransport.Start(request, supervisor);
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {
-            return AcpOutcome.NotStarted($"could not start `{ask.Executable}`: {e.Message}");
+            return AcpOutcome.NotStarted($"could not start `{ask.Executable}`: {e.Message}", ask.Session);
         }
 
         using (transport)
         {
+            Told(supervisor, transport.Pid);
+
             return await TurnAsync(transport, ask, ct);
+        }
+    }
+
+    /// <summary>The supervisor is told of the agent by its REAL identity; a start time that cannot be read is told as an unidentified pid, never a made-up time.</summary>
+    private static void Told(ITreeSupervisor supervisor, int pid)
+    {
+        if (ProcessTracking.StartedAt(pid) is { } started)
+        {
+            supervisor.Started(new ProcessIdentity(pid, started));
+        }
+        else
+        {
+            supervisor.StartedUnidentified(pid);
         }
     }
 
@@ -85,21 +109,46 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
             : profile.AgentRefusal(request, ask);
 
     /// <summary>
-    /// The turn. Everything after the start is inside the one <c>try</c> whose <c>finally</c> ends the agent — the
-    /// clock, the pump, the requests — so nothing that throws can leave the child running.
+    /// The turn. Everything after the start is inside a <c>try</c> whose <c>finally</c> ends the agent — the clock, the pump, the requests —
+    /// so nothing that throws can leave the child running. The deadline's two sources are armed INSIDE the first <c>try</c>: a clock that cannot
+    /// make a timer (or a caller's source already disposed) would otherwise throw before any <c>finally</c> existed, with the agent started.
+    /// Once <see cref="ConverseUntilAsync"/> has the turn its own <c>finally</c> ends the agent, and this one stands down.
     /// </summary>
     private async Task<AcpOutcome> TurnAsync(AcpTransport transport, AcpAsk ask, CancellationToken ct)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var session = new AcpSession(transport, boundary, deadline.Token);
+        var handedOver = false;
+        try
+        {
+            // Two sources, the timer FIRST and the link second (plan §5.2): the `using`s dispose the link before the timer, so a timer that
+            // fires between the two disposals meets a disposed link rather than a live link holding a disposed timer. The timer is armed here, a few
+            // microseconds before the session exists; the tests claim only that the TIMER decides the turn's end. `ct.IsCancellationRequested` still
+            // tells the caller's cancellation (`Failed`) from this deadline's.
+            using var turnTimer = new CancellationTokenSource(ask.Deadline, _clock);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, turnTimer.Token);
+            handedOver = true;
+
+            return await ConverseUntilAsync(transport, ask, ct, deadline.Token);
+        }
+        finally
+        {
+            if (!handedOver)
+            {
+                await transport.EndAsync(() => Task.CompletedTask);
+            }
+        }
+    }
+
+    /// <summary>The conversation under an armed deadline: the session, the pump, the requests, and the one <c>finally</c> that ends the agent and settles the pump.</summary>
+    private async Task<AcpOutcome> ConverseUntilAsync(AcpTransport transport, AcpAsk ask, CancellationToken ct, CancellationToken deadline)
+    {
+        var session = new AcpSession(transport, boundary, deadline);
         Ended ended;
         try
         {
-            deadline.CancelAfter(ask.Deadline);
             session.Pump();
             ended = await ConverseAsync(session, ask);
         }
-        catch (Exception e) when (e is AcpAgentException or AcpProtocolException or OperationCanceledException)
+        catch (Exception e) when (e is AcpAgentException or AcpProtocolException or AcpSessionLostException or OperationCanceledException)
         {
             ended = Ended.Of(Failed(e, ct.IsCancellationRequested, ask.Deadline));
         }
@@ -110,17 +159,33 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         }
 
         return new AcpOutcome(
-            ended.End, Cut(session.Answer, ended.AnswerChars), ended.Reason, ended.Stop, session.SessionId, session.Usage, session.Refusals, session.ToolCalls, session.Reads,
+            ended.End, Cut(session.Answer, ended.AnswerChars), ended.Reason, ended.Stop, Named(session, ask), session.Usage, session.Refusals, session.ToolCalls, session.Reads,
             transport.StdErr, transport.Pid, session.DroppedTraceEntries, session.TruncatedTraceFields)
         {
             Tokens = ended.Tokens,
+            Survivors = transport.Survivors,
+            StdErrTruncated = transport.StdErrTruncated,
         };
     }
 
-    /// <summary><c>initialize</c>, <c>session/new</c>, the model found among what the session announced (D10) — and only then the prompt.</summary>
+    /// <summary>The session the report names: the one the agent minted or loaded — else, for a turn that ended before it, the one <c>--session</c> asked for.</summary>
+    private static string Named(AcpSession session, AcpAsk ask) => session.SessionId.Length > 0 ? session.SessionId : ask.Session;
+
+    /// <summary><c>initialize</c>, the session opened (new, or loaded for <c>--session</c>), the model found among what it announced (D10) — and only then the prompt.</summary>
     private async Task<Ended> ConverseAsync(AcpSession session, AcpAsk ask)
     {
         await session.CallAsync("initialize", AcpMessages.Initialize());
+        var announced = await OpenedAsync(session, ask);
+
+        return NotOffered(announced, ask) is { Length: > 0 } why ? Ended.Of((AcpEnd.ModelNotOffered, why)) : await PromptedAsync(session, ask);
+    }
+
+    /// <summary>The session's own announcement: a new one's (<c>session/new</c>), or — with <see cref="AcpAsk.Session"/> — a loaded one's, whose result announces the model as a new one's does (M-K16, RESULTS §33).</summary>
+    private static Task<JsonElement> OpenedAsync(AcpSession session, AcpAsk ask) =>
+        ask.Session.Length == 0 ? CreatedAsync(session, ask) : LoadedAsync(session, ask);
+
+    private static async Task<JsonElement> CreatedAsync(AcpSession session, AcpAsk ask)
+    {
         var created = await session.CallAsync("session/new", AcpMessages.NewSession(ask.Cwd));
         session.SessionId = AcpMessages.Text(created, "sessionId");
         if (session.SessionId.Length == 0)
@@ -130,8 +195,44 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
             throw new AcpProtocolException("session/new answered with no sessionId — nothing to configure or prompt");
         }
 
-        return NotOffered(created, ask) is { Length: > 0 } why ? Ended.Of((AcpEnd.ModelNotOffered, why)) : await PromptedAsync(session, ask);
+        return created;
     }
+
+    /// <summary>
+    /// <c>session/load</c> of the session an earlier turn's report named, on the SAME working folder (a loaded session resolves paths against the
+    /// folder it was made in, M-K5). The id is the asked one — the result need not repeat it. The history Kimi replays before it answers the load
+    /// is never the answer (<see cref="AcpSession.ReplayedAsync"/>). Any error the agent answers the load with is
+    /// <see cref="AcpEnd.SessionLost"/>: the agent no longer holds the session, whatever its code (a bad <c>cwd</c> is the same <c>-32602</c>,
+    /// RESULTS §33) — unless a known failure names it, which the shim decides (E5.2 decision 4).
+    /// </summary>
+    private static async Task<JsonElement> LoadedAsync(AcpSession session, AcpAsk ask)
+    {
+        session.SessionId = ask.Session;
+        try
+        {
+            return await session.ReplayedAsync("session/load", AcpMessages.LoadSession(ask.Session, ask.Cwd));
+        }
+        catch (AcpAgentException refused)
+        {
+            throw new AcpSessionLostException(LostReason(ask.Session, refused));
+        }
+    }
+
+    /// <summary>
+    /// The sentence for a refused load: <see cref="LostLead"/> (the id in coai's own words), then the agent's code and message — with Kimi's own echo of the
+    /// id (<c>Unknown sessionId: &lt;id&gt;</c>, RESULTS §33) written <c>&lt;id&gt;</c>. Only that phrase is rewritten: a short id written over every one of its
+    /// occurrences would garble the agent's words (an id <c>a</c> turned <c>Authentication</c> into <c>Authentic&lt;id&gt;tion</c>, E5.2 review).
+    /// </summary>
+    private static string LostReason(string session, AcpAgentException refused) =>
+        $"{LostLead(session)}it answered session/load with an error ({refused.Code}): {refused.Message.Replace(KimisEcho + session, KimisEcho + "<id>", StringComparison.Ordinal)}";
+
+    private const string KimisEcho = "Unknown sessionId: ";
+
+    /// <summary>
+    /// The start of a <see cref="AcpEnd.SessionLost"/> reason — coai's words, naming the id. The shim leaves it out of the text a known failure is looked for
+    /// in, so an id cannot spell a failure (<c>AskAcpMode.Diagnosable</c>).
+    /// </summary>
+    public static string LostLead(string session) => $"the agent no longer holds session {session} — ";
 
     /// <summary>
     /// Why the asked model cannot be set — the session does not offer it, or offers no such option at all — or empty. Found out in the
@@ -170,7 +271,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         var kept = answered with { AnswerChars = mark };
         try
         {
-            await session.CallAsync("session/prompt", AcpMessages.Prompt(session.SessionId, UsagePrompt)).WaitAsync(usageBound);
+            await session.CallAsync("session/prompt", AcpMessages.Prompt(session.SessionId, UsagePrompt)).WaitAsync(usageBound, _clock);
 
             return kept with { Tokens = AcpUsageLine.Parse(After(session.Answer, mark)) };
         }
@@ -204,6 +305,12 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
     /// Waits for the pump to end, for as long as the drain grace allows: the agent's tree is dead, so its output
     /// ends now — unless something that survived holds the pipe, which is the case the grace bounds.
     /// </summary>
+    /// <remarks>
+    /// <b>On the SYSTEM clock, on purpose</b> (E4 plan §5.1, teardown): this bounds how long a REAL pipe may still deliver bytes after the tree was
+    /// killed. It decides nothing a test races — the deadline has already fired or the answer is in — and on a manual clock that nobody advances it
+    /// would turn a two-second bound on a real pipe into a hang. The same holds for the graces under <see cref="AcpTransport.EndAsync"/> and
+    /// <see cref="AcpSession"/>.
+    /// </remarks>
     private static async Task SettledAsync(Task reading)
     {
         try
@@ -220,6 +327,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
     /// <param name="cancelledByCaller">Whether the caller's own token fired; otherwise a cancellation is the deadline.</param>
     private static (AcpEnd End, string Reason) Failed(Exception e, bool cancelledByCaller, TimeSpan deadline) => e switch
     {
+        AcpSessionLostException lost => (AcpEnd.SessionLost, lost.Message),
         AcpAgentException agent => (AcpEnd.AgentFailed, $"the agent answered with an error ({agent.Code}): {agent.Message}"),
         AcpProtocolException protocol => (AcpEnd.Protocol, protocol.Message),
         _ => Cancelled(cancelledByCaller, deadline),

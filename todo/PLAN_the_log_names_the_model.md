@@ -30,7 +30,7 @@ ran FIRST and is finished; what is left here is disjoint from it.
 | `ReviewStatusDto` gains a `Model` — what a Team server ACTUALLY ran | **this plan, step 2** | the repair plan records what was ASKED for and says so |
 | The round overwriting its guess with the server's answer | **this plan, step 3** | it writes into the `ReviewerState.Model` the repair plan filled |
 | The ledger moving off the CONFIGURED model | **this plan, step 3** | untouched by the repair plan |
-| Effort and tier with their SOURCE (`row` / `cli-config` / `vendor-default`) on every ledger line | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), story 3.4 | this plan's step 3 owns the ledger's `model` field; that plan does not touch it |
+| Effort and tier with their SOURCE on every ledger line — the shipped source words are `row`, `server`, `cli-config`, `ignored` and `dropped` (the last two are the NOT-SENT words, carried as `effortNotSent` / `tierNotSent`), and an empty source means nothing was sent and nothing known names a value; there is no `vendor-default` word | [PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md), story 3.4 | this plan's step 3 owns the ledger's `model` field; that plan does not touch it |
 
 ## The symptom
 

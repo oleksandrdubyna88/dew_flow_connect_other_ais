@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A round has an identity across the wire, and every launch of it says what it is and how long its caller can still
-/// wait — story 4.1 of <c>todo/PLAN_every_round_is_counted.md</c>, the client half.
+/// wait — story 4.1 of <c>research/PLAN_every_round_is_counted.md</c>, the client half.
 /// </summary>
 /// <remarks>
 /// <para><b>What was wrong.</b> One <c>POST /api/reviews</c> was one role for one vendor and carried nothing that tied

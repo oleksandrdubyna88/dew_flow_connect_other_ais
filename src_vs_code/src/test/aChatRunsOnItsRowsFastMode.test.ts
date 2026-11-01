@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { chatFastSettingsFile } from '../chatFastSettings';
 import { CLAUDE_ARGS, claudeAdapter } from '../claudeAdapter';
@@ -66,10 +66,15 @@ test("the chat's own file is never in the chat's empty folder — a private fold
   // The code round: the chat's text-mode folder is "a directory with nothing in it", and a fixed shared temp path is one
   // another local user could plant first.
   const path = chatFastSettingsFile(true);
-
-  assert.match(path, /coai-chat-fast-[^/\\]+[/\\]fast-on\.json$/u);
-  assert.equal(readFileSync(path, 'utf8'), '{"fastMode":true}');
-  assert.equal(chatFastSettingsFile(true), path, 'one folder for the life of the extension');
+  try {
+    assert.match(path, /coai-chat-fast-[^/\\]+[/\\]fast-on\.json$/u);
+    assert.equal(readFileSync(path, 'utf8'), '{"fastMode":true}');
+    assert.equal(chatFastSettingsFile(true), path, 'one folder for the life of the extension');
+  } finally {
+    // The product makes one folder per process, by design, and a test process never ends a session: this test removes what it made.
+    // replace() in chatFastSettings.ts recreates it on the next call, so a later test that needs it is not affected.
+    rmSync(dirname(path), { recursive: true, force: true });
+  }
 });
 
 test('through cmd.exe a settings path with a space reaches claude whole; elsewhere it is passed as it is', () => {

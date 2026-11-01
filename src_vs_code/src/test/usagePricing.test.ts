@@ -7,7 +7,7 @@ import { parseUsage, totalsByVendor, UsageEntry } from '../usage';
 import { Vendor } from '../vendors';
 
 /**
- * The spending tab prices each ledger LINE (story 2.5 of todo/PLAN_every_round_is_counted.md): by the model that
+ * The spending tab prices each ledger LINE (story 2.5 of research/PLAN_every_round_is_counted.md): by the model that
  * answered it, its cached input at the cached rate, a long-context tier per request, a reported cost never re-estimated,
  * and a total that could not price every line marked as a floor. The arithmetic is `TokenPrice.CostOf`'s
  * (`src_mcp/core/Findings/TokenPrice.cs`) — one rule on both halves.
@@ -46,7 +46,7 @@ test('TheParser_KeepsCachedReasoningAndKind — a new line keeps its cached, rea
 });
 
 test('TheParser_KeepsTheTurnAndTheAttempt — a launch line keeps the turn it shares and what it was; an old line has neither', () => {
-  // Story 3.3 of todo/PLAN_every_round_is_counted.md: one ledger line per paid launch, tied to its turn — read, not dropped.
+  // Story 3.3 of research/PLAN_every_round_is_counted.md: one ledger line per paid launch, tied to its turn — read, not dropped.
   const [repair, old] = parseUsage([
     '{"utc":"2026-10-10T10:00:00Z","provider":"gemini","model":"gemini-3.7-flash-low","tokensIn":200,"tokensOut":7,'
     + '"kind":"review","outcome":"ok","turn":"3f9a0c1b2d4e","attempt":"repair"}',
@@ -60,7 +60,7 @@ test('TheParser_KeepsTheTurnAndTheAttempt — a launch line keeps the turn it sh
 });
 
 test('TheParser_KeepsTheEndCause — a cancelled Team-server line keeps why it was cancelled; an old line and any other ending have none', () => {
-  // Story 3.2 of todo/PLAN_every_round_is_counted.md: the store that fired the token writes the cause, the outcome stays
+  // Story 3.2 of research/PLAN_every_round_is_counted.md: the store that fired the token writes the cause, the outcome stays
   // `Cancelled`, and this side reads the column rather than dropping it — so a withdrawal can be told from the backstop.
   const [withdrawn, deadline, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":0,"tokensOut":0,"outcome":"Cancelled",'
@@ -76,7 +76,7 @@ test('TheParser_KeepsTheEndCause — a cancelled Team-server line keeps why it w
 });
 
 test('TheParser_KeepsTheRoundAndTheClientAttempt — a Team-server line keeps the round its request carried and the client\'s word beside the server\'s; an old line has neither', () => {
-  // Story 4.2 of todo/PLAN_every_round_is_counted.md: the server writes the client's round id and its own word for the
+  // Story 4.2 of research/PLAN_every_round_is_counted.md: the server writes the client's round id and its own word for the
   // request (`clientAttempt`) on every line of the job, beside — never over — its own `attempt`.
   const [server, noRound, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":3,"tokensOut":1,"outcome":"ok",'
@@ -94,8 +94,42 @@ test('TheParser_KeepsTheRoundAndTheClientAttempt — a Team-server line keeps th
   assert.equal(old?.clientAttempt, undefined);
 });
 
+test('ALocalReviewLine_KeepsItsRound_AndTheRoundDoesNotMoveATotal — two local launches of one round are two lines, one round each, summed once', () => {
+  // `coai-mcp`'s own ledger line since the fix of `fix/local-ledger-line-carries-round`: the shape `UsageLedger.Record` writes — no
+  // email, job or slot, `attempt` the client's word, `round` the engine's key. The reader is source-agnostic, so a local line
+  // reads as a server line does; this pins that and that carrying a round changes no count or total (no double count).
+  const roundKey = '0123456789abcdef0123456789abcdef';
+  const local = (utc: string, attempt: string, tokensIn: number): string => '{"utc":"' + utc + '","provider":"codex","model":"gpt-6-luna",'
+    + '"role":"Architecture","stage":"CodeReview","seconds":4,"tokensIn":' + tokensIn + ',"tokensOut":10,"costUsd":null,"outcome":"ok",'
+    + '"email":"","kind":"","turn":"abcdef012345","attempt":"' + attempt + '","cli":"codex","job":"","slot":"","round":"' + roundKey
+    + '","clientAttempt":""}';
+  const entries = parseUsage([local('2026-10-19T10:00:00Z', 'first', 100), local('2026-10-19T10:00:05Z', 'repair', 50)].join('\n'));
+
+  assert.deepEqual(entries.map((line) => line.round), [roundKey, roundKey], 'a local line\'s round was dropped on the way in');
+  assert.deepEqual(entries.map((line) => line.attempt), ['first', 'repair'], 'the client\'s word for the launch keeps its meaning');
+  assert.equal(entries.every((line) => line.clientAttempt === undefined && line.job === undefined), true, 'a local line is still local');
+
+  const [row] = totalsByVendor(entries);
+  assert.equal(row?.runs, 2, 'two lines are two runs — the round id groups nothing in this reader');
+  assert.equal(row?.tokensIn, 150, 'the tokens are summed once per line, never once per round');
+});
+
+test('ALocalLine_ReadsItsRound_AndAnEmptyRoundIsNoRound — a key is kept as written; "" is absent, never a phantom round to group by', () => {
+  // The local shape `UsageLedger.Record` writes (empty email/job/slot, the client's `attempt`) with a round, and the same shape
+  // outside a round, which the ledger writes as `"round":""`. A reader that kept "" would make every round-less line one round.
+  const roundKey = '0123456789abcdef0123456789abcdef';
+  const shape = (round: string): string => '{"utc":"2026-10-19T10:00:00Z","provider":"codex","model":"gpt-6-luna","role":"Architecture",'
+    + '"stage":"PlanReview","seconds":4,"tokensIn":100,"tokensOut":10,"costUsd":null,"outcome":"ok","email":"","kind":"",'
+    + '"turn":"abcdef012345","attempt":"first","job":"","slot":"","round":"' + round + '","clientAttempt":""}';
+  const [inside, outside] = parseUsage([shape(roundKey), shape('')].join('\n'));
+
+  assert.equal(inside?.round, roundKey, 'a local line\'s round must parse to exactly the key written');
+  assert.equal(outside?.round, undefined, 'an empty round must be absent — an empty-string key would group as one phantom round');
+  assert.equal('round' in (outside ?? {}), false, 'the property itself is absent, not present and undefined');
+});
+
 test('TheParser_KeepsWhatTheLaunchRanWith —a line keeps its CLI, version, effort and tier with their sources, job and slot; an old line has none', () => {
-  // Story 3.4 of todo/PLAN_every_round_is_counted.md — AnOldLedgerLine_StillReads, the extension's half: read, not dropped.
+  // Story 3.4 of research/PLAN_every_round_is_counted.md — AnOldLedgerLine_StillReads, the extension's half: read, not dropped.
   const [server, local, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'
     + '"cli":"codex","cliVersion":"codex-cli 0.160.0","effort":"low","effortFrom":"cli-config","tier":"default","tierFrom":"server",'
@@ -120,7 +154,7 @@ test('TheParser_KeepsWhatTheLaunchRanWith —a line keeps its CLI, version, effo
 });
 
 test('TheParser_KeepsTheGaugeReading — a Team-server line keeps the gauge read after its launch; an absent window is absent, never 0; an old line has none', () => {
-  // Story 6.1a of todo/PLAN_every_round_is_counted.md — the extension's half of the gauge fields, read not dropped; since
+  // Story 6.1a of research/PLAN_every_round_is_counted.md — the extension's half of the gauge fields, read not dropped; since
   // epic 6's code round the line carries EVERY window of EVERY limit as a list.
   const [read, oneWindow, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'
@@ -240,4 +274,25 @@ test('AnUnpricedLine_MakesTheTotalAFloor — a model no list prices, or a line w
   assert.equal(whole?.floor, false, 'a fully priced row is not a floor — the positive case the two above need');
   assert.equal(spend(whole!), '~$2.00');
   assert.equal(spend(nothing!), '—', 'nothing priced is a dash, never ≥ $0');
+});
+
+test('ConsultationIsRead_AndAnOldLineHasNone — E3.S4: the consult line keeps the consultation its turn belongs to', () => {
+  const [new1, empty, old] = parseUsage([
+    '{"utc":"2026-10-20T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok","kind":"consult","consultation":"c-0a1b2c"}',
+    '{"utc":"2026-10-20T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok","kind":"consult","consultation":""}',
+    '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1,"kind":"consult"}',
+  ].join('\n'));
+
+  assert.equal(new1?.consultation, 'c-0a1b2c', 'the consultation id was dropped on the way in');
+  assert.equal(empty?.consultation, undefined, 'an empty id is absent — an empty-string id would group every check as one phantom consultation');
+  assert.equal('consultation' in (old ?? {}), false, 'an old consult line has no consultation');
+});
+
+test('ALocalCauseWord_IsReadLikeAnyOther — E3.S2 guard: roundClock and unknown parse whole', () => {
+  const [clock, unknown] = parseUsage([
+    '{"utc":"2026-10-20T10:00:00Z","provider":"codex","tokensIn":1,"tokensOut":1,"outcome":"Cancelled","endCause":"roundClock"}',
+    '{"utc":"2026-10-20T10:00:00Z","provider":"codex","tokensIn":1,"tokensOut":1,"outcome":"Cancelled","endCause":"unknown"}',
+  ].join('\n'));
+
+  assert.deepEqual([clock?.endCause, unknown?.endCause], ['roundClock', 'unknown']);
 });

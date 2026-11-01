@@ -6,7 +6,7 @@ import { readRoundCounts } from '../roundCountsRead';
 import { ANSWER_JSON } from './roundCountsFixtures';
 
 /**
- * Reading `coai-mcp --round-counts` (story 2.2 of todo/PLAN_every_round_is_counted.md): an answer that parses is a
+ * Reading `coai-mcp --round-counts` (story 2.2 of research/PLAN_every_round_is_counted.md): an answer that parses is a
  * count, nought included; exit 64 (an older binary), 65, 74, a timeout (-1) and an answer this build cannot read are
  * `unavailable` with their reason — never a zero.
  */

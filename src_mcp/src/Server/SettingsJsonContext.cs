@@ -62,6 +62,16 @@ internal sealed record VendorDto(
     string? SystemPrompt = null,
     /// <summary>A CLI row's own reviewer timeout, in whole minutes (PLAN_one_model_catalog.md E2.2). Absent is the round's.</summary>
     int? TimeoutMinutes = null,
+    /// <summary>
+    /// The most this row's reviewer is sent in its FIRST prompt, in whole KiB (PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md
+    /// D1). Written by the operator after the row was seen to fail; the product ships none. Absent is no cap.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="System.Text.Json.JsonElement"/>, not an <c>int?</c>: a settings file is hand-edited, and a typed number field
+    /// makes the WHOLE vendor list unreadable the moment one row says <c>"180"</c> — the parser answers no vendors at all. Read as
+    /// a value, a cap that is not a whole number in range is no cap, and the row's neighbours survive.
+    /// </remarks>
+    System.Text.Json.JsonElement? MaxPromptKib = null,
     /// <summary>For an `api` row: ask for the answer as a stream (research/PLAN_api_streaming.md). Absent or false is today's call.</summary>
     bool? Stream = null,
     /// <summary>The row's fast mode (research/PLAN_fast_mode.md): `off`, `on` or `cli`. Absent is Off — the owner's default.</summary>

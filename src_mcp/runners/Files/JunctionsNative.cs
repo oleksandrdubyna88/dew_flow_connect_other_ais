@@ -36,7 +36,15 @@ internal sealed partial class JunctionsNative : IJunctionShell
         }
     }
 
-    public string SetReparsePoint(string link, string target)
+    /// <summary>The empty folder made at <paramref name="link"/> and turned into the mount point; a failure after the folder is made is answered, and <see cref="Junctions"/> takes the folder back out.</summary>
+    public string MakeLink(string link, string target)
+    {
+        Directory.CreateDirectory(link);
+
+        return SetReparsePoint(link, target);
+    }
+
+    private static string SetReparsePoint(string link, string target)
     {
         using var handle = HandleRead.CreateFileW(link, GenericWrite, 0, 0, OpenExisting, OpenTheLinkItself, 0);
         if (handle.IsInvalid)

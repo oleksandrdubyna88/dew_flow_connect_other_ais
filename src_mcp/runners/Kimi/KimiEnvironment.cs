@@ -31,15 +31,21 @@ public static class KimiEnvironment
 
     private const string D19 = "(D19)";
 
-    private static readonly string[] BuiltNames =
+    private const string CacheVariable = "XDG_CACHE_HOME";
+
+    /// <summary>The seven names a Windows launch is built from.</summary>
+    private static readonly string[] WindowsNames =
         [HomeVariable, NoUpdateVariable, ProfileVariable, HomeNameVariable, DriveVariable, PathVariable, SearchPath];
+
+    /// <summary>The five a Linux or WSL launch is built from (S-K8, DL11): <c>HOME</c> alone redirects the OS home, <c>XDG_CACHE_HOME</c> moves Kimi's native-file extraction out of it.</summary>
+    private static readonly string[] UnixNames = [HomeVariable, NoUpdateVariable, HomeNameVariable, CacheVariable, SearchPath];
 
     private static readonly char[] Separators = ['\\', '/'];
 
     /// <summary>
     /// <paramref name="request"/> in the BUILT environment (D19) — the one builder every Kimi child goes through, the version
     /// probe and the shim's own request alike, so the two cannot drift: nothing inherited but the minimal names, and exactly the
-    /// seven this adds.
+    /// names this adds — seven on Windows, five on Linux and WSL (<see cref="UnixNames"/>), by the machine's own operating system.
     /// </summary>
     /// <remarks>
     /// The parent's <c>PATH</c> is the request's own when it carries one, else this process's — the one environment value read
@@ -50,21 +56,48 @@ public static class KimiEnvironment
     public static ProcessRequest Built(ProcessRequest request, KimiPlaces places) => Built(request, places, ParentPath(request));
 
     /// <summary><see cref="Built(ProcessRequest, KimiPlaces)"/> over a parent <c>PATH</c> given — pure.</summary>
-    public static ProcessRequest Built(ProcessRequest request, KimiPlaces places, string parentPath) => request with
+    public static ProcessRequest Built(ProcessRequest request, KimiPlaces places, string parentPath) => Built(request, places, parentPath, OperatingSystem.IsWindows());
+
+    /// <summary>
+    /// The same for a stated platform — so the Windows shape and the Linux one are each a unit test on any machine. The launch is always built for the machine it runs on: a
+    /// caller outside a test uses the overloads above.
+    /// </summary>
+    public static ProcessRequest Built(ProcessRequest request, KimiPlaces places, string parentPath, bool windows) => request with
     {
         InheritsEnvironment = false,
         Passthrough = ProcessEnvironment.Minimal,
-        Environment = new Dictionary<string, string?>(ProcessEnvironment.NameComparer)
+        Environment = Variables(places, parentPath, windows),
+    };
+
+    private static Dictionary<string, string?> Variables(KimiPlaces places, string parentPath, bool windows)
+    {
+        var variables = new Dictionary<string, string?>(ProcessEnvironment.NameComparer)
         {
             [HomeVariable] = places.Home,
             [NoUpdateVariable] = NoUpdateOn,
-            [ProfileVariable] = places.Os,
             [HomeNameVariable] = places.Os,
-            [DriveVariable] = Drive(places.Os),
-            [PathVariable] = Rest(places.Os),
             [SearchPath] = BuiltPath([places.PersonsBin, .. places.ToolFolders], parentPath),
-        },
-    };
+        };
+
+        return windows ? WithWindowsNames(variables, places) : WithCache(variables, places);
+    }
+
+    private static Dictionary<string, string?> WithWindowsNames(Dictionary<string, string?> variables, KimiPlaces places)
+    {
+        variables[ProfileVariable] = places.Os;
+        variables[DriveVariable] = Drive(places.Os);
+        variables[PathVariable] = Rest(places.Os);
+
+        return variables;
+    }
+
+    /// <summary>DL11: Kimi extracts about 2 MB of native files on every launch into <c>$XDG_CACHE_HOME</c>, else <c>$HOME/.cache</c> — inside <c>os/</c>, which must stay empty. So the cache folder beside <c>os/</c> is named.</summary>
+    private static Dictionary<string, string?> WithCache(Dictionary<string, string?> variables, KimiPlaces places)
+    {
+        variables[CacheVariable] = places.Cache;
+
+        return variables;
+    }
 
     /// <summary>
     /// The prefix, then each entry of <paramref name="parent"/> (split on the platform's separator, empties dropped) not already
@@ -81,24 +114,41 @@ public static class KimiEnvironment
 
     /// <summary>
     /// D19: the launch is the built one. A path that built a Kimi launch any other way is refused here rather than started — the
-    /// FIRST of: the structure (nothing inherited, the minimal names, exactly the seven), then each value, then — when the argv
-    /// carries them — the two place flags. Each sentence names the value it found.
+    /// FIRST of: the structure (nothing inherited, the minimal names, exactly this platform's names), then each value, then — when the argv
+    /// carries them — the two place flags. Each sentence names the value it found. By the machine's own operating system.
     /// </summary>
-    public static string Refusal(ProcessRequest request, KimiPlaces places) =>
-        new Func<string>[]
-        {
-            () => Structure(request),
-            () => Same(request, HomeVariable, places.Home, "the owned home"),
-            () => Same(request, ProfileVariable, places.Os, "coai's own os/ folder (the OS-home redirect)"),
-            () => Same(request, HomeNameVariable, places.Os, "coai's own os/ folder (the OS-home redirect)"),
-            () => DrivePath(request, places),
-            () => Pinned(request),
-            () => PathBegins(request, places),
-            () => FlagIs(request, AcpWords.HomeFlag, places.OwnedRoot, "the owned root"),
-            () => FlagIs(request, AcpWords.PersonsBinFlag, places.PersonsBin, "the person's bin"),
-        }
-        .Select(check => check())
-        .FirstOrDefault(refusal => refusal.Length > 0) ?? string.Empty;
+    public static string Refusal(ProcessRequest request, KimiPlaces places) => Refusal(request, places, OperatingSystem.IsWindows());
+
+    /// <summary>The same for a stated platform (see <see cref="Built(ProcessRequest, KimiPlaces, string, bool)"/>): on Linux and WSL <c>HOME</c> alone is checked, and the cache.</summary>
+    public static string Refusal(ProcessRequest request, KimiPlaces places, bool windows) =>
+        Checks(request, places, windows)
+            .Select(check => check())
+            .FirstOrDefault(refusal => refusal.Length > 0) ?? string.Empty;
+
+    private static IEnumerable<Func<string>> Checks(ProcessRequest request, KimiPlaces places, bool windows) =>
+    [
+        () => Structure(request, windows),
+        () => Same(request, HomeVariable, places.Home, "the owned home"),
+        .. windows ? WindowsValues(request, places) : UnixValues(request, places),
+        () => Pinned(request),
+        () => PathBegins(request, places),
+        () => FlagIs(request, AcpWords.HomeFlag, places.OwnedRoot, "the owned root"),
+        () => FlagIs(request, AcpWords.PersonsBinFlag, places.PersonsBin, "the person's bin"),
+    ];
+
+    private static Func<string>[] WindowsValues(ProcessRequest request, KimiPlaces places) =>
+    [
+        () => Same(request, ProfileVariable, places.Os, "coai's own os/ folder (the OS-home redirect)"),
+        () => Same(request, HomeNameVariable, places.Os, "coai's own os/ folder (the OS-home redirect)"),
+        () => DrivePath(request, places),
+    ];
+
+    private static Func<string>[] UnixValues(ProcessRequest request, KimiPlaces places) =>
+    [
+        () => Same(request, HomeNameVariable, places.Os, "coai's own os/ folder (the OS-home redirect)"),
+        () => Same(request, CacheVariable, places.Cache, "coai's own cache/ folder (where Kimi's native files are extracted, DL11)"),
+    ];
+
 
     /// <summary>The value after <paramref name="flag"/> in the arguments, or empty when the flag is absent or last.</summary>
     public static string FlagOf(ProcessRequest request, string flag)
@@ -128,14 +178,22 @@ public static class KimiEnvironment
     private static bool Confined(ProcessRequest request) =>
         !request.InheritsEnvironment && request.Passthrough.SetEquals(ProcessEnvironment.Minimal);
 
-    /// <summary>Exactly the seven built names — no more, none outside them.</summary>
-    private static bool TheSeven(ProcessRequest request) =>
-        request.Environment.Count == BuiltNames.Length && request.Environment.Keys.All(name => BuiltNames.Contains(name, ProcessEnvironment.NameComparer));
+    /// <summary>Exactly this platform's built names — no more, none outside them.</summary>
+    private static bool TheBuiltNames(ProcessRequest request, bool windows)
+    {
+        var names = windows ? WindowsNames : UnixNames;
 
-    private static string Structure(ProcessRequest request) =>
-        Confined(request) && TheSeven(request)
+        return request.Environment.Count == names.Length && request.Environment.Keys.All(name => names.Contains(name, ProcessEnvironment.NameComparer));
+    }
+
+    private static string Structure(ProcessRequest request, bool windows) =>
+        Confined(request) && TheBuiltNames(request, windows)
             ? string.Empty
-            : $"this Kimi launch was not built with coai's own environment (the minimal set plus {HomeVariable}, {NoUpdateVariable}=1, the four OS-home names pointing into coai's own os/ folder, and a PATH beginning with your ~/.kimi-code/bin, nothing inherited) and is refused {D19}";
+            : $"this Kimi launch was not built with coai's own environment (the minimal set plus {HomeVariable}, {NoUpdateVariable}=1, {OsHomeWords(windows)}, and a PATH beginning with your ~/.kimi-code/bin, nothing inherited) and is refused {D19}";
+
+    private static string OsHomeWords(bool windows) => windows
+        ? "the four OS-home names pointing into coai's own os/ folder"
+        : $"HOME pointing into coai's own os/ folder and {CacheVariable} into its cache/ folder";
 
     private static string Same(ProcessRequest request, string name, string expected, string what) =>
         Junctions.SameFolder(Value(request, name), expected)

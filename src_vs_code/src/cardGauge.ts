@@ -6,7 +6,7 @@ import type { TeamServerState } from './teamServerView';
 import type { Vendor } from './vendors';
 
 /**
- * The vendor's own gauge on a model card (story 6.2 of todo/PLAN_every_round_is_counted.md) — pure, from what the panel
+ * The vendor's own gauge on a model card (story 6.2 of research/PLAN_every_round_is_counted.md) — pure, from what the panel
  * already holds: the Team servers' cached catalogs and the cached local round-count answer. Never a read per render.
  *
  * <p><b>Only an explicit match shows a server's observation.</b> Local capture (story 6.1b) is deferred, so this machine

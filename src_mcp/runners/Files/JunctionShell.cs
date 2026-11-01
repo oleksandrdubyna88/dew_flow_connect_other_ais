@@ -2,9 +2,9 @@ namespace CoaiMcp.Runners.Files;
 
 /// <summary>
 /// Everything <see cref="Junctions"/> needs from the operating system, and nothing else: bytes in, bytes out. The one real implementation is
-/// <c>JunctionsNative</c> (P/Invoke and handles, run only on Windows, where the <c>windows-latest</c> job runs <c>JunctionsTests</c> and the
-/// Kimi home suites); the Linux suite drives the same decisions — refusals, the length arithmetic, the read-back, the removal — through a
-/// shell that makes a symbolic link, so every sentence is tested on any OS. It decides NOTHING.
+/// <c>JunctionsNative</c> on Windows (P/Invoke and handles; the <c>windows-latest</c> job runs <c>JunctionsTests</c> and the Kimi home suites) and
+/// <c>JunctionsUnix</c> on Linux and WSL (a directory symbolic link); a test's, per async flow, names paths by their real spelling, so every
+/// decision — refusals, the length arithmetic, the read-back, the removal — runs on any OS. It decides NOTHING.
 /// </summary>
 internal interface IJunctionShell
 {
@@ -15,8 +15,9 @@ internal interface IJunctionShell
     DriveType DriveOf(string root);
 
     /// <summary>
-    /// Turns the EMPTY folder at <paramref name="link"/> into a link to <paramref name="target"/> (a full path, no trailing separator, whose
-    /// reparse buffer is known to fit); empty on success, otherwise the system's message.
+    /// Makes the link at <paramref name="link"/> — a path that does NOT exist yet — to <paramref name="target"/> (a full path, no trailing separator, whose
+    /// reparse buffer is known to fit); empty on success, otherwise the system's message. Atomic where the system allows it: never a delete-then-create window.
+    /// <b>The link's PARENT folder is created when it is missing</b> (both shells; <c>Junctions.Make</c> relies on it for a fresh owned home) — a caller never makes it, and a shell that did not would fail on the first launch of a new home.
     /// </summary>
-    string SetReparsePoint(string link, string target);
+    string MakeLink(string link, string target);
 }

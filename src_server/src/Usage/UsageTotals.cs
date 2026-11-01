@@ -74,7 +74,7 @@ public static class UsageWindow
         return (string.IsNullOrWhiteSpace(name) ? "today" : name).ToLowerInvariant() switch
         {
             "today" => new UsageRange(new DateTimeOffset(nowUtc.UtcDateTime.Date, TimeSpan.Zero), end),
-            // Trailing, as `week` is (story 5.1 of todo/PLAN_every_round_is_counted.md): a vendor's own five-hour window
+            // Trailing, as `week` is (story 5.1 of research/PLAN_every_round_is_counted.md): a vendor's own five-hour window
             // does not start at midnight, and the local counter's 5 h / 24 h are trailing too, so the two halves agree.
             "5h" => new UsageRange(end.AddHours(-5), end),
             "24h" => new UsageRange(end.AddHours(-24), end),
@@ -272,7 +272,7 @@ public static class UsageTotals
             sum.CostIsFloor,
             sum.UnpricedRuns,
             ByModel(lines),
-            // Story 5.1 of todo/PLAN_every_round_is_counted.md — the same lines, counted as rounds and requests.
+            // Story 5.1 of research/PLAN_every_round_is_counted.md — the same lines, counted as rounds and requests.
             rounds.Rounds,
             rounds.RunsWithoutRound,
             rounds.Retries,

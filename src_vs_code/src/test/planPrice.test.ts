@@ -5,7 +5,7 @@ import type { GaugeRatio } from '../gaugeWords';
 import { planPricesFrom, readPlanPrice, savePlanPrice, shareLine } from '../planPrice';
 
 /**
- * A subscription's share (story 6.2 of todo/PLAN_every_round_is_counted.md): a monthly plan price typed ONCE per vendor
+ * A subscription's share (story 6.2 of research/PLAN_every_round_is_counted.md): a monthly plan price typed ONCE per vendor
  * account — a finite number ≥ 0, anything else refused at the card with the reason and never saved, 0 meaning "no price"
  * — turns the weekly gauge into money: monthly price × weekly-% per round ÷ 100 ÷ weeks in the month. Shown only beside a
  * figure that is shown, labelled as a share, never summed with a list-price estimate.

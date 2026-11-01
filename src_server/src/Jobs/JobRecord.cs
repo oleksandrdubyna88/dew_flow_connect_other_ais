@@ -31,7 +31,7 @@ public enum FailureKind
 
     /// <summary>
     /// Ended at claim, before anything launched: the caller's stated budget could no longer hold a launch's start-up
-    /// (story 4.3 of todo/PLAN_every_round_is_counted.md). Its OWN name, on the wire as <c>no_budget</c>, so the client
+    /// (story 4.3 of research/PLAN_every_round_is_counted.md). Its OWN name, on the wire as <c>no_budget</c>, so the client
     /// reads it by name and never by sentence.
     /// </summary>
     NoBudget,
@@ -117,7 +117,7 @@ public sealed record JobRecord(
 
     /// <summary>
     /// The client's id for the round this review belongs to — <see cref="TakenRound.Round"/>, empty from an old client or
-    /// when it was dropped (story 4.2 of todo/PLAN_every_round_is_counted.md). Every ledger line of the job carries it.
+    /// when it was dropped (story 4.2 of research/PLAN_every_round_is_counted.md). Every ledger line of the job carries it.
     /// </summary>
     string Round = "",
 
@@ -131,14 +131,14 @@ public sealed record JobRecord(
 
     /// <summary>
     /// When the caller's stated budget ends, on THIS server's clock — <see cref="ClientBudget.DeadlineOf"/>, stamped by the
-    /// store at submit (story 4.3 of todo/PLAN_every_round_is_counted.md). Null for a request that stated none: an old
+    /// store at submit (story 4.3 of research/PLAN_every_round_is_counted.md). Null for a request that stated none: an old
     /// client, which the budget rule never refuses.
     /// </summary>
     DateTimeOffset? ClientDeadlineUtc = null)
 {
     /// <summary>
     /// What the vendor reported for this job — the whole usage, cached and reasoning included (story 3.1 of
-    /// todo/PLAN_every_round_is_counted.md). It replaced two longs, which is where the server ledger lost the rest.
+    /// research/PLAN_every_round_is_counted.md). It replaced two longs, which is where the server ledger lost the rest.
     /// </summary>
     public Usage Usage { get; init; } = Usage.None;
 
@@ -152,7 +152,7 @@ public sealed record JobRecord(
 
     /// <summary>
     /// WHY a <see cref="FailureKind.Cancelled"/> job was cancelled — one of <see cref="EndCauses"/> — and empty for
-    /// every other ending (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// every other ending (story 3.2 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     /// <remarks>
     /// Set AT the transition, by whoever fired the token: <c>JobStore.Cancel</c> says <c>withdrawn</c>,
@@ -247,7 +247,7 @@ public static class JobTransitions
     /// <summary>The job starts on a slot: the run clock begins HERE, not at submit.</summary>
     /// <remarks>
     /// The budget it runs with is its own, capped at what is left before its caller's deadline
-    /// (<see cref="ClientBudget.RunBudgetOf"/>, story 4.3 of todo/PLAN_every_round_is_counted.md): a vendor given
+    /// (<see cref="ClientBudget.RunBudgetOf"/>, story 4.3 of research/PLAN_every_round_is_counted.md): a vendor given
     /// ten minutes for a caller that leaves in one would spend nine on an answer nobody collects. The record keeps the
     /// capped number, so every sentence that names the budget — the timeout's, the backstop's — names the one that ran.
     /// </remarks>
@@ -268,7 +268,7 @@ public static class JobTransitions
     /// <summary>
     /// The job is ended at claim because its caller can no longer wait for a launch's start-up — nothing launched, so it
     /// carries no usage; its own <see cref="FailureKind.NoBudget"/>, and a reason naming the configured allowance
-    /// (story 4.3 of todo/PLAN_every_round_is_counted.md).
+    /// (story 4.3 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     public static JobRecord WithoutBudget(JobRecord job, TimeSpan minStart, DateTimeOffset nowUtc) =>
         Fail(job, FailureKind.NoBudget, ClientBudget.NoBudgetReason(job, nowUtc, minStart), nowUtc);
@@ -290,7 +290,7 @@ public static class JobTransitions
     /// What the attempt actually cost. A vendor that answered unusably, or exited non-zero, still BILLED for the call,
     /// and leaving it out writes a usage line saying the company spent nothing — which is precisely the vendor somebody
     /// would want to find in that report. (CodeRabbit, PR 93; widened to every failure and to the whole usage by story
-    /// 3.1 of todo/PLAN_every_round_is_counted.md.)
+    /// 3.1 of research/PLAN_every_round_is_counted.md.)
     /// </param>
     public static JobRecord Fail(JobRecord job, FailureKind kind, string reason, DateTimeOffset nowUtc, Usage usage) =>
         job with
@@ -304,7 +304,7 @@ public static class JobTransitions
 
     /// <summary>
     /// A job somebody's token killed, saying WHY as a word and not only as a sentence — the one transition that writes
-    /// <see cref="FailureKind.Cancelled"/> (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// <see cref="FailureKind.Cancelled"/> (story 3.2 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     /// <param name="cause">One of <see cref="EndCauses"/>: the store's word for the token it fired.</param>
     /// <param name="usage">
@@ -341,7 +341,7 @@ public static class JobTransitions
 
     /// <summary>
     /// The clock that ran out, as the cause the record keeps AND the sentence a person reads — decided once, so the
-    /// two cannot disagree (story 3.2 of todo/PLAN_every_round_is_counted.md). Abandonment first, as above.
+    /// two cannot disagree (story 3.2 of research/PLAN_every_round_is_counted.md). Abandonment first, as above.
     /// </summary>
     public static (string Cause, string Reason) Expiry(JobRecord job, DateTimeOffset nowUtc)
     {

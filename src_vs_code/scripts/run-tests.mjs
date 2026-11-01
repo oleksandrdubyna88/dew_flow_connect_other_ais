@@ -22,9 +22,10 @@
  * that reason. Per-file isolation costs a process start and removes the need for anybody to know
  * which file is the special one.</p>
  */
-import { readdirSync } from 'node:fs';
+import fs, { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { availableParallelism, tmpdir } from 'node:os';
+import { availableParallelism, hostname, tmpdir } from 'node:os';
+import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { readRule, sweep } from './sweepTemp.mjs';
 
@@ -109,13 +110,121 @@ function sweepFirst() {
   }
 }
 
-function main() {
-  sweepFirst();
+/** The family rule: `testsToDelete-` marks a folder only a test run makes, so a janitor may take it without asking whose it is. */
+const RUN_PREFIX = 'testsToDelete-coai-run-';
+
+/**
+ * The owner claim, `<host>@<os>:<pid>[:<startUnixSeconds>]` — the C# runner writes the same text (`RunTemp`/`OwnerClaim`), so one sweeper
+ * judges both. `os` is Node's own `process.platform` spelling; the start is given only where the OS tells it without spawning a process.
+ */
+export function claimText({ host, platform, pid, startSeconds }) {
+  const safeHost = host.replace(/[@:\s]/g, '-');
+  return startSeconds === undefined ? `${safeHost}@${platform}:${pid}` : `${safeHost}@${platform}:${pid}:${startSeconds}`;
+}
+
+/**
+ * This process's start as unix seconds, from the text of `/proc/self/stat` (field 22, in ticks of 1/100 s since boot — the command name
+ * may hold spaces and ")", so the fields are counted after the LAST ")") and of `/proc/stat` (`btime`). `undefined` when either does
+ * not parse: no start is better than a wrong one.
+ */
+export function linuxStartSeconds(statText, procStatText) {
+  const ticks = Number(statText.slice(statText.lastIndexOf(')') + 2).split(' ')[19]);
+  const boot = /^btime (\d+)$/m.exec(procStatText);
+  return Number.isFinite(ticks) && boot ? Number(boot[1]) + Math.floor(ticks / 100) : undefined;
+}
+
+function ownStartSeconds() {
+  if (process.platform !== 'linux') {
+    return undefined;
+  }
+  try {
+    return linuxStartSeconds(readFileSync('/proc/self/stat', 'utf8'), readFileSync('/proc/stat', 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Makes this invocation's own temp folder inside `realTmp`, with its owner claim beside it, and answers its path. One per call: two
+ * runners at once each get theirs, and never the C# run's.
+ *
+ * <p><b>Exclusive:</b> `mkdirSync` without `recursive` throws `EEXIST` on a name that exists, and a run that drew a taken name draws again (up to
+ * `tries` times) — it never shares a folder, and never claims one it did not make. After the last collision it throws, and `beginRun` then runs
+ * without a folder of its own (with a line saying so). `suffix` and `io` are seams for the test that forces a collision.</p>
+ */
+export function makeRunTemp(realTmp, { suffix = () => randomBytes(3).toString('hex'), tries = 5, io = fs } = {}) {
+  const folder = freeFolder(realTmp, suffix, tries, io);
+  try {
+    io.writeFileSync(`${folder}.owner`, claimText({ host: hostname(), platform: process.platform, pid: process.pid, startSeconds: ownStartSeconds() }));
+  } catch (error) {
+    console.log(`run-tests: the owner claim for ${folder} could not be written (${error.message}); a killed run's folder is then collected only by the family janitor's age rule, after one hour`);
+  }
+  return folder;
+}
+
+/** The first `tries` draws that `mkdirSync` can make; an existing name is skipped, any other failure is the caller's. */
+function freeFolder(realTmp, suffix, tries, io) {
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    const folder = join(realTmp, RUN_PREFIX + suffix());
+    try {
+      io.mkdirSync(folder);
+      return folder;
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        throw error;
+      }
+    }
+  }
+  throw new Error(`no free name for a run folder in ${realTmp} after ${tries} draws (EEXIST each time)`);
+}
+
+/**
+ * Removes the folder, then its claim — the claim ONLY when the folder is gone, so a folder that could not be removed (a file still held) keeps the
+ * claim that says whose it was. Idempotent, and it never throws: a leftover is reported and left to the family janitor.
+ */
+export function removeRunTemp(folder, io = fs) {
+  if (folder === '') {
+    return;
+  }
+  if (removed(folder, io)) {
+    removed(`${folder}.owner`, io);
+  }
+}
+
+/** One removal; answers whether it went, and says why when it did not. */
+function removed(target, io) {
+  try {
+    io.rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    return true;
+  } catch (error) {
+    console.log(`run-tests: ${target} could not be removed (${error.message}); the family janitor takes it later`);
+    return false;
+  }
+}
+
+/**
+ * Points this process's temp variables at a fresh run folder — ONCE, before the first child, so every `node --test` descendant inherits
+ * it (`spawnSync` copies `process.env`). `os.tmpdir()` reads TEMP/TMP on Windows and TMPDIR on Unix at call time, so all three are set.
+ * Answers the folder, or `''` when it could not be made (the run then behaves as it did before).
+ */
+function beginRun() {
+  try {
+    const folder = makeRunTemp(tmpdir());
+    process.env.TEMP = process.env.TMP = process.env.TMPDIR = folder;
+    return folder;
+  } catch (error) {
+    console.log(`run-tests: no folder of its own could be made (${error.message}); the tests share the machine's temp as before`);
+    return '';
+  }
+}
+
+/** Every batch, in order; the worst status wins. 1 when there is nothing compiled to run. */
+function runAll() {
   const { compiled, sources } = discover('.');
 
   if (compiled.length === 0) {
     console.error('no compiled test files in out/test — did the compile step run?');
-    process.exit(1);
+    return 1;
   }
 
   // Printed, because the count is the thing that silently fell. A suite that runs fewer files than
@@ -125,6 +234,19 @@ function main() {
   let status = 0;
   for (const batch of batches('.')) {
     status = run(batch) || status;
+  }
+  return status;
+}
+
+function main() {
+  sweepFirst();
+  const folder = beginRun();
+  let status = 1;
+  try {
+    status = runAll();
+  } finally {
+    // BEFORE process.exit, which ends the process without running anything after it — the trap leftovers-E5 recorded for run-host.mjs.
+    removeRunTemp(folder);
   }
   process.exit(status);
 }

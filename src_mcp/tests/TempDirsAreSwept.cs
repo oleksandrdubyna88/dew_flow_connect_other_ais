@@ -23,7 +23,15 @@ namespace CoaiMcp.Tests;
 /// <para>It runs ONCE per assembly, deletes only what this project named, only what is older than
 /// <see cref="Rule"/>'s window, and never the product's own working directories — so neither a
 /// directory another test run is using right now nor a live round's is touched.</para>
+/// <para>In the serial <c>fakecli-env</c> collection: <c>TheProductSweeps_AtMostOncePerWindow</c> calls <c>PanelService.ForgetTheLastSweep</c>, which resets a static of
+/// the PROCESS, and the next <c>BuildWork</c> anywhere then walks the real temp folder inside its round's deadline (C6 of
+/// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>). It is also an assembly fixture; the attribute changes nothing about that.</para>
+/// <para><b>It sweeps the MACHINE's temp folder, <see cref="RunTemp.Real"/> — not the run's.</b> Since E2 every run makes everything inside its own
+/// <c>testsToDelete-coai-run-&lt;6&gt;</c> folder, with the three temp variables pointed at it (<see cref="RunTemp"/>), so <c>Path.GetTempPath()</c> is the
+/// run's folder; the leftovers of EARLIER runs and of the product are in the real one. The run folder and its restore belong to
+/// <see cref="RunTempFixture"/>, which has no test methods — never to this class.</para>
 /// </remarks>
+[Collection("fakecli-env")]
 public sealed class TempDirsAreSwept
 {
     /// <summary>
@@ -55,9 +63,26 @@ public sealed class TempDirsAreSwept
     /// </remarks>
     internal static readonly SweepRule Rule = SweepRule.Shared();
 
-    public TempDirsAreSwept() =>
+    /// <summary>
+    /// The fake CLI's steering file a KILLED run left beside the binary is deleted at this run's start, once — never in the middle of it
+    /// (this class is also a test class, and its constructor runs again for every Fact). The file is read by the first vendor-shaped
+    /// launch of any later run of the same output folder, so a stale one would steer it (C1 of
+    /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>). A flag, not a <see cref="Lazy{T}"/>: a lazy value caches the exception
+    /// of its factory, and an exception here would then fail every test that builds this class instead of one. The delete is best-effort and
+    /// warns on stderr (<see cref="FakeCliSteering.DeleteALeftover"/>), so a leftover that cannot be removed does not stop the run.
+    /// </summary>
+    private static int _steeringLeftoverChecked;
+
+    public TempDirsAreSwept()
+    {
+        if (Interlocked.Exchange(ref _steeringLeftoverChecked, 1) == 0)
+        {
+            _ = FakeCliSteering.DeleteALeftover(Console.Error.WriteLine);
+        }
+
         PanelService.PruneOldScratchDirs(
-            Path.GetTempPath(), DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
+            RunTemp.Real, DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
+    }
 
     [Fact]
     public void TheSharedRuleIsTheOperatorsTenMinutes()

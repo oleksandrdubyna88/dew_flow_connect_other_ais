@@ -8,6 +8,10 @@
 > [PLAN_the_resolver_says_what_the_change_selects.md](../todo/PLAN_the_resolver_says_what_the_change_selects.md)
 > and blocked on dependency **E1** in `dew_flow_conventions`.
 >
+> **Budget note, 2026-10-16:** every "80 000" and "80 KB" in this plan is the budget of 2026-09-15, when it was
+> written and measured. The operator has since raised `RuleFiles.DefaultBudgetBytes` to **90 000**; the
+> re-measurement is the last section of [RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md).
+>
 > **Three deviations, each forced by something measured rather than argued.**
 > *(1)* Epic 3 was to delete the draw and leave a fixed order. The measurement taken first
 > ([RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md)) showed the tier fills the

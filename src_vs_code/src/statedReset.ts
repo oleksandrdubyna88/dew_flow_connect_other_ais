@@ -3,7 +3,7 @@ import type { RoundsSnapshot } from './roundCountsCache';
 import type { UsageEntry } from './usage';
 
 /**
- * A stated reset, as a person reads it (story 5.3b of todo/PLAN_every_round_is_counted.md):
+ * A stated reset, as a person reads it (story 5.3b of research/PLAN_every_round_is_counted.md):
  * `quota out — resets in 89 h (Wed 04:49)` beside a vendor row on the Spending tab's Rounds block and on its model card.
  *
  * <p>Pure, and NOT a parser of vendor sentences: `coai-mcp` reads the refusal with the one parser both halves use

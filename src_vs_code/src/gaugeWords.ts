@@ -2,7 +2,7 @@ import { clockOf } from './resetWords';
 import type { GaugeReading, GaugeWindow } from './teamServerApi';
 
 /**
- * The vendor's own gauge, as a person reads it (story 6.2 of todo/PLAN_every_round_is_counted.md):
+ * The vendor's own gauge, as a person reads it (story 6.2 of research/PLAN_every_round_is_counted.md):
  * `codex (weekly): 37 % used · resets Thu 07:00 · seen 12 min ago` per reported window, and the window's rounds per 1 %,
  * or why there is none. Pure — every sentence is a test.
  *
@@ -116,7 +116,7 @@ function reachedWords(reading: GaugeReading): string {
 /** Why a figure is not a number, in words — a code this build does not know is said as it came. */
 const REASON_WORDS: Readonly<Record<string, string>> = {
   'too-few-readings': 'fewer than two readings of this window on one account',
-  'percent-did-not-rise': 'the percentage did not rise between the last readings',
+  'percent-did-not-rise': 'the percentage has not risen yet',
   'window-reset': 'the window reset between the last readings',
   'stale-reading': 'a reading was older than the launch it followed',
   'missing-reading': 'a launch between the readings has no reading of its own',
@@ -124,6 +124,9 @@ const REASON_WORDS: Readonly<Record<string, string>> = {
   'no-rounds': 'no round ran between the readings',
   'local-capture-deferred': 'this machine does not read the gauge; a Team server does',
 };
+
+/** Every reason code the words above know — what the help's rounds article must name (`helpCoverage.test.ts`). */
+export const REASON_CODES: readonly string[] = Object.keys(REASON_WORDS);
 
 /** The consumers coai cannot count, in words. */
 const CONSUMER_WORDS: Readonly<Record<string, string>> = {

@@ -21,6 +21,7 @@ public sealed class SecretCheckTests
     [InlineData("```csharp\nvar x = Foo();\n```")]
     [InlineData("I tried `dotnet build` and then `git status`; the launcher at ./src/x.ts is wrong")]
     [InlineData("the endpoint is http://127.0.0.1:11434/v1 and COAI_DATA_DIR=D:/data")]
+    [InlineData("the org-settings-panel and the org-wide setting stay readable")]
     [InlineData("")]
     public void APathACodeFenceAConfigLine_AllPass_Unchanged(string context)
     {
@@ -37,12 +38,16 @@ public sealed class SecretCheckTests
     [InlineData("I call GET /x?api_key=abc123def456 and it works", "parameter")]
     [InlineData("the config has password: hunter22secret in it", "labelled")]
     [InlineData("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----", "private-key")]
+    // K6 of the code gate: the Moonshot account id is a personal identifier, so a consultant row on the internet refuses it like any other secret shape — pinned, not accidental.
+    [InlineData("my account is org-0a1b2c3d4e5f6a7b on the plan", "moonshot-id")]
+    [InlineData("the key id <ak-9z8y7x6w5v4u3t2s> was in the log", "moonshot-id")]
     public void ASecretShape_IsRefused_NamingItsClass_AndNeverQuotingIt(string context, string cls)
     {
         var refused = SecretCheck.Inspect(context).Should().BeOfType<SecretCheckResult.Refused>().Which;
 
         refused.Class.Should().Be(cls);
         refused.Cure.Should().Contain("placeholder", "the consultant rule's own cure: a placeholder, and say you did");
+        refused.Reason.Should().NotContain("org-0a1b2c3d4e5f6a7b").And.NotContain("ak-9z8y7x6w5v4u3t2s");
         foreach (var secret in (string[])["abcdefghijklmnopqrstuvwxyz0123456789", "sk-live-0123456789abcdefghijklmnop", "ghp_0123456789abcdefghijklmnopqrstuvwxyz", "hunter22secret", "abc123def456", "MIIEowIBAAKCAQEA"])
         {
             refused.Reason.Should().NotContain(secret, "a refusal is written down");

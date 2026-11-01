@@ -11,7 +11,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The local round counter (story 2.1 of <c>todo/PLAN_every_round_is_counted.md</c>): every round in
+/// The local round counter (story 2.1 of <c>research/PLAN_every_round_is_counted.md</c>): every round in
 /// the rounds database is counted ONCE, under its own stage, for every vendor row that ran in it, over
 /// three trailing windows — and nothing is written.
 /// </summary>
@@ -210,7 +210,7 @@ public sealed class RoundCountsTests : IDisposable
     }
 
     /// <summary>
-    /// Story 6.2 of todo/PLAN_every_round_is_counted.md: the local answer carries the gauge figure from the ONE derivation,
+    /// Story 6.2 of research/PLAN_every_round_is_counted.md: the local answer carries the gauge figure from the ONE derivation,
     /// and on this machine that is "not read here" — local capture (6.1b) is deferred — never an empty gauge read as 0 %.
     /// </summary>
     [Fact]

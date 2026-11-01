@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Diagnostics;
 using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Runners.Reviewers;
@@ -20,14 +19,20 @@ namespace CoaiMcp.Runners.Reviewers;
 /// every turn's usage kept on it, the earlier turns' findings discarded (a failed later turn is a failed
 /// reviewer — falling back to findings made while waiting for source could give a false proceed), and
 /// the slot released by the scheduler's <c>finally</c>.</para>
+/// <para><b>The clock.</b> The conversation's elapsed and each turn's elapsed are read from ONE <see cref="TimeProvider"/>
+/// (the scheduler's, which hands its own — a loop inside a scheduler on clock X is on clock X), so a test can move the
+/// time a turn "takes" without spending it. The per-turn TIMER is not here: it is the launcher's.</para>
 /// <para><b>Usage.</b> Every answered turn is added to <see cref="Earlier"/> BEFORE the next thing that
 /// can fail — the continuation's serving and the next launch — so a cancellation anywhere after it still
 /// carries the turn's cost out on the abandoned outcome.</para>
 /// </remarks>
 internal sealed class TurnLoop(
     Func<ReviewerWork, CancellationToken, Task<ReviewerOutcome>> runTurn,
-    Action<ReviewerProgress>? onProgress)
+    Action<ReviewerProgress>? onProgress,
+    TimeProvider? clock = null)
 {
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+
     private ImmutableList<TurnUsage> _earlier = [];
     private ImmutableList<string> _served = [];
 
@@ -42,11 +47,11 @@ internal sealed class TurnLoop(
         // whole-review limit for an api reviewer, `ReviewerWork.ConversationCap`) — the lesser of the two.
         var derived = first.Invocation.Request.Timeout * (1 + first.Continue.FollowUps);
         var cap = first.ConversationCap is { } own && own < derived ? own : derived;
-        var clock = Stopwatch.StartNew();
+        var started = _clock.GetTimestamp();
         var work = first;
         for (var turn = 1; ; turn++)
         {
-            var (outcome, elapsed) = await TurnAsync(work, clock, cap, ct);
+            var (outcome, elapsed) = await TurnAsync(work, started, cap, ct);
             outcome = SecurityAnswerLimit.Apply(work, outcome);
             if (outcome is not ReviewerOutcome.Ok answered)
             {
@@ -59,7 +64,7 @@ internal sealed class TurnLoop(
                 return Terminal(answered with { InputCoverage = InputCoverage.Of(work, answered) }, turn);
             }
 
-            // A later turn belongs to the round its first turn did (story 4.1 of todo/PLAN_every_round_is_counted.md):
+            // A later turn belongs to the round its first turn did (story 4.1 of research/PLAN_every_round_is_counted.md):
             // the stage builds it fresh, from the roster's settings, and the round's key is the engine's to stamp.
             work = InRound(next.Work, first.Invocation.Round);
             _served = _served.Add(next.Note);
@@ -69,19 +74,19 @@ internal sealed class TurnLoop(
 
     /// <summary>One turn under its own deadline and what is left of the cap; TimedOut when nothing is left.</summary>
     private async Task<(ReviewerOutcome Outcome, TimeSpan Elapsed)> TurnAsync(
-        ReviewerWork work, Stopwatch clock, TimeSpan cap, CancellationToken ct)
+        ReviewerWork work, long started, TimeSpan cap, CancellationToken ct)
     {
-        var left = cap - clock.Elapsed;
+        var left = cap - _clock.GetElapsedTime(started);
         if (left <= TimeSpan.Zero)
         {
             // Never launched, so it consumed nothing — the one TimedOut whose usage is known to be zero.
             return (new ReviewerOutcome.TimedOut { Usage = Usage.None }, TimeSpan.Zero);
         }
 
-        var started = clock.Elapsed;
+        var turnStart = _clock.GetTimestamp();
         var outcome = await runTurn(Within(work, left), ct);
 
-        return (outcome, clock.Elapsed - started);
+        return (outcome, _clock.GetElapsedTime(turnStart));
     }
 
     /// <summary>
@@ -99,7 +104,7 @@ internal sealed class TurnLoop(
     private async Task<TurnDecision> AfterAsync(
         ReviewerWork work, int turn, ReviewerOutcome.Ok answered, TimeSpan elapsed, CancellationToken ct)
     {
-        // Its launches with it — the ledger writes each as its own line (story 3.3 of todo/PLAN_every_round_is_counted.md).
+        // Its launches with it — the ledger writes each as its own line (story 3.3 of research/PLAN_every_round_is_counted.md).
         _earlier = _earlier.Add(new TurnUsage(turn, answered.LastTurnUsage, elapsed) { Launches = answered.Launches });
         var decision = await work.Continue.AfterAsync(turn, answered, ct);
         if (decision is TurnDecision.Stop)

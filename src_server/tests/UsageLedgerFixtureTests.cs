@@ -10,7 +10,7 @@ namespace CoaiServer.Tests;
 
 /// <summary>
 /// The ledger lines the deployed Team server actually WRITES — three of them, copied from its live
-/// <c>usage.jsonl</c> on 2026-10-10 and redacted (story 1.2 of <c>todo/PLAN_every_round_is_counted.md</c>).
+/// <c>usage.jsonl</c> on 2026-10-10 and redacted (story 1.2 of <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para>One <c>ok</c>, one withdrawal the server wrote as <c>TimedOut</c> with zero tokens (8.4 s — the client
@@ -138,7 +138,7 @@ public sealed partial class UsageLedgerFixtureTests
     [Fact]
     public async Task TheDeployedWithdrawal_WasWrittenTimedOut_AndThisServerWritesItWithdrawn()
     {
-        // Changed with story 3.2 of todo/PLAN_every_round_is_counted.md, on purpose. Until then this test was named
+        // Changed with story 3.2 of research/PLAN_every_round_is_counted.md, on purpose. Until then this test was named
         // `TheWithdrawal_IsWrittenTimedOutWithNothingCounted_WhichIsTheDefectE3Names` and asserted ONLY the deployed
         // shape: a launch the client withdrew after 8.4 s, filed as the vendor's own timeout with a free 0/0 instead of
         // "not captured". The deployed bytes are history and still say that; the same event through THIS server — the

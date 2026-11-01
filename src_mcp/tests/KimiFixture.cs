@@ -39,6 +39,16 @@ internal sealed class KimiFixture : IDisposable
         {
             File.WriteAllBytes(Path.Combine(Bin, tool), []);
         }
+        if (!OperatingSystem.IsWindows())
+        {
+            // A Linux or WSL person's bin: the installer's kimi and the two tools, executable (DL5 counts only an executable file).
+            foreach (var tool in (string[])["kimi", "rg", "fd"])
+            {
+                var path = Path.Combine(Bin, tool);
+                File.WriteAllBytes(path, []);
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
     }
 
     /// <summary>The folder every part of the fixture lives in.</summary>

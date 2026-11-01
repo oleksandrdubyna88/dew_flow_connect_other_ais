@@ -1,6 +1,7 @@
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
@@ -16,11 +17,14 @@ public sealed class TheLocalReviewerStandsDownTests
     private const string HeldOnTheCard = "--held-on-the-card";
     private const string Fails = "--fails";
 
+    /// <summary>A cloud row that answers ONE finding with exactly the title that follows — the plan-incomplete token.</summary>
+    private const string AnswersOnly = "--only-title:";
+
     private static ReviewerWork Local(string role, bool held = false) =>
         new(new ReviewerInvocation("local", role, new ProcessRequest("dotnet", [held ? HeldOnTheCard : "--quick"], "."), SharedResource: Engine));
 
-    private static ReviewerWork Cloud(string provider, string role, int remarks = 0, bool fails = false) =>
-        new(new ReviewerInvocation(provider, role, new ProcessRequest("dotnet", [fails ? Fails : $"--remarks={remarks}"], ".")));
+    private static ReviewerWork Cloud(string provider, string role, int remarks = 0, bool fails = false, string answersOnly = "") =>
+        new(new ReviewerInvocation(provider, role, new ProcessRequest("dotnet", [fails ? Fails : answersOnly.Length > 0 ? AnswersOnly + answersOnly : $"--remarks={remarks}"], ".")));
 
     /// <summary>The first local row runs on the card until released; the rest are queued behind it.</summary>
     private static ReviewerWork[] Round(params ReviewerWork[] cloud) =>
@@ -28,7 +32,7 @@ public sealed class TheLocalReviewerStandsDownTests
 
     /// <summary>Runs the round, releasing the held local row only once every cloud row has finished.</summary>
     private static async Task<IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)>> Run(
-        ReviewerWork[] work, bool switchedOn = true)
+        ReviewerWork[] work, bool switchedOn = true, Func<ReviewerOutcome, ReviewerOutcome>? settle = null)
     {
         var card = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cloudRows = work.Count(w => !w.Invocation.IsOnEngine);
@@ -45,7 +49,8 @@ public sealed class TheLocalReviewerStandsDownTests
                     card.TrySetResult();
                 }
             },
-            switchedOn ? StandDown.For(work) : null);
+            switchedOn ? StandDown.For(work) : null,
+            settle);
         if (cloudRows == 0)
         {
             card.TrySetResult();
@@ -67,6 +72,26 @@ public sealed class TheLocalReviewerStandsDownTests
         StoodDownRoles(results).Should().BeEquivalentTo([RoleCatalog.SecurityRole, RoleCatalog.UxDxRole]);
         results.OfType<(ReviewerInvocation, ReviewerOutcome)>().Select(r => r.Item2).OfType<ReviewerOutcome.StoodDown>()
             .Should().AllSatisfy(s => s.Reason.Should().Contain("1 remark"));
+    }
+
+    /// <summary>
+    /// Issue #485 meets D12 of the plan gate: a cloud reviewer that answered ONLY <c>PLAN_INCOMPLETE &lt;id&gt;</c> found one
+    /// finding — and used to count as one quiet remark, so with the switch on the local reviewer (the one reviewer that could
+    /// still read the plan) was never started. The count reads the settled outcome now: that reviewer FAILED.
+    /// </summary>
+    [Fact]
+    public async Task ACloudReviewerThatDidNotGetThePlan_IsNotAQuietCloud()
+    {
+        const string plan = "# PLAN — a thing\n\nthe very last line of the plan";
+        var title = PlanIncomplete.TitleOf(plan);
+
+        var results = await Run(
+            Round(Cloud("codex", RoleCatalog.ArchitectureRole, answersOnly: title)),
+            settle: outcome => PlanIncomplete.Settle(Stage.PlanReview, title, outcome));
+
+        StoodDownRoles(results).Should().BeEmpty("a cloud that never saw the plan is a failed row, not a quiet one — the local reviewer must start");
+        results.Single(r => r.Invocation.Provider == "codex").Outcome.Should().BeOfType<ReviewerOutcome.Unparseable>();
+        results.Where(r => r.Invocation.Provider == "local").Select(r => r.Outcome).Should().AllBeOfType<ReviewerOutcome.Ok>();
     }
 
     [Fact]
@@ -183,6 +208,11 @@ public sealed class TheLocalReviewerStandsDownTests
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
             var argument = request.Arguments[0];
+            if (argument.StartsWith(AnswersOnly, StringComparison.Ordinal))
+            {
+                return new ProcessResult(0, OneFinding(argument[AnswersOnly.Length..]), string.Empty, false);
+            }
+
             if (argument == HeldOnTheCard)
             {
                 await card.WaitAsync(ct);
@@ -193,10 +223,16 @@ public sealed class TheLocalReviewerStandsDownTests
                 : new ProcessResult(0, Answer(argument), string.Empty, false);
         }
 
+        private static string OneFinding(string title) =>
+            $$"""{"status":"FINDINGS","findings":[{{Finding(title)}}]}""";
+
+        private static string Finding(string title) =>
+            $$"""{"severity":"minor","category":"clarity","file":null,"line":null,"title":"{{title}}","why":"w","fix":"f","trigger":"input","mechanism":"missing check","consequence":"unintended output"}""";
+
         private static string Answer(string argument)
         {
             var remarks = argument.StartsWith("--remarks=", StringComparison.Ordinal) ? int.Parse(argument["--remarks=".Length..]) : 0;
-            var one = """{"severity":"minor","category":"clarity","file":null,"line":null,"title":"t","why":"w","fix":"f","trigger":"input","mechanism":"missing check","consequence":"unintended output"}""";
+            var one = Finding("t");
 
             return $$"""{"status":"{{(remarks == 0 ? "SECURE" : "FINDINGS")}}","findings":[{{string.Join(",", Enumerable.Repeat(one, remarks))}}]}""";
         }

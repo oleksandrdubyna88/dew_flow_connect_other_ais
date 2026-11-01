@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// <c>--round-counts</c>, run as the PROCESS the extension runs (story 2.1 of
-/// <c>todo/PLAN_every_round_is_counted.md</c>).
+/// <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para>`common/scenario-tests.md`: a new flow ships with its scenario. The extension spawns this binary,

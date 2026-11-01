@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using CoaiMcp.Core.Authors;
 
 namespace CoaiMcp.Store;
 
@@ -36,8 +38,7 @@ public static class AgentLog
     private const int MaxTextPerEntry = 600;
 
     /// <summary>Where the CLI keeps its transcripts, for this machine's user.</summary>
-    public static string DefaultProjectsDir =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "projects");
+    public static string DefaultProjectsDir => ClaudeHome.Default.ProjectsDir;
 
     /// <summary>
     /// Everything the agent did between two instants, as a compact JSON array.
@@ -78,7 +79,7 @@ public static class AgentLog
     private static Dictionary<string, List<Entry>> Read(string projectsDir, DateTime fromUtc, DateTime toUtc)
     {
         var byFile = new Dictionary<string, List<Entry>>();
-        var days = Days(fromUtc, toUtc);
+        var days = TranscriptLines.Days(fromUtc, toUtc);
         foreach (var file in Files(projectsDir, fromUtc))
         {
             var entries = ReadFile(file, fromUtc, toUtc, days).ToList();
@@ -92,26 +93,6 @@ public static class AgentLog
     }
 
     /// <summary>
-    /// The days the window touches, as the text an entry's timestamp starts with.
-    /// </summary>
-    /// <remarks>
-    /// A cheap gate in front of an expensive one: a transcript is tens of megabytes and the window
-    /// is usually one afternoon of it, so a line that does not even mention a day in range is
-    /// skipped by a substring scan rather than parsed as JSON. Empty for a window spanning more days
-    /// than are worth listing, and then every line is parsed as before.
-    /// </remarks>
-    internal static IReadOnlyList<string> Days(DateTime fromUtc, DateTime toUtc)
-    {
-        var span = toUtc.Date - fromUtc.Date;
-        if (span.TotalDays > 7)
-        {
-            return [];
-        }
-
-        return [.. Enumerable.Range(0, (int)span.TotalDays + 1).Select(n => fromUtc.Date.AddDays(n).ToString("yyyy-MM-dd"))];
-    }
-
-    /// <summary>
     /// The transcripts that could hold anything in the window.
     /// </summary>
     /// <remarks>
@@ -122,7 +103,7 @@ public static class AgentLog
     {
         foreach (var file in Directory.EnumerateFiles(projectsDir, "*.jsonl", SearchOption.AllDirectories))
         {
-            if (File.GetLastWriteTimeUtc(file) >= fromUtc)
+            if (TranscriptLines.WrittenSince(file, fromUtc))
             {
                 yield return file;
             }
@@ -131,9 +112,9 @@ public static class AgentLog
 
     private static IEnumerable<Entry> ReadFile(string file, DateTime fromUtc, DateTime toUtc, IReadOnlyList<string> days)
     {
-        foreach (var line in ReadLines(file))
+        foreach (var line in TranscriptLines.ReadShared(file))
         {
-            if (!Mentions(line, days))
+            if (!TranscriptLines.Mentions(line, days))
             {
                 continue;
             }
@@ -154,86 +135,29 @@ public static class AgentLog
         }
     }
 
-    private static bool Mentions(string line, IReadOnlyList<string> days)
-    {
-        if (days.Count == 0)
-        {
-            return true;
-        }
-
-        foreach (var day in days)
-        {
-            if (line.Contains(day, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// The file's lines, or none at all.
-    /// </summary>
-    /// <remarks>
-    /// The CLI is appending to its own transcript while this reads it, so the file is opened shared
-    /// and a failure to read is silence rather than an exception — this is a nicety attached to a
-    /// round, and it does not get to fail one.
-    /// </remarks>
-    private static IEnumerable<string> ReadLines(string file)
-    {
-        StreamReader reader;
-        try
-        {
-            reader = new StreamReader(new FileStream(
-                file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
-        }
-        catch (IOException)
-        {
-            yield break;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            yield break;
-        }
-
-        using (reader)
-        {
-            while (reader.ReadLine() is { } line)
-            {
-                yield return line;
-            }
-        }
-    }
-
     private static Entry? Parse(string line)
     {
-        try
+        // A half-written last line is the normal state of a live transcript: TryParse says so and it is skipped.
+        if (!TranscriptLines.TryParse(line, out var document))
         {
-            using var document = JsonDocument.Parse(line);
+            return null;
+        }
+
+        using (document)
+        {
             var root = document.RootElement;
-            if (!root.TryGetProperty("timestamp", out var stamp)
-                || !DateTime.TryParse(stamp.GetString(), null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var utc))
+            if (!DateTime.TryParse(JsonText.StringProperty(root, "timestamp"), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var utc))
             {
                 return null;
             }
 
             return new Entry(
                 utc,
-                Text(root, "type"),
-                Text(root, "cwd"),
+                JsonText.StringProperty(root, "type"),
+                JsonText.StringProperty(root, "cwd"),
                 Said(root));
         }
-        catch (JsonException)
-        {
-            return null; // a half-written last line, which is the normal state of a live transcript
-        }
     }
-
-    private static string Text(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString() ?? string.Empty
-            : string.Empty;
 
     /// <summary>
     /// What the entry actually said, whatever shape it said it in.
@@ -245,12 +169,9 @@ public static class AgentLog
     /// </remarks>
     private static string Said(JsonElement root)
     {
-        if (!root.TryGetProperty("message", out var message)
-            || !message.TryGetProperty("content", out var content))
-        {
-            return string.Empty;
-        }
-
+        // Child answers "nothing" for a non-object root, a missing property and a non-object message, so a line that is
+        // valid JSON in the wrong shape says nothing instead of throwing out of the slice.
+        var content = JsonText.Child(JsonText.Child(root, "message"), "content");
         if (content.ValueKind == JsonValueKind.String)
         {
             return Cut(content.GetString() ?? string.Empty);
@@ -272,12 +193,12 @@ public static class AgentLog
 
     private static void Append(StringBuilder said, JsonElement block)
     {
-        var kind = Text(block, "type");
+        var kind = JsonText.StringProperty(block, "type");
         var piece = kind switch
         {
-            "text" => Text(block, "text"),
-            "thinking" => Text(block, "thinking"),
-            "tool_use" => "[" + Text(block, "name") + "]",
+            "text" => JsonText.StringProperty(block, "text"),
+            "thinking" => JsonText.StringProperty(block, "thinking"),
+            "tool_use" => "[" + JsonText.StringProperty(block, "name") + "]",
             _ => string.Empty,
         };
         if (piece.Length > 0)
@@ -301,20 +222,7 @@ public static class AgentLog
     /// repository, and the first version answered no and fell back to every project on the machine.
     /// The separator is part of the test, so <c>/repo-two</c> is not inside <c>/repo</c>.
     /// </remarks>
-    private static bool InRepo(string cwd, string repoPath)
-    {
-        if (cwd.Length == 0 || repoPath.Length == 0)
-        {
-            return false;
-        }
-
-        var (where, repo) = (Normalise(cwd), Normalise(repoPath));
-
-        return where.Equals(repo, StringComparison.OrdinalIgnoreCase)
-            || where.StartsWith(repo + "/", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string Normalise(string path) => path.Replace('\\', '/').TrimEnd('/');
+    private static bool InRepo(string cwd, string repoPath) => Repositories.Contains(repoPath, cwd);
 
     /// <summary>The slice as JSON, capped, saying what it had to leave out.</summary>
     private static string Render(IReadOnlyList<Entry> entries)

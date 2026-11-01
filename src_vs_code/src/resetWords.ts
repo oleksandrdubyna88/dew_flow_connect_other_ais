@@ -1,5 +1,5 @@
 /**
- * The one wording of a stated reset (story 5.3b of todo/PLAN_every_round_is_counted.md): `89 h (Wed 04:49)`.
+ * The one wording of a stated reset (story 5.3b of research/PLAN_every_round_is_counted.md): `89 h (Wed 04:49)`.
  *
  * <p>A LEAF — it imports nothing — because two very different modules say it: `statedReset.ts` (this side's ledger,
  * which reaches `usage.ts` and the round-count cache) and `teamServerView.ts` (the Team server's catalog). Kept inside
@@ -28,7 +28,7 @@ function spanOf(ms: number): string {
 
 /**
  * `Wed 04:49` — the day and the 24-hour time, in the viewer's zone unless one is named. Exported for the vendor gauge's
- * `resets Thu 07:00` (story 6.2 of todo/PLAN_every_round_is_counted.md), so the two say an instant one way.
+ * `resets Thu 07:00` (story 6.2 of research/PLAN_every_round_is_counted.md), so the two say an instant one way.
  */
 export function clockOf(ms: number, timeZone: string | undefined): string {
   const zone = timeZone === undefined ? {} : { timeZone };

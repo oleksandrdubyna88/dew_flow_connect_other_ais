@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// How a job ended is said, not guessed — story 3.2 of <c>todo/PLAN_every_round_is_counted.md</c>, the Team server's
+/// How a job ended is said, not guessed — story 3.2 of <c>research/PLAN_every_round_is_counted.md</c>, the Team server's
 /// half: a launch the caller's token killed is <c>Cancelled</c> with its usage not captured, never the vendor's timeout;
 /// WHY it was killed is set by the store AT the transition and read by the ledger from the record the store KEPT; and
 /// both shapes of a cancellation — a <c>ProcessResult.Cancelled</c> and a thrown <c>OperationCanceledException</c> —

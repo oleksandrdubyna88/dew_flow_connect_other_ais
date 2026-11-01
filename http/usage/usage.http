@@ -98,7 +98,7 @@ Authorization: Bearer {{token}}
 
 ###
 
-# Rounds, counted by the server (story 5.1 of todo/PLAN_every_round_is_counted.md). The runner seeds, a minute ago, two
+# Rounds, counted by the server (story 5.1 of research/PLAN_every_round_is_counted.md). The runner seeds, a minute ago, two
 # rounds through every client word — first, a retry whose job met a refusing account first (two lines, ONE request), a
 # cancelled repair, a follow-up, a budget refusal — a deploy canary, and the one line from an older client with no round.
 # Every count below is asserted BY VALUE: a field serialised under another name, or counted per line instead of per

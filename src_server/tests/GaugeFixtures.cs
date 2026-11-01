@@ -68,6 +68,12 @@ internal static class GaugeFixtures
         /// <summary>What the reader does to the slot's home on its way, if anything — a refresh, as a reader would leave it.</summary>
         public Action<ProcessRequest> SideEffect { get; init; } = _ => { };
 
+        /// <summary>
+        /// Whether the reader tells its tracker the identity of the child it started. False is a launch that RETURNED without
+        /// ever calling <c>Record</c> — what the real launcher does for a child that exited before its start time was read.
+        /// </summary>
+        public bool RecordsItsIdentity { get; init; } = true;
+
         public IProcessLauncher For(IProcessTracker tracker)
         {
             Trackers.Add(tracker);
@@ -80,7 +86,11 @@ internal static class GaugeFixtures
             Requests.Add(request);
             // The identity a real launcher reports the moment the child exists — a pid no process has, so a check
             // finds it gone, which is what a fake reader that returned at once amounts to.
-            Trackers.Last().Record(999_999, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), request.TrackAs);
+            if (RecordsItsIdentity)
+            {
+                Trackers.Last().Record(999_999, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), request.TrackAs);
+            }
+
             SideEffect(request);
             var result = new ProcessResult(0, stdout, string.Empty, TimedOut: false, Ended: true);
 

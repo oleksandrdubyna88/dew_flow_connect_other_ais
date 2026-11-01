@@ -2,7 +2,7 @@ import { escapeHtml } from './escapeHtml';
 import { RoundWindow, serverRounds, Usage, VendorRounds, WindowRounds } from './teamServerApi';
 
 /**
- * The Team server tab's Rounds block (story 5.2 of todo/PLAN_every_round_is_counted.md) — pure, so every sentence an
+ * The Team server tab's Rounds block (story 5.2 of research/PLAN_every_round_is_counted.md) — pure, so every sentence an
  * admin reads is a test.
  *
  * <p><b>Rounds as the SERVER counted them</b>: per vendor, the distinct rounds its review launches belonged to over the

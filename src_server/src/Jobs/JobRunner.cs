@@ -19,7 +19,7 @@ namespace CoaiServer;
 /// ladder apply.</para>
 /// </remarks>
 /// <param name="gauge">
-/// The vendor's gauge read after each job, INSIDE the slot's lease (story 6.1a of todo/PLAN_every_round_is_counted.md) —
+/// The vendor's gauge read after each job, INSIDE the slot's lease (story 6.1a of research/PLAN_every_round_is_counted.md) —
 /// <see cref="NoGaugeCapture"/> by default, which is what every test of something else gets.
 /// </param>
 public sealed class JobRunner(
@@ -121,7 +121,7 @@ public sealed class JobRunner(
         new ReviewAttempt.Failed(new ReviewerOutcome.NotStarted("ended at claim: its caller could no longer wait for a launch"));
 
     /// <summary>
-    /// The refusal is counted (story 4.3 of todo/PLAN_every_round_is_counted.md): one line per job the claim pass ended
+    /// The refusal is counted (story 4.3 of research/PLAN_every_round_is_counted.md): one line per job the claim pass ended
     /// for want of budget — outcome <c>NoBudget</c>, an honest zero with no usage note, no seconds, no account, the job's
     /// kind and round kept — so the effect of the rule can be seen in the same ledger as what it saves.
     /// </summary>
@@ -150,7 +150,7 @@ public sealed class JobRunner(
             // The THROWN shape of a cancellation — a launcher that throws rather than reporting
             // `ProcessResult.Cancelled` — recorded exactly as the returned shape is: one road, so a cancel,
             // an expiry and a host stop each write their one ledger line here too (story 3.2 of
-            // todo/PLAN_every_round_is_counted.md; this arm used to finish the job and write nothing).
+            // research/PLAN_every_round_is_counted.md; this arm used to finish the job and write nothing).
             // The store already wrote the terminal state and its cause when it fired the token, and `Finish`
             // hands that record back; the runner's own `hostStopped` stands only when nothing else ended it.
             await RecordAsync(vendor, slot, job, new ReviewAttempt.Failed(new ReviewerOutcome.Cancelled()), hostToken);
@@ -174,7 +174,7 @@ public sealed class JobRunner(
     /// The job is made terminal in the store FIRST, so a caller polling it is answered before the reader runs and
     /// nothing the reader does can change what it is told; the gauge is read AFTER the job, on the account the job
     /// just used, while this lease still excludes every other user of its token set; and the ledger line is written
-    /// LAST, carrying the reading (story 6.1a of todo/PLAN_every_round_is_counted.md). A capture that produced nothing
+    /// LAST, carrying the reading (story 6.1a of research/PLAN_every_round_is_counted.md). A capture that produced nothing
     /// writes a line that says nothing about the gauge — never 0 % — and the job's result is what the store already
     /// holds. A requeued attempt is not the job's end: its line is written at once and no gauge is read.
     /// </remarks>
@@ -207,7 +207,7 @@ public sealed class JobRunner(
             ReviewAttempt.Failed { Outcome: ReviewerOutcome.RateLimited limited } =>
                 RateLimited(vendor, slot, job, limited, now),
             // The usage travels with EVERY failure — whatever the launch reported, the attempt carries
-            // (story 3.1 of todo/PLAN_every_round_is_counted.md). It used to travel with Unparseable alone,
+            // (story 3.1 of research/PLAN_every_round_is_counted.md). It used to travel with Unparseable alone,
             // so a vendor that crashed after it was billed was written as one that cost nothing.
             ReviewAttempt.Failed failed => Failed(job, failed, now),
             _ => JobTransitions.Fail(
@@ -221,14 +221,14 @@ public sealed class JobRunner(
             // finally runs the job is another line of the same turn. It used to write nothing, on the reasoning that a
             // line per refused attempt would count one review several times; a REVIEW is counted by its turn (the job's
             // id, on every line), and what one line counts now is one launch (story 3.3 of
-            // todo/PLAN_every_round_is_counted.md — row 10 of the paid-path census).
+            // research/PLAN_every_round_is_counted.md — row 10 of the paid-path census).
             Ledger(new(vendor, slot.Name, job, attempt), Refused(job, attempt, now), LaunchAttempts.Rotated, GaugeOnLine.None);
         }
 
         // The ledger line is written from the record the STORE kept, not from this method's own `finished`: a cancel or
         // an expiry that fired the token wrote its cause first, under the store's lock, and `Finish` hands that back —
         // carrying what the attempt REPORTED, because a vendor that answered a second before the withdrawal was billed
-        // for the answer nobody collected (story 3.2 of todo/PLAN_every_round_is_counted.md).
+        // for the answer nobody collected (story 3.2 of research/PLAN_every_round_is_counted.md).
         return finished;
     }
 
@@ -264,7 +264,7 @@ public sealed class JobRunner(
     /// A cancelled launch is the one ending the runner does not name by itself: the store that fired the token wrote
     /// WHY (withdrawn, abandoned, the backstop) on its own record first, and <c>JobStore.Finish</c> hands that record
     /// back over this one. <c>hostStopped</c> is this record's word for the case nothing else ended — the host's own
-    /// token — and it stands only then (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// token — and it stands only then (story 3.2 of research/PLAN_every_round_is_counted.md).
     /// </remarks>
     private static JobRecord Failed(JobRecord job, ReviewAttempt.Failed failed, DateTimeOffset now)
     {
@@ -332,7 +332,7 @@ public sealed class JobRunner(
     }
     /// <summary>
     /// The job's lines: one per launch of the attempt that ended it — a follow-up is its own — every one carrying the
-    /// job's id as its turn and saying which attempt it was (story 3.3 of todo/PLAN_every_round_is_counted.md).
+    /// job's id as its turn and saying which attempt it was (story 3.3 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     /// <param name="firstAttempt">
     /// What the attempt's first launch is called: <c>first</c> when this account was the only one the job met, else
@@ -344,7 +344,7 @@ public sealed class JobRunner(
     /// server's log beside the job, and what a person asking "what happened to this review" holds.</para>
     /// <para>Every line also says what its launch ran with, which job it was and which account SLOT carried it — by the
     /// slot's name from <c>vendors.json</c>, which <c>VendorConfig.Refusal</c> holds to letters, digits, <c>-</c> and
-    /// <c>_</c>; the account's own sign-in is never named (story 3.4 of todo/PLAN_every_round_is_counted.md).</para>
+    /// <c>_</c>; the account's own sign-in is never named (story 3.4 of research/PLAN_every_round_is_counted.md).</para>
     /// </remarks>
     /// <param name="gauge">
     /// The vendor's gauge as read on the account right after this job (story 6.1a), on every line of the job —
@@ -368,11 +368,11 @@ public sealed class JobRunner(
                     kind: JobKinds.Wire(on.Job.Kind), stage: "TeamServer", turn: on.Job.Id, attempt: line.Attempt,
                     ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot, gauge: gauge,
                     // WHY the store killed it, on the line that says Cancelled — a follow-up pair's first launch ended on
-                    // its own and says so (story 3.2 of todo/PLAN_every_round_is_counted.md).
+                    // its own and says so (story 3.2 of research/PLAN_every_round_is_counted.md).
                     endCause: line.Outcome == nameof(FailureKind.Cancelled) ? finished.EndCause : string.Empty,
                     // What the REQUEST carried, on every line of the job — a requeued launch's included — so a round is
                     // counted once however many launches it took; the client's word beside the server's own attempt,
-                    // never over it (story 4.2 of todo/PLAN_every_round_is_counted.md).
+                    // never over it (story 4.2 of research/PLAN_every_round_is_counted.md).
                     round: on.Job.Round, clientAttempt: on.Job.ClientAttempt);
             }
         }

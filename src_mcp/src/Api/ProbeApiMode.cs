@@ -140,9 +140,9 @@ internal static class ProbeApiMode
         // No client-wide timeout: each call carries its own, below.
         http.Timeout = Timeout.InfiniteTimeSpan;
         // Every completion sent with the real key is written down as it is spent (story 3.3 of
-        // todo/PLAN_every_round_is_counted.md) — into this machine's one ledger, under the row it probed.
+        // research/PLAN_every_round_is_counted.md) — into this machine's one ledger, under the row it probed.
         var ledger = new UsageLedger(SettingsFile.DataDirFrom(env).Path);
-        var report = await ProbeAsync(probe, key, http, note, spent => Written(ledger, row?.Provider ?? vendor, probe.Model, spent));
+        var report = await ProbeAsync(probe, key, http, note, (variant, spent) => Written(ledger, row?.Provider ?? vendor, probe.Model, variant, spent));
         await output.WriteLineAsync(Render(probe, report));
 
         return Ok;
@@ -159,8 +159,8 @@ internal static class ProbeApiMode
     private static string DialectOf(ProviderSettings? row) =>
         row is { Dialect.Length: > 0 } ? row.Dialect : ApiDialects.OpenAiName;
 
-    /// <param name="paid">Told of every completion sent with the REAL key, the moment it answers — the wrong-key request bills nobody.</param>
-    private static async Task<Report> ProbeAsync(Probe probe, string key, HttpClient http, Action<string> note, Action<RequestResult> paid)
+    /// <param name="paid">Told of every completion sent with the REAL key, and of the variant that sent it, the moment it answers — the wrong-key request bills nobody.</param>
+    private static async Task<Report> ProbeAsync(Probe probe, string key, HttpClient http, Action<string> note, Action<Variant, RequestResult> paid)
     {
         var models = await ModelsAsync(probe, key, http);
         note($"GET {probe.Endpoint}/models answered {models.Status} with {models.Ids.Count} model id(s)");
@@ -260,17 +260,17 @@ internal static class ProbeApiMode
     }
 
     /// <summary>A completion sent with the real key is a paid launch, and is handed on to be written down.</summary>
-    private static void Spent(Variant variant, RequestResult result, Action<RequestResult> paid)
+    private static void Spent(Variant variant, RequestResult result, Action<Variant, RequestResult> paid)
     {
         if (!variant.WrongKey)
         {
-            paid(result);
+            paid(variant, result);
         }
     }
 
     /// <summary>
     /// One completion as a ledger line — kind <c>probe</c>, stage <c>Probe</c>, the variant as its role, the model it
-    /// asked, and what the endpoint reported (story 3.3 of todo/PLAN_every_round_is_counted.md).
+    /// asked, and what the endpoint reported (story 3.3 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     /// <remarks>
     /// <para>Before this the matrix spent ten completions per run against a metered key and wrote nothing — row 7 of the
@@ -282,9 +282,16 @@ internal static class ProbeApiMode
     /// <para>A request that got no answer may well have been read and billed, so its usage is <i>not captured</i>,
     /// never a zero; a refusal reported nothing, and is the zero it reported.</para>
     /// </remarks>
-    private static void Written(UsageLedger ledger, string provider, string model, RequestResult result) =>
+    private static void Written(UsageLedger ledger, string provider, string model, Variant variant, RequestResult result) =>
         ledger.RecordJob(
-            string.Empty, provider, model, result.Case, LedgerOutcome(result), result.Took, LedgerUsage(result), UsageKinds.Probe, "Probe");
+            string.Empty, provider, model, result.Case, LedgerOutcome(result), result.Took, LedgerUsage(result), UsageKinds.Probe, "Probe", RanWith(variant));
+
+    /// <summary>
+    /// What a probe's request ran with: <c>api</c>, and the effort the variant SENT labelled <c>row</c> — "sent, from what coai fills
+    /// in" (decision D3 of todo/PLAN_the_round_counter_tail_E3.md). No version and no tier: nothing here asked or sent either.
+    /// </summary>
+    private static LaunchOptions RanWith(Variant variant) =>
+        LaunchOptions.Of("api", string.Empty, new OptionChoice(variant.Effort, OptionSources.Row), new OptionChoice(string.Empty, string.Empty), CliDefaults.None);
 
     private static string LedgerOutcome(RequestResult result) => result.Status switch
     {

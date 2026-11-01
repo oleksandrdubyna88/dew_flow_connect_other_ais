@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 
@@ -31,8 +32,12 @@ public enum DiagnosisKind
     UnknownOption,
 }
 
-/// <summary>A recognised vendor sentence: what kind of failure it is, and what to do about it.</summary>
-public sealed record Diagnosis(DiagnosisKind Kind, string Cure);
+/// <summary>A recognised vendor sentence: what kind of failure it is, what to do about it, and the table's marker that matched it.</summary>
+/// <remarks>
+/// <see cref="Marker"/> is empty for a cure that is our own sentence (the unreachable local engine, which already quotes the address):
+/// there is then no vendor line to keep after the cure (D4 of todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md).
+/// </remarks>
+public sealed record Diagnosis(DiagnosisKind Kind, string Cure, string Marker = "");
 
 /// <summary>
 /// Failures a vendor CLI reports in its own words, translated into what to DO about them.
@@ -63,6 +68,10 @@ public static class VendorDiagnosis
         ("balance_spent:",
             "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset.",
             DiagnosisKind.Refused),
+        // The 5-hour AND the monthly plan quota (kimi 2.2.0, 2026-10-19; 2.3.0, 2026-10-21): Kimi wraps it in the sign-in's own prefix, so the shim's name is the only thing that says
+        // it is not a lost sign-in. The sentence is KimiQuotaWords' — one string in the shim's cure, here and in the reviewer's reason. `Refused` as the row above
+        // is: there is no Spent kind here, and the rate-limit path reads the report's field, not this table.
+        (QuotaMarker, KimiQuotaWords.Fixed, DiagnosisKind.Refused),
         ("model_not_offered",
             "the Kimi session does not offer this model — pick one the plan has (the shim's message lists what the session offered).",
             DiagnosisKind.Refused),
@@ -106,7 +115,8 @@ public static class VendorDiagnosis
         // this sentence on stderr and in its export. Its sign-in lives in the OS keyring (§12), not in the home coai gives it,
         // so the cure is Vibe's own setup, once, as the user coai runs as. Reached through Vibe's test switch, not a real
         // signed-out machine, whose wording is not measured.
-        ("Missing MISTRAL_API_KEY environment variable",
+        // WINDOWS' sentence: the sign-in is in the keyring. On Linux and WSL the cure is per host (`MistralSignedOutOffWindows`, DL2).
+        (MistralMarker,
             "Vibe is installed but not signed in for this user — run `vibe --setup` once in a terminal (the sign-in is kept in " +
             "the operating system's keyring, which every coai launch of Vibe reads).",
             DiagnosisKind.Refused),
@@ -170,22 +180,57 @@ public static class VendorDiagnosis
     /// The same table and the same order as <see cref="For"/>, which is now this and nothing else: two
     /// readings of one sentence that could disagree are how a cure and a classification would drift.
     /// </remarks>
-    public static Diagnosis? Classify(string text, bool? wsl = null)
+    public static Diagnosis? Classify(string text, bool? wsl = null) =>
+        Classify(text, HostFor(wsl, HostKinds.Current));
+
+    /// <summary>The host the legacy WSL-or-not flag names, given this process's own host: pure. `false` is "not WSL" — never "Windows" — so it keeps this process's own kind (a WSL process, asked as not-WSL, is plain Linux).</summary>
+    internal static HostKind HostFor(bool? wsl, HostKind process) => wsl switch { true => HostKind.Wsl, false => process == HostKind.Wsl ? HostKind.Linux : process, null => process };
+
+    /// <summary>
+    /// <see cref="Classify(string, bool?)"/> for a stated HOST (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): a cure that differs
+    /// by platform — Vibe's sign-in is in the keyring on Windows and in <c>~/.vibe/.env</c> elsewhere — needs more than WSL-or-not.
+    /// The old signature routes through this one (<c>true</c> is WSL, <c>false</c> Windows, <c>null</c> this machine's own host).
+    /// </summary>
+    public static Diagnosis? Classify(string text, HostKind host)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
             return null;
         }
 
-        if (UnreachableLocalEngine(text, wsl ?? UnderWsl.Value) is { } engine)
+        if (UnreachableLocalEngine(text, host == HostKind.Wsl) is { } engine)
         {
             return new Diagnosis(DiagnosisKind.EngineUnreachable, engine);
         }
 
         var known = Known.FirstOrDefault(k => text.Contains(k.Marker, StringComparison.OrdinalIgnoreCase));
 
-        return known.Sentence is { } sentence ? new Diagnosis(known.Kind, sentence) : null;
+        return known.Sentence is not null ? new Diagnosis(known.Kind, CureOn(known.Marker, known.Sentence, host, text), known.Marker) : null;
     }
+
+    /// <summary>Vibe's signed-out marker (§11 of research/RESULTS_vibe_confinement.md; L-V1 on WSL): the same words on every host.</summary>
+    private const string MistralMarker = "Missing MISTRAL_API_KEY environment variable";
+
+    /// <summary>
+    /// The cure for a recognised sentence on this host, given the text it was found in. Vibe's differs by host, and a spent Kimi quota quotes the vendor's reset clause out of <paramref name="text"/> (
+    /// <see cref="KimiQuotaWords.Said"/>) — so every reader of the diagnosis, the round summary included, leads with the clause and not only the 160-character cut of the vendor's line. Vibe's: off Windows its sign-in is the file <c>~/.vibe/.env</c>, which
+    /// coai LINKS into its own homes and never copies — and a sign-in kept in a desktop keyring is invisible to coai's launches, whose built
+    /// environment carries no D-Bus session (<c>ProcessEnvironment.MinimalUnix</c>).
+    /// </summary>
+    private static string CureOn(string marker, string sentence, HostKind host, string text) => marker switch
+    {
+        MistralMarker when host != HostKind.Windows => MistralSignedOutOffWindows,
+        QuotaMarker => KimiQuotaWords.Said(text),
+        _ => sentence,
+    };
+
+    /// <summary>The shim's name for a spent Kimi plan quota, with its colon — the one marker whose cure also QUOTES a clause of the vendor's own text (K1 of the code gate).</summary>
+    private const string QuotaMarker = KimiAcpProfile.QuotaSpent + ":";
+
+    internal const string MistralSignedOutOffWindows =
+        "Vibe is installed but not signed in for this user — run `vibe --setup` in a terminal on this side; the sign-in is ~/.vibe/.env, "
+        + "which coai links into its own homes and never copies. A sign-in kept in a desktop keyring is invisible to coai's launches — "
+        + "their built environment carries no D-Bus session (ProcessEnvironment.MinimalUnix) — so coai needs ~/.vibe/.env.";
 
     /// <summary>Whether this server runs inside a WSL distro — the side a consultation's health file names.</summary>
     public static bool OnWsl => UnderWsl.Value;
@@ -231,19 +276,7 @@ public static class VendorDiagnosis
     }
 
     /// <summary>Whether this kernel is WSL, asked once.</summary>
-    private static readonly Lazy<bool> UnderWsl = new(() =>
-    {
-        try
-        {
-            return OperatingSystem.IsLinux()
-                   && File.Exists("/proc/version")
-                   && NamesWsl(File.ReadAllText("/proc/version"));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    });
+    private static readonly Lazy<bool> UnderWsl = new(() => NamesWsl(ProcVersion.Text));
 
     /// <summary>
     /// Whether a <c>/proc/version</c> banner is WSL's.

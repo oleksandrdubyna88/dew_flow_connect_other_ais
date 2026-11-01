@@ -11,7 +11,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Every paid launch is written, and written whole — story 3.3 of <c>todo/PLAN_every_round_is_counted.md</c>, the
+/// Every paid launch is written, and written whole — story 3.3 of <c>research/PLAN_every_round_is_counted.md</c>, the
 /// local half: one ledger line per launch of a reviewer turn, each saying what it was and sharing its turn's id, and a
 /// vendor's reason kept whole in the ledger and the log.
 /// </summary>

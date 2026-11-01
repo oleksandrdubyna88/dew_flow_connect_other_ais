@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The Team server captures the codex gauge, safely — story 6.1a of <c>todo/PLAN_every_round_is_counted.md</c>: inside
+/// The Team server captures the codex gauge, safely — story 6.1a of <c>research/PLAN_every_round_is_counted.md</c>: inside
 /// the slot's lease, after the job, behind the expiry guard, suspended on an authentication error, never changing the
 /// job's result, never logging what the reader said.
 /// </summary>
@@ -27,7 +27,7 @@ namespace CoaiServer.Tests;
 [Collection(ServerCollection.Name)]
 public sealed class GaugeCaptureTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-gauge-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "testsToDelete-gauge-" + Guid.NewGuid().ToString("N"));
 
     private readonly List<string> _notes = [];
 
@@ -264,6 +264,34 @@ public sealed class GaugeCaptureTests : IDisposable
         (next as Acquisition.Taken)?.Lease.Dispose();
     }
 
+    /// <summary>
+    /// The server-side half of the launcher's "a child that exited before its start time was read" path
+    /// (todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md, C2): the launch RETURNED and <c>Record</c> was never called, so
+    /// the reader marker still says "spawning". The capture's own end clears it — the gauge is stored and the slot is not
+    /// blocked. A guard: it is green against the code as it stands, written because the plan's first draft claimed this
+    /// outcome for a reason that was wrong.
+    /// </summary>
+    [Fact]
+    public async Task ALaunchThatReturnedWithoutRecord_ClearsTheMarker_StoresTheGauge_AndBlocksNoSlot()
+    {
+        RequiresATree();
+        var reader = new GaugeFixtures.Reader(GaugeFixtures.Answer + "\n") { RecordsItsIdentity = false };
+        var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), reader.For);
+        jobs.Submit(Job());
+
+        await runner.PumpAsync("codex", CancellationToken.None);
+
+        reader.Requests.Should().ContainSingle("the reader ran; only the identity was never recorded");
+        jobs.All().Single().Status.Should().Be(JobStatus.Done);
+        State().Reader.Should().BeNull("the capture's own end clears the marker (GaugeCapture.ReadAsync, ClearReader) — nothing else would");
+        Slot().Gauge.Should().NotBeNull("the answer the reader gave is stored");
+        Slot().Gauge!.PlanType.Should().Be("prolite");
+        Slot().Blocked.Should().BeEmpty("a marker cleared by the launch's own end blocks nothing");
+        var next = await new SlotRegistry(_dir, new JsonFileStore()).AcquireAsync(Slot(), TimeSpan.Zero);
+        next.Should().BeOfType<Acquisition.Taken>("the next job on the slot is not held up");
+        (next as Acquisition.Taken)?.Lease.Dispose();
+    }
+
     [Fact]
     public async Task TheLog_CarriesNoRawMessage_NoAccountId_NoMachineName()
     {
@@ -351,6 +379,51 @@ public sealed class GaugeCaptureTests : IDisposable
         Slot().Gauge.Should().BeNull();
     }
 
+    /// <summary>
+    /// Seen live on the Team server 2026-10-19 after the 0.13.1 deploy: <c>gauge claude/a: skipped (slot-not-readable)</c>
+    /// and <c>gauge antigravity/a: skipped (slot-not-readable)</c> — both slots healthy. A vendor whose runtime has no gauge
+    /// the server reads is not a slot that cannot be read, and the log must not say so. This skip happens BEFORE the
+    /// platform check, so no tree is needed and it runs on every platform.
+    /// </summary>
+    [Fact]
+    public async Task AVendorWhoseRuntimeHasNoGauge_IsSkippedAsSuch_NeverAsASlotThatCannotBeRead()
+    {
+        File.WriteAllText(
+            Path.Combine(_dir, "vendors.json"),
+            """[{ "id": "claude", "runtime": "claude", "models": ["m"], "slots": ["a"] }]""");
+        var registry = new SlotRegistry(_dir, new JsonFileStore());
+        registry.MarkSignedIn(registry.Read("claude", "a"));
+        var counting = new GaugeFixtures.Counting();
+        var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), counting.For);
+        jobs.Submit(Job("claude"));
+
+        (await runner.PumpAsync("claude", CancellationToken.None)).Should().BeTrue();
+
+        jobs.All().Single().Status.Should().Be(JobStatus.Done, "the job's result is the vendor's, whatever the gauge did");
+        counting.Launches.Should().Be(0, "a runtime with no gauge has no reader to launch");
+        _notes.Should().ContainSingle().Which.Should().Contain($"skipped ({GaugeCodes.NoGaugeForRuntime})")
+            .And.NotContain(GaugeCodes.SlotNotReadable, "the slot is healthy: the vendor simply has no gauge");
+    }
+
+    /// <summary>
+    /// The slot-state skip keeps its own code: a blocked slot IS a slot that cannot be read now. Asked directly — a blocked
+    /// slot is never scheduled, and a job that succeeds lifts a gauge suspension before the capture runs.
+    /// </summary>
+    [Fact]
+    public async Task ABlockedCodexSlot_StillSaysSlotNotReadable()
+    {
+        var registry = new SlotRegistry(_dir, new JsonFileStore());
+        registry.MarkBlocked(registry.Read("codex", "a"), BlockedReasons.ReaderTerminationFailed);
+        var counting = new GaugeFixtures.Counting();
+        var capture = new GaugeCapture(registry, counting.For, "0.0.0-test", _notes.Add);
+
+        var outcome = await capture.CaptureAsync(new VendorConfig("codex", "codex", ["m"], ["a"]), registry.Read("codex", "a"), CancellationToken.None);
+
+        outcome.Should().Be(new GaugeCaptured.Skipped(GaugeCodes.SlotNotReadable));
+        counting.Launches.Should().Be(0);
+        _notes.Should().ContainSingle().Which.Should().Contain($"skipped ({GaugeCodes.SlotNotReadable})");
+    }
+
     [Fact]
     public async Task TheCatalog_ServesTheLatestReadingPerVendor_NamingNoAccount()
     {
@@ -420,8 +493,8 @@ public sealed class GaugeCaptureTests : IDisposable
     private SlotStateDto State() =>
         new JsonFileStore().Read(Path.Combine(Slot().Directory, "state.json"), ServerJsonContext.Default.SlotStateDto)!;
 
-    private static JobRecord Job() =>
-        new(JobId.New(), "dev@example.com", "codex", "m", "Architecture", "review this",
+    private static JobRecord Job(string vendor = "codex") =>
+        new(JobId.New(), "dev@example.com", vendor, "m", "Architecture", "review this",
             JobStatus.Queued, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(10), TimeSpan.FromSeconds(60));
 
     private IReadOnlyList<JsonElement> Lines() =>
