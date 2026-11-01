@@ -300,10 +300,24 @@ exists.
 
 ## RE-MEASURED, 2026-11-01 — the conventions pin moves to release `105d53c` (test-leftovers split into a core and a detail)
 
-> **Subject:** `chore/pin-conventions-115bbf8` with `.agents/conventions` at `105d53c820ca9551830fefc6b99544e4259a1c03` (release; verified with `git rev-parse HEAD` in the mount before measuring).
-> **Harness:** a temporary test, not committed, through the PRODUCTION collector (`RuleFiles.Collect` with `RuleOrder.ForBranch`) at the default 90 000 budget: base and tier at no budget, the tail
-> of the canary branch, the tail of each of the hundred fixed names (`feat/branch-<i>` for even i, `fix/issue-<i>-thing` for odd, i in 0..99) and of 3 000 names of the same shape. Sizes are
-> characters of the line-ending-normalised text, the unit the collector spends.
+> **Subject:** branch `chore/pin-conventions-115bbf8` at commit `131a3239` (the parent of the commit that adds the harness below, which changes no
+> measured file). The corpus measured is the conventions mount at `105d53c820ca9551830fefc6b99544e4259a1c03` (release; verified with `git rev-parse HEAD` in the mount).
+> **Harness:** `src_mcp/tests/Measurements/RuleBudgetMeasurementTests.cs`, an explicit test (`[Fact(Explicit = true)]`, the repository's pattern for measurements, as in
+> `SecurityLaneEffortMeasurementTests`), so the normal suite skips it. It runs the PRODUCTION collector (`RuleFiles.Collect` with `RuleOrder.ForBranch`) at the default 90 000 budget:
+> base and tier at no budget, the tail of the canary branch, the tail of each of the hundred fixed names (`feat/branch-<i>` for even i, `fix/issue-<i>-thing` for odd, i in 0..99) and of 3 000 names of the same shape.
+> Command, from the repository root (the harness was run from this file and printed the same numbers as the table below):
+> `COAI_RULE_BUDGET_OUT=/tmp/rule-budget.txt node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests --explicit only --filter-class CoaiMcp.Tests.RuleBudgetMeasurementTests`
+> after `dotnet build src_mcp/tests -c Debug -m:4`. Sizes are characters of the line-ending-normalised text, the unit the collector spends.
+
+**Predicted (before the run, in the gated plan of 2026-11-01), against observed.**
+
+| | Predicted | Observed |
+|---|---|---|
+| Share of the documented population that draws the core | "reaches the tail on SOME branches and not on others" (none would mean a budget decision, all would mean it belongs in the tier) | 7 of 100; 147 of 3 000 (4.9 %). Some, not all. |
+| Free tail | about 9 976, moving "by at most a few dozen characters" (only the tier's rule files changed size) | 10 002 (+26) |
+| Tail-size bounds (at most three, at least one) | unchanged | unchanged: widest 3, narrowest 1 |
+
+No numeric share was predicted: the plan said only "some but not all". The 7 of 100 is an observation, not a confirmed forecast, and the prediction would have held for any share from 1 to 99.
 
 | | 2026-10-21 (before the `115bbf8` pin; the columns below are the figures the tests last pinned) | 2026-11-01 (pin `105d53c`) |
 |---|---|---|
