@@ -1,7 +1,8 @@
 # PLAN — E5.S2 spec: the test sweep, in two halves (CORNERSTONE) — stage A
 
-> Status: **plan only, nothing implemented yet, 2026-11-02 — cornerstone spec by Fable, written before its code. This
-> file holds the S2-A half (stage A: the age-only `coai-` test sweep is retired); the S2-B half (the owner-aware sweep)
+> Status: **plan only, nothing implemented yet, 2026-11-02 — cornerstone spec by Fable, written before its code; revised the
+> same day with the five accepted findings of the S2-A plan gate (coai session f478a03b, verdict proceed), each marked
+> `[S2-A gate finding n]` where it lands, and with the decision of P4 (A.9). This file holds the S2-A half (stage A: the age-only `coai-` test sweep is retired); the S2-B half (the owner-aware sweep)
 > is added to this same file before S2-B is coded, after S2-A has merged.** Story S2 of
 > [PLAN_test_leftovers_E5.md](PLAN_test_leftovers_E5.md) § *S2-A* (D4, D7, must-not-copy #13; plan-gate rounds 1 and 2
 > of 2026-11-01). Its own file because the stories document is sent whole to a review gate and must stay short; it
@@ -84,6 +85,18 @@ export function startOfRun({ dir, rule, io = fs }) {
 ```
 
 `isOldTestName(name, neverSwept)` = `name.startsWith('coai-')` ∧ `!/^coai-[0-9]/.test(name)` ∧ no `neverSwept` prefix.
+
+**[S2-A gate finding 1] The legacy run folders are counted too, on their own line.** The folder an E2 run makes and removes
+itself is `testsToDelete-coai-run-<6 hex>` (F8) — a LEGACY name of the rule (§1: its second segment is not an owner), and
+a KILLED run leaves one plus its `.owner` file. Nothing sweeps them after this PR, and `coai-` does not match them, so a
+count that only reads `coai-` would hide the other half of the pile. `startOfRun` therefore returns
+`{ leftovers, legacyRuns }`, `legacyRuns` being the directories whose name matches `/^testsToDelete-coai-run-[0-9a-f]{6}$/`
+(the shape the one-off clean-up lists as `legacy-run`, decision 5); still names only, no `stat`, no age, no claim read. A
+count of names cannot tell a dead run's folder from a LIVE run's (another session's run in the same temp root), so the line
+says "of other runs, some may be live" and sends the person to the clean-up's listing, which reads the claim. `reportLeftoversFirst`
+prints a SECOND line after the first, only when `legacyRuns > 0`:
+`run-tests: <n> legacy testsToDelete-coai-run-* director(y|ies) in <tmpdir()> — a killed run leaves one; some may belong to a run still going; the one-off clean-up lists them with their claim (E5 S2-A); see research/module_tests.md § The one-off clean-up`.
+The module still imports `node:fs` and `node:path` only and has no remover (N6 holds unchanged).
 The module imports `node:fs` and `node:path` only; it has no `rm`, `rmSync`, `rmdir`, `unlink`, `rename` or `exec` of
 any kind (a structural assertion, A.3 N6). `run-tests.mjs`: `sweepFirst()` becomes `reportLeftoversFirst()`, still the
 first statement of `main()`, still inside `try/catch`, printing
@@ -98,7 +111,12 @@ first statement of `main()`, still inside `try/catch`, printing
 filtered by the same three conditions on `Path.GetFileName`, `DirectoryNotFoundException` → 0. It references nothing
 in `CoaiMcp.Server` (A.8 check 3). The `TempDirsAreSwept` constructor replaces the `PruneOldScratchDirs` call (F3) with
 ONE count per process behind an `Interlocked.Exchange` flag (the pattern of `_steeringLeftoverChecked`, `:74-81`),
-writing the same sentence to `Console.Error`. The `using CoaiMcp.Server;` at `TempDirsAreSwept.cs:2` stays only while a
+writing the same sentence to `Console.Error`. **[S2-A gate finding 1]** `StartOfRun` has a second entry,
+`internal static int RunFolders(string tempRoot, string ownFolder)`: the directories matching
+`^testsToDelete-coai-run-[0-9a-f]{6}$` in `tempRoot` EXCEPT `ownFolder` (`RunTemp.Folder` — in C# the run's folder exists in the
+real temp root before the fixture's constructor runs, and a count that included it would read 1 on a clean machine; the Node
+runner counts before it makes its own, so it excludes nothing). The constructor writes it as a second `Console.Error` line, only when
+it is above 0, in the Node line's words. Same rules as `Run`: names only, `DirectoryNotFoundException` → 0, no `CoaiMcp.Server`. The `using CoaiMcp.Server;` at `TempDirsAreSwept.cs:2` stays only while a
 remaining test in the file needs it (the product-sweep tests that stay, A.5) — never for the constructor.
 
 **The class keeps its name `TempDirsAreSwept` in this PR**, with its `<summary>` rewritten ("Since E5 S2-A this fixture
@@ -146,43 +164,74 @@ A person's tool, run with no coai session and no VS Code window open on the mach
 a sweep, never the janitor's (D4). Three files:
 
 - `scripts/old-coai-leftovers.mjs` — the CLI. `list [--tmp <dir>] [--out <file>]` prints one line per entry and
-  writes the listing JSON (default `./old-coai-leftovers-listing.json`); `remove --listing <file> <name>...` removes
+  writes the listing JSON (default `./old-coai-leftovers-listing.json`); `remove --listing <file> [--tmp <dir>] <name>...` removes
   the named picks and prints one line per pick: `removed <name>` or `refused <name>: <check>`. Exit 0 when every pick
   was removed, 1 when any was refused, 2 on a usage error (naming the legal forms). `--tmp` defaults to the reference's
-  `tempRoot()` (F9). No other flags.
+  `tempRoot()` (F9). No other flags. **[S2-A gate finding 2] The listing records its temp root.** The JSON is
+  `{ "tmp": "<the absolute temp root the listing read>", "entries": [ ... ] }`; `remove` uses `listing.tmp` unless `--tmp` is
+  given, and **refuses a `--tmp` that differs** from it (`path.resolve` of both compared) with exit 2 and one line naming both
+  paths — a listing taken in one root is evidence about THAT root only, and a pick judged `unchanged` against another
+  root's folder of the same name would be a removal on a name read elsewhere. A listing without `tmp`, or with a `tmp` that is
+  not an absolute path, is a usage error (exit 2) too.
 - `scripts/lib/old-coai-leftovers.mjs` — the logic, pure over an `io` seam (`readdirSync`, `lstatSync`, `statSync`,
   `readFileSync`, `mkdirSync`, `renameSync`, `rmSync`, `rmdirSync`, `unlinkSync`) and `hooks` (`drawName(dir)`,
-  `afterReserve`, `beforeRename`, `probe`) so every scenario below runs over a private root.
-  - `listOldLeftovers({ tmp, neverSwept, now, io, probe })` → entries `{ name, kind, lastWriteMs, ageMinutes, dev, ino, claim }`:
+  `afterReserve`, `beforeRename`, `afterRename`, `probe`, `platform`) so every scenario below runs over a private root.
+  - `listOldLeftovers({ tmp, neverSwept, now, io, probe })` → `{ tmp, entries }`, entries `{ name, kind, lastWriteMs, ageMinutes, dev, ino, claim }`
+    (`tmp` is the root's absolute path — **[S2-A gate finding 2]**):
     `kind: 'coai'` for a directory `coai-*` that is not `^coai-[0-9]` and starts with no `neverSwept` prefix;
     `kind: 'legacy-run'` for a directory `/^testsToDelete-coai-run-[0-9a-f]{6}$/` with `claim` = the sibling `.owner`
-    file's state — `gone`, `live`, `unknown` from the reference's `readOwner` + `legacyOwnerState` (F9; a `win32`/`darwin`
-    tag parses as `unknown`, E5 #15), `none` when no claim file, `unreadable` otherwise. Protected prefixes, the version
-    cache, files, links and every other name are LEFT OUT (not listed as refused — they were never candidates).
-    `dev`/`ino` from `lstatSync(…, { bigint: true })` (as the reference's `identityOf`), serialised as decimal strings.
+    file's state — `gone`, `live`, `unknown` from the reference's `readClaimText` + `parseLegacyOwner` + `legacyOwnerState`
+    (F9; the claim of a legacy name is in the OLD grammar, so `readOwner`, which parses the owner form, is not the
+    reader; a `win32`/`darwin` tag parses as `unknown`, E5 #15; and `legacyOwnerState` answers `unknown` for EVERY legacy record
+    on a Linux reader, because a legacy record carries no pid namespace — the listing therefore never calls a Linux claim `gone`, and a
+    test reaches `gone` through the `platform` seam, as the reference's own tests do), `none` when no claim file, `unreadable`
+    otherwise. **[S2-A gate finding 3] `kind: 'quarantine'`** for a directory
+    `/^\.(coai-.+|testsToDelete-coai-run-[0-9a-f]{6})\.teststodelete-quarantine-[0-9]+-[0-9a-f]{8}$/i` whose original name (group 1) is
+    NOT a protected name — an interrupted clean-up of THIS script (killed between its rename and its removal), listed
+    with `of: <original name>`, `empty` (it holds nothing: the placeholder of a move killed before its rename) and `claim` as
+    for a `legacy-run` when `of` is one. Protected prefixes, the version cache, files, links and every other name are LEFT OUT (not
+    listed as refused — they were never candidates). `dev`/`ino` from `lstatSync(…, { bigint: true })` (as the reference's
+    `identityOf`), serialised as decimal strings.
   - `removePicked({ tmp, listing, picks, neverSwept, io, hooks, probe })` → `[{ name, outcome: 'removed' | 'refused', check }]`.
     Per pick, in this order, the first failing check refuses with its name and the command goes on to the next pick:
-    `not-listed` (the name is not in the listing); `protected` (a `neverSwept` prefix, `^coai-[0-9]`, or any name not
-    matching `kind`'s two shapes — re-judged NOW, not trusted from the listing); `missing` (`lstatSync` fails);
+    `not-listed` (the name is not in the listing's entries); `protected` (a `neverSwept` prefix, `^coai-[0-9]`, or any name not
+    matching `kind`'s shapes — re-judged NOW, not trusted from the listing; for a `quarantine` the ORIGINAL name is judged);
+    `missing` (`lstatSync` fails);
     `not-a-directory` (a link or a file is at the name); `changed` (`dev`, `ino` or `mtimeMs` differ from the listing's);
-    `owner-<state>` (a `legacy-run` whose claim is now anything but `gone` or `none`; `probe` injected in tests; a
+    `owner-<state>` (a `legacy-run`, or a `quarantine` of one, whose claim is now anything but `gone` or `none`; `probe` injected in tests; a
     `coai` name has no claim and skips this check — the pick plus the unchanged check is the whole authority, D4);
-    `quarantine-taken` (the exclusive move failed because the drawn name is occupied); `moved-but-changed` (the
-    quarantined object's `dev`+`ino` differ from the listing's — re-read on the quarantined path after the move; the
-    quarantine is then LEFT in place and listed, never removed). Then `rmSync(quarantined, { recursive: true, force: true })`
-    and, for a `legacy-run`, `unlinkSync(<name>.owner)` LAST. The exclusive move is the reference's shape exactly
-    (F9, `moveExclusively`): the quarantine name `.<name>.teststodelete-quarantine-<pid>-<hex8>` drawn by `hooks.drawName`
-    (default `crypto.randomBytes(4)`); POSIX — `mkdirSync(to, { mode: 0o700 })` (EEXIST ⇒ taken), re-`lstat` the
-    placeholder (ours, a directory, empty) immediately before `renameSync(from, to)`, a failed rename removes only our
-    own empty placeholder; Windows — `renameSync` and `isTakenRename(error, identityOf(to) !== undefined, 'win32')`
-    (imported from the reference). Any other error from `io` refuses the pick with `error-<code>`; nothing throws out of
-    `removePicked`. The reference's `identityOf`/`moveExclusively` are not exported, so this module carries its own
-    copies of those ~40 lines with a comment naming their source; **note for the parent:** exporting them from
-    `leftovers-sweep.mjs` would let this script and S4's wrap share one implementation (E5 § *Notes for the parent*, new
-    note 19). The script imports token-free functions straight from the mount (`.agents/conventions/tools/lib/…`): D3's
+    `quarantine-taken` (**[S2-A gate finding 0]** the exclusive move found every one of its `MOVE_DRAWS = 5` drawn names occupied);
+    `moved-but-changed` (**[S2-A gate finding 4]** the quarantined object's `dev`+`ino` OR last-write time differ from the listing's —
+    re-read on the quarantined path after the move; the quarantine is then LEFT in place and listed, never removed).
+    Then `rmSync(quarantined, { recursive: true, force: true })`
+    and, for a `legacy-run` (or the `quarantine` of one), `unlinkSync(<original name>.owner)` LAST. A pick of kind `quarantine` skips the move
+    (it IS the quarantined object — **[S2-A gate finding 3]** `remove` accepts it by its dot-name, under `not-listed`, `protected`, `missing`,
+    `not-a-directory`, `changed` and `owner-<state>` exactly as above) and goes straight to the post-check and the removal; the scenario
+    is "kill after the rename, a second run finishes it" (A.3 S15).
+    The exclusive move is the reference's shape (F9, `moveExclusively`) with the two changes of finding 0: the quarantine name
+    `.<name>.teststodelete-quarantine-<pid>-<hex8>` drawn by `hooks.drawName` (default `crypto.randomBytes(4)`); POSIX —
+    `mkdirSync(to, { mode: 0o700 })` (EEXIST ⇒ this draw is taken), re-`lstat` the placeholder (ours, a directory, empty)
+    immediately before `renameSync(from, to)`; **[S2-A gate finding 0] the placeholder is removed in a `finally` whenever the rename did
+    not complete, and only while it is still OUR empty reservation** (a directory, not a link, the reserved `(dev, ino)`, empty;
+    `rmdirSync`, never recursive — a name taken over in between is never touched), and **a taken draw draws a new name, up to `MOVE_DRAWS = 5`
+    times, before the pick is refused `quarantine-taken`** (the reference's `QUARANTINE_DRAWS`); Windows — `renameSync` and
+    `isTakenRename(error, identityOf(to) !== undefined, 'win32')` (imported from the reference), the same bounded draws. Any other error
+    from `io` refuses the pick with `error-<code>`; nothing throws out of `removePicked`.
+    **[S2-A gate finding 4] The residual window, recorded in the module's header and in `module_tests.md`.** The `changed` check and the
+    `rename(2)` are two calls: an object swapped in between is moved aside under the quarantine name instead of the one the person picked.
+    The post-move re-check sees it (identity or last-write time differs from the listing) and KEEPS it — nothing is removed — but the swapped-in
+    object has been displaced from its name for the time until the person looks at the next `list`; and between the post-move re-check and
+    `rmSync` only the same user can swap the dot-named quarantine, which is the threat this tool does not guard against (the reference's own
+    accepted window, F9). A directory's last-write time does not move when the directory itself is renamed within one parent (observed on
+    the build machine in commit 5; if a platform moves it, the post-check would refuse every pick there and the observation is recorded).
+    **P4 — decided:** the reference's `identityOf`/`moveExclusively` are not exported, and stage A merges BEFORE any new conventions
+    release, so this module carries its OWN copy of those ~40 lines now, with a comment naming their source
+    (`.agents/conventions/tools/lib/leftovers-sweep.mjs`, at pin `105d53c`); **follow-up, recorded in A.7 item 7 and in `module_tests.md`:**
+    when the conventions export them, this module switches to the exported function and its copy is deleted (E5 § *Notes for the parent*,
+    new note 19). The script imports token-free functions straight from the mount (`.agents/conventions/tools/lib/…`): D3's
     one-module rule is about the `coai` token being written once, and this tool carries no token; the mount missing ⇒
     one line naming `git submodule update --init .agents/conventions`, exit 2.
-- `scripts/lib/old-coai-leftovers.test.mjs` — A.3 S1–S10, run by CI's `node --test "scripts/**/*.test.mjs"` (F11).
+- `scripts/lib/old-coai-leftovers.test.mjs` — A.3 S1–S10 and S11–S16, run by CI's `node --test "scripts/**/*.test.mjs"` (F11).
 
 `research/module_tests.md` gets the section § *The one-off clean-up of old `coai-*` test leftovers* (A.6).
 
@@ -194,7 +243,7 @@ a sweep, never the janitor's (D4). Three files:
 | B2 | In `startOfRun.mjs` add `io.rmSync(path.join(dir, e.name), { recursive: true })` for each counted name | A.3 N-I1, N-R1 and N6 |
 | B3 | `neverSwept` emptied in `shared/temp-sweep.json` | the three product-prefix scans red (F7) — and A.3 C-I1 / N-I1 stay GREEN, which is the point of the invariant |
 | B4 | `PanelService.cs:1516` `>=` → `>` | A.4 C5 red; `git diff --exit-code origin/main -- src_mcp/src/Server/PanelService.cs` red |
-| B5 | In `removePicked`, replace the exclusive move + identity re-check with `io.rmSync(path.join(tmp, name), { recursive: true, force: true })` | A.3 S5, S6, S8 red |
+| B5 | In `removePicked`, replace the exclusive move + identity re-check with `io.rmSync(path.join(tmp, name), { recursive: true, force: true })` | A.3 S5, S6, S8, S11, S12 and S16 red (the checks they pin are the exclusive move, the identity re-check and the post-move re-check; the others pass for a body that removes by name only if they assert nothing about those — each is confirmed at build time and recorded) |
 
 ## A.2 — The order of commits (one branch `feat/test-leftovers-e5-s2a`, one PR; every commit green on its own)
 
@@ -203,8 +252,8 @@ a sweep, never the janitor's (D4). Three files:
 | 1 | `test(sweep): characterize PanelService.PruneOldScratchDirs on the unchanged function (E5 S2-A item 4)` | only `src_mcp/tests/PruneOldScratchDirsCharacterizationTests.cs` (A.4) | all seven green on `main`'s `PanelService.cs`; B4 red then restored |
 | 2 | `refactor(sweep): the start-of-run entry points, behaviour unchanged (E5 S2-A seam)` | `src_mcp/tests/StartOfRun.cs` with `internal static void Run(string tempRoot, SweepRule rule)` whose body is F3's call verbatim, the constructor calling `StartOfRun.Run(RunTemp.Real, Rule)`; `src_vs_code/scripts/startOfRun.mjs` exporting `startOfRun({ dir, rule, io = fs, now = Date.now() })` whose body is `return sweep(dir, now, rule, io)` from `sweepTemp.mjs`, `run-tests.mjs:105` calling it | the whole C# suite and `npm test` green; the Node sweep still prints its "swept N" line |
 | 3 | `test(sweep): RED — every coai-* name is outside the start of a run; an unmarked coai-chat-live survives (E5 #13)` | `src_mcp/tests/TheTestSweepIsRetiredTests.cs` C-I1, C-R1; `src_vs_code/src/test/startOfRun.test.mjs` N-I1, N-R1 (A.3) | **the four observed RED**, each with its failure line quoted in the commit body (`coai-chat-live` missing; `coai-panel-x` and `coai-futurething-x` missing with `neverSwept` empty) |
-| 4 | `feat(sweep): the age-only coai- test sweep is retired — both runners count and report, nothing is deleted (E5 S2-A)` | decisions 1 and 2 (`temp-sweep.json`, `SweepRule.cs`, `StartOfRun.cs` → `Run` returns `int`, `startOfRun.mjs` counts, `sweepTemp.mjs` and `sweepTemp.test.mjs` deleted, A.5's rewrites and deletions, A.3's remaining tests, the `TempDirsAreSwept` summary) | commit 3's four tests GREEN; B1–B3 red then restored; the old-reader observations of decision 1 |
-| 5 | `feat(scripts): old-coai-leftovers — list, pick, re-check, quarantine by identity, remove (E5 D4)` | the three files of decision 5; A.3 S1–S10 written FIRST against a body that does `rmSync` by name, S5/S6/S8 observed red (B5), then the implementation | S1–S10 green on Linux (WSL) and on Windows (the owner's machine or the Windows CI leg's `node --test` — add the step if the leg lacks it, else record "Windows: not run" in the PR) |
+| 4 | `feat(sweep): the age-only coai- test sweep is retired — both runners count and report, nothing is deleted (E5 S2-A)` | decisions 1 and 2 (`temp-sweep.json`, `SweepRule.cs`, `StartOfRun.cs` → `Run` returns `int` and `RunFolders` counts the legacy run folders [S2-A gate finding 1], `startOfRun.mjs` counts both, `sweepTemp.mjs` and `sweepTemp.test.mjs` deleted, A.5's rewrites and deletions, A.3's remaining tests including C-N4 and N7–N8 each seen RED before its code, the `TempDirsAreSwept` summary) | commit 3's four tests GREEN; B1–B3 red then restored; the old-reader observations of decision 1 |
+| 5 | `feat(scripts): old-coai-leftovers — list, pick, re-check, quarantine by identity, remove (E5 D4)` | the three files of decision 5; A.3 S1–S16 written FIRST against a body that does `rmSync` by name, S5/S6/S8/S11/S12/S16 observed red (B5), then the implementation | S1–S16 green on Linux (WSL) and on Windows (the owner's machine or the Windows CI leg's `node --test` — add the step if the leg lacks it, else record "Windows: not run" in the PR) |
 | 6 | `docs(tests): module_tests.md — the retired sweep, the invariant, the one-off clean-up, the residual risk (E5 S2-A)` | A.6 | `node .agents/conventions/tools/plan-lifecycle.mjs .` clean |
 
 Commits 3 and 4 are never squashed into each other locally: the PR is squash-merged by the repository's rule, and the
@@ -223,6 +272,7 @@ NOT needed: `StartOfRun` touches no process static).
 | C-N1 | `TheCount_IsTheOldTestNames_AndNothingProtected` (commit 4) | the eleven directories plus a FILE `coai-3.png` and `other-x` | `StartOfRun.Run(root, Rule) == 2` (`coai-panel-x`, `coai-futurething-x`); with `NeverSwept = []` it is 10 (the cache stays out) | — (new) |
 | C-N2 | `TheCount_OfAMissingRoot_IsZero` (commit 4) | a path under the private root that does not exist | `== 0`, no throw | — (new) |
 | C-N3 | `TheStartOfRun_ReferencesNothingOfTheProduct` (commit 4) | the text of `src_mcp/tests/StartOfRun.cs` | contains neither `PanelService` nor `CoaiMcp.Server`; and contains `EnumerateDirectories` (the scan must see what it knows is there) | — (new) |
+| C-N4 | `TheLegacyRunFolders_AreCountedOnTheirOwnLine_ExceptThisRunsOwn` (commit 4, **[S2-A gate finding 1]**) | `testsToDelete-coai-run-abc123`, `testsToDelete-coai-run-def456` (passed as `ownFolder`), `testsToDelete-coai-run-xyz`, `testsToDelete-coai-runabc123`, `testsToDelete-u1000-coai-run-abc123`, `coai-panel-x`, and a FILE `testsToDelete-coai-run-aaaaaa` | `StartOfRun.RunFolders(root, ownFolder) == 1` (`abc123` only); a missing root → 0; `StartOfRun.Run(root, Rule)` on the same root is 1 (`coai-panel-x`) — the two counts never mix | — (new) |
 | C-P1 | `EveryTempDirectoryThisProgramMakes_IsNeverTheTestsToSweep` | unchanged, in `TempDirsAreSwept.cs:103-110` | unchanged | — (stays green throughout) |
 
 **Node** — `src_vs_code/src/test/startOfRun.test.mjs` (`node:test`, `node:assert/strict`; the repo root and
@@ -238,6 +288,8 @@ NOT needed: `StartOfRun` touches no process static).
 | N4 | `a name is never stat-ed: the count reads names only` (rewrites `:114-130`) | recording io with `statSync` that throws | `startOfRun` returns and `statSync` was never called | — |
 | N5 | `the runner reports leftovers FIRST, before it makes its run folder` (rewrites `:132-138`) | the text of `run-tests.mjs` from `function main() {` | matches `/^function main\(\) \{\s*reportLeftoversFirst\(\);\s*\n/` | — |
 | N6 | `the start-of-run module cannot delete: it imports no remover` | the text of `scripts/startOfRun.mjs` | does not match `/\b(rm|rmSync|rmdir|rmdirSync|unlink|unlinkSync|rename|renameSync|exec|spawn)\b/`; does match `readdirSync` (the scan sees what it knows is there) | — |
+| N7 | `the legacy run folders are counted on their own line, the run's own gone from it` (commit 4, **[S2-A gate finding 1]**) | fake `io.readdirSync` returning `testsToDelete-coai-run-abc123`, `testsToDelete-coai-run-def456`, `testsToDelete-coai-run-xyz`, `testsToDelete-u1000-coai-run-abc123` (directories) and `testsToDelete-coai-run-aaaaaa` (a file), plus the eleven | `startOfRun({ dir, rule, io })` is `{ leftovers: 2, legacyRuns: 2 }`; `statSync` never called | — (new) |
+| N8 | `the runner prints the legacy line only when there is something to say` (commit 4) | `reportLeftoversFirst` over an injected `log` and `startOfRun` result: `{ leftovers: 0, legacyRuns: 0 }`, `{ leftovers: 0, legacyRuns: 3 }`, `{ leftovers: 2, legacyRuns: 0 }` | the first prints one line (`no old coai-* leftovers`), the second two (the second names `testsToDelete-coai-run-*`, "3" and the module_tests section), the third one | — (new) |
 
 **The one-off clean-up** — `scripts/lib/old-coai-leftovers.test.mjs`, every case over a fresh private root
 (`fs.mkdtempSync(path.join(os.tmpdir(), 'old-coai-leftovers-'))`, removed in `t.after` after links are unlinked by
@@ -245,19 +297,25 @@ name), `now` fixed, `probe` injected.
 
 | # | Test | Fixture | Assertion | RED with B5 |
 |---|---|---|---|---|
-| S1 | `the listing holds coai-* names with age and identity, and leaves out the product's, the cache, files and links` | `coai-panel-a` (60 min), `coai-ctx-b` (3 days), `coai-answers-x`, `coai-chat-x`, `coai-0.31.0`, `coai-3.png` (a file), a symlink `coai-link` → `coai-panel-a`, `other-dir` | exactly `coai-panel-a` and `coai-ctx-b`, each with `kind: 'coai'`, `ageMinutes` 60 / 4320, `dev`/`ino` equal to `lstatSync(…, {bigint:true})` of the same path as strings | — |
+| S1 | `the listing holds coai-* names with age and identity, and leaves out the product's, the cache, files and links` | `coai-panel-a` (60 min), `coai-ctx-b` (3 days), `coai-answers-x`, `coai-chat-x`, `coai-0.31.0`, `coai-3.png` (a file), a symlink `coai-link` → `coai-panel-a`, `other-dir` | `listing.tmp` is the root's absolute path ([S2-A gate finding 2]); `listing.entries` are exactly `coai-panel-a` and `coai-ctx-b`, each with `kind: 'coai'`, `ageMinutes` 60 / 4320, `dev`/`ino` equal to `lstatSync(…, {bigint:true})` of the same path as strings | — |
 | S2 | `a legacy run folder is listed with its claim state` | `testsToDelete-coai-run-abc123` + `.owner` = `host@linux:99999:1700000000` with `probe` → `dead` (listed `gone`); a second with `probe` → `alive` (`live`); a third with `.owner` = `host@win32:5` (`unknown`, E5 #15); a fourth with no `.owner` (`none`) | the four, `kind: 'legacy-run'`, the four states | — |
 | S3 | `a pick that is not in the listing is refused` | S1's root; pick `coai-ctx-c` | `refused`, check `not-listed`; nothing on disk changed | — |
 | S4 | `a product prefix, a cache and a name of another shape are refused even when picked` | a listing JSON hand-edited to carry `coai-chat-x`, `coai-0.31.0`, `other-dir` with their true identities | three `refused` with `protected`; all three exist afterwards with their bytes | — |
 | S5 | `a pick changed after the listing is refused` | listing taken; then `utimesSync(coai-panel-a, …)` to a new mtime | `refused`, check `changed`; the folder and its sentinel stay | removed |
 | S6 | `a pick swapped after the listing is refused and the swapped-in object keeps its bytes` | listing taken; `coai-panel-a` renamed to `aside`; (a) a NEW directory `coai-panel-a` with `sentinel.txt` = `"the swapped-in one"`; (b) in a second case a symlink `coai-panel-a` → `aside` | (a) `refused`/`changed`, the new directory and its bytes stay, `aside` stays; (b) `refused`/`not-a-directory`, the link stays, `aside` and its bytes stay; `hooks.beforeRename` never called in either | (a) the swapped-in sentinel is gone |
 | S7 | `a legacy run folder with a live or unknown claim is refused; one with a gone claim goes with its claim file` | S2's four | `live` → `refused`/`owner-live`; `unknown` → `refused`/`owner-unknown`; `gone` and `none` → `removed`, their `.owner` files gone, the live and unknown ones' `.owner` files intact | the live one is removed |
-| S8 | `a quarantine name already taken refuses the pick and renames nothing` | `hooks.drawName` returns a fixed name; the test pre-creates an EMPTY directory there (POSIX also: a file there) | `refused`/`quarantine-taken`; the pre-created object untouched (same identity), `coai-panel-a` untouched; on POSIX no placeholder left behind | removed |
+| S8 | `when every drawn quarantine name is taken the pick is refused and nothing is renamed` | `hooks.drawName` returns the SAME fixed name on every call (so five draws, all taken); the test pre-creates an EMPTY directory there (POSIX also, in a second case: a file there) | `refused`/`quarantine-taken`; `drawName` was called exactly `MOVE_DRAWS` (5) times; the pre-created object untouched (same identity), `coai-panel-a` untouched; on POSIX no placeholder left behind | removed |
 | S9 | `an unchanged pick is removed through the quarantine name by identity` | `hooks.drawName` records; `hooks.beforeRename` asserts the placeholder exists and is empty (POSIX) | `removed`; `coai-panel-a` gone; the recorded name matches `/^\.coai-panel-a\.teststodelete-quarantine-[0-9]+-[0-9a-f]{8}$/`; nothing else in the root changed (`readdirSync` before/after differ by exactly that name) | (passes for the wrong reason — which is why S5/S6/S8 exist) |
-| S10 | `the CLI: list writes the listing, remove refuses a usage error with the legal forms, exit codes 0/1/2` | `execFileSync(process.execPath, [cli, 'list', '--tmp', root, '--out', file])`; then `remove --listing file coai-panel-a coai-ctx-c` | the JSON file holds S1's two entries; stdout has `removed coai-panel-a` and `refused coai-ctx-c: not-listed`; exit 1; `remove` with no `--listing` exits 2 naming the forms | — |
+| S10 | `the CLI: list writes the listing, remove refuses a usage error with the legal forms, exit codes 0/1/2` | `execFileSync(process.execPath, [cli, 'list', '--tmp', root, '--out', file])`; then `remove --listing file coai-panel-a coai-ctx-c` | the JSON file is `{ tmp, entries }` with S1's two entries; stdout has `removed coai-panel-a` and `refused coai-ctx-c: not-listed`; exit 1; `remove` with no `--listing` exits 2 naming the forms | — |
+| S11 | `a rename that fails removes its own empty placeholder and refuses the pick` (**[S2-A gate finding 0]**, POSIX) | `io.renameSync` throws `EACCES` (an `io` that fails on purpose); `hooks.drawName` records the name | `refused`, check `error-EACCES`; `coai-panel-a` and its sentinel untouched; the drawn placeholder name is NOT in the root afterwards | the placeholder is still there |
+| S12 | `a taken draw draws a new name, and the move lands on the second` (**[S2-A gate finding 0]**) | `hooks.drawName` returns a pre-created occupied name first, a free one second | `removed`; `drawName` called twice; the occupied object untouched (same identity); only the second name was ever a placeholder | removed with one draw |
+| S13 | `remove uses the listing's temp root, and refuses a --tmp that is another root` (**[S2-A gate finding 2]**) | a listing taken in root A with `coai-panel-a`; a root B holding ANOTHER folder `coai-panel-a` (same name, own sentinel); the CLI run from a third working directory: (1) `remove --listing <A's file> --tmp B coai-panel-a`; (2) `remove --listing <A's file> --tmp A/ coai-panel-a` (A spelled with a trailing separator); (3) a listing file with no `tmp` key, `remove --listing <it> coai-panel-a` | (1) exits 2, one line naming both roots, A's and B's folders and sentinels untouched; (2) exits 0 and `removed coai-panel-a` (the same root, spelled another way), A's folder gone, B's untouched; (3) exits 2 naming the legal forms; S10's `remove` without any `--tmp` removes from the listing's root, never from `os.tmpdir()` | B's folder is removed in (1) |
+| S14 | `the listing reports this script's own quarantines, and remove accepts them by name` (**[S2-A gate finding 3]**) | `.coai-panel-a.teststodelete-quarantine-4242-0a1b2c3d` (a directory with a sentinel), `.testsToDelete-coai-run-abc123.teststodelete-quarantine-4242-0a1b2c3d` with its `.owner` (probe `gone`), `.coai-chat-x.teststodelete-quarantine-4242-0a1b2c3d` (a PROTECTED original), `.coai-panel-b.teststodelete-quarantine-4242-0a1b2c3d` as a FILE | the listing carries the first two as `kind: 'quarantine'` with `of`; not the protected one, not the file; `remove` of the first: `removed`; of the second: `removed` and `testsToDelete-coai-run-abc123.owner` gone; a hand-edited listing naming the protected quarantine: `refused`/`protected`; one of them modified after the listing: `refused`/`changed` | removed (every case passes for the wrong reason; the refusals are red) |
+| S15 | `kill after the rename, a second run finishes it` (**[S2-A gate finding 3]**) | a child process (`execFileSync` of a tiny ESM script that imports the library and passes `hooks.afterRename` that sends itself `SIGKILL`) removes `coai-panel-a`; then `list` in the parent, then `remove` of the quarantine's name | the child dies by `SIGKILL`; the root holds the quarantine name and no `coai-panel-a`; the second `list` shows it as `kind: 'quarantine'`, `of: 'coai-panel-a'`; the second `remove` answers `removed`; the root is empty | removed by the first run — the child never reaches its kill |
+| S16 | `the quarantined object is re-checked after the move by identity AND last-write time; either change keeps it` (**[S2-A gate finding 4]**) | `hooks.afterRename(from, to)` (a) `utimesSync(to, …)` to a new mtime; (b) removes `to` and makes a NEW directory at `to` with a sentinel | (a) and (b): `refused`/`moved-but-changed`; the quarantined object and its bytes stay in the root under the quarantine name; the next `list` shows it as `kind: 'quarantine'`; nothing else removed | removed |
 
 Run: C# `node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*TempDirsAreSwept" --filter-class "*PruneOldScratchDirs*" --filter-class "*TheTestSweepIsRetired*"`
-then the whole suite; Node `cd src_vs_code && npm test`; the script `node --test "scripts/**/*.test.mjs"`; the scan
+then the whole suite; Node `cd src_vs_code && npm test` (lowered: `nice -n 19`); the script `node --test "scripts/**/*.test.mjs"`; the scan
 `node .agents/conventions/tools/sweeper-scan.mjs --root .` before commit 1 and after commit 6.
 
 ## A.4 — The characterization cases of `PruneOldScratchDirs` (A.1 § 4; commit 1)
@@ -313,7 +371,12 @@ Break-it (A.1 § 6): with the `>=` at `PanelService.cs:1516` changed to `>` C5 i
   and records the residual risk (an old checkout keeps its own file and its own age-only sweep; update or rebase it,
   or run it with a private temp root). A new section § *The one-off clean-up of old `coai-*` test leftovers*: the two
   commands verbatim, the checks in order, the quarantine shape, "run with no coai session and no VS Code window open",
-  the legacy `testsToDelete-coai-run-*` line, and what it never does (never a sweep, never the janitor's, never wired
+  the legacy `testsToDelete-coai-run-*` line — **[S2-A gate finding 1]** the section says the one-off clean-up handles BOTH the
+  `coai-*` leftovers and the legacy `testsToDelete-coai-run-*` run folders, that both runners count both (two lines), and that a Linux
+  reader's legacy claims are always `unknown` (rule §3) — the listing temp root and the `--tmp` refusal (finding 2), the interrupted
+  clean-ups the listing reports and `remove` finishes (finding 3), the post-move re-check by identity and last-write time and the
+  residual window (finding 4), the bounded redraw and the placeholder's removal (finding 0), the follow-up to switch to the
+  reference's exported identity helpers (P4) — and what it never does (never a sweep, never the janitor's, never wired
   into a runner).
 - `shared/temp-sweep.json` `why` — decision 1.
 - `TheTestSweepLeavesAJobAloneTests.cs` doc text — A.5's last row.
@@ -342,7 +405,9 @@ Break-it (A.1 § 6): with the `>=` at `PanelService.cs:1516` changed to `>` C5 i
    `ConsultCheckSweepTests`, `ConsultantHomeSweepTests`, `AScratchSweepRunsOnTheConsultationBeatTests`, `chatStoreSweep.test.ts`).
 6. The residual risk (D4) restated; the platforms the script's tests ran on.
 7. A note for E5 § *Notes for the parent*, new note 19: the reference's `identityOf`/`moveExclusively` are duplicated
-   here because they are not exported (decision 5).
+   here because they are not exported (decision 5, P4 decided: copy now, stage A merges before any new conventions release).
+   **Follow-up to record:** once the conventions export them, `scripts/lib/old-coai-leftovers.mjs` switches to the exported
+   function and deletes its copy; the same note names S4's wrap as the second consumer.
 
 ## A.8 — What the Opus reviewer checks
 
@@ -361,7 +426,7 @@ Break-it (A.1 § 6): with the `>=` at `PanelService.cs:1516` changed to `>` C5 i
    product-prefix scan and no `TempDir` test was deleted; the three scans still assert their must-find prefix.
 7. **The script**: no `rmSync` by the picked NAME anywhere (`grep -n 'rmSync' scripts/lib/old-coai-leftovers.mjs` shows
    only the call on the quarantined path); the check order of decision 5 in code and in the module's doc comment;
-   `identityOf` is `lstat` with `bigint`; the Windows branch uses the reference's `isTakenRename`; nothing throws out of
+   `identityOf` is `lstat` with `bigint`; the placeholder is removed in a `finally` only while it is still our empty reservation, and a taken draw redraws at most `MOVE_DRAWS` times; the post-move check compares `dev`, `ino` AND `mtimeMs`; the Windows branch uses the reference's `isTakenRename`; nothing throws out of
    `removePicked`; S6 has BOTH the directory and the link variant; the CLI has no `--force`, no `--all`, no glob.
 8. **`temp-sweep.json`**: `neverSwept` byte-identical to `origin/main`'s (`git diff` of the file shows only `why`,
    `prefix` and `keepMinutes` lines); the `why` names the PR and says "no test sweep deletes by this file".
@@ -375,8 +440,10 @@ Break-it (A.1 § 6): with the `>=` at `PanelService.cs:1516` changed to `>` C5 i
 - **P2** — no count line at all (decision 2's "why a count"). Spec: count; a silent retirement hides the pile the
   operator's ruling was about.
 - **P3** — rename `TempDirsAreSwept` now. Spec: keep until S2-B deletes it (decision 2).
-- **P4** — the script's identity helpers duplicated from the reference (decision 5). Spec: duplicate ~40 lines with a
-  source comment; ask the parent to export them (note 19).
+- **P4** — the script's identity helpers duplicated from the reference (decision 5). **Decided 2026-11-02:** duplicate ~40 lines NOW
+  with a source comment (stage A merges before any new conventions release, so an import of a function that does not exist yet
+  cannot be built); the follow-up to switch to an exported function is recorded (A.7 item 7, note 19, `module_tests.md`).
+  P1–P3 stay as the spec's recommended answers: delete `prefix`/`keepMinutes` (P1), count (P2), keep the class name (P3).
 
 ## Definition of Done (S2-A)
 
@@ -387,6 +454,7 @@ Break-it (A.1 § 6): with the `>=` at `PanelService.cs:1516` changed to `>` C5 i
 - [ ] `PanelService.cs` and the product sweep's tests unchanged and green (A.8 check 2, A.7 item 5).
 - [ ] The three product-prefix scans unchanged in code and green.
 - [ ] `shared/temp-sweep.json`: `neverSwept` unchanged; `prefix`, `keepMinutes` gone; `why` rewritten; the old-reader observations in the PR.
-- [ ] The one-off clean-up script with S1–S10 green (S5/S6/S8 observed red under B5), documented in `module_tests.md`.
+- [ ] The one-off clean-up script with S1–S16 green (S5/S6/S8/S11/S12/S16 observed red under B5), documented in `module_tests.md`, with the residual window and the P4 follow-up.
+- [ ] Both start-of-run counters print the legacy `testsToDelete-coai-run-*` line (C-N4, N7, N8) — [S2-A gate finding 1].
 - [ ] The stage-A record (A.7 item 4) in the PR, with the scan before and after.
 - [ ] `plan-lifecycle.mjs` clean; E5's S2-A DoD boxes ticked in the merging PR; this file's status line updated to "S2-A shipped #<PR>; S2-B half pending".
