@@ -7,26 +7,19 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The suite sweeps up after itself, once, before anything runs.
+/// Since E5 S2-A this fixture sweeps NOTHING: at the start of the run it deletes a killed run's fake-CLI steering file, counts the old <c>coai-*</c> leftovers
+/// once and says how many; S2-B replaces it with the copied <c>LeftoversSweepFixture</c>.
 /// </summary>
 /// <remarks>
-/// <para><b>Measured on this machine, 2026-09-05.</b> The temp folder held 21,857 directories this
-/// project had made. The product's own three prefixes accounted for 3,395 of them and <b>not one was
-/// older than its six-hour window</b> — its sweeper works. The rest were the TESTS: 4,650
-/// <c>coai-panel-*</c> older than six hours, the oldest at five days, plus 1,386 <c>coai-prompts-*</c>
-/// and 184 leftover worktree directories. Nothing had ever removed them.</para>
-/// <para><b>Why a sweep and not forty fixed Disposes.</b> Forty test classes create a temp directory
-/// and delete it in <c>Dispose</c>, and that delete loses a race whenever a file in it is still held
-/// open — a spawned CLI, a SQLite handle, a reader mid-poll. Each of those catches the exception, and
-/// correctly: a leftover temp directory is not a failing test. What was missing is anybody clearing
-/// the leftovers afterwards, which is one sweep rather than forty corrections.</para>
-/// <para>It runs ONCE per assembly, deletes only what this project named, only what is older than
-/// <see cref="Rule"/>'s window, and never the product's own working directories — so neither a
-/// directory another test run is using right now nor a live round's is touched.</para>
+/// <para><b>Why nothing is swept.</b> The age-only <c>coai-*</c> sweep that stood here (measured 2026-09-05: 21,857 folders, 4,650 of them old <c>coai-panel-*</c>) deleted on
+/// a name and an age, and a name and an age cannot say whose a folder is: another user's run, a live chat that wrote nothing for an hour. It was retired with its twin in the
+/// extension's runner (<c>todo/PLAN_test_leftovers_E5_S2_spec.md</c>); <see cref="StartOfRun"/> counts, names only, and the one-off clean-up
+/// (<c>scripts/old-coai-leftovers.mjs</c>) takes what a person picks. The product's own sweep (<c>PanelService.PruneOldScratchDirs</c>) is untouched and keeps
+/// its own tests below.</para>
 /// <para>In the serial <c>fakecli-env</c> collection: <c>TheProductSweeps_AtMostOncePerWindow</c> calls <c>PanelService.ForgetTheLastSweep</c>, which resets a static of
 /// the PROCESS, and the next <c>BuildWork</c> anywhere then walks the real temp folder inside its round's deadline (C6 of
 /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>). It is also an assembly fixture; the attribute changes nothing about that.</para>
-/// <para><b>It sweeps the MACHINE's temp folder, <see cref="RunTemp.Real"/> — not the run's.</b> Since E2 every run makes everything inside its own
+/// <para><b>It counts in the MACHINE's temp folder, <see cref="RunTemp.Real"/> — not the run's.</b> Since E2 every run makes everything inside its own
 /// <c>testsToDelete-coai-run-&lt;6&gt;</c> folder, with the three temp variables pointed at it (<see cref="RunTemp"/>), so <c>Path.GetTempPath()</c> is the
 /// run's folder; the leftovers of EARLIER runs and of the product are in the real one. The run folder and its restore belong to
 /// <see cref="RunTempFixture"/>, which has no test methods — never to this class.</para>
@@ -35,32 +28,9 @@ namespace CoaiMcp.Tests;
 public sealed class TempDirsAreSwept
 {
     /// <summary>
-    /// Everything this suite makes, by the one thing they all share.
+    /// What the product makes under <c>coai-</c> at runtime — <c>shared/temp-sweep.json</c>, which the extension's runner reads too. The start-of-run count leaves
+    /// these out, and the one-off clean-up refuses them; nothing selects by age any more.
     /// </summary>
-    /// <remarks>
-    /// A pattern rather than a list, because the list was wrong the first time it was written: the
-    /// thirteen prefixes it named left 6,759 directories behind, under twelve more nobody had
-    /// thought of (<c>coai-e2e-</c>, <c>coai-ctx-</c>, <c>coai-deal-</c>, <c>coai-bom-</c>…). A test
-    /// class that invents a fourteenth tomorrow is the normal case, and it is swept too.
-    /// </remarks>
-    private static readonly string[] Prefixes = ["coai-*"];
-
-    /// <summary>
-    /// How old a leftover must be, and what is never one — <c>shared/temp-sweep.json</c>, which the
-    /// extension's runner reads too.
-    /// </summary>
-    /// <remarks>
-    /// <para><b>Ten minutes, and it was two hours, and before that a day.</b> A day was far too slow:
-    /// a machine running this suite repeatedly accumulated everything it made IN that day, and what
-    /// that cost was not disk — it was <c>RosterBuilder.BuildWork</c>, which walks the temp directory.
-    /// Measured here 2026-09-13: <b>81,986</b> directories, and a test that calls <c>BuildWork</c> a
-    /// hundred times went from 8 seconds to over four minutes. Ten minutes is the operator's ruling of
-    /// 2026-09-18, for both runners: the longest single run of this suite is under ten minutes, so a
-    /// concurrent run is still never reached.</para>
-    /// <para><b>And the product's own working directories are excepted</b>, which the two-hour window
-    /// never did: a live chat's directory can sit with nothing written into it for longer than either
-    /// window, and <c>coai-*</c> matched it.</para>
-    /// </remarks>
     internal static readonly SweepRule Rule = SweepRule.Shared();
 
     /// <summary>
@@ -73,6 +43,9 @@ public sealed class TempDirsAreSwept
     /// </summary>
     private static int _steeringLeftoverChecked;
 
+    /// <summary>The old-leftover count runs ONCE per process, for the same reason: this class is also a test class and its constructor runs again for every Fact.</summary>
+    private static int _leftoversCounted;
+
     public TempDirsAreSwept()
     {
         if (Interlocked.Exchange(ref _steeringLeftoverChecked, 1) == 0)
@@ -80,32 +53,32 @@ public sealed class TempDirsAreSwept
             _ = FakeCliSteering.DeleteALeftover(Console.Error.WriteLine);
         }
 
-        StartOfRun.Run(RunTemp.Real, Rule);
+        if (Interlocked.Exchange(ref _leftoversCounted, 1) == 0)
+        {
+            Console.Error.WriteLine(StartOfRun.Sentence(StartOfRun.Run(RunTemp.Real, Rule), RunTemp.Real));
+            if (StartOfRun.RunFolders(RunTemp.Real, RunTemp.Folder) is > 0 and var legacy)
+            {
+                Console.Error.WriteLine(StartOfRun.LegacySentence(legacy, RunTemp.Real));
+            }
+        }
     }
 
-    [Fact]
-    public void TheSharedRuleIsTheOperatorsTenMinutes()
-    {
-        Rule.Prefix.Should().Be("coai-");
-        Rule.Keeps.Should().Be(TimeSpan.FromMinutes(10));
-    }
-
-    /// <summary>Every temp directory this program makes at runtime is one the test sweep leaves alone.</summary>
+    /// <summary>Every temp directory this program makes at runtime is named in the product's list — the one the one-off clean-up refuses.</summary>
     /// <remarks>
-    /// <para>A new working directory that nobody adds to <c>shared/temp-sweep.json</c> would be removed
-    /// out from under a live round by the next test run on the same machine. (Plan round, local.)</para>
+    /// <para>A new working directory that nobody adds to <c>shared/temp-sweep.json</c> is what the one-off clean-up
+    /// would offer a person as a leftover, beside a live round's. (Plan round, local.)</para>
     /// <para>A scan of THIS program's own source, and it cannot go quiet: it must find the prefixes it
     /// already knows are there, so a reformat that stops it matching is red, not an empty list every
     /// assertion passes over. Each program holds its own half; the Team server's is in its suite and
-    /// the extension's in <c>sweepTemp.test.mjs</c>.</para>
+    /// the extension's in <c>startOfRun.test.mjs</c>.</para>
     /// </remarks>
     [Fact]
-    public void EveryTempDirectoryThisProgramMakes_IsNeverTheTestsToSweep()
+    public void EveryTempDirectoryThisProgramMakes_IsNamedInTheProductsList()
     {
         var made = TempPrefixesIn("src", "runners", "core");
 
         made.Should().Contain(["coai-answers-", "coai-plan-"], "the scan must still see what it knows is there");
-        Rule.NeverSwept.Should().Contain(made, "the product sweeps its own directories, on its own clock");
+        Rule.NeverSwept.Should().Contain(made, "the product sweeps its own directories, on its own clock, and the clean-up refuses them");
     }
 
     /// <summary>Every <c>CreateTempSubdirectory("coai-…")</c> under the named folders of <c>src_mcp</c>.</summary>
@@ -120,40 +93,6 @@ public sealed class TempDirsAreSwept
                 && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .SelectMany(f => literal.Matches(File.ReadAllText(f)).Select(m => m.Groups[1].Value))
             .Distinct()];
-    }
-
-    [Fact]
-    public void AProductWorkingDirectory_SurvivesTheTestSweep_WhateverItsAge()
-    {
-        using var root = TempDir.For("coai-sweep-owned-");
-        var chat = Directory.CreateDirectory(root.At("coai-chat-live")).FullName;
-        var leftover = Directory.CreateDirectory(root.At("coai-panel-old")).FullName;
-        foreach (var dir in new[] { chat, leftover })
-        {
-            Directory.SetLastWriteTimeUtc(dir, DateTime.UtcNow.AddHours(-3));
-        }
-
-        PanelService.PruneOldScratchDirs(root, DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
-
-        Directory.Exists(chat).Should().BeTrue("a chat that wrote nothing for three hours is still somebody's chat");
-        Directory.Exists(leftover).Should().BeFalse("and the test's own leftover beside it still goes");
-    }
-
-    [Fact]
-    public void TheSweepRemovesWhatIsOldAndLeavesWhatIsInUse()
-    {
-        var root = Directory.CreateTempSubdirectory("coai-sweep-test-").FullName;
-        var old = Directory.CreateDirectory(Path.Combine(root, "coai-panel-old")).FullName;
-        var fresh = Directory.CreateDirectory(Path.Combine(root, "coai-panel-fresh")).FullName;
-        // The LAST WRITE is what the sweep reads — Windows hands a recreated name its predecessor's
-        // creation time, so that one lies about exactly the case this is for.
-        Directory.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-3));
-
-        PanelService.PruneOldScratchDirs(root, DateTime.UtcNow.AddDays(-1), ["coai-panel-*"]);
-
-        Assert.False(Directory.Exists(old), "a directory three days old is nobody's working state");
-        Assert.True(Directory.Exists(fresh), "and one made a moment ago may be another run's");
-        Directory.Delete(root, recursive: true);
     }
 
     [Fact]
@@ -269,27 +208,6 @@ public sealed class TempDirsAreSwept
 
         seen.Distinct().Should().BeEquivalentTo(["Escalations.cs", "ReviewTreeRoot.cs", "WorktreeManager.cs"],
             "a raw recursive delete in a fourth file is a deleter that skipped the shared one — use GitScratch.DeleteEvenIfReadOnly");
-    }
-
-    [Fact]
-    public void ADownloadedServerIsNotScratch_AndSurvives()
-    {
-        // The sweep matches coai-*, and a downloaded server sits under coai-<version> in the same
-        // folder. Deleting one would cost a download and look like the extension had lost its
-        // install; the gate asked for this check by name.
-        var root = Directory.CreateTempSubdirectory("coai-sweep-cache-").FullName;
-        var cache = Directory.CreateDirectory(Path.Combine(root, "coai-0.17.5")).FullName;
-        var scratch = Directory.CreateDirectory(Path.Combine(root, "coai-panel-whatever")).FullName;
-        foreach (var dir in new[] { cache, scratch })
-        {
-            Directory.SetLastWriteTimeUtc(dir, DateTime.UtcNow.AddDays(-9));
-        }
-
-        PanelService.PruneOldScratchDirs(root, DateTime.UtcNow.AddDays(-1), Prefixes);
-
-        Assert.True(Directory.Exists(cache), "a version is a cache, not scratch");
-        Assert.False(Directory.Exists(scratch), "and the scratch beside it still goes");
-        Directory.Delete(root, recursive: true);
     }
 
     /// <summary>

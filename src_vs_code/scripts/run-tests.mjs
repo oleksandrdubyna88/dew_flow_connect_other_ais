@@ -27,8 +27,7 @@ import { spawnSync } from 'node:child_process';
 import { availableParallelism, hostname, tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { readRule } from './sweepTemp.mjs';
-import { startOfRun } from './startOfRun.mjs';
+import { readRule, startOfRun } from './startOfRun.mjs';
 
 /**
  * Every test file under `root`, by extension: compiled ones from `out/test`, source ones from
@@ -97,17 +96,22 @@ function run(files) {
 }
 
 /**
- * What earlier runs left in temp, removed BEFORE this one makes anything (`startOfRun.mjs`), and
- * said, so a run that starts by removing four thousand directories tells somebody. It never stops
- * the run: housekeeping that fails is reported and stepped over.
+ * What earlier runs and the product left under `coai-` in temp, COUNTED and said BEFORE this run makes anything (`startOfRun.mjs`) — no test sweep
+ * removes them since E5 S2-A, so a pile that grows tells somebody instead of hiding. A second line names the legacy `testsToDelete-coai-run-*` folders a
+ * killed run leaves. It never stops the run: housekeeping that fails is reported and stepped over. `log` and `count` are the seams its own test uses.
  */
-function sweepFirst() {
+export function reportLeftoversFirst({ log = console.log, count = () => startOfRun({ dir: tmpdir(), rule: readRule('..') }) } = {}) {
   try {
-    const { removed, failed } = startOfRun({ dir: tmpdir(), rule: readRule('..') });
-    console.log(`run-tests: swept ${removed} leftover temp director${removed === 1 ? 'y' : 'ies'}`
-      + (failed > 0 ? `, ${failed} could not be removed` : ''));
+    const { leftovers, legacyRuns } = count();
+    log(leftovers === 0
+      ? `run-tests: no old coai-* leftovers in ${tmpdir()}`
+      : `run-tests: ${leftovers} old coai-* director${leftovers === 1 ? 'y' : 'ies'} in ${tmpdir()} — no test sweep removes them (E5 S2-A); see research/module_tests.md § The one-off clean-up`);
+    if (legacyRuns > 0) {
+      log(`run-tests: ${legacyRuns} legacy testsToDelete-coai-run-* director${legacyRuns === 1 ? 'y' : 'ies'} in ${tmpdir()} — a killed run leaves one; some may belong to a run still going; `
+        + 'the one-off clean-up lists them with their claim (E5 S2-A); see research/module_tests.md § The one-off clean-up');
+    }
   } catch (error) {
-    console.log(`run-tests: the temp sweep did not run (${error.message}); the tests still will`);
+    log(`run-tests: the leftover count did not run (${error.message}); the tests still will`);
   }
 }
 
@@ -240,7 +244,7 @@ function runAll() {
 }
 
 function main() {
-  sweepFirst();
+  reportLeftoversFirst();
   const folder = beginRun();
   let status = 1;
   try {

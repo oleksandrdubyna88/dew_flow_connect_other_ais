@@ -4,8 +4,8 @@ import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { readRule } from '../../scripts/sweepTemp.mjs';
-import { startOfRun } from '../../scripts/startOfRun.mjs';
+import { readRule, startOfRun } from '../../scripts/startOfRun.mjs';
+import { reportLeftoversFirst } from '../../scripts/run-tests.mjs';
 
 /**
  * The extension's test run touches NO `coai-*` directory at its start, at any age, whatever `neverSwept` holds
@@ -73,4 +73,102 @@ test('an unmarked coai-chat-live survives the start of a run when coai-chat- is 
   const sentinel = path.join(root, 'coai-chat-live', 'sentinel.txt');
   assert.ok(fs.existsSync(sentinel), 'a live chat\'s directory is somebody\'s even when the list that would protect it forgot its prefix');
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'still somebody\'s chat');
+});
+
+test('the shared file names the product\'s directories and nothing that selects', () => {
+  // The extension's own runtime directory, made by chatLaunch.ts. The server's are held by its suite.
+  assert.ok(rule.neverSwept.includes('coai-chat-'), 'a live chat\'s working directory is not a leftover');
+  assert.equal('prefix' in rule, false, 'nothing selects by prefix any more: a key left in the file would read as a decision');
+  assert.equal('keepMinutes' in rule, false, 'nor by age: ten minutes beside a sweep that no longer exists would read as "something still removes after ten minutes"');
+});
+
+test('every temp directory the extension makes at runtime is one the product\'s list names', () => {
+  // A scan of THIS program's own source that cannot go quiet: it must find the one prefix it knows is
+  // there. A new runtime directory nobody adds to the shared list is what the one-off clean-up would
+  // offer a person as a leftover, beside a live session's. (Plan round, local.)
+  const src = path.join(here, '..');
+  const made = [...new Set(fs.readdirSync(src, { recursive: true })
+    .filter((f) => f.endsWith('.ts') && !f.split(/[\\/]/).includes('test'))
+    .flatMap((f) => [...fs.readFileSync(path.join(src, f), 'utf8')
+      .matchAll(/mkdtemp(?:Sync)?\(\s*path\.join\(\s*(?:os\.)?tmpdir\(\)\s*,\s*['"`](coai-[a-z-]+)['"`]/g)].map((m) => m[1])))];
+
+  assert.ok(made.includes('coai-chat-'), `the scan must still see chatLaunch.ts's directory; it found ${made.join(', ') || 'nothing'}`);
+  for (const prefix of made) {
+    assert.ok(rule.neverSwept.includes(prefix), `${prefix} is made at runtime and is not in shared/temp-sweep.json`);
+  }
+});
+
+/** A directory listing as `readdirSync(dir, { withFileTypes: true })` answers it. */
+function entry(name, isDirectory = true) {
+  return { name, isDirectory: () => isDirectory };
+}
+
+test('the count is the old test names, never a protected one, a cache or a file', () => {
+  const io = { readdirSync: () => [...names.map((name) => entry(name)), entry('coai-3.png', false), entry('other-x')] };
+
+  assert.equal(startOfRun({ dir: '/nowhere', rule, io }).leftovers, 2, 'coai-panel-x and coai-futurething-x: the only names no product prefix, cache or file explains');
+  assert.equal(startOfRun({ dir: '/nowhere', rule: { ...rule, neverSwept: [] }, io }).leftovers, 10, 'the version cache coai-0.17.5 stays out whatever the list holds');
+});
+
+test('a name is never stat-ed: the count reads names only', () => {
+  const statted = [];
+  const io = {
+    readdirSync: () => ['somebody-elses', 'npm-12345', 'coai-x'].map((name) => entry(name)),
+    statSync: (target) => { statted.push(target); throw new Error('a count never stats'); },
+  };
+
+  assert.deepEqual(startOfRun({ dir: '/nowhere', rule, io }), { leftovers: 1, legacyRuns: 0 });
+  assert.deepEqual(statted, []);
+});
+
+test('the runner reports leftovers FIRST, before it makes its run folder', () => {
+  const runner = fs.readFileSync(path.join(here, '..', '..', 'scripts', 'run-tests.mjs'), 'utf8');
+  const main = runner.slice(runner.indexOf('function main() {'));
+
+  assert.match(main, /^function main\(\) \{\s*reportLeftoversFirst\(\);\s*\n/,
+    'a count after the run starts would read the run\'s own folder');
+});
+
+test('the start-of-run module cannot delete: it imports no remover', () => {
+  const text = fs.readFileSync(path.join(here, '..', '..', 'scripts', 'startOfRun.mjs'), 'utf8');
+
+  assert.doesNotMatch(text, /\b(rm|rmSync|rmdir|rmdirSync|unlink|unlinkSync|rename|renameSync|exec|spawn)\b/, 'the start of a run counts, it takes nothing');
+  assert.match(text, /readdirSync/, 'the scan must still see what it knows is there');
+});
+
+test('the legacy run folders are counted on their own line, the owner form and the lookalikes left out', () => {
+  const io = {
+    readdirSync: () => [
+      entry('testsToDelete-coai-run-abc123'), entry('testsToDelete-coai-run-def456'), entry('testsToDelete-coai-run-xyz'), entry('testsToDelete-coai-runabc123'),
+      entry('testsToDelete-u1000-coai-run-abc123'), entry('testsToDelete-coai-run-aaaaaa', false), ...names.map((name) => entry(name)),
+    ],
+    statSync: () => { throw new Error('a count never stats'); },
+  };
+
+  assert.deepEqual(startOfRun({ dir: '/nowhere', rule, io }), { leftovers: 2, legacyRuns: 2 });
+});
+
+test('the runner prints the legacy line only when there is something to say', () => {
+  const said = (counted) => {
+    const lines = [];
+    reportLeftoversFirst({ log: (line) => lines.push(line), count: () => counted });
+    return lines;
+  };
+
+  const none = said({ leftovers: 0, legacyRuns: 0 });
+  assert.equal(none.length, 1);
+  assert.match(none[0], /^run-tests: no old coai-\* leftovers in /);
+
+  const legacy = said({ leftovers: 0, legacyRuns: 3 });
+  assert.equal(legacy.length, 2);
+  assert.match(legacy[1], /3 legacy testsToDelete-coai-run-\* directories/);
+  assert.match(legacy[1], /research\/module_tests\.md § The one-off clean-up/);
+
+  const old = said({ leftovers: 2, legacyRuns: 0 });
+  assert.equal(old.length, 1);
+  assert.match(old[0], /2 old coai-\* directories/);
+
+  const broken = [];
+  reportLeftoversFirst({ log: (line) => broken.push(line), count: () => { throw new Error('boom'); } });
+  assert.deepEqual(broken, ['run-tests: the leftover count did not run (boom); the tests still will']);
 });

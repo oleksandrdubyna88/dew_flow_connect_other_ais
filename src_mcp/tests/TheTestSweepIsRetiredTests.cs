@@ -66,4 +66,71 @@ public sealed class TheTestSweepIsRetiredTests
         File.Exists(sentinel).Should().BeTrue("a live chat's folder is somebody's even when the list that would protect it forgot its prefix");
         File.ReadAllText(sentinel).Should().Be("still somebody's chat");
     }
+
+    /// <summary>The eleven directories, a FILE that looks like a cache and a name of somebody else's.</summary>
+    private static void MakeTheCountedRoot(string root)
+    {
+        foreach (var name in Names)
+        {
+            Make(root, name, Bytes(name), DateTime.UtcNow.AddDays(-10));
+        }
+
+        File.WriteAllText(Path.Combine(root, "coai-3.png"), "a file, not a directory");
+        Directory.CreateDirectory(Path.Combine(root, "other-x"));
+    }
+
+    [Fact]
+    public void TheCount_IsTheOldTestNames_AndNothingProtected()
+    {
+        using var root = TempDir.For("retired-sweep-");
+        MakeTheCountedRoot(root);
+
+        StartOfRun.Run(root, TempDirsAreSwept.Rule).Should().Be(2, "coai-panel-x and coai-futurething-x are the only names no product prefix, cache or file explains");
+        StartOfRun.Run(root, TempDirsAreSwept.Rule with { NeverSwept = [] }).Should().Be(10, "the version cache coai-0.17.5 stays out whatever the list holds");
+        Names.Should().OnlyContain(name => Directory.Exists(Path.Combine(root, name)), "counting takes nothing");
+    }
+
+    [Fact]
+    public void TheCount_OfAMissingRoot_IsZero()
+    {
+        using var root = TempDir.For("retired-sweep-");
+
+        StartOfRun.Run(Path.Combine(root, "not-there"), TempDirsAreSwept.Rule).Should().Be(0);
+        StartOfRun.RunFolders(Path.Combine(root, "not-there"), string.Empty).Should().Be(0);
+    }
+
+    [Fact]
+    public void TheStartOfRun_ReferencesNothingOfTheProduct()
+    {
+        var text = File.ReadAllText(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "tests", "StartOfRun.cs")));
+
+        text.Should().NotContain("PanelService").And.NotContain("CoaiMcp.Server", "a start-of-run that cannot reach the product's sweeper cannot call it");
+        text.Should().NotMatchRegex(@"\.(Delete|Move|Remove\w*)\(", "the start of a run counts, it takes nothing");
+        text.Should().Contain("EnumerateDirectories", "the scan must still see what it knows is there");
+    }
+
+    /// <summary>[S2-A gate finding 1] The legacy run folders are a count of their own, and this run's own folder is not in it.</summary>
+    [Fact]
+    public void TheLegacyRunFolders_AreCountedOnTheirOwnLine_ExceptThisRunsOwn()
+    {
+        using var root = TempDir.For("retired-sweep-");
+        foreach (var name in (string[])["testsToDelete-coai-run-abc123", "testsToDelete-coai-run-def456", "testsToDelete-coai-run-xyz", "testsToDelete-coai-runabc123",
+            "testsToDelete-u1000-coai-run-abc123", "coai-panel-x"])
+        {
+            Directory.CreateDirectory(Path.Combine(root, name));
+        }
+
+        File.WriteAllText(Path.Combine(root, "testsToDelete-coai-run-aaaaaa"), "a file, not a directory");
+
+        StartOfRun.RunFolders(root, Path.Combine(root, "testsToDelete-coai-run-def456")).Should().Be(1, "abc123 only: def456 is this run's own, the rest are no run folder");
+        StartOfRun.Run(root, TempDirsAreSwept.Rule).Should().Be(1, "the two counts never mix: coai-panel-x is the only old coai name");
+    }
+
+    [Fact]
+    public void TheSentences_NameTheNumberTheRootAndWhereToGo()
+    {
+        StartOfRun.Sentence(0, "/tmp").Should().Be("run: no old coai-* leftovers in /tmp");
+        StartOfRun.Sentence(1, "/tmp").Should().Contain("1 old coai-* directory in /tmp").And.Contain("The one-off clean-up");
+        StartOfRun.LegacySentence(3, "/tmp").Should().Contain("3 legacy testsToDelete-coai-run-* directories").And.Contain("a run still going");
+    }
 }
