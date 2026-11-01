@@ -922,8 +922,10 @@ every runner script started with a stub that exits non-zero leaves no folder; `r
   the reference's sweep on the real temp root before the tests; S2-B item 2, tested). Still recommended for the sites
   themselves: per-test `ownedDir(t, …)` through the wrap inside hooks (rule §2).
 - **Q6 — The Node sweeper on Windows checks the profile only (F16 open for Node; the C# side checks the SID too).**
-  *Recommended:* accept and record; on a single-user Windows machine the two agree, and the C# sweep runs on every
-  machine the extension's does. Tell the parent that coai has two sweepers of unequal strictness on Windows until F16.
+  **Decided 2026-11-01 (the parent's epoch 2, § 4; consult `3310f6ba`): F16 (b).** Until F16's Fix, the reference sweep on
+  Windows LISTS and changes nothing (`unverified:` lines); the C# sweep, which checks both keys, collects. coai's producer
+  PR merges only after the release carrying that change is pinned, and its Windows CI leg asserts that a planted gone-owner
+  folder survives the Node sweep. (Superseded recommendation: accept and record.)
 - **Q7 — `temp-sweep.json`: keep `prefix`/`keepMinutes` as documentation or delete them.** *Recommended:* keep the
   file with `neverSwept` and a rewritten `why`; delete `prefix` and `keepMinutes` (nothing reads them after S2-A; an old
   checkout's `SweepRule` must be shown to fail soft — the spec's item 1).
@@ -1076,6 +1078,6 @@ The October notes 1–12 are kept below with what changed; 13–18 are new.
     (a legacy name is listed and collected only on kernel owner AND `gone`).
 16. **The parent's E5 scope sentence** "`TempDir.cs` is already the helper … it gains a fixed one" is superseded: the
     helper is the COPIED library; `TempDir.For` stays as the in-run helper with no prefix at all.
-17. **Two sweepers of unequal strictness on Windows** until F16 (Q6).
+17. **Two sweepers of unequal strictness on Windows** until F16 (Q6) — resolved by F16 (b): the Node one only lists there.
 18. **The Darwin path is exercised here on three C# suites** (`ci.yml:281-287`), more than the template's one; any
     Darwin defect found here goes back to E3's owner as a note (the boundary table).
