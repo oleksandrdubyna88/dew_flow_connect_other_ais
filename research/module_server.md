@@ -8104,6 +8104,19 @@ Question-consultant roots: a root that cannot be resolved is refused.
 
 **Gate findings, same day.** A read root the resolver cannot resolve has an EMPTY canonical path (`HandleRead.CanonicalDirectory`; it was `GetFullPath(root)`), and `HandleRead.Read` and the private-folder check refuse under it. The unresolvable-path refusal of the document reader says to check the path and the links on it FIRST and offers `documentText` only for a file that is the right one. `ConsultationService.RepoIdentity` keeps the spelling of an unresolvable checkout on purpose (an owner label, not an access decision). The check-to-use race of the two recursive deletes is a recorded follow-up: `todo/PLAN_a_delete_is_pinned_to_the_folder_it_judged.md`.
 
+**CI round on #938 (2026-11-01) — Windows and macOS.** Five failures were the TESTS' seams, one was a real defect, and the review found four more.
+(1) The seams that stand a link in for one path compare the path the resolver asks about with the test's own text; the resolver asks with
+the resolved spelling and native separators (macOS `/private/var/…` for `/var/…`; Windows `\` where `Path.Combine` kept a `/`), so those tests now
+name their paths that way — reproduced on Linux by pointing `TMPDIR` at a symlink. (2) The real defect: a request walked through the root's
+SPELLING paid the root's links out of the one budget (macOS temp is under `/var`), so a chain of exactly 40 links was refused;
+`DocumentReader.CanonicalUnder` walks a relative request from the already-resolved root (`FromPath`, `IdentityOf`, `FeaturePlan`). The kernel
+bound is 32 on macOS and 40 on Linux, but every guard acts on the RESOLVED path, so a budget above the kernel's only turns a later open of
+the original spelling into ELOOP — a failure, not a read — and the budget stays 40. (3) A Windows share that is not on the runner is not placed by the resolver, as it must be:
+the share test stands the entries in. Review: `file/.` is ENOTDIR (the on-a-file check now comes before the `.` skip); `ResolveParent("C:child")`
+refuses as `Resolve` does (`IsBareDriveName`); a root the resolver cannot place keeps its kind and stored value (`QuestionRoots.Unplaced`: absent or unanswerable
+as `Missing`, present but unplaceable as `unreadable-folder`) so the Settings page can mark it; `FeaturePlan` asks the RESOLVED path whether the plan exists
+(`alias/../plan.md` with `alias` a link was folded as text).
+
 **Limits, said.** Hard links and bind mounts are out of reach of any path check. Case is kept as spelled: on a case-insensitive disk a
 comparison differing only by case is a FALSE REFUSAL (fail closed), never a false accept; on macOS the document reader keeps `Ordinal` (open limit,
 not widened here). The check is at one moment; a swap between it and the use is not seen. See `SECURITY.md`.

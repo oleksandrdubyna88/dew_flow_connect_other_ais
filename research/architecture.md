@@ -1517,6 +1517,7 @@ resolved and a `..` in link text was folded as a string; the document reader rea
 **The rule across modules: a resolution failure REFUSES** — refused (a document, a lookup, a consultant's root), "not ours" (a tree to delete),
 or "cannot compare" (a path comparison). It is never the spelling; the one named exception is `ConsultationService.RepoIdentity`, an owner label that
 is not an access decision. Containment is the caller's decision on the resolved path and the equally resolved root.
+A relative request is walked from the already-resolved root (`DocumentReader.CanonicalUnder`), so the links in the root's own spelling — macOS `/var` — do not spend the request's budget of 40.
 
 Consumers: `DocumentReader` (and through it `PanelService`, `FeaturePlan`, `AskGateDesk`), `WorkspaceLookup`, `ConsultationService`
 (`RepoIdentity`, `SamePath`), `QuestionConsultSettings`, `WorktreeManager` (the `coai-wt-*` deletion guard), `ReviewTreeRoot` (the review-tree

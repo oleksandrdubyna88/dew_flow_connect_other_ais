@@ -12,14 +12,19 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
 - A link is read as the text it stores (never `ResolveLinkTarget(...).FullName`, which folds `..` as a string and never
   resolves the directories inside the target). Its text is pushed in front of the rest of the path.
 - **One budget of 40 link expansions** for a whole resolution (the kernel's own `MAXSYMLINKS` on Linux). Plain folders cost
-  nothing: a 60-folder path resolves. Over the budget, or a loop, is a refusal.
+  nothing: a 60-folder path resolves. Over the budget, or a loop, is a refusal. The links in a repository root's OWN spelling
+  (macOS: `/var` is `/private/var`) are the root's: the document reader and the feature plan resolve the root once and walk a
+  relative request from what it resolved to, so a chain of exactly 40 links is not refused for a link the caller never wrote. An
+  absolute request is walked as written. macOS's kernel bound is 32 and Linux's 40: a chain of 33 to 40 links is accepted by the
+  resolver on macOS, and a later open of the ORIGINAL spelling would fail with ELOOP — a failure, never a read. Every guard acts on
+  the resolved path, which has no link left, so the higher budget cannot widen what is read.
 - `..` goes to the parent of the real path resolved so far, never above its root.
 - A name that is not there ends the walk and the rest is kept as written. A `..` after such a name FAILS: the disk
   answers "no such file", and a lexical pop would answer a folder nobody looked at. A DANGLING link is a link, not a
   missing name: it costs a hop and its target is walked.
-- **Nothing is below a file.** `file/..` and `file/name` fail (the disk answers ENOTDIR); a pop to the file's neighbour would
-  read a file nobody named.
-- A NUL, an empty link text, a drive-relative `C:x`, a path or link text over 32 KiB (`RealPath.MaxPathChars`), a resolved
+- **Nothing is below a file.** `file/.`, `file/..` and `file/name` fail (the disk answers ENOTDIR); a skip or a pop to the file's
+  neighbour would read a file nobody named.
+- A NUL, an empty link text, a drive-relative `C:x` (also as the whole of a path given to `ResolveParent`), a path or link text over 32 KiB (`RealPath.MaxPathChars`), a resolved
   path over 32 KiB, and any IO error are a failure. Callers turn the failure into refuse, not ours or cannot compare — never
   into the spelling, with one named exception (`ConsultationService.RepoIdentity`, below). A Windows target `\x` (a root with no drive) resolves against the LINK's volume.
 - Containment compares the resolved path with the equally resolved root: equal, or the root plus a separator. Never a bare
