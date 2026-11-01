@@ -1440,7 +1440,7 @@ against the code without its fix. What changed on this side, by item:
 | # | What was wrong | What it does now | Where |
 |---|---|---|---|
 | 1 | The QUESTION reached none, disk and api rows unchecked (only the context went through `SecretCheck`) | both are checked on every non-web row, the production-risk beside run included; a hit refuses THAT row, naming the class, never the value | `QuestionFanOut.CheckedInput`, `SecretCheck.Inspect(text, what)` |
-| 2 | A root ABOVE the profile, the data directory or a system directory passed, links were not followed, credential directories were readable | refused as written and at what every component resolves to (`DocumentReader.Canonical` over `ResolveLinkTarget(returnFinalTarget: true)`), credential directories as a root, inside one or holding one | `QuestionRoots` |
+| 2 | A root ABOVE the profile, the data directory or a system directory passed, links were not followed, credential directories were readable | refused as written and at what every component resolves to (`DocumentReader.Canonical` over `RealPath` — root-down, a link's RAW text, a 40-expansion budget; it was `ResolveLinkTarget(returnFinalTarget: true)` until 2026-11-01, see the past-defects section at the end of this file), credential directories as a root, inside one or holding one | `QuestionRoots` |
 | 3 | A row's advice and its reason (a CLI's stderr) were written down raw | `Redaction.SafeSource` on the advice (layout kept), `Redaction.SafeText` on the reason, before the record — the one road to the database, reply, card and sidebar | `QuestionRowLaunch` |
 | 4 | Any `scheme://` was set aside before the path checks; invisible and compatibility characters beat every pattern | only http/https/ftp is set aside and any other scheme is refused (`scheme`); every check reads `TextAsRead.Normalised` (Unicode `Cf` removed, the NFKC mappings that reach ASCII folded — `Normalize(FormKC)` folds nothing under `InvariantGlobalization`, measured and pinned), and a question carrying a format character is refused (`invisible`); `SecretCheck` reads the raw AND the folded text | `WebQuestionSanitiser`, `TextAsRead`, `SecretCheck` |
 | 5 | A disk root that is no git checkout was a log line | the row's `note` says "root <name> is not a git checkout: changes there are not watched" — record, reply (`answers[].note`), card (`consultantAnswers[].note`), projection | `QuestionFanOut.SaidUnwatched` |
@@ -5853,8 +5853,8 @@ a code session, which is what every file written before this deserialises into.
 
 **`DocumentReader`** turns what a caller sent into a document or into one sentence saying why it is
 not one: both arguments and neither are two different refusals, a path is confined to the repository
-(symlinks resolved through an injected `followLink`, so the rule is a unit test rather than a
-privilege the CI runner may not have), the payload is decoded with a THROWING UTF-8 decoder rather
+(symlinks resolved root-down by `RealPath` through an injectable entry reader, so the rule is a unit test rather than a
+privilege the CI runner may not have; the first form of this resolver was replaced 2026-11-01 — see the past-defects section at the end of this file), the payload is decoded with a THROWING UTF-8 decoder rather
 than sniffed for a NUL byte, known binary extensions are refused before a byte is read, and the
 ceiling is 256 KB — roughly 64 000 tokens, which every shipped reviewer's context can hold together
 with its prompt and its answer.
@@ -7019,7 +7019,7 @@ rules — collected from the working tree at `RuleFiles.DefaultBudgetBytes`, and
 `RulesText.Section`: the rules block moved out of `PanelService` unchanged when the feature stage
 became its fourth caller, so the "criteria, not instructions" boundary sentence stays one sentence.
 
-**A defect found on the way (D12): `DocumentReader.FollowLink` threw for a path with nothing at it.**
+**A defect found on the way (D12): `DocumentReader.FollowLink` threw for a path with nothing at it.** (`FollowLink` is gone since 2026-11-01: `RealPath.Lstat` reads an entry without following it, and a missing entry is `Missing`, never an exception.)
 .NET answers `ResolveLinkTarget` on a missing entry with `FileNotFoundException`, not null, so
 `status`, `resolve` and `ask_human` with a `document` nobody reviewed — and `review_feature` with a
 missing plan — threw an SDK-level error instead of the no-session sentence. RED first:
@@ -8070,3 +8070,53 @@ sequenceDiagram
   settings built by hand (no homes root) the home sits at `<scratch>\own\kh-*` and `ConsultCheckScratch.Delete` disposes it by name before the scratch.
 
 Not covered by a test: a live question row per admitted capability and a live `--check-consultant` through the released binary (RESULTS §35).
+
+## Past defects 2026-11-01: a link's target path was never resolved (the document reader and everything that shared it)
+
+**What was wrong.** `DocumentReader.Canonical` walked a path root-down but took `ResolveLinkTarget(returnFinalTarget: true).FullName` for
+a link. That string is the target as TEXT, folded lexically: the directories INSIDE it were never resolved, and a `..` in the link text was
+applied to the string instead of to the real directory. With `root/l2` a link to a folder outside the root and `root/alias` a link to
+`root/l2/secret.txt`, the check said "inside" and the read followed `l2` outside. `review_document` sends the text it reads to three
+vendors; `WorkspaceLookup` (list and search of granted roots), `QuestionConsultSettings`, `FeaturePlan`, `IdentityOf` and
+`ConsultationService.RepoIdentity` decided containment or identity on the same result. The same hand-written walk stood twice in
+`runners/Worktrees`: `WorktreeManager.IsUnderOurRoot` — the DELETION guard for `coai-wt-*` trees, which OR-ed the lexical `GetFullPath` with the
+resolved path and gave up after 16 links with the place it had reached — and `WorktreePaths.Real`, whose `Target` swallowed a loop's
+`IOException` and answered the spelling.
+
+**Observed (RED on `origin/main`, Linux).** `DocumentReader.Read` returned the outside file's text for `alias` and for `alias3/secret2.md`;
+a `..` in link text read an inside decoy instead of the outside file the disk opens; `nonexistent/../evil` read an outside file that was never
+inspected; a loop and a 41-link chain threw `IOException` instead of being refused; a root reached through a symlinked ancestor refused its own
+inside links. `WorktreeManager.ReleaseAsync` deleted a folder OUTSIDE the storage root (a canary file was gone) for a name lexically under it.
+`WorktreePaths.Real(dd)` answered `root/x` where `realpath` answers `outside/x`.
+
+**The fix is one road, not four walks.** `runners/Files/RealPath.cs`: root-down with a stack of pending segments; a link read RAW and pushed in
+front of the rest; ONE cumulative budget of 40 link expansions (plain segments are free); `..` is the parent of the real path so far and never
+above its root; a name that is not there ends the walk and a `..` after it FAILS (the kernel says ENOENT); a loop, an over-budget chain, a NUL, a name
+below a file (`file/..`, `file/name`), a path over 32 KiB, an empty link text, a drive-relative `C:x` and any IO error are a failure value that each caller turns into refuse / not ours /
+cannot compare. `TheLinkResolverIsOneRoadTests` fails for a second `ResolveLinkTarget` and for an unlisted reader of `.LinkTarget`.
+
+**Per site.** Document reader and lookup: refused, naming the resolution as the reason; a dangling link or a file removed since is "no file", not an exception. Deletion guard: ours only when its REAL path is strictly under
+the REAL root, and the leaf is not a link; any failure is NOT ours; every erase command is aimed at the judged real path, never the spelling; `ReviewTreeRoot.EnsureGoneAsync` follows the same rule; on Linux the comparison is `Ordinal` (it was `OrdinalIgnoreCase`, which called a
+sibling `/x/Storage` ours). Path comparison: `WorktreePaths.Real` throws `IOException` for a path it cannot resolve; `Same` answers `false`.
+Question-consultant roots: a root that cannot be resolved is refused.
+
+**The existence check comes AFTER containment.** `DocumentReader.FromPath` resolves, decides containment, and only then asks what is at the RESOLVED path — `File.Exists` and `Directory.Exists` follow links, so asked of the spelling first they answered "is a directory" for a link to an outside folder. `RealPath` is held to the doctrine's cyclomatic bound of 4 by `CA1502` (`.editorconfig`; its first walk measured 23).
+
+**Gate findings, same day.** A read root the resolver cannot resolve has an EMPTY canonical path (`HandleRead.CanonicalDirectory`; it was `GetFullPath(root)`), and `HandleRead.Read` and the private-folder check refuse under it. The unresolvable-path refusal of the document reader says to check the path and the links on it FIRST and offers `documentText` only for a file that is the right one. `ConsultationService.RepoIdentity` keeps the spelling of an unresolvable checkout on purpose (an owner label, not an access decision). The check-to-use race of the two recursive deletes is a recorded follow-up: `todo/PLAN_a_delete_is_pinned_to_the_folder_it_judged.md`.
+
+**CI round on #938 (2026-11-01) — Windows and macOS.** Five failures were the TESTS' seams, one was a real defect, and the review found four more.
+(1) The seams that stand a link in for one path compare the path the resolver asks about with the test's own text; the resolver asks with
+the resolved spelling and native separators (macOS `/private/var/…` for `/var/…`; Windows `\` where `Path.Combine` kept a `/`), so those tests now
+name their paths that way — reproduced on Linux by pointing `TMPDIR` at a symlink. (2) The real defect: a request walked through the root's
+SPELLING paid the root's links out of the one budget (macOS temp is under `/var`), so a chain of exactly 40 links was refused;
+`DocumentReader.CanonicalUnder` walks a relative request from the already-resolved root (`FromPath`, `IdentityOf`, `FeaturePlan`). The kernel
+bound is 32 on macOS and 40 on Linux, but every guard acts on the RESOLVED path, so a budget above the kernel's only turns a later open of
+the original spelling into ELOOP — a failure, not a read — and the budget stays 40. (3) A Windows share that is not on the runner is not placed by the resolver, as it must be:
+the share test stands the entries in. Review: `file/.` is ENOTDIR (the on-a-file check now comes before the `.` skip); `ResolveParent("C:child")`
+refuses as `Resolve` does (`IsBareDriveName`); a root the resolver cannot place keeps its kind and stored value (`QuestionRoots.Unplaced`: absent or unanswerable
+as `Missing`, present but unplaceable as `unreadable-folder`) so the Settings page can mark it; `FeaturePlan` asks the RESOLVED path whether the plan exists
+(`alias/../plan.md` with `alias` a link was folded as text).
+
+**Limits, said.** Hard links and bind mounts are out of reach of any path check. Case is kept as spelled: on a case-insensitive disk a
+comparison differing only by case is a FALSE REFUSAL (fail closed), never a false accept; on macOS the document reader keeps `Ordinal` (open limit,
+not widened here). The check is at one moment; a swap between it and the use is not seen. See `SECURITY.md`.

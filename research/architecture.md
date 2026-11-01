@@ -1507,6 +1507,24 @@ cross-slot READ is what the unprivileged plan above is for.
   gate body from this pinned source before building, and reviewers sample its canonical rule
   directories. The shared resolver owns applicability; the reviewer sample is not a second selector.
 
+## One path resolver for every decision that follows a link (2026-11-01)
+
+`src_mcp/runners/Files/RealPath.cs` is the ONE place this product resolves a path through links — `realpath(3)`-like, root-down, a link's raw
+text pushed in front of the rest, one budget of 40 link expansions, `..` after a missing name or a file fails, a NUL or a path over 32 KiB
+fails. It replaced four hand-written walks that took `ResolveLinkTarget(...).FullName` for a link (the target's own folders were never
+resolved and a `..` in link text was folded as a string; the document reader read an outside file through it).
+
+**The rule across modules: a resolution failure REFUSES** — refused (a document, a lookup, a consultant's root), "not ours" (a tree to delete),
+or "cannot compare" (a path comparison). It is never the spelling; the one named exception is `ConsultationService.RepoIdentity`, an owner label that
+is not an access decision. Containment is the caller's decision on the resolved path and the equally resolved root.
+A relative request is walked from the already-resolved root (`DocumentReader.CanonicalUnder`), so the links in the root's own spelling — macOS `/var` — do not spend the request's budget of 40.
+
+Consumers: `DocumentReader` (and through it `PanelService`, `FeaturePlan`, `AskGateDesk`), `WorkspaceLookup`, `ConsultationService`
+(`RepoIdentity`, `SamePath`), `QuestionConsultSettings`, `WorktreeManager` (the `coai-wt-*` deletion guard), `ReviewTreeRoot` (the review-tree
+delete), `WorktreePaths` (`Real`, `Same`), `JunctionsUnix` and `HandleRead` (the read root's canonical path; empty when nothing resolves).
+`TheLinkResolverIsOneRoadTests` fails for a second `ResolveLinkTarget`, an unlisted `.LinkTarget` reader, or a new lexical containment shape.
+Guarantees, limits and the lexical sites that remain: [../SECURITY.md](../SECURITY.md); the record: `module_server.md`, "Past defects 2026-11-01".
+
 ## Additions after the first real runs (2026-08-31 → 09-01)
 
 | What | Where | Why it is here |
