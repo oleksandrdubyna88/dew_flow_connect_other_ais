@@ -52,6 +52,36 @@ public sealed class TheLinkResolverIsOneRoadTests
             "a new reader of .LinkTarget is a new place that may decide containment from a link; it uses RealPath or is listed here with its reason");
     }
 
+    /// <summary>
+    /// Production files that spell BOTH a <c>GetFullPath(</c> and a <c>StartsWith(</c> — the shape of a LEXICAL containment check — and why
+    /// each is safe. A new one fails this test: it routes through <c>RealPath</c>, or it is listed here with its reason.
+    /// </summary>
+    private static readonly Dictionary<string, string> LexicalByDesign = new()
+    {
+        ["src_mcp/runners/Acp/AcpReadBoundary.cs"] = "a reader's request is placed lexically, then every component is lstat-ed (LinkOnTheWay refuses ANY link) and the bytes are read by handle whose own name is verified (HandleRead)",
+        ["src_mcp/runners/Consultation/FilesystemInvariant.cs"] = "compares two paths git itself printed (absolute, already real) to fingerprint a repository; decides no access",
+        ["src_mcp/runners/Files/AtomicFile.cs"] = "names a temp file beside the target; no containment decision, and StartsWith is on a file NAME",
+        ["src_mcp/runners/Files/HandleRead.cs"] = "strips the long-path prefix of a kernel path and falls back to a spelling the handle check then compares; StartsWith is on a prefix, not containment",
+        ["src_mcp/runners/Files/Junctions.cs"] = "classifies a link target as local or network by its spelling (and reads back the link the product made); it deletes and reads nothing by it",
+        ["src_mcp/runners/Worktrees/SubmoduleMounts.cs"] = "decides which declared mounts of a tree the product made are INSPECTED (read-only git status); nothing is deleted by it, and the tree's removal is guarded by RealPath",
+        ["src_mcp/runners/Worktrees/SubmodulePopulator.cs"] = "the clone source IS the folded path it checked: NoLinksBetween lstat-s every directory from the checkout down to it, so no link can sit on the way",
+        ["src_mcp/src/Acp/KimiClearMarkerMode.cs"] = "deletes one file whose DIRECT parent string equals the product's own lock root and whose name matches 16 hex digits plus .survivors.json; a link there is unlinked, never followed",
+        ["src_mcp/src/Server/QuestionConsult/QuestionConsultSettings.cs"] = "a deny-list of places: every root is compared as written AND at its RealPath, and a root that cannot be resolved is refused",
+    };
+
+    [Fact]
+    public void EveryLexicalContainmentShape_IsEitherRoutedThroughRealPathOrListedWithItsReason()
+    {
+        var shaped = ProductionSources.FilesMentioning("GetFullPath(").Keys
+            .Intersect(ProductionSources.FilesMentioning("StartsWith(").Keys)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        shaped.Should().Equal(LexicalByDesign.Keys.Order(StringComparer.Ordinal),
+            "a file that folds a path with GetFullPath and then tests StartsWith is a lexical containment check, which cannot see a link; "
+            + "route it through RealPath, or list it here with the reason it is safe. A stale entry fails too.");
+    }
+
     [Fact]
     public void TheScansStillSeeTheirKnownInstances_SoAReformatCannotTurnThemIntoAPass()
     {

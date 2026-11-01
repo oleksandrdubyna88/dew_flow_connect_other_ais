@@ -136,6 +136,33 @@ public sealed class ALinkCannotCarryTheReaderOutsideTests : IDisposable
     }
 
     [Fact]
+    public void ADanglingLinkInsideTheRepository_IsRefusedAsNoFile_NeverThrown()
+    {
+        // The target is inside the root and is not there. SECURITY.md promises a refusal; the size check used to throw
+        // FileNotFoundException because it stood outside the try.
+        Link("dl", In("missing"));
+
+        var outcome = Read("dl");
+
+        outcome.Should().BeOfType<DocumentOutcome.Refused>(Said(outcome));
+    }
+
+    [Fact]
+    public void ADotDotAfterALinkThatLeadsToAFile_IsRefused_NotAReadOfItsNeighbour()
+    {
+        // `l` is a link to the FILE d/f.txt. The disk answers ENOTDIR for `l/..`; a pop would answer d and read d/g.md.
+        Directory.CreateDirectory(In("d"));
+        File.WriteAllText(In("d/f.md"), Inside);
+        File.WriteAllText(In("d/g.md"), "THE-NEIGHBOUR-1618");
+        Link("l", In("d/f.md"));
+
+        var outcome = Read("l/../g.md");
+
+        outcome.Should().BeOfType<DocumentOutcome.Refused>(Said(outcome));
+        Said(outcome).Should().NotContain("THE-NEIGHBOUR-1618");
+    }
+
+    [Fact]
     public void ARepositoryReachedThroughASymlinkedAncestor_StillReadsItsOwnLinks()
     {
         // The false-refusal side: the root is spelled through a link (every macOS temp folder), and an inside link is

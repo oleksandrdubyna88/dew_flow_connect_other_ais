@@ -198,10 +198,54 @@ public sealed class TheSharedResolverFollowsEveryLinkRootDownTests : IDisposable
     }
 
     [Fact]
-    public void ANameBelowAPlainFile_IsMissing_NotAnError()
+    public void ANameBelowAPlainFile_Fails_BecauseTheDiskAnswersNotADirectory()
     {
-        // ENOTDIR: the parent is a file, so nothing is below it. The rest is appended, as for any missing name.
-        RealPath.Resolve(At("a", "b", "f.txt", "zz")).Path.Should().Be(At("a", "b", "f.txt", "zz"));
+        // ENOTDIR: the parent is a FILE. Nothing can be below it, so a path that goes there is no path — and it is not "missing".
+        var result = RealPath.Resolve(At("a", "b", "f.txt", "zz"));
+
+        result.Ok.Should().BeFalse();
+        result.Why.Should().Contain("file");
+    }
+
+    [Fact]
+    public void ADotDotAfterAPlainFile_Fails_NeverAPopToItsNeighbour()
+    {
+        File.WriteAllText(At("a", "b", "g.txt"), "g");
+
+        var result = RealPath.Resolve(At("a", "b", "f.txt", "..", "g.txt"));
+
+        result.Ok.Should().BeFalse("`f.txt/..` is ENOTDIR on the disk; a pop would read g.txt, a file nobody asked for");
+    }
+
+    [Fact]
+    public void ADotDotAfterALinkToAFile_Fails_Too()
+    {
+        Link(At("tofile"), At("a", "b", "f.txt"));
+
+        RealPath.Resolve(At("tofile", "..", "g.txt")).Ok.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AFileAsTheLastName_IsStillResolved()
+    {
+        RealPath.Resolve(At("a", "b", "f.txt")).Path.Should().Be(At("a", "b", "f.txt"));
+        RealPath.Resolve(At("a", "b", "f.txt") + Path.DirectorySeparatorChar).Ok.Should().BeTrue("a trailing separator names nothing below the file");
+    }
+
+    [Fact]
+    public void ResolveParent_OfNull_IsAFailureNotANullReference()
+    {
+        var result = RealPath.ResolveParent(null!);
+
+        result.Ok.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ResolveParent_CountsTheLeafAgainstTheLengthCap()
+    {
+        var result = RealPath.ResolveParent(At("a") + Path.DirectorySeparatorChar + new string('x', RealPath.MaxPathChars + 10));
+
+        result.Ok.Should().BeFalse();
     }
 
     [Fact]
