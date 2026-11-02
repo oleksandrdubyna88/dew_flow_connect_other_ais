@@ -13,7 +13,8 @@
  * folder's claim; for a quarantine of this script, the state of the process whose pid its name carries — S2-A Opus 3: alive or unaskable keeps it),
  * `quarantine-taken`, `moved-but-changed`; any other error from the file system refuses with `error-<code>`; an ENOENT from the rename is `missing`
  * (S2-A gate 4). After the move a legacy run folder's claim is read again before anything is removed (S2-A Opus 5), and the uid again (S2-A code2 1). The root is the
- * listing's: `bad-listing` / `wrong-root` refuse every pick before any of these (S2-A code2 7). Nothing throws out of `removePicked`.
+ * listing's: `bad-listing` / `wrong-root` refuse every pick before any of these (S2-A code2 7). A pick that is not listed refuses ALL the picks before anything is
+ * removed (`not-listed` for it, `not-attempted` for the rest — S2-A code3 3). A refusal after the move says where the folder is now (S2-A code3 0). Nothing throws out of `removePicked`.
  *
  * THE RESIDUAL WINDOW (S2-A gate finding 4). The `changed` check and the rename are two calls: an object swapped in between is moved aside under
  * the quarantine name instead of the one the person picked. The check after the move (device, inode AND last-write time against the listing) sees
@@ -269,14 +270,21 @@ function removeClaim(file, io) {
   }
 }
 
+/** A refusal AFTER the move: the object is aside, so the result says where (S2-A code3 0) and a later `list` / `remove` can finish it. */
+const keptAside = (name, check, quarantined) => ({ ...refused(name, check), quarantine: path.basename(quarantined) });
+
 /** The last step: the quarantined object (checked again where it is) removed by ITS path, then a legacy run folder's claim file. */
 function removeQuarantined(tmp, entry, judged, quarantined, ctx) {
   const now = identityOf(quarantined, ctx.io);
-  if (now === undefined || !sameAsListed(now, entry)) return refused(entry.name, 'moved-but-changed'); // left in place, never removed; the next listing shows it
-  if (isForeign(now)) return refused(entry.name, 'foreign-uid'); // [S2-A code2 1] the kernel owner is checked again where the object is now
+  if (now === undefined || !sameAsListed(now, entry)) return keptAside(entry.name, 'moved-but-changed', quarantined); // left in place, never removed; the next listing shows it
+  if (isForeign(now)) return keptAside(entry.name, 'foreign-uid', quarantined); // [S2-A code2 1] the kernel owner is checked again where the object is now
   const claim = ownerRefusal(tmp, judged, ctx); // the claim is read AGAIN now that the folder is aside: a run that took it in between keeps the folder
-  if (claim !== undefined) return refused(entry.name, claim);
-  ctx.io.rmSync(quarantined, { recursive: true, force: true });
+  if (claim !== undefined) return keptAside(entry.name, claim, quarantined);
+  try {
+    ctx.io.rmSync(quarantined, { recursive: true, force: true });
+  } catch (error) {
+    return keptAside(entry.name, `error-${error?.code ?? 'unknown'}`, quarantined);
+  }
   if (LEGACY_RUN.test(judged.original)) removeClaim(path.join(tmp, `${judged.original}${OWNER_SUFFIX}`), ctx.io);
   return { name: entry.name, outcome: 'removed' };
 }
@@ -319,7 +327,7 @@ function decide(tmp, name, entries, ctx) {
 
 /**
  * Removes the `picks` named in `listing`, one result per pick: `{ name, outcome: 'removed' | 'refused', check }`, each handed to `onResult` as soon as it is
- * decided (S2-A gate 6/9) and all returned. The listing's entries are indexed by name once (S2-A gate 7). [S2-A code2 7] The root is the LISTING's: `listing.tmp` must be
+ * decided (S2-A gate 6/9) and all returned; a result of a refusal after the move carries `quarantine` (the name it was moved to). The listing's entries are indexed by name once (S2-A gate 7). [S2-A code2 7] The root is the LISTING's: `listing.tmp` must be
  * an absolute path (else every pick is refused `bad-listing`), and a `tmp` argument that is another folder refuses every pick `wrong-root` — the deletion API itself holds the
  * confinement, not only the command that calls it. `hooks` are the seams the tests use: `drawName(dir)` (the full quarantine path), `afterReserve`, `beforeRename`,
  * `afterRename(from, quarantined)` and `platform` (the move's, default `process.platform`); `readClaim` reads a claim file.
@@ -329,9 +337,22 @@ export function removePicked({ tmp, listing, picks, neverSwept, io = fs, hooks =
   const ctx = { io, hooks, neverSwept, probe, claimPlatform, readClaim, platform: hooks.platform ?? process.platform };
   const entries = new Map((listing?.entries ?? []).map((entry) => [entry.name, entry]));
   const rootCheck = typeof root !== 'string' || !path.isAbsolute(root) ? 'bad-listing' : tmp !== undefined && !sameRoot(tmp, root) ? 'wrong-root' : undefined;
+  // [S2-A code3 3] Every pick is checked against the listing BEFORE any removal: one pick that is not listed (a typo) removes nothing, and every such name is reported.
+  const problem = (name) => (!isOneSegment(name) ? 'bad-name' : entries.has(name) ? undefined : 'not-listed');
+  const aborted = rootCheck === undefined && picks.some((name) => problem(name) !== undefined);
   return picks.map((name) => {
-    const result = rootCheck === undefined ? decide(root, name, entries, ctx) : refused(String(name), rootCheck);
+    const result = rootCheck !== undefined ? refused(String(name), rootCheck)
+      : aborted ? refused(String(name), problem(name) ?? 'not-attempted')
+        : decide(root, name, entries, ctx);
     onResult(result);
     return result;
   });
+}
+
+/** The line a person reads for one result: `removed <name>`, or `refused <name>: <check>` — and where the folder is now when it was moved aside first (S2-A code3 0 and 3). */
+export function describeResult(result) {
+  if (result.outcome === 'removed') return `removed ${result.name}`;
+  const why = result.check === 'not-attempted' ? ' (another pick is not in the listing, so nothing was removed — fix the names and run it again)' : '';
+  const aside = result.quarantine === undefined ? '' : ` — moved aside as ${result.quarantine}; run \`list\` again and \`remove\` that name to finish it`;
+  return `refused ${result.name}: ${result.check}${why}${aside}`;
 }

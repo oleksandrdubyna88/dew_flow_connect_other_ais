@@ -94,9 +94,9 @@ function remove(lib, args) {
   const { listing, error: unusable } = readListing(flags.listing);
   if (unusable !== undefined) return usage(unusable);
   if (flags.tmp !== undefined && !lib.sameRoot(flags.tmp, listing.tmp)) {
-    return usage(`--tmp ${flags.tmp} is not the temp root of the listing (${listing.tmp}); a listing is evidence about its own root only`); // both as given
+    return usage(`--tmp ${flags.tmp} is not the temp root of the listing (${listing.tmp}); a listing is evidence about its own root only; omit --tmp to use the listing's root, or run \`list --tmp <dir>\` for that root`); // both as given
   }
-  const onResult = (result) => console.log(result.outcome === 'removed' ? `removed ${result.name}` : `refused ${result.name}: ${result.check}`); // as each is decided
+  const onResult = (result) => console.log(lib.describeResult(result)); // as each is decided
   const results = lib.removePicked({ listing, picks: names, neverSwept: neverSweptOf(), onResult });
   return results.every((result) => result.outcome === 'removed') ? 0 : 1;
 }
