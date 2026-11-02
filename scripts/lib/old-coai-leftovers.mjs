@@ -22,25 +22,21 @@
  * an interrupted clean-up. Between that check and the removal only the same user can swap the dot-named quarantine, which is the threat this
  * tool does not guard against. An object that comes back with the same inode AND the same last-write time to the nanosecond is not told apart.
  *
- * The identity helpers (`identityOf`, the exclusive move) are COPIES of the reference's, not imports: the conventions do not export them, and this
- * story merges before any new conventions release. Source: `.agents/conventions/tools/lib/leftovers-sweep.mjs` (`identityOf`, `moveExclusively`,
- * `isOwnEmptyPlaceholder`, `removeOwnEmptyPlaceholder`, `moveToQuarantine`) at pin 105d53c. FOLLOW-UP: when the conventions export them, switch to
- * the exported functions and delete the copies.
+ * The exclusive move, the placeholder checks and the quarantine draw are the conventions' own (`.agents/conventions/tools/lib/leftovers-sweep.mjs`, exported since
+ * release 5863c60), imported — not copied (E5 S2-A code5 2/8/9; the copy of the first release is gone). The one thing kept here is a test seam: `hooks.drawName` names the
+ * quarantine, which the reference's `moveToQuarantine` cannot; without that hook the reference's own `moveToQuarantine` runs.
  */
-import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { isTakenRename } from '../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
+import { moveExclusively, moveToQuarantine as moveToQuarantineOf } from '../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import { hidepidActive, isAskablePid, legacyOwnerState, parseLegacyOwner, processProbe, readClaimText } from '../../.agents/conventions/tools/lib/owned.mjs';
 
-/** The quarantine names a move draws before it gives up (the reference's `QUARANTINE_DRAWS`). */
+/** The quarantine names the `hooks.drawName` seam draws before it gives up (the reference's own bound is its `QUARANTINE_DRAWS`, also 5). */
 export const MOVE_DRAWS = 5;
 const OWNER_SUFFIX = '.owner';
 const LEGACY_RUN = /^testsToDelete-coai-run-[0-9a-f]{6}$/;
 /** A quarantine of THIS script: the picked name, `.teststodelete-quarantine-`, a pid, eight hex. */
 const QUARANTINE = /^\.(coai-[^/\\]+|testsToDelete-coai-run-[0-9a-f]{6})\.teststodelete-quarantine-([0-9]+)-([0-9a-f]{8})$/i;
-/** What rename(2) answers when the name is occupied: a directory with content, or a file where our directory was. */
-const TAKEN_CODES = new Set(['ENOTEMPTY', 'EEXIST', 'ENOTDIR']);
 
 /** Is `name` ONE path segment: not empty, not `.` or `..`, no separator of either kind, no `:` (`C:foo` is drive-relative on Windows; S2-A code5 3) and no NUL, and its own basename? A name that is not is never joined to a path. */
 export function isOneSegment(name) {
@@ -66,10 +62,10 @@ export function judge(name, neverSwept) {
   return { kind: 'quarantine', original: quarantine[1], pid: quarantine[2] };
 }
 
-// --- identity: copies of the reference's (see the header) ---------------------------------------------------------
+// --- what is at a name ---------------------------------------------------------------------------------------------
 
 /** `{ dev, ino, mtimeNs, uid, directory }` of an entry itself (a link is not followed), or `undefined` when it is not there. */
-function identityOf(target, io) {
+function statOf(target, io) {
   try {
     const stat = io.lstatSync(target, { bigint: true });
     return { dev: stat.dev, ino: stat.ino, mtimeNs: stat.mtimeNs, uid: Number(stat.uid), directory: stat.isDirectory() };
@@ -78,74 +74,22 @@ function identityOf(target, io) {
   }
 }
 
-const sameObject = (a, b) => a !== undefined && b !== undefined && a.dev === b.dev && a.ino === b.ino && a.directory === b.directory;
-
-/** Is `placeholder` still the directory this move reserved: a directory, not a link, the reserved `(dev, ino)`, and empty? */
-function isOwnEmptyPlaceholder(placeholder, reserved, io) {
-  const now = identityOf(placeholder, io);
-  if (!sameObject(now, reserved) || !now.directory) return false;
-  try {
-    return io.readdirSync(placeholder).length === 0;
-  } catch {
-    return false;
-  }
-}
-
-/** Remove the reserved placeholder only while it is still ours and empty (`rmdir`, never recursive): a name taken over in between is never touched. */
-function removeOwnEmptyPlaceholder(placeholder, reserved, io) {
-  try {
-    if (isOwnEmptyPlaceholder(placeholder, reserved, io)) io.rmdirSync(placeholder);
-  } catch { /* gone, or not empty: leave it */ }
-}
-
 /**
- * Rename `from` to `to` ONLY if nothing is at `to`: `true` when it moved, `false` when the name is taken, any other failure throws. POSIX: Node has no
- * `renameat2(RENAME_NOREPLACE)` and `rename(2)` replaces an EMPTY directory, so the name is reserved with an exclusive `mkdir` and the rename lands on our
- * own empty placeholder, checked again immediately before the rename. S2-A gate finding 0: whenever the rename did not complete, the placeholder is removed in
- * a `finally` — only while it is still our empty reservation.
+ * Move `dir` aside under a quarantine name that was free. The conventions' `moveToQuarantine` draws the name and throws when every draw was taken (`undefined` here); with
+ * the `hooks.drawName` test seam the draws are ours, `MOVE_DRAWS` at most. The quarantine's path, or `undefined` when all were taken.
  */
-function moveExclusively(from, to, io, hooks, platform) {
-  if (platform === 'win32') {
+function moveToQuarantine(dir, hooks, options) {
+  if (hooks.drawName === undefined) {
     try {
-      io.renameSync(from, to); // onto an existing directory this fails by itself
+      return moveToQuarantineOf(dir, hooks, options);
     } catch (error) {
-      if (isTakenRename(error, identityOf(to, io) !== undefined, 'win32')) return false;
+      if (String(error?.message).startsWith('cannot move ')) return undefined;
       throw error;
     }
-    return true;
   }
-  try {
-    io.mkdirSync(to, { mode: 0o700 }); // exclusive: an existing folder, file or link under the name refuses
-  } catch (error) {
-    if (error?.code === 'EEXIST') return false;
-    throw error;
-  }
-  const reserved = identityOf(to, io);
-  let moved = false;
-  try {
-    hooks.afterReserve?.(to, from);
-    if (!isOwnEmptyPlaceholder(to, reserved, io)) return false; // not ours any more: never renamed onto, never removed
-    hooks.beforeRename?.(to, from);
-    io.renameSync(from, to);
-    moved = true;
-    return true;
-  } catch (error) {
-    if (TAKEN_CODES.has(error?.code)) return false;
-    throw error;
-  } finally {
-    if (!moved) removeOwnEmptyPlaceholder(to, reserved, io);
-  }
-}
-
-function quarantineName(dir) {
-  return path.join(path.dirname(dir), `.${path.basename(dir)}.teststodelete-quarantine-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
-}
-
-/** Move `dir` to a quarantine name that was free: a taken draw draws a new name, `MOVE_DRAWS` times at most. The quarantine's path, or `undefined` when all were taken. */
-function moveToQuarantine(dir, io, hooks, platform) {
   for (let draw = 0; draw < MOVE_DRAWS; draw += 1) {
-    const to = (hooks.drawName ?? quarantineName)(dir);
-    if (moveExclusively(dir, to, io, hooks, platform)) return to;
+    const to = hooks.drawName(dir);
+    if (moveExclusively(dir, to, hooks, options)) return to;
   }
   return undefined;
 }
@@ -254,7 +198,7 @@ const isForeign = (identity) => typeof process.getuid === 'function' && identity
 
 /** The checks that need only a look at the name now: the first that fails. */
 function refusalBefore(tmp, entry, judged, ctx) {
-  const now = identityOf(path.join(tmp, entry.name), ctx.io);
+  const now = statOf(path.join(tmp, entry.name), ctx.io);
   if (now === undefined) return 'missing';
   if (!now.directory) return 'not-a-directory'; // lstat: a link or a file at the name
   if (isForeign(now)) return 'foreign-uid'; // the kernel owner is the caller's, or it is not ours to remove
@@ -276,7 +220,7 @@ const keptAside = (name, check, quarantined) => ({ ...refused(name, check), quar
 
 /** The last step: the quarantined object (checked again where it is) removed by ITS path, then a legacy run folder's claim file. */
 function removeQuarantined(tmp, entry, judged, quarantined, ctx) {
-  const now = identityOf(quarantined, ctx.io);
+  const now = statOf(quarantined, ctx.io);
   if (now === undefined || !sameAsListed(now, entry)) return keptAside(entry.name, 'moved-but-changed', quarantined); // left in place, never removed; the next listing shows it
   if (isForeign(now)) return keptAside(entry.name, 'foreign-uid', quarantined); // [S2-A code2 1] the kernel owner is checked again where the object is now
   const claim = ownerRefusal(tmp, judged, ctx); // the claim is read AGAIN now that the folder is aside: a run that took it in between keeps the folder
@@ -299,7 +243,7 @@ function removeQuarantined(tmp, entry, judged, quarantined, ctx) {
 /** The move, with an ENOENT from the rename read as what it says: the pick is gone (S2-A gate 4). `undefined` when every drawn name was taken. */
 function moveAside(target, ctx) {
   try {
-    return moveToQuarantine(target, ctx.io, ctx.hooks, ctx.platform);
+    return moveToQuarantine(target, ctx.hooks, { io: ctx.io, platform: ctx.platform });
   } catch (error) {
     if (error?.code === 'ENOENT') return 'missing';
     throw error;
