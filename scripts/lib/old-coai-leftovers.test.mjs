@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { listOldLeftovers, removePicked, MOVE_DRAWS } from './old-coai-leftovers.mjs';
-import { thisOwner } from '../../.agents/conventions/tools/lib/owned.mjs';
+import { processProbe, thisOwner } from '../../.agents/conventions/tools/lib/owned.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(here, '..', 'old-coai-leftovers.mjs');
@@ -329,7 +329,7 @@ test('S13 remove uses the listing\'s temp root, and refuses a --tmp that is anot
 });
 
 /** A quarantine of this script, as a killed run leaves it. */
-const quarantineOf = (name, suffix = '4242-0a1b2c3d') => `.${name}.teststodelete-quarantine-${suffix}`;
+const quarantineOf = (name, suffix = '99999-0a1b2c3d') => `.${name}.teststodelete-quarantine-${suffix}`;
 
 test('S14 the listing reports this script\'s own quarantines, and remove accepts them by name', (t) => {
   const root = privateRoot(t);
@@ -392,24 +392,33 @@ test('S15 kill after the rename, a second run finishes it', (t) => {
 
   const second = list(root);
   assert.deepEqual(second.entries.map((e) => [e.name, e.kind, e.of]), [[left[0], 'quarantine', 'coai-panel-a']]);
-  const [result] = remove(root, second, [left[0]]);
+  const [result] = remove(root, second, [left[0]], { probe: processProbe }); // the real table: the killed child is gone
   assert.equal(result.outcome, 'removed');
   assert.deepEqual(fs.readdirSync(root), [], 'the second run finished the first one\'s work');
 });
 
 test('S16 the quarantined object is re-checked after the move by identity AND last-write time; either change keeps it', { skip: !posix && 'the swap needs POSIX rename semantics' }, (t) => {
-  for (const variant of ['its last-write time moved', 'it was replaced by another directory']) {
+  for (const variant of ['its last-write time moved', 'it was replaced by another directory with the listed last-write time']) {
     const root = privateRoot(t);
     make(root, 'coai-panel-a', 60);
     const listing = list(root);
+    const listed = listing.entries[0];
     const afterRename = (_from, quarantined) => {
       if (variant === 'its last-write time moved') {
         age(quarantined, 5);
         return;
       }
+      // [S2-A Opus 2] The replacement exists BEFORE the original goes, so its inode cannot be the original's (ext4 and tmpfs reuse a freed one);
+      // its last-write time is put back to the listed one, so ONLY the device and inode comparison can tell it apart.
+      const replacement = `${quarantined}.replacement`;
+      fs.mkdirSync(replacement);
+      fs.writeFileSync(path.join(replacement, 'sentinel.txt'), 'the replacement');
+      fs.utimesSync(replacement, new Date(listed.lastWriteMs), new Date(listed.lastWriteMs));
       fs.rmSync(quarantined, { recursive: true });
-      fs.mkdirSync(quarantined);
-      fs.writeFileSync(path.join(quarantined, 'sentinel.txt'), 'the replacement');
+      fs.renameSync(replacement, quarantined);
+      const now = fs.lstatSync(quarantined, { bigint: true });
+      assert.equal(String(now.mtimeNs), listed.mtimeNs, 'the replacement carries the listed last-write time');
+      assert.notEqual(String(now.ino), listed.ino, 'and a different inode');
     };
 
     const [result] = remove(root, listing, ['coai-panel-a'], { hooks: { afterRename } });
@@ -421,4 +430,130 @@ test('S16 the quarantined object is re-checked after the move by identity AND la
     const next = list(root);
     assert.deepEqual(next.entries.map((e) => [e.kind, e.of]), [['quarantine', 'coai-panel-a']], 'and the next listing shows it as an interrupted clean-up');
   }
+});
+
+test('S17 [S2-A Opus 1] a name that is not ONE path segment is refused before any path is built: the victim outside the root survives', (t) => {
+  const outer = privateRoot(t, 'old-coai-escape-');
+  const root = path.join(outer, 'tmp');
+  fs.mkdirSync(root);
+  const victim = make(outer, 'victim', 60, 'the victim\'s bytes'); // a sibling of the temp root, found by `coai-x/../../victim` below it
+  const stat = fs.lstatSync(victim, { bigint: true });
+  const identity = { dev: String(stat.dev), ino: String(stat.ino), mtimeNs: String(stat.mtimeNs), lastWriteMs: now - 60 * MINUTE, ageMinutes: 60 };
+  const names = [
+    ['coai-x/../../victim', 'coai'],
+    ['coai-x\\..\\..\\victim', 'coai'],
+    ['.coai-x/../../victim.teststodelete-quarantine-99999-0a1b2c3d', 'quarantine'],
+    ['..', 'coai'],
+    ['.', 'coai'],
+  ];
+  const listing = { tmp: root, entries: names.map(([name, kind]) => ({ name, kind, ...identity })) };
+
+  const results = remove(root, listing, names.map(([name]) => name));
+
+  assert.deepEqual(results.map((r) => [r.outcome, r.check]), names.map(() => ['refused', 'bad-name']));
+  assert.equal(sentinel(outer, 'victim'), 'the victim\'s bytes', 'the victim outside the temp root was neither moved nor removed');
+  assert.deepEqual(fs.readdirSync(outer).sort(), ['tmp', 'victim'], 'and nothing was made beside it');
+  assert.deepEqual(fs.readdirSync(root), [], 'nor inside the root');
+});
+
+test('S18 [S2-A Opus 3] a quarantine whose renamer is alive or cannot be asked is refused; one whose renamer is gone is removed', (t) => {
+  const root = privateRoot(t);
+  const live = quarantineOf('coai-panel-a', '88888-0a1b2c3d');
+  const unknown = quarantineOf('coai-panel-b', '77777-0a1b2c3d');
+  const gone = quarantineOf('coai-panel-c', '99999-0a1b2c3d');
+  for (const name of [live, unknown, gone]) make(root, name, 60);
+  const listing = list(root);
+
+  const results = byName(remove(root, listing, [live, unknown, gone]));
+
+  assert.deepEqual([results[live].outcome, results[live].check], ['refused', 'owner-live'], 'a sweep that is running now waits to restore it');
+  assert.deepEqual([results[unknown].outcome, results[unknown].check], ['refused', 'owner-unknown']);
+  assert.equal(results[gone].outcome, 'removed');
+  assert.deepEqual(fs.readdirSync(root).sort(), [live, unknown].sort());
+});
+
+test('S19 [S2-A Opus 4] a pick the caller does not own (kernel owner, rule §3) is refused', { skip: typeof process.getuid !== 'function' && 'no uid on this platform' }, (t) => {
+  const root = privateRoot(t);
+  make(root, 'coai-panel-a', 60);
+  const listing = list(root);
+  const strangers = {
+    ...fs,
+    lstatSync: (target, options) => {
+      const stat = fs.lstatSync(target, options);
+      return { dev: stat.dev, ino: stat.ino, mtimeNs: stat.mtimeNs, uid: stat.uid + 1n, isDirectory: () => stat.isDirectory() };
+    },
+  };
+
+  const [result] = remove(root, listing, ['coai-panel-a'], { io: strangers });
+
+  assert.deepEqual([result.outcome, result.check], ['refused', 'foreign-uid']);
+  assert.equal(sentinel(root, 'coai-panel-a'), 'still coai-panel-a');
+});
+
+test('S20 [S2-A Opus 5] a legacy run folder whose claim turned live after the move is kept, with its claim', (t) => {
+  const root = privateRoot(t);
+  const name = 'testsToDelete-coai-run-abc123';
+  make(root, name, 120);
+  fs.writeFileSync(path.join(root, `${name}.owner`), `${claimOf(99999, 1700000000)}\n`);
+  const listing = list(root);
+  const afterRename = () => fs.writeFileSync(path.join(root, `${name}.owner`), `${claimOf(88888)}\n`); // a run took the claim in between
+
+  const [result] = remove(root, listing, [name], { hooks: { afterRename } });
+
+  assert.deepEqual([result.outcome, result.check], ['refused', 'owner-live']);
+  const left = fs.readdirSync(root).sort();
+  assert.equal(left.length, 2, `the quarantined folder and the claim stay: ${left}`);
+  assert.ok(left.includes(`${name}.owner`));
+  assert.equal(fs.readFileSync(path.join(root, `${name}.owner`), 'utf8'), `${claimOf(88888)}\n`, 'the claim is untouched');
+});
+
+test('S21 [S2-A gate 4] a rename that answers ENOENT is the missing refusal, on Windows and elsewhere', (t) => {
+  for (const platform of ['win32', process.platform]) {
+    const root = privateRoot(t);
+    make(root, 'coai-panel-a', 60);
+    const listing = list(root);
+    const io = { ...fs, renameSync: () => { throw Object.assign(new Error('ENOENT: no such file or directory, rename'), { code: 'ENOENT' }); } };
+
+    const [result] = remove(root, listing, ['coai-panel-a'], { io, hooks: { platform } });
+
+    assert.deepEqual([result.outcome, result.check], ['refused', 'missing'], platform);
+    assert.deepEqual(fs.readdirSync(root), ['coai-panel-a'], `no placeholder is left (${platform})`);
+  }
+});
+
+test('S22 [S2-A gate 7] the listing is indexed by name once, not searched for every pick', (t) => {
+  const root = privateRoot(t);
+  for (const name of ['coai-panel-a', 'coai-panel-b', 'coai-panel-c']) make(root, name, 60);
+  const listing = list(root);
+  listing.entries.find = () => { throw new Error('a per-pick search of the entries'); };
+
+  const results = remove(root, listing, ['coai-panel-a', 'coai-panel-b', 'coai-panel-zzz']);
+
+  assert.deepEqual(results.map((r) => r.outcome), ['removed', 'removed', 'refused']);
+});
+
+test('S23 [S2-A gate 6/9] each pick\'s result is reported as soon as it is decided, before the next pick is touched', (t) => {
+  const root = privateRoot(t);
+  make(root, 'coai-panel-a', 60);
+  make(root, 'coai-panel-b', 60);
+  const listing = list(root);
+  const reported = [];
+  const seenWhenBStarts = [];
+  const hooks = { afterRename: (from) => { if (path.basename(from) === 'coai-panel-b') seenWhenBStarts.push(reported.map((r) => r.name)); } };
+
+  const results = remove(root, listing, ['coai-panel-a', 'coai-panel-b'], { hooks, onResult: (result) => reported.push(result) });
+
+  assert.deepEqual(seenWhenBStarts, [['coai-panel-a']], 'a was already reported when b was being moved');
+  assert.deepEqual(reported, results, 'every result is reported once, in order, and still returned');
+});
+
+test('S24 [S2-A gate 3] list shows the listing first and writes --out after; a write failure exits 2 with the listing already shown', (t) => {
+  const root = s1Root(t);
+  const nowhere = path.join(privateRoot(t, 'old-coai-out-'), 'no', 'such', 'folder', 'listing.json');
+
+  const result = runCli(['list', '--tmp', root, '--out', nowhere]);
+
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stdout, /^coai	coai-panel-a	/m, 'the listing was printed before the write was tried');
+  assert.match(result.stderr, /listing\.json|ENOENT/, 'and the failure is named');
 });
