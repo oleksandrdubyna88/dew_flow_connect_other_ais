@@ -537,6 +537,14 @@ Accepted 0, 1, 3, 4 and 6; rejected 2 (the call order matches) and 5 (pin tags i
 | **[S2-A CodeRabbit 6]** | S36's fixture block is POSIX-only (`coai-a:b` cannot be a directory name on Windows); the `isOneSegment` loop runs everywhere | S36 |
 | **[S2-A CodeRabbit 7]** | `list` rejects stray positional names with exit 2 and the usage line | S42 |
 
+### A.10 round 9 — code gate on PR #940 (2026-11-02)
+
+Accepted 1; rejected 0 (`decide()` catches the strict look's error and maps it to `error-<code>`; S39 covers it).
+
+| Mark | Change | Test |
+|---|---|---|
+| **[S2-A code9 1]** | the window between the second claim snapshot and the unlink is closed: the claim is never unlinked by its public name — it is moved to a private name (`<claim>.coai-cleanup-<pid>-<hex>`; reserved with an exclusive create, renamed onto our own reservation), compared THERE (dev, ino, text against `claimBefore`), unlinked only if the same; a different one is put back without replacing (`link` then unlink), else kept at the private name; `partial`/`claim-changed` with `claimLeft` = where it is; ENOENT on the move is `removed`; any other error is `partial` with its code; hooks `afterFolderRemoved`, `afterClaimMoved`. The conventions' `moveExclusively` is not reused: it is directory-only (a file given to it throws EISDIR on the pin; on Windows a file rename replaces), so the file takes the same shape in miniature | S35 (the private name fails to unlink), S41, S43 (the race, both swap kinds), S44 (cannot be put back), S45 (gone), S46 (EACCES) |
+
 **Rejected, with the reason (no change):** code 1 (the two digit checks — `[0-9]` in a regex and the first-character test — mean the same); code 5 (no streaming of the listing: a one-off script over a temp folder); code 8 and the P4 copy follow-up stay as decided (decision 11: the pinned mount is the Node consumers' interface).
 
 ## Definition of Done (S2-A)
