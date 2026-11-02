@@ -768,3 +768,22 @@ test('S35 [S2-A code4 9] a legacy run folder removed whose claim cannot be unlin
   const line = lib.describeResult?.(result) ?? '';
   assert.ok(line.includes(name) && line.includes(claim) && line.includes('EPERM'), `the line a person reads names the claim and the cause: ${line}`);
 });
+
+test('S36 [S2-A code5 3] a name holding `:` or NUL is not one path segment: `C:foo` is a drive-relative path on Windows, and no path is built from it', (t) => {
+  for (const name of ['C:foo', 'coai-a:b', 'coai-a\0b', 'D:\\x']) assert.equal(lib.isOneSegment(name), false, JSON.stringify(name));
+  assert.equal(lib.isOneSegment('coai-panel-a'), true, 'and a real name is still one');
+
+  const outer = privateRoot(t, 'old-coai-colon-');
+  const root = path.join(outer, 'tmp');
+  fs.mkdirSync(root);
+  const victim = make(root, 'coai-a:b', 60, 'a name with a colon'); // a legal POSIX name, a different place on Windows
+  const stat = fs.lstatSync(victim, { bigint: true });
+  const identity = { dev: String(stat.dev), ino: String(stat.ino), mtimeNs: String(stat.mtimeNs), lastWriteMs: now - 60 * MINUTE, ageMinutes: 60 };
+
+  const listing = list(root);
+  assert.deepEqual(listing.entries.map((e) => e.name), [], 'not offered');
+  assert.deepEqual(listing.refused, [{ name: 'coai-a:b', check: 'bad-name' }], 'but reported');
+  const edited = { ...listing, entries: ['C:foo', 'coai-a:b'].map((name) => ({ name, kind: 'coai', ...identity })) };
+  assert.deepEqual(remove(root, edited, ['C:foo', 'coai-a:b']).map((r) => [r.outcome, r.check]), [['refused', 'bad-name'], ['refused', 'bad-name']]);
+  assert.equal(sentinel(root, 'coai-a:b'), 'a name with a colon');
+});
