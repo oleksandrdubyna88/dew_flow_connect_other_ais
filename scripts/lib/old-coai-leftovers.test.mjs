@@ -586,7 +586,7 @@ test('S25 [S2-A code2 0] a quarantine-shaped name whose original is not one path
   assert.deepEqual(remove(root, edited, [crafted]).map((r) => [r.outcome, r.check]), [['refused', 'bad-name']]);
   // The listing's own filter and the quarantine pattern both stop this name first; judge() is the layer that must hold on its own.
   assert.equal(lib.judge?.(crafted, NEVER_SWEPT), null, 'judge() returns null for a quarantine whose original is not one segment');
-  assert.equal(lib.judge?.(crafted.replace('\\', '-'), NEVER_SWEPT)?.kind, 'quarantine', 'and still knows a real quarantine (the scan sees what it knows is there)');
+  assert.equal(lib.judge?.(crafted.replaceAll('\\', '-'), NEVER_SWEPT)?.kind, 'quarantine', 'and still knows a real quarantine (the scan sees what it knows is there)');
 });
 
 test('S26 [S2-A code2 1] the uid is checked again after the move: a quarantined object that is no longer the caller\'s is kept', { skip: typeof process.getuid !== 'function' && 'no uid on this platform' }, (t) => {
@@ -634,7 +634,7 @@ test('S28 [S2-A code2 4/8] list says which temp root it is scanning before it sc
   const result = runCli(['list', '--tmp', missing, '--out', path.join(os.tmpdir(), 'never-written-listing.json')]);
 
   assert.equal(result.status, 2, 'a root that cannot be read is exit 2');
-  assert.match(result.stdout, new RegExp(`^scanning ${missing.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'), 'the start line named the root before the scan failed');
+  assert.ok(result.stdout.split('\n').includes(`scanning ${missing}`), 'the start line named the root before the scan failed');
 });
 
 test('S29 [S2-A code2 5] --tmp and the listing\'s root are compared by realpath; when they differ both are shown as given', (t) => {
@@ -721,7 +721,8 @@ test('S32 [S2-A code3 0] when the removal fails AFTER the move, the result names
   assert.match(result.quarantine, /^\.coai-panel-a\.teststodelete-quarantine-[0-9]+-[0-9a-f]{8}$/, 'the result says where the folder is now');
   assert.deepEqual(fs.readdirSync(root), [result.quarantine]);
   assert.deepEqual(list(root).entries.map((e) => [e.name, e.kind, e.of]), [[result.quarantine, 'quarantine', 'coai-panel-a']], 'a later list offers it, and remove can finish it');
-  assert.match(lib.describeResult?.(result) ?? '', new RegExp(`^refused coai-panel-a: error-EBUSY.*${result.quarantine.replace(/[.]/g, '\\.')}`), 'the line a person reads names the quarantine');
+  const line = lib.describeResult?.(result) ?? '';
+  assert.ok(line.startsWith('refused coai-panel-a: error-EBUSY') && line.includes(result.quarantine), `the line a person reads names the quarantine: ${line}`);
   assert.equal(lib.describeResult?.({ name: 'coai-x', outcome: 'removed' }), 'removed coai-x');
 });
 
