@@ -1506,6 +1506,10 @@ cross-slot READ is what the unprivileged plan above is for.
   only AGENTS. Local rules live in `.agents/rules`. The extension generates its distributable
   gate body from this pinned source before building, and reviewers sample its canonical rule
   directories. The shared resolver owns applicability; the reviewer sample is not a second selector.
+- **The one-off clean-up of old `coai-*` test leftovers imports its move and identity helpers from the pinned conventions reference, not a copy** — `moveToQuarantine` from
+  `.agents/conventions/tools/lib/leftovers-sweep.mjs` (which owns the exclusive move and the placeholder checks), and the owner and identity helpers it needs (`readClaimText`,
+  `parseLegacyOwner`, `legacyOwnerState`, `processProbe`, `isAskablePid`, `hidepidActive`) from `.agents/conventions/tools/lib/owned.mjs` (decision 11: the pinned mount is the Node
+  consumers' interface). `scripts/lib/old-coai-leftovers.mjs` carries no copy of any of them and no seam in front of them (E5 S2-A).
 
 ## One path resolver for every decision that follows a link (2026-11-01)
 

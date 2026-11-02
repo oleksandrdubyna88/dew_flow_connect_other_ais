@@ -9,11 +9,10 @@ namespace CoaiServer.Tests;
 /// A running job's working directory is never a test run's to sweep.
 /// </summary>
 /// <remarks>
-/// <para>Both test runners sweep <c>coai-*</c> directories older than ten minutes from the machine's
-/// temp folder before they start, and a job's directory — <c>coai-server-job-</c> — sits there for as
-/// long as a vendor takes to answer. <c>shared/temp-sweep.json</c> names it as the product's own; this
-/// holds that list against what this program actually makes, so a new working directory that nobody
-/// adds to it is red here rather than deleted under a live job on a developer's machine.</para>
+/// <para>No test runner sweeps a <c>coai-*</c> name (E5 S2-A); the list is what the one-off clean-up refuses. A job's directory —
+/// <c>coai-server-job-</c> — sits in the machine's temp folder for as long as a vendor takes to answer. <c>shared/temp-sweep.json</c>
+/// names it as the product's own; this holds that list against what this program actually makes, so a new working directory that nobody
+/// adds to it is red here rather than offered to a person as a leftover beside a live job on a developer's machine.</para>
 /// <para>A scan of this program's own source that cannot go quiet: it must find the prefix it knows
 /// is there, so a reformat that stops it matching is red, not an empty list. coai-mcp's suite and the
 /// extension hold their own halves.</para>
