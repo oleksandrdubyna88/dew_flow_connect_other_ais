@@ -175,7 +175,7 @@ a sweep, never the janitor's (D4). Three files:
   root's folder of the same name would be a removal on a name read elsewhere. A listing without `tmp`, or with a `tmp` that is
   not an absolute path, is a usage error (exit 2) too.
 - `scripts/lib/old-coai-leftovers.mjs` — the logic, pure over an `io` seam (`readdirSync`, `lstatSync`, `statSync`,
-  `readFileSync`, `mkdirSync`, `renameSync`, `rmSync`, `rmdirSync`, `unlinkSync`) and `hooks` (`drawName(dir)`,
+  `readFileSync`, `mkdirSync`, `renameSync`, `rmSync`, `rmdirSync`, `unlinkSync`) and `hooks` ([S2-A code6 6]: no `drawName` — the quarantine name is the reference's own, never ours;
   `afterReserve`, `beforeRename`, `afterRename`, `probe`, `platform`) and the options `claimPlatform` (the platform a legacy claim is judged as: a Linux reader never says `gone`, rule §3, so a test reaches `gone` through it — [S2-A Opus 7], absent from the first text) and `onResult` (each result handed over as soon as it is decided — [S2-A code 6/9]) so every scenario below runs over a private root.
   - `listOldLeftovers({ tmp, neverSwept, now, io, probe })` → `{ tmp, entries }`, entries `{ name, kind, lastWriteMs, ageMinutes, dev, ino, claim }`
     (`tmp` is the root's absolute path — **[S2-A gate finding 2]**):
@@ -210,7 +210,7 @@ a sweep, never the janitor's (D4). Three files:
     `not-a-directory`, `changed` and `owner-<state>` exactly as above) and goes straight to the post-check and the removal; the scenario
     is "kill after the rename, a second run finishes it" (A.3 S15).
     The exclusive move is the reference's shape (F9, `moveExclusively`) with the two changes of finding 0: the quarantine name
-    `.<name>.teststodelete-quarantine-<pid>-<hex8>` drawn by `hooks.drawName` (default `crypto.randomBytes(4)`); POSIX —
+    `.<name>.teststodelete-quarantine-<pid>-<hex8>` drawn by the reference's `moveToQuarantine` ([S2-A code6 6]: no name seam of ours; a test drives its redraws through the `io`); POSIX —
     `mkdirSync(to, { mode: 0o700 })` (EEXIST ⇒ this draw is taken), re-`lstat` the placeholder (ours, a directory, empty)
     immediately before `renameSync(from, to)`; **[S2-A gate finding 0] the placeholder is removed in a `finally` whenever the rename did
     not complete, and only while it is still OUR empty reservation** (a directory, not a link, the reserved `(dev, ino)`, empty;
@@ -227,9 +227,8 @@ a sweep, never the janitor's (D4). Three files:
     the build machine in commit 5; if a platform moves it, the post-check would refuse every pick there and the observation is recorded).
     **P4 — done [S2-A code5 2/8/9]:** the first release copied ~40 lines of the reference's `identityOf`/`moveExclusively` because they were not exported; since release
     `5863c60` (coai main #939) the reference exports them with a last `{ io, platform }` argument, and this module IMPORTS `moveExclusively` and `moveToQuarantine`
-    from `.agents/conventions/tools/lib/leftovers-sweep.mjs` — the copy is deleted and no follow-up remains. Two small things stay local: a stat helper that also reads
-    `mtimeNs` and `uid` (which the reference's `identityOf` does not carry), and the `hooks.drawName` test seam (the reference's `moveToQuarantine` has none; without the hook
-    the reference's own runs). The script imports token-free functions straight from the mount (`.agents/conventions/tools/lib/…`): D3's
+    from `.agents/conventions/tools/lib/leftovers-sweep.mjs` — the copy is deleted and no follow-up remains. One small thing stays local: a stat helper that also reads
+    `mtimeNs` and `uid` (which the reference's `identityOf` does not carry); the `hooks.drawName` seam and the local draw loop of round 5 are GONE [S2-A code6 6]. The script imports token-free functions straight from the mount (`.agents/conventions/tools/lib/…`): D3's
     one-module rule is about the `coai` token being written once, and this tool carries no token; the mount missing ⇒
     one line naming `git submodule update --init .agents/conventions`, exit 2.
 - `scripts/lib/old-coai-leftovers.test.mjs` — A.3 S1–S10 and S11–S16, run by CI's `node --test "scripts/**/*.test.mjs"` (F11).
@@ -307,11 +306,11 @@ name), `now` fixed, `probe` injected.
 | S5 | `a pick changed after the listing is refused` | listing taken; then `utimesSync(coai-panel-a, …)` to a new mtime | `refused`, check `changed`; the folder and its sentinel stay | removed |
 | S6 | `a pick swapped after the listing is refused and the swapped-in object keeps its bytes` | listing taken; `coai-panel-a` renamed to `aside`; (a) a NEW directory `coai-panel-a` with `sentinel.txt` = `"the swapped-in one"`; (b) in a second case a symlink `coai-panel-a` → `aside` | (a) `refused`/`changed`, the new directory and its bytes stay, `aside` stays; (b) `refused`/`not-a-directory`, the link stays, `aside` and its bytes stay; `hooks.beforeRename` never called in either | (a) the swapped-in sentinel is gone |
 | S7 | `a legacy run folder with a live or unknown claim is refused; one with a gone claim goes with its claim file` | S2's four | `live` → `refused`/`owner-live`; `unknown` → `refused`/`owner-unknown`; `gone` and `none` → `removed`, their `.owner` files gone, the live and unknown ones' `.owner` files intact | the live one is removed |
-| S8 | `when every drawn quarantine name is taken the pick is refused and nothing is renamed` | `hooks.drawName` returns the SAME fixed name on every call (so five draws, all taken); the test pre-creates an EMPTY directory there (POSIX also, in a second case: a file there) | `refused`/`quarantine-taken`; `drawName` was called exactly `MOVE_DRAWS` (5) times; the pre-created object untouched (same identity), `coai-panel-a` untouched; on POSIX no placeholder left behind | removed |
-| S9 | `an unchanged pick is removed through the quarantine name by identity` | `hooks.drawName` records; `hooks.beforeRename` asserts the placeholder exists and is empty (POSIX) | `removed`; `coai-panel-a` gone; the recorded name matches `/^\.coai-panel-a\.teststodelete-quarantine-[0-9]+-[0-9a-f]{8}$/`; nothing else in the root changed (`readdirSync` before/after differ by exactly that name) | (passes for the wrong reason — which is why S5/S6/S8 exist) |
+| S8 | `when every drawn quarantine name is taken the pick is refused and nothing is renamed` ([S2-A code6 6]: driven through the `io`) | an `io` whose `mkdirSync` of a quarantine name (the POSIX reservation) answers `EEXIST` every time, and a second whose `renameSync` onto one does | `refused`/`quarantine-taken`; five draws (the pinned reference's bound); `coai-panel-a` untouched; no placeholder left | removed |
+| S9 | `an unchanged pick is removed through the quarantine name by identity` | the `io` records the drawn name; `hooks.beforeRename` asserts the placeholder exists and is empty (POSIX) | `removed`; `coai-panel-a` gone; the drawn name matches `/^\.coai-panel-a\.teststodelete-quarantine-[0-9]+-[0-9a-f]+$/`; nothing else in the root changed | (passes for the wrong reason — which is why S5/S6/S8 exist) |
 | S10 | `the CLI: list writes the listing, remove refuses a usage error with the legal forms, exit codes 0/1/2` | `execFileSync(process.execPath, [cli, 'list', '--tmp', root, '--out', file])`; then `remove --listing file coai-panel-a coai-ctx-c` | the JSON file is `{ tmp, entries }` with S1's two entries; stdout has `removed coai-panel-a` and `refused coai-ctx-c: not-listed`; exit 1; `remove` with no `--listing` exits 2 naming the forms | — |
-| S11 | `a rename that fails removes its own empty placeholder and refuses the pick` (**[S2-A gate finding 0]**, POSIX) | `io.renameSync` throws `EACCES` (an `io` that fails on purpose); `hooks.drawName` records the name | `refused`, check `error-EACCES`; `coai-panel-a` and its sentinel untouched; the drawn placeholder name is NOT in the root afterwards | the placeholder is still there |
-| S12 | `a taken draw draws a new name, and the move lands on the second` (**[S2-A gate finding 0]**) | `hooks.drawName` returns a pre-created occupied name first, a free one second | `removed`; `drawName` called twice; the occupied object untouched (same identity); only the second name was ever a placeholder | removed with one draw |
+| S11 | `a rename that fails removes its own empty placeholder and refuses the pick — as an ERROR, never as quarantine-taken` (**[S2-A gate finding 0]**, **[S2-A code6 1/3]**, POSIX) | an `io` whose `renameSync` onto a quarantine name throws `EACCES` | `refused`, check `error-EACCES` (not `quarantine-taken`); `coai-panel-a` and its sentinel untouched; one draw; the placeholder is NOT in the root afterwards | the placeholder is still there |
+| S12 | `a taken draw draws a new name, and the move lands on the draw after the taken ones` (**[S2-A gate finding 0]**, [S2-A code6 6]) | an `io` whose `mkdirSync` answers `EEXIST` for the first two draws | `removed`; three distinct draws; no quarantine name left behind | removed with one draw |
 | S13 | `remove uses the listing's temp root, and refuses a --tmp that is another root` (**[S2-A gate finding 2]**) | a listing taken in root A with `coai-panel-a`; a root B holding ANOTHER folder `coai-panel-a` (same name, own sentinel); the CLI run from a third working directory: (1) `remove --listing <A's file> --tmp B coai-panel-a`; (2) `remove --listing <A's file> --tmp A/ coai-panel-a` (A spelled with a trailing separator); (3) a listing file with no `tmp` key, `remove --listing <it> coai-panel-a` | (1) exits 2, one line naming both roots, A's and B's folders and sentinels untouched; (2) exits 0 and `removed coai-panel-a` (the same root, spelled another way), A's folder gone, B's untouched; (3) exits 2 naming the legal forms; S10's `remove` without any `--tmp` removes from the listing's root, never from `os.tmpdir()` | B's folder is removed in (1) |
 | S14 | `the listing reports this script's own quarantines, and remove accepts them by name` (**[S2-A gate finding 3]**) | `.coai-panel-a.teststodelete-quarantine-4242-0a1b2c3d` (a directory with a sentinel), `.testsToDelete-coai-run-abc123.teststodelete-quarantine-4242-0a1b2c3d` with its `.owner` (probe `gone`), `.coai-chat-x.teststodelete-quarantine-4242-0a1b2c3d` (a PROTECTED original), `.coai-panel-b.teststodelete-quarantine-4242-0a1b2c3d` as a FILE | the listing carries the first two as `kind: 'quarantine'` with `of`; not the protected one, not the file; `remove` of the first: `removed`; of the second: `removed` and `testsToDelete-coai-run-abc123.owner` gone; a hand-edited listing naming the protected quarantine: `refused`/`protected`; one of them modified after the listing: `refused`/`changed` | removed (every case passes for the wrong reason; the refusals are red) |
 | S15 | `kill after the rename, a second run finishes it` (**[S2-A gate finding 3]**) | a child process (`execFileSync` of a tiny ESM script that imports the library and passes `hooks.afterRename` that sends itself `SIGKILL`) removes `coai-panel-a`; then `list` in the parent, then `remove` of the quarantine's name | the child dies by `SIGKILL`; the root holds the quarantine name and no `coai-panel-a`; the second `list` shows it as `kind: 'quarantine'`, `of: 'coai-panel-a'`; the second `remove` answers `removed`; the root is empty | removed by the first run — the child never reaches its kill |
@@ -324,6 +323,8 @@ name), `now` fixed, `probe` injected.
 | S22 | `the listing is indexed by name once, not searched for every pick` (**[S2-A code 7]**) | `listing.entries.find` throws | three picks answered | throws |
 | S23 | `each pick's result is reported as soon as it is decided` (**[S2-A code 6/9]**) | two picks; `afterRename` of the second records what `onResult` has seen | the first was already reported; every result reported once, in order | nothing reported |
 | S24 | `list shows the listing first and writes --out after` (**[S2-A code 3]**) | `--out` under a folder that does not exist | exit 2; stdout holds the entry lines; stderr names the failure | nothing shown |
+| S37 | `the PINNED reference says "no free name" when every draw is taken` (**[S2-A code6 1/3]**) | the reference's `moveToQuarantine` over an `io` whose reservation always answers `EEXIST` | it throws exactly `cannot move <dir> into quarantine: no free name in 5 draws — the folder is kept`; a release that changes it turns this red | — |
+| S38 | `there is no name seam` (**[S2-A code6 6]**) | a `hooks.drawName` passed to `removePicked` | never called; the pick is removed | called |
 
 Run: C# `node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*TempDirsAreSwept" --filter-class "*PruneOldScratchDirs*" --filter-class "*TheTestSweepIsRetired*"`
 then the whole suite; Node `cd src_vs_code && npm test` (lowered: `nice -n 19`); the script `node --test "scripts/**/*.test.mjs"`; the scan
@@ -513,6 +514,17 @@ Accepted 2/8/9 (drop the copied helpers) and 3 (refuse `:`); the rest rejected. 
 | **[S2-A code5 2/8/9]** | the copied `identityOf`, `isOwnEmptyPlaceholder`, `removeOwnEmptyPlaceholder`, `moveExclusively` and `moveToQuarantine` are deleted; the module imports `moveExclusively` and `moveToQuarantine` from the reference and passes `{ io, platform }`; the P4 follow-up is done and removed from A.7 item 7 and A.9 | S1–S36 unchanged and green (a refactor of call shapes; S21's forced `win32` already uses a fake io) |
 | **[S2-A code5 3]** | `isOneSegment` also refuses `:` and NUL (`C:foo` is drive-relative on Windows) | S36 (RED first) |
 
+### A.10 round 6 — the sixth code round (2026-11-02, proceed)
+
+Accepted 0, 1, 3, 4 and 6; rejected 2 (the call order matches) and 5 (pin tags in the measurement history stay).
+
+| Mark | Change | Test |
+|---|---|---|
+| **[S2-A code6 6]** | `hooks.drawName`, `MOVE_DRAWS` and the local draw loop are removed: every quarantine move goes through the reference's `moveToQuarantine`; the collision tests drive its redraws through the `io` (`mkdirSync` of the reservation or `renameSync` answering `EEXIST` for the first k draws, or every draw) | S8, S9, S11, S12 rewritten; S38 RED first |
+| **[S2-A code6 1, 3]** | only the reference's name-exhaustion failure (`no free name` in its message) is `quarantine-taken`; every other error is rethrown and reported as `error-<code>` (an `EACCES` rename is `error-EACCES`); the exact message of the PINNED reference is pinned by a test | S11, S37 |
+| **[S2-A code6 4]** | `research/architecture.md` records that the clean-up imports its identity and move helpers from the pinned reference (decision 11), not a copy | — |
+| **[S2-A code6 0]** | the Definition of Done no longer says "and the P4 follow-up" | — |
+
 **Rejected, with the reason (no change):** code 1 (the two digit checks — `[0-9]` in a regex and the first-character test — mean the same); code 5 (no streaming of the listing: a one-off script over a temp folder); code 8 and the P4 copy follow-up stay as decided (decision 11: the pinned mount is the Node consumers' interface).
 
 ## Definition of Done (S2-A)
@@ -524,7 +536,7 @@ Accepted 2/8/9 (drop the copied helpers) and 3 (refuse `:`); the rest rejected. 
 - [ ] `PanelService.cs` and the product sweep's tests unchanged and green (A.8 check 2, A.7 item 5).
 - [ ] The three product-prefix scans unchanged in code and green.
 - [ ] `shared/temp-sweep.json`: `neverSwept` unchanged; `prefix`, `keepMinutes` gone; `why` rewritten; the old-reader observations in the PR.
-- [ ] The one-off clean-up script with S1–S36 green (S5/S6/S8/S11/S12/S16 observed red under B5), documented in `module_tests.md`, with the residual window and the P4 follow-up.
+- [ ] The one-off clean-up script with S1–S36 green (S5/S6/S8/S11/S12/S16 observed red under B5), documented in `module_tests.md`, with the residual window. **[S2-A code6 0]**
 - [ ] Both start-of-run counters print the legacy `testsToDelete-coai-run-*` line (C-N4, N7, N8) — [S2-A gate finding 1].
 - [ ] The stage-A record (A.7 item 4) in the PR, with the scan before and after.
 - [ ] `plan-lifecycle.mjs` clean; E5's S2-A DoD boxes ticked in the merging PR; this file's status line updated to "S2-A shipped #<PR>; S2-B half pending".
