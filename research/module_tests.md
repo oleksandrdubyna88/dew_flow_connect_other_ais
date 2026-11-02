@@ -406,7 +406,7 @@ been changed. The product now walks at most once every ten minutes per process r
 reviewer. CI never sees any of this: a runner starts with an empty temp, so a green CI beside a
 stalled local suite is evidence FOR this cause.
 
-**Retired 2026-11 (E5 S2-A of `todo/PLAN_test_leftovers_E5.md`):** neither runner removes anything any more. The paragraph below is kept as history — a sweep that took `coai-*` on a name and an age could not tell a person's live chat, another user's run or a round waiting on a slow reviewer from a dead run's folder, and the owner-aware sweep that replaces it is a later story (S2-B). What runs now is below the paragraph.
+**Retired 2026-11 (E5 S2-A of `todo/PLAN_test_leftovers_E5.md`):** neither runner sweeps the machine's temp folder any more (the only delete left at a run's start is the MCP suite's removal of a killed run's leftover fake-CLI steering file, `FakeCliSteering.DeleteALeftover`). The paragraph below is kept as history — a sweep that took `coai-*` on a name and an age could not tell a person's live chat, another user's run or a round waiting on a slow reviewer from a dead run's folder, and the owner-aware sweep that replaces it is a later story (S2-B). What runs now is below the paragraph.
 
 **Both runners sweep BEFORE they start, on one shared rule (2026-09-23).** The operator's ruling of
 2026-09-18: tests must clean up, not after each test but before the run, everything older than ten
