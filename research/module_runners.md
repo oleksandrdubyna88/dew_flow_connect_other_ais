@@ -121,7 +121,7 @@ sequenceDiagram
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
   reviewer) and leave **10 002** now (9 976 until 2026-11-01, 10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
   names the tail takes one rule on 35 %, two on 58 %, three on 7 % (mean 1.72; 30 / 62 / 8 % and 1.78 at 9 976), and
-  `common/test-leftovers.md` (an 8 403-character core since 2026-11-01) is drawn on 4.9 % (it was 9.8 % at 4 706 bytes) — drawn, not owed: a rule that must reach every reviewer
+  `common/test-leftovers.md` (an 8 403-character core since 2026-11-01; 8 794 since 2026-11-02, pin 5863c60) is drawn on 4.9 % (4.7 % at 8 794) (it was 9.8 % at 4 706 bytes) — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
 
   **That number is the same on every platform only since 2026-09-18.** Until then `RuleFiles.Read`
@@ -138,7 +138,7 @@ sequenceDiagram
   The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
   and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
   `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (the measuring test and drift
-  guard: 17 963 + 62 035 since 2026-11-01 (the conventions pin at 105d53c); 17 963 + 62 061 before that; 17 947 + 62 061 before E1.S2's --host-facts; 17 925 + 62 061 from 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
+  guard: 17 963 + 62 035 since 2026-11-01 (the conventions pin at 105d53c), re-measured and unchanged on 2026-11-02 (the pin at 5863c60: free tail still 10 002, `common/test-leftovers.md` an 8 794-character core, 8 403 before; the new `common/test-leftovers-baseline.md` is 9 123 characters and a tail rule outside the tier; the same 7 of 100 fixed names draw the core, 142 of 3 000 (4.7 %) against 147); 17 963 + 62 061 before that; 17 947 + 62 061 before E1.S2's --host-facts; 17 925 + 62 061 from 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
   `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
   the measured maximum elsewhere),
   `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
