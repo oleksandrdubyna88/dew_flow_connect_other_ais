@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { listOldLeftovers, removePicked, MOVE_DRAWS } from './old-coai-leftovers.mjs';
+import * as lib from './old-coai-leftovers.mjs';
 import { processProbe, thisOwner } from '../../.agents/conventions/tools/lib/owned.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -569,6 +570,9 @@ test('S25 [S2-A code2 0] a quarantine-shaped name whose original is not one path
   assert.equal(sentinel(root, crafted), `still ${crafted}`);
   const edited = { ...listing, entries: [{ name: crafted, kind: 'quarantine', of: 'coai-a\\b', dev: '1', ino: '1', mtimeNs: '1', lastWriteMs: 0, ageMinutes: 0 }] };
   assert.deepEqual(remove(root, edited, [crafted]).map((r) => [r.outcome, r.check]), [['refused', 'bad-name']]);
+  // The listing's own filter and the quarantine pattern both stop this name first; judge() is the layer that must hold on its own.
+  assert.equal(lib.judge?.(crafted, NEVER_SWEPT), null, 'judge() returns null for a quarantine whose original is not one segment');
+  assert.equal(lib.judge?.(crafted.replace('\\\\', '-'), NEVER_SWEPT)?.kind, 'quarantine', 'and still knows a real quarantine (the scan sees what it knows is there)');
 });
 
 test('S26 [S2-A code2 1] the uid is checked again after the move: a quarantined object that is no longer the caller\'s is kept', { skip: typeof process.getuid !== 'function' && 'no uid on this platform' }, (t) => {
