@@ -247,11 +247,14 @@ test('S10 the CLI: list writes the listing, remove refuses a usage error with th
 
   const removed = runCli(['remove', '--listing', file, 'coai-panel-a', 'coai-ctx-c']);
 
-  assert.equal(removed.status, 1, 'one pick was refused');
-  assert.match(removed.stdout, /^removed coai-panel-a$/m);
+  assert.equal(removed.status, 1, 'one pick is not listed: exit 1');
   assert.match(removed.stdout, /^refused coai-ctx-c: not-listed$/m);
+  assert.match(removed.stdout, /^refused coai-panel-a: not-attempted/m, '[S2-A code3 3] and nothing else was removed');
+  assert.ok(fs.existsSync(path.join(root, 'coai-panel-a')));
+  const both = runCli(['remove', '--listing', file, 'coai-panel-a', 'coai-ctx-b']);
+  assert.equal(both.status, 0, 'every pick removed is exit 0');
+  assert.match(both.stdout, /^removed coai-panel-a$/m);
   assert.ok(!fs.existsSync(path.join(root, 'coai-panel-a')), 'removed from the listing\'s root, with no --tmp given');
-  assert.equal(runCli(['remove', '--listing', file, 'coai-ctx-b']).status, 0, 'every pick removed is exit 0');
 
   const usage = runCli(['remove', 'coai-panel-a']);
   assert.equal(usage.status, 2);
@@ -528,9 +531,9 @@ test('S22 [S2-A gate 7] the listing is indexed by name once, not searched for ev
   const listing = list(root);
   listing.entries.find = () => { throw new Error('a per-pick search of the entries'); };
 
-  const results = remove(root, listing, ['coai-panel-a', 'coai-panel-b', 'coai-panel-zzz']);
+  const results = remove(root, listing, ['coai-panel-a', 'coai-panel-b']);
 
-  assert.deepEqual(results.map((r) => r.outcome), ['removed', 'removed', 'refused']);
+  assert.deepEqual(results.map((r) => r.outcome), ['removed', 'removed']);
 });
 
 test('S23 [S2-A gate 6/9] each pick\'s result is reported as soon as it is decided, before the next pick is touched', (t) => {
@@ -644,6 +647,7 @@ test('S29 [S2-A code2 5] --tmp and the listing\'s root are compared by realpath;
   assert.equal(wrong.status, 2);
   assert.ok(wrong.stderr.includes(given), `the --tmp is shown as given: ${wrong.stderr}`);
   assert.ok(wrong.stderr.includes(rootA), 'and so is the listing\'s root');
+  assert.ok(wrong.stderr.includes('omit --tmp to use the listing\'s root') && wrong.stderr.includes('list --tmp <dir>'), `[S2-A code3 4] the way out is named: ${wrong.stderr}`);
   assert.equal(sentinel(rootA, 'coai-panel-a'), 'still coai-panel-a');
 
   const same = runCli(['remove', '--listing', file, '--tmp', alias, 'coai-panel-a'], { cwd: elsewhere });
@@ -686,4 +690,43 @@ test('S31 [S2-A code2 7] removePicked takes its root from the listing, and refus
   assert.equal(derived.outcome, 'removed', 'no tmp argument: the listing\'s root is the root');
   assert.ok(!fs.existsSync(path.join(rootA, 'coai-panel-a')));
   assert.equal(sentinel(rootB, 'coai-panel-a'), 'root B\'s own');
+});
+
+test('S32 [S2-A code3 0] when the removal fails AFTER the move, the result names the quarantine, and the next list offers it', (t) => {
+  const root = privateRoot(t);
+  make(root, 'coai-panel-a', 60);
+  const listing = list(root);
+  const io = {
+    ...fs,
+    rmSync: (target, options) => {
+      if (path.basename(target).startsWith('.coai-panel-a.teststodelete-quarantine-')) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+      return fs.rmSync(target, options);
+    },
+  };
+
+  const [result] = remove(root, listing, ['coai-panel-a'], { io });
+
+  assert.deepEqual([result.outcome, result.check], ['refused', 'error-EBUSY']);
+  assert.match(result.quarantine, /^\.coai-panel-a\.teststodelete-quarantine-[0-9]+-[0-9a-f]{8}$/, 'the result says where the folder is now');
+  assert.deepEqual(fs.readdirSync(root), [result.quarantine]);
+  assert.deepEqual(list(root).entries.map((e) => [e.name, e.kind, e.of]), [[result.quarantine, 'quarantine', 'coai-panel-a']], 'a later list offers it, and remove can finish it');
+  assert.match(lib.describeResult?.(result) ?? '', new RegExp(`^refused coai-panel-a: error-EBUSY.*${result.quarantine.replace(/[.]/g, '\\.')}`), 'the line a person reads names the quarantine');
+  assert.equal(lib.describeResult?.({ name: 'coai-x', outcome: 'removed' }), 'removed coai-x');
+});
+
+test('S33 [S2-A code3 3] every pick is checked against the listing BEFORE any removal: one unlisted pick removes nothing, and every unlisted name is reported', (t) => {
+  const root = privateRoot(t);
+  make(root, 'coai-panel-a', 60);
+  make(root, 'coai-panel-b', 60);
+  const listing = list(root);
+
+  const results = remove(root, listing, ['coai-panel-a', 'coai-panel-typo', 'coai-panel-b', 'coai-panel-typo2']);
+
+  assert.deepEqual(results.map((r) => [r.name, r.outcome, r.check]), [
+    ['coai-panel-a', 'refused', 'not-attempted'],
+    ['coai-panel-typo', 'refused', 'not-listed'],
+    ['coai-panel-b', 'refused', 'not-attempted'],
+    ['coai-panel-typo2', 'refused', 'not-listed'],
+  ]);
+  assert.deepEqual(fs.readdirSync(root).sort(), ['coai-panel-a', 'coai-panel-b'], 'nothing was removed');
 });
