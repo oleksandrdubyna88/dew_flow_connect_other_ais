@@ -769,16 +769,18 @@ test('S35 [S2-A code4 9] a legacy run folder removed whose claim cannot be unlin
   const claim = path.join(root, `${name}.owner`);
   fs.writeFileSync(claim, `${claimOf(99999, 1700000000)}\n`);
   const listing = list(root);
-  const io = { ...fs, unlinkSync: (target) => { if (target === claim) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' }); return fs.unlinkSync(target); } };
+  // [S2-A code9 1] The claim is never unlinked by its public name: it is moved to a private name first, and THAT is what cannot be unlinked here.
+  const io = { ...fs, unlinkSync: (target) => { if (target.includes('.coai-cleanup-')) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' }); return fs.unlinkSync(target); } };
 
   const [result] = remove(root, listing, [name], { io });
 
   assert.equal(result.outcome, 'partial');
-  assert.equal(result.claimLeft, claim, 'the result names the claim that is left');
+  assert.ok(result.claimLeft.startsWith(`${claim}.coai-cleanup-`), `the result names the claim that is left, where it is now: ${result.claimLeft}`);
   assert.ok(!fs.existsSync(path.join(root, name)), 'the folder is gone');
-  assert.ok(fs.existsSync(claim), 'the claim stays');
+  assert.ok(fs.existsSync(result.claimLeft), 'the claim stays, at that name');
+  assert.ok(!fs.existsSync(claim), 'and nothing is left at the public name');
   const line = lib.describeResult?.(result) ?? '';
-  assert.ok(line.includes(name) && line.includes(claim) && line.includes('EPERM'), `the line a person reads names the claim and the cause: ${line}`);
+  assert.ok(line.includes(name) && line.includes(result.claimLeft) && line.includes('EPERM'), `the line a person reads names the claim and the cause: ${line}`);
 });
 
 test('S36 [S2-A code5 3] a name holding `:` or NUL is not one path segment: `C:foo` is a drive-relative path on Windows, and no path is built from it', (t) => {
@@ -887,4 +889,66 @@ test('S42 [S2-A CodeRabbit 7] list takes no names: a stray positional is a usage
   assert.equal(result.status, 2);
   assert.match(result.stderr, /list \[--tmp <dir>\] \[--out <file>\]/);
   assert.ok(result.stderr.includes('coai-panel-a'), 'the stray name is named');
+});
+
+/** A legacy run folder with a gone claim, and the claim's paths. */
+function runWithClaim(t) {
+  const root = privateRoot(t);
+  const name = 'testsToDelete-coai-run-abc123';
+  make(root, name, 120);
+  const claim = path.join(root, `${name}.owner`);
+  const text = `${claimOf(99999, 1700000000)}\n`;
+  fs.writeFileSync(claim, text);
+  return { root, name, claim, text, listing: list(root) };
+}
+
+test('S43 [S2-A code9 1] a claim swapped in at the very moment of removal is never deleted: the claim is moved aside, found different, and put back where it was', (t) => {
+  for (const [variant, replacement] of [['another text', (claim) => fs.writeFileSync(claim, `${claimOf(88888)}\n`)], ['the same text in a new file', (claim, text) => { fs.writeFileSync(`${claim}.new`, text); fs.renameSync(`${claim}.new`, claim); }]]) {
+    const { root, name, claim, text, listing } = runWithClaim(t);
+    let raced = false;
+    const race = (target, run) => { if (!raced && String(target) === claim) { raced = true; replacement(claim, text); } return run(); };
+    // The race: the instant the claim is first touched by its public name — an unlink (old code) or a rename away (new code) — somebody else's claim takes its place.
+    const io = { ...fs, unlinkSync: (target) => race(target, () => fs.unlinkSync(target)), renameSync: (from, to) => race(from, () => fs.renameSync(from, to)) };
+
+    const [result] = remove(root, listing, [name], { io });
+
+    assert.ok(fs.existsSync(claim), `the new claim is intact at the public name (${variant})`);
+    assert.equal(result.outcome, 'partial', variant);
+    assert.equal(result.cause, 'claim-changed', variant);
+    assert.equal(result.claimLeft, claim, 'it was put back: the claim left is at its own name');
+    assert.deepEqual(fs.readdirSync(root), [`${name}.owner`], 'no private name is left behind');
+  }
+});
+
+test('S44 [S2-A code9 1] a claim that cannot be put back without replacing another stays at the private name, and the other claim is untouched', (t) => {
+  const { root, name, claim, listing } = runWithClaim(t);
+  const afterFolderRemoved = () => fs.writeFileSync(claim, `${claimOf(88888)}\n`); // swapped before the move: what is moved is NOT the claim that was judged
+  const afterClaimMoved = () => fs.writeFileSync(claim, 'a claim that appeared at the public name after the move\n');
+
+  const [result] = remove(root, listing, [name], { hooks: { afterFolderRemoved, afterClaimMoved } });
+
+  assert.equal(result.outcome, 'partial');
+  assert.equal(result.cause, 'claim-changed');
+  assert.ok(result.claimLeft.startsWith(`${claim}.coai-cleanup-`), `kept at the private name: ${result.claimLeft}`);
+  assert.equal(fs.readFileSync(result.claimLeft, 'utf8'), `${claimOf(88888)}\n`, 'the moved claim keeps its bytes');
+  assert.equal(fs.readFileSync(claim, 'utf8'), 'a claim that appeared at the public name after the move\n', 'and the one at the public name was not replaced');
+});
+
+test('S45 [S2-A code9 1] a claim that is gone when it is to be moved is not an error: the pick is removed', (t) => {
+  const { root, name, claim, listing } = runWithClaim(t);
+
+  const [result] = remove(root, listing, [name], { hooks: { afterFolderRemoved: () => fs.unlinkSync(claim) } });
+
+  assert.equal(result.outcome, 'removed');
+  assert.deepEqual(fs.readdirSync(root), [], 'and no placeholder or private name is left');
+});
+
+test('S46 [S2-A code9 1] any other error moving the claim aside is a partial result with that cause; nothing is left at a private name', (t) => {
+  const { root, name, claim, listing } = runWithClaim(t);
+  const io = { ...fs, renameSync: (from, to) => { if (from === claim) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); return fs.renameSync(from, to); } };
+
+  const [result] = remove(root, listing, [name], { io });
+
+  assert.deepEqual([result.outcome, result.cause, result.claimLeft], ['partial', 'EACCES', claim]);
+  assert.deepEqual(fs.readdirSync(root), [`${name}.owner`], 'the claim stays at its own name and the reservation is gone');
 });
