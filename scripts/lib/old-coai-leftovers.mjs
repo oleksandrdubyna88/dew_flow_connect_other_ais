@@ -12,7 +12,8 @@
  * `not-a-directory`, `foreign-uid` (S2-A Opus 4: on POSIX the caller owns what it removes, rule §3), `changed`, `owner-<state>` (a legacy run
  * folder's claim; for a quarantine of this script, the state of the process whose pid its name carries — S2-A Opus 3: alive or unaskable keeps it),
  * `quarantine-taken`, `moved-but-changed`; any other error from the file system refuses with `error-<code>`; an ENOENT from the rename is `missing`
- * (S2-A gate 4). After the move a legacy run folder's claim is read again before anything is removed (S2-A Opus 5). Nothing throws out of `removePicked`.
+ * (S2-A gate 4). After the move a legacy run folder's claim is read again before anything is removed (S2-A Opus 5), and the uid again (S2-A code2 1). The root is the
+ * listing's: `bad-listing` / `wrong-root` refuse every pick before any of these (S2-A code2 7). Nothing throws out of `removePicked`.
  *
  * THE RESIDUAL WINDOW (S2-A gate finding 4). The `changed` check and the rename are two calls: an object swapped in between is moved aside under
  * the quarantine name instead of the one the person picked. The check after the move (device, inode AND last-write time against the listing) sees
@@ -53,13 +54,15 @@ export function candidateKind(name, neverSwept) {
 }
 
 /** What a name is for this tool: its kind, and for a quarantine the original name it holds. `null` when it is not ours to touch. */
-function judge(name, neverSwept) {
+export function judge(name, neverSwept) {
   const quarantine = QUARANTINE.exec(name);
   if (quarantine === null) {
     const kind = candidateKind(name, neverSwept);
     return kind === null ? null : { kind, original: name };
   }
-  return candidateKind(quarantine[1], neverSwept) === null ? null : { kind: 'quarantine', original: quarantine[1], pid: quarantine[2] };
+  // [S2-A code2 0] defence in depth: the pattern already excludes separators, and the original must be ONE segment before any claim is read or unlinked.
+  if (!isOneSegment(quarantine[1]) || candidateKind(quarantine[1], neverSwept) === null) return null;
+  return { kind: 'quarantine', original: quarantine[1], pid: quarantine[2] };
 }
 
 // --- identity: copies of the reference's (see the header) ---------------------------------------------------------
@@ -148,18 +151,25 @@ function moveToQuarantine(dir, io, hooks, platform) {
 
 // --- the listing --------------------------------------------------------------------------------------------------
 
-/** The state of the claim file beside `original`: `none`, `unreadable`, or the legacy grammar's `gone` / `live` / `unknown` (a Linux reader never says `gone`). */
-function claimState(tmp, original, { probe, claimPlatform }) {
-  const read = readClaimText(path.join(tmp, `${original}${OWNER_SUFFIX}`));
-  if (read === null) return 'none';
-  if (typeof read !== 'string') return 'unreadable';
-  return legacyOwnerState(parseLegacyOwner(read), probe, { platform: claimPlatform });
+/**
+ * The state of the claim file beside `original`: `none`, `unreadable`, or the legacy grammar's `gone` / `live` / `unknown` (a Linux reader never says `gone`).
+ * [S2-A code2 2] A read that fails in ANY way — a directory or a FIFO in the claim's place, EACCES, a throw — is `unreadable`, which refuses a pick and never aborts a listing.
+ */
+function claimState(tmp, original, { probe, claimPlatform, readClaim = readClaimText }) {
+  try {
+    const read = readClaim(path.join(tmp, `${original}${OWNER_SUFFIX}`));
+    if (read === null) return 'none';
+    if (typeof read !== 'string') return 'unreadable';
+    return legacyOwnerState(parseLegacyOwner(read), probe, { platform: claimPlatform });
+  } catch {
+    return 'unreadable';
+  }
 }
 
 const identityFields = (stat) => ({ dev: String(stat.dev), ino: String(stat.ino), mtimeNs: String(stat.mtimeNs) });
 
 /** The entry of one directory: kind, age, identity, and what the kind adds (`of` and `empty` for a quarantine, `claim` for a legacy run folder). */
-function entryOf(tmp, name, judged, { now, io, probe, claimPlatform }) {
+function entryOf(tmp, name, judged, { now, io, probe, claimPlatform, readClaim }) {
   const stat = io.lstatSync(path.join(tmp, name), { bigint: true });
   const lastWriteMs = Number(stat.mtimeNs / 1_000_000n);
   const isRunFolder = LEGACY_RUN.test(judged.original);
@@ -170,24 +180,45 @@ function entryOf(tmp, name, judged, { now, io, probe, claimPlatform }) {
     ageMinutes: Math.floor((now - lastWriteMs) / 60_000),
     ...identityFields(stat),
     ...(judged.kind === 'quarantine' ? { of: judged.original, empty: io.readdirSync(path.join(tmp, name)).length === 0 } : {}),
-    ...(isRunFolder ? { claim: claimState(tmp, judged.original, { probe, claimPlatform }) } : {}),
+    ...(isRunFolder ? { claim: claimState(tmp, judged.original, { probe, claimPlatform, readClaim }) } : {}),
   };
 }
 
+/** Is this the shape of a name this tool would have offered, were it one segment? A folder of that shape that is not one on this system is REPORTED, not offered. */
+function looksLikeOurs(name, neverSwept) {
+  return candidateKind(name, neverSwept) !== null || /^\.(coai-|testsToDelete-coai-run-)/i.test(name);
+}
+
 /**
- * What `tmp` holds that this tool may offer: `{ tmp, entries }`. `tmp` is the root's absolute path, recorded so `remove` reads the same root (S2-A gate finding 2).
+ * What `tmp` holds that this tool may offer: `{ tmp, entries, refused }`. `tmp` is the root's absolute path, recorded so `remove` reads the same root (S2-A gate finding 2).
  * Product prefixes, the version cache, files, links and every other name are left out — they were never candidates. A quarantine of this script is
- * listed as an interrupted clean-up (S2-A gate finding 3).
+ * listed as an interrupted clean-up (S2-A gate finding 3). [S2-A code2 6] A folder of our shape whose name is not ONE path segment on THIS system (a POSIX name holding a
+ * backslash) is reported in `refused` as `bad-name` — seen, never offered — so nothing sits behind a removal that always refuses it.
  */
-export function listOldLeftovers({ tmp, neverSwept, now = Date.now(), io = fs, probe = processProbe, claimPlatform = process.platform }) {
-  const entries = io.readdirSync(tmp, { withFileTypes: true })
-    .filter((dirent) => dirent.isDirectory())
+export function listOldLeftovers({ tmp, neverSwept, now = Date.now(), io = fs, probe = processProbe, claimPlatform = process.platform, readClaim = readClaimText }) {
+  const directories = io.readdirSync(tmp, { withFileTypes: true }).filter((dirent) => dirent.isDirectory());
+  const entries = directories
+    .filter((dirent) => isOneSegment(dirent.name))
     .flatMap((dirent) => {
       const judged = judge(dirent.name, neverSwept);
-      return judged === null ? [] : [entryOf(tmp, dirent.name, judged, { now, io, probe, claimPlatform })];
+      return judged === null ? [] : [entryOf(tmp, dirent.name, judged, { now, io, probe, claimPlatform, readClaim })];
     })
     .sort((a, b) => (a.name < b.name ? -1 : 1));
-  return { tmp: path.resolve(tmp), entries };
+  const refusedNames = directories.filter((dirent) => !isOneSegment(dirent.name) && looksLikeOurs(dirent.name, neverSwept))
+    .map((dirent) => ({ name: dirent.name, check: 'bad-name' })).sort((a, b) => (a.name < b.name ? -1 : 1));
+  return { tmp: path.resolve(tmp), entries, refused: refusedNames };
+}
+
+/** Are two temp roots the same folder? By realpath (a link to the root is the root); a root that cannot be resolved is compared as an absolute path. */
+export function sameRoot(a, b) {
+  const real = (root) => {
+    try {
+      return fs.realpathSync.native(root);
+    } catch {
+      return path.resolve(root);
+    }
+  };
+  return real(a) === real(b);
 }
 
 // --- the removal --------------------------------------------------------------------------------------------------
@@ -216,12 +247,15 @@ function ownerRefusal(tmp, judged, ctx) {
   return state === 'gone' || state === 'none' ? undefined : `owner-${state}`;
 }
 
+/** On POSIX: is the object owned by somebody else than the caller? (No uid on Windows.) */
+const isForeign = (identity) => typeof process.getuid === 'function' && identity.uid !== process.getuid();
+
 /** The checks that need only a look at the name now: the first that fails. */
 function refusalBefore(tmp, entry, judged, ctx) {
   const now = identityOf(path.join(tmp, entry.name), ctx.io);
   if (now === undefined) return 'missing';
   if (!now.directory) return 'not-a-directory'; // lstat: a link or a file at the name
-  if (typeof process.getuid === 'function' && now.uid !== process.getuid()) return 'foreign-uid'; // the kernel owner is the caller's, or it is not ours to remove
+  if (isForeign(now)) return 'foreign-uid'; // the kernel owner is the caller's, or it is not ours to remove
   if (!sameAsListed(now, entry)) return 'changed';
   return ownerRefusal(tmp, judged, ctx);
 }
@@ -239,6 +273,7 @@ function removeClaim(file, io) {
 function removeQuarantined(tmp, entry, judged, quarantined, ctx) {
   const now = identityOf(quarantined, ctx.io);
   if (now === undefined || !sameAsListed(now, entry)) return refused(entry.name, 'moved-but-changed'); // left in place, never removed; the next listing shows it
+  if (isForeign(now)) return refused(entry.name, 'foreign-uid'); // [S2-A code2 1] the kernel owner is checked again where the object is now
   const claim = ownerRefusal(tmp, judged, ctx); // the claim is read AGAIN now that the folder is aside: a run that took it in between keeps the folder
   if (claim !== undefined) return refused(entry.name, claim);
   ctx.io.rmSync(quarantined, { recursive: true, force: true });
@@ -284,14 +319,18 @@ function decide(tmp, name, entries, ctx) {
 
 /**
  * Removes the `picks` named in `listing`, one result per pick: `{ name, outcome: 'removed' | 'refused', check }`, each handed to `onResult` as soon as it is
- * decided (S2-A gate 6/9) and all returned. The listing's entries are indexed by name once (S2-A gate 7). `hooks` are the seams the tests use:
- * `drawName(dir)` (the full quarantine path), `afterReserve`, `beforeRename`, `afterRename(from, quarantined)` and `platform` (the move's, default `process.platform`).
+ * decided (S2-A gate 6/9) and all returned. The listing's entries are indexed by name once (S2-A gate 7). [S2-A code2 7] The root is the LISTING's: `listing.tmp` must be
+ * an absolute path (else every pick is refused `bad-listing`), and a `tmp` argument that is another folder refuses every pick `wrong-root` — the deletion API itself holds the
+ * confinement, not only the command that calls it. `hooks` are the seams the tests use: `drawName(dir)` (the full quarantine path), `afterReserve`, `beforeRename`,
+ * `afterRename(from, quarantined)` and `platform` (the move's, default `process.platform`); `readClaim` reads a claim file.
  */
-export function removePicked({ tmp, listing, picks, neverSwept, io = fs, hooks = {}, probe = processProbe, claimPlatform = process.platform, onResult = () => {} }) {
-  const ctx = { io, hooks, neverSwept, probe, claimPlatform, platform: hooks.platform ?? process.platform };
-  const entries = new Map(listing.entries.map((entry) => [entry.name, entry]));
+export function removePicked({ tmp, listing, picks, neverSwept, io = fs, hooks = {}, probe = processProbe, claimPlatform = process.platform, readClaim = readClaimText, onResult = () => {} }) {
+  const root = listing?.tmp;
+  const ctx = { io, hooks, neverSwept, probe, claimPlatform, readClaim, platform: hooks.platform ?? process.platform };
+  const entries = new Map((listing?.entries ?? []).map((entry) => [entry.name, entry]));
+  const rootCheck = typeof root !== 'string' || !path.isAbsolute(root) ? 'bad-listing' : tmp !== undefined && !sameRoot(tmp, root) ? 'wrong-root' : undefined;
   return picks.map((name) => {
-    const result = decide(tmp, name, entries, ctx);
+    const result = rootCheck === undefined ? decide(root, name, entries, ctx) : refused(String(name), rootCheck);
     onResult(result);
     return result;
   });

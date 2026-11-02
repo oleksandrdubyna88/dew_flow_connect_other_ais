@@ -56,9 +56,12 @@ function line(entry) {
 function list(lib, args, tempRoot) {
   const { flags, error } = parse(args, ['--tmp', '--out']);
   if (error !== undefined) return usage(error);
-  const listing = lib.listOldLeftovers({ tmp: flags.tmp ?? tempRoot(), neverSwept: neverSweptOf() });
+  const tmp = path.resolve(flags.tmp ?? tempRoot());
+  console.log(`scanning ${tmp}`); // [S2-A code2 4/8] said before the scan: a root that cannot be read still shows which one it was
+  const listing = lib.listOldLeftovers({ tmp, neverSwept: neverSweptOf() });
   const out = flags.out ?? 'old-coai-leftovers-listing.json';
-  for (const entry of listing.entries) console.log(line(entry)); // shown FIRST: a file that cannot be written must not hide what was found
+  for (const entry of listing.entries) console.log(line(entry));
+  for (const skipped of listing.refused) console.log(`refused\t${skipped.name}\t${skipped.check} (not one path segment on this system; remove it by hand)`); // shown FIRST: a file that cannot be written must not hide what was found
   console.log(`${listing.entries.length} entr${listing.entries.length === 1 ? 'y' : 'ies'} in ${listing.tmp}`);
   try {
     fs.writeFileSync(out, `${JSON.stringify(listing, null, 2)}\n`);
@@ -90,11 +93,11 @@ function remove(lib, args) {
   if (flags.listing === undefined || names.length === 0) return usage('remove needs --listing <file> and at least one name');
   const { listing, error: unusable } = readListing(flags.listing);
   if (unusable !== undefined) return usage(unusable);
-  if (flags.tmp !== undefined && path.resolve(flags.tmp) !== path.resolve(listing.tmp)) {
-    return usage(`--tmp ${path.resolve(flags.tmp)} is not the temp root of the listing (${listing.tmp}); a listing is evidence about its own root only`);
+  if (flags.tmp !== undefined && !lib.sameRoot(flags.tmp, listing.tmp)) {
+    return usage(`--tmp ${flags.tmp} is not the temp root of the listing (${listing.tmp}); a listing is evidence about its own root only`); // both as given
   }
   const onResult = (result) => console.log(result.outcome === 'removed' ? `removed ${result.name}` : `refused ${result.name}: ${result.check}`); // as each is decided
-  const results = lib.removePicked({ tmp: listing.tmp, listing, picks: names, neverSwept: neverSweptOf(), onResult });
+  const results = lib.removePicked({ listing, picks: names, neverSwept: neverSweptOf(), onResult });
   return results.every((result) => result.outcome === 'removed') ? 0 : 1;
 }
 

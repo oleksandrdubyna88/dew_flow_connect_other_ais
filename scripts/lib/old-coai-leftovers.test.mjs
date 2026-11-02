@@ -572,7 +572,7 @@ test('S25 [S2-A code2 0] a quarantine-shaped name whose original is not one path
   assert.deepEqual(remove(root, edited, [crafted]).map((r) => [r.outcome, r.check]), [['refused', 'bad-name']]);
   // The listing's own filter and the quarantine pattern both stop this name first; judge() is the layer that must hold on its own.
   assert.equal(lib.judge?.(crafted, NEVER_SWEPT), null, 'judge() returns null for a quarantine whose original is not one segment');
-  assert.equal(lib.judge?.(crafted.replace('\\\\', '-'), NEVER_SWEPT)?.kind, 'quarantine', 'and still knows a real quarantine (the scan sees what it knows is there)');
+  assert.equal(lib.judge?.(crafted.replace('\\', '-'), NEVER_SWEPT)?.kind, 'quarantine', 'and still knows a real quarantine (the scan sees what it knows is there)');
 });
 
 test('S26 [S2-A code2 1] the uid is checked again after the move: a quarantined object that is no longer the caller\'s is kept', { skip: typeof process.getuid !== 'function' && 'no uid on this platform' }, (t) => {
