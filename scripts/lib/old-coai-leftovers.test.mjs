@@ -784,6 +784,7 @@ test('S35 [S2-A code4 9] a legacy run folder removed whose claim cannot be unlin
 test('S36 [S2-A code5 3] a name holding `:` or NUL is not one path segment: `C:foo` is a drive-relative path on Windows, and no path is built from it', (t) => {
   for (const name of ['C:foo', 'coai-a:b', 'coai-a\0b', 'D:\\x']) assert.equal(lib.isOneSegment(name), false, JSON.stringify(name));
   assert.equal(lib.isOneSegment('coai-panel-a'), true, 'and a real name is still one');
+  if (!posix) return; // [S2-A CodeRabbit 6] `coai-a:b` cannot be a directory name on Windows: the fixture below is POSIX-only, the loop above runs everywhere
 
   const outer = privateRoot(t, 'old-coai-colon-');
   const root = path.join(outer, 'tmp');
@@ -819,4 +820,71 @@ test('S38 [S2-A code6 6] there is no name seam: every quarantine move goes throu
 
   assert.equal(result.outcome, 'removed');
   assert.equal(called, false, 'a drawName hook is not a seam any more');
+});
+
+test('S39 [S2-A CodeRabbit 3] only ENOENT from the look at a pick means missing: an EACCES is error-EACCES', (t) => {
+  const root = privateRoot(t);
+  make(root, 'coai-panel-a', 60);
+  const listing = list(root);
+  const target = path.join(root, 'coai-panel-a');
+  const io = { ...fs, lstatSync: (given, options) => { if (given === target) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); return fs.lstatSync(given, options); } };
+
+  const [result] = remove(root, listing, ['coai-panel-a'], { io });
+
+  assert.deepEqual([result.outcome, result.check], ['refused', 'error-EACCES']);
+  assert.equal(sentinel(root, 'coai-panel-a'), 'still coai-panel-a');
+  fs.rmSync(target, { recursive: true });
+  assert.deepEqual(remove(root, listing, ['coai-panel-a']).map((r) => r.check), ['missing'], 'a name that is really gone is still missing');
+});
+
+test('S40 [S2-A CodeRabbit 4] a quarantine that cannot be read is listed with an unknown emptiness, and the listing goes on', (t) => {
+  const root = privateRoot(t);
+  const quarantine = quarantineOf('coai-panel-a');
+  make(root, quarantine, 60);
+  make(root, 'coai-panel-b', 60);
+  const folder = path.join(root, quarantine);
+  const io = { ...fs, readdirSync: (given, ...rest) => { if (given === folder) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); return fs.readdirSync(given, ...rest); } };
+
+  const listing = list(root, { io });
+
+  assert.deepEqual(listing.entries.map((e) => e.name).sort(), [quarantine, 'coai-panel-b'].sort(), 'both are listed');
+  const entry = byName(listing.entries)[quarantine];
+  assert.equal(entry.kind, 'quarantine');
+  assert.equal(entry.empty, undefined, 'its emptiness is not known, and not guessed');
+});
+
+test('S41 [S2-A CodeRabbit 5] a claim swapped in while the folder is removed is kept and reported, never unlinked', (t) => {
+  for (const variant of ['another text', 'the same text in a new file']) {
+    const root = privateRoot(t);
+    const name = 'testsToDelete-coai-run-abc123';
+    make(root, name, 120);
+    const claim = path.join(root, `${name}.owner`);
+    const text = `${claimOf(99999, 1700000000)}\n`;
+    fs.writeFileSync(claim, text);
+    const listing = list(root);
+    const afterFolderRemoved = () => {
+      if (variant === 'another text') {
+        fs.writeFileSync(claim, `${claimOf(88888)}\n`);
+        return;
+      }
+      fs.writeFileSync(`${claim}.new`, text); // a different file, byte for byte the same claim
+      fs.renameSync(`${claim}.new`, claim);
+    };
+
+    const [result] = remove(root, listing, [name], { hooks: { afterFolderRemoved } });
+
+    assert.deepEqual([result.outcome, result.claimLeft, result.cause], ['partial', claim, 'claim-changed'], variant);
+    assert.ok(fs.existsSync(claim), `the swapped-in claim stays (${variant})`);
+    assert.ok(!fs.existsSync(path.join(root, name)), 'the folder is gone');
+  }
+});
+
+test('S42 [S2-A CodeRabbit 7] list takes no names: a stray positional is a usage error with the legal forms', (t) => {
+  const root = s1Root(t);
+
+  const result = runCli(['list', '--tmp', root, 'coai-panel-a']);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /list \[--tmp <dir>\] \[--out <file>\]/);
+  assert.ok(result.stderr.includes('coai-panel-a'), 'the stray name is named');
 });
