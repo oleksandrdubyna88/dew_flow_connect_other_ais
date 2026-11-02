@@ -23,16 +23,14 @@
  * tool does not guard against. An object that comes back with the same inode AND the same last-write time to the nanosecond is not told apart.
  *
  * The exclusive move, the placeholder checks and the quarantine draw are the conventions' own (`.agents/conventions/tools/lib/leftovers-sweep.mjs`, exported since
- * release 5863c60), imported — not copied (E5 S2-A code5 2/8/9; the copy of the first release is gone). The one thing kept here is a test seam: `hooks.drawName` names the
- * quarantine, which the reference's `moveToQuarantine` cannot; without that hook the reference's own `moveToQuarantine` runs.
+ * release 5863c60), imported — not copied, and with no seam of ours in front of them: every quarantine move, test or not, goes through the reference's `moveToQuarantine`
+ * (a test drives its redraws through the `io` it passes).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { moveExclusively, moveToQuarantine as moveToQuarantineOf } from '../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
+import { moveToQuarantine as moveToQuarantineOf } from '../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import { hidepidActive, isAskablePid, legacyOwnerState, parseLegacyOwner, processProbe, readClaimText } from '../../.agents/conventions/tools/lib/owned.mjs';
 
-/** The quarantine names the `hooks.drawName` seam draws before it gives up (the reference's own bound is its `QUARANTINE_DRAWS`, also 5). */
-export const MOVE_DRAWS = 5;
 const OWNER_SUFFIX = '.owner';
 const LEGACY_RUN = /^testsToDelete-coai-run-[0-9a-f]{6}$/;
 /** A quarantine of THIS script: the picked name, `.teststodelete-quarantine-`, a pid, eight hex. */
@@ -75,23 +73,17 @@ function statOf(target, io) {
 }
 
 /**
- * Move `dir` aside under a quarantine name that was free. The conventions' `moveToQuarantine` draws the name and throws when every draw was taken (`undefined` here); with
- * the `hooks.drawName` test seam the draws are ours, `MOVE_DRAWS` at most. The quarantine's path, or `undefined` when all were taken.
+ * Move `dir` aside under a quarantine name that was free — ALWAYS through the conventions' `moveToQuarantine`, which draws the names (no seam of ours: [S2-A code6 6]).
+ * Only its name-exhaustion failure ("no free name" in its message, pinned by S37) is `undefined` here, which the caller reports as `quarantine-taken`; every other error is
+ * rethrown and becomes an `error-<code>` result ([S2-A code6 1/3]).
  */
 function moveToQuarantine(dir, hooks, options) {
-  if (hooks.drawName === undefined) {
-    try {
-      return moveToQuarantineOf(dir, hooks, options);
-    } catch (error) {
-      if (String(error?.message).startsWith('cannot move ')) return undefined;
-      throw error;
-    }
+  try {
+    return moveToQuarantineOf(dir, hooks, options);
+  } catch (error) {
+    if (String(error?.message).includes('no free name')) return undefined;
+    throw error;
   }
-  for (let draw = 0; draw < MOVE_DRAWS; draw += 1) {
-    const to = hooks.drawName(dir);
-    if (moveExclusively(dir, to, hooks, options)) return to;
-  }
-  return undefined;
 }
 
 // --- the listing --------------------------------------------------------------------------------------------------
@@ -280,7 +272,7 @@ function decide(tmp, name, entries, ctx) {
  * Removes the `picks` named in `listing`, one result per pick: `{ name, outcome: 'removed' | 'partial' | 'refused', check }` (`partial`: the folder is gone and its claim file is left, named in `claimLeft`), each handed to `onResult` as soon as it is
  * decided (S2-A gate 6/9) and all returned; a result of a refusal after the move carries `quarantine` (the name it was moved to). The listing's entries are indexed by name once (S2-A gate 7). [S2-A code2 7] The root is the LISTING's: `listing.tmp` must be
  * an absolute path (else every pick is refused `bad-listing`), and a `tmp` argument that is another folder refuses every pick `wrong-root` — the deletion API itself holds the
- * confinement, not only the command that calls it. `hooks` are the seams the tests use: `drawName(dir)` (the full quarantine path), `afterReserve`, `beforeRename`,
+ * confinement, not only the command that calls it. `hooks` are the seams the tests use: `afterReserve`, `beforeRename`,
  * `afterRename(from, quarantined)` and `platform` (the move's, default `process.platform`); `readClaim` reads a claim file.
  */
 export function removePicked({ tmp, listing, picks, neverSwept, io = fs, hooks = {}, probe = processProbe, claimPlatform = process.platform, readClaim = readClaimText, onResult = () => {} }) {
