@@ -8,7 +8,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { listOldLeftovers, removePicked, MOVE_DRAWS } from './old-coai-leftovers.mjs';
+import { listOldLeftovers, removePicked } from './old-coai-leftovers.mjs';
+import { moveToQuarantine as referenceMoveToQuarantine } from '../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import * as lib from './old-coai-leftovers.mjs';
 import { processProbe, thisOwner } from '../../.agents/conventions/tools/lib/owned.mjs';
 
@@ -182,25 +183,47 @@ test('S7 a legacy run folder with a live or unknown claim is refused; one with a
     'the live and unknown ones keep folder and claim; the gone one and the unclaimed one are gone, claim included');
 });
 
+/**
+ * An io that drives the conventions' own quarantine move from outside — there is no name seam any more. `mkdirSync` of a quarantine name (the POSIX reservation) answers EEXIST for the
+ * first `mkdirTaken` draws, `renameSync` onto a quarantine name answers `renameCode` when given; `draws` records every quarantine name the reference drew.
+ */
+function quarantineIo({ mkdirTaken = 0, renameCode } = {}) {
+  const draws = [];
+  const isQuarantine = (target) => path.basename(target).includes('.teststodelete-quarantine-');
+  const refuse = (code) => Object.assign(new Error(`${code}: simulated`), { code });
+  const io = {
+    ...fs,
+    mkdirSync: (target, options) => {
+      if (isQuarantine(target)) {
+        draws.push(path.basename(target));
+        if (draws.length <= mkdirTaken) throw refuse('EEXIST');
+      }
+      return fs.mkdirSync(target, options);
+    },
+    renameSync: (from, to) => {
+      if (renameCode !== undefined && isQuarantine(to)) throw refuse(renameCode);
+      return fs.renameSync(from, to);
+    },
+  };
+  return { io, draws };
+}
+
+/** The bound of the PINNED reference's quarantine draws (its `QUARANTINE_DRAWS`, not exported): pinned here with the message below, so a release that changes it turns S37 red. */
+const REFERENCE_DRAWS = 5;
+
 test('S8 when every drawn quarantine name is taken the pick is refused and nothing is renamed', { skip: !posix && 'the placeholder is a POSIX shape' }, (t) => {
-  for (const occupant of ['an empty directory', 'a file']) {
+  for (const [how, options] of [['the reservation answers EEXIST each time', { mkdirTaken: Infinity }], ['the rename answers EEXIST each time', { renameCode: 'EEXIST' }]]) {
     const root = privateRoot(t);
     make(root, 'coai-panel-a', 60);
     const listing = list(root);
-    const taken = path.join(root, '.fixed-quarantine');
-    if (occupant === 'a file') fs.writeFileSync(taken, 'not a directory');
-    else fs.mkdirSync(taken);
-    const before = fs.lstatSync(taken, { bigint: true });
-    let draws = 0;
+    const { io, draws } = quarantineIo(options);
 
-    const [result] = remove(root, listing, ['coai-panel-a'], { hooks: { drawName: () => { draws += 1; return taken; } } });
+    const [result] = remove(root, listing, ['coai-panel-a'], { io });
 
-    assert.deepEqual([result.outcome, result.check], ['refused', 'quarantine-taken'], occupant);
-    assert.equal(draws, MOVE_DRAWS, 'a taken draw draws again, up to the bound');
-    const after = fs.lstatSync(taken, { bigint: true });
-    assert.deepEqual([after.dev, after.ino], [before.dev, before.ino], 'the pre-created object is untouched');
+    assert.deepEqual([result.outcome, result.check], ['refused', 'quarantine-taken'], how);
+    assert.equal(draws.length, REFERENCE_DRAWS, `a taken draw draws again, up to the bound (${how})`);
     assert.equal(sentinel(root, 'coai-panel-a'), 'still coai-panel-a');
-    assert.deepEqual(fs.readdirSync(root).sort(), ['.fixed-quarantine', 'coai-panel-a'], 'no placeholder left behind');
+    assert.deepEqual(fs.readdirSync(root), ['coai-panel-a'], 'no placeholder left behind');
   }
 });
 
@@ -209,23 +232,18 @@ test('S9 an unchanged pick is removed through the quarantine name by identity', 
   make(root, 'coai-panel-a', 60);
   make(root, 'coai-ctx-b', 60);
   const listing = list(root);
-  const drawn = [];
+  const { io, draws } = quarantineIo();
   const before = fs.readdirSync(root).sort();
   const hooks = {
-    drawName: (dir) => {
-      const name = path.join(path.dirname(dir), `.${path.basename(dir)}.teststodelete-quarantine-${process.pid}-0a1b2c3d`);
-      drawn.push(path.basename(name));
-      return name;
-    },
     beforeRename: (placeholder) => {
       if (posix) assert.deepEqual(fs.readdirSync(placeholder), [], 'the placeholder exists and is empty when the rename is about to happen');
     },
   };
 
-  const [result] = remove(root, listing, ['coai-panel-a'], { hooks });
+  const [result] = remove(root, listing, ['coai-panel-a'], { io, hooks });
 
   assert.equal(result.outcome, 'removed');
-  assert.match(drawn[0], /^\.coai-panel-a\.teststodelete-quarantine-[0-9]+-[0-9a-f]{8}$/);
+  if (posix) assert.match(draws[0], /^\.coai-panel-a\.teststodelete-quarantine-[0-9]+-[0-9a-f]+$/);
   assert.deepEqual(fs.readdirSync(root).sort(), before.filter((n) => n !== 'coai-panel-a'), 'only the picked folder is gone, and no quarantine is left');
   assert.equal(sentinel(root, 'coai-ctx-b'), 'still coai-ctx-b');
 });
@@ -264,40 +282,33 @@ test('S10 the CLI: list writes the listing, remove refuses a usage error with th
   assert.equal(runCli(['remove', '--listing', file, '--force', 'x']).status, 2, 'there is no --force');
 });
 
-test('S11 a rename that fails removes its own empty placeholder and refuses the pick', { skip: !posix && 'the placeholder is a POSIX shape' }, (t) => {
+test('S11 a rename that fails removes its own empty placeholder and refuses the pick — as an ERROR, never as quarantine-taken [S2-A code6 1/3]', { skip: !posix && 'the placeholder is a POSIX shape' }, (t) => {
   const root = privateRoot(t);
   make(root, 'coai-panel-a', 60);
   const listing = list(root);
-  const io = { ...fs, renameSync: () => { throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); } };
-  const drawn = [];
+  const { io, draws } = quarantineIo({ renameCode: 'EACCES' });
 
-  const [result] = remove(root, listing, ['coai-panel-a'], { io, hooks: { drawName: (dir) => { const name = path.join(path.dirname(dir), '.drawn-once'); drawn.push(name); return name; } } });
+  const [result] = remove(root, listing, ['coai-panel-a'], { io });
 
   assert.deepEqual([result.outcome, result.check], ['refused', 'error-EACCES']);
+  assert.notEqual(result.check, 'quarantine-taken', 'only the exhaustion of the draws is quarantine-taken');
   assert.equal(sentinel(root, 'coai-panel-a'), 'still coai-panel-a');
-  assert.equal(drawn.length, 1, 'a failed rename is not a taken name: no redraw');
+  assert.equal(draws.length, 1, 'a failed rename is not a taken name: no redraw');
   assert.deepEqual(fs.readdirSync(root), ['coai-panel-a'], 'the placeholder this move reserved is gone');
 });
 
-test('S12 a taken draw draws a new name, and the move lands on the second', { skip: !posix && 'the placeholder is a POSIX shape' }, (t) => {
+test('S12 a taken draw draws a new name, and the move lands on the draw after the taken ones', { skip: !posix && 'the placeholder is a POSIX shape' }, (t) => {
   const root = privateRoot(t);
   make(root, 'coai-panel-a', 60);
   const listing = list(root);
-  const occupied = path.join(root, '.occupied');
-  fs.mkdirSync(occupied);
-  fs.writeFileSync(path.join(occupied, 'someone-elses'), 'bytes');
-  const before = fs.lstatSync(occupied, { bigint: true });
-  const names = [occupied, path.join(root, '.free')];
-  let draws = 0;
+  const { io, draws } = quarantineIo({ mkdirTaken: 2 });
 
-  const [result] = remove(root, listing, ['coai-panel-a'], { hooks: { drawName: () => names[draws++] } });
+  const [result] = remove(root, listing, ['coai-panel-a'], { io });
 
   assert.equal(result.outcome, 'removed');
-  assert.equal(draws, 2);
-  const after = fs.lstatSync(occupied, { bigint: true });
-  assert.deepEqual([after.dev, after.ino], [before.dev, before.ino]);
-  assert.equal(fs.readFileSync(path.join(occupied, 'someone-elses'), 'utf8'), 'bytes', 'the occupied name was never touched');
-  assert.deepEqual(fs.readdirSync(root), ['.occupied'], 'the picked folder is gone and the second name is not left behind');
+  assert.equal(draws.length, 3, 'two taken draws, then the one that landed');
+  assert.equal(new Set(draws).size, 3, 'every draw is a new name');
+  assert.deepEqual(fs.readdirSync(root), [], 'the picked folder is gone and no quarantine name is left behind');
 });
 
 test('S13 remove uses the listing\'s temp root, and refuses a --tmp that is another root', (t) => {
@@ -786,4 +797,25 @@ test('S36 [S2-A code5 3] a name holding `:` or NUL is not one path segment: `C:f
   const edited = { ...listing, entries: ['C:foo', 'coai-a:b'].map((name) => ({ name, kind: 'coai', ...identity })) };
   assert.deepEqual(remove(root, edited, ['C:foo', 'coai-a:b']).map((r) => [r.outcome, r.check]), [['refused', 'bad-name'], ['refused', 'bad-name']]);
   assert.equal(sentinel(root, 'coai-a:b'), 'a name with a colon');
+});
+
+test('S37 [S2-A code6 1/3] the PINNED reference says "no free name" when every draw is taken — the one message quarantine-taken is read from; a release that changes it turns this red', { skip: !posix && 'the reservation is a POSIX shape' }, (t) => {
+  const root = privateRoot(t);
+  const dir = make(root, 'coai-panel-a', 60);
+  const { io } = quarantineIo({ mkdirTaken: Infinity });
+
+  assert.throws(() => referenceMoveToQuarantine(dir, {}, { io }), (error) => error.message === `cannot move ${dir} into quarantine: no free name in ${REFERENCE_DRAWS} draws — the folder is kept`);
+});
+
+test('S38 [S2-A code6 6] there is no name seam: every quarantine move goes through the reference, whatever hooks are passed', (t) => {
+  const root = privateRoot(t);
+  make(root, 'coai-panel-a', 60);
+  const listing = list(root);
+  let called = false;
+  const hooks = { drawName: () => { called = true; return path.join(root, '.never-used'); } };
+
+  const [result] = remove(root, listing, ['coai-panel-a'], { hooks });
+
+  assert.equal(result.outcome, 'removed');
+  assert.equal(called, false, 'a drawName hook is not a seam any more');
 });
