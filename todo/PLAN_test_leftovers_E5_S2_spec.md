@@ -475,6 +475,22 @@ The S2-A code gate (proceed) and the Opus review returned the items below; each 
 | Opus 6 | `.gitignore` names the default listing `old-coai-leftovers-listing.json` | `.gitignore` |
 | Opus 7 | the spec's drift is recorded: `mtimeNs` (not `mtimeMs`), the `mtimeNs` and `empty` fields, the `claimPlatform` and `onResult` seams | decision 5 |
 
+### A.10 round 2 — the second code round (2026-11-02, proceed)
+
+Accepted 0, 1, 2, 4, 5, 6, 7, 8; rejected 3. Built RED first (tests S25–S31), then the fix, then the RED confirmed with the fix stashed.
+
+| Mark | Change | Test |
+|---|---|---|
+| **[S2-A code2 0]** | `judge()` returns null unless the quarantine's original is ONE segment, before any claim is read or unlinked (defence in depth; `judge` is exported) | S25 — green by construction through the listing; RED by mutation (pattern relaxed and the check removed) through `judge()` |
+| **[S2-A code2 1]** | `removeQuarantined` re-checks the uid where the object is now: `foreign-uid`, kept | S26 |
+| **[S2-A code2 2]** | `claimState` treats any read failure (a throw, `EACCES`, a directory or FIFO in the claim's place) as `unreadable`: refuses a pick, never aborts a listing; a `readClaim` seam | S27 |
+| **[S2-A code2 4/8]** | `list` prints one start line `scanning <root>` before the scan | S28 |
+| **[S2-A code2 5]** | `--tmp` and the listing's root are compared by realpath (`sameRoot`); when they differ both are shown as given | S29 |
+| **[S2-A code2 6]** | a folder of our shape whose name is not one segment on THIS system (a POSIX name with a backslash) is reported in `listing.refused` as `bad-name` and printed, never offered | S30 |
+| **[S2-A code2 7]** | `removePicked` derives its root from `listing.tmp` (absolute, else `bad-listing`) and refuses a `tmp` argument that is another root (`wrong-root`): the deletion API itself holds the confinement; the CLI passes only the listing | S31 |
+
+**Rejected:** code2 3 — no streaming of the listing (as code 5 before: a one-off script).
+
 **Rejected, with the reason (no change):** code 1 (the two digit checks — `[0-9]` in a regex and the first-character test — mean the same); code 5 (no streaming of the listing: a one-off script over a temp folder); code 8 and the P4 copy follow-up stay as decided (decision 11: the pinned mount is the Node consumers' interface).
 
 ## Definition of Done (S2-A)
