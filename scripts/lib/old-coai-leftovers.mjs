@@ -8,8 +8,11 @@
  * again, and only then removed, by the quarantine's path.
  *
  * The checks of one pick, in this order — the first that fails refuses the pick under its name and the run goes on to the next:
- * `not-listed`, `protected`, `missing`, `not-a-directory`, `changed`, `owner-<state>`, `quarantine-taken`, `moved-but-changed`; any other
- * error from the file system refuses with `error-<code>`. Nothing throws out of `removePicked`.
+ * `bad-name` (S2-A Opus 1: a name is ONE path segment, or no path is ever built from it), `not-listed`, `protected`, `missing`,
+ * `not-a-directory`, `foreign-uid` (S2-A Opus 4: on POSIX the caller owns what it removes, rule §3), `changed`, `owner-<state>` (a legacy run
+ * folder's claim; for a quarantine of this script, the state of the process whose pid its name carries — S2-A Opus 3: alive or unaskable keeps it),
+ * `quarantine-taken`, `moved-but-changed`; any other error from the file system refuses with `error-<code>`; an ENOENT from the rename is `missing`
+ * (S2-A gate 4). After the move a legacy run folder's claim is read again before anything is removed (S2-A Opus 5). Nothing throws out of `removePicked`.
  *
  * THE RESIDUAL WINDOW (S2-A gate finding 4). The `changed` check and the rename are two calls: an object swapped in between is moved aside under
  * the quarantine name instead of the one the person picked. The check after the move (device, inode AND last-write time against the listing) sees
@@ -26,16 +29,21 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isTakenRename } from '../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
-import { legacyOwnerState, parseLegacyOwner, processProbe, readClaimText } from '../../.agents/conventions/tools/lib/owned.mjs';
+import { hidepidActive, isAskablePid, legacyOwnerState, parseLegacyOwner, processProbe, readClaimText } from '../../.agents/conventions/tools/lib/owned.mjs';
 
 /** The quarantine names a move draws before it gives up (the reference's `QUARANTINE_DRAWS`). */
 export const MOVE_DRAWS = 5;
 const OWNER_SUFFIX = '.owner';
 const LEGACY_RUN = /^testsToDelete-coai-run-[0-9a-f]{6}$/;
 /** A quarantine of THIS script: the picked name, `.teststodelete-quarantine-`, a pid, eight hex. */
-const QUARANTINE = /^\.(coai-.+|testsToDelete-coai-run-[0-9a-f]{6})\.teststodelete-quarantine-([0-9]+)-([0-9a-f]{8})$/i;
+const QUARANTINE = /^\.(coai-[^/\\]+|testsToDelete-coai-run-[0-9a-f]{6})\.teststodelete-quarantine-([0-9]+)-([0-9a-f]{8})$/i;
 /** What rename(2) answers when the name is occupied: a directory with content, or a file where our directory was. */
 const TAKEN_CODES = new Set(['ENOTEMPTY', 'EEXIST', 'ENOTDIR']);
+
+/** Is `name` ONE path segment: not empty, not `.` or `..`, no separator of either kind, and its own basename? A name that is not is never joined to a path. */
+export function isOneSegment(name) {
+  return typeof name === 'string' && name !== '' && name !== '.' && name !== '..' && !/[/\\]/.test(name) && name === path.basename(name);
+}
 
 /** `'coai'`, `'legacy-run'` or `null` (protected, a cache, or no candidate at all) — judged by name, NOW, from the product's list. */
 export function candidateKind(name, neverSwept) {
@@ -51,16 +59,16 @@ function judge(name, neverSwept) {
     const kind = candidateKind(name, neverSwept);
     return kind === null ? null : { kind, original: name };
   }
-  return candidateKind(quarantine[1], neverSwept) === null ? null : { kind: 'quarantine', original: quarantine[1] };
+  return candidateKind(quarantine[1], neverSwept) === null ? null : { kind: 'quarantine', original: quarantine[1], pid: quarantine[2] };
 }
 
 // --- identity: copies of the reference's (see the header) ---------------------------------------------------------
 
-/** `{ dev, ino, mtimeNs, directory }` of an entry itself (a link is not followed), or `undefined` when it is not there. */
+/** `{ dev, ino, mtimeNs, uid, directory }` of an entry itself (a link is not followed), or `undefined` when it is not there. */
 function identityOf(target, io) {
   try {
     const stat = io.lstatSync(target, { bigint: true });
-    return { dev: stat.dev, ino: stat.ino, mtimeNs: stat.mtimeNs, directory: stat.isDirectory() };
+    return { dev: stat.dev, ino: stat.ino, mtimeNs: stat.mtimeNs, uid: Number(stat.uid), directory: stat.isDirectory() };
   } catch {
     return undefined;
   }
@@ -187,15 +195,35 @@ export function listOldLeftovers({ tmp, neverSwept, now = Date.now(), io = fs, p
 const refused = (name, check) => ({ name, outcome: 'refused', check });
 const sameAsListed = (now, entry) => String(now.dev) === entry.dev && String(now.ino) === entry.ino && String(now.mtimeNs) === entry.mtimeNs;
 
-/** The checks that need only a look at the name now: the first that fails. */
-function refusalBefore(tmp, entry, judged, ctx) {
-  const target = path.join(tmp, entry.name);
-  const now = identityOf(target, ctx.io);
-  if (now === undefined) return 'missing';
-  if (!now.directory) return 'not-a-directory'; // lstat: a link or a file at the name
-  if (!sameAsListed(now, entry)) return 'changed';
+/** Is the process whose pid a quarantine's name carries gone? `gone`, `live` or `unknown` (a pid nobody may ask about, a refused query, a list that may hide processes). */
+function renamerState(pidText, { probe }) {
+  if (!isAskablePid(pidText)) return 'unknown';
+  let seen;
+  try {
+    seen = probe(Number(pidText));
+  } catch {
+    return 'unknown';
+  }
+  if (seen?.state === 'live') return 'live';
+  return seen?.state === 'dead' && !hidepidActive() ? 'gone' : 'unknown';
+}
+
+/** The state that keeps a pick: a quarantine's renamer still alive or unaskable, or a legacy run folder's claim that is not `gone`. `undefined` when nothing keeps it. */
+function ownerRefusal(tmp, judged, ctx) {
+  const renamer = judged.kind === 'quarantine' ? renamerState(judged.pid, ctx) : 'gone';
+  if (renamer !== 'gone') return `owner-${renamer}`;
   const state = LEGACY_RUN.test(judged.original) ? claimState(tmp, judged.original, ctx) : 'none';
   return state === 'gone' || state === 'none' ? undefined : `owner-${state}`;
+}
+
+/** The checks that need only a look at the name now: the first that fails. */
+function refusalBefore(tmp, entry, judged, ctx) {
+  const now = identityOf(path.join(tmp, entry.name), ctx.io);
+  if (now === undefined) return 'missing';
+  if (!now.directory) return 'not-a-directory'; // lstat: a link or a file at the name
+  if (typeof process.getuid === 'function' && now.uid !== process.getuid()) return 'foreign-uid'; // the kernel owner is the caller's, or it is not ours to remove
+  if (!sameAsListed(now, entry)) return 'changed';
+  return ownerRefusal(tmp, judged, ctx);
 }
 
 /** A legacy run folder's claim file, last: a claim that is not there is nothing to remove. */
@@ -211,9 +239,21 @@ function removeClaim(file, io) {
 function removeQuarantined(tmp, entry, judged, quarantined, ctx) {
   const now = identityOf(quarantined, ctx.io);
   if (now === undefined || !sameAsListed(now, entry)) return refused(entry.name, 'moved-but-changed'); // left in place, never removed; the next listing shows it
+  const claim = ownerRefusal(tmp, judged, ctx); // the claim is read AGAIN now that the folder is aside: a run that took it in between keeps the folder
+  if (claim !== undefined) return refused(entry.name, claim);
   ctx.io.rmSync(quarantined, { recursive: true, force: true });
   if (LEGACY_RUN.test(judged.original)) removeClaim(path.join(tmp, `${judged.original}${OWNER_SUFFIX}`), ctx.io);
   return { name: entry.name, outcome: 'removed' };
+}
+
+/** The move, with an ENOENT from the rename read as what it says: the pick is gone (S2-A gate 4). `undefined` when every drawn name was taken. */
+function moveAside(target, ctx) {
+  try {
+    return moveToQuarantine(target, ctx.io, ctx.hooks, ctx.platform);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return 'missing';
+    throw error;
+  }
 }
 
 function removeOne(tmp, entry, ctx) {
@@ -223,25 +263,36 @@ function removeOne(tmp, entry, ctx) {
   if (check !== undefined) return refused(entry.name, check);
   const target = path.join(tmp, entry.name);
   if (judged.kind === 'quarantine') return removeQuarantined(tmp, entry, judged, target, ctx);
-  const quarantined = moveToQuarantine(target, ctx.io, ctx.hooks, ctx.platform);
+  const quarantined = moveAside(target, ctx);
   if (quarantined === undefined) return refused(entry.name, 'quarantine-taken');
+  if (quarantined === 'missing') return refused(entry.name, 'missing');
   ctx.hooks.afterRename?.(target, quarantined);
   return removeQuarantined(tmp, entry, judged, quarantined, ctx);
 }
 
+/** The result of one pick: the name must be one path segment before anything else is looked at, and nothing throws. */
+function decide(tmp, name, entries, ctx) {
+  if (!isOneSegment(name)) return refused(String(name), 'bad-name'); // S2-A Opus 1: no path is built from a name that could leave the root
+  const entry = entries.get(name);
+  if (entry === undefined) return refused(name, 'not-listed');
+  try {
+    return removeOne(tmp, entry, ctx);
+  } catch (error) {
+    return refused(name, `error-${error?.code ?? 'unknown'}`);
+  }
+}
+
 /**
- * Removes the `picks` named in `listing`, one result per pick: `{ name, outcome: 'removed' | 'refused', check }`. `hooks` are the seams the tests use:
+ * Removes the `picks` named in `listing`, one result per pick: `{ name, outcome: 'removed' | 'refused', check }`, each handed to `onResult` as soon as it is
+ * decided (S2-A gate 6/9) and all returned. The listing's entries are indexed by name once (S2-A gate 7). `hooks` are the seams the tests use:
  * `drawName(dir)` (the full quarantine path), `afterReserve`, `beforeRename`, `afterRename(from, quarantined)` and `platform` (the move's, default `process.platform`).
  */
-export function removePicked({ tmp, listing, picks, neverSwept, io = fs, hooks = {}, probe = processProbe, claimPlatform = process.platform }) {
+export function removePicked({ tmp, listing, picks, neverSwept, io = fs, hooks = {}, probe = processProbe, claimPlatform = process.platform, onResult = () => {} }) {
   const ctx = { io, hooks, neverSwept, probe, claimPlatform, platform: hooks.platform ?? process.platform };
+  const entries = new Map(listing.entries.map((entry) => [entry.name, entry]));
   return picks.map((name) => {
-    const entry = listing.entries.find((e) => e.name === name);
-    if (entry === undefined) return refused(name, 'not-listed');
-    try {
-      return removeOne(tmp, entry, ctx);
-    } catch (error) {
-      return refused(name, `error-${error?.code ?? 'unknown'}`);
-    }
+    const result = decide(tmp, name, entries, ctx);
+    onResult(result);
+    return result;
   });
 }

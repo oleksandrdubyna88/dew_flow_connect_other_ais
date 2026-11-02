@@ -58,9 +58,15 @@ function list(lib, args, tempRoot) {
   if (error !== undefined) return usage(error);
   const listing = lib.listOldLeftovers({ tmp: flags.tmp ?? tempRoot(), neverSwept: neverSweptOf() });
   const out = flags.out ?? 'old-coai-leftovers-listing.json';
-  fs.writeFileSync(out, `${JSON.stringify(listing, null, 2)}\n`);
-  for (const entry of listing.entries) console.log(line(entry));
-  console.log(`${listing.entries.length} entr${listing.entries.length === 1 ? 'y' : 'ies'} in ${listing.tmp}; listing written to ${out}`);
+  for (const entry of listing.entries) console.log(line(entry)); // shown FIRST: a file that cannot be written must not hide what was found
+  console.log(`${listing.entries.length} entr${listing.entries.length === 1 ? 'y' : 'ies'} in ${listing.tmp}`);
+  try {
+    fs.writeFileSync(out, `${JSON.stringify(listing, null, 2)}\n`);
+  } catch (error) {
+    console.error(`old-coai-leftovers: the listing could not be written to ${out} (${error.code ?? error.message}); \`remove\` needs it, so run \`list\` again with --out <a writable file>`);
+    return 2;
+  }
+  console.log(`listing written to ${out}`);
   return 0;
 }
 
@@ -87,8 +93,8 @@ function remove(lib, args) {
   if (flags.tmp !== undefined && path.resolve(flags.tmp) !== path.resolve(listing.tmp)) {
     return usage(`--tmp ${path.resolve(flags.tmp)} is not the temp root of the listing (${listing.tmp}); a listing is evidence about its own root only`);
   }
-  const results = lib.removePicked({ tmp: listing.tmp, listing, picks: names, neverSwept: neverSweptOf() });
-  for (const result of results) console.log(result.outcome === 'removed' ? `removed ${result.name}` : `refused ${result.name}: ${result.check}`);
+  const onResult = (result) => console.log(result.outcome === 'removed' ? `removed ${result.name}` : `refused ${result.name}: ${result.check}`); // as each is decided
+  const results = lib.removePicked({ tmp: listing.tmp, listing, picks: names, neverSwept: neverSweptOf(), onResult });
   return results.every((result) => result.outcome === 'removed') ? 0 : 1;
 }
 
