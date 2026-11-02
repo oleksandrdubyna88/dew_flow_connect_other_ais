@@ -491,6 +491,16 @@ Accepted 0, 1, 2, 4, 5, 6, 7, 8; rejected 3. Built RED first (tests S25–S31), 
 
 **Rejected:** code2 3 — no streaming of the listing (as code 5 before: a one-off script).
 
+### A.10 round 3 — the third code round (2026-11-02, proceed)
+
+Accepted 0, 3, 4; rejected 1, 2, 5. Built RED first (S32, S33, S29 extended; S10 and S22 changed), then the fix, then the RED confirmed with the fix stashed.
+
+| Mark | Change | Test |
+|---|---|---|
+| **[S2-A code3 0]** | when the removal fails AFTER the move (and for every other refusal after it), the result carries `quarantine` and `describeResult` says the folder was moved aside as that name and that `list` then `remove` finishes it | S32 |
+| **[S2-A code3 3]** | every pick is checked against the listing BEFORE any removal: one unlisted pick removes nothing (`not-listed` for it, `not-attempted` for the rest), every unlisted name reported | S33, S10 |
+| **[S2-A code3 4]** | the `--tmp` mismatch message names the way out: omit `--tmp`, or run `list --tmp <dir>` for that root | S29 |
+
 **Rejected, with the reason (no change):** code 1 (the two digit checks — `[0-9]` in a regex and the first-character test — mean the same); code 5 (no streaming of the listing: a one-off script over a temp folder); code 8 and the P4 copy follow-up stay as decided (decision 11: the pinned mount is the Node consumers' interface).
 
 ## Definition of Done (S2-A)
