@@ -196,7 +196,8 @@ function looksLikeOurs(name, neverSwept) {
  * listed as an interrupted clean-up (S2-A gate finding 3). [S2-A code2 6] A folder of our shape whose name is not ONE path segment on THIS system (a POSIX name holding a
  * backslash) is reported in `refused` as `bad-name` — seen, never offered — so nothing sits behind a removal that always refuses it.
  */
-export function listOldLeftovers({ tmp, neverSwept, now = Date.now(), io = fs, probe = processProbe, claimPlatform = process.platform, readClaim = readClaimText }) {
+export function listOldLeftovers({ tmp: given, neverSwept, now = Date.now(), io = fs, probe = processProbe, claimPlatform = process.platform, readClaim = readClaimText }) {
+  const tmp = path.resolve(given); // [S2-A code4 8] resolved ONCE, here: the scan and the recorded root are the same absolute folder whatever the working directory does next
   const directories = io.readdirSync(tmp, { withFileTypes: true }).filter((dirent) => dirent.isDirectory());
   const entries = directories
     .filter((dirent) => isOneSegment(dirent.name))
@@ -207,7 +208,7 @@ export function listOldLeftovers({ tmp, neverSwept, now = Date.now(), io = fs, p
     .sort((a, b) => (a.name < b.name ? -1 : 1));
   const refusedNames = directories.filter((dirent) => !isOneSegment(dirent.name) && looksLikeOurs(dirent.name, neverSwept))
     .map((dirent) => ({ name: dirent.name, check: 'bad-name' })).sort((a, b) => (a.name < b.name ? -1 : 1));
-  return { tmp: path.resolve(tmp), entries, refused: refusedNames };
+  return { tmp, entries, refused: refusedNames };
 }
 
 /** Are two temp roots the same folder? By realpath (a link to the root is the root); a root that cannot be resolved is compared as an absolute path. */
@@ -285,7 +286,13 @@ function removeQuarantined(tmp, entry, judged, quarantined, ctx) {
   } catch (error) {
     return keptAside(entry.name, `error-${error?.code ?? 'unknown'}`, quarantined);
   }
-  if (LEGACY_RUN.test(judged.original)) removeClaim(path.join(tmp, `${judged.original}${OWNER_SUFFIX}`), ctx.io);
+  if (!LEGACY_RUN.test(judged.original)) return { name: entry.name, outcome: 'removed' };
+  const claimFile = path.join(tmp, `${judged.original}${OWNER_SUFFIX}`);
+  try {
+    removeClaim(claimFile, ctx.io);
+  } catch (error) {
+    return { name: entry.name, outcome: 'partial', claimLeft: claimFile, cause: error?.code ?? 'unknown' }; // [S2-A code4 9] the folder is gone; the claim file is named, not hidden in an error
+  }
   return { name: entry.name, outcome: 'removed' };
 }
 
@@ -326,7 +333,7 @@ function decide(tmp, name, entries, ctx) {
 }
 
 /**
- * Removes the `picks` named in `listing`, one result per pick: `{ name, outcome: 'removed' | 'refused', check }`, each handed to `onResult` as soon as it is
+ * Removes the `picks` named in `listing`, one result per pick: `{ name, outcome: 'removed' | 'partial' | 'refused', check }` (`partial`: the folder is gone and its claim file is left, named in `claimLeft`), each handed to `onResult` as soon as it is
  * decided (S2-A gate 6/9) and all returned; a result of a refusal after the move carries `quarantine` (the name it was moved to). The listing's entries are indexed by name once (S2-A gate 7). [S2-A code2 7] The root is the LISTING's: `listing.tmp` must be
  * an absolute path (else every pick is refused `bad-listing`), and a `tmp` argument that is another folder refuses every pick `wrong-root` — the deletion API itself holds the
  * confinement, not only the command that calls it. `hooks` are the seams the tests use: `drawName(dir)` (the full quarantine path), `afterReserve`, `beforeRename`,
@@ -352,6 +359,7 @@ export function removePicked({ tmp, listing, picks, neverSwept, io = fs, hooks =
 /** The line a person reads for one result: `removed <name>`, or `refused <name>: <check>` — and where the folder is now when it was moved aside first (S2-A code3 0 and 3). */
 export function describeResult(result) {
   if (result.outcome === 'removed') return `removed ${result.name}`;
+  if (result.outcome === 'partial') return `partial ${result.name}: the folder is removed, but its claim file is left at ${result.claimLeft} (${result.cause}); remove that file by hand`;
   const why = result.check === 'not-attempted' ? ' (another pick is not in the listing, so nothing was removed — fix the names and run it again)' : '';
   const aside = result.quarantine === undefined ? '' : ` — moved aside as ${result.quarantine}; run \`list\` again and \`remove\` that name to finish it`;
   return `refused ${result.name}: ${result.check}${why}${aside}`;
