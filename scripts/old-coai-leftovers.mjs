@@ -54,8 +54,9 @@ function line(entry) {
 }
 
 function list(lib, args, tempRoot) {
-  const { flags, error } = parse(args, ['--tmp', '--out']);
+  const { flags, names, error } = parse(args, ['--tmp', '--out']);
   if (error !== undefined) return usage(error);
+  if (names.length > 0) return usage(`list takes no names (got ${names.join(' ')})`); // [S2-A CodeRabbit 7] as remove refuses what it does not take
   const tmp = path.resolve(flags.tmp ?? tempRoot());
   console.log(`scanning ${tmp}`); // [S2-A code2 4/8] said before the scan: a root that cannot be read still shows which one it was
   const listing = lib.listOldLeftovers({ tmp, neverSwept: neverSweptOf() });

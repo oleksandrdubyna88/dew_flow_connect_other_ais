@@ -62,12 +62,16 @@ export function judge(name, neverSwept) {
 
 // --- what is at a name ---------------------------------------------------------------------------------------------
 
-/** `{ dev, ino, mtimeNs, uid, directory }` of an entry itself (a link is not followed), or `undefined` when it is not there. */
-function statOf(target, io) {
+/**
+ * `{ dev, ino, mtimeNs, uid, directory }` of an entry itself (a link is not followed), or `undefined` when it is not there. With `strict` only ENOENT means "not there" and
+ * any other error is rethrown (S2-A CodeRabbit 3: the look at a pick must report `error-<code>`, never `missing`, for an EACCES); without it any failure is `undefined`.
+ */
+function statOf(target, io, { strict = false } = {}) {
   try {
     const stat = io.lstatSync(target, { bigint: true });
     return { dev: stat.dev, ino: stat.ino, mtimeNs: stat.mtimeNs, uid: Number(stat.uid), directory: stat.isDirectory() };
-  } catch {
+  } catch (error) {
+    if (strict && error?.code !== 'ENOENT') throw error;
     return undefined;
   }
 }
@@ -105,6 +109,15 @@ function claimState(tmp, original, { probe, claimPlatform, readClaim = readClaim
 
 const identityFields = (stat) => ({ dev: String(stat.dev), ino: String(stat.ino), mtimeNs: String(stat.mtimeNs) });
 
+/** Is the folder empty? `undefined` when it cannot be read: unknown is not guessed, and one unreadable folder never aborts the listing (S2-A CodeRabbit 4). */
+function isEmpty(folder, io) {
+  try {
+    return io.readdirSync(folder).length === 0;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The entry of one directory: kind, age, identity, and what the kind adds (`of` and `empty` for a quarantine, `claim` for a legacy run folder). */
 function entryOf(tmp, name, judged, { now, io, probe, claimPlatform, readClaim }) {
   const stat = io.lstatSync(path.join(tmp, name), { bigint: true });
@@ -116,7 +129,7 @@ function entryOf(tmp, name, judged, { now, io, probe, claimPlatform, readClaim }
     lastWriteMs,
     ageMinutes: Math.floor((now - lastWriteMs) / 60_000),
     ...identityFields(stat),
-    ...(judged.kind === 'quarantine' ? { of: judged.original, empty: io.readdirSync(path.join(tmp, name)).length === 0 } : {}),
+    ...(judged.kind === 'quarantine' ? { of: judged.original, empty: isEmpty(path.join(tmp, name), io) } : {}),
     ...(isRunFolder ? { claim: claimState(tmp, judged.original, { probe, claimPlatform, readClaim }) } : {}),
   };
 }
@@ -190,7 +203,7 @@ const isForeign = (identity) => typeof process.getuid === 'function' && identity
 
 /** The checks that need only a look at the name now: the first that fails. */
 function refusalBefore(tmp, entry, judged, ctx) {
-  const now = statOf(path.join(tmp, entry.name), ctx.io);
+  const now = statOf(path.join(tmp, entry.name), ctx.io, { strict: true });
   if (now === undefined) return 'missing';
   if (!now.directory) return 'not-a-directory'; // lstat: a link or a file at the name
   if (isForeign(now)) return 'foreign-uid'; // the kernel owner is the caller's, or it is not ours to remove
@@ -207,6 +220,18 @@ function removeClaim(file, io) {
   }
 }
 
+/** What identifies a claim file now: its device and inode and the text read from it (`none` when there is no file). Compared as one string. */
+function claimSnapshot(claimFile, ctx) {
+  const file = statOf(claimFile, ctx.io);
+  let text;
+  try {
+    text = ctx.readClaim(claimFile);
+  } catch {
+    text = 'unreadable';
+  }
+  return JSON.stringify({ file: file === undefined ? null : [String(file.dev), String(file.ino)], text: typeof text === 'string' || text === null ? text : 'unreadable' });
+}
+
 /** A refusal AFTER the move: the object is aside, so the result says where (S2-A code3 0) and a later `list` / `remove` can finish it. */
 const keptAside = (name, check, quarantined) => ({ ...refused(name, check), quarantine: path.basename(quarantined) });
 
@@ -217,13 +242,17 @@ function removeQuarantined(tmp, entry, judged, quarantined, ctx) {
   if (isForeign(now)) return keptAside(entry.name, 'foreign-uid', quarantined); // [S2-A code2 1] the kernel owner is checked again where the object is now
   const claim = ownerRefusal(tmp, judged, ctx); // the claim is read AGAIN now that the folder is aside: a run that took it in between keeps the folder
   if (claim !== undefined) return keptAside(entry.name, claim, quarantined);
+  const claimFile = path.join(tmp, `${judged.original}${OWNER_SUFFIX}`);
+  const claimBefore = LEGACY_RUN.test(judged.original) ? claimSnapshot(claimFile, ctx) : undefined;
   try {
     ctx.io.rmSync(quarantined, { recursive: true, force: true });
   } catch (error) {
     return keptAside(entry.name, `error-${error?.code ?? 'unknown'}`, quarantined);
   }
-  if (!LEGACY_RUN.test(judged.original)) return { name: entry.name, outcome: 'removed' };
-  const claimFile = path.join(tmp, `${judged.original}${OWNER_SUFFIX}`);
+  if (claimBefore === undefined) return { name: entry.name, outcome: 'removed' };
+  ctx.hooks.afterFolderRemoved?.(claimFile);
+  // [S2-A CodeRabbit 5] the claim is unlinked only while it is still the one that was judged: same file (device, inode) and same text. A claim that changed in between is somebody's now.
+  if (claimSnapshot(claimFile, ctx) !== claimBefore) return { name: entry.name, outcome: 'partial', claimLeft: claimFile, cause: 'claim-changed' };
   try {
     removeClaim(claimFile, ctx.io);
   } catch (error) {
@@ -273,7 +302,7 @@ function decide(tmp, name, entries, ctx) {
  * decided (S2-A gate 6/9) and all returned; a result of a refusal after the move carries `quarantine` (the name it was moved to). The listing's entries are indexed by name once (S2-A gate 7). [S2-A code2 7] The root is the LISTING's: `listing.tmp` must be
  * an absolute path (else every pick is refused `bad-listing`), and a `tmp` argument that is another folder refuses every pick `wrong-root` — the deletion API itself holds the
  * confinement, not only the command that calls it. `hooks` are the seams the tests use: `afterReserve`, `beforeRename`,
- * `afterRename(from, quarantined)` and `platform` (the move's, default `process.platform`); `readClaim` reads a claim file.
+ * `afterRename(from, quarantined)`, `afterFolderRemoved(claimFile)` and `platform` (the move's, default `process.platform`); `readClaim` reads a claim file.
  */
 export function removePicked({ tmp, listing, picks, neverSwept, io = fs, hooks = {}, probe = processProbe, claimPlatform = process.platform, readClaim = readClaimText, onResult = () => {} }) {
   const root = listing?.tmp;
