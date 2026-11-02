@@ -96,18 +96,24 @@ function run(files) {
 }
 
 /**
+ * The machine's real temp root, captured when this module loads — BEFORE `beginRun` moves TEMP/TMP/TMPDIR into the run's folder, which makes `os.tmpdir()` answer
+ * the run folder from then on (S2-A gate 0). The count and the run folder are both made in this one root, as the C# runner uses `RunTemp.Real`.
+ */
+export const REAL_TEMP_ROOT = tmpdir();
+
+/**
  * What earlier runs and the product left under `coai-` in temp, COUNTED and said BEFORE this run makes anything (`startOfRun.mjs`) — no test sweep
  * removes them since E5 S2-A, so a pile that grows tells somebody instead of hiding. A second line names the legacy `testsToDelete-coai-run-*` folders a
  * killed run leaves. It never stops the run: housekeeping that fails is reported and stepped over. `log` and `count` are the seams its own test uses.
  */
-export function reportLeftoversFirst({ log = console.log, count = () => startOfRun({ dir: tmpdir(), rule: readRule('..') }) } = {}) {
+export function reportLeftoversFirst({ log = console.log, root = REAL_TEMP_ROOT, ownFolder, count = () => startOfRun({ dir: root, rule: readRule('..'), ownFolder }) } = {}) {
   try {
     const { leftovers, legacyRuns } = count();
     log(leftovers === 0
-      ? `run-tests: no old coai-* leftovers in ${tmpdir()}`
-      : `run-tests: ${leftovers} old coai-* director${leftovers === 1 ? 'y' : 'ies'} in ${tmpdir()} — no test sweep removes them (E5 S2-A); see research/module_tests.md § The one-off clean-up`);
+      ? `run-tests: no old coai-* leftovers in ${root}`
+      : `run-tests: ${leftovers} old coai-* director${leftovers === 1 ? 'y' : 'ies'} in ${root} — no test sweep removes them (E5 S2-A); see research/module_tests.md § The one-off clean-up`);
     if (legacyRuns > 0) {
-      log(`run-tests: ${legacyRuns} legacy testsToDelete-coai-run-* director${legacyRuns === 1 ? 'y' : 'ies'} in ${tmpdir()} — a killed run leaves one; some may belong to a run still going; `
+      log(`run-tests: ${legacyRuns} legacy testsToDelete-coai-run-* director${legacyRuns === 1 ? 'y' : 'ies'} in ${root} — a killed run leaves one; some may belong to a run still going; `
         + 'the one-off clean-up lists them with their claim (E5 S2-A); see research/module_tests.md § The one-off clean-up');
     }
   } catch (error) {
@@ -214,7 +220,7 @@ function removed(target, io) {
  */
 function beginRun() {
   try {
-    const folder = makeRunTemp(tmpdir());
+    const folder = makeRunTemp(REAL_TEMP_ROOT);
     process.env.TEMP = process.env.TMP = process.env.TMPDIR = folder;
     return folder;
   } catch (error) {

@@ -25,10 +25,11 @@ function isOldTestName(name, neverSwept) {
 
 /**
  * What earlier runs and the product left in `dir`, by name alone: `{ leftovers, legacyRuns }` — the old `coai-*` directories, and the legacy
- * `testsToDelete-coai-run-<6 hex>` run folders (some of them perhaps another run's, still going; a name cannot say).
+ * `testsToDelete-coai-run-<6 hex>` run folders (some of them perhaps another run's, still going; a name cannot say). `ownFolder`, when the caller has one
+ * already, is left out (the C# count does the same with `RunTemp.Folder`).
  */
-export function startOfRun({ dir, rule, io = fs }) {
-  const directories = io.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+export function startOfRun({ dir, rule, io = fs, ownFolder }) {
+  const directories = io.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory() && path.join(dir, entry.name) !== ownFolder);
 
   return {
     leftovers: directories.filter((entry) => isOldTestName(entry.name, rule.neverSwept)).length,
