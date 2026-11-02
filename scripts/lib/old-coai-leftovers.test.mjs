@@ -557,3 +557,129 @@ test('S24 [S2-A gate 3] list shows the listing first and writes --out after; a w
   assert.match(result.stdout, /^coai	coai-panel-a	/m, 'the listing was printed before the write was tried');
   assert.match(result.stderr, /listing\.json|ENOENT/, 'and the failure is named');
 });
+
+test('S25 [S2-A code2 0] a quarantine-shaped name whose original is not one path segment is not a quarantine: not listed, never judged', { skip: !posix && 'a backslash is a separator on Windows' }, (t) => {
+  const root = privateRoot(t);
+  // A backslash is an ordinary file-name character on POSIX, so this directory can exist; its "original" would be coai-a\b, two segments on Windows.
+  const crafted = '.coai-a\\b.teststodelete-quarantine-99999-0a1b2c3d';
+  make(root, crafted, 60);
+  const listing = list(root);
+
+  assert.deepEqual(listing.entries.map((e) => e.name), [], 'defence in depth: judged null before any claim is read or unlinked');
+  assert.equal(sentinel(root, crafted), `still ${crafted}`);
+  const edited = { ...listing, entries: [{ name: crafted, kind: 'quarantine', of: 'coai-a\\b', dev: '1', ino: '1', mtimeNs: '1', lastWriteMs: 0, ageMinutes: 0 }] };
+  assert.deepEqual(remove(root, edited, [crafted]).map((r) => [r.outcome, r.check]), [['refused', 'bad-name']]);
+});
+
+test('S26 [S2-A code2 1] the uid is checked again after the move: a quarantined object that is no longer the caller\'s is kept', { skip: typeof process.getuid !== 'function' && 'no uid on this platform' }, (t) => {
+  const root = privateRoot(t);
+  make(root, 'coai-panel-a', 60);
+  const listing = list(root);
+  let handedOver = false;
+  const io = {
+    ...fs,
+    lstatSync: (target, options) => {
+      const stat = fs.lstatSync(target, options);
+      return { dev: stat.dev, ino: stat.ino, mtimeNs: stat.mtimeNs, uid: handedOver ? stat.uid + 1n : stat.uid, isDirectory: () => stat.isDirectory() };
+    },
+  };
+
+  const [result] = remove(root, listing, ['coai-panel-a'], { io, hooks: { afterRename: () => { handedOver = true; } } });
+
+  assert.deepEqual([result.outcome, result.check], ['refused', 'foreign-uid']);
+  const left = fs.readdirSync(root);
+  assert.equal(left.length, 1, 'nothing was removed: the object stays under its quarantine name');
+  assert.ok(fs.existsSync(path.join(root, left[0], 'sentinel.txt')));
+});
+
+test('S27 [S2-A code2 2] a claim that cannot be read is `unreadable`, refuses the pick, and never aborts the listing', (t) => {
+  const root = privateRoot(t);
+  const name = 'testsToDelete-coai-run-abc123';
+  make(root, name, 120);
+  fs.mkdirSync(path.join(root, `${name}.owner`)); // a directory in the claim's place
+  make(root, 'testsToDelete-coai-run-def456', 120);
+  fs.writeFileSync(path.join(root, 'testsToDelete-coai-run-def456.owner'), `${claimOf(99999, 1700000000)}\n`);
+
+  const listing = list(root);
+  assert.equal(byName(listing.entries)[name].claim, 'unreadable', 'a directory where the claim should be');
+  const [result] = remove(root, listing, [name]);
+  assert.deepEqual([result.outcome, result.check], ['refused', 'owner-unreadable']);
+  assert.equal(sentinel(root, name), `still ${name}`);
+
+  const throwing = list(root, { readClaim: () => { throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); } });
+  assert.deepEqual(throwing.entries.map((e) => [e.name, e.claim]), [[name, 'unreadable'], ['testsToDelete-coai-run-def456', 'unreadable']], 'a read that throws is unreadable for that entry and the listing goes on');
+});
+
+test('S28 [S2-A code2 4/8] list says which temp root it is scanning before it scans', (t) => {
+  const missing = path.join(privateRoot(t, 'old-coai-start-'), 'no-such-root');
+
+  const result = runCli(['list', '--tmp', missing, '--out', path.join(os.tmpdir(), 'never-written-listing.json')]);
+
+  assert.equal(result.status, 2, 'a root that cannot be read is exit 2');
+  assert.match(result.stdout, new RegExp(`^scanning ${missing.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'), 'the start line named the root before the scan failed');
+});
+
+test('S29 [S2-A code2 5] --tmp and the listing\'s root are compared by realpath; when they differ both are shown as given', (t) => {
+  const rootA = privateRoot(t);
+  const rootB = privateRoot(t);
+  const elsewhere = privateRoot(t, 'old-coai-cwd-');
+  make(rootA, 'coai-panel-a', 60);
+  const file = path.join(elsewhere, 'listing.json');
+  assert.equal(runCli(['list', '--tmp', rootA, '--out', file]).status, 0);
+  const alias = path.join(elsewhere, 'alias-of-a');
+  try {
+    fs.symlinkSync(rootA, alias, 'dir');
+  } catch (error) {
+    t.skip(`this OS refuses to make a symbolic link without privilege: ${error.code}`);
+    return;
+  }
+  const given = `${rootB}${path.sep}..${path.sep}${path.basename(rootB)}`;
+
+  const wrong = runCli(['remove', '--listing', file, '--tmp', given, 'coai-panel-a'], { cwd: elsewhere });
+
+  assert.equal(wrong.status, 2);
+  assert.ok(wrong.stderr.includes(given), `the --tmp is shown as given: ${wrong.stderr}`);
+  assert.ok(wrong.stderr.includes(rootA), 'and so is the listing\'s root');
+  assert.equal(sentinel(rootA, 'coai-panel-a'), 'still coai-panel-a');
+
+  const same = runCli(['remove', '--listing', file, '--tmp', alias, 'coai-panel-a'], { cwd: elsewhere });
+
+  assert.equal(same.status, 0, same.stdout + same.stderr);
+  assert.match(same.stdout, /^removed coai-panel-a$/m, 'a link to the same root is the same root');
+});
+
+test('S30 [S2-A code2 6] a folder whose name is not one segment on THIS system is reported as refused/bad-name: seen, never offered', { skip: !posix && 'a backslash is a separator on Windows' }, (t) => {
+  const root = privateRoot(t);
+  make(root, 'coai-a\\b', 60);
+  make(root, 'coai-panel-a', 60);
+
+  const listing = list(root);
+
+  assert.deepEqual(listing.entries.map((e) => e.name), ['coai-panel-a'], 'it is not offered');
+  assert.deepEqual(listing.refused, [{ name: 'coai-a\\b', check: 'bad-name' }], 'but it is reported');
+  const file = path.join(privateRoot(t, 'old-coai-listing-'), 'listing.json');
+  const shown = runCli(['list', '--tmp', root, '--out', file]);
+  assert.match(shown.stdout, /^refused\tcoai-a\\b\tbad-name/m);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).entries.map((e) => e.name), ['coai-panel-a']);
+});
+
+test('S31 [S2-A code2 7] removePicked takes its root from the listing, and refuses a tmp argument that is another root', (t) => {
+  const rootA = privateRoot(t);
+  const rootB = privateRoot(t);
+  make(rootA, 'coai-panel-a', 60);
+  make(rootB, 'coai-panel-a', 60, 'root B\'s own');
+  const listing = list(rootA);
+
+  const [wrong] = remove(rootB, listing, ['coai-panel-a']);
+  assert.deepEqual([wrong.outcome, wrong.check], ['refused', 'wrong-root']);
+  assert.equal(sentinel(rootA, 'coai-panel-a'), 'still coai-panel-a');
+  assert.equal(sentinel(rootB, 'coai-panel-a'), 'root B\'s own');
+
+  const [relative] = remove(rootA, { ...listing, tmp: 'relative/dir' }, ['coai-panel-a']);
+  assert.deepEqual([relative.outcome, relative.check], ['refused', 'bad-listing'], 'a root that is not absolute is no root');
+
+  const [derived] = removePicked({ listing, picks: ['coai-panel-a'], neverSwept: NEVER_SWEPT, ...world });
+  assert.equal(derived.outcome, 'removed', 'no tmp argument: the listing\'s root is the root');
+  assert.ok(!fs.existsSync(path.join(rootA, 'coai-panel-a')));
+  assert.equal(sentinel(rootB, 'coai-panel-a'), 'root B\'s own');
+});
