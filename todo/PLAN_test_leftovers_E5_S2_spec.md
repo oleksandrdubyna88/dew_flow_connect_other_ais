@@ -501,6 +501,15 @@ Accepted 0, 3, 4; rejected 1, 2, 5. Built RED first (S32, S33, S29 extended; S10
 | **[S2-A code3 3]** | every pick is checked against the listing BEFORE any removal: one unlisted pick removes nothing (`not-listed` for it, `not-attempted` for the rest), every unlisted name reported | S33, S10 |
 | **[S2-A code3 4]** | the `--tmp` mismatch message names the way out: omit `--tmp`, or run `list --tmp <dir>` for that root | S29 |
 
+### A.10 round 4 — the fourth code round (2026-11-02, proceed)
+
+Accepted 8 and 9; every other item of the round is rejected (no change). Built RED first (S34, S35), then the fix, then the RED confirmed with the fix stashed.
+
+| Mark | Change | Test |
+|---|---|---|
+| **[S2-A code4 8]** | `listOldLeftovers` resolves `tmp` ONCE at its start and uses that absolute path for the scan, every later look and the recorded root | S34 |
+| **[S2-A code4 9]** | a legacy run folder removed whose claim's unlink fails is outcome `partial`, with `claimLeft` (the claim's path) and the cause, printed by `describeResult`; the CLI exits 1 | S35 |
+
 **Rejected, with the reason (no change):** code 1 (the two digit checks — `[0-9]` in a regex and the first-character test — mean the same); code 5 (no streaming of the listing: a one-off script over a temp folder); code 8 and the P4 copy follow-up stay as decided (decision 11: the pinned mount is the Node consumers' interface).
 
 ## Definition of Done (S2-A)
