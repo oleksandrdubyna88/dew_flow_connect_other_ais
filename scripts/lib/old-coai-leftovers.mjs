@@ -42,9 +42,9 @@ const QUARANTINE = /^\.(coai-[^/\\]+|testsToDelete-coai-run-[0-9a-f]{6})\.testst
 /** What rename(2) answers when the name is occupied: a directory with content, or a file where our directory was. */
 const TAKEN_CODES = new Set(['ENOTEMPTY', 'EEXIST', 'ENOTDIR']);
 
-/** Is `name` ONE path segment: not empty, not `.` or `..`, no separator of either kind, and its own basename? A name that is not is never joined to a path. */
+/** Is `name` ONE path segment: not empty, not `.` or `..`, no separator of either kind, no `:` (`C:foo` is drive-relative on Windows; S2-A code5 3) and no NUL, and its own basename? A name that is not is never joined to a path. */
 export function isOneSegment(name) {
-  return typeof name === 'string' && name !== '' && name !== '.' && name !== '..' && !/[/\\]/.test(name) && name === path.basename(name);
+  return typeof name === 'string' && name !== '' && name !== '.' && name !== '..' && !/[/\\:\0]/.test(name) && name === path.basename(name);
 }
 
 /** `'coai'`, `'legacy-run'` or `null` (protected, a cache, or no candidate at all) — judged by name, NOW, from the product's list. */
