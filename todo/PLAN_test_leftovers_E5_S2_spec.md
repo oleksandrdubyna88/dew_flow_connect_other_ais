@@ -225,11 +225,11 @@ a sweep, never the janitor's (D4). Three files:
     `rmSync` only the same user can swap the dot-named quarantine, which is the threat this tool does not guard against (the reference's own
     accepted window, F9). A directory's last-write time does not move when the directory itself is renamed within one parent (observed on
     the build machine in commit 5; if a platform moves it, the post-check would refuse every pick there and the observation is recorded).
-    **P4 — decided:** the reference's `identityOf`/`moveExclusively` are not exported, and stage A merges BEFORE any new conventions
-    release, so this module carries its OWN copy of those ~40 lines now, with a comment naming their source
-    (`.agents/conventions/tools/lib/leftovers-sweep.mjs`, at pin `105d53c`); **follow-up, recorded in A.7 item 7 and in `module_tests.md`:**
-    when the conventions export them, this module switches to the exported function and its copy is deleted (E5 § *Notes for the parent*,
-    new note 19). The script imports token-free functions straight from the mount (`.agents/conventions/tools/lib/…`): D3's
+    **P4 — done [S2-A code5 2/8/9]:** the first release copied ~40 lines of the reference's `identityOf`/`moveExclusively` because they were not exported; since release
+    `5863c60` (coai main #939) the reference exports them with a last `{ io, platform }` argument, and this module IMPORTS `moveExclusively` and `moveToQuarantine`
+    from `.agents/conventions/tools/lib/leftovers-sweep.mjs` — the copy is deleted and no follow-up remains. Two small things stay local: a stat helper that also reads
+    `mtimeNs` and `uid` (which the reference's `identityOf` does not carry), and the `hooks.drawName` test seam (the reference's `moveToQuarantine` has none; without the hook
+    the reference's own runs). The script imports token-free functions straight from the mount (`.agents/conventions/tools/lib/…`): D3's
     one-module rule is about the `coai` token being written once, and this tool carries no token; the mount missing ⇒
     one line naming `git submodule update --init .agents/conventions`, exit 2.
 - `scripts/lib/old-coai-leftovers.test.mjs` — A.3 S1–S10 and S11–S16, run by CI's `node --test "scripts/**/*.test.mjs"` (F11).
@@ -386,8 +386,7 @@ Break-it (A.1 § 6): with the `>=` at `PanelService.cs:1516` changed to `>` C5 i
   `coai-*` leftovers and the legacy `testsToDelete-coai-run-*` run folders, that both runners count both (two lines), and that a Linux
   reader's legacy claims are always `unknown` (rule §3) — the listing temp root and the `--tmp` refusal (finding 2), the interrupted
   clean-ups the listing reports and `remove` finishes (finding 3), the post-move re-check by identity and last-write time and the
-  residual window (finding 4), the bounded redraw and the placeholder's removal (finding 0), the follow-up to switch to the
-  reference's exported identity helpers (P4) — and what it never does (never a sweep, never the janitor's, never wired
+  residual window (finding 4), the bounded redraw and the placeholder's removal (finding 0), the import of the reference's exported helpers (P4, done) — and what it never does (never a sweep, never the janitor's, never wired
   into a runner).
 - `shared/temp-sweep.json` `why` — decision 1.
 - `TheTestSweepLeavesAJobAloneTests.cs` doc text — A.5's last row.
@@ -415,10 +414,7 @@ Break-it (A.1 § 6): with the `>=` at `PanelService.cs:1516` changed to `>` C5 i
    product sweep's own tests (`ScratchDirsTests`, `TheScratchSweepNeverDeletesAKimiHomeUnderALiveTreeTests`,
    `ConsultCheckSweepTests`, `ConsultantHomeSweepTests`, `AScratchSweepRunsOnTheConsultationBeatTests`, `chatStoreSweep.test.ts`).
 6. The residual risk (D4) restated; the platforms the script's tests ran on.
-7. A note for E5 § *Notes for the parent*, new note 19: the reference's `identityOf`/`moveExclusively` are duplicated
-   here because they are not exported (decision 5, P4 decided: copy now, stage A merges before any new conventions release).
-   **Follow-up to record:** once the conventions export them, `scripts/lib/old-coai-leftovers.mjs` switches to the exported
-   function and deletes its copy; the same note names S4's wrap as the second consumer.
+7. ~~A note for E5 § *Notes for the parent*, new note 19~~ — superseded **[S2-A code5 2/8/9]**: the helpers are exported (release `5863c60`) and imported; there is no copy and no follow-up to record.
 
 ## A.8 — What the Opus reviewer checks
 
@@ -451,9 +447,7 @@ Break-it (A.1 § 6): with the `>=` at `PanelService.cs:1516` changed to `>` C5 i
 - **P2** — no count line at all (decision 2's "why a count"). Spec: count; a silent retirement hides the pile the
   operator's ruling was about.
 - **P3** — rename `TempDirsAreSwept` now. Spec: keep until S2-B deletes it (decision 2).
-- **P4** — the script's identity helpers duplicated from the reference (decision 5). **Decided 2026-11-02:** duplicate ~40 lines NOW
-  with a source comment (stage A merges before any new conventions release, so an import of a function that does not exist yet
-  cannot be built); the follow-up to switch to an exported function is recorded (A.7 item 7, note 19, `module_tests.md`).
+- **P4** — the script's identity helpers. First decided 2026-11-02: copy ~40 lines (not exported yet). **Done [S2-A code5 2/8/9]:** imported from the reference at `5863c60`; the copy and the follow-up are gone.
   P1–P3 stay as the spec's recommended answers: delete `prefix`/`keepMinutes` (P1), count (P2), keep the class name (P3).
 
 ## A.10 — The changes after the code gate and the Opus review (2026-11-02)
@@ -510,6 +504,15 @@ Accepted 8 and 9; every other item of the round is rejected (no change). Built R
 | **[S2-A code4 8]** | `listOldLeftovers` resolves `tmp` ONCE at its start and uses that absolute path for the scan, every later look and the recorded root | S34 |
 | **[S2-A code4 9]** | a legacy run folder removed whose claim's unlink fails is outcome `partial`, with `claimLeft` (the claim's path) and the cause, printed by `describeResult`; the CLI exits 1 | S35 |
 
+### A.10 round 5 — the fifth code round (2026-11-02, proceed)
+
+Accepted 2/8/9 (drop the copied helpers) and 3 (refuse `:`); the rest rejected. The merge of coai main brought the pin to `5863c60`.
+
+| Mark | Change | Test |
+|---|---|---|
+| **[S2-A code5 2/8/9]** | the copied `identityOf`, `isOwnEmptyPlaceholder`, `removeOwnEmptyPlaceholder`, `moveExclusively` and `moveToQuarantine` are deleted; the module imports `moveExclusively` and `moveToQuarantine` from the reference and passes `{ io, platform }`; the P4 follow-up is done and removed from A.7 item 7 and A.9 | S1–S36 unchanged and green (a refactor of call shapes; S21's forced `win32` already uses a fake io) |
+| **[S2-A code5 3]** | `isOneSegment` also refuses `:` and NUL (`C:foo` is drive-relative on Windows) | S36 (RED first) |
+
 **Rejected, with the reason (no change):** code 1 (the two digit checks — `[0-9]` in a regex and the first-character test — mean the same); code 5 (no streaming of the listing: a one-off script over a temp folder); code 8 and the P4 copy follow-up stay as decided (decision 11: the pinned mount is the Node consumers' interface).
 
 ## Definition of Done (S2-A)
@@ -521,7 +524,7 @@ Accepted 8 and 9; every other item of the round is rejected (no change). Built R
 - [ ] `PanelService.cs` and the product sweep's tests unchanged and green (A.8 check 2, A.7 item 5).
 - [ ] The three product-prefix scans unchanged in code and green.
 - [ ] `shared/temp-sweep.json`: `neverSwept` unchanged; `prefix`, `keepMinutes` gone; `why` rewritten; the old-reader observations in the PR.
-- [ ] The one-off clean-up script with S1–S16 green (S5/S6/S8/S11/S12/S16 observed red under B5), documented in `module_tests.md`, with the residual window and the P4 follow-up.
+- [ ] The one-off clean-up script with S1–S36 green (S5/S6/S8/S11/S12/S16 observed red under B5), documented in `module_tests.md`, with the residual window and the P4 follow-up.
 - [ ] Both start-of-run counters print the legacy `testsToDelete-coai-run-*` line (C-N4, N7, N8) — [S2-A gate finding 1].
 - [ ] The stage-A record (A.7 item 4) in the PR, with the scan before and after.
 - [ ] `plan-lifecycle.mjs` clean; E5's S2-A DoD boxes ticked in the merging PR; this file's status line updated to "S2-A shipped #<PR>; S2-B half pending".
