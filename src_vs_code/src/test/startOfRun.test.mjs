@@ -5,7 +5,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { readRule, startOfRun } from '../../scripts/startOfRun.mjs';
-import { reportLeftoversFirst } from '../../scripts/run-tests.mjs';
+import * as runner from '../../scripts/run-tests.mjs';
+
+const { reportLeftoversFirst } = runner;
 
 /**
  * The extension's test run touches NO `coai-*` directory at its start, at any age, whatever `neverSwept` holds
@@ -171,4 +173,36 @@ test('the runner prints the legacy line only when there is something to say', ()
   const broken = [];
   reportLeftoversFirst({ log: (line) => broken.push(line), count: () => { throw new Error('boom'); } });
   assert.deepEqual(broken, ['run-tests: the leftover count did not run (boom); the tests still will']);
+});
+
+test('[S2-A gate 0] the runner counts the REAL temp root it captured at its start, not the one TEMP/TMP/TMPDIR were moved to', (t) => {
+  const real = runner.REAL_TEMP_ROOT ?? os.tmpdir();
+  const moved = privateRoot(t, 'moved-temp-');
+  make(moved, 'coai-panel-redirected', 'a leftover where the run folder would be', 11 * minute);
+  const saved = { TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP };
+  t.after(() => {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+  process.env.TMPDIR = process.env.TMP = process.env.TEMP = moved;
+  const lines = [];
+
+  reportLeftoversFirst({ log: (line) => lines.push(line) });
+
+  assert.equal(runner.REAL_TEMP_ROOT, real, 'the runner exports the temp root of this process as it was when the runner was loaded');
+  assert.ok(lines[0].includes(` in ${real}`), `the line names the real root: ${lines[0]}`);
+  assert.ok(!lines.some((line) => line.includes(moved)), 'and nothing was read from, or said about, the redirected one');
+
+  const explicit = [];
+  reportLeftoversFirst({ log: (line) => explicit.push(line), root: moved });
+  assert.match(explicit[0], /1 old coai-\* directory in /, 'the root is a parameter: asked for the redirected one, the run reads that one');
+});
+
+test('[S2-A gate 0] the count leaves out the run\'s own folder', () => {
+  const dir = path.join(path.sep, 'nowhere');
+  const io = { readdirSync: () => [entry('testsToDelete-coai-run-abc123'), entry('testsToDelete-coai-run-def456')] };
+
+  assert.deepEqual(startOfRun({ dir, rule, io, ownFolder: path.join(dir, 'testsToDelete-coai-run-def456') }), { leftovers: 0, legacyRuns: 1 });
+  assert.deepEqual(startOfRun({ dir, rule, io }), { leftovers: 0, legacyRuns: 2 }, 'with no folder of its own to leave out it counts both');
 });
