@@ -211,13 +211,72 @@ function refusalBefore(tmp, entry, judged, ctx) {
   return ownerRefusal(tmp, judged, ctx);
 }
 
-/** A legacy run folder's claim file, last: a claim that is not there is nothing to remove. */
-function removeClaim(file, io) {
-  try {
-    io.unlinkSync(file);
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
+/**
+ * Moves the claim file to a private name beside it and answers where: `{ aside }`, or `{ gone: true }` when there is no claim any more (ENOENT). The claim is NEVER unlinked
+ * by its public name — whatever stands at that name at the moment of the call would go with it — it is renamed away, atomically, and judged where it lies.
+ * The conventions' `moveExclusively` is for DIRECTORIES (its reservation is a `mkdir` and a rename of a file onto it is EISDIR; on Windows a file rename would replace), so a file takes the
+ * same shape in miniature: the private name is reserved with an exclusive create (`wx`), the rename lands on our own empty reservation, and a rename that fails removes the
+ * reservation only while it is still ours. Any other error is thrown, with its code.
+ */
+function moveClaimAside(claimFile, ctx) {
+  const { io } = ctx;
+  for (let draw = 0; draw < 5; draw += 1) {
+    const aside = `${claimFile}.coai-cleanup-${process.pid}-${Math.random().toString(16).slice(2, 10)}`;
+    try {
+      io.closeSync(io.openSync(aside, 'wx', 0o600));
+    } catch (error) {
+      if (error?.code === 'EEXIST') continue;
+      throw error;
+    }
+    const reserved = statOf(aside, io);
+    try {
+      io.renameSync(claimFile, aside);
+      return { aside };
+    } catch (error) {
+      const now = statOf(aside, io);
+      if (reserved !== undefined && now !== undefined && now.dev === reserved.dev && now.ino === reserved.ino) {
+        try { io.unlinkSync(aside); } catch { /* ours and empty; leave it */ }
+      }
+      if (error?.code === 'ENOENT') return { gone: true };
+      throw error;
+    }
   }
+  throw Object.assign(new Error('no free private name beside the claim'), { code: 'EEXIST' });
+}
+
+/** The partial result of a claim that is left: the folder is gone, the claim file is named where it is now. */
+const claimLeft = (name, where, cause) => ({ name, outcome: 'partial', claimLeft: where, cause });
+
+/**
+ * The claim of a removed legacy run folder, last (S2-A code9 1): moved aside, compared with what was judged before the folder went (same device and inode, same text) and only then
+ * unlinked — by its private name. One that differs is put back WITHOUT replacing anything (`link`, which refuses an occupied name, then unlink of the private name); if that
+ * cannot be done it stays at the private name. Either way the result is partial/claim-changed and names where it is.
+ */
+function removeClaimByIdentity(name, claimFile, claimBefore, ctx) {
+  const { io, hooks } = ctx;
+  let moved;
+  try {
+    moved = moveClaimAside(claimFile, ctx);
+  } catch (error) {
+    return claimLeft(name, claimFile, error?.code ?? 'unknown');
+  }
+  if (moved.gone) return { name, outcome: 'removed' };
+  hooks.afterClaimMoved?.(claimFile, moved.aside);
+  if (claimSnapshot(moved.aside, ctx) === claimBefore) {
+    try {
+      io.unlinkSync(moved.aside);
+    } catch (error) {
+      return claimLeft(name, moved.aside, error?.code ?? 'unknown'); // the claim is named where it is now, not hidden in an error
+    }
+    return { name, outcome: 'removed' };
+  }
+  try {
+    io.linkSync(moved.aside, claimFile); // exclusive: it refuses a name another claim has taken
+  } catch {
+    return claimLeft(name, moved.aside, 'claim-changed');
+  }
+  try { io.unlinkSync(moved.aside); } catch { /* a second name for the same file: the claim is back, and that is what is reported */ }
+  return claimLeft(name, claimFile, 'claim-changed');
 }
 
 /** What identifies a claim file now: its device and inode and the text read from it (`none` when there is no file). Compared as one string. */
@@ -251,14 +310,7 @@ function removeQuarantined(tmp, entry, judged, quarantined, ctx) {
   }
   if (claimBefore === undefined) return { name: entry.name, outcome: 'removed' };
   ctx.hooks.afterFolderRemoved?.(claimFile);
-  // [S2-A CodeRabbit 5] the claim is unlinked only while it is still the one that was judged: same file (device, inode) and same text. A claim that changed in between is somebody's now.
-  if (claimSnapshot(claimFile, ctx) !== claimBefore) return { name: entry.name, outcome: 'partial', claimLeft: claimFile, cause: 'claim-changed' };
-  try {
-    removeClaim(claimFile, ctx.io);
-  } catch (error) {
-    return { name: entry.name, outcome: 'partial', claimLeft: claimFile, cause: error?.code ?? 'unknown' }; // [S2-A code4 9] the folder is gone; the claim file is named, not hidden in an error
-  }
-  return { name: entry.name, outcome: 'removed' };
+  return removeClaimByIdentity(entry.name, claimFile, claimBefore, ctx);
 }
 
 /** The move, with an ENOENT from the rename read as what it says: the pick is gone (S2-A gate 4). `undefined` when every drawn name was taken. */
@@ -302,7 +354,7 @@ function decide(tmp, name, entries, ctx) {
  * decided (S2-A gate 6/9) and all returned; a result of a refusal after the move carries `quarantine` (the name it was moved to). The listing's entries are indexed by name once (S2-A gate 7). [S2-A code2 7] The root is the LISTING's: `listing.tmp` must be
  * an absolute path (else every pick is refused `bad-listing`), and a `tmp` argument that is another folder refuses every pick `wrong-root` — the deletion API itself holds the
  * confinement, not only the command that calls it. `hooks` are the seams the tests use: `afterReserve`, `beforeRename`,
- * `afterRename(from, quarantined)`, `afterFolderRemoved(claimFile)` and `platform` (the move's, default `process.platform`); `readClaim` reads a claim file.
+ * `afterRename(from, quarantined)`, `afterFolderRemoved(claimFile)`, `afterClaimMoved(claimFile, aside)` and `platform` (the move's, default `process.platform`); `readClaim` reads a claim file.
  */
 export function removePicked({ tmp, listing, picks, neverSwept, io = fs, hooks = {}, probe = processProbe, claimPlatform = process.platform, readClaim = readClaimText, onResult = () => {} }) {
   const root = listing?.tmp;
