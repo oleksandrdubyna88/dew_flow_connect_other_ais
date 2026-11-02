@@ -730,3 +730,41 @@ test('S33 [S2-A code3 3] every pick is checked against the listing BEFORE any re
   ]);
   assert.deepEqual(fs.readdirSync(root).sort(), ['coai-panel-a', 'coai-panel-b'], 'nothing was removed');
 });
+
+test('S34 [S2-A code4 8] a relative tmp is resolved ONCE at the start: the scan and the recorded root are the same absolute folder, whatever the working directory does after', (t) => {
+  const root = privateRoot(t);
+  const elsewhere = privateRoot(t, 'old-coai-cwd-');
+  make(root, 'coai-panel-a', 60);
+  const here0 = process.cwd();
+  t.after(() => process.chdir(here0));
+  process.chdir(path.dirname(root));
+  const relative = path.basename(root); // only meaningful from the folder that holds the root; from anywhere else it names nothing
+  // The working directory moves right after the folder is read, as it could while a long scan runs.
+  const io = { ...fs, readdirSync: (...args) => { const names = fs.readdirSync(...args); process.chdir(elsewhere); return names; } };
+
+  const listing = list(relative, { io });
+
+  assert.equal(listing.tmp, root, 'the recorded root is the folder that was scanned');
+  assert.deepEqual(listing.entries.map((e) => e.name), ['coai-panel-a'], 'and every later look at an entry used that folder, not the new working directory');
+  const [result] = remove(root, listing, ['coai-panel-a']);
+  assert.equal(result.outcome, 'removed', 'a chdir between list and remove changes nothing');
+});
+
+test('S35 [S2-A code4 9] a legacy run folder removed whose claim cannot be unlinked is a partial success that names the leftover claim', (t) => {
+  const root = privateRoot(t);
+  const name = 'testsToDelete-coai-run-abc123';
+  make(root, name, 120);
+  const claim = path.join(root, `${name}.owner`);
+  fs.writeFileSync(claim, `${claimOf(99999, 1700000000)}\n`);
+  const listing = list(root);
+  const io = { ...fs, unlinkSync: (target) => { if (target === claim) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' }); return fs.unlinkSync(target); } };
+
+  const [result] = remove(root, listing, [name], { io });
+
+  assert.equal(result.outcome, 'partial');
+  assert.equal(result.claimLeft, claim, 'the result names the claim that is left');
+  assert.ok(!fs.existsSync(path.join(root, name)), 'the folder is gone');
+  assert.ok(fs.existsSync(claim), 'the claim stays');
+  const line = lib.describeResult?.(result) ?? '';
+  assert.ok(line.includes(name) && line.includes(claim) && line.includes('EPERM'), `the line a person reads names the claim and the cause: ${line}`);
+});
