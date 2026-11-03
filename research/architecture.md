@@ -1494,6 +1494,44 @@ a later edit cannot confine half a launch. **This is not filesystem isolation**:
 `antigravity` are bound to read-only rather than to a directory, and the process is still root — a
 cross-slot READ is what the unprivileged plan above is for.
 
+## The Windows `coai-mcp` package is signed after it is built (2026-11-03)
+
+An `mcp-v*` release carries six packages. The four Linux and macOS ones are made and attached by their
+build legs, as before. The two Windows ones are not: Smart App Control blocks an unsigned `coai-mcp.exe`
+AND the unsigned native libraries a process loads (`e_sqlite3.dll`, the tree-sitter grammars), so the
+Windows package is signed before it becomes a zip. The signing is not written here: it is the reusable
+workflow `dew_flow_release_signing/.github/workflows/sign-windows.yml`, called at a pinned commit.
+
+```
+mcp-binaries (win legs)  builds + tests + packs the FOLDER, runs both carry checks on it,
+                         uploads it as unsigned-mcp-<rid>      (7 days; no zip, no checksum, no attach)
+mcp-sign                 the shared workflow: signs coai-mcp.exe (own-files) and the declared libraries
+                         (extra-files), keeps a vendor signature, verifies, makes <pkg>.zip + .sha256,
+                         uploads them as mcp-<rid>
+mcp-sign-attach          archive-carries.sh on each FINAL zip, then (tag only) gh release upload --clobber
+mcp-release-complete     needs [mcp-binaries, mcp-sign-attach]; verify-and-publish-release.sh is still the
+                         last word on completeness
+```
+
+Facts a reader will need:
+
+- **`id-token: write` is held by `mcp-sign` alone**, and the federated trust names this repository's
+  `release-signing` environment. `windowsPackageIsSigned.test.ts` fails for a second holder.
+- **`mcp-sign`'s `if:` is `needs.mcp-binaries.result == 'success'`, not a copy of `mcp-binaries`' own.** That one
+  reads `needs.mcp-draft.result` and carries `always()`; the sign job does not need `mcp-draft`, so the same text would
+  be `null == 'success'` on every tag and the signing would never run.
+- **The shared workflow signs only what is declared** and turns an unsigned PE that nothing declares red:
+  `own-files` is `["coai-mcp.exe"]`, `extra-files` is `["e_sqlite3.dll","tree-sitter*.dll"]` — the names the Windows
+  publish produces, checked by the test against `shared/kept-grammars.txt`. A library a dependency bump renames fails the
+  release that carries it.
+- **`archive-carries.sh` lists a `.zip` with `unzip -Z1`** as well as a `.tar.gz` with `tar tzf`; the match is the same
+  (basename glob, exact by default), and `TheArchiveCheckTests` runs it on zips built to be wrong.
+- **The release stays unsigned until the next real `src_mcp` change ships.** This change touches only `.github/**` and
+  tests, so release-please proposes no mcp release for it.
+
+Plan and verification (V1 trial package, V2 on a Smart App Control machine, V3 after the next release):
+[../todo/PLAN_windows_code_signing.md](../todo/PLAN_windows_code_signing.md).
+
 ## Cross-cutting decisions already in force
 
 - **Solution layout follows `dew_flow_creds_for_devs`**: `src_mcp/{src,tests}`, later
