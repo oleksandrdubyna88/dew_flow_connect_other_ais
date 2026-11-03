@@ -245,7 +245,11 @@ test('mcp-sign-attach checks the FINAL zip with the product check, then uploads 
   const attach = withoutComments(step('mcp-sign-attach', 'Attach to the draft release'));
   assert.match(check, /archive-carries\.sh "\$ZIP" coai-mcp\.exe '\*e_sqlite3\*'/, 'the binary and the SQLite library');
   assert.doesNotMatch(check, /^\s+if:/m, 'it runs on a dispatch trial too, which is what V1 exercises');
-  assert.match(attach, /if: startsWith\(github\.ref, 'refs\/tags\/'\)/, 'only a tag uploads');
+  assert.match(
+    attach,
+    /if: startsWith\(github\.ref, 'refs\/tags\/mcp-v'\)\s*\n/,
+    'only an mcp tag uploads — the same tag line as mcp-binaries and mcp-release-complete, not any tag',
+  );
   assert.match(attach, /gh release upload "\$GITHUB_REF_NAME" "\$ZIP" --clobber/, 'the zip');
   assert.match(attach, /gh release upload "\$GITHUB_REF_NAME" "\$ZIP\.sha256" --clobber/, 'and its checksum');
 
