@@ -801,6 +801,14 @@ nothing renamed. Node: the runner does NOT call `sweepLeftovers`; it lists the s
 wrap's `ownedPattern()`/`legacyPattern()` (`owned.mjs` of the mount, through coai's one module) and prints the same lines.
 `coai-*` names are in neither listing.
 
+**The switch governs every platform on its own terms** *(S2-B spec gate, 2026-11-03, finding 1)*. `list-only` is
+decided by coai's runners BEFORE the reference is reached: the C# suites call `ListOnly`, and the Node runner does not call
+`sweepLeftovers` at all — so it holds on Windows too, whatever a later reference release does there. `collect` on Windows
+is non-mutating today only because the pinned reference lists there (F16 interim); the spec does not rely on that. The
+Windows CI step of N-S9 runs BOTH values: `collect` asserts the reference's own Windows answer (`unverified:`, nothing
+removed); `list-only` asserts that no sweep was called (the `switched-off:` lines, and a planted gone-owner folder
+untouched). If a later pin makes the reference collect on Windows, this test is where that shows.
+
 **The safe side is list-only** (a typo switches collection OFF, never ON), and a test in every suite and in Node pins the
 repository's value to `collect` (B.4 B9, N-S5), so a typo on `main` is red in CI, never silent. The PR description's
 rollback procedure (D8 (m), B.7) quotes the one line.
