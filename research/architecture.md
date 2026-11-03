@@ -1517,9 +1517,12 @@ Facts a reader will need:
 
 - **`id-token: write` is held by `mcp-sign` alone**, and the federated trust names this repository's
   `release-signing` environment. `windowsPackageIsSigned.test.ts` fails for a second holder.
-- **`mcp-sign`'s `if:` is `needs.mcp-binaries.result == 'success'`, not a copy of `mcp-binaries`' own.** That one
-  reads `needs.mcp-draft.result` and carries `always()`; the sign job does not need `mcp-draft`, so the same text would
-  be `null == 'success'` on every tag and the signing would never run.
+- **`mcp-sign`'s `if:` is `!cancelled() && needs.mcp-binaries.result == 'success'`** (and `mcp-sign-attach`'s the same
+  over `mcp-sign`), not a copy of `mcp-binaries`' own. That one reads `needs.mcp-draft.result`, which the sign job does not
+  need, so the copy would be `null == 'success'` on every tag. The status function is not optional either: an `if:` with
+  none gets an implicit `success()` that looks at every upstream job — including `mcp-draft`, which a dispatch skips
+  (actions/runner#491) — so the bare comparison skips the dispatch trial. `!cancelled()` replaces it; a failed or cancelled
+  build still stops the job. `mcp-release-complete` is tag-only and keeps its implicit `success()`.
 - **The shared workflow signs only what is declared** and turns an unsigned PE that nothing declares red:
   `own-files` is `["coai-mcp.exe"]`, `extra-files` is `["e_sqlite3.dll","tree-sitter*.dll"]` — the names the Windows
   publish produces, checked by the test against `shared/kept-grammars.txt`. A library a dependency bump renames fails the
