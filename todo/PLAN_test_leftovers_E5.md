@@ -8,6 +8,8 @@
 > are not built. This stories document keeps no ledger: a change to it is an entry in the parent's ledger
 > (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` § *Plan changes*). The text below keeps every decision
 > and measurement; a statement the revision supersedes carries a dated note *[epoch 3, 2026-11-03]* in place.
+> *After the re-review gate (2026-11-03, findings 0–3, all accepted):* S5 has NO stage-A part. Its renames are commit 4
+> of the producer PR (S3 → S2-B → S4 → S5 → S6); the eligible-site list of § *S5 as revised* is that commit's input.
 > Was: **plan only, nothing implemented yet — the 2026-11-01 re-split against release `105d53c` (wave 2 of the
 > rollout, written the way wave 1 re-split E3 and E4 against the released contract and the merged C# helper). First
 > split 2026-10-16; plan-gate round 1 applied 2026-10-17; the risk decision of 2026-10-17 applied; the E1 release it
@@ -105,6 +107,10 @@ content hash, only shrinking (S6, *[round-1 finding 7]*); the baseline drains to
 the ENUMERATED eligible sites (§ *S5 as revised at the epoch-3 re-review*). The deferred sites lose it inside the
 producer PR (S3 and S4), and S6's repository-wide zero for `owner-blind` and `legacy-name` is unchanged. So what must be
 done BEFORE the producer got smaller; E5's final Done-when did not.
+*[after the re-review gate, 2026-11-03]* Narrower still: NOTHING of S5 lands before the producer PR. Both runners fall
+back to the machine temp today (`RunTemp.cs:33-47`, `run-tests.mjs:221-230`), the run folder keeps its legacy name
+until S3, and a person can start a test file directly; by D10 no S5 site is contained until S3 and S4. So S5's
+renames are a commit of the producer PR, after S3, S2-B and S4.
 
 ## Facts the split rests on
 
@@ -473,6 +479,11 @@ release that carries F16 (b) is pinned (Q6); (g) if this PR is the family's firs
 shipped Node guard (before creds' E2.5), F3 of the follow-ups (the `node` profile reads `package.json` scripts) is
 released and pinned first (the parent's epoch 3, § 4); (h) every other barrier, release and review condition of the
 parent's § 3 still holds.
+*[after the re-review gate, 2026-11-03, findings 0 and 3] Condition (a) changes.* "the REVISED S5 on `main`" no longer
+holds: S5 has no stage-A part. The producer PR merges only when S2-A (#940) is on `main`, and the ONE squash-merged PR
+carries, in this commit order, S3 → S2-B → S4 → **S5** → S6: S5 is the renames of every eligible site, and the PR also
+carries every site S5 deferred (S3, S4). Conditions (b)–(h) stand; S6's check is the exemption contract of S6 (zero
+UNEXEMPTED `owner-blind` and `legacy-name`, and the expected-exemption inventory equal to the guard's list).
 
 **D9 — The end-of-run audit is copied, and bounded to the run folder.** `LeftoversAudit` (never-disposed,
 disposed-not-removed, claimed-in-temp-root) runs at the end of every C# suite as in the template — but coai's four
@@ -492,6 +503,13 @@ invocation, the missing containment and the story that adds it. A runner's fallb
 uncontained path; S3 (sc. 3a) and S4 (`beginRun`) withdraw both fallbacks. The inventory on `a3b73534` is in § *Facts*
 (the first table). Found by the S5 build: `sonarcloud.yml:302` runs the compiled extension tests with no run folder,
 and `ci.yml:197` runs `scripts/**/*.test.mjs` with none.
+*[after the re-review gate, 2026-11-03, finding 2] A direct start is an invocation too.* For each tree the inventory
+also lists how a person starts one test file or one suite outside the runner: `node --test <compiled test>` or
+`node --test <source test>` (Node); `dotnet test`, an IDE or the test executable (C#). For each such start the story
+either makes it REFUSE — a test that needs the run folder checks the runner's marker and, when it is absent, fails with
+one line naming the command to use, before it creates anything — or names it as uncontained, and the site keeps its
+prefix. S3 does this for C#, S4 for Node. A runner's fallback is uncontained too, so S3 and S4 also make both runners
+fail closed. Until both are done, NO S5 site is contained.
 
 **Growth surface** (the shared planning rule § *A plan that creates something that GROWS*). Owned folders: ONE run
 folder per runner invocation (five C# suites and the extension: six per full run on a machine; plus one per runner
@@ -518,6 +536,20 @@ record of 2026-11-01.
 | B | S4 — the Node producers wrap the reference, **plus S5's deferred Node sites and `sonarcloud.yml:302` routed through the runner** | Opus · Sonnet · Opus | S3 | commit 3 |
 | B | S6 — the two guards, the audit, the baseline, the CI legs; **repository-wide zero for `owner-blind` and `legacy-name`, with the named exemptions** | Opus · Sonnet · Opus | S3, S4; F3 released and pinned if this PR is the family's first Node compliance declaration (D8 (g)) | commit 4; the PR squash-merges once, deferred sites included |
 | C — the drain | S7 — the `raw-temp` baseline drains to zero | Opus · Sonnet (one coder per suite) · Opus | S6 merged | after B; one PR per suite; not a producer |
+
+**After the re-review gate (2026-11-03, findings 0–3).** The table above changes in four rows; the rest stands:
+
+| Stage | Story | Model (spec · code · review) | Depends on | Lands |
+|---|---|---|---|---|
+| B — the producer PR | S3 — as above, AND the run folder fails closed, AND a test started without its run folder refuses | Opus · Sonnet · Opus | S2-A on `main`; the barrier record (D8) | commit 1 — never merged without S2-B |
+| B | S4 — as above, AND `beginRun` fails closed, AND a direct `node --test` refuses | Opus · Sonnet · Opus | S3 | commit 3 |
+| B | **S5 — the renames of every eligible site** (the list of § *S5 as revised*; the legacy fixtures as plain literals with the inline `legacy-name` exemption) | Opus · Sonnet · Opus | S3, S2-B, S4 in the same branch | commit 4 — no stage-A part any more |
+| B | S6 — as above | Opus · Sonnet · Opus | S3, S4, S5; F3 as above | commit 5; the PR squash-merges once |
+
+Why S5 is commit 4: its renames are safe only once S3 and S4 have given every site an owner-form run folder that fails
+closed, under every invocation, with a refusal for a direct start; and S6's guard asserts the repository-wide zero, so
+it must read the tree after the renames. The squash merge makes the five commits one commit on `main`; the order is for
+the review and a bisect on the branch. The section headings below keep their old commit numbers (S6 says "commit 4").
 
 *The table of 2026-11-01 — superseded 2026-11-03 by the table above* (its S5 row said "any time before the producer
 PR" with a DoD of zero bare-prefix lines outside the two helper files; the S5 build showed that this cannot be done
@@ -827,6 +859,13 @@ runs them outside a run folder (D10), and drops their bare prefix in the same co
   failing the run. S3's spec names the mechanism for each MTP executable (for example: the initializer records the
   failure, and a startup hook or assembly fixture fails the run before any test runs), its observed non-zero exit code and
   its one-line message, and tests it on the three OSes.
+- **Fails closed, AND a test started without its run folder refuses** *[after the re-review gate, 2026-11-03,
+  finding 2]*. In C# the run folder is made by the test assembly's own module initializer, so every start of the
+  assembly (the executable, `dotnet test`, `dotnet-coverage`, an IDE) runs it. S3 adds the refusal for a start that
+  skips or loses it: a test that needs the run folder (every suite's first-ordered test of sc. 2, and the S5 sites'
+  suites) checks that `TEMP`, `TMP` and `TMPDIR` name an owner-form run folder this process made, and otherwise fails
+  with one line naming the command to use, before it creates anything. Test: the suite started with the initializer's
+  folder removed from the variables ⇒ that line, a non-zero exit, nothing created in the machine temp. RED on `main`.
 
 Scenario: `S5DeferredCSharpSites_AreInsideTheRunFolder` — for each listed site, the suite that runs it asserts that
 the site's path is inside `Path.GetTempPath()` = the run folder; the guard (S6) reports zero `legacy-name` for the
@@ -898,6 +937,16 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
   run folder made by the wrap), and then the two names drop the prefix. That routing is also what makes the baseline's
   `src_vs_code/src/test/` scope true for every invocation (D6).
 - the runner's fallback to the machine temp (`run-tests.mjs:221-227`) goes, as above.
+- **`beginRun` fails closed, AND a direct `node --test` refuses** *[after the re-review gate, 2026-11-03, findings 0
+  and 2]*. `run-tests.mjs` `beginRun` (`:221-230` on `a3b73534`) catches the error and lets the tests "share the
+  machine's temp as before"; S4 makes it print one line and exit non-zero before the first batch. And a test file that
+  needs the run folder, started directly (`node --test out/test/x.test.js`, `node --test src/test/x.test.mjs`, or
+  `node --test scripts/lib/x.test.mjs` without S2-B's preload), refuses: it checks a marker the runner (or the preload)
+  sets — S4's brief names the variable — and, when it is absent, fails with one line naming `npm test` (or the
+  preload command), before it creates anything. Tests: `runTests.test.mjs` (a root that cannot take the folder ⇒ one
+  line, a non-zero exit, no batch ran) and a direct `node --test` of one renamed extension test and one `scripts/lib`
+  test ⇒ that line, a non-zero exit, nothing created. RED on `main`. `sonarcloud.yml:302` goes through the runner first,
+  or this refusal would fail that job.
 
 Scenarios: the guard (`leftovers-check.mjs --profile node --token coai`) on the whole repository reports zero
 `legacy-name` and `owner-blind` for every listed line; `sonarcloudRunsThroughTheRunner` — a test that reads
@@ -933,6 +982,14 @@ under S4's folder loses its prefix only in S4. The Models line and the three-PR 
   no producer in the diff (the reviewer asserts the diff touches no `.owner` writer and no sweep).
 
 ### S5 as revised at the epoch-3 re-review (2026-11-03)
+
+*[after the re-review gate, 2026-11-03, findings 0 and 3] No stage-A part.* By D10 no site below is contained today:
+both runners fall back to the machine temp, the run folder keeps its legacy name until S3, and a direct start has no
+run folder. So S5 is not a set of PRs before the producer PR. Its renames are **commit 4 of the producer PR**, after
+S3, S2-B and S4, and the eligible-site list below is that commit's input (the S5 build's classification of 2026-11-03,
+kept). The goal, the lists, the two SonarCloud sites and the legacy-fixture exemption form stand; "before the producer
+PR" and "one PR per tree" in them are read as "a commit of the producer PR". The local S5 branches are material for
+that commit, after the judge's cuts.
 
 Decided as option A of consult `c137f641`, confirmed by the re-review consult `3ebddd39`; the parent's epoch 3, § 1
 and § 3. Measured by the S5 build on `a3b73534` (three branches `feat/test-leftovers-e5-s5-{mcp,ext,scripts}`, local
@@ -1144,6 +1201,8 @@ built from pieces; the PR lists every S5 deferral and where it was handled; the 
       fixtures that keep a plain legacy literal with the inline `legacy-name` exemption; no prefix built from pieces;
       every deferred site named with its invocation, the missing containment and its owning S3 or S4 change; no
       producer and no sweep.
+      *[after the re-review gate, 2026-11-03]* S5 is commit 4 of the producer PR, not a PR before it: "no producer and
+      no sweep" is read as "no producer or sweep code in the S5 commit itself".
 - [ ] *[epoch 3]* D10: every story that drops a prefix (S5, S3, S4) carries its invocation inventory in its PR.
 - [ ] S3: the library is a byte-identical copy but the namespace, `OwnedToken.cs`, `GuardFiles.cs`, `RepositoryRoot.cs`;
       the run folder of all four C# suites is the owner form, claimed first, in the contract's grammar; Step 0 on
@@ -1176,6 +1235,11 @@ built from pieces; the PR lists every S5 deferral and where it was handled; the 
       checks green (`owner-blind` and `legacy-name` at zero outside the helpers' own files and S6's named exemptions,
       only the authorised `raw-temp` baseline left); F3 first if this is the family's first Node compliance
       declaration; every other barrier, release and review condition still met.
+      *[after the re-review gate, 2026-11-03]* "after … the REVISED S5" is superseded: the PR's commits are S3 → S2-B →
+      S4 → S5 → S6; S2-A alone is on `main` before it.
+- [ ] *[after the re-review gate, 2026-11-03]* S3 and S4: both runners fail closed, and a test that needs the run
+      folder refuses when it is started without it (C#: every start of the assembly; Node: a direct `node --test`);
+      each tested RED then GREEN.
 - [ ] *[epoch 3]* S6: the `raw-temp` baseline is ONE file at the repository root, with one scope per tree; every scope's
       proof holds under every invocation of its tree.
 - [ ] S7: the baseline drained to zero and deleted.
@@ -1238,6 +1302,8 @@ built from pieces; the PR lists every S5 deferral and where it was handled; the 
   third tree (`scripts/lib` + `src_server/tests` + `http`) that is 14 lines (13 legacy fixtures that keep a plain
   literal with the inline `legacy-name` exemption, and one vacuous clause), none of them a rename; the rest of that tree
   is deferred to S3 and S4.
+  *[after the re-review gate, 2026-11-03]* Superseded: S5 is ONE commit of the producer PR (commit 4), not three PRs;
+  the three trees' classifications are its input.
 
 ## Plan-gate round 1 of the re-split (2026-11-01, coai session `55ddb13b`)
 
