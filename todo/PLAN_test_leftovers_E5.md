@@ -449,6 +449,14 @@ root. The old-grammar claim's
 `<os>` tag `win32|darwin` (`OwnerClaim.cs:38`) is read by the legacy clause of the reference (`<host>@<os>:<pid>[:<start>]`)
 only when `<os>` is `linux|macos|windows`: a `win32`/`darwin` legacy claim is **unreadable ⇒ `unknown` ⇒ kept** and
 listed — the safe side; the one-off clean-up covers them.
+*[rollout entry 4.1, 2026-11-03]* **Corrected — the legacy-collection promise cannot hold at the pin.** "a killed old run of
+either runner is collected by the next extension run of the same user" is WITHDRAWN (the S2-B spec, B.10 item 1; the
+question consultants `08beb732`, `76d09c26`; the parent's entry 4.1, dew_flow_conventions #121). At `cc24f9e` the Node
+reference never collects a legacy coai folder: on a Linux reader `legacyOwnerState` is always `unknown` (`owned.mjs:580-587`,
+a legacy record has no `<ns>`); on Windows the sweep lists and changes nothing (F16 interim); and E2's claims carry
+`win32`/`darwin`, which `parseLegacyOwner` does not read. The C# copy LISTS a legacy name with the exact command and never
+reads its claim. **The only removal of E2's `testsToDelete-coai-run-*` folders is S2-A's one-off clean-up**
+(`scripts/old-coai-leftovers.mjs`, a person's tool). Both runners print the sweep's `legacy:` line per folder (S2-B spec B.1 § 3).
 
 **D5 — Product-named directories under test.** *Superseded for `src_mcp` and the extension by E2* (the three variables
 are the seam: `RunTemp.cs:14-15`); *becomes true for the Team server, ingest-server and bench suites in S3* when they
@@ -510,6 +518,10 @@ operator's WSL machine (open, 2026-10-31) AND the owner's Windows machine (R6: "
 the code gate on the PR reached `proceed`; (4) the macOS, Windows and Linux legs are green; (5) *[round-1 finding
 7]* the `raw-temp` baseline rule (D6) is released in `dew_flow_conventions` and coai's pin has moved to that release
 by a pin bump merged alone.
+*[rollout entry 4.1, 2026-11-03]* Q6's line "its Windows CI leg asserts that a planted gone-owner folder survives the Node
+sweep" is met AS WRITTEN (the question consultants on the S2-B spec's B.10 item 3): the `windows` job gets a step that runs
+the extension's Node sweep test file through the actual wrapper and the pinned reference, with an otherwise collectible
+fixture (S2-B spec B.1 § 5, N-S9, B.5). The `platform: 'win32'` seam test on Linux is an extra, not a substitute.
 *[epoch 3, 2026-11-03] Revised merge condition of the producer PR.* The PR merges only when ALL of these hold:
 (a) S2-A (#940, done) and the REVISED S5 (§ *S5 as revised*) are on `main`; (b) S3, S2-B, S4 and S6 squash-merge
 together in this one PR, and the PR INCLUDES every site S5 deferred (each listed in S3 or S4 below), with S6's
@@ -802,6 +814,9 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
   C# test projects' `[assembly: AssemblyFixture]` wiring; `src_vs_code/scripts/run-tests.mjs` (`sweepFirst` becomes
   `sweepLeftovers` of the mount); `src_vs_code/scripts/owned.mjs` (D3); `src_vs_code/src/test/sweepTemp.test.mjs` →
   `leftoversSweep.test.mjs`; `research/module_tests.md`.
+  *[2026-11-03, S2-B spec B.10 item 4]* `sweepTemp.test.mjs` was deleted by S2-A (#940); its survivors are
+  `src_vs_code/src/test/startOfRun.test.mjs`. S2-B ADDS `src_vs_code/src/test/leftoversSweep.test.mjs` beside it and
+  renames nothing; `startOfRun.test.mjs` loses the legacy-count tests (N7, N10, N8's arms).
   *[epoch 4, 2026-11-03]* "(S3 brought them)" is corrected: the copied `LeftoversSweepTests` take the fixture as a constructor
   parameter, so they land HERE, when the fixture is wired. S2-B registers `LeftoversSweepFixture` as the assembly fixture
   in EACH of the four test assemblies (each its own `[assembly: AssemblyFixture(...)]` line; the template's line is a
@@ -837,9 +852,18 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
      claim (injected probe) planted in a private root; the command's entry point run with that root; the folder is
      collected before the first test; the `package.json`/CI command is pinned to carry the preload. RED on `main`
      (no sweep in front of `node --test`).
+     *[2026-11-03, S2-B spec B.1 § 7, B.10 item 9 — not a change: this item already allows the runner]* **The tiny
+     runner is picked: `scripts/run-lib-tests.mjs`**, with its test `scripts/run-lib-tests.test.mjs` and `ci.yml:197`
+     running it. Not the `--import` preload: `--import` sits in `process.execArgv`, which `node --test` hands to every
+     test-file child, so a preload would sweep once per test file, concurrently, over the real temp root. Every
+     "preload" below (S4 Files, S4's direct-start note, S4's scenarios, Q5) reads as this runner.
   3. **Legacy names** (D4): the C# copy lists `testsToDelete-coai-run-*` of the old grammar with the exact `rm`
      command; the Node reference collects one only on kernel owner AND old-grammar `gone`; a legacy claim whose `<os>`
      is `win32`/`darwin` reads as `unknown` and is kept — asserted in both.
+     *[rollout entry 4.1, 2026-11-03]* Read with D4's correction: at the pin the Node reference's "collects on kernel
+     owner AND `gone`" never fires (Linux: always `unknown`; Windows: list-only; `win32`/`darwin` tags unreadable), so
+     BOTH runners list and neither collects a legacy name; the one-off clean-up is the only remover. The spec asserts the
+     listing in both (B7, N-S2) and nothing more.
   4. **Two sweeps at once** (plan-gate round 1 item 7, kept): a gone owner's folder removed by another sweep between
      the listing and the delete (an injected deleter that removes it first, and once two real sweeps over one private
      root at once) ⇒ no failure, no report line for the other's removal, no throw; a quarantine the OTHER sweep made
@@ -1075,6 +1099,10 @@ the text above differ, this block wins.
   `.github/workflows/release.yml:307`, `:1154` ⇒ `mktemp -d -p "$RUNNER_TEMP"` (job-scoped, no finding under rule §7);
   new `src_vs_code/src/test/owned.test.mjs`, `runHost.test.mjs`, `runTests.test.mjs` (E2's `runTemp.test.mjs` rewritten);
   `research/module_tests.md`.
+  *[2026-11-03, S2-B spec B.10 item 9]* `scripts/lib/leftovers-preload.mjs` above is read as **`scripts/run-lib-tests.mjs`**
+  (S2-B builds it: the sweep, then `node --test "scripts/**/*.test.mjs"`); S4 adds to that runner the owned run folder of
+  the wrap and the marker its direct-start refusal reads, and `src_vs_code/scripts/owned.mjs` already exists from S2-B
+  (the one `ownedFor` call, `REPO_TOKEN`, `loadStartOfRunSweep`) — S4 extends it, never a second module.
 
 **The change — `run-host.mjs`.** `workspace`, `dataHome` and a NEW `userData` come from the wrap (`what` = `host-ws`,
 `host-data`, `host-profile`); `launchArgs` gains `--user-data-dir=<userData>` (the comment at `:87-88` becomes true);
@@ -1437,6 +1465,10 @@ S6 creates the baseline:
 - [ ] *[round-1 findings 1–3, 5]* the sweep root is `RunTemp.Real` (tested); each C# suite has its own initializer and
       its first-ordered run-folder test; a run that cannot make its folder fails before any test (both runners); the
       bare `node --test` of `scripts/lib` sweeps first (tested).
+      *[2026-11-03, S2-B spec B.10 item 10]* "its first-ordered run-folder test" is superseded by S3 as revised at the
+      epoch-4 re-review: the collections run in parallel and no order exists; the gated `Main` (exit 78 before discovery)
+      is the guarantee, and the per-assembly run-folder test stays WITHOUT an order (F24 for the baseline's proof rule).
+      Read the line as: each C# suite has its own initializer, its gated entry point and its run-folder test.
 - [ ] *[round-1 finding 6, round-2 finding 0]* the one-off clean-up script re-checks every pick, removes only through
       an exclusive rename to a quarantine name while the listed identity holds, refuses otherwise; the swap test is
       RED then GREEN.
@@ -1502,6 +1534,10 @@ S6 creates the baseline:
   *Recommended:* keep the copy byte-identical (list only) and let the Node wrap collect under rule §4's legacy clause;
   the one-off clean-up covers the `win32`/`darwin`-tagged claims nobody reads (D4). Reason: a byte-identical copy is
   the whole value of the template; the Node reference already implements the clause with its tests.
+  *[rollout entry 4.1, 2026-11-03]* **DECIDED by the S2-B spec (B.1 § 3, B.10 items 1 and 12):** list only, in BOTH
+  runners. The copy is an adapted copy now (D2, epoch 4), so "byte-identical" is no longer the reason; the reason is that
+  nothing coai adds collects a legacy name, and the Node reference's clause never fires at the pin (D4's correction).
+  The one-off clean-up is the only remover of E2's folders.
 - **Q4 — `src_server/tests`, `src_bugs/tests` and bench get the run folder (S3) rather than per-test owned folders.**
   DECIDED *[round-1 finding 2]*: yes, and **each of the three assemblies gets its OWN `[ModuleInitializer]`** that
   calls `RunTemp.Start` — a module initializer runs only when its own assembly loads, so the library's cannot serve
@@ -1512,11 +1548,14 @@ S6 creates the baseline:
   finding 5]*: the command gets a start-of-run sweep in front of it (a `--import` preload or a tiny runner that calls
   the reference's sweep on the real temp root before the tests; S2-B item 2, tested). Still recommended for the sites
   themselves: per-test `ownedDir(t, …)` through the wrap inside hooks (rule §2).
+  *[2026-11-03, S2-B spec]* The runner, `scripts/run-lib-tests.mjs` (the S2-B item 2 note says why not the preload).
 - **Q6 — The Node sweeper on Windows checks the profile only (F16 open for Node; the C# side checks the SID too).**
   **Decided 2026-11-01 (the parent's epoch 2, § 4; consult `3310f6ba`): F16 (b).** Until F16's Fix, the reference sweep on
   Windows LISTS and changes nothing (`unverified:` lines); the C# sweep, which checks both keys, collects. coai's producer
   PR merges only after the release carrying that change is pinned, and its Windows CI leg asserts that a planted gone-owner
   folder survives the Node sweep. (Superseded recommendation: accept and record.)
+  *[rollout entry 4.1, 2026-11-03]* Met as written by S2-B: a NEW step of the `windows` job runs the extension's Node sweep
+  test file (the real wrapper, the pinned reference, an otherwise collectible fixture) — S2-B spec B.1 § 5, N-S9, B.5.
 - **Q7 — `temp-sweep.json`: keep `prefix`/`keepMinutes` as documentation or delete them.** *Recommended:* keep the
   file with `neverSwept` and a rewritten `why`; delete `prefix` and `keepMinutes` (nothing reads them after S2-A; an old
   checkout's `SweepRule` must be shown to fail soft — the spec's item 1).
