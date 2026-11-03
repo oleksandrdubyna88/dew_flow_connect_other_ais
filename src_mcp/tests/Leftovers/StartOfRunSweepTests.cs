@@ -683,6 +683,9 @@ public sealed class StartOfRunSweepTests : IDisposable
         var junctionB = Path.Combine(inside, "to-runner-temp");
         try
         {
+            // ONE scope over both arms: a red run reports (i) AND (ii), each with its reason, not only the first that failed.
+            using var both = new AssertionScope();
+
             // (i) a root INSIDE the profile reached through a junction OUTSIDE it: the entry's final path is inside, the given path is not.
             DirectoryLinks.CreateOrSkip(junctionA, inside);
             var g = PlantFolder(inside, Name("w-gone"), Rec(dead));
