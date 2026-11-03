@@ -70,6 +70,33 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
         RunTempFolder.Variables.Select(Environment.GetEnvironmentVariable).Should().OnlyContain(value => value == RunTemp.Folder, "TEMP, TMP and TMPDIR all name the run folder");
     }
 
+    /// <summary>D8's merge condition (E5 S2-B): this suite makes an owner-form run folder AND registers the start-of-run sweep (the copied fixture) AND the order proof, in ONE assembly. A producer without the sweep, or the sweep without the producer, is red.</summary>
+    [Fact]
+    public void TheProducerAndTheSweep_LandTogether()
+    {
+        RunTemp.IsActive.Should().BeTrue("the producer: Gate checked and passed this run");
+        System.IO.Path.GetFileName(RunTemp.Folder).Should().MatchRegex(
+            "^" + System.Text.RegularExpressions.Regex.Escape(Owned.NameBase + "run-") + "[A-Za-z0-9]{6}\\z", "the producer: the run folder is of the owner form");
+        var assembly = Assembly.GetExecutingAssembly();
+
+        var fixtures = assembly.GetCustomAttributes<AssemblyFixtureAttribute>().Select(a => a.AssemblyFixtureType).ToList();
+        fixtures.Should().Contain(typeof(LeftoversSweepFixture), "the start-of-run sweep is an assembly fixture of THIS suite");
+        fixtures.Should().Contain(typeof(RunTempFixture), "the run folder's fallback refusal and teardown");
+        assembly.GetCustomAttributes<StartOfRunOrderAttribute>().Should().ContainSingle("the order proof runs on every test of THIS suite");
+    }
+
+    /// <summary>The re-review's finding e1: the sweep ENDED before the first test of any collection started. The attribute proves it on every test; this one writes the margin down.</summary>
+    [Fact]
+    public void TheSweep_EndedBeforeTheFirstTestStarted()
+    {
+        StartOfRunSweep.EndedAt.Should().NotBe(0, "the sweep returned (a result or an error) and stamped its end");
+        StartOfRunSweep.FirstTestStart.Should().NotBe(0, "this test's own Before recorded a start");
+        StartOfRunSweep.FirstTestStart.Should().BeGreaterThan(StartOfRunSweep.EndedAt, "no test started before the sweep ended");
+        StartOfRunSweep.LastRoot.Should().Be(RunTemp.Real, "the sweep was handed the machine's temp root, never the run folder");
+        var margin = System.Diagnostics.Stopwatch.GetElapsedTime(StartOfRunSweep.EndedAt, StartOfRunSweep.FirstTestStart);
+        TestContext.Current.AddWarning($"E5 S2-B order: the start-of-run sweep ended {margin.TotalMilliseconds:F1} ms before the first test started");
+    }
+
     [Fact]
     public void TheEntryPoint_IsTheGatedOne() =>
         Assembly.GetEntryAssembly()!.EntryPoint!.DeclaringType!.FullName.Should().Be("CoaiMcp.Tests.TestEntryPoint", "xUnit's generated Main is behind RunTemp.Gate");

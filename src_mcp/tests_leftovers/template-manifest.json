@@ -122,6 +122,15 @@
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/DarwinFifoChild.cs", "target": "src_mcp/tests/Leftovers/DarwinFifoChild.cs", "blob": "126a03cf095176dceb026a753c30c33c7c9c57d3", "replace": [
         {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversSweepTests.cs", "target": "src_mcp/tests/Leftovers/LeftoversSweepTests.cs", "blob": "2caec6fbe79d8b4c0a75a96e9ed60af589e43bb2", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversJanitorTests.cs", "target": "src_mcp/tests/Leftovers/LeftoversJanitorTests.cs", "blob": "f5ec23b2ccdf729ac08189866421f91345a6b8ea", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
+        {"old": "private const string Janitor = \".claude/rules/shared/tools/janitor.sh\";", "new": "private const string Janitor = \".agents/conventions/tools/janitor.sh\";", "count": 1},
+        {"old": "git submodule update --init .claude/rules/shared", "new": "git submodule update --init .agents/conventions", "count": 1},
+        {"old": "exactly as Path.GetTempPath does", "new": "exactly as the temp-path API does", "count": 1}
     ] }
   ]
 }
