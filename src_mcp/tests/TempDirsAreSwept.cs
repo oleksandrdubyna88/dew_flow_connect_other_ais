@@ -8,7 +8,8 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Since E5 S2-A this fixture sweeps NOTHING: at the start of the run it deletes a killed run's fake-CLI steering file, counts the old <c>coai-*</c> leftovers
-/// once and says how many; S2-B replaces it with the copied <c>LeftoversSweepFixture</c>.
+/// once and says how many. The owner-aware sweep is <c>LeftoversSweepFixture</c> (E5 S2-B), registered beside it; this class stays the home of the count, the steering-file
+/// delete and the product-sweep tests below.
 /// </summary>
 /// <remarks>
 /// <para><b>Why nothing is swept.</b> The age-only <c>coai-*</c> sweep that stood here (measured 2026-09-05: 21,857 folders, 4,650 of them old <c>coai-panel-*</c>) deleted on
@@ -56,10 +57,6 @@ public sealed class TempDirsAreSwept
         if (Interlocked.Exchange(ref _leftoversCounted, 1) == 0)
         {
             Console.Error.WriteLine(StartOfRun.Sentence(StartOfRun.Run(RunTemp.Real, Rule), RunTemp.Real));
-            if (StartOfRun.RunFolders(RunTemp.Real, RunTemp.Folder) is > 0 and var legacy)
-            {
-                Console.Error.WriteLine(StartOfRun.LegacySentence(legacy, RunTemp.Real));
-            }
         }
     }
 

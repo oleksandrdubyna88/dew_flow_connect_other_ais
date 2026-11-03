@@ -2,6 +2,8 @@ using System.Runtime.CompilerServices;
 using Xunit;
 
 [assembly: AssemblyFixture(typeof(CoaiMcp.Tests.RunTempFixture))]
+[assembly: AssemblyFixture(typeof(CoaiMcp.Tests.Leftovers.LeftoversSweepFixture))]
+[assembly: CoaiMcp.Tests.StartOfRunOrder]
 
 namespace CoaiMcp.Tests;
 

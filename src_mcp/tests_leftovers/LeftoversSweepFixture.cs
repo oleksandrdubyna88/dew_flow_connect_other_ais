@@ -18,7 +18,7 @@ public sealed class LeftoversSweepFixture : IAsyncDisposable
     private readonly Action _audit;
 
     public LeftoversSweepFixture()
-        : this(RealSweep, Console.Error.WriteLine, () => RealAudit(Owned.TempRoot(), OwnedDir.Unreclaimed()))
+        : this(RealSweep, Console.Error.WriteLine, audit: null /* the end-of-run audit is wired in E5 S6 (D9); until then this fixture's disposal does nothing */)
     {
     }
 
@@ -75,7 +75,7 @@ public sealed class LeftoversSweepFixture : IAsyncDisposable
         GuardedAudit(DarwinLayout.Require, () => LeftoversAudit.Run(tmp, Owner.This, registry, mine, env));
 
     private static SweepResult RealSweep() =>
-        GuardedSweep(DarwinLayout.Require, () => LeftoversSweep.Run(new SweepOptions(Owned.TempRoot(), DateTimeOffset.UtcNow, LeftoversSweep.MinAge, Liveness.ProbeProcess, Scope.IsMine)));
+        GuardedSweep(DarwinLayout.Require, () => StartOfRunSweep.Run(RunTemp.Real));
 
     /// <summary>The sweep behind the layout requirement: it removes by identity, so on macOS it runs only after the layout holds. A requirement
     /// that throws means NO sweep runs and the one exception is what the constructor reports.</summary>
