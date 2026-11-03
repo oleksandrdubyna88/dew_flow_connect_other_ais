@@ -25,7 +25,39 @@ public static class SuiteChild
     public static Result Run(IReadOnlyList<string> args, IReadOnlyDictionary<string, string?> env, TimeSpan timeout)
     {
         var exe = Environment.ProcessPath ?? throw new InvalidOperationException("this process has no executable path");
-        var start = new ProcessStartInfo(exe) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+        var start = StartInfoFor(exe, args, env);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException($"{exe} did not start");
+        var pid = process.Id;
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        if (process.WaitForExit(timeout))
+        {
+            process.WaitForExit();
+            Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(10));
+
+            return new Result(false, process.ExitCode, pid, Text(stdout), Text(stderr));
+        }
+
+        process.Kill(entireProcessTree: true);
+        process.WaitForExit();
+
+        return new Result(true, -1, pid, string.Empty, string.Empty);
+    }
+
+    /// <summary>The start of the child: no shell, one argument per entry, the environment applied (a <c>null</c> removes a variable).</summary>
+    internal static ProcessStartInfo StartInfoFor(string exe, IReadOnlyList<string> args, IReadOnlyDictionary<string, string?> env)
+    {
+        // Both streams are read as UTF-8: the refusal line has an em dash, and the child writes UTF-8 bytes (RunTemp.WriteRefusal), where the default would be the console's code page.
+        var utf8 = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        var start = new ProcessStartInfo(exe)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = utf8,
+            StandardErrorEncoding = utf8,
+            CreateNoWindow = true,
+        };
         foreach (var argument in args)
         {
             start.ArgumentList.Add(argument);
@@ -43,22 +75,7 @@ public static class SuiteChild
             }
         }
 
-        using var process = Process.Start(start) ?? throw new InvalidOperationException($"{exe} did not start");
-        var pid = process.Id;
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        if (process.WaitForExit(timeout))
-        {
-            process.WaitForExit();
-            Task.WaitAll([stdout, stderr], TimeSpan.FromSeconds(10));
-
-            return new Result(false, process.ExitCode, pid, Text(stdout), Text(stderr));
-        }
-
-        process.Kill(entireProcessTree: true);
-        process.WaitForExit();
-
-        return new Result(true, -1, pid, string.Empty, string.Empty);
+        return start;
     }
 
     private static string Text(Task<string> read) => read.IsCompletedSuccessfully ? read.Result : string.Empty;

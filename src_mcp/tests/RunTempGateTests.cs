@@ -22,6 +22,8 @@ public sealed class RunTempGateTests : IDisposable
 
     private static string[] LinesOf(string text) => text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
 
+    private static string Dashless(string text) => text.Replace('\u2014', '-');
+
     private static string Said(string? refusal) => refusal ?? "<no refusal>";
 
     [Fact]
@@ -155,6 +157,34 @@ public sealed class RunTempGateTests : IDisposable
         File.Exists(sentinel).Should().BeFalse("nothing was discovered");
     }
 
+    /// <summary>
+    /// The refusal line carries an em dash. A console writes it in its code page (on Windows U+2014 becomes '-'), so the gate writes UTF-8 BYTES to the standard error stream,
+    /// without a byte order mark, and the parent reads the child's streams as UTF-8. The real red of this is the Windows CI run; on Linux the console is UTF-8 already, so these two
+    /// pin the seams: the bytes the gate writes, and the encodings of the child's start.
+    /// </summary>
+    [Fact]
+    public void TheRefusalLine_IsWrittenAsUtf8Bytes_NotInAConsoleCodePage()
+    {
+        using var stream = new MemoryStream();
+        var line = RunTemp.RefusalPrefix + "the run folder is gone";
+
+        RunTemp.WriteRefusal(stream, line);
+
+        var written = stream.ToArray();
+        written.Take(3).Should().Equal(new byte[] { (byte)'c', (byte)'o', (byte)'a' }, "no byte order mark");
+        written.AsSpan().IndexOf(new byte[] { 0xE2, 0x80, 0x94 }).Should().BeGreaterThan(0, "U+2014 is the three UTF-8 bytes E2 80 94, never a '-'");
+        new System.Text.UTF8Encoding(false).GetString(written).Should().Be(line + Environment.NewLine, "one line, ended by a line break, and nothing else");
+    }
+
+    [Fact]
+    public void TheChild_IsReadAsUtf8_OnBothStreams()
+    {
+        var start = SuiteChild.StartInfoFor("the-exe", ["--help"], new Dictionary<string, string?>());
+
+        start.StandardOutputEncoding.Should().NotBeNull().And.Match<System.Text.Encoding>(e => e.CodePage == 65001, "stdout is read as UTF-8");
+        start.StandardErrorEncoding.Should().NotBeNull().And.Match<System.Text.Encoding>(e => e.CodePage == 65001, "stderr is read as UTF-8");
+    }
+
     [Fact]
     public void ListTests_IsGated_AndItsDiscoveryNeverRuns()
     {
@@ -199,7 +229,9 @@ public sealed class RunTempGateTests : IDisposable
 
         result.TimedOut.Should().BeFalse(result.StdErr);
         result.ExitCode.Should().NotBe(0, "the failed fixture fails the run");
-        (result.StdOut + result.StdErr).Should().Contain(RunTemp.RefusalPrefix + "the gated entry point did not run");
+        // This line reaches the parent through Microsoft.Testing.Platform's own console output (the assembly fixture's exception), in the CHILD's console encoding, which this
+        // code does not control: on Windows the em dash arrives as '-'. The gate's own line (stderr) is exact in every test above; here the dash is compared in either spelling.
+        Dashless(result.StdOut + result.StdErr).Should().Contain(Dashless(RunTemp.RefusalPrefix + "the gated entry point did not run"));
         // Discovery DOES run (the gate was bypassed), so the discovery line may be there; a test body must not have run.
         (File.Exists(sentinel) ? File.ReadAllText(sentinel) : string.Empty).Should().NotContain("test body", "no test body ran: the fixture failed first");
     }

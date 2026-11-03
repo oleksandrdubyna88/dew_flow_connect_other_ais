@@ -170,7 +170,7 @@ public static class RunTemp
 
         if (Refusal() is { } line)
         {
-            Console.Error.WriteLine(line);
+            WriteRefusal(Console.OpenStandardError(), line);
 
             return RefusedExitCode;
         }
@@ -182,6 +182,16 @@ public static class RunTemp
         }
 
         return run(args);
+    }
+
+    /// <summary>
+    /// Writes the refusal line as explicit UTF-8 BYTES (no byte order mark) to <paramref name="stderr"/> and flushes. Never through <c>Console.Error</c>: on Windows that writes in the
+    /// console's code page, which maps the em dash of <see cref="RefusalPrefix"/> to a '-' — the plan's exact prefix would reach a reader as another text.
+    /// </summary>
+    internal static void WriteRefusal(Stream stderr, string line)
+    {
+        stderr.Write(new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(line + Environment.NewLine));
+        stderr.Flush();
     }
 
     /// <summary>Restores the three variables and removes the folder and its claim. Idempotent: whichever of the fixture and the process exit comes first does the work.</summary>
