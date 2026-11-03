@@ -862,9 +862,10 @@ runs them outside a run folder (D10), and drops their bare prefix in the same co
 - **Fails closed, AND a test started without its run folder refuses** *[after the re-review gate, 2026-11-03,
   finding 2]*. In C# the run folder is made by the test assembly's own module initializer, so every start of the
   assembly (the executable, `dotnet test`, `dotnet-coverage`, an IDE) runs it. S3 adds the refusal for a start that
-  skips or loses it: a test that needs the run folder (every suite's first-ordered test of sc. 2, and the S5 sites'
-  suites) checks that `TEMP`, `TMP` and `TMPDIR` name an owner-form run folder this process made, and otherwise fails
-  with one line naming the command to use, before it creates anything. Test: the suite started with the initializer's
+  skips or loses it: a process-wide check, run before any test (in the module initializer or an assembly fixture),
+  verifies that `TEMP`, `TMP` and `TMPDIR` name an owner-form run folder this process made. Otherwise it fails the run
+  with one line naming the command to use. A test-level check cannot guarantee that no other test created resources
+  first: the suites run collections in parallel (`maxParallelThreads: 8`) with no enforced order [PR review, CodeRabbit]. Test: the suite started with the initializer's
   folder removed from the variables ⇒ that line, a non-zero exit, nothing created in the machine temp. RED on `main`.
 
 Scenario: `S5DeferredCSharpSites_AreInsideTheRunFolder` — for each listed site, the suite that runs it asserts that
