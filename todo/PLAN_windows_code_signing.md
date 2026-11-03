@@ -8,6 +8,12 @@
 > .github/workflows/sign-windows.yml`, the Azure setup (its O1–O9) and the facts F1–F11. Findings that
 > matter are carried over below rather than linked.
 
+## Plan changes
+
+> Epoch 1 · approved 2026-11-03 · by reviewers · state: open
+
+  (The approving round's accepted findings 0, 1, 2, 4 and 5 are part of the approved text, not changes of it.)
+
 ## 1. The symptom and the goal
 
 **Symptom.** On Windows 11 with Smart App Control (SAC) on, the extension's *Install the MCP server*
@@ -49,8 +55,8 @@ owner asked for the MCP binary. The same call fits those jobs later. macOS/Linux
 - `Checksum` (`:425-427`) and `Attach to the draft release` (`:439-453`) get a non-Windows `if:`.
 - A new upload: the folder's parent as `unsigned-mcp-${{ matrix.rid }}`, `retention-days: 7`.
 
-**`mcp-sign`** (new) — `needs: mcp-binaries`, the same `if:` as `mcp-binaries`, permissions
-`contents: read` + the federation permission only, and:
+**`mcp-sign`** (new) — `needs: mcp-binaries`, the same `if:` as `mcp-binaries`,
+`permissions: { contents: read, id-token: write }` and nothing else, and:
 
 ```yaml
 uses: oleksandrdubyna88/dew_flow_release_signing/.github/workflows/sign-windows.yml@<40-hex> # v1.0.0
@@ -60,24 +66,28 @@ with:
   required: ${{ startsWith(github.ref, 'refs/tags/') }}
 ```
 
-The shared workflow signs every unsigned `exe`/`dll`, keeps a vendor-signed one as it is, verifies, and
+The shared workflow's contract takes output names WITHOUT the prefix: it downloads `unsigned-NAME`
+(what the leg uploaded) and uploads `NAME`, so the unsigned artifacts never match an `mcp-*` pattern.
+It signs every unsigned `exe`/`dll`, keeps a vendor-signed one as it is, verifies, and
 packs with today's `7z` command and checksum format, proving by hash that the zip holds the verified
 files.
 
-**`mcp-sign-attach`** (new) — `needs: mcp-sign`, tag only, `ubuntu-latest`, `contents: write`.
-Downloads `mcp-win-*`, runs the product check on each FINAL zip —
-`archive-carries.sh <zip> coai-mcp.exe '*e_sqlite3*'` — then `gh release upload … --clobber` of the zip
-and its `.sha256`, exactly as the leg does today. `archive-carries.sh` learns `.zip` (listing by
+**`mcp-sign-attach`** (new) — `needs: mcp-sign`, the same `if:` as `mcp-sign` (a dispatch trial runs
+it too, so V1 exercises the check), `ubuntu-latest`, `contents: write`. Downloads `mcp-win-*`, runs the
+product check on each FINAL zip — `archive-carries.sh <zip> coai-mcp.exe '*e_sqlite3*'` — and then, on
+a tag only (a step-level `if:`), `gh release upload … --clobber` of the zip and its `.sha256`, exactly as
+the leg does today. `archive-carries.sh` learns `.zip` (listing by
 `unzip -Z1`), with tests beside its existing ones (`src_bugs/tests/TheArchiveCheckTests.cs:154` runs the
 script on archives built to be wrong).
 
-**`mcp-release-complete`** (`:455-473`) — `needs: [mcp-binaries, mcp-sign-attach]`. Its
+**`mcp-release-complete`** (`:455-473`, tag only) — `needs: [mcp-binaries, mcp-sign-attach]`. Its
 `verify-and-publish-release.sh` stays the last word on completeness.
 
-**Releasable commit.** A `fix(mcp): …` commit touching a file under `src_mcp/` that honestly describes
-the change (decided at implementation: there is no `src_mcp/README.md`; `RELEASES.md` is
-release-please's), and the release pull request carries the `src_vs_code/CHANGELOG.md` prose the guard
-asks for. The owner merges it only after V1.
+**No release commit of its own.** This change touches only `.github/**` and tests, so release-please
+does not propose an mcp release for it, and no `src_mcp/` file is edited just to force one. The signing
+ships with the NEXT real `src_mcp` change — the mcp line releases often — whose release pull request
+carries the `src_vs_code/CHANGELOG.md` prose the guard asks for, as always. Until then the current
+release stays unsigned; V2 on the trial package (below) has already proven the signed one runs.
 
 **Owner steps here** (the Azure side is the twin's O1–O6): the environment `release-signing` with the
 six variables (twin O7), deployment rule `main` + `mcp-v*` + this PR branch until the merge, which O9
@@ -91,7 +101,9 @@ removes.
    release, the `release.yml` comments).
 3. Owner: twin O1–O8 including this repository's credential and environment.
 4. V1 here: dispatch `target: mcp` on the PR branch.
-5. Merge, O9, then the next mcp release.
+5. V2 on the owner's SAC machine with V1's trial package — before the merge, so nothing is published
+   that SAC would block.
+6. Merge, O9; the next real mcp release carries the signing.
 
 ## 5. Test and verification plan
 
@@ -104,9 +116,13 @@ removes.
   federation permission. Break-it: drop `mcp-sign-attach` from `needs`, watch it fail, restore.
 - The whole existing suite, actionlint, `plan-lifecycle.mjs`, `pin-check.mjs`.
 - **V1** — the dispatch trial signs both zips; downloaded and extracted on the owner's machine,
-  `coai-mcp.exe` and every DLL report `Valid`.
-- **V2** — after the release, on the owner's SAC machine: *Install the MCP server*, then one real
-  review round, which writes the rounds database (loads `e_sqlite3.dll`) — not just `--help`.
+  `coai-mcp.exe` reports `Valid` with the signer's simple name equal to `SIGNING_PUBLISHER` (the
+  organization) and a timestamp; every DLL reports `Valid` — either the same signer, or the vendor
+  signature it already had.
+- **V2** — before the merge, on the owner's SAC machine, the extracted `win-x64` trial package:
+  `coai-mcp.exe --version`, then `coai-mcp.exe --log`, which opens the rounds database and so loads
+  `e_sqlite3.dll`, and `--normalize` on a small file, which loads a grammar. SAC must block none of them.
+- **V3** — after the next mcp release: *Install the MCP server* and one real review round.
 
 ## 6. Growth surfaces
 
@@ -117,5 +133,5 @@ MB each, `retention-days: 7`.
 
 - [ ] PR merged with the tests green and the break-it output in it; `coai` gate plan and code rounds
       resolved.
-- [ ] V1 observed before the merge; the next mcp release signed; V2 observed on a SAC machine.
+- [ ] V1 and V2 observed before the merge; the next mcp release signed; V3 observed.
 - [ ] Plan promoted to `research/` with its deviations.
