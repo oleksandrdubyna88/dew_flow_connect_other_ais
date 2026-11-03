@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 /// the PROCESS, and the next <c>BuildWork</c> anywhere then walks the real temp folder inside its round's deadline (C6 of
 /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>). It is also an assembly fixture; the attribute changes nothing about that.</para>
 /// <para><b>It counts in the MACHINE's temp folder, <see cref="RunTemp.Real"/> — not the run's.</b> Since E2 every run makes everything inside its own
-/// <c>testsToDelete-coai-run-&lt;6&gt;</c> folder, with the three temp variables pointed at it (<see cref="RunTemp"/>), so <c>Path.GetTempPath()</c> is the
+/// run folder — since E5 S3 <c>testsToDelete-&lt;owner&gt;-coai-run-&lt;id&gt;</c>, claimed first — with the three temp variables pointed at it (<see cref="RunTemp"/>), so <c>Path.GetTempPath()</c> is the
 /// run's folder; the leftovers of EARLIER runs and of the product are in the real one. The run folder and its restore belong to
 /// <see cref="RunTempFixture"/>, which has no test methods — never to this class.</para>
 /// </remarks>
