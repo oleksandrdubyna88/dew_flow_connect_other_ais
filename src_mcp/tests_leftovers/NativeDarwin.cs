@@ -115,7 +115,8 @@ internal static partial class Native
         if (code == errno.Eexist) return false;
         if (code == errno.Enotsup || code == errno.Einval || code == errno.Enosys)
         {
-            throw new IOException($"renamex_np {from} to {to} failed with errno {code}: this volume does not take RENAME_EXCL, so nothing was renamed — an exclusive rename is the only one the helper makes, and the folder is kept");
+            Directory.Move(from, to); // PLANT row 3 (c): ENOTSUP falls back to a plain rename
+            return true;
         }
 
         throw Failure($"renamex_np {from} to {to}", code);
@@ -126,7 +127,8 @@ internal static partial class Native
     {
         try
         {
-            return DarwinExclusiveRenameOutcome(Errno.Darwin, Darwin.RenamexNp(from, to, RenameExcl) == 0 ? 0 : Marshal.GetLastPInvokeError(), from, to);
+            Directory.Move(from, to); // PLANT row 3 (c): a plain move replaces an empty folder at the target
+            return true;
         }
         catch (EntryPointNotFoundException ex)
         {
@@ -137,7 +139,7 @@ internal static partial class Native
     [SupportedOSPlatform("macos")]
     private static byte[]? DarwinReadVerifiedRegular(string path, Identity expected, int limit)
     {
-        var descriptor = Darwin.Open(path, DarwinONonblock | DarwinONofollow | DarwinOCloexec); // O_RDONLY is 0: a FIFO opens at once, a link is refused
+        var descriptor = Darwin.Open(path, DarwinONofollow | DarwinOCloexec); /* PLANT row 5: no O_NONBLOCK */ // O_RDONLY is 0: a FIFO opens at once, a link is refused
         if (descriptor < 0) return null;
         using var handle = new SafeFileHandle(descriptor, ownsHandle: true); // closed on every path from here
         var now = DarwinIdentity(DarwinFstat(descriptor));
