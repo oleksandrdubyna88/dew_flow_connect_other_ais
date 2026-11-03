@@ -1,6 +1,21 @@
 # PLAN — Test leftovers, E5: coai's run folder takes the owner form, both test sweeps judge by owner, and the product's `coai-*` directories stay untouched
 
-> Status: **revised 2026-11-03 at the parent's epoch-3 re-review (entry 2.2 of the parent's ledger); epoch 3 waits for
+> Status: **revised 2026-11-03 at the parent's epoch-4 re-review (entries 3.1 and 3.2 of the parent's ledger, found
+> writing S3's build brief); epoch 4 waits for the owner's approval (the record says `Narrowed: yes`), and no E5 story
+> takes new code until then.** Epoch 3 was approved by the owner (2026-11-03), and this document was merged for it as
+> #942 (`004c55fb`). The producer branch has no code; S3's build brief exists. Two changes: D2 becomes an ADAPTED copy of
+> the template (a pinned manifest, permitted transformations per file, a diff check), and the DoD names the suite × OS
+> matrix coai's CI runs. A new prerequisite: the conventions' F24 (the baseline proof rule) is released and pinned before
+> S6 creates its baseline. S3's fail-closed mechanism is the gated custom `Main` (exit 78). This document keeps no ledger:
+> its changes are entries of the parent (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`). What epoch 4
+> supersedes carries a dated note *[epoch 4, 2026-11-03]* in place.
+> *After the two re-review plan gates (2026-11-03):* each OS's proofs are named CI steps (D8); a rollback procedure is
+> D11; F24 needs an acceptance check against the released guard and the real test host before S6; S3 adds a fallback
+> check behind the gate, lets pure information flags pass, and keeps the diff check's golden source in coai; S2-B proves
+> its sweep runs before any test collection. Gate finding e3 was rejected (the custom `Main` was built and run in the
+> S3 brief's probe).
+
+> Was: **revised 2026-11-03 at the parent's epoch-3 re-review (entry 2.2 of the parent's ledger); epoch 3 waits for
 > the owner's approval (the record says `Narrowed: yes`), and no E5 story takes new code until then.** S1 is done (#936;
 > the pin is at `cc24f9e` since #941). S2-A is done (#940, `d02ed40e`, 2026-11-02). S5 started on 2026-11-03 on three
 > branches and stopped with the plan (local work only). S5 is NARROWED here (§ *S5 as revised at the epoch-3
@@ -366,6 +381,36 @@ findings, and the `raw-temp` baseline filter of D6 lives in coai's OWN wrapper t
 `src_mcp/tests/Leftovers/LeftoversRepositoryGuardTests.cs` (coai's file, not a copy of the template's one-assertion
 test), which calls `Scan`, subtracts the baseline's entries, and asserts the rest is empty. *Kept from October* in its
 shape; *changed*: a copy, not a design.
+*[epoch 4, 2026-11-03]* **Revised: an ADAPTED copy** (the parent's entry 3.1 and its epoch 4, item 4; re-review consult `8d309111`).
+Byte identity "except the namespace line", and "`LeftoversGuard.cs` stays byte-identical", cannot hold: the template
+hard-codes mcp's mount path (`LeftoversGuardScripts.cs:20`, `.claude/rules/shared/tools/lib/sweeper-scan.mjs`;
+`OwnerVectors.cs:11`), its helper paths (`LeftoversGuard.cs:47-48`, `tests/Mcp.Tests/Leftovers/…`; `:60-66`) and an mcp
+type (`RepositoryIdentity.Row`), and coai cannot mount the rules under `.claude/rules` (`.agents/PROJECT.md`). The copy is:
+
+- **A pinned file manifest**, from `dew_flow_mcp` `197cc76`: the 51 files of `tests/Mcp.Tests/Leftovers/` (not 54), plus
+  `tests/Mcp.Tests/DirectoryLinks.cs` (used at `DarwinLayout.cs:130`) and `tests/Mcp.Tests/RepositoryRoot.cs` (used at
+  `OwnerVectors.cs:11`). Each entry says where the file goes: the library `src_mcp/tests_leftovers/`, or the test
+  project `src_mcp/tests/Leftovers/` when it holds `[Fact]`s — the `*Tests.cs` files AND `DarwinFifoChild.cs` and
+  `LeftoversSelfTest.cs`, which hold `[Fact]`s without that suffix.
+- **Per file, the permitted transformations**: the namespace; `OwnedToken.cs` rewritten; the mount path
+  `.claude/rules/shared` → `.agents/conventions`; mcp's helper paths and folders → coai's (coai has TWO helper folders,
+  the library and the test project); `RepositoryIdentity.Row` → coai's identity; and the edits S3's and S6's briefs list,
+  each by file and line. The known sites (S3 brief § 14 item 2, spot-checked on `197cc76`): `OwnedTests.cs:24`
+  (`-mcp-pg-`), `OwnerVectors.cs:11`, `LeftoversSweepFixture.cs:3` (a fully qualified type), `LeftoversAuditException.cs:35`;
+  for S6, `LeftoversGuard.cs:47-48`, `:60-66`, `LeftoversGuardScripts.cs:20`, `LeftoversGuardTokens.cs:98`, `:126`,
+  `LeftoversGuardFiles.cs:28`, `:63-64`, `LeftoversJanitorTests.cs:17`, `:32`, `LeftoversAuditTests.cs:223`,
+  `LeftoversGuardTests.cs:264`, `:350-352`, `:394`, `:474`, `:557`, `:579`, `:607`.
+- **A diff check** (a test or a script in the PR) that compares every manifest file with the template at `197cc76`
+  and fails on any change the manifest does not permit, naming file and line.
+- **The ownership, liveness and deletion algorithms unchanged** (`Owned`, `OwnedDir`, `Owner`, `Liveness`, `Scope`,
+  `Native*`, `Removal`, `LeftoversSweep`, `LeftoversAudit`), unless a change is separately reviewed.
+
+Also settled for D2: `RunTemp.cs` moves into the library (no `[ModuleInitializer]` there any more), and each of the four
+test projects gets its own `RunTempStart.cs` (the initializer) and `TestEntryPoint.cs` (the gated `Main`, S3); the
+library references `CoaiMcp.Runners`, because `TempDir` keeps `GitScratch.DeleteEvenIfReadOnly` (S3), so the bench tests
+get it transitively — the "*Loses:* … the bench project does not reference `Runners`" reason above no longer holds.
+Making the template parameterised upstream is NOT done now; it is a possible later follow-up if the same adaptations
+recur in E2, E6 or E7.
 
 **D3 — The Node side wraps the reference** (decision 11, R7). `run-tests.mjs`, `run-host.mjs`, every runner in
 `src_vs_code/scripts`, `http/run-contracts.mjs` and `scripts/lib/*.test.mjs` import `ownedFor` from the mounted
@@ -484,6 +529,29 @@ holds: S5 has no stage-A part. The producer PR merges only when S2-A (#940) is o
 carries, in this commit order, S3 → S2-B → S4 → **S5** → S6: S5 is the renames of every eligible site, and the PR also
 carries every site S5 deferred (S3, S4). Conditions (b)–(h) stand; S6's check is the exemption contract of S6 (zero
 UNEXEMPTED `owner-blind` and `legacy-name`, and the expected-exemption inventory equal to the guard's list).
+*[epoch 4, 2026-11-03]* **Three conditions added, one read anew** (the parent's epoch 4, item 3): (i) F24 of the conventions' follow-ups
+(the baseline proof rule accepts a process-wide gate before discovery) is released and coai's pin carries it — a pin bump
+alone — BEFORE S6 creates the baseline; (j) the adapted copy's diff check (D2) is green; (k) condition (4), "the macOS,
+Windows and Linux legs are green", is read as the suite × OS matrix of the DoD: every suite green on every leg CI runs
+it on, and the ownership and startup proofs (the run folder, fail closed, the refusal) green for every suite on all
+three OSes; the counts reconciled by name. P1 still holds: until it is recorded, Windows evidence comes from CI only.
+*[re-review plan gates, 2026-11-03: the parent's session `7c66b50d`, findings r0–r5; this document's session `7a6707ad`, findings e0–e2]* **(k) is replaced by named merge gates** (findings r0, r3). The run-folder LIBRARY is shared code: its proofs
+(owner-form folder, claim first, fail closed with exit 78, the refusal) run on all three OSes through the suites that
+run there. Each suite's OWN wiring (`RunTempStart.cs`, `TestEntryPoint.cs`, its `RunFolderTests`) is proven where a CI
+step runs that suite. Each cell with a step is a merge gate: green on the PR's head (`ci.yml` lines at `004c55f`; NEW =
+added by S3):
+
+| What is proven | Linux | macOS | Windows |
+|---|---|---|---|
+| the library (via `CoaiMcp.Tests`) and mcp's wiring | `build-test` `Test` (`:58`) | `macos`: NEW `The stat layout self-test`, NEW `Leftovers`, then `Test` (`:282`) | `windows`: NEW `Step 0` first, then `Test` (`:317`) |
+| server's wiring | `:77` | `:285` | NEW filtered step after `Test`: `CoaiServer.Tests.exe --filter-class "*RunFolderTests"` |
+| bench's wiring | `:64` | `:288` | — (bench never runs on Windows) |
+| bugs' (ingest) wiring | `:88` | — | — (Linux only: `:258-259`; `release.yml` `bugs-binaries` is Linux too) |
+
+`release.yml` `server-binaries` (`:619`, test line `:694`) runs the server suite on Windows x64 and arm64 and macOS arm64
+at release time: release evidence, not a merge gate. **(l) NEW (finding r2):** before S6 creates the baseline, F24's
+acceptance check has passed against the RELEASED guard and THIS repository's real test host (S6's note). **(m) NEW
+(finding r1):** the rollback procedure of D11 is written in the PR description before it merges.
 
 **D9 — The end-of-run audit is copied, and bounded to the run folder.** `LeftoversAudit` (never-disposed,
 disposed-not-removed, claimed-in-temp-root) runs at the end of every C# suite as in the template — but coai's four
@@ -491,6 +559,9 @@ suites run one after another in one CI job (`build-test`, the macOS job) and on 
 reads ONLY the entries whose claim record is THIS process's, never every entry under the shared `TESTSTODELETE_RUN`
 record (wave 1 defect A: the first child to finish deleted its siblings' folders). The audit self-test steps of the
 template's CI (`selftest`, `selftest-failed`) are copied to all three legs.
+*[epoch 4, 2026-11-03]* The audit SOURCE (`LeftoversAudit.cs`, `LeftoversAuditException.cs`) lands in S3, unwired, because S3's
+`LayoutGateTests` (#10) needs `LeftoversSweepFixture`, which needs it; its tests, its wiring and the self-test steps stay
+in S6.
 
 **D10 — Containment is a property of each invocation, not of the file** *[epoch 3, 2026-11-03; the parent's epoch 3,
 § 4]*. A site may lose its bare prefix (rule §1: inside an owned resource a name needs none) only when EVERY
@@ -510,6 +581,18 @@ either makes it REFUSE — a test that needs the run folder checks the runner's 
 one line naming the command to use, before it creates anything — or names it as uncontained, and the site keeps its
 prefix. S3 does this for C#, S4 for Node. A runner's fallback is uncontained too, so S3 and S4 also make both runners
 fail closed. Until both are done, NO S5 site is contained.
+
+**D11 — Rolling back the producer PR** *[re-review plan gate, 2026-11-03, the parent's session `7c66b50d`, finding r1]*. A
+plain revert of the squash merge is NOT the first step: it brings back the legacy producers while owner-form folders
+already exist on machines. The order:
+
+1. **Switch off the destructive start-of-run sweep** (S2-B) with a one-line, reviewed change (the sweep lists and
+   removes nothing; its fixture stays registered). Owner-form creation and teardown stay ON, so every run still removes
+   what it made.
+2. **Account for what exists:** `bash .agents/conventions/tools/janitor.sh --token coai --dry-run` on every machine
+   that ran the suites (and the CI legs' own logs) lists the owner-form folders and claims already created.
+3. **Then revert or repair** the faulty part in a NEW PR, with its own gates; the listed folders are removed by the
+   janitor or by the next good sweep, never by hand by name alone.
 
 **Growth surface** (the shared planning rule § *A plan that creates something that GROWS*). Owned folders: ONE run
 folder per runner invocation (five C# suites and the extension: six per full run on a machine; plus one per runner
@@ -551,6 +634,11 @@ closed, under every invocation, with a refusal for a direct start; and S6's guar
 it must read the tree after the renames. The squash merge makes the five commits one commit on `main`; the order is for
 the review and a bisect on the branch. The section headings below keep their old commit numbers (S6 says "commit 4").
 
+*[epoch 4, 2026-11-03]* Two rows read anew: **S3** is the ADAPTED copy of D2 (a manifest, permitted transformations, a diff check) with
+the gated custom `Main` (exit 78); **S6** also depends on F24 of the conventions (the baseline proof rule) released and
+pinned — a pin bump alone — before it creates the baseline. S3, S2-B, S4 and S5 do not wait for F24. The DoD of every
+commit is the suite × OS matrix of the DoD, not "the three legs".
+
 *The table of 2026-11-01 — superseded 2026-11-03 by the table above* (its S5 row said "any time before the producer
 PR" with a DoD of zero bare-prefix lines outside the two helper files; the S5 build showed that this cannot be done
 before S3 and S4 give the outside sites an owned folder — the parent's entry 2.2):
@@ -584,6 +672,9 @@ names the difference.
 | A contract finding from this epic | — | goes back to the parent as a note (§ *Notes for the parent*), not into the mounted copy |
 
 Disjoint otherwise: E5 changes nothing in `dew_flow_conventions` or in `dew_flow_mcp`.
+*[epoch 4, 2026-11-03]* The E3 row's "byte-identical except the namespace … edits exactly three files … keeps `LeftoversGuard.cs`
+byte-identical" is superseded by D2's adapted copy (a manifest, permitted transformations, a diff check). F24 is a new
+row of the conventions' side: the baseline proof rule, built and released there, pinned here before S6.
 
 ## Must not copy back in — wave 1 and the Darwin follow-ups, each with its RED-GREEN-RED test here
 
@@ -612,6 +703,10 @@ recorded in the PR; a planted violation never stays in CI). Story: where the tes
 | 14 | **coai's own:** `.then(process.exit).finally(cleanup)` never cleans (`run-host.mjs:115-127`) | `runHost.test.mjs` with an injected launch that resolves and one that rejects: the owned folders and claims are gone after `main` settles. RED on `main` today | S4 |
 | 15 | **coai's own:** a claim whose `<os>` is Node's `win32`/`darwin` (`OwnerClaim.cs:38`) is foreign to every reader of the contract's grammar | the C# and Node writers emit `windows`/`macos`/`linux`; the copied `Owner.Parse` reads the C# claim and the reference's `parseOwner` reads it too (the vectors file of the template, `OwnerVectors.cs`, extended by coai's cross-reader rows). RED with the old tag | S3, S4 |
 | 16 | **coai's own:** a move that replaces a claim (`WorktreeManager.WriteOwner` shape) and a two-valued owner (`OwnerIsAlive`, `OwnerClaim.Judge`) | `AClaimThatAlreadyExists_IsNeverOverwritten` (October sc. 5a, kept): the helper handed a taken name throws, removes only what it made, the existing claim keeps its bytes; the three-valued `Liveness.State` table of the template (`LivenessStateTests`) copied. RED with a `File.Move`/`WriteAllText` claim | S3 |
+
+*[epoch 4, 2026-11-03]* Row 15's "the vectors file of the template, `OwnerVectors.cs`, extended by coai's cross-reader rows" cannot be done
+in the copy: `OwnerVectors.cs` reads the MOUNT's file (`OwnerVectors.cs:11`, another repository's). coai's cross-reader
+rows go in a coai-owned file, `shared/owner-record-cross-vectors.json` (the name of S3's brief), read by coai's own test.
 
 ## S1 — The pin bump to `105d53c` — DONE
 
@@ -707,6 +802,15 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
   C# test projects' `[assembly: AssemblyFixture]` wiring; `src_vs_code/scripts/run-tests.mjs` (`sweepFirst` becomes
   `sweepLeftovers` of the mount); `src_vs_code/scripts/owned.mjs` (D3); `src_vs_code/src/test/sweepTemp.test.mjs` →
   `leftoversSweep.test.mjs`; `research/module_tests.md`.
+  *[epoch 4, 2026-11-03]* "(S3 brought them)" is corrected: the copied `LeftoversSweepTests` take the fixture as a constructor
+  parameter, so they land HERE, when the fixture is wired. S2-B registers `LeftoversSweepFixture` as the assembly fixture
+  in EACH of the four test assemblies (each its own `[assembly: AssemblyFixture(...)]` line; the template's line is a
+  fully qualified mcp type, `LeftoversSweepFixture.cs:3`). S3 brings the sweep's source only.
+  *[re-review plan gate, 2026-11-03, session `7a6707ad`, finding e1]* **The order must be PROVEN, not assumed.** S2's
+  spec writes a test on the pinned xUnit v3 version (4.0.1) that shows the start-of-run sweep FINISHES before any test
+  collection runs: the fixture records the sweep's end, the earliest test of every collection records its start, and
+  the test asserts the end is before every start. If the pinned version does not guarantee it, the sweep moves into the
+  gate (`RunTemp.Gate`, before discovery), and the spec says so.
 - **What the Fable spec must settle (B):**
   1. **Where the C# sweep runs and who calls it.** The copied `LeftoversSweepFixture` as an assembly fixture in EACH of
      the four C# suites (rule §4: every run that creates the kind sweeps it at its start — all four make a run folder
@@ -872,6 +976,86 @@ Scenario: `S5DeferredCSharpSites_AreInsideTheRunFolder` — for each listed site
 the site's path is inside `Path.GetTempPath()` = the run folder; the guard (S6) reports zero `legacy-name` for the
 file. DoD addition: every listed site renamed, each in an invocation that the inventory shows as contained.
 
+**S3 as revised at the epoch-4 re-review (2026-11-03).** S3's build brief (by Opus, 2026-11-03, against this document
+at `004c55fb`) found the parent's entries 3.1 and 3.2 and the items below. Each is settled here; where this block and
+the text above differ, this block wins.
+
+- **Review.** Opus reviews against D2's MANIFEST and its diff check, not against "a diff empty but the namespace".
+- **Files, added or changed.** The manifest and the diff check (D2). `RunTemp.cs` moves into the library;
+  `src_mcp/tests` does NOT keep its initializer in `RunTemp.cs`: each of the FOUR test projects gets `RunTempStart.cs`
+  (its `[ModuleInitializer]`) and `TestEntryPoint.cs` (the gated `Main`). `[Fact]` files without a `*Tests` name
+  (`DarwinFifoChild.cs`, `LeftoversSelfTest.cs`) go to the test project. The audit source lands unwired (D9's note).
+  `sonarcloud.yml:254`'s `sonar.coverage.exclusions` gains `src_mcp/tests_leftovers/**`, which `**/tests/**` does not
+  match. A coai-owned cross-reader vectors file, `shared/owner-record-cross-vectors.json` (#15's note).
+- **The order of the run folder.** `OwnedDir.Create` writes the claim (exclusively, first) and makes the folder in ONE
+  call; the restore of the three variables is registered AFTER it returns (the template's own shape,
+  `dew_flow_mcp · tests/Mcp.Tests/Leftovers/OwnedDir.cs:6-9`). A restore registered between the claim and the folder
+  could, after a redraw past a squatter, remove by a name the run never made. Scenario 1's recorded order becomes:
+  claim → folder (one `Create` call) → restore registered → variables. S2-B's hook between the claim and the folder is
+  `RunTempSeams.AfterClaim`, forwarded to `OwnedDir.Create(…, afterClaim:)` (`OwnedDir.cs:136` there).
+- **`TempDir` keeps its deleter.** `TempDir.Dispose` keeps `GitScratch.DeleteEvenIfReadOnly` (the read-only clearing that
+  `TempDir` and E2's run folder rely on; `RunTempFolder.cs:18`) and keeps re-throwing `LinkTargetLostException`
+  (`TempDir.cs:49`; scenario 6). "`Removal.Quietly` is the one deleter for … `TempDir.Dispose`" (the change, above) is
+  WITHDRAWN: `Removal.Quietly` never throws and does not clear read-only bits. It stays the deleter of the library's
+  owned folders.
+- **The fail-closed mechanism: a gated custom `Main`.** Each test project sets
+  `<XunitAutoGeneratedEntryPoint>false</XunitAutoGeneratedEntryPoint>` and has its own `Main` in `TestEntryPoint.cs`:
+  xUnit's generated body, UNCHANGED, behind `RunTemp.Gate`. The module initializer runs first and makes the folder. The
+  gate refuses when the folder could not be made, the claim could not be written (fail closed covers the claim too),
+  the macOS layout does not hold (`DarwinLayout.Require`), the initializer did not run, the folder is gone, or `TEMP`,
+  `TMP` and `TMPDIR` do not all name it. A refused run: exit **78** (EX_CONFIG; outside MTP's 0-13; coai already uses 78
+  for a configuration fault, `src_mcp/src/Api/ProbeApiMode.cs:41`), stdout empty, ONE stderr line that starts
+  `coai tests: no test ran — ` and names the executable to run. `Main` runs before discovery, any fixture, any
+  `MemberData` and any test, for every start of the assembly (the executable, MTP `dotnet test`, `dotnet-coverage
+  collect --`, an IDE). This settles the two notes above ("How a C# executable fails closed", "Fails closed, AND a test
+  started without its run folder refuses") and scenario 3a. Measured by the brief on a scratch build (xunit.v3 4.0.1,
+  Microsoft.Testing.Platform 2.4.0): refused with exit 78 before discovery; a throw from `ITestPipelineStartup.StartAsync`
+  or from the module initializer aborts the host (exit 134); an assembly fixture runs after discovery; the platform's
+  lifetime hooks give no supported way to set the exit code. This revision did not re-run that measurement.
+- **Scenario 2's "ordered first"** cannot hold: the suites run collections in parallel (`maxParallelThreads: 8` in all
+  four `xunit.runner.json`). The guarantee is the gate in `Main`. The per-assembly test that asserts `TEMP` names the
+  run folder stays (it carries the baseline's proof marker for S6) and needs no order once F24 is pinned.
+- **Commands.** "on Windows (CRLF)" is superseded: until P1 is recorded, this branch's C# suites do not run on the
+  Windows side of an unrecorded machine; Windows evidence comes from the `windows-latest` CI leg only. Local runs: WSL,
+  after a fresh barrier scan. The macOS steps are `ci.yml:282`, `:285`, `:288` on `004c55f` (the change above says
+  `:281-287`).
+- **DoD (S3, revised).** Every scenario RED then GREEN; the diff check green against the manifest; the suite × OS
+  matrix: every suite green on every leg CI runs it on — Linux: all four (`ci.yml:58`, `:64`, `:77`, `:88`); macOS: mcp,
+  server, bench (`:282`, `:285`, `:288`); Windows: mcp (`:317`); the ingest suite is Linux-only by design (`:258-259`);
+  and at release time `release.yml` server-binaries runs the server suite on Windows (x64, arm) and macOS as well, so the
+  server suite DOES run on Windows (checked job by job at 004c55f, [PR review on the stop, CodeRabbit]) —
+  AND the run-folder, fail-closed and refusal tests of EVERY suite green on all three OSes (filtered steps on the legs
+  that do not run the whole suite, or a small cross-OS job where a suite cannot run there); the counts reconciled BY
+  NAME (each test added, removed or skipped by platform, listed in the PR), not "the same counts"; the private
+  machine-temp measurement of E2 repeated per suite on Linux: 0 entries after a whole run.
+
+*[re-review plan gates, 2026-11-03: the parent's session `7c66b50d`, findings r0–r5; this document's session `7a6707ad`, findings e0–e2]* Four additions to S3, and one rejection:
+
+- **The CI steps are D8's merge-gate table** (findings r0, r3). S3 adds: in job `windows`, `Step 0` first and, after
+  `Test`, the filtered `CoaiServer.Tests.exe --filter-class "*RunFolderTests"`; in job `macos`, `The stat layout
+  self-test` and `Leftovers` before `Test`. The S3 brief's filtered `CoaiBugs.Tests` and `CoaiBench.Tests` steps on
+  Windows, and `CoaiBugs.Tests` on macOS, are WITHDRAWN: the bugs suite runs on Linux only, and bench never runs on
+  Windows. The DoD above ("the run-folder, fail-closed and refusal tests of EVERY suite green on all three OSes") is read
+  as that table: the library's proofs on all three OSes; each suite's wiring where its step runs.
+- **Pure information flags pass** (finding e0). `RunTemp.Gate` lets `--help`, `--version` and `--info` through: they run
+  no test and no discovery. The module initializer has already made, claimed and registered the run folder before
+  `Main` runs (on every start of the assembly), so these flags run INSIDE it and the folder is removed at exit like any
+  run's; the gate does not refuse them for a missing folder [PR review, CodeRabbit: the first text said "with no run
+  folder", which the initializer makes impossible]. `--list-tests` is gated like a test run, because discovery runs
+  `MemberData`. A test for both: each information flag exits as the platform does, and its run folder is gone after it;
+  `--list-tests` with the folder forced to fail exits 78 with the one line, and the `MemberData` sentinel is untouched.
+- **A fallback behind the gate** (finding r4). Besides the gated `Main`, a check at the first point any test can reach
+  (the `RunTempFixture` assembly fixture) fails the run with the SAME one line when the gate did not run (a host that
+  bypassed `Main`). The module initializer still makes the folder; the fallback refuses when `RunTemp.IsActive` is
+  false. Test: the fixture started with the gate flag unset ⇒ the line, and no test body runs.
+- **The diff check's golden source** (finding r5). A committed manifest in coai (next to the library) holds, per copied
+  file, the upstream path at `dew_flow_mcp` `197cc76`, the upstream git blob SHA and the expected list of
+  transformations. The check reads the copy, undoes the listed transformations, and compares the result's blob SHA
+  with the manifest's. It needs no network and keeps NO vendored copy of the upstream files; when it is red, a reviewer
+  fetches the named blob from dew_flow_mcp.
+- *Rejected (finding e3):* that `XunitAutoGeneratedEntryPoint=false` with a custom `Main` may not build or run. The S3
+  brief built and ran it (xunit.v3 4.0.1, Microsoft.Testing.Platform 2.4.0): a refused run exits 78 before discovery.
+
 ## S4 — The Node producers wrap the reference (commit 3 of the producer PR)
 
 - **Models.** Brief by Opus; code by a Sonnet coder; review by Opus against rule §1–§3, D1, D3, decision 11 and
@@ -948,6 +1132,10 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
   line, a non-zero exit, no batch ran) and a direct `node --test` of one renamed extension test and one `scripts/lib`
   test ⇒ that line, a non-zero exit, nothing created. RED on `main`. `sonarcloud.yml:302` goes through the runner first,
   or this refusal would fail that job.
+- *[epoch 4, 2026-11-03]* **Every direct invocation enters containment or refuses.** Each row of D10's inventory that
+  starts a Node test or script outside the runner — `sonarcloud.yml:302` (the coverage run), `ci.yml:197`, the runner
+  scripts, a person's direct `node --test` — either runs inside an owned folder of the wrap, or refuses with one line
+  before it creates anything. The S4 commit lists each row with its outcome.
 
 Scenarios: the guard (`leftovers-check.mjs --profile node --token coai`) on the whole repository reports zero
 `legacy-name` and `owner-blind` for every listed line; `sonarcloudRunsThroughTheRunner` — a test that reads
@@ -1155,6 +1343,30 @@ DoD addition: zero `owner-blind` and `legacy-name` findings on the whole reposit
 the named exemptions (helper-own lines and the listed inline `legacy-name` exemptions of test fixtures); no prefix
 built from pieces; the PR lists every S5 deferral and where it was handled; the baseline is one file at the root.
 
+*[epoch 4, 2026-11-03]* **S6 waits for F24.** F24 of the conventions' follow-ups changes the baseline proof rule
+(`common/test-leftovers-baseline.md:19` at `cc24f9e` asks for "a test per assembly or package, ordered first"): a
+process-wide gate that enforces containment before discovery — S3's gated `Main` — satisfies "a run that cannot make
+it fails before any test", and the marked assertion test stays without an order. S6 creates the baseline only after a
+release carrying F24 is pinned here, by a pin bump alone. Its guard edits are the manifest's (D2: `LeftoversGuard.cs:47-48`,
+`:60-66` for coai's two helper folders, and the rest of D2's list). **Seeded violations in every actual test root**:
+one planted site per root — `src_mcp/tests`, `src_mcp/tests_leftovers`, `src_mcp/tests_fakecli`, `src_server/tests`,
+`src_bugs/tests`, `src_bench/CoaiBench.Tests`, `src_vs_code/src/test`, `scripts/`, `.github/workflows`, and every other
+root the two guards scan (`.github/scripts/`, `http/`) — each red,
+naming file and line, then reverted; plus a scope whose proof file is missing ⇒ a `baseline` finding, and a stale
+entry ⇒ a `baseline` finding. The repository-wide guard test lands here, never in S3 (before S5 and S6 it fails on
+the whole tree).
+
+*[re-review plan gates, 2026-11-03: the parent's finding r2; this document's finding e2]* Two more checks, both before
+S6 creates the baseline:
+
+- **F24's acceptance check** (r2), against the RELEASED guard (the pin carrying F24) and THIS repository's real C# test
+  host: a run under the gate passes the guard's proof check for each scope; a forced folder failure and a forced claim
+  failure each exit 78 before discovery, with the S3 brief's `MemberData` sentinel untouched. The output is recorded
+  in the PR.
+- **The baseline is found from both places** (e2): a companion test that `RepositoryRoot.cs` finds
+  `raw-temp-baseline.json` at the repository root both when started from the project folder and when started from the
+  binary output folder (`bin/Release/net10.0/`), as CI starts the executables.
+
 ## S7 — The drain: the `raw-temp` baseline to zero (stage C, after the producer PR)
 
 - **Models.** Brief by Opus (one brief per suite, listing the files and the helper call for each shape); code by one
@@ -1209,6 +1421,11 @@ built from pieces; the PR lists every S5 deferral and where it was handled; the 
       the run folder of all four C# suites is the owner form, claimed first, in the contract's grammar; Step 0 on
       Windows measured; the Darwin layout self-test runs first on the macOS leg; the E2 measurement (0 entries) repeated
       per suite.
+      *[epoch 4, 2026-11-03] Superseded by the next line* (the copy is adapted, and the legs are the matrix).
+- [ ] *[epoch 4]* S3 (revised): the adapted copy's manifest and diff check are green (D2); `RunTempStart.cs` and the gated
+      `TestEntryPoint.cs` in each of the four test projects; a refused run exits 78 with one `coai tests: no test ran — `
+      line, before discovery; the suite × OS matrix green (S3's revised DoD); the run-folder, fail-closed and refusal
+      tests of every suite green on all three OSes; the counts reconciled by name.
 - [ ] S2-B: every C# suite and the extension runner sweep at their start on two keys, by identity, through the
       quarantine; legacy names listed (C#) or collected on `gone` only (Node); concurrent sweeps never fail; the sweep
       never fails the run.
@@ -1243,6 +1460,15 @@ built from pieces; the PR lists every S5 deferral and where it was handled; the 
       each tested RED then GREEN.
 - [ ] *[epoch 3]* S6: the `raw-temp` baseline is ONE file at the repository root, with one scope per tree; every scope's
       proof holds under every invocation of its tree.
+- [ ] *[epoch 4]* S6: created only after F24 is released and pinned here (a pin bump alone); seeded violations red in
+      every actual test root; a missing proof and a stale entry each a `baseline` finding.
+- [ ] *[epoch 4]* S2-B: the sweep fixture registered in each of the four test assemblies; the copied sweep tests landed
+      with it.
+- [ ] *[re-review plan gates, 2026-11-03]* D8's merge-gate table green (each named step on the PR's head); the S2-B
+      order test (the sweep ends before any collection starts) or the sweep moved into the gate; the gate's information
+      flags pass and `--list-tests` is refused, both tested; the fallback check behind the gate tested; the diff check
+      reads the committed manifest (upstream path, blob SHA, transformations) with no network; F24's acceptance check
+      recorded before S6; the `RepositoryRoot` baseline test from both folders; D11's rollback procedure in the PR.
 - [ ] S7: the baseline drained to zero and deleted.
 - [ ] `research/module_tests.md` describes the run folder in its owner form, the sweep in two languages, the one-off
       clean-up, the residual risk, the two guards and the baseline's drain.
@@ -1446,6 +1672,10 @@ The October notes 1–12 are kept below with what changed; 13–18 are new.
 19. **Containment is per invocation (D10)** *[epoch 3]*: the S5 build found that a file is not "inside the run folder";
     an invocation is. `sonarcloud.yml:302` and `ci.yml:197` run test files with no run folder. The parent adds an
     invocation inventory to every remaining prep or rename story (its epoch 3, § 4).
+20. **The template is mcp-shaped (the parent's entry 3.1), and the DoD's legs were not coai's CI (entry 3.2)**
+    *[epoch 4]*: D2 is an adapted copy (a manifest, permitted transformations, a diff check); the DoD names the suite ×
+    OS matrix; S6 waits for F24 (the baseline proof rule). Upstream parameterisation of the template is a possible later
+    follow-up for dew_flow_mcp's owner, if E2, E6 or E7 need the same adaptations.
 14. **A shared rule change is needed before E5's producer PR** *[round-1 finding 7, consult `abcaae48`]*: rule §7's
     `raw-temp` class needs a baseline form — only for sites proven inside an owned run folder, exact membership plus
     content hash, only shrinking, the line number a hint — written as its own plan in `dew_flow_conventions`, released,
