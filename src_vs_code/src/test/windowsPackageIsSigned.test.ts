@@ -129,7 +129,7 @@ test('a Windows leg builds no zip and attaches nothing', () => {
 
   assert.match(attach, /if: .*!startsWith\(matrix\.rid, 'win-'\)/, 'the attach is for the other RIDs only');
   assert.match(attach, /startsWith\(github\.ref, 'refs\/tags\/mcp-v'\)/, 'and still tag-only');
-  assert.match(checksum, /if: !startsWith\(matrix\.rid, 'win-'\)/, 'the checksum has nothing to sum on Windows');
+  assert.match(checksum, /if: \$\{\{ !startsWith\(matrix\.rid, 'win-'\) \}\}/, 'the checksum has nothing to sum on Windows');
   assert.doesNotMatch(withoutComments(pack), /7z a/, 'no zip is made before signing');
 });
 
