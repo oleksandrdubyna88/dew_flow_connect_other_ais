@@ -27,7 +27,8 @@ import { spawnSync } from 'node:child_process';
 import { availableParallelism, hostname, tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { readRule, startOfRun } from './startOfRun.mjs';
+import { fileURLToPath } from 'node:url';
+import { readRule, readSweepSwitch, startOfRun } from './startOfRun.mjs';
 
 /**
  * Every test file under `root`, by extension: compiled ones from `out/test`, source ones from
@@ -101,23 +102,117 @@ function run(files) {
  */
 export const REAL_TEMP_ROOT = tmpdir();
 
+/** This repository's root, from this file's own place: the shared switch file and the mounted conventions are read from here, whatever the working directory. */
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+
 /**
  * What earlier runs and the product left under `coai-` in temp, COUNTED and said BEFORE this run makes anything (`startOfRun.mjs`) — no test sweep
- * removes them since E5 S2-A, so a pile that grows tells somebody instead of hiding. A second line names the legacy `testsToDelete-coai-run-*` folders a
- * killed run leaves. It never stops the run: housekeeping that fails is reported and stepped over. `log` and `count` are the seams its own test uses.
+ * removes them since E5 S2-A, so a pile that grows tells somebody instead of hiding. The legacy `testsToDelete-coai-run-*` folders a killed run leaves are no
+ * longer counted here: the start-of-run sweep (`startOfRunSweep`) lists each by name with its command. It never stops the run: housekeeping that fails is
+ * reported and stepped over. `log` and `count` are the seams its own test uses.
  */
-export function reportLeftoversFirst({ log = console.log, root = REAL_TEMP_ROOT, ownFolder, count = () => startOfRun({ dir: root, rule: readRule('..'), ownFolder }) } = {}) {
+export function reportLeftoversFirst({ log = console.log, root = REAL_TEMP_ROOT, count = () => startOfRun({ dir: root, rule: readRule('..') }) } = {}) {
   try {
-    const { leftovers, legacyRuns } = count();
+    const { leftovers } = count();
     log(leftovers === 0
       ? `run-tests: no old coai-* leftovers in ${root}`
       : `run-tests: ${leftovers} old coai-* director${leftovers === 1 ? 'y' : 'ies'} in ${root} — no test sweep removes them (E5 S2-A); see research/module_tests.md § The one-off clean-up`);
-    if (legacyRuns > 0) {
-      log(`run-tests: ${legacyRuns} legacy testsToDelete-coai-run-* director${legacyRuns === 1 ? 'y' : 'ies'} in ${root} — a killed run leaves one; some may belong to a run still going; `
-        + 'the one-off clean-up lists them with their claim (E5 S2-A); see research/module_tests.md § The one-off clean-up');
-    }
   } catch (error) {
     log(`run-tests: the leftover count did not run (${error.message}); the tests still will`);
+  }
+}
+
+const firstLine = (text) => String(text).split('\n')[0].trimEnd();
+
+/** The ONE line a missing mount is: what to run. Shared by this runner and `scripts/run-lib-tests.mjs`, each with its own `prefix`. */
+export function mountMissingLine(error, prefix = 'run-tests') {
+  return `${prefix}: the shared conventions are not mounted (${firstLine(error?.message)}) — run: git submodule update --init .agents/conventions`;
+}
+
+/**
+ * The repository's one Node module of the leftovers helper (`owned.mjs`, plan D3), loaded inside a `try`: a mount that is not there is ONE stderr line and exit 2 BEFORE
+ * anything is spawned or made. `importOwned`, `error` and `exit` are the seams of its test.
+ */
+export async function loadOwned({ importOwned = () => import('./owned.mjs'), error = console.error, exit = process.exit, prefix = 'run-tests' } = {}) {
+  try {
+    return await importOwned();
+  } catch (caught) {
+    error(mountMissingLine(caught, prefix));
+    return exit(2);
+  }
+}
+
+/** The most preserved entries the report names; the rest is one line (the C# fixture's `MaxPreservedLines`). */
+const MAX_PRESERVED_LINES = 20;
+
+/** What a sweep said, one line each, under the runner's own prefix: silence when it found nothing. */
+function say({ log, prefix, root, result }) {
+  const { removed, preserved, listed, errors } = result;
+  if (removed.length + preserved.length + listed.length + errors.length === 0) {
+    return;
+  }
+  log(`${prefix}: leftovers in ${root} — removed ${removed.length}, preserved ${preserved.length}, listed ${listed.length}`);
+  for (const line of listed) log(`${prefix}: ${line}`);
+  for (const kept of preserved.slice(0, MAX_PRESERVED_LINES)) log(`${prefix}: preserved: ${kept.path} — ${kept.reason}`);
+  if (preserved.length > MAX_PRESERVED_LINES) {
+    log(`${prefix}: … ${preserved.length - MAX_PRESERVED_LINES} more preserved entries are not shown (preserved ${preserved.length} in all; the first ${MAX_PRESERVED_LINES} are named above)`);
+  }
+  for (const line of errors) log(`${prefix}: error: ${line}`);
+}
+
+/** `quarantine` when the name is a sweep's sibling quarantine (`.<name>.…-quarantine-<pid>-<hex>`): the name inside is the one judged. */
+const QUARANTINE = /^\.(.+)\.teststodelete-quarantine-\d+-[0-9a-f]+$/i;
+
+/**
+ * The switch is OFF: the sweep is NOT called. Every entry whose name is the owner form of this repository's token (any owner) or its legacy form, and every
+ * quarantine of such a name, is ONE `switched-off:` line. NAMES only: nothing is stat-ed, read, renamed or removed. A root that cannot be listed is one `errors` line.
+ */
+function listOnly({ owned, root, io }) {
+  const result = { removed: [], preserved: [], listed: [], errors: [] };
+  try {
+    const helper = owned.owned;
+    const ours = (name) => {
+      const found = helper.classifyName(name);
+      return (found.form === 'owner' || found.form === 'legacy') && found.token === owned.token;
+    };
+    for (const name of [...io.readdirSync(root)].sort()) {
+      const quarantine = QUARANTINE.exec(name);
+      const kind = quarantine ? 'quarantine' : name.endsWith('.owner') ? 'claim' : 'folder';
+      if (ours(quarantine ? quarantine[1] : name)) {
+        result.listed.push(`switched-off: ${kind} ${name} — startOfRunSweep is list-only (shared/leftovers-sweep.json, D11); nothing is removed`);
+      }
+    }
+  } catch (error) {
+    result.errors.push(`temp root ${root}: ${firstLine(error.message)}`);
+  }
+  return result;
+}
+
+/**
+ * The start-of-run sweep (E5 S2-B): the MOUNTED reference `sweepLeftovers` with this repository's token, over the REAL temp root, before this run makes anything.
+ * Behind the ONE switch `shared/leftovers-sweep.json` (read by `readSweepSwitch`; `mode` is the seam): `list-only` calls NO sweep and lists what it would have judged.
+ * It never fails the run: a sweep that cannot load or throws is ONE line ("leftovers sweep not run"), and the exit code is the tests'.
+ *
+ * Returns the sweep's result (or the listing's), or `undefined` when nothing was swept. `sweepOptions` are the reference's own (`probe`, `now`, `platform`, `mine`, `hooks`);
+ * the token is bound AFTER them by `owned.loadStartOfRunSweep` and cannot be overridden.
+ */
+export async function startOfRunSweep({
+  owned, log = console.log, root = REAL_TEMP_ROOT, repo = REPO_ROOT, loadSweep, sweepOptions = {}, mode, io = fs, prefix = 'run-tests',
+} = {}) {
+  try {
+    const chosen = mode ?? readSweepSwitch(repo, { warn: log, prefix });
+    let result;
+    if (chosen === 'collect') {
+      const sweep = await (loadSweep ?? owned.loadStartOfRunSweep)();
+      result = await sweep({ ...sweepOptions, repo, tmp: root });
+    } else {
+      result = listOnly({ owned, root, io });
+    }
+    say({ log, prefix, root, result });
+    return result;
+  } catch (error) {
+    log(`${prefix}: leftovers sweep not run (${firstLine(error.message)}); the tests still will`);
+    return undefined;
   }
 }
 
@@ -249,7 +344,9 @@ function runAll() {
   return status;
 }
 
-function main() {
+async function main() {
+  const owned = await loadOwned();
+  await startOfRunSweep({ owned });
   reportLeftoversFirst();
   const folder = beginRun();
   let status = 1;
@@ -268,5 +365,5 @@ if (process.argv[1]?.endsWith('run-tests.mjs')) {
   // nice 19 elsewhere; nothing under CI). Only the script lowers itself — importing this module
   // from a test does not.
   await import('./lower-priority.mjs');
-  main();
+  await main();
 }

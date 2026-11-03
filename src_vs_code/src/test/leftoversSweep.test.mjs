@@ -158,7 +158,7 @@ test('N-S5 the switch: the repository says collect; list-only calls no sweep and
   const document = JSON.parse(fs.readFileSync(path.join(repoRoot, 'shared', 'leftovers-sweep.json'), 'utf8'));
   assert.deepEqual(Object.keys(document).sort(), ['startOfRunSweep', 'why']);
 
-  const names = [`testsToDelete-${ownerToken}-coai-run-abc123`, `testsToDelete-${otherOwner}-coai-x-abc123`, 'testsToDelete-coai-run-1a2b3c', `.testsToDelete-${ownerToken}-coai-run-abc123.teststodelete-quarantine-4242-0a1b2c3d`,
+  const names = [`testsToDelete-${ownerToken}-coai-run-abc123`, `testsToDelete-${otherOwner}-coai-f-abc123`, 'testsToDelete-coai-run-1a2b3c', `.testsToDelete-${ownerToken}-coai-run-abc123.teststodelete-quarantine-4242-0a1b2c3d`,
     `testsToDelete-${ownerToken}-mcp-x-abc123`, 'coai-x'];
   const calls = [];
   const lines = [];
@@ -260,7 +260,7 @@ test('N-S8 the same verdicts under the root as given and as resolved', async (t)
   }
 });
 
-test('N-S9 on windows the REAL wrapper and the PINNED reference keep an otherwise collectible folder, listing it unverified (F16, Q6)', async (t) => {
+test('N-S9 on windows the REAL wrapper and the PINNED reference keep an otherwise collectible folder, listing it unverified (F16, Q6) — with `collect`; with `list-only` no sweep is called', async (t) => {
   if (process.platform !== 'win32') {
     t.skip('Windows only: the `windows` CI job runs this against the real wrapper and the pinned reference');
     return;
@@ -276,18 +276,32 @@ test('N-S9 on windows the REAL wrapper and the PINNED reference keep an otherwis
   assert.notEqual(mount.parseOwner(claim).unreadable, true, 'premise: the claim parses');
   assert.equal(mount.ownerState(mount.parseOwner(claim), mount.processProbe, { nameOwner: ownerToken, callerOwner: ownerToken, kernelMine: true }), 'gone', 'premise: every key but the Windows gate says remove');
   const dir = plant(root, `testsToDelete-${ownerToken}-coai-win-abc123`, claim);
-  const before = fs.readFileSync(`${dir}.owner`, 'utf8');
-  const lines = [];
+  const claimBefore = fs.readFileSync(`${dir}.owner`, 'utf8');
+  const intact = () => {
+    assert.equal(fs.readFileSync(path.join(dir, 'sentinel.txt'), 'utf8'), `still ${path.basename(dir)}`);
+    assert.equal(fs.readFileSync(`${dir}.owner`, 'utf8'), claimBefore, 'the claim is intact byte for byte');
+    assert.deepEqual(quarantinesIn(root), [], 'no quarantine entry in the root');
+  };
 
-  const result = await startOfRunSweep({ owned: ownedModule, log: (line) => lines.push(line), root, repo: repoRoot, mode: 'collect' });
+  // `collect` (the repository's own value, read from the file): the reference's own Windows answer.
+  const collectLines = [];
+  const collected = await startOfRunSweep({ owned: ownedModule, log: (line) => collectLines.push(line), root, repo: repoRoot });
 
-  assert.deepEqual(result.removed, [], 'nothing is removed on Windows');
-  assert.equal(result.listed.filter((line) => line.startsWith('unverified: ')).length, 1, JSON.stringify(result.listed));
-  assert.ok(result.listed[0].includes(path.basename(dir)) && result.listed[0].includes('the owner SID is not read on Windows (F16)'));
-  assert.equal(fs.readFileSync(path.join(dir, 'sentinel.txt'), 'utf8'), `still ${path.basename(dir)}`);
-  assert.equal(fs.readFileSync(`${dir}.owner`, 'utf8'), before, 'the claim is intact byte for byte');
-  assert.deepEqual(quarantinesIn(root), []);
-  assert.ok(lines.some((line) => line.includes('unverified: ')), 'the log carries the same');
+  assert.deepEqual(collected.removed, [], 'nothing is removed on Windows');
+  assert.equal(collected.listed.filter((line) => line.startsWith('unverified: ')).length, 1, JSON.stringify(collected.listed));
+  assert.ok(collected.listed[0].includes(path.basename(dir)) && collected.listed[0].includes('the owner SID is not read on Windows (F16)'));
+  assert.ok(collectLines.some((line) => line.includes('unverified: ')), 'the log carries the same');
+  intact();
+
+  // `list-only` (the rollback value): NO sweep is called, whatever the reference would do on this platform — the `switched-off:` lines say so.
+  const listLines = [];
+  const listed = await startOfRunSweep({ owned: ownedModule, log: (line) => listLines.push(line), root, repo: repoRoot, mode: 'list-only' });
+
+  assert.deepEqual(listed.removed, []);
+  assert.ok(listed.listed.some((line) => line.startsWith(`switched-off: folder ${path.basename(dir)} `)), JSON.stringify(listed.listed));
+  assert.ok(!listed.listed.some((line) => line.startsWith('unverified: ')), 'the reference was not reached: it would have said unverified');
+  assert.ok(listLines.some((line) => line.includes('switched-off: ')), 'the log carries the same');
+  intact();
 });
 
 /** The static `import` specifiers of a module's text (side-effect imports and `from` imports; a dynamic `import(` is not read). */

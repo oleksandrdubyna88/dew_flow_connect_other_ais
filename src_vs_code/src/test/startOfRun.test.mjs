@@ -119,16 +119,8 @@ test('a name is never stat-ed: the count reads names only', () => {
     statSync: (target) => { statted.push(target); throw new Error('a count never stats'); },
   };
 
-  assert.deepEqual(startOfRun({ dir: '/nowhere', rule, io }), { leftovers: 1, legacyRuns: 0 });
+  assert.deepEqual(startOfRun({ dir: '/nowhere', rule, io }), { leftovers: 1 });
   assert.deepEqual(statted, []);
-});
-
-test('the runner reports leftovers FIRST, before it makes its run folder', () => {
-  const runner = fs.readFileSync(path.join(here, '..', '..', 'scripts', 'run-tests.mjs'), 'utf8');
-  const main = runner.slice(runner.indexOf('function main() {'));
-
-  assert.match(main, /^function main\(\) \{\s*reportLeftoversFirst\(\);\s*\n/,
-    'a count after the run starts would read the run\'s own folder');
 });
 
 test('the start-of-run module cannot delete: it imports no remover', () => {
@@ -138,35 +130,18 @@ test('the start-of-run module cannot delete: it imports no remover', () => {
   assert.match(text, /readdirSync/, 'the scan must still see what it knows is there');
 });
 
-test('the legacy run folders are counted on their own line, the owner form and the lookalikes left out', () => {
-  const io = {
-    readdirSync: () => [
-      entry('testsToDelete-coai-run-abc123'), entry('testsToDelete-coai-run-def456'), entry('testsToDelete-coai-run-xyz'), entry('testsToDelete-coai-runabc123'),
-      entry('testsToDelete-u1000-coai-run-abc123'), entry('testsToDelete-coai-run-aaaaaa', false), ...names.map((name) => entry(name)),
-    ],
-    statSync: () => { throw new Error('a count never stats'); },
-  };
-
-  assert.deepEqual(startOfRun({ dir: '/nowhere', rule, io }), { leftovers: 2, legacyRuns: 2 });
-});
-
-test('the runner prints the legacy line only when there is something to say', () => {
+test('the runner prints one line, and says so when the count did not run', () => {
   const said = (counted) => {
     const lines = [];
     reportLeftoversFirst({ log: (line) => lines.push(line), count: () => counted });
     return lines;
   };
 
-  const none = said({ leftovers: 0, legacyRuns: 0 });
+  const none = said({ leftovers: 0 });
   assert.equal(none.length, 1);
   assert.match(none[0], /^run-tests: no old coai-\* leftovers in /);
 
-  const legacy = said({ leftovers: 0, legacyRuns: 3 });
-  assert.equal(legacy.length, 2);
-  assert.match(legacy[1], /3 legacy testsToDelete-coai-run-\* directories/);
-  assert.match(legacy[1], /research\/module_tests\.md § The one-off clean-up/);
-
-  const old = said({ leftovers: 2, legacyRuns: 0 });
+  const old = said({ leftovers: 2 });
   assert.equal(old.length, 1);
   assert.match(old[0], /2 old coai-\* directories/);
 
@@ -197,12 +172,4 @@ test('[S2-A gate 0] the runner counts the REAL temp root it captured at its star
   const explicit = [];
   reportLeftoversFirst({ log: (line) => explicit.push(line), root: moved });
   assert.match(explicit[0], /1 old coai-\* directory in /, 'the root is a parameter: asked for the redirected one, the run reads that one');
-});
-
-test('[S2-A gate 0] the count leaves out the run\'s own folder', () => {
-  const dir = path.join(path.sep, 'nowhere');
-  const io = { readdirSync: () => [entry('testsToDelete-coai-run-abc123'), entry('testsToDelete-coai-run-def456')] };
-
-  assert.deepEqual(startOfRun({ dir, rule, io, ownFolder: path.join(dir, 'testsToDelete-coai-run-def456') }), { leftovers: 0, legacyRuns: 1 });
-  assert.deepEqual(startOfRun({ dir, rule, io }), { leftovers: 0, legacyRuns: 2 }, 'with no folder of its own to leave out it counts both');
 });

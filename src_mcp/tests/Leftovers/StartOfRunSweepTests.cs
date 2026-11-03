@@ -155,6 +155,78 @@ public sealed class StartOfRunSweepTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// B5 (c), the real cross-process case: while THIS process's claim is on disk and its folder is not, the extension runner's sweep — the MOUNTED Node reference through coai's one module
+    /// (<c>src_vs_code/scripts/owned.mjs</c>), a second process — judges the root past the window. It removes nothing and names the claim <c>live</c>. Skipped, with the reason, without <c>node</c>.
+    /// </summary>
+    [Fact]
+    public void TheNodeSweep_NeverTouchesTheCurrentProcessOwnClaim_BetweenClaimAndFolder()
+    {
+        if (!NodeIsOnThePath(out var why))
+        {
+            Assert.Skip(why);
+        }
+
+        var root = _owned.Dir("b5c-root");
+        var variables = new Dictionary<string, string?>();
+        DirectoryLinks.ToolRun? ran = null;
+        var after = (Claim: false, Folder: true, SameBytes: false, Quarantine: true);
+        byte[]? claimBytes = null;
+        var seams = new RunTempSeams((name, value) => variables[name] = value, name => variables.GetValueOrDefault(name))
+        {
+            Warn = _ => { },
+            AfterClaim = claim =>
+            {
+                claimBytes = File.ReadAllBytes(claim);
+                ran = DirectoryLinks.Run("node", ["--input-type=module", "-e", NodeSweepScript, root, RepositoryRoot.Path], TimeSpan.FromSeconds(60));
+                after = (File.Exists(claim), Directory.Exists(claim[..^".owner".Length]), File.Exists(claim) && File.ReadAllBytes(claim).AsSpan().SequenceEqual(claimBytes),
+                    Directory.GetFileSystemEntries(root).Any(entry => Path.GetFileName(entry).Contains(QuarantineWord, StringComparison.OrdinalIgnoreCase)));
+            },
+        };
+
+        var run = RunTempFolder.Create(root, seams);
+        try
+        {
+            using var all = new AssertionScope();
+            ran.Should().NotBeNull();
+            ran!.TimedOut.Should().BeFalse(ran.Output);
+            ran.ExitCode.Should().Be(0, ran.Output);
+            var result = JsonDocument.Parse(ran.Output.Trim().Split('\n')[^1]).RootElement;
+            result.GetProperty("removed").GetArrayLength().Should().Be(0, "the Node sweep removes nothing: " + ran.Output);
+            result.GetProperty("errors").GetArrayLength().Should().Be(0, ran.Output);
+            var kept = result.GetProperty("preserved").EnumerateArray().Where(p => p.GetProperty("path").GetString()!.EndsWith(".owner", StringComparison.Ordinal)).ToList();
+            kept.Should().ContainSingle("the claim is the one entry it names: " + ran.Output);
+            string[] accepted = OperatingSystem.IsWindows() ? ["live", "foreign-uid"] : ["live"];
+            kept[0].GetProperty("reason").GetString().Should().BeOneOf(accepted);
+            TestContext.Current.AddWarning($"E5 S2-B B5 (c): the Node sweep, past the window, kept the own claim: {kept[0].GetProperty("reason").GetString()}");
+            after.Should().Be((true, false, true, false), "the claim is still there with its bytes, the folder was not made by the sweep, nothing was renamed");
+            Directory.Exists(run.Folder).Should().BeTrue("Create completed: the folder exists");
+            File.Exists(run.ClaimFile).Should().BeTrue();
+        }
+        finally
+        {
+            run.Restore();
+        }
+    }
+
+    /// <summary>The Node reference through coai's wrap, over <c>argv[1]</c>, with the clock 11 minutes ahead so only liveness decides; prints the result as one JSON line.</summary>
+    private const string NodeSweepScript = """
+        import path from 'node:path';
+        import { pathToFileURL } from 'node:url';
+        const [root, repo] = process.argv.slice(1);
+        const owned = await import(pathToFileURL(path.join(repo, 'src_vs_code', 'scripts', 'owned.mjs')).href);
+        const sweep = await owned.loadStartOfRunSweep();
+        console.log(JSON.stringify(sweep({ repo, tmp: root, now: Date.now() + 11 * 60_000 })));
+        """;
+
+    private static bool NodeIsOnThePath(out string why)
+    {
+        var probe = DirectoryLinks.Run("node", ["--version"], TimeSpan.FromSeconds(30));
+        why = $"node is not on the PATH (exit {probe.ExitCode}): the Node arm of the race is skipped here";
+
+        return !probe.TimedOut && probe.ExitCode == 0;
+    }
+
     // ---- B6 -------------------------------------------------------------------------------------------------------
 
     private static readonly string[] CoaiNames =
