@@ -275,16 +275,45 @@ jobs:
         with:
           global-json-file: global.json
 
+      # E5 S3. Order: who the runner is; the build; the layout self-test (its values are printed as test warnings; every identity read of the
+      # leftovers helper fails loudly if the layout does not hold); the Leftovers namespace; then the suites, each only when the build was green.
+      # The machine, printed; anything but Arm64 is red with a clear message (the Darwin layout was measured on Arm64 only).
+      - name: The runner is Arm64 (uid and system printed)
+        run: |
+          arch="$(uname -m)"
+          echo "uname -m: $arch; uid: $(id -u); gid: $(id -g); $(sw_vers -productName) $(sw_vers -productVersion)"
+          [ "$arch" = "arm64" ] || { echo "this runner is $arch, not arm64: the Darwin layout was measured on Arm64 only, and the x86-64 entry points were never run"; exit 1; }
+
       - name: Build
+        id: build
         run: dotnet build dew_flow_connect_other_ais.slnx -c Release
 
+      # The runner's architecture as .NET sees it and every value of the self-test (offsets of struct stat checked against getuid, a known file,
+      # a known mtime and stat(1)). The grep proves the values were PRINTED and that the uid read is the shell's.
+      - name: The stat layout self-test
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests --filter-class "*DarwinLayoutTests" 2>&1 | tee layout.log
+          grep -Eq "darwin layout: arch=Arm64" layout.log || { echo "the self-test did not report ProcessArchitecture Arm64"; exit 1; }
+          grep -Eq "darwin layout: getuid=$(id -u)\$" layout.log || { echo "the self-test did not report the shell's uid $(id -u)"; exit 1; }
+          grep -Eq "darwin layout: file: dev=" layout.log || { echo "the self-test did not print the values it read"; exit 1; }
+
+      # The helper's own tests alone first, so a defect in the library is named before the whole suite buries it.
+      - name: Leftovers
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests --filter-namespace "CoaiMcp.Tests.Leftovers"
+
       - name: Test
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
 
       - name: Test the Team server
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests
 
       - name: Test the bench
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./src_bench/CoaiBench.Tests/bin/Release/net10.0/CoaiBench.Tests
 
   # THE MCP SUITE ON WINDOWS, on every pull request.
@@ -292,8 +321,9 @@ jobs:
   # The Vibe path budget, the private-folder DACLs (PrivateFolder) and the junction and read-only-folder cases are Windows facts: on
   # Linux and macOS their tests skip, so until this job ran them a defect there waited for the owner's machine. The runner is ELEVATED,
   # so a folder it makes may be owned by Administrators (PrivateFolderWindowsTests.E1 accepts that), and a denial that does not bite an
-  # elevated account skips its test with the reason (the Proven pattern of ConsultFailureScenarioTests). Only the MCP server's suite:
-  # the others have no Windows-only behaviour yet.
+  # elevated account skips its test with the reason (the Proven pattern of ConsultFailureScenarioTests). Only the MCP server's suite
+  # runs whole: the others have no Windows-only behaviour yet — but the Team server's run-folder proofs run too (E5 S3, plan D8's merge-gate
+  # table), and Step 0 measures who owns a new file before any helper code does.
   windows:
     name: Windows · mcp
     runs-on: windows-latest
@@ -302,6 +332,35 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # Step 0 (E5 S3, plan D8): the facts the leftovers helper's Windows assertions are written against, measured BEFORE any helper code runs, and
+      # printed. A new file here is owned by BUILTIN\Administrators (the runner is elevated), not by the caller's SID: the kernel-owner key of the
+      # sweep would otherwise not separate two fixtures. A runner image that changes either fact turns this step red, naming what to re-read.
+      # It uses RUNNER_TEMP (job-scoped), never a machine temp path.
+      - name: Step 0 — who owns a new file here
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $caller = $id.User
+          $elevated = ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          $admins = New-Object Security.Principal.SecurityIdentifier([Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+          $dir = Join-Path $env:RUNNER_TEMP ('step0-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+          [IO.Directory]::CreateDirectory($dir) | Out-Null
+          $file = Join-Path $dir 'probe.txt'
+          [IO.File]::WriteAllText($file, 'step 0')
+          $fileOwner = (Get-Acl -LiteralPath $file).GetOwner([Security.Principal.SecurityIdentifier])
+          $dirOwner = (Get-Acl -LiteralPath $dir).GetOwner([Security.Principal.SecurityIdentifier])
+          Write-Host "step 0: caller SID = $($caller.Value); token owner SID = $($id.Owner.Value); elevated = $elevated"
+          Write-Host "step 0: new file owner = $($fileOwner.Value); new folder owner = $($dirOwner.Value)"
+          Write-Host "step 0: EqualSid(file owner, caller) = $($fileOwner.Equals($caller)); file owner is BUILTIN\Administrators = $($fileOwner.Equals($admins))"
+          Remove-Item -LiteralPath $dir -Recurse -Force
+          # The facts the helper's Windows assertions are written against (measured on mcp PR #58: dew_flow_mcp LeftoversSweepTests.cs:587-589).
+          if ($null -eq $caller) { throw 'step 0: the caller has no user SID' }
+          if (-not $elevated) { throw 'step 0: the runner is no longer elevated — re-read every Windows assertion of the leftovers helper (must-not-copy #6)' }
+          if (-not $fileOwner.Equals($admins)) { throw "step 0: a new file is owned by $($fileOwner.Value), not BUILTIN\Administrators — re-read the Windows assertions (#6)" }
+          if ($fileOwner.Equals($caller)) { throw 'step 0: the file owner equals the caller SID — the kernel-owner key would not separate the two fixtures (#6)' }
+          exit 0
 
       - name: Conventions submodule
         run: git submodule update --init --depth 1 .agents/conventions
@@ -315,6 +374,11 @@ jobs:
 
       - name: Test
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe
+
+      # The Team server's own wiring of the run folder (E5 S3): its RunTempStart.cs made the folder, its TestEntryPoint.cs gates the run. The whole
+      # server suite runs on Windows at release time (release.yml, server-binaries); here only the run-folder proofs, which need no server.
+      - name: Run folder — Team server
+        run: ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests.exe --filter-class "*RunFolderTests"
 
   extension:
     name: extension · typecheck · test · package
