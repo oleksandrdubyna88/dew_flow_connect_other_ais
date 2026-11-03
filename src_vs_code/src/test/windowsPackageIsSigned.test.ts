@@ -201,11 +201,15 @@ test('mcp-sign runs exactly when the build succeeded, and may hold the federatio
   const block = jobBlock('mcp-sign');
 
   assert.deepEqual(needsOf('mcp-sign'), ['mcp-binaries']);
-  // The defect this stands against: copying mcp-binaries' own `if:` word for word. That one reads
-  // `needs.mcp-draft.result`, and mcp-sign does not need mcp-draft, so on a tag the expression is
-  // null == 'success' and the signing never runs; and its `always()` would run it after a failed
-  // build on a dispatch. What the job wants is the result of what it NEEDS.
-  assert.equal(condition('mcp-sign'), "needs.mcp-binaries.result == 'success'");
+  // The defects this stands against: copying mcp-binaries' own `if:` word for word (it reads
+  // `needs.mcp-draft.result`, which mcp-sign does not need, so on a tag it is null == 'success'); and
+  // the bare `needs.mcp-binaries.result == 'success'`, whose implicit success() is skipped on a
+  // dispatch by the skipped draft. What the job wants is the result of what it NEEDS, behind a
+  // status function that does not look at the rest — `!cancelled()`, so a cancel still stops it.
+  // And a status function is REQUIRED. A job `if:` with none gets an implicit `success()`, and that one
+  // looks at EVERY upstream job, not only the `needs` — including `mcp-draft`, which a dispatch skips
+  // (actions/runner#491). So the bare comparison is skipped on a dispatch and V1 can never run.
+  assert.equal(condition('mcp-sign'), "${{ !cancelled() && needs.mcp-binaries.result == 'success' }}");
   assert.doesNotMatch(condition('mcp-sign'), /mcp-draft/, 'a job not in `needs` is not in the context');
   assert.match(
     block,
@@ -229,7 +233,7 @@ test('mcp-sign-attach checks the FINAL zip with the product check, then uploads 
   const code = withoutComments(block);
 
   assert.deepEqual(needsOf('mcp-sign-attach'), ['mcp-sign']);
-  assert.equal(condition('mcp-sign-attach'), "needs.mcp-sign.result == 'success'");
+  assert.equal(condition('mcp-sign-attach'), "${{ !cancelled() && needs.mcp-sign.result == 'success' }}");
   assert.match(code, /\n {4}permissions:\n {6}contents: write\n(?! {6}\S)/, 'it uploads, and only that');
   assert.doesNotMatch(code, /id-token/);
 
