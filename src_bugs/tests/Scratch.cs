@@ -1,3 +1,4 @@
+using CoaiMcp.Tests.Leftovers;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -23,14 +24,7 @@ internal static class Scratch
         // The connections are what hold the file on Windows, and a test that disposed its `Corpus`
         // has still left the pool holding it.
         SqliteConnection.ClearAllPools();
-        try
-        {
-            Directory.Delete(dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            TestContext.Current.SendDiagnosticMessage(
-                "the scratch directory {0} could not be removed: {1}", dir, e.Message);
-        }
+        // The leftovers helper's teardown (E5 S3): the exact path, five tries, never throwing; a folder that stays is named in ONE line to the diagnostic channel.
+        Removal.Quietly(dir, line => TestContext.Current.SendDiagnosticMessage("{0}", line));
     }
 }
