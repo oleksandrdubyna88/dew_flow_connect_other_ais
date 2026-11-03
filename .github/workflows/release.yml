@@ -527,7 +527,7 @@ jobs:
   # The product check on the FINAL zips, then the attach. The signing workflow proves the zip holds
   # the files it verified; it knows nothing of what this package is FOR, so the question that is
   # ours — is the binary in it, and the SQLite library beside it — is asked here of the file that
-  # would ship, the same `archive-carries.sh` the other platforms are checked with. It runs on a
+  # would ship, with the `archive-carries.sh` the coai-bugs release uses. It runs on a
   # dispatch trial too, so the trial exercises it; only the upload waits for a tag.
   #
   # `contents: write` and nothing else: it uploads to the draft release, and it holds no signing
