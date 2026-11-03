@@ -730,6 +730,10 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
 - **DoD (B).** Every scenario RED then GREEN on Windows, Linux and macOS; the break-its red; `PanelService.cs` and the
   characterization test unchanged; the product sweep's tests green; legacy names listed (C#) / collected on `gone` only
   (Node); concurrent sweeps silent on not-found; `module_tests.md` describes the one sweep in two languages.
+- **The claim-first race (2026-11-03, re-review gate, finding 1).** S3's initializer claims and creates the run folder
+  before S2-B's sweep runs in the assembly fixture. S2-B adds a scenario where a sweep runs AFTER this process's claim is
+  written and BEFORE its folder exists (a hook between the two): the sweep never removes or quarantines a claim or folder
+  of the current process's own record, on every OS, and S2's spec states the startup order it relies on.
 
 ## S3 — The C# library (a copy), the run folder on the owner form, the contract's claim grammar (commit 1 of the producer PR)
 
@@ -818,6 +822,11 @@ runs them outside a run folder (D10), and drops their bare prefix in the same co
   three new initializers and, in S4, for `run-tests.mjs` `beginRun` (`:221-230`, which catches the error and goes on
   "as before"). Until then this fallback is the one uncontained path of an eligible S5 site, and the S5 `src_mcp/tests`
   PR names it.
+- **How a C# executable fails closed is S3's spec to define and test (2026-11-03, re-review gate, finding 0).** A module
+  initializer has no supported way to set the test host's exit code, and a bare throw from it crashes the host instead of
+  failing the run. S3's spec names the mechanism for each MTP executable (for example: the initializer records the
+  failure, and a startup hook or assembly fixture fails the run before any test runs), its observed non-zero exit code and
+  its one-line message, and tests it on the three OSes.
 
 Scenario: `S5DeferredCSharpSites_AreInsideTheRunFolder` — for each listed site, the suite that runs it asserts that
 the site's path is inside `Path.GetTempPath()` = the run folder; the guard (S6) reports zero `legacy-name` for the
@@ -995,6 +1004,14 @@ only at the stop).
   the same counts; `research/module_tests.md` updated where it quotes a renamed name.
 
 ## S6 — The two guards, the audit, the `raw-temp` baseline, the CI legs (commit 4 of the producer PR)
+
+*The exemption contract (2026-11-03, re-review gate, finding 3).* The pinned rule core at `cc24f9e`
+(`common/test-leftovers.md`, the § 7 paragraph, lines 96-98) has ONE exemption form, a comment on the line or the line
+above, `testsToDelete-exempt: <class> — <reason>`; `owner-blind` and `ryuk-off` take none, so `legacy-name` takes it.
+S6's CI assertion is therefore: zero UNEXEMPTED `owner-blind` and `legacy-name` findings, AND an expected-exemption
+inventory (file, line, class) that the guard's exemption list must equal exactly, so a new exemption is a visible diff.
+A site that the guard would classify `owner-blind` cannot be exempted inline: it lives in a helper file the guard
+knows, or it is rewritten.
 
 - **Models.** Brief by Opus; code by a Sonnet coder; review by Opus against rule §7, D6, D9, must-not-copy #1, #2.
 - **Goal.** One guard per language keeps every tree of the repository so: red on every class of rule §7 outside the
