@@ -9,6 +9,11 @@
 > S6 creates its baseline. S3's fail-closed mechanism is the gated custom `Main` (exit 78). This document keeps no ledger:
 > its changes are entries of the parent (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`). What epoch 4
 > supersedes carries a dated note *[epoch 4, 2026-11-03]* in place.
+> *After the two re-review plan gates (2026-11-03):* each OS's proofs are named CI steps (D8); a rollback procedure is
+> D11; F24 needs an acceptance check against the released guard and the real test host before S6; S3 adds a fallback
+> check behind the gate, lets pure information flags pass, and keeps the diff check's golden source in coai; S2-B proves
+> its sweep runs before any test collection. Gate finding e3 was rejected (the custom `Main` was built and run in the
+> S3 brief's probe).
 
 > Was: **revised 2026-11-03 at the parent's epoch-3 re-review (entry 2.2 of the parent's ledger); epoch 3 waits for
 > the owner's approval (the record says `Narrowed: yes`), and no E5 story takes new code until then.** S1 is done (#936;
@@ -530,6 +535,23 @@ alone — BEFORE S6 creates the baseline; (j) the adapted copy's diff check (D2)
 Windows and Linux legs are green", is read as the suite × OS matrix of the DoD: every suite green on every leg CI runs
 it on, and the ownership and startup proofs (the run folder, fail closed, the refusal) green for every suite on all
 three OSes; the counts reconciled by name. P1 still holds: until it is recorded, Windows evidence comes from CI only.
+*[re-review plan gates, 2026-11-03: the parent's session `7c66b50d`, findings r0–r5; this document's session `7a6707ad`, findings e0–e2]* **(k) is replaced by named merge gates** (findings r0, r3). The run-folder LIBRARY is shared code: its proofs
+(owner-form folder, claim first, fail closed with exit 78, the refusal) run on all three OSes through the suites that
+run there. Each suite's OWN wiring (`RunTempStart.cs`, `TestEntryPoint.cs`, its `RunFolderTests`) is proven where a CI
+step runs that suite. Each cell with a step is a merge gate: green on the PR's head (`ci.yml` lines at `004c55f`; NEW =
+added by S3):
+
+| What is proven | Linux | macOS | Windows |
+|---|---|---|---|
+| the library (via `CoaiMcp.Tests`) and mcp's wiring | `build-test` `Test` (`:58`) | `macos`: NEW `The stat layout self-test`, NEW `Leftovers`, then `Test` (`:282`) | `windows`: NEW `Step 0` first, then `Test` (`:317`) |
+| server's wiring | `:77` | `:285` | NEW filtered step after `Test`: `CoaiServer.Tests.exe --filter-class "*RunFolderTests"` |
+| bench's wiring | `:64` | `:288` | — (bench never runs on Windows) |
+| bugs' (ingest) wiring | `:88` | — | — (Linux only: `:258-259`; `release.yml` `bugs-binaries` is Linux too) |
+
+`release.yml` `server-binaries` (`:619`, test line `:694`) runs the server suite on Windows x64 and arm64 and macOS arm64
+at release time: release evidence, not a merge gate. **(l) NEW (finding r2):** before S6 creates the baseline, F24's
+acceptance check has passed against the RELEASED guard and THIS repository's real test host (S6's note). **(m) NEW
+(finding r1):** the rollback procedure of D11 is written in the PR description before it merges.
 
 **D9 — The end-of-run audit is copied, and bounded to the run folder.** `LeftoversAudit` (never-disposed,
 disposed-not-removed, claimed-in-temp-root) runs at the end of every C# suite as in the template — but coai's four
@@ -559,6 +581,18 @@ either makes it REFUSE — a test that needs the run folder checks the runner's 
 one line naming the command to use, before it creates anything — or names it as uncontained, and the site keeps its
 prefix. S3 does this for C#, S4 for Node. A runner's fallback is uncontained too, so S3 and S4 also make both runners
 fail closed. Until both are done, NO S5 site is contained.
+
+**D11 — Rolling back the producer PR** *[re-review plan gate, 2026-11-03, the parent's session `7c66b50d`, finding r1]*. A
+plain revert of the squash merge is NOT the first step: it brings back the legacy producers while owner-form folders
+already exist on machines. The order:
+
+1. **Switch off the destructive start-of-run sweep** (S2-B) with a one-line, reviewed change (the sweep lists and
+   removes nothing; its fixture stays registered). Owner-form creation and teardown stay ON, so every run still removes
+   what it made.
+2. **Account for what exists:** `bash .agents/conventions/tools/janitor.sh --token coai --dry-run` on every machine
+   that ran the suites (and the CI legs' own logs) lists the owner-form folders and claims already created.
+3. **Then revert or repair** the faulty part in a NEW PR, with its own gates; the listed folders are removed by the
+   janitor or by the next good sweep, never by hand by name alone.
 
 **Growth surface** (the shared planning rule § *A plan that creates something that GROWS*). Owned folders: ONE run
 folder per runner invocation (five C# suites and the extension: six per full run on a machine; plus one per runner
@@ -772,6 +806,11 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
   parameter, so they land HERE, when the fixture is wired. S2-B registers `LeftoversSweepFixture` as the assembly fixture
   in EACH of the four test assemblies (each its own `[assembly: AssemblyFixture(...)]` line; the template's line is a
   fully qualified mcp type, `LeftoversSweepFixture.cs:3`). S3 brings the sweep's source only.
+  *[re-review plan gate, 2026-11-03, session `7a6707ad`, finding e1]* **The order must be PROVEN, not assumed.** S2's
+  spec writes a test on the pinned xUnit v3 version (4.0.1) that shows the start-of-run sweep FINISHES before any test
+  collection runs: the fixture records the sweep's end, the earliest test of every collection records its start, and
+  the test asserts the end is before every start. If the pinned version does not guarantee it, the sweep moves into the
+  gate (`RunTemp.Gate`, before discovery), and the spec says so.
 - **What the Fable spec must settle (B):**
   1. **Where the C# sweep runs and who calls it.** The copied `LeftoversSweepFixture` as an assembly fixture in EACH of
      the four C# suites (rule §4: every run that creates the kind sweeps it at its start — all four make a run folder
@@ -989,6 +1028,30 @@ the text above differ, this block wins.
   that do not run the whole suite, or a small cross-OS job where a suite cannot run there); the counts reconciled BY
   NAME (each test added, removed or skipped by platform, listed in the PR), not "the same counts"; the private
   machine-temp measurement of E2 repeated per suite on Linux: 0 entries after a whole run.
+
+*[re-review plan gates, 2026-11-03: the parent's session `7c66b50d`, findings r0–r5; this document's session `7a6707ad`, findings e0–e2]* Four additions to S3, and one rejection:
+
+- **The CI steps are D8's merge-gate table** (findings r0, r3). S3 adds: in job `windows`, `Step 0` first and, after
+  `Test`, the filtered `CoaiServer.Tests.exe --filter-class "*RunFolderTests"`; in job `macos`, `The stat layout
+  self-test` and `Leftovers` before `Test`. The S3 brief's filtered `CoaiBugs.Tests` and `CoaiBench.Tests` steps on
+  Windows, and `CoaiBugs.Tests` on macOS, are WITHDRAWN: the bugs suite runs on Linux only, and bench never runs on
+  Windows. The DoD above ("the run-folder, fail-closed and refusal tests of EVERY suite green on all three OSes") is read
+  as that table: the library's proofs on all three OSes; each suite's wiring where its step runs.
+- **Pure information flags pass** (finding e0). `RunTemp.Gate` lets `--help`, `--version` and `--info` through with no
+  run folder, because they create nothing. `--list-tests` stays REFUSED, because discovery runs `MemberData`. A test for
+  both: each information flag exits as the platform does with no run folder made; `--list-tests` without a run folder
+  exits 78 with the one line, and the `MemberData` sentinel is untouched.
+- **A fallback behind the gate** (finding r4). Besides the gated `Main`, a check at the first point any test can reach
+  (the `RunTempFixture` assembly fixture) fails the run with the SAME one line when the gate did not run (a host that
+  bypassed `Main`). The module initializer still makes the folder; the fallback refuses when `RunTemp.IsActive` is
+  false. Test: the fixture started with the gate flag unset ⇒ the line, and no test body runs.
+- **The diff check's golden source** (finding r5). A committed manifest in coai (next to the library) holds, per copied
+  file, the upstream path at `dew_flow_mcp` `197cc76`, the upstream git blob SHA and the expected list of
+  transformations. The check reads the copy, undoes the listed transformations, and compares the result's blob SHA
+  with the manifest's. It needs no network and keeps NO vendored copy of the upstream files; when it is red, a reviewer
+  fetches the named blob from dew_flow_mcp.
+- *Rejected (finding e3):* that `XunitAutoGeneratedEntryPoint=false` with a custom `Main` may not build or run. The S3
+  brief built and ran it (xunit.v3 4.0.1, Microsoft.Testing.Platform 2.4.0): a refused run exits 78 before discovery.
 
 ## S4 — The Node producers wrap the reference (commit 3 of the producer PR)
 
@@ -1290,6 +1353,17 @@ naming file and line, then reverted; plus a scope whose proof file is missing �
 entry ⇒ a `baseline` finding. The repository-wide guard test lands here, never in S3 (before S5 and S6 it fails on
 the whole tree).
 
+*[re-review plan gates, 2026-11-03: the parent's finding r2; this document's finding e2]* Two more checks, both before
+S6 creates the baseline:
+
+- **F24's acceptance check** (r2), against the RELEASED guard (the pin carrying F24) and THIS repository's real C# test
+  host: a run under the gate passes the guard's proof check for each scope; a forced folder failure and a forced claim
+  failure each exit 78 before discovery, with the S3 brief's `MemberData` sentinel untouched. The output is recorded
+  in the PR.
+- **The baseline is found from both places** (e2): a companion test that `RepositoryRoot.cs` finds
+  `raw-temp-baseline.json` at the repository root both when started from the project folder and when started from the
+  binary output folder (`bin/Release/net10.0/`), as CI starts the executables.
+
 ## S7 — The drain: the `raw-temp` baseline to zero (stage C, after the producer PR)
 
 - **Models.** Brief by Opus (one brief per suite, listing the files and the helper call for each shape); code by one
@@ -1387,6 +1461,11 @@ the whole tree).
       every actual test root; a missing proof and a stale entry each a `baseline` finding.
 - [ ] *[epoch 4]* S2-B: the sweep fixture registered in each of the four test assemblies; the copied sweep tests landed
       with it.
+- [ ] *[re-review plan gates, 2026-11-03]* D8's merge-gate table green (each named step on the PR's head); the S2-B
+      order test (the sweep ends before any collection starts) or the sweep moved into the gate; the gate's information
+      flags pass and `--list-tests` is refused, both tested; the fallback check behind the gate tested; the diff check
+      reads the committed manifest (upstream path, blob SHA, transformations) with no network; F24's acceptance check
+      recorded before S6; the `RepositoryRoot` baseline test from both folders; D11's rollback procedure in the PR.
 - [ ] S7: the baseline drained to zero and deleted.
 - [ ] `research/module_tests.md` describes the run folder in its owner form, the sweep in two languages, the one-off
       clean-up, the residual risk, the two guards and the baseline's drain.
