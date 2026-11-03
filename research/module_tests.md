@@ -5038,7 +5038,7 @@ and a whole extension run leave the machine's temp folder as they found it; ever
 
 | Piece | What it does |
 |---|---|
-| `RunTemp` (`[ModuleInitializer]`) | runs when the module loads — before `Main`, before any static constructor, before `MemberData` discovery. Keeps the machine's temp in `RunTemp.Real` (trailing separator trimmed), makes `testsToDelete-coai-run-<6 hex>` inside it (`RunTemp.Folder`), points `TEMP`, `TMP` AND `TMPDIR` at it — once, never again during the run. Never throws: if the folder cannot be made it warns once on stderr and `Folder == Real` (the run then behaves as before). |
+| `RunTemp` (`[ModuleInitializer]`) | runs when the module loads — before `Main`, before any static constructor, before `MemberData` discovery. Keeps the machine's temp in `RunTemp.Real` (trailing separator trimmed), makes `testsToDelete-coai-run-<6 hex>` inside it (`RunTemp.Folder`), points `TEMP`, `TMP` AND `TMPDIR` at it — once, never again during the run. Never throws: if the folder cannot be made it warns once on stderr and `Folder == Real` (the run then behaves as before). *[superseded by E5 S3, 2026-11-03: `RunTemp` is no longer a `[ModuleInitializer]` and moved into `src_mcp/tests_leftovers`; each of the four test projects calls `RunTemp.Start()` from its own `RunTempStart.cs`. The folder is `testsToDelete-<owner>-coai-run-<id>`, claimed first. The never-throw machine-temp fallback is WITHDRAWN: `Start` records any failure and the gated `Main` (`RunTemp.Gate`) refuses the run — exit 78, one line, before discovery. See the section "E5 S3" at the end of this file.]* |
 | `RunTempFolder` | the testable core (exclusive create with a bounded redraw; the claim removed only once the folder is gone, through its own seam), one instance per call (the initializer ran once, long ago, and cannot be exercised twice). `Create(realRoot, seams)` records the three variables, makes the folder, calls `RegisterRestore`, sets the variables, calls `WriteClaim` — **in that order**. `Restore()` puts the old values back (an absent one is removed), deletes the folder with `GitScratch.DeleteEvenIfReadOnly` and the claim; **idempotent and never throws** (a leftover is warned about with its path). `RunTempSeams` carries the functions it touches, so a test passes a private root and a dictionary. *Deviation from the spec:* `Create` takes one `RunTempSeams` record instead of three positional arguments, because it also needs the register-restore, claim-writer, deleter and warning seams. |
 | `RunTempFixture` | an assembly fixture with NO test methods (`TempDirsAreSwept` is both a fixture and a test class, so a disposal there would run after test instances). `Dispose()` calls `RunTemp.EndOfRun()`. |
 | process-exit handler | registered by the initializer in `RegisterRestore` (before the first variable moves); calls the same idempotent restore — what makes `--list-tests`, `--help` and a filter matching nothing leave no folder and no `.owner`. Not run on a kill: that leaves exactly one folder plus its claim, by design. |
@@ -5082,18 +5082,18 @@ The coai code gate (verdict proceed) and the Opus judge (proceed, no blockers) a
 | Finding | Test | Red (2026-10-20) | Break-it |
 |---|---|---|---|
 | **J1 (MAJOR)** the claim's host was `Environment.MachineName` on the C# side (`BUILD01`: NetBIOS, upper case, cut at 15, domain dropped on Unix) and `os.hostname()` on the Node side (`build01`): a Node sweeper would judge every C# claim "another host" and keep it for ever. Now `Dns.GetHostName()` (the `gethostname` libuv calls) | `OwnerClaimVectorsTests.ThisMachinesHost_IsSpelledAsNodeSpellsIt` asks Node for its own spelling (skips, saying why, only when `node` is not on PATH); Node: `J1 this machine's host in the claim is os.hostname()` | `Expected claimHost to be "build01" … but "BUILD01" differs near "BUI" (index 0)` | `Environment.MachineName` put back → red |
-| **G0/G1** two writers of one format, no check that they agree | `shared/owner-claim-vectors.json` (format, strict valid/invalid, Linux start) read by `OwnerClaimVectorsTests` (C#) AND `runTemp.test.mjs` (Node) | C#: 7 of 24 rows red on the stubs (the `a b@c:d` host, the valid texts, two start rows); Node: green by construction (the vectors were written from its output) | the separator changed on ONE side → only that side red (C#: 4 rows; Node: 5 tests); the start divisor changed → the start rows red. **E5's reader must pass the same vectors.** |
+| **G0/G1** two writers of one format, no check that they agree | `shared/owner-claim-vectors.json` (format, strict valid/invalid, Linux start) read by `OwnerClaimVectorsTests` (C#) AND `runTemp.test.mjs` (Node) | C#: 7 of 24 rows red on the stubs (the `a b@c:d` host, the valid texts, two start rows); Node: green by construction (the vectors were written from its output) | the separator changed on ONE side → only that side red (C#: 4 rows; Node: 5 tests); the start divisor changed → the start rows red. **E5's reader must pass the same vectors.** *[superseded by E5 S3, 2026-11-03: `OwnerClaimVectorsTests` no longer reads `shared/owner-claim-vectors.json` and `OwnerClaim` no longer writes or judges (the C# writer is `Owner.RunRecord`, the reader `Owner.Parse`, the judge `Liveness.State`). It reads `shared/owner-record-cross-vectors.json` (C# and Node read every row and the live claim). The old file stays for the Node `runTemp.test.mjs` until S4.]* |
 | **J2** the Linux start was `Process.StartTime` in C# (derived from other clocks) and `btime` + ticks÷100 in Node: up to about a second apart | one shared formula, `OwnerClaim.LinuxStartSeconds` ⇄ `linuxStartSeconds`, pinned by the `linuxStart` vectors | stub returned none for every row: both rows with a start red | `ticks / 10` → both rows red. Nothing compares a start today; E5 decides its precision rule (a start from any other source needs a ±2 s tolerance) |
 | **G13/G17** `Verdict`'s `liveStartUnixSeconds` was accepted and ignored | the parameter is gone (`Verdict(claim, pidAlive)`); a live pid always KEEPS (a leak, never a deletion) | text and compile only — the table `TheSweepersVerdict_KeepsWhatItCannotProveDead` (9 rows) is unchanged in meaning | — |
-| **G2/J4** `Directory.CreateDirectory` succeeds on an existing folder: two runs that drew the same six characters would share one | `RunTempHardeningTests.ANameThatAlreadyExists_IsNeverShared_ANewSuffixIsDrawn`, `…WhenEveryDrawCollides_CreateGivesUp_AndSharesNothing`; Node: the two `G2/J4` tests (`makeRunTemp(root, { suffix, tries })`) | `Expected Path.GetFileName(run.Folder) to be …bbbbbb … differ at index 23`; `Expected a <IOException> to be thrown … but no exception was thrown`; Node: the second draw was not made | the existence check dropped → both C# tests red; `EEXIST` treated as fatal → the Node test red. **Limit:** check-then-create are two calls (1 in 16 million, then a microsecond window); the claim is written after and a run removes only the folder it made by name |
+| **G2/J4** `Directory.CreateDirectory` succeeds on an existing folder: two runs that drew the same six characters would share one | `RunTempHardeningTests.ANameThatAlreadyExists_IsNeverShared_ANewSuffixIsDrawn`, `…WhenEveryDrawCollides_CreateGivesUp_AndSharesNothing`; Node: the two `G2/J4` tests (`makeRunTemp(root, { suffix, tries })`) | `Expected Path.GetFileName(run.Folder) to be …bbbbbb … differ at index 23`; `Expected a <IOException> to be thrown … but no exception was thrown`; Node: the second draw was not made | the existence check dropped → both C# tests red; `EEXIST` treated as fatal → the Node test red. **Limit:** check-then-create are two calls (1 in 16 million, then a microsecond window); the claim is written after and a run removes only the folder it made by name *[superseded by E5 S3, 2026-11-03: the two tests are replaced by `RunTempHardeningTests.ATakenName_IsNeverAdopted_AClaimAlreadyThere`, `…AFolderAlreadyThere` and `WhenEveryDrawCollides_CreateGivesUp_AfterThreeDraws_…`: the claim is made first by an EXCLUSIVE create and the folder by an exclusive `mkdir` (`OwnedDir.Create`), so the check-then-create limit is gone, and the bound is three draws (`Owned.MaxDraws`), then `InvalidOperationException`.]* |
 | **J3** the `.owner` was removed even when its folder could not be | `…AFolderThatCannotBeDeleted_KeepsItsClaim`; Node: `J3 a claim is removed only when its folder is gone` | `Expected File.Exists(run.ClaimFile) to be True … but found False` | the claim deleted unconditionally → red (both sides) |
-| **G18** the claim was deleted with a hard-coded `File.Delete` | `RunTempSeams.DeleteClaim`; `…AClaimThatCannotBeDeleted_IsWarnedAbout_ByItsPath_AndRestoreNeverThrows` | `Expected warnings to contain a single item matching …testsToDelete-coai-run-<id>.owner` | covered by the red (the seam was ignored) |
+| **G18** the claim was deleted with a hard-coded `File.Delete` | `RunTempSeams.DeleteClaim`; `…AClaimThatCannotBeDeleted_IsWarnedAbout_ByItsPath_AndRestoreNeverThrows` | `Expected warnings to contain a single item matching …testsToDelete-coai-run-<id>.owner` | covered by the red (the seam was ignored) *[superseded by E5 S3, 2026-11-03: `RunTempSeams.DeleteClaim` and its test are removed; the claim goes LAST in the helper's removal (`Removal.Quietly`), and a folder that stays keeps it (`AFolderThatCannotBeDeleted_KeepsItsClaim`, with the copied `Unremovable`).]* |
 | **G8** `Path.GetTempPath().TrimEnd(separator)` is EMPTY when temp is `/` and `C:` for `C:\`, so the run folder would be a relative path | `…TheMachinesTemp_LosesItsTrailingSeparator_ButIsNeverTrimmedToNothingOrToADriveLetter` (4 rows per OS) through the pure `RunTemp.Trimmed` | `Expected trimmed to be "C:\" with a length of 3, but "C:" has a length of 2` | the old trim put back → red |
 | **G14** the creation warning did not name the path or say there is no isolation | `…TheFolderCreationWarning_NamesThePath_SaysThereIsNoIsolation_AndWhatToDo` | `Expected said "WARNING: … could not be made (UnauthorizedAccessException: denied); …" to contain "/the/temp"` | green by construction of the new text; the old text is the red |
 | **G15** the claim warning did not say the consequence | `…TheClaimWarning_SaysTheConsequencePlainly` | `Expected said … to contain "one hour"` | as above |
 | **J6** S5e allowed a trailing newline on Linux (`$` matches before a final `\n`; `long.Parse` accepts whitespace) | `TheRunFoldersClaim_NamesThisProcess_InE5sFormat` now reads the claim strictly (`OwnerClaim.IsWellFormed`), requires no `\n`/`\r`, and parses the start as digits only | on Windows the old test already failed with a newline appended (the pid field read `1234\n`); on Linux/macOS-style two- or three-field text it did not for the start field | the writer appends a line feed → red |
 | **J7** the cornerstone's never-toggled proof was not built | `NoTestMovesTempButTheRunTempInitializerTests` (3): no test source calls `SetEnvironmentVariable` with a temp name as its literal first argument, or in the loop-over-the-three-names form, except `RunTemp` and `AVibeHomesNeverLiveUnderTempTests`; a companion finds `AVibeHomes…` with an empty allow-list; a synthetic case names `Direct.cs` and `Loop.cs` and not a child's request, a comment, or an allowed file | the scan filtered to find nothing: `TheScan_StillSeesTheClassItKnowsMovesTemp` and the synthetic case red (the real-tree test names `ChildEnvironmentTests.cs` and `EveryClassThatSetsTheProcessEnvironmentTests.cs` until they were allow-listed with a stated reason) | that same filter is the break-it. **Limits:** a name built at run time or written through a helper is not seen; three files are exempt by name (two only spell the pattern, `ChildEnvironmentTests` lists the three names as allowlist data beside a write of its own variable) |
-| **J5** the family janitor matches DIRECTORIES only (`-type d` / `-Directory`) | text only: a killed run's `.owner` FILE is never removed until E5's sweep (the `RunTemp` remark and the plan's D2 text say so; E5's open tail gains "remove orphan `.owner` files whose folder is gone") | — | — |
+| **J5** the family janitor matches DIRECTORIES only (`-type d` / `-Directory`) | text only: a killed run's `.owner` FILE is never removed until E5's sweep (the `RunTemp` remark and the plan's D2 text say so; E5's open tail gains "remove orphan `.owner` files whose folder is gone") | — | — *[superseded by E5 S3, 2026-11-03: a killed run's folder and claim are written in the owner form; the owner-aware sweep that collects them is S2-B of the same producer PR (not yet in this commit). `AKilledRun_IsCollected_ByTheSweep` runs the copied `LeftoversSweep` over a real killed child's folder.]* |
 | **G3** `node-compile-cache` appears in the machine temp, made by node itself before the runner moves `TEMP` | measured, no test: with `TEMP`/`TMP`/`TMPDIR` on a private folder, one and then three `npm --version` runs leave ONE entry, `node-compile-cache` (version-keyed subfolder `v24.18.0-x64-…`, 70 files each time) — one stable, reused folder of node's own, not growth per run; the machine's real temp holds exactly one | — | the guarantee is worded accordingly: a run leaves nothing of its OWN; node's reused cache is not counted |
 
 Also changed alongside: `TestSourceIndex.Files` / `ParseFile` (a spelling view per source file), and `OwnerClaim` gained `IsWellFormed`, `LinuxStartSeconds` and a public `Sanitised`; `RunTempSeams` gained `Suffix` and `DeleteClaim`.
@@ -5841,3 +5841,135 @@ NOT covered: the real `kimi` under a question row or a check (RESULTS §35's liv
 endings through the real `QuestionRowLaunch`, S5.6.7, but not through `PanelService`); the real NTFS junction branch of the disposal on any machine but Windows —
 on Linux `KimiFixture` makes a symbolic link (`WindowsStandIn`), so a red or a green seen there proves the link-first order, not the junction's own unlink; a
 Kimi row on Linux, WSL or macOS (D18 refuses it — the tests stand Windows in).
+
+## E5 S3 — the C# owned-resource library (an adapted copy); the run folder takes the owner form; a run without it is refused (2026-11-03)
+
+Commit 1 of the producer PR of `todo/PLAN_test_leftovers_E5.md` (S3, as revised at the epoch-4 re-review). Built on WSL Linux only: the Windows and macOS rows below
+are written from the design and the CI steps, and are filled from the first green `windows-latest` and `macos-latest` runs (append, never replace).
+
+### The copy and its manifest
+
+`src_mcp/tests_leftovers/` (project `CoaiMcp.Tests.Leftovers`, `IsTestProject=false`, namespace `CoaiMcp.Tests.Leftovers`) and `src_mcp/tests/Leftovers/` hold the files of
+`dew_flow_mcp · tests/Mcp.Tests/Leftovers/` (and `DirectoryLinks.cs`, `RepositoryRoot.cs`) at commit `197cc76af7c3c1d28f50e57533fa99d34682466d`: **38 entries** in
+`src_mcp/tests_leftovers/template-manifest.json` (23 to the library, 2 from `tests/Mcp.Tests/`, 13 `[Fact]` files to the test project). Each entry: the upstream path, the
+target path, the upstream git blob SHA and the ORDERED exact replaces with their match counts. Beyond the namespace line the operations are: `OwnedToken.cs` (`RepoToken = "coai"`,
+`RepoRow = "the multi-model review extension and server"`); `LeftoversSweepFixture.cs:3` (a fully qualified type); `LeftoversAuditException.cs:35` (`bash .claude/rules/shared/tools/janitor.sh` →
+`bash .agents/conventions/tools/janitor.sh`); `OwnerVectors.cs:11` (`".claude", "rules", "shared"` → `".agents", "conventions"`); `OwnedTests.cs:24` (`-mcp-pg-` → `-coai-pg-`). The
+ownership, liveness and deletion algorithms are unchanged. S6 adds its own entries (the 15 files S3 does not copy). `.gitattributes` gained `-text` lines for the copied FILE NAMES only
+(not a glob: coai's own files in the same folders keep the normal text rule; `.gitattributes` existed already — the brief's "coai has none" was wrong — and its `*.cs text eol=lf` is
+overridden by the later line for these names).
+
+**The diff check** — `TheAdaptedCopyTests` (coai's own file): `TheManifest_IsWellFormed`; `EveryCopiedFile_IsTheTemplateUnderTheListedReplacesOnly` (one row per entry: the target's RAW bytes, each operation undone
+in REVERSE order with its count checked, then `sha1("blob " + length + NUL + bytes)` against the manifest's blob); `EveryLeftoversFile_IsInTheManifestOrIsCoaisOwn` (a `.cs` file in the two folders is a target or on one
+short own-list). It needs no network and holds no upstream bytes; with `COAI_TEMPLATE_REPO` naming a local `dew_flow_mcp` checkout the message also names the first differing line.
+
+| Plant (by hand, then reverted) | Seen red as |
+|---|---|
+| `Owned.cs` `IdLength = 6` → `7` | `src_mcp/tests_leftovers/Owned.cs: with the listed replaces undone, the git blob is c647f934…; the manifest says ea29fb8d…` (1 of 40 red) |
+| the same, with `COAI_TEMPLATE_REPO` set | `First differing line 64: template '… IdLength = 6, StartTol...' vs copy '… IdLength = 7, StartTol...'` |
+| a replace the manifest does not list (`Owned.cs:77` `mcp` → `coai`) | red, naming the file and both SHAs |
+| count drift (the namespace line repeated in a comment of `Scope.cs`) | `operation 1 of 1 ('namespace Mcp.Tests.Leftovers;' -> 'namespace CoaiMcp.Tests.Leftovers;') expected 1 occurrence(s) of the new text, found 2 at line(s) 5, 6` |
+
+The copy compiles and passes: `--filter-namespace "CoaiMcp.Tests.Leftovers"` = 171 tests, 157 passed, 14 skipped (Windows and macOS arms), 0 failed (the brief's measurement, reproduced).
+
+### Must-not-copy rows, RED-GREEN-RED (Linux)
+
+| # | Plant | Seen red as |
+|---|---|---|
+| 9 | `Errno.For` → `isMacOS ? Darwin : Linux` | `ErrnoTests.A_system_that_is_neither_Linux_nor_macOS_has_no_table_and_never_gets_the_Linux_one` + the diff check |
+| 10 | `requireLayout();` removed from `OwnedDir.Create` / the requirement removed from `Removal.Quietly` | `LayoutGateTests.An_owned_folder_is_not_created_when_the_layout_does_not_hold`, `…is_created_once_the_layout_holds…`; `…The_removal_helper_itself_asks_for_the_layout`, `…Teardown_asks_for_the_layout…` |
+| 11 | `private static readonly string Probe = System.IO.Path.<the temp-path call>();` in `NativeTests.cs` | `TheHelpersTestsMakeNothingOutsideAnOwnedScopeTests.NoHelperTestAsksTheMachineForATempPath`: `found at least one item {"NativeTests.cs:13"}` |
+| 16 | `FileMode.CreateNew` → `Create` (claim); `Liveness.State` mapping a probe that is not `Live` to `Gone` | `OwnedTests.After_three_draws_with_no_free_name_the_call_throws`, `…A_claim_already_there_for_the_first_name_…`; `LivenessStateTests.Every_scope_vector_…`, `…Every_verdict_vector_…`, `…A_refused_query_or_a_probe_that_throws_is_unknown` |
+| 15 | the live claim written with the tag `win32` | `OwnerClaimVectorsTests.OldAndNewClaims_AreReadByBothReaders` |
+| 6 (Windows) | `Scope.cs:79` → `return true;` | NOT run here: `windows-latest` only, on a throwaway branch after the push |
+
+Every plant in a copied file also turned `TheAdaptedCopyTests` red, as expected.
+
+### The run folder
+
+Name `testsToDelete-<owner>-coai-run-<id>` (owner `u<uid>` / `w<digits>`, id six characters of `[A-Za-z0-9]`), claim `<name>.owner` BESIDE it, text `<owner>:<host>@<os>:<pid>[:<start>[:<ns>]]`, one line, `<os>` ∈ `linux`, `macos`, `windows`.
+Linux, measured: folder `testsToDelete-u1000-coai-run-p2m6nf`, claim `u1000:jinx~Ubuntu@linux:1234713:1793729601:4026532216` (a killed child's, left on purpose). macOS and Windows: `u<uid>:<host>@macos:<pid>` and
+`w<digits>:<host>@windows:<pid>` by the contract's grammar (three fields); the real examples come from the CI logs.
+
+**The order**, in ONE `OwnedDir.Create` call: the claim (an exclusive create, then written and flushed) → the folder (an exclusive `mkdir`; a taken claim or a squatted folder draws another name, three draws at most, then
+`InvalidOperationException`) → the restore registered (after `Create` returns: a restore registered between the claim and the folder could, after a redraw past a squatter, remove by a name this run never made) → `TEMP`, `TMP`, `TMPDIR`.
+`RunTempSeams.AfterClaim` is the hook S2-B's race test needs (called with the claim path, folder not made). `Restore` is idempotent and never throws: the variables back, a read-only pre-clear (`GitScratch.DeleteEvenIfReadOnly`),
+then `Removal.Quietly` (folder, five tries, claim LAST; a folder that stays keeps its claim and one warning). `TempDir` keeps its own deleter and still re-throws `LinkTargetLostException` (`ALostLinkTarget_StillFailsTheTest`).
+
+**The gate.** Each test project sets `XunitAutoGeneratedEntryPoint=false` and has `TestEntryPoint.cs`: xUnit's generated body (xunit.v3 4.0.1, copied from `obj/Debug/net10.0/XunitAutoGeneratedEntryPoint.cs`), unchanged, behind `RunTemp.Gate`; and
+`RunTempStart.cs` with the `[ModuleInitializer]` (a module initializer runs only when ITS assembly loads) and the `[assembly: AssemblyFixture]` line. `Start()` makes the folder and keeps any failure (every exception: a throw from an initializer kills the host);
+`Gate` runs before MTP is built — before discovery, any fixture, any `MemberData`, any test. Refused: **exit 78**, stdout empty, ONE stderr line `coai tests: no test ran — …` naming the executable; the lines (first failing check wins):
+the folder could not be made; `Start` never ran; the folder is gone; the leaf is not `NameBase + "run-" + 6 × [A-Za-z0-9]`; `TEMP`, `TMP` or `TMPDIR` is not exactly the folder. Measured by hand: `TMPDIR=/nonexistent/s3 TEMP=… TMP=… <suite exe>` → `exit=78`, one line, in
+all four suites. The information flags pass the gate and run inside the initializer's folder (removed at exit; with an unwritable root: still not refused, nothing created): **`--help` exit 0, `--version` exit 5 (MTP 2.4.0 does not know it: its invalid-command-line code), `--info` exit 0**, identical in all four suites.
+`--list-tests` is gated (discovery runs `MemberData`). The E2 fallback to the machine temp is withdrawn.
+
+**The fallback behind the gate.** `RunTempFixture` (the assembly fixture) throws the SAME line when `RunTemp.IsActive` is false (a host that bypassed `Main`). Measured with `COAI_RUNTEMP_SELFTEST=bypass-gate`: the run fails with **exit 2** (the platform's code for failed tests, not 78),
+the line is in the failure output, no test body ran (the sentinel holds only `discovery`: discovery DOES run when `Main` is bypassed — the fixture is built after it).
+
+`COAI_RUNTEMP_SELFTEST` (each value makes the run fail closed): `fail-claim`, `drop-variables`, `mismatch-temp`, `mismatch-tmp`, `mismatch-tmpdir` (that ONE variable names another folder — the three are proved independently, as the F24 review asked), `bypass-gate`.
+
+**Per-suite wiring and proof files** (S6 marks each for the `raw-temp` baseline; the three forced-failure child runs sit next to the TEMP assertion, each in the same file): mcp `src_mcp/tests/RunTempTests.cs` (also `RunTempGateTests.cs`: the refusal table, information flags, `--list-tests`, the fallback, the killed run);
+server `src_server/tests/RunFolderTests.cs`; ingest `src_bugs/tests/RunFolderTests.cs`; bench `src_bench/CoaiBench.Tests/RunFolderTests.cs`. Each `RunFolderTests` holds the owner-form assertion, `TheEntryPoint_IsTheGatedOne`, and the child runs for a folder that cannot be made,
+a claim that cannot be written (a `DiscoverySentinel` theory proves discovery never ran) and each variable alone.
+
+### RED on today's behaviour, then GREEN
+
+The scenarios were written first and run against the library moved with TODAY's behaviour (`Refusal()` null, the entry point not gated, `IsActive` always true, the seams accepted and ignored) — E2's method. mcp: 24 of 58 red; server, ingest, bench: 7 of 7 `RunFolderTests` red (the library referenced, `RunTempStart.cs` and `TestEntryPoint.cs` absent).
+
+| # | Seen red as (on today's behaviour) |
+|---|---|
+| 1 | `Expected environment.Events to be equal to {"after-claim claim=True folder=False", "registered folder=True claim=True sets=0", "set TEMP", "set TMP", "set TMPDIR"}, but {"registered folder=True claim=False sets=0", "set TEMP", …}` |
+| 2 | mcp: `Path.GetFileName(RunTemp.Folder) to match regex "^testsToDelete-u1000-coai-run-[A-Za-z0-9]{6}\z" … but "testsToDelete-coai-run-2e91d4" does not match`; `TheEntryPoint_IsTheGatedOne` red (xUnit's generated `Main`); server/ingest/bench: `Path.GetTempPath()` is the machine's, `Folder` is empty |
+| 3 | `ATakenName_…` (claim, folder): `Expected … to be …run-bbbbbb … differ at index 14` (the old leaf has no owner); every-draw-collides: `Expected a <InvalidOperationException> to be thrown … but no exception was thrown` (today: `IOException` after 5); `AFolderThatCannotBeDeleted_KeepsItsClaim`: `Expected File.Exists(run.ClaimFile) to be True … but found False` |
+| 3a | `Expected result.ExitCode to be 78 …` (found 8, zero tests ran); the child printed the old `CreationWarning` and went on |
+| 3b | in process: `Expected a <InvalidOperationException> to be thrown, but no exception was thrown` (the seam was ignored); child with `fail-claim`: exit ≠ 78 |
+| 3c | table: `Expected Said(line) to start with "coai tests: no test ran — ", but "<no refusal>" is too short`; children: `Expected result.ExitCode to be 78, but found 8` |
+| 3d | `--list-tests` with an unwritable root: `Expected result.ExitCode to be 78 … but found 0` (1.6 MB of listing; the sentinel written by discovery); `--help`/`--version`/`--info` with an unwritable root: red on today's code too — it CREATED the missing root (`Directory.CreateDirectory` is recursive) |
+| 3e | in process: `Expected a <InvalidOperationException> to be thrown, but no exception was thrown`; `bypass-gate` child: `Did not expect result.ExitCode to be 0 because the failed fixture fails the run` |
+| 5 | `Expected CSharpVerdict(live) to be … because the live claim 'jinx@linux:1057373:1793726577' is in the contract's grammar` (the old `host@linux:pid:start`, unreadable to both new readers) |
+| 6 | green on today's code (a keep-test); break-it (g) below |
+| 7 | `Expected owner not to be <null> because the claim is in the owner form` |
+| 8 | `Did not expect CoaiMcp.Tests.RunTemp.Folder to be empty because this suite made a run folder before any test` (a first version of the assertion passed vacuously: `"" + "/"` is a prefix of every path) |
+
+GREEN: the same 58 mcp tests (0 skipped here: the read-only-root arm ran as uid 1000), 7 + 7 + 7 `RunFolderTests` and `TheGaugeFolder_IsInsideTheRunFolder`.
+
+**Break-its** (each once, by hand, observed red, reverted):
+
+| | Plant | Seen red as |
+|---|---|---|
+| (a) | the folder made BEFORE the claim is written (a scratch `Create`; `OwnedDir` is never edited) | `TheRunFolder_IsOwnerForm_AndClaimedFirst`, `RestoreIsIdempotent_…`, `AFolderThatCannotBeDeleted_IsWarnedAbout_…`. Planted for EVERY `Create`, the suite itself refused (exit 78, no test ran): the gate caught it |
+| (b) | `Start()` catches only `IOException` | `ARunThatCannotMakeItsFolder_FailsBeforeAnyTest`, `AClaimThatCannotBeWritten_FailsTheRun`, the read-only-root arm: the child crashes instead of exit 78 (the failure is an `InvalidOperationException`, as a `PlatformNotSupportedException` from `RequireLayout` would be) |
+| (c) | the gate removed from the bench `TestEntryPoint` | 7 of 7 bench `RunFolderTests` red (`TheEntryPoint_IsTheGatedOne`, the owner-form test, the children) |
+| (d) | the variables check removed | the table test, `ARunWhoseVariablesAreDropped_…`, and the three `…ForEachVariableAlone` rows |
+| (e) | `--list-tests` added to `InformationFlags` | `ListTests_IsGated_AndItsDiscoveryNeverRuns` |
+| (f) | the fallback check removed | `TheFallback_RefusesWhenTheGateDidNotRun_InProcess`, `TheFallback_RefusesAHostThatBypassedTheGate_AndNoTestBodyRuns` |
+| (g) | `TempDir.Dispose` on `Removal.Quietly` | `ALostLinkTarget_StillFailsTheTest` |
+| (h) | the live claim with the tag `win32` | `OldAndNewClaims_AreReadByBothReaders` |
+| (scans) | `RunTemp.cs` taken off `NoTestMovesTempButTheRunTempInitializerTests`' allow-list | red: `found "RunTemp.cs"` — the two repository scans now read `src_mcp/tests_leftovers` too, so the moved writer is seen |
+
+### Step 0 and the macOS layout
+
+Step 0 (`ci.yml`, job `windows`, first step) prints who owns a new file on the runner and is red unless the runner is elevated, a new file is owned by `BUILTIN\Administrators` and that is not the caller's SID. Printed values: **to be copied here from the first green Windows run.**
+The macOS job prints the stat-layout self-test (`darwin layout: arch=…`, `getuid=`, `file: dev=…`) before the Leftovers namespace and the suites: **to be copied here from the first green macOS run.**
+
+### Counts, reconciled by name (`--list-tests`, before at `004c55fb`, after at the head of this commit)
+
+| Suite | Before | After | Added | Removed |
+|---|---|---|---|---|
+| `CoaiMcp.Tests` | 13,885 | 14,124 | 302 | 63 |
+| `CoaiServer.Tests` | 614 | 623 | 9 | 0 |
+| `CoaiBugs.Tests` | 320 | 328 | 8 | 0 |
+| `CoaiBench.Tests` | 119 | 127 | 8 | 0 |
+
+Whole runs on WSL, before (main) / after: `CoaiMcp.Tests` 14,005 run, 125 skipped / 14,244 run, 142 skipped; the 17 more skips are 14 platform arms (the Windows and macOS arms of the copied tests) and 3 by design (the child-only classes `DiscoverySentinel`, `GateBypassedSentinel` and `KilledRunChild` skip in a normal run, naming why); each of the other three suites gains one such skip (its `DiscoverySentinel`). **mcp added:** the 25 library and 13 test files' tests (171), the 40 `TheAdaptedCopyTests` rows, 2 `TheHelpersTestsMakeNothingOutsideAnOwnedScopeTests`, the new `RunTempTests`
+(9), `RunTempGateTests` (10), `RunTempHardeningTests` (3), `OwnerClaimVectorsTests.OldAndNewClaims_AreReadByBothReaders`, `ALostLinkTarget_StillFailsTheTest`, the three child-only classes (3), and 62 rows of `NoSourceFileCarriesAControlByteTests` for the new files.
+**mcp removed:** `OwnerClaimTests` (all 16 rows, replaced by the copied `LivenessStateTests`: the two-valued `Judge`/`Verdict`/`ProcessIsAlive` are gone); in `OwnerClaimVectorsTests` the writer, strict-reader and Linux-start rows (`TheWriter_ProducesExactlyTheVectorsText`, `AStrictReader_…`, `TheLinuxStart_…`: 23 rows, replaced by the
+cross-vectors test; `shared/owner-claim-vectors.json` itself is unchanged); in `RunTempTests` `TheClaimIsWrittenAfterTheFolderExists_AndTheRestoreIsRegistered` (→ scenario 1), `TheRunFoldersClaim_NamesThisProcess_InE5sFormat` and `TheClaimText_IsOneLine_…` (→ the live-claim row), `TheSweepersVerdict_KeepsWhatItCannotProveDead` (9 rows; the verdict table is withdrawn), and one `AMemberDataReadAtDiscovery_…` row (its name carries the temp path);
+in `RunTempHardeningTests` `ANameThatAlreadyExists_…`, `WhenEveryDrawCollides_…` (→ the three-draw tests), `AClaimThatCannotBeDeleted_…` (the `DeleteClaim` seam is gone), `TheFolderCreationWarning_…`, `TheClaimWarning_…` (the withdrawn messages); 6 control-byte rows of the moved or deleted files. The full list is kept with the PR's evidence.
+**Server, ingest, bench:** `RunFolderTests` (7 rows each: the owner-form test, the entry point, the two child runs, the three single-variable rows) and one `DiscoverySentinel` row each; the server also `GaugeCaptureTests.TheGaugeFolder_IsInsideTheRunFolder`.
+
+### The private machine temp (E2's measurement, per suite, Linux)
+
+Each whole suite run with `TMPDIR`, `TEMP` and `TMP` at a private empty folder: **0 entries left** after `CoaiMcp.Tests` (14,244 run), `CoaiServer.Tests` (623), `CoaiBugs.Tests` (328) and `CoaiBench.Tests` (127). Failures of the whole mcp run, and what they are: `AServerStoppedByASignal_…(INT)` and `(HUP)` fail with a 30 s timeout on `004c55fb` too
+(this WSL machine), and `ConsultLookupScenarioTests.ALookup_InsideOneConsult_…` fails on `004c55fb` too when `TMPDIR` is a symbolic link (the prompt names the real path); `VibeLaunchControlTests.AHomeThatWouldPassTheWindowsLimit_…` and `RegularFilesTests.A_fifo_a_socket_and_a_device_…` fail only when the private
+`TMPDIR` is very long (a Unix socket path past 108 characters; the scratchpad path here is 170) and pass with a short one. The owner form is seven characters longer than the old name: a path budget measured on Windows has seven fewer to spend — the first `windows-latest` run is the evidence.
