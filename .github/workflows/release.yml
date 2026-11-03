@@ -477,12 +477,19 @@ jobs:
   # signing action does not run on a Windows ARM runner), keeps a vendor signature it finds, makes
   # the zip and its checksum, and uploads them as `mcp-win-x64` / `mcp-win-arm64`.
   #
-  # THE `if:` IS NOT mcp-binaries'. That one reads `needs.mcp-draft.result` and carries `always()`
-  # for a skipped draft; this job needs only `mcp-binaries`, so `mcp-draft` is not in its context
-  # and the same text would be `null == 'success'` on every tag — the signing would never run. And
-  # `always()` would run it after a failed build on a dispatch. What it wants is the one fact it can
-  # see: the build, every leg of it, succeeded. A skipped `mcp-binaries` (a tag of another line, a
-  # dispatch for another target) is not success, so it is skipped with it.
+  # THE `if:` IS NOT mcp-binaries'. That one reads `needs.mcp-draft.result`; this job needs only
+  # `mcp-binaries`, so `mcp-draft` is not in its context and the same text would be `null ==
+  # 'success'` on every tag. What it wants is the one fact it can see: the build, every leg of it,
+  # succeeded — `needs.mcp-binaries.result == 'success'`, which a failed, cancelled or skipped build
+  # (a tag of another line, a dispatch for another target) does not satisfy.
+  #
+  # And it carries `!cancelled()` for the same reason `mcp-binaries` carries `always()`: a job `if:`
+  # with NO status function gets an implicit `success()`, and that one looks at EVERY upstream job, not
+  # only the `needs` — including `mcp-draft`, which a workflow_dispatch skips (actions/runner#491). So
+  # the bare comparison is skipped on every dispatch and the trial that proves the signing could never
+  # run. `!cancelled()` replaces the implicit check, so a cancel still stops it; a FAILED build still
+  # stops it, through the comparison. `mcp-release-complete` is tag-only and keeps its implicit
+  # `success()`: on a tag the draft ran, so there is nothing skipped upstream to trip it.
   #
   # The permissions are the shared contract's and nothing more: `id-token` is what lets the job ask
   # Azure for a token, and no other job in this file has it. The federated trust names this
@@ -505,7 +512,7 @@ jobs:
   # reviewer has not read.
   mcp-sign:
     name: sign the Windows coai-mcp
-    if: needs.mcp-binaries.result == 'success'
+    if: ${{ !cancelled() && needs.mcp-binaries.result == 'success' }}
     needs: [mcp-binaries]
     permissions:
       contents: read
@@ -527,7 +534,7 @@ jobs:
   # permission — the package arrives already signed.
   mcp-sign-attach:
     name: attach the signed Windows coai-mcp
-    if: needs.mcp-sign.result == 'success'
+    if: ${{ !cancelled() && needs.mcp-sign.result == 'success' }}
     needs: [mcp-sign]
     runs-on: ubuntu-latest
     timeout-minutes: 10
