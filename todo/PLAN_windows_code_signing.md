@@ -14,6 +14,8 @@
 
   (The approving round's accepted findings 0, 1, 2, 4 and 5 are part of the approved text, not changes of it.)
 
+- 1.1 · 2026-11-03 · reviewer · contract — the twin's re-review made the shared workflow sign only declared files: coai passes its libraries in `extra-files`, and an undeclared unsigned PE is red
+
 ## 1. The symptom and the goal
 
 **Symptom.** On Windows 11 with Smart App Control (SAC) on, the extension's *Install the MCP server*
@@ -63,12 +65,14 @@ uses: oleksandrdubyna88/dew_flow_release_signing/.github/workflows/sign-windows.
 with:
   artifacts: '["mcp-win-x64","mcp-win-arm64"]'
   own-files: '["coai-mcp.exe"]'
+  extra-files: '["*e_sqlite3*.dll","*tree-sitter*.dll"]'
   required: ${{ startsWith(github.ref, 'refs/tags/') }}
 ```
 
 The shared workflow's contract takes output names WITHOUT the prefix: it downloads `unsigned-NAME`
 (what the leg uploaded) and uploads `NAME`, so the unsigned artifacts never match an `mcp-*` pattern.
-It signs every unsigned `exe`/`dll`, keeps a vendor-signed one as it is, verifies, and
+It signs the own file and every unsigned `exe`/`dll` matched by `extra-files` — an unsigned PE that
+matches neither is red, so nothing undeclared is ever signed — keeps a vendor-signed one as it is, verifies, and
 packs with today's `7z` command and checksum format, proving by hash that the zip holds the verified
 files.
 
