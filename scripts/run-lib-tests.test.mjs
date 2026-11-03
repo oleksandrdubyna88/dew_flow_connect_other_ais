@@ -81,7 +81,9 @@ test('L3 the child\'s status is the runner\'s; a thrown sweep is one line and th
 
   assert.equal(status, 0);
   assert.equal(spawned, 1, 'the child still runs');
-  assert.deepEqual(lines, ['run-lib-tests: leftovers sweep not run (boom); the tests still will']);
+  assert.equal(lines.length, 2, 'the sweep line, then the count line');
+  assert.equal(lines[0], 'run-lib-tests: leftovers sweep not run (boom); the tests still will');
+  assert.match(lines[1], /^run-lib-tests: no old coai-\* leftovers in /);
 });
 
 test('L4 the mount missing is one line and exit 2, nothing spawned', async (t) => {
@@ -98,4 +100,27 @@ test('L4 the mount missing is one line and exit 2, nothing spawned', async (t) =
   assert.equal(spawned, 0, 'nothing is spawned');
   assert.equal(errors.length, 1);
   assert.match(errors[0], /^run-lib-tests: the shared conventions are not mounted \(Cannot find module .*\) — run: git submodule update --init \.agents\/conventions$/);
+});
+
+test('L6 [S2-B code1 5] the coai-* count follows the sweep and comes before node --test, as in run-tests.mjs', async (t) => {
+  const root = privateRoot(t);
+  plantDeadOwnersFolder(root);
+  fs.mkdirSync(path.join(root, 'coai-panel-x'));
+  const events = [];
+  const spawn = () => {
+    events.push('SPAWN');
+    return { status: 0 };
+  };
+
+  await runLibTests({
+    loadOwned: withMount, spawn, log: (line) => events.push(line), repoRoot, root, mode: 'collect', sweepOptions: { probe, mine: () => true, now: Date.now() },
+  });
+
+  const swept = events.findIndex((line) => line.startsWith('run-lib-tests: leftovers in '));
+  const counted = events.findIndex((line) => /^run-lib-tests: 1 old coai-\* directory in /.test(line));
+  assert.ok(swept >= 0, `the sweep says what it removed: ${JSON.stringify(events)}`);
+  assert.ok(counted > swept, `the count line comes after the sweep's: ${JSON.stringify(events)}`);
+  assert.equal(events.indexOf('SPAWN'), events.length - 1, 'and node --test is started after both');
+  assert.ok(events.indexOf('SPAWN') > counted);
+  assert.ok(fs.existsSync(path.join(root, 'coai-panel-x')), 'a count takes nothing');
 });

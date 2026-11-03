@@ -16,7 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mountMissingLine, startOfRunSweep } from '../src_vs_code/scripts/run-tests.mjs';
+import { mountMissingLine, reportLeftoversFirst, startOfRunSweep } from '../src_vs_code/scripts/run-tests.mjs';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PREFIX = 'run-lib-tests';
@@ -40,6 +40,8 @@ export async function runLibTests({
     return 2;
   }
   await startOfRunSweep({ owned, prefix: PREFIX, log, root, repo: repoRoot, loadSweep: sweep, sweepOptions, mode });
+  // The sweep never looks at `coai-*`, so the count (one line, names only) says how many old ones are there, exactly as `run-tests.mjs` does: sweep, count, then the run.
+  reportLeftoversFirst({ prefix: PREFIX, log, root, repo: repoRoot });
   // The glob is node's own, quoted for no shell: a new `scripts/**/*.test.mjs` is picked up without touching this runner or the CI step.
   const result = spawn(process.execPath, ['--test', 'scripts/**/*.test.mjs'], { cwd: repoRoot, stdio: 'inherit' });
   return result.status ?? 1;

@@ -111,14 +111,16 @@ const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
  * longer counted here: the start-of-run sweep (`startOfRunSweep`) lists each by name with its command. It never stops the run: housekeeping that fails is
  * reported and stepped over. `log` and `count` are the seams its own test uses.
  */
-export function reportLeftoversFirst({ log = console.log, root = REAL_TEMP_ROOT, count = () => startOfRun({ dir: root, rule: readRule('..') }) } = {}) {
+export function reportLeftoversFirst({
+  log = console.log, root = REAL_TEMP_ROOT, repo = REPO_ROOT, prefix = 'run-tests', count = () => startOfRun({ dir: root, rule: readRule(repo) }),
+} = {}) {
   try {
     const { leftovers } = count();
     log(leftovers === 0
-      ? `run-tests: no old coai-* leftovers in ${root}`
-      : `run-tests: ${leftovers} old coai-* director${leftovers === 1 ? 'y' : 'ies'} in ${root} — no test sweep removes them (E5 S2-A); see research/module_tests.md § The one-off clean-up`);
+      ? `${prefix}: no old coai-* leftovers in ${root}`
+      : `${prefix}: ${leftovers} old coai-* director${leftovers === 1 ? 'y' : 'ies'} in ${root} — no test sweep removes them (E5 S2-A); see research/module_tests.md § The one-off clean-up`);
   } catch (error) {
-    log(`run-tests: the leftover count did not run (${error.message}); the tests still will`);
+    log(`${prefix}: the leftover count did not run (${error.message}); the tests still will`);
   }
 }
 
