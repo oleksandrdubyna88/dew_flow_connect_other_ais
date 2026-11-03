@@ -406,7 +406,7 @@ been changed. The product now walks at most once every ten minutes per process r
 reviewer. CI never sees any of this: a runner starts with an empty temp, so a green CI beside a
 stalled local suite is evidence FOR this cause.
 
-**Retired 2026-11 (E5 S2-A of `todo/PLAN_test_leftovers_E5.md`):** neither runner sweeps the machine's temp folder any more (the only delete left at a run's start is the MCP suite's removal of a killed run's leftover fake-CLI steering file, `FakeCliSteering.DeleteALeftover`). The paragraph below is kept as history — a sweep that took `coai-*` on a name and an age could not tell a person's live chat, another user's run or a round waiting on a slow reviewer from a dead run's folder, and the owner-aware sweep that replaces it is a later story (S2-B). What runs now is below the paragraph.
+**Retired 2026-11 (E5 S2-A of `todo/PLAN_test_leftovers_E5.md`):** neither runner sweeps the machine's temp folder any more (the only delete left at a run's start is the MCP suite's removal of a killed run's leftover fake-CLI steering file, `FakeCliSteering.DeleteALeftover`). The paragraph below is kept as history — a sweep that took `coai-*` on a name and an age could not tell a person's live chat, another user's run or a round waiting on a slow reviewer from a dead run's folder, and the owner-aware sweep that replaces it is a later story (S2-B). What runs now is below the paragraph. *[2026-11-03, E5 S2-B: the owner-aware sweep is in — `LeftoversSweepFixture` in every C# suite, the mounted reference in the extension runner; see § E5 S2-B at the end of this file.]*
 
 **Both runners sweep BEFORE they start, on one shared rule (2026-09-23).** The operator's ruling of
 2026-09-18: tests must clean up, not after each test but before the run, everything older than ten
@@ -427,6 +427,8 @@ swept temp added 19 directories. Each rule in `sweepTemp.mjs` and the C# excepti
 purpose and the test that owns it went red (`sweepTemp.test.mjs`, `TempDirsAreSwept`). **And the list cannot fall behind the product:** each program scans its OWN source for the temp directories it makes (`CreateTempSubdirectory("coai-…")` in coai-mcp and the Team server, `mkdtemp(path.join(os.tmpdir(), 'coai-…'))` in the extension) and requires every one in `neverSwept` — and requires the scan to find the prefixes it knows are there, so a reformat is red rather than an empty list passing (plan round, local). Removing `coai-plan-`, `coai-server-job-` and `coai-chat-` from the file in turn reddened exactly the owning program's check.
 
 **What runs now (E5 S2-A).** At its start each runner COUNTS, by name only, and says so — it never removes: the extension's `scripts/run-tests.mjs` (`reportLeftoversFirst`, calling `startOfRun.mjs`) prints `run-tests: <n> old coai-* director(y|ies) in <tmp> — no test sweep removes them (E5 S2-A); see research/module_tests.md § The one-off clean-up` (or `no old coai-* leftovers`); the server suite's `TempDirsAreSwept` constructor calls `StartOfRun.Run` once per process and writes the same sentence to stderr. **Both also count the legacy `testsToDelete-coai-run-<6 hex>` folders a killed run leaves, on a line of their own** (a name cannot say whether another run is still going, so the line says "some may belong to a run still going"; the C# count leaves out this run's own folder). `shared/temp-sweep.json` keeps `neverSwept` (the product's own prefixes) and no longer holds `prefix` or `keepMinutes`: nothing selects by them. **The invariant:** every `coai-*` name is outside the test start-of-run, at any age, whatever `neverSwept` holds — `EveryCoaiName_IsOutsideTheStartOfRun_AtAnyAge_WithNeverSweptEmpty` (C-I1) and `every coai-* name is outside the start of a run, at any age, with neverSwept empty` (N-I1), with an unmarked `coai-chat-live` that survives when its prefix is missing from the list (C-R1, N-R1). The product's own sweep, `PanelService.PruneOldScratchDirs`, is untouched: `PruneOldScratchDirsCharacterizationTests` records what it does (written first, on the unchanged function), and the product sweep's own tests (`ScratchDirsTests`, `TheScratchSweepNeverDeletesAKimiHomeUnderALiveTreeTests`, `ConsultCheckSweepTests`, `ConsultantHomeSweepTests`, `AScratchSweepRunsOnTheConsultationBeatTests`, the extension's `chatStoreSweep.test.ts`) stay green beside it, while the three scans of `neverSwept` against what each program makes (`TempDirsAreSwept`, `startOfRun.test.mjs`, `TheTestSweepLeavesAJobAloneTests`) still hold the list complete. **The residual risk:** a checkout from before this change keeps its own copy of the file and its own age-only sweep (an old reader fed the new file removes nothing, or fails every test, which is the safe side); update or rebase it, or run it with a private temp root.
+
+*[2026-11-03, E5 S2-B: the SECOND count of this paragraph, of the legacy `testsToDelete-coai-run-<6 hex>` folders, is retired in both runners (C# `StartOfRun.RunFolders`, `LegacySentence`, test C-N4; Node `legacyRuns`, N7, N10, the legacy arm of N8): the sweep now LISTS each legacy folder by name with its `rm` command (`legacy: folder … — remove with: …`), never by age and never collecting it. The `coai-*` count line stays: the sweep never looks at those names.]*
 
 ## The one-off clean-up of old `coai-*` test leftovers (2026-11, E5 S2-A)
 
@@ -5996,3 +5998,137 @@ Counts after these fixes (`--list-tests`, by name, against the first S3 list): `
 
 On `windows-latest` 13 tests of `RunTempTests` and `RunTempGateTests` failed for ONE cause: the child wrote the refusal line through `Console.Error`, in the console's code page, which maps U+2014 to `-`, so the plan's exact prefix `coai tests: no test ran — ` reached the parent as `coai tests: no test ran - `. Every refusal was correct (exit 78; the fallback threw its line). Step 0 printed: elevated; caller SID `…-500`; a new file is owned by `BUILTIN\Administrators`; macOS was green with the layout values printed. The step `Run folder — Team server` did not run: the job stops at the first failed step (`Test`), so it ran no server proof yet.
 Fix: `RunTemp.WriteRefusal` writes explicit UTF-8 bytes (no byte order mark, flushed) to `Console.OpenStandardError()`, and `SuiteChild` reads both child streams as UTF-8. The line that the assembly-fixture fallback throws reaches the parent through MTP's own console output, in the CHILD's console encoding, which this code does not control, so that one test compares the dash in either spelling. On Linux the console is UTF-8 already, so the real red is the Windows run above; the seams are pinned by `TheRefusalLine_IsWrittenAsUtf8Bytes_NotInAConsoleCodePage` and `TheChild_IsReadAsUtf8_OnBothStreams`, and a stub that wrote ASCII turned the gate's child tests red on Linux too (`coai tests: no test ran ? the run folder …`).
+
+## E5 S2-B — the owner-aware start-of-run sweep in every C# suite and in both Node runners (2026-11-03)
+
+S2-B, commit 2 of the producer PR of `todo/PLAN_test_leftovers_E5.md`, built as reviewable commits (spec: `todo/PLAN_test_leftovers_E5_S2_spec.md` Stage B). Built and measured on WSL Linux only; the macOS and Windows rows are written from the design and the CI steps and are filled from the
+first green legs (append, never replace). Never merged alone: a producer without this sweep, or this sweep without the producer, is red (`TheProducerAndTheSweep_LandTogether`, D8).
+
+### Step 0 — the probe, and the branch it chose
+
+A scratch project outside the repository (xunit.v3 4.0.1, the MTP runner, six tests in three classes, one class per collection): an assembly-level `BeforeAfterTestAttribute` whose `Before` throws for a test named `Boom`, an assembly fixture that no class
+injects whose constructor is a 400 ms "sweep" with its end stamped in a `finally`. Seen on Linux: `Before` ran for tests of all three classes (`ClassA=1, ClassB=1, ClassC=1`); `Probe.ClassA.Boom` failed with `probe: planted throw from Before for Probe.ClassA.Boom` in 1 ms, its body NEVER ran,
+the host went on (5 of 6 passed; exit 2 only because one test failed); the fixture was built although no class asked for it, and its constructor ended 170.5 ms before the first test's `Before`. Negative controls: the end never stamped ⇒ all 6 fail with
+`probe: the sweep had not ended when <test> started`; the sweep throwing in the fixture constructor ⇒ all 6 fail with `Assembly fixture type 'Probe.SweepFixture' threw in its constructor`. **The fixture branch holds; plan B (the sweep in `RunTemp.Gate`) is not taken.**
+
+### What runs, and how the pieces fit
+
+| Piece | C# (all four suites) | Node (the extension runner, `scripts/run-lib-tests.mjs`) |
+|---|---|---|
+| The sweep | the copied `LeftoversSweepFixture`, registered in each `RunTempStart.cs`; its constructor calls `StartOfRunSweep.Run(RunTemp.Real)` (manifest operation A) | `startOfRunSweep` of `run-tests.mjs`: the mounted reference `sweepLeftovers`, token `coai` bound AFTER the caller's options by `src_vs_code/scripts/owned.mjs` |
+| The root | `RunTemp.Real`, the machine's temp root, the run folder's PARENT (never `Path.GetTempPath()`, which is the run folder after `RunTemp.Start`) | `REAL_TEMP_ROOT`, captured at load |
+| The switch | `shared/leftovers-sweep.json` `"startOfRunSweep": "collect"`; read by `StartOfRunSweep.ReadMode` | the same file, read by `readSweepSwitch` |
+| `list-only` | `StartOfRunSweep.ListOnly`: names only, `switched-off:` lines, nothing read, renamed or removed | the sweep is NOT loaded or called; the same lines from `readdirSync` |
+| End-of-run audit | OFF until S6 (manifest operation B: `audit: null`) | — |
+| Order | `main`: `loadOwned()` (a missing mount is ONE line and exit 2) → `startOfRunSweep` → `reportLeftoversFirst` (the `coai-*` count) → `beginRun` (N-S6) | |
+| Order proof | `StartOfRunOrderAttribute` (assembly-level `Before` THROWS when the sweep had not ended) on EVERY test of every run, and `TheSweep_EndedBeforeTheFirstTestStarted` | by structure (the runner awaits the sweep before it spawns anything) |
+
+What each runner does with each name class is B.1 § 3 of the spec (kept there; the C# column is B6/B7 and the copied tests, the Node column N-S2/N-S7). In short: owner-form names of this token and owner are judged on two keys (scope: the name, the record and the kernel owner are the caller's; and `gone`),
+removed by identity through the quarantine; another owner's are listed `foreign:`; legacy names are LISTED with their exact command and never collected; every other name, and EVERY `coai-*` name at any age, is not looked at. On Windows the Node reference lists `unverified:` and changes
+nothing (F16 interim); the C# copy applies the SID and profile keys, and the copied `WindowsOwnership` fixtures make both outcomes on the elevated runner.
+
+**The switch.** One reviewed line, `"startOfRunSweep": "collect"` → `"list-only"`, switches the destructive part off in every suite and in both runners; creation and teardown of the run folder are untouched. The safe side is `list-only`: any other value, a missing key, bad JSON or an
+unreadable file reads as `list-only` with ONE line (`coai tests: the start-of-run sweep is list-only because shared/leftovers-sweep.json startOfRunSweep is <value|missing|unreadable: …>`, prefixed `run-tests:` in Node). Pinned to `collect` on `main` by `TheSwitch_IsOnInTheRepository_AndListOnlyRemovesNothing` (B9) in C# and
+N-S5 in Node. **Rehearsed (B-B12), Linux:** with the file at `list-only` the server, ingest and bench suites ran whole and green (625, 331, 129), the mcp `Leftovers` namespace green but for B9 (a), and a planted gone-owner folder with an old claim in the private temp root SURVIVED (the log carries
+`switched-off: folder testsToDelete-u1000-coai-rehearsal-abc123 — startOfRunSweep is list-only … nothing is removed`); the same planted folder with the switch back at `collect` (bench suite): `coai tests: leftovers — removed 1, preserved 1, listed 0`, folder and claim gone. Node, same file at `list-only`: only N-S5 red.
+
+### The order proof, measured (Linux)
+
+The prediction written before the run: the margin is positive and larger than the sweep's own duration. The sweep ended **201.8 / 203.1 / 207.2 / 197.2 ms** (first full run) and **193.4 / 217.2 / 205.7 / 194.1 ms** (second) before the first test started, in `CoaiMcp.Tests` / `CoaiServer.Tests` / `CoaiBugs.Tests` / `CoaiBench.Tests`
+(the warning line of `TheSweep_EndedBeforeTheFirstTestStarted`, one per suite per leg). macOS and Windows margins: to be copied here from the first green legs. (The sweep's own duration is not measured apart from it.)
+
+### The claim-first race and the startup order
+
+Per process: `[ModuleInitializer]` `RunTemp.Start()` (claim written exclusively → folder made exclusively, ONE `OwnedDir.Create` → restore registered → `TEMP`/`TMP`/`TMPDIR` moved) → `Main` → `RunTemp.Gate` → the platform is built → discovery → the assembly fixtures (the sweep, over `RunTemp.Real`) → the collections. So THIS
+process's sweep never sees its own claim without its folder. The race is with ANOTHER process's sweep (a second suite starting at once, the Node runner, the janitor), which may list the root between this process's claim and its `mkdir`. Two keys each protect the orphan claim: age (a claim under ten minutes is passed over, silently) and, past
+the window, liveness (the claim names this live pid: kept `live`; on the hosted Windows runner `foreign-uid` first). **B5** uses `RunTempSeams.AfterClaim` (not a sleep): inside the hook, with the claim written and the folder asserted absent, the real C# sweep runs with the real clock and with `now + 11 min`, and the Node reference runs as a second
+process (`TheNodeSweep_…`, commit 3, because it needs `owned.mjs`): claim still there with the same bytes, nothing removed, no quarantine made, the reason `live` (Linux, observed for both the C# arm (b) and the Node arm).
+
+### Findings against the spec, made while building (reported to the main session)
+
+1. **The RED commit does not compile**: with no registration the copied `LeftoversSweepTests` fail the analyzer (`error xUnit1041 … Fixture argument 'fixture' does not have a fixture source`), before any test can fail at construction. The runtime lines were taken with `-p:NoWarn=xUnit1041`: the 33 facts fail with `The following constructor parameters did not have matching fixture data: LeftoversSweepFixture fixture`. Unregistering the fixture again (B-B8) is therefore red at BUILD time for the mcp suite.
+2. **The copied `LeftoversSweepTests` has 33 facts**, not 31 (F20).
+3. **The janitor copy needs a FOURTH manifest operation**: its comment names the temp-path API, which `TheHelpersTestsMakeNothingOutsideAnOwnedScopeTests` (#11) reads as a raw temp call (`LeftoversJanitorTests.cs:33`). The operation rewrites the words of the comment (`exactly as Path.GetTempPath does` → `exactly as the temp-path API does`).
+4. **`young` is not silent in the copy**: a folder under the window is kept as `Preserved … young` (no `Listed` line); only an orphan claim is truly silent. B4 asserts what the copy does. A consequence: EVERY suite start prints a summary and one line for its own run folder (`coai tests: leftovers — removed 0, preserved 1, listed 0` / `  preserved: <run folder> — young`); in `list-only` the own folder and claim are listed too.
+5. **`StartOfRunSweep.Run`'s 4-argument overload takes a `Ledger`** (the spec's version wrote process-global state): B9 calls it, and a call that moved `EndedAt` or `LastRoot` would have made `TheSweep_EndedBeforeTheFirstTestStarted`, B3 (a) and the order attribute of the other tests red at random. The real `Run(string)` uses the process's own ledger.
+6. **B8 (c): two real sweeps over one root are NOT error-free in the copy.** The sweep that loses the rename of a folder the other already moved reports ONE `Errors` line naming that rename (ENOENT) — measured, 6 runs of 6. No throw, no removal of the other's work, every folder removed once. The spec's "both `Errors` empty" (and E5 item 4's "no report line") is not met without an edit of `LeftoversSweep.cs`; B8 (c) asserts what holds and records the count as a warning. A plan decision.
+7. **B-B1's literal plant does not reach the sweep**: `Owned.Pattern` is read by `OwnedTests` and the audit, not by the sweep (which classifies through `Owned.Classify` in `RelationOf`). The literal plant is red in `OwnedTests`; the plant that reaches the sweep is `RelationOf` returning `Own` for every owner segment.
+8. **Row 3 (b) has no behavioural RED on this Linux**: `LinuxRenameExclusively` reaches `RenameByReservation` only on EINVAL/ENOSYS, which this file system never returns; the plant (`return false;` in its place) turns only the diff check red. The three `RenameByReservation` tests call the fallback directly. A test would need a seam for the errno or a file system without `RENAME_NOREPLACE`.
+9. **B5 (c) moved to commit 3** (it needs `owned.mjs`, which the spec creates there; a commit-2 test would be red).
+10. The Node tests: the spec's N-S4 ("`main` with `loadOwned` injected") is `loadOwned({ importOwned, error, exit })` (main has no parameters, as N-S6's pattern fixes); N5 of `startOfRun.test.mjs` is deleted, its content being N-S6. The expected value of the stat-less count test lost its `legacyRuns: 0` (the function no longer returns it).
+11. N-S9 runs BOTH switch values (the spec's gate finding 1): `collect` through the real default loader, `list-only` through the `mode` seam.
+
+### RED records (commit 1, `5ff1ffb5`)
+
+| Scenario | Seen red as |
+|---|---|
+| the copied sweep tests | build: `error xUnit1041` on `LeftoversSweepTests.cs(14,63)`; at runtime (analyzer off): 33 × `The following constructor parameters did not have matching fixture data: LeftoversSweepFixture fixture` |
+| B1, four suites | `Expected fixtures {CoaiMcp.Tests.RunTempFixture} to contain CoaiMcp.Tests.Leftovers.LeftoversSweepFixture` (mcp: `{RunTempFixture, TempDirsAreSwept, TestClaudeHome}`) |
+| B2, four suites | `Did not expect StartOfRunSweep.EndedAt to be 0L` |
+| B3 (a) | `Expected StartOfRunSweep.LastRoot to be "/tmp/claude-1000/s2b" … but "" has a length of 0` |
+| B9 (a) | `the repository's switch warns: … startOfRunSweep is unreadable: the file is not there` |
+| Node, both files | `ERR_MODULE_NOT_FOUND … src_vs_code/scripts/owned.mjs` |
+| B4-B8, B10, B11, B13 | they test the library already on the branch: green on commit 1, red by a planted defect (next two tables) |
+
+### Break-its (Linux; each once, planted, seen red, reverted — the diff check is also red for a plant in a copied file, as expected)
+
+| # | Plant | Red |
+|---|---|---|
+| B-B1 (literal) | `Owned.Pattern` without the owner segment | `OwnedTests` ×2, the diff check — not the sweep (finding 7) |
+| B-B1 (reaches the sweep) | `RelationOf`: `Own` for every owner segment | `A_live_foreign_unknown_or_unmarked_folder_…`, `An_orphan_claim_is_judged_by_its_owner_never_by_age_alone` |
+| B-B2 | `Liveness.State`: the start-time compare returns `Gone` | `LivenessStateTests` ×2, `A_live_foreign_unknown_…` |
+| B-B3 | the age authorises (`Judge`) | 13 tests: B3, B4, B5, B11, B13, 7 copied ones (`…_judged_by_its_owner_never_by_age_alone`, the quarantine-restore tests, …) and the diff check |
+| B-B4 | `Directory.Move` for the exclusive rename | `The_rename_into_quarantine_never_replaces_an_existing_empty_folder_…`, `A_folder_whose_every_quarantine_name_is_taken_…`, B8 |
+| B-B5 | (a) `SweepOrphanClaim` without `Young`; (b) `Judge` removes on `Live` | (a) `An_orphan_claim_is_judged_…`, 2 more; (b) 10 tests incl. B4, B5 |
+| B-B6, B-B7 | operation A with `RunTemp.Folder`; with `Owned.TempRoot()` | B3 (a) and B2 (`LastRoot`) |
+| B-B8 | the fixture line removed: mcp / server | mcp: build error xUnit1041; with the analyzer off 262 of 262 red (33 `matching fixture data`, 229 by the order attribute), B1 included; server: 9 of 9 `RunFolderTests` red (the order attribute names the first) |
+| B-B9 | the order line removed (mcp) | B1 and B2 |
+| B-B10 | the end stamp removed | 262 of 262 (the order attribute) |
+| B-B11 | `"COLLECT"` compared case-insensitively; an unknown value mapped to `Collect` | B9 (c): `… to be Mode.ListOnly … but found Mode.Collect` |
+| B-B12 | the switch at `list-only` | see § The switch (rehearsal) |
+| B-B13, B-B14, B-B15 | Node: token before the options; `beginRun` before the sweep; the spawn before the sweep | N-S1; N-S6; L1 |
+| B5 (c) | a Node wrapper that calls every pid dead | the claim is REMOVED and the test is red |
+| B6 | `RelationOf`: `Own` for legacy and for `coai-*` | `coai-chat-live` removed; B6 and B7 red |
+| B7 | the legacy folder goes through `Judge` | `Expected ReasonOf(result, dir) to be … legacy` |
+| B8 (a) | `RemoveFolder` throws on `Unchanged == false` | `a.Errors` not empty |
+| B10 | a base-36 draw | `draw 0 was .testsToDelete-u1000-coai-draw-abc123.teststodelete-quarantine-…-tgj541j9` |
+| B11 | `Scope.ReadClaimText` → `File.ReadAllText` | `AFifoAtTheClaimPath_…` and the copied `On_posix_a_fifo_swapped_in_…`: 5 s wait false |
+| B13 | `Scope.IsMine` compares a profile path on POSIX | `viaAlias.Removed` and `viaReal.Removed` empty |
+
+### Must-not-copy rows (RED-GREEN-RED)
+
+| # | Plant | Seen red as |
+|---|---|---|
+| 3 (a) | B-B4 | above |
+| 3 (b) | `LinuxRenameExclusively` returns `false` where it falls back | only the diff check (finding 8) |
+| 3 (c), 5 (Darwin) | `tmp/e5-s2b-red-macos` (local branch, to be pushed by the main session): a plain `Directory.Move` for `renamex_np` and for ENOTSUP; no `O_NONBLOCK` on the Darwin claim open | on Linux already red: `NativeDarwinTests.An_exclusive_rename_is_done_taken_or_an_error_and_a_volume_that_does_not_take_the_flag_fails_closed` and the diff check; the macOS arms await the leg |
+| 4 | B10's plant | above |
+| 5 | B11's plant | above |
+| 7 | `Liveness.AskablePid` → `long.Parse` | `A_quarantine_whose_renamer_is_no_process_id_is_never_restored_and_never_probed` |
+| 8 | the `quarantined.Contains(…)` line of `SweepOrphanClaim` removed | `An_orphan_claim_whose_folder_sits_in_a_quarantine_is_kept_with_it`, `A_quarantine_whose_renamer_is_no_process_id_…` |
+| 10 (sweep half) | `requireLayout();` removed from `GuardedSweep` | `LayoutGateTests.The_real_sweep_asks_for_the_layout_first_…`, `…runs_once_the_layout_holds` |
+| 12 | B13's POSIX plant; N-S8 and B13's macOS arms (green on the macOS leg, no plant) | above; `tmp/e5-s2b-red-windows` (local, to be pushed by the main session): `Scope.cs:77` with the GIVEN path for the final path — B13-W reports both arms in one run: (i) `g` kept `foreign-uid`, (ii) `o` removed; the recorded result decides item 8 (or the parent's entry 4.2) |
+
+### Counts, reconciled by name (`--list-tests`, before at `594a1d00`, after at the head of the commit that adds this section; the same checkout files in both)
+
+| Suite | Before | After | Added | Removed |
+|---|---|---|---|---|
+| `CoaiMcp.Tests` | 14,220 | 14,283 | 64 | 1 |
+| `CoaiServer.Tests` | 623 | 625 | 2 | 0 |
+| `CoaiBugs.Tests` | 329 | 331 | 2 | 0 |
+| `CoaiBench.Tests` | 127 | 129 | 2 | 0 |
+
+mcp added: the copied `LeftoversSweepTests` (33 facts) and `LeftoversJanitorTests` (1); `StartOfRunSweepTests` (B3, B4, B5, B5 (c) `TheNodeSweep_…`, B6, B7, B8, B9, B10, B11, B13, B13-W: 12); B1 and B2 (`RunTempTests`: 2); two rows of `TheAdaptedCopyTests.EveryCopiedFile_…` (the two manifest entries); 14 rows of
+`NoSourceFileCarriesAControlByteTests` (the new files). mcp removed: `TheTestSweepIsRetiredTests.TheLegacyRunFolders_AreCountedOnTheirOwnLine_ExceptThisRunsOwn` (C-N4: it pinned the legacy count; the sweep's `legacy:` lines replace it); `TheSentences_…` lost its legacy arm. (`ZeroKnowledgeTests` rows carry the checkout path in their name and
+differ by directory only: 24 out, 24 in.) Server, ingest, bench: B1 and B2 each. Whole runs on WSL (the short private `TMPDIR`, a symbolic link): mcp 14,316 run, 14,168 passed, 144 skipped, 4 failed — all four are on `594a1d00` too: `AReviewTree_SurvivesTheGatesPrune` and `ALookup_InsideOneConsult_…` (a `TMPDIR` that is a symbolic link),
+`AServerStoppedByASignal_…(INT)` and `(HUP)` (30 s timeout, recorded by S3 on `004c55fb`); server 625 (620 passed, 5 skipped), ingest 331 (329, 2), bench 129 (128, 1). Node: `leftoversSweep.test.mjs` is new with 10 tests (N-S1…N-S9, L5; N-S9 skips off Windows), `scripts/run-lib-tests.test.mjs` 4 (L1-L4);
+`startOfRun.test.mjs` lost N5 (now N-S6), N7, N10 and N8's legacy arm. `npm test` with a real-path `TMPDIR`: all pass (6,535 compiled-batch tests, 6,515 passed, 20 skipped, and every source file green); with the symbolic-link `TMPDIR` one compiled test (`claudeAsked`, a realpath compare) is red as it is without this change. `node scripts/run-lib-tests.mjs`:
+17 of 398 red on this WSL — the PATH-audit tests of `make-series.sh` (G3, G4, G13, J6, TEETH), 18 of 395 without the runner (`node --test "scripts/**/*.test.mjs"` on `594a1d00`): not this change. After every whole run the private temp root held no folder and no claim of a run.
+
+### The janitor, after the full runs (WSL, `bash .agents/conventions/tools/janitor.sh --token coai --dry-run`)
+
+On the private root after the runs: `janitor: looking for testsToDelete resources…` and nothing else. While the bench suite was running (its run folder and claim there): the same, nothing listed. On the machine's `/tmp`: nothing of token `coai` (18 entries of other tokens: `conventions`, `r9700`).
+
+### What this does NOT prove here
+
+The Node sweep on a real Windows machine (N-S9 runs on the `windows` job only); the macOS and Windows margins of the order proof; the macOS arms of rows 3 and 5 and of row 12 (B13, N-S8); the root-resolution mutation of `Scope` on Windows (the throwaway branch); the janitor on macOS and Windows; S6's audit (operation B keeps it off).
