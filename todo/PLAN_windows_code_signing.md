@@ -1,6 +1,6 @@
 # PLAN — the Windows `coai-mcp` package is signed, so Smart App Control lets it run and load its libraries
 
-> Status: **plan only, nothing implemented yet, 2026-11-03.** Scope: the `mcp-binaries` and
+> Status: **built and gated, 2026-11-03 — on `ci/windows-code-signing`, pinned to the shared workflow's v1.0.0 (609cc23); not merged: waits for the owner's Azure setup and the trials V1/V2.** Scope: the `mcp-binaries` and
 > `mcp-release-complete` jobs of `.github/workflows/release.yml`, one new caller job and one new
 > attach job, `.github/scripts/archive-carries.sh` (zip support), the owner's GitHub environment here.
 > No product code. Twin of `dew_flow_creds_for_devs · todo/PLAN_windows_code_signing.md`, which owns
