@@ -18,13 +18,14 @@ namespace CoaiMcp.Tests;
 public sealed class OwnerClaimVectorsTests
 {
     private const string AskNode = """
-        import { parseOwner, parseLegacyOwner } from process.argv[1];
+        import { parseOwner, parseLegacyOwner, ownerState } from process.argv[1];
         const rows = JSON.parse(process.argv[2]);
         const verdict = (read, text) => (read(text).unreadable ? "unreadable" : "owner");
         process.stdout.write(JSON.stringify(rows.map((text) => ({
           text,
           node: verdict(parseOwner, text),
           nodeLegacy: parseLegacyOwner(text).unreadable ? "unreadable" : "legacy",
+          state: ownerState(parseOwner(text)),
         }))));
         """;
 
@@ -43,7 +44,7 @@ public sealed class OwnerClaimVectorsTests
 
     private static string CSharpVerdict(string text) => Owner.Parse(text) is null ? "unreadable" : "owner";
 
-    private static async Task<Dictionary<string, (string Node, string Legacy)>> NodeVerdictsAsync(IEnumerable<string> texts)
+    private static async Task<Dictionary<string, (string Node, string Legacy, string State)>> NodeVerdictsAsync(IEnumerable<string> texts)
     {
         var owned = new Uri(Path.Combine(RepoPaths.Root(), ".agents", "conventions", "tools", "lib", "owned.mjs")).AbsoluteUri;
         var script = AskNode.Replace("process.argv[1]", $"\"{owned}\"", StringComparison.Ordinal).Replace("process.argv[2]", "process.argv[1]", StringComparison.Ordinal);
@@ -54,7 +55,7 @@ public sealed class OwnerClaimVectorsTests
         node.ExitCode.Should().Be(0, node.StdErr);
 
         return JsonDocument.Parse(node.StdOut).RootElement.EnumerateArray().ToDictionary(
-            e => e.GetProperty("text").GetString()!, e => (e.GetProperty("node").GetString()!, e.GetProperty("nodeLegacy").GetString()!));
+            e => e.GetProperty("text").GetString()!, e => (e.GetProperty("node").GetString()!, e.GetProperty("nodeLegacy").GetString()!, e.GetProperty("state").GetString()!));
     }
 
     [Fact]
@@ -73,6 +74,10 @@ public sealed class OwnerClaimVectorsTests
 
         CSharpVerdict(live).Should().Be("owner", $"the live claim '{live}' is in the contract's grammar");
         asked[live].Node.Should().Be("owner", "and Node reads it too");
+        // Reading it is not judging it: Node's liveness (the conventions' ownerState: same owner, same host spelling, same pid namespace, this pid alive, the
+        // START within two seconds of the process's own) must call this run's claim LIVE. A start field computed by another formula than the one both writers share
+        // would read "unknown" here — the guarantee the removed TheLinuxStart_IsComputedByTheFormulaBothWritersShare gave.
+        asked[live].State.Should().Be("live", "the claim of a running process, in the C# writer's own spelling, is live to the Node judge");
     }
 
     [Fact]
