@@ -41,6 +41,9 @@ public sealed class TheAdaptedCopyTests
         "src_mcp/tests_leftovers/StartOfRunSweep.cs",
         "src_mcp/tests_leftovers/StartOfRunOrderAttribute.cs",
         "src_mcp/tests/Leftovers/StartOfRunSweepTests.cs",
+        "src_mcp/tests/Leftovers/StartOfRunSweepPlants.cs",
+        "src_mcp/tests/Leftovers/StartOfRunSweepSwitchTests.cs",
+        "src_mcp/tests/Leftovers/StartOfRunSweepRaceAndRootTests.cs",
     ];
 
     internal sealed record Operation(string Old, string New, int Count);
