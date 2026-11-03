@@ -30,7 +30,7 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
 {
     private static readonly string TempSeenByTheStaticConstructor;
 
-    private static readonly TimeSpan ChildTimeout = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan ChildTimeout = TimeSpan.FromSeconds(60);
 
     private readonly TempSeenByAClassFixture _fixture;
     private readonly OwnedScope _owned = DarwinLayout.FreshOwnedScope();
@@ -235,19 +235,37 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
         TheThreeVariablesAreAFolder(out var root);
         var missing = Path.Combine(root, "missing");
 
-        var result = SuiteChild.Run(SuiteChild.MatchesNothing, AllThreeAt(missing), ChildTimeout);
+        var result = RefusedChild(root, missing, null, out var sentinel);
 
-        TheOneLineRefusal(result, root, missing);
+        TheOneLineRefusal(result, root, missing, sentinel);
     }
 
-    /// <summary>Exit 78, stdout without a result line, and exactly ONE non-empty stderr line that starts with the prefix and holds <paramref name="mentions"/>.</summary>
-    private static void TheOneLineRefusal(SuiteChild.Result result, string root, string mentions)
+    /// <summary>
+    /// A forced-failure child: the three variables at <paramref name="at"/>, started on <c>DiscoverySentinel</c> with the sentinel in <paramref name="root"/>, so a run that
+    /// got as far as discovery or a test body would have written it.
+    /// </summary>
+    private static SuiteChild.Result RefusedChild(string root, string at, string? selfTest, out string sentinel)
+    {
+        sentinel = Path.Combine(root, "sentinel");
+        var env = AllThreeAt(at);
+        env[RunTempChildren.SentinelVariable] = sentinel;
+        if (selfTest is not null)
+        {
+            env[RunTemp.SelfTestVariable] = selfTest;
+        }
+
+        return SuiteChild.Run(["--filter-class", "*DiscoverySentinel"], env, ChildTimeout);
+    }
+
+    /// <summary>Exit 78, stdout without a result line, ONE stderr line starting with the prefix and holding <paramref name="mentions"/>, the sentinel untouched, nothing left in the root.</summary>
+    private static void TheOneLineRefusal(SuiteChild.Result result, string root, string mentions, string sentinel)
     {
         result.TimedOut.Should().BeFalse("the child must end by itself: " + result.StdErr);
         result.ExitCode.Should().Be(RunTemp.RefusedExitCode, $"stdout: {result.StdOut} / stderr: {result.StdErr}");
         LinesOf(result.StdErr).Should().ContainSingle().Which.Should().StartWith(RunTemp.RefusalPrefix).And.Contain(mentions);
         result.StdOut.Should().NotContain("total:", "no test ran");
-        Directory.GetFileSystemEntries(root).Where(e => !e.EndsWith("missing", StringComparison.Ordinal)).Should().BeEmpty("the refused child left nothing in its root");
+        File.Exists(sentinel).Should().BeFalse("discovery never ran: the refusal is before it");
+        Directory.GetFileSystemEntries(root).Where(entry => !entry.EndsWith("missing", StringComparison.Ordinal)).Should().BeEmpty("the refused child left nothing in its root");
     }
 
     [Fact]
@@ -259,8 +277,9 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
 
         using (OperatingSystem.IsWindows() ? DenyWriting(readOnly) : MakeReadOnlyPosix(readOnly))
         {
-            var result = SuiteChild.Run(SuiteChild.MatchesNothing, AllThreeAt(readOnly), ChildTimeout);
+            var result = RefusedChild(root, readOnly, null, out var sentinel);
 
+            File.Exists(sentinel).Should().BeFalse("discovery never ran");
             result.TimedOut.Should().BeFalse(result.StdErr);
             result.ExitCode.Should().Be(RunTemp.RefusedExitCode, $"stdout: {result.StdOut} / stderr: {result.StdErr}");
             LinesOf(result.StdErr).Should().ContainSingle().Which.Should().StartWith(RunTemp.RefusalPrefix).And.Contain(readOnly);
@@ -335,15 +354,10 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     public void AClaimThatCannotBeWritten_FailsTheRun()
     {
         var root = _owned.Dir("s3-claim");
-        var sentinel = Path.Combine(root, "sentinel");
-        var env = AllThreeAt(root);
-        env[RunTemp.SelfTestVariable] = "fail-claim";
-        env[RunTempChildren.SentinelVariable] = sentinel;
 
-        var result = SuiteChild.Run(["--filter-class", "*DiscoverySentinel"], env, ChildTimeout);
+        var result = RefusedChild(root, root, "fail-claim", out var sentinel);
 
-        TheOneLineRefusal(result, root, "could not claim");
-        File.Exists(sentinel).Should().BeFalse("discovery never ran: the refusal is before it");
+        TheOneLineRefusal(result, root, "could not claim", sentinel);
     }
 
     /// <summary>Each of the three variables, changed ALONE after the folder was made, is refused on its own: one combined case would pass for a check of only one of them.</summary>
@@ -354,12 +368,10 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     public void ARunWhoseVariableNoLongerNamesItsFolder_IsRefused_ForEachVariableAlone(string selfTest, string variable)
     {
         var root = _owned.Dir("s3-lost");
-        var env = AllThreeAt(root);
-        env[RunTemp.SelfTestVariable] = selfTest;
 
-        var result = SuiteChild.Run(SuiteChild.MatchesNothing, env, ChildTimeout);
+        var result = RefusedChild(root, root, selfTest, out var sentinel);
 
-        TheOneLineRefusal(result, root, "TEMP, TMP and TMPDIR must all name this run's folder");
+        TheOneLineRefusal(result, root, "TEMP, TMP and TMPDIR must all name this run's folder", sentinel);
         LinesOf(result.StdErr).Single().Should().Contain($"{variable}='").And.Contain("-mismatch'", $"only {variable} was changed");
     }
 
