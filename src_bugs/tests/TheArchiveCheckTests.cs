@@ -115,6 +115,92 @@ public sealed class TheArchiveCheckTests
         code.Should().Be(2, "a check that cannot look must not answer 'everything is there'");
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // THE ZIP. The Windows `coai-mcp` package is a `.zip` made AFTER signing, by the shared signing
+    // workflow, so the product check runs on that final file and must read it the way it reads a
+    // `.tar.gz`: same basename match, exact by default. Each case is an archive built to be wrong.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>What the Windows package must carry: the binary and the SQLite library beside it.</summary>
+    private static readonly string[] WhatTheWindowsPackageWants = ["coai-mcp.exe", "*e_sqlite3*"];
+
+    [Fact]
+    public void AZipWithEverythingInItPasses()
+    {
+        var archive = Zip("coai-mcp.exe", "e_sqlite3.dll", "tree-sitter.dll");
+
+        var (code, error) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(0, "this zip carries the binary and the library, and said: {0}", error);
+    }
+
+    [Fact]
+    public void AZipWithoutTheBinaryIsRefused()
+    {
+        var archive = Zip("e_sqlite3.dll", "tree-sitter.dll");
+
+        var (code, error) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(1, "a zip that signed everything but the binary is not a package");
+        error.Should().Contain("does not carry coai-mcp.exe");
+    }
+
+    /// <summary>The #328 hole, now for a zip: a name that CONTAINS the wanted one is not the wanted one.</summary>
+    [Fact]
+    public void DebugSymbolsDoNotStandInForTheBinaryInAZip()
+    {
+        var archive = Zip("coai-mcp.exe.dbg", "e_sqlite3.dll");
+
+        var (code, error) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(1, "there is no coai-mcp.exe here, only a file whose name contains it");
+        error.Should().Contain("does not carry coai-mcp.exe");
+    }
+
+    [Fact]
+    public void AZipWithoutTheSqliteLibraryIsRefused()
+    {
+        var archive = Zip("coai-mcp.exe", "tree-sitter.dll");
+
+        var (code, error) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(1);
+        error.Should().Contain("does not carry *e_sqlite3*");
+    }
+
+    /// <summary>A file that is named `.zip` and is not one cannot be looked into, and that is not a pass.</summary>
+    [Fact]
+    public void AFileThatIsNotAZipIsNotAPass()
+    {
+        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
+        var archive = Path.Combine(work.FullName, "coai-mcp-0.1.0-win-x64.zip");
+        File.WriteAllText(archive, "this is not a zip");
+
+        var (code, _) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(2, "a check that cannot list the archive must not answer 'everything is there'");
+    }
+
+    /// <summary>A `.zip` holding one directory of empty files, the way the signing workflow packs one.</summary>
+    private static string Zip(params string[] names)
+    {
+        const string Directory = "coai-mcp-0.1.0-win-x64";
+        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
+
+        // Staging tree and archive are separate, for the same reason as in <see cref="Archive"/>.
+        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.FullName, "tree"));
+        var staged = System.IO.Directory.CreateDirectory(Path.Combine(tree.FullName, Directory));
+        foreach (var name in names)
+        {
+            File.WriteAllText(Path.Combine(staged.FullName, name), string.Empty);
+        }
+
+        var archive = Path.Combine(work.FullName, $"{Directory}.zip");
+        ZipFile.CreateFromDirectory(tree.FullName, archive, CompressionLevel.Fastest, includeBaseDirectory: false);
+
+        return archive;
+    }
+
     /// <summary>A `.tar.gz` holding one directory of empty files, the way the release packages one.</summary>
     private static string Archive(params string[] names)
     {
