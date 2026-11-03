@@ -40,9 +40,9 @@ public sealed class TheAdaptedCopyTests
         "src_mcp/tests_leftovers/SuiteChild.cs",
     ];
 
-    private sealed record Operation(string Old, string New, int Count);
+    internal sealed record Operation(string Old, string New, int Count);
 
-    private sealed record Entry(string Upstream, string Target, string Blob, IReadOnlyList<Operation> Replace);
+    internal sealed record Entry(string Upstream, string Target, string Blob, IReadOnlyList<Operation> Replace);
 
     private sealed record Manifest(string Repository, string Commit, IReadOnlyList<Entry> Entries);
 
@@ -117,11 +117,28 @@ public sealed class TheAdaptedCopyTests
         CoaiOwn.Should().NotIntersectWith(targets, "a file is either a copy or coai's own");
     }
 
+    /// <summary>
+    /// A manifest count BELOW the template's occurrences: the template has the old text twice, the manifest lists a count of one, and the copy replaced only one of them. Undoing the
+    /// replace gives the template back byte for byte, so the blob matches — only applying the operations FORWARD again shows that one old text remains.
+    /// </summary>
+    [Fact]
+    public void ACountBelowTheTemplatesOccurrences_IsRefused_WhereOneOldTextRemainsInTheCopy()
+    {
+        var template = Encoding.UTF8.GetBytes("aXbXc");
+        var entry = new Entry("tests/Mcp.Tests/Fake.cs", "src_mcp/tests_leftovers/Fake.cs", GitBlobSha(template), [new Operation("X", "Y", 1)]);
+
+        var partial = Verify(entry, Encoding.UTF8.GetBytes("aYbXc"));
+        var faithful = Verify(entry with { Replace = [new Operation("X", "Y", 2)] }, Encoding.UTF8.GetBytes("aYbYc"));
+
+        partial.Failure.Should().NotBeNull("the copy kept one old text the manifest does not list").And.Contain("2 occurrence(s) of the old text").And.Contain("lists 1");
+        faithful.Failure.Should().BeNull("a copy with the right count passes");
+    }
+
     /// <summary>The outcome of the check: a message when it failed, and the reversed bytes either way.</summary>
-    private sealed record Verdict(string? Failure, byte[] Reversed);
+    internal sealed record Verdict(string? Failure, byte[] Reversed);
 
     /// <summary>Undoes the entry's operations in REVERSE order on the bytes, then compares the git blob SHA. Pure: the bytes in, the verdict out.</summary>
-    private static Verdict Verify(Entry entry, byte[] bytes)
+    internal static Verdict Verify(Entry entry, byte[] bytes)
     {
         var current = bytes;
         for (var index = entry.Replace.Count - 1; index >= 0; index--)
@@ -141,13 +158,41 @@ public sealed class TheAdaptedCopyTests
         }
 
         var actual = GitBlobSha(current);
-        return actual == entry.Blob
+        if (actual != entry.Blob)
+        {
+            return Mismatch(entry, actual, current);
+        }
+
+        // The same operations FORWARD on the template's bytes must give exactly the committed file, each with its listed count of old text. Undoing alone cannot see a count
+        // BELOW the template's: the copy that replaced one of two old texts reverses to the template, and only the forward count (two, not one) shows what stayed.
+        var forward = current;
+        for (var index = 0; index < entry.Replace.Count; index++)
+        {
+            var operation = entry.Replace[index];
+            var oldBytes = Encoding.UTF8.GetBytes(operation.Old);
+            var (found, lines) = Occurrences(forward, oldBytes);
+            if (found != operation.Count)
+            {
+                return new Verdict(
+                    $"{entry.Target}: operation {index + 1} of {entry.Replace.Count} ('{Shown(operation.Old)}' -> '{Shown(operation.New)}') applied to the template finds {found} occurrence(s) of the old text"
+                    + (lines.Count > 0 ? $" at line(s) {string.Join(", ", lines)}" : string.Empty)
+                    + $", but the manifest lists {operation.Count}: the copy keeps old text the manifest does not account for.",
+                    current);
+            }
+
+            forward = Replace(forward, oldBytes, Encoding.UTF8.GetBytes(operation.New));
+        }
+
+        return forward.AsSpan().SequenceEqual(bytes)
             ? new Verdict(null, current)
-            : new Verdict(
-                $"{entry.Target}: with the listed replaces undone, the git blob is {actual}; the manifest says {entry.Blob} (template file {entry.Upstream}). "
-                + $"A byte of the copy differs from the template outside the listed replaces. Compare: git -C <dew_flow_mcp> show {entry.Blob} | diff - <(the reversed bytes). ",
-                current);
+            : new Verdict($"{entry.Target}: the listed replaces applied to the template do not give this file byte for byte.", current);
     }
+
+    private static Verdict Mismatch(Entry entry, string actual, byte[] current) =>
+        new Verdict(
+            $"{entry.Target}: with the listed replaces undone, the git blob is {actual}; the manifest says {entry.Blob} (template file {entry.Upstream}). "
+            + $"A byte of the copy differs from the template outside the listed replaces. Compare: git -C <dew_flow_mcp> show {entry.Blob} | diff - <(the reversed bytes). ",
+            current);
 
     private static string Shown(string text) => text.Length <= 60 ? text : text[..57] + "...";
 
