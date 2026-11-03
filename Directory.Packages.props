@@ -74,6 +74,11 @@
          aborts — run the executable (.claude/rules/shared/common/testing.md). -->
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
 
+    <!-- The leftovers library (src_mcp/tests_leftovers) is not a test project, so it takes xUnit's extensibility core and
+         assert packages, not the runner. They move with xunit.v3: its 4.0.1 nuspec pins both at [4.0.1]. -->
+    <PackageVersion Include="xunit.v3.extensibility.core" Version="4.0.1" />
+    <PackageVersion Include="xunit.v3.assert" Version="4.0.1" />
+
     <!-- 7.2.2 = the last Apache-2.0 release; 8.x moved to the Xceed Community License
          (non-commercial only). Do NOT bump. -->
     <PackageVersion Include="FluentAssertions" Version="7.2.2" />
