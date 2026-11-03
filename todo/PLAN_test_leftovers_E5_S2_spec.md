@@ -1094,6 +1094,14 @@ plant stays on a pushed branch but the throwaway macOS one):
 | 10 (sweep half) | the copied `LayoutGateTests.The_real_sweep_asks_for_the_layout_first…` and `…runs_once_the_layout_holds` (S3 copied them; they now read the REGISTERED fixture's `GuardedSweep`); the diff check holds operation A inside `GuardedSweep(DarwinLayout.Require, …)` | `requireLayout();` removed from `GuardedSweep` | Linux (the seam injects the failing layout); the macOS leg runs `The stat layout self-test` first |
 | 12 | B13 (with its macOS arm: both root forms `mine`, the sweep's listing and the claim identity agree); N-S8 (the same in Node); B13-W | a profile-path `IsMine` on POSIX (B13's plant) — Linux; **and the root-resolution mutation of the copied `Scope` (`Scope.cs:77`, the given path for the final path) — Windows, B13-W, both arms red for THAT reason, on `tmp/e5-s2b-red-windows`; not red for that reason ⇒ the evidence reported, the parent's entry 4.2, the plan stops (B.1 § 5)** *[2026-11-03]* | Linux; the macOS leg (B13's and N-S8's macOS arms run GREEN there, no plant); `windows-latest` (the throwaway branch) |
 
+*[2026-11-03, row 12 SETTLED — the Windows throwaway run]* **Run 41717749312, branch `tmp/e5-s2b-red-windows`, job `Windows · mcp`:** the mutation of `Scope.cs:77` (the GIVEN path for
+the final path) turned B13-W red for exactly the intended reasons, both arms in one run: `E5 S2-B B13-W (i): removed=0 reason=foreign-uid errors=0` (the gone-owner folder inside the profile, reached through a junction outside it, was KEPT)
+and `E5 S2-B B13-W (ii): removed=1 reason=(none) errors=0` (the owner's folder outside the profile, reached through a junction inside it, was REMOVED — the dangerous direction); `TheAdaptedCopyTests` was red on `Scope.cs` beside them, as
+designed. The same job's N-S9 step (`The Node sweep lists and changes nothing on Windows (F16, Q6)`) printed `ok 9`. Row 12's C# half is met as written; **there is no entry 4.2 and the plan does not stop.**
+*[2026-11-03, the macOS throwaway run]* **Run 41717755065, branch `tmp/e5-s2b-red-macos`, job `macOS · mcp · server · bench`:** red on the plants, as planned: `DarwinNativeTests` (`A_fifo_swapped_in_…`, `An_exclusive_rename_onto_a_taken_name_leaves_the_existing_entry_with_its_identity`),
+`NativeDarwinTests.An_exclusive_rename_is_done_taken_or_an_error_and_a_volume_that_does_not_take_the_flag_fails_closed`, `NativeTests.An_exclusive_rename_takes_a_free_name_and_never_replaces_an_empty_folder_or_a_full_one`, `ScopeTests.On_posix_a_fifo_swapped_in_…` (5 s wait),
+`LeftoversSweepTests.The_rename_into_quarantine_never_replaces_an_existing_empty_folder_…` and `A_folder_whose_every_quarantine_name_is_taken_stays_where_it_is`, and the diff check on `NativeDarwin.cs`.
+
 **Run:** the four executables through `low-priority.mjs` with a private `TMPDIR`/`TEMP`/`TMP` (S3 brief § 10's `run`
 function): `--filter-namespace "CoaiMcp.Tests.Leftovers"` first, then `--filter-class "*RunTemp*" --filter-class
 "*RunFolder*"`, then whole; `cd src_vs_code && npm test`; `node scripts/run-lib-tests.mjs`; after a full run of every
@@ -1257,6 +1265,7 @@ added on macOS or Windows (S6's).
    `OwnedByCaller` premise first. If the throwaway run cannot show it red for that reason, the coder reports the
    evidence, the main session records item 8 as the parent's entry 4.2, and the plan stops (B.1 § 5). The coder reports
    the evidence either way.
+   *[2026-11-03, SETTLED]* The throwaway run 41717749312 showed both arms red for the path-key reason (row 12's note under B.4): no entry 4.2, the plan does not stop.
 9. **S2-B item 2 "a preload … or a tiny runner (the spec picks one)" and the plan's S4 Files line naming
    `scripts/lib/leftovers-preload.mjs`.** The runner is picked (B.1 § 7, P8); S4's Files list should say
    `scripts/run-lib-tests.mjs` (and add the owned folder and the marker to it).
@@ -1271,6 +1280,27 @@ added on macOS or Windows (S6's).
     byte-identical (D2, epoch 4) and the answer stands for a different reason now (the legacy branch of the copy is kept
     as the template has it; nothing coai adds collects a legacy name). Q3 should be marked decided by this spec.
     *[2026-11-03]* Done: Q3 carries the dated "DECIDED" note in the E5 plan (with entry 4.1).
+
+## B.11 — Corrections found while building (2026-11-03, the coder's report; the main session takes them as spec-text corrections, none is a design change)
+
+Each is a dated note; the text above is history. Measured on WSL Linux, on the macOS and Windows legs of runs 41717749312 and 41717755065, or both.
+
+1. **B.4 (the RED column of commit 1) and B.3 step 1.** With no registered fixture the RED commit does not COMPILE: the analyzer says `xUnit1041 Fixture argument 'fixture' does not have a fixture source` on `LeftoversSweepTests.cs(14,63)`. The runtime line (`The following constructor
+   parameters did not have matching fixture data`) is seen with `-p:NoWarn=xUnit1041`. B-B8 (the fixture line removed) is red at build time in the mcp suite.
+2. **F20.** The copied `LeftoversSweepTests` has 33 facts, not 31.
+3. **B.2, the janitor entry.** A FOURTH operation is needed: the comment of `LeftoversJanitorTests.cs:33` names the temp-path API, which scan #11 reads as a raw temp call (`exactly as Path.GetTempPath does` → `exactly as the temp-path API does`, count 1).
+4. **B.1 § 3 and B4 (a): "young … passed over silently".** In the copy a young FOLDER is kept as `Preserved … young` (no `Listed` line); only an orphan claim is silent. The template wins (E5 § Stages and order). Every suite start therefore prints `coai tests: leftovers — removed 0,
+   preserved 1, listed 0` and the line for its own run folder; in `list-only` the own folder and claim are listed too. B4 asserts what the copy does.
+5. **B.1 § 1, `StartOfRunSweep`.** The 4-argument overload takes a `Ledger` (`Run(tmp, mode, collect, listOnly, ledger)`); the real `Run(string)` uses the process's own ledger. Without it B9 would move `EndedAt` and `LastRoot` and turn B2, B3 (a) and the order attribute red at random.
+6. **B8 (c) and the plan's S2-B item 4 "no report line for the other's removal" — the template's behaviour wins.** Two real sweeps over one root: the sweep that loses the rename of a folder the other already moved reports ONE `Errors` line naming that rename (ENOENT; Linux, 6 runs of 6;
+   0 to 6 lines per sweep; macOS and Windows CI too). The template has no test with two real sweeps and the plan's "template wins" rule keeps the line: it is a LOST RENAME, never a throw, never a removal of the other's work. **The arm asserts what the plan requires:** no throw, no folder lost twice (each of the twenty
+   in exactly one `Removed`), no foreign removal, and every `Errors` line a lost rename. *(Found by the macOS and Windows legs:)* `Removed` ALSO lists orphan claims, by the claim's own path: a claim whose folder the other sweep has just removed is an ORPHAN claim to this sweep, which removes it. The legs failed with 21 entries
+   for 20 folders (the 21st, on macOS: `testsToDelete-u501-coai-many19-abc123.owner`); that is not a double report and not a removal of the other's work (B8 (d) makes the interleaving on purpose, in the `AfterRemove` gap). The assertions count folders and claims apart.
+7. **B.8 and § 8, B-B1.** `Owned.Pattern` is read by `OwnedTests` and the audit, not by the sweep (which classifies by `Owned.Classify` in `RelationOf`): the literal plant is red in `OwnedTests` only. The plant that reaches the sweep makes `RelationOf` return `Own` for every owner segment.
+8. **Must-not-copy row 3 (b).** `LinuxRenameExclusively` reaches `RenameByReservation` only on EINVAL/ENOSYS, which no file system of the Linux leg returns: the plant (`return false;` in its place) turns only the diff check red. The three fallback tests call `RenameByReservation` directly. A behavioural RED needs an errno seam or a file system without `RENAME_NOREPLACE`.
+9. **B5 (c).** The Node arm is a separate fact, `TheNodeSweep_NeverTouchesTheCurrentProcessOwnClaim_BetweenClaimAndFolder`, added in the Node commit: it needs `owned.mjs`, which the spec creates there, and a commit-2 test would be red.
+10. **B.4, Node.** N-S4 tests `loadOwned({ importOwned, error, exit })` (`main` has no parameters, as N-S6's pattern fixes); `startOfRun.test.mjs` N5 is deleted (its content is N-S6); the expected value of the stat-less count test lost `legacyRuns: 0`.
+11. **B.1 § 5, N-S9.** N-S9 runs BOTH switch values: `collect` through the real default loader (the repository's own value), `list-only` through the `mode` seam.
 
 ## Definition of Done (S2-B)
 
