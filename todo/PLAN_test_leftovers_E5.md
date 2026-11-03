@@ -1037,10 +1037,13 @@ the text above differ, this block wins.
   Windows, and `CoaiBugs.Tests` on macOS, are WITHDRAWN: the bugs suite runs on Linux only, and bench never runs on
   Windows. The DoD above ("the run-folder, fail-closed and refusal tests of EVERY suite green on all three OSes") is read
   as that table: the library's proofs on all three OSes; each suite's wiring where its step runs.
-- **Pure information flags pass** (finding e0). `RunTemp.Gate` lets `--help`, `--version` and `--info` through with no
-  run folder, because they create nothing. `--list-tests` stays REFUSED, because discovery runs `MemberData`. A test for
-  both: each information flag exits as the platform does with no run folder made; `--list-tests` without a run folder
-  exits 78 with the one line, and the `MemberData` sentinel is untouched.
+- **Pure information flags pass** (finding e0). `RunTemp.Gate` lets `--help`, `--version` and `--info` through: they run
+  no test and no discovery. The module initializer has already made, claimed and registered the run folder before
+  `Main` runs (on every start of the assembly), so these flags run INSIDE it and the folder is removed at exit like any
+  run's; the gate does not refuse them for a missing folder [PR review, CodeRabbit: the first text said "with no run
+  folder", which the initializer makes impossible]. `--list-tests` is gated like a test run, because discovery runs
+  `MemberData`. A test for both: each information flag exits as the platform does, and its run folder is gone after it;
+  `--list-tests` with the folder forced to fail exits 78 with the one line, and the `MemberData` sentinel is untouched.
 - **A fallback behind the gate** (finding r4). Besides the gated `Main`, a check at the first point any test can reach
   (the `RunTempFixture` assembly fixture) fails the run with the SAME one line when the gate did not run (a host that
   bypassed `Main`). The module initializer still makes the folder; the fallback refuses when `RunTemp.IsActive` is
