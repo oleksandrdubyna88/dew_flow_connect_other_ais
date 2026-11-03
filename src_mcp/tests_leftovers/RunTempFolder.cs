@@ -30,6 +30,21 @@ public sealed record RunTempSeams(Action<string, string?> SetVariable, Func<stri
 
     /// <summary>Where a warning of the helper is reported: a squatted name, a folder that could not be removed.</summary>
     public Action<string> Warn { get; init; } = Console.Error.WriteLine;
+
+    /// <summary>
+    /// Held while the run folder is claimed: the inherited <c>TESTSTODELETE_RUN</c> is withheld, so the claim names THIS process (E5 S2-B, Opus review 1). The default withholds nothing (a test
+    /// that hands <see cref="RunTempFolder"/> a dictionary must not move the real environment); <see cref="RunTemp"/> hands the real one.
+    /// </summary>
+    public Func<IDisposable> WithholdInheritedRun { get; init; } = static () => NothingWithheld.Instance;
+
+    private sealed class NothingWithheld : IDisposable
+    {
+        internal static readonly NothingWithheld Instance = new();
+
+        public void Dispose()
+        {
+        }
+    }
 }
 
 /// <summary>
@@ -82,7 +97,13 @@ public sealed class RunTempFolder
     public static RunTempFolder Create(string realRoot, RunTempSeams seams)
     {
         var before = Variables.ToDictionary(name => name, seams.GetVariable);
-        var dir = OwnedDir.Create("run", realRoot, seams.Warn, seams.NextName, seams.BeforeClaimWrite, seams.AfterClaim, seams.RequireLayout);
+        // The run folder belongs to ONE process: a record inherited in TESTSTODELETE_RUN (a wrapper's, which may die while this suite runs) is for the CHILDREN this run starts, not for the run's own folder.
+        OwnedDir dir;
+        using (seams.WithholdInheritedRun())
+        {
+            dir = OwnedDir.Create("run", realRoot, seams.Warn, seams.NextName, seams.BeforeClaimWrite, seams.AfterClaim, seams.RequireLayout);
+        }
+
         var run = new RunTempFolder(dir, seams, before);
 
         // After Create returns, never between the claim and the folder: a restore registered earlier could, after a redraw past a squatter,

@@ -201,8 +201,21 @@ public static class RunTemp
         new(static (name, value) => Environment.SetEnvironmentVariable(name, value), static name => Environment.GetEnvironmentVariable(name))
         {
             RegisterRestore = static run => AppDomain.CurrentDomain.ProcessExit += (_, _) => run.Restore(),
+            WithholdInheritedRun = static () => new InheritedRunWithheld(),
             BeforeClaimWrite = selfTest == "fail-claim" ? static _ => throw new IOException("E5 S3 self-test: the claim cannot be written") : null,
         };
+
+    /// <summary>The real environment with <c>TESTSTODELETE_RUN</c> taken out for the length of the claim, and put back exactly as it was (the module initializer is single-threaded: nothing else reads it meanwhile).</summary>
+    private sealed class InheritedRunWithheld : IDisposable
+    {
+        private const string Variable = "TESTSTODELETE_RUN";
+
+        private readonly string? _inherited = Environment.GetEnvironmentVariable(Variable);
+
+        public InheritedRunWithheld() => Environment.SetEnvironmentVariable(Variable, null);
+
+        public void Dispose() => Environment.SetEnvironmentVariable(Variable, _inherited);
+    }
 
     /// <summary>The self-test values that break the variables AFTER a successful <c>Create</c>: the gate must then refuse. Any other value is ignored.</summary>
     private static void ApplySelfTestAfterCreate(string? selfTest, IReadOnlyDictionary<string, string?> before)
