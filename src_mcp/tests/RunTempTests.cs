@@ -1,34 +1,45 @@
+using System.Reflection;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text.RegularExpressions;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
+using CoaiMcp.Tests.Leftovers;
 using FluentAssertions;
 using Xunit;
 
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A test run keeps everything it makes in "temp" inside ONE folder of its own (<c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>,
-/// D2, scenarios S5a-S5i).
+/// A test run keeps everything it makes in "temp" inside ONE folder of its own, in the owner form, claimed first, and a run that cannot have it does not start
+/// (<c>todo/PLAN_test_leftovers_E5.md</c>, S3; the run folder first came with E2, scenarios S5a-S5i).
 /// </summary>
 /// <remarks>
-/// <para>The folder is made, and <c>TEMP</c>, <c>TMP</c> and <c>TMPDIR</c> are pointed at it, by <see cref="RunTemp"/>'s module initializer — before
-/// any type of this assembly is touched. The three arms below that record <c>Path.GetTempPath()</c> from a class fixture, a <c>MemberData</c> and a
-/// static constructor are the order proof: each runs at a moment an assembly FIXTURE would be too late for.</para>
-/// <para>This class writes no environment variable of the process: the folder logic is tested through <see cref="RunTempFolder"/> against a private
-/// root and a dictionary standing in for the environment, and a child is started on its own variables through the request.</para>
+/// <para>The folder is made, claimed and registered by <see cref="RunTemp.Start"/>, called from this assembly's module initializer (<c>RunTempStart.cs</c>), and the
+/// gated <c>Main</c> (<c>TestEntryPoint.cs</c>) refuses a run whose folder is missing, before discovery. No ORDER is assumed between collections (they run in
+/// parallel): the gate is the guarantee. The three arms below that record <c>Path.GetTempPath()</c> from a class fixture, a <c>MemberData</c> and a static
+/// constructor stay as a witness that nothing read the machine's temp first.</para>
+/// <para><b>This file is the suite's proof file</b> (S6 marks it for the <c>raw-temp</c> baseline): the TEMP assertion and the three forced-failure child runs —
+/// a folder that cannot be made, a claim that cannot be written, and a TEMP, TMP or TMPDIR that does not name the run folder — each exit 78 before discovery.</para>
+/// <para>This class writes no environment variable of the process: the folder logic is tested through <see cref="RunTempFolder"/> against a private root and a
+/// dictionary standing in for the environment, and a child is started on its own variables through <see cref="SuiteChild"/>.</para>
 /// </remarks>
-public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFixture>
+public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFixture>, IDisposable
 {
     private static readonly string TempSeenByTheStaticConstructor;
 
-    private static readonly Regex Claim = new(@"^[^@\s]+@(win32|linux|darwin):\d+(:\d+)?$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    private static readonly TimeSpan ChildTimeout = TimeSpan.FromMinutes(3);
 
     private readonly TempSeenByAClassFixture _fixture;
+    private readonly OwnedScope _owned = DarwinLayout.FreshOwnedScope();
 
     static RunTempTests() => TempSeenByTheStaticConstructor = Path.GetTempPath();
 
     public RunTempTests(TempSeenByAClassFixture fixture) => _fixture = fixture;
+
+    public void Dispose() => _owned.Dispose();
 
     /// <summary>What a class fixture saw when it was built: before the first test of the class.</summary>
     public sealed class TempSeenByAClassFixture
@@ -41,13 +52,27 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
 
     private static string Trimmed(string path) => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
+    /// <summary>The leaf of the run folder: this owner's base name, <c>run-</c>, six characters of [A-Za-z0-9].</summary>
+    private static Regex RunLeaf { get; } = new("^" + Regex.Escape(Owned.NameBase) + "run-[A-Za-z0-9]{6}\\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
+    private static Dictionary<string, string?> AllThreeAt(string path) => RunTempFolder.Variables.ToDictionary(name => name, _ => (string?)path);
+
+    private static string[] LinesOf(string text) => text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+
     [Fact]
     public void ATestRun_KeepsItsTempInsideItsOwnFolder()
     {
-        Trimmed(Path.GetTempPath()).Should().StartWith(RunTemp.Folder, "the run's temp folder is where every test's temp path points");
-        RunTemp.Folder.Should().StartWith(RunTemp.Real).And.NotBe(RunTemp.Real, "the run folder is INSIDE the machine's temp folder, never it");
-        Path.GetFileName(RunTemp.Folder).Should().MatchRegex("^testsToDelete-coai-run-[0-9a-f]{6}$");
+        RunTemp.Refusal().Should().BeNull("a run that reached a test passed the gate");
+        RunTemp.IsActive.Should().BeTrue("Gate checked and passed this run");
+        Trimmed(Path.GetTempPath()).Should().Be(RunTemp.Folder, "the run's temp folder is where every test's temp path points");
+        Path.GetDirectoryName(RunTemp.Folder).Should().Be(RunTemp.Real, "the run folder is INSIDE the machine's temp folder, never it");
+        Path.GetFileName(RunTemp.Folder).Should().MatchRegex(RunLeaf.ToString(), "the owner form: the name base of this owner and repository, run-, six characters");
+        RunTempFolder.Variables.Select(Environment.GetEnvironmentVariable).Should().OnlyContain(value => value == RunTemp.Folder, "TEMP, TMP and TMPDIR all name the run folder");
     }
+
+    [Fact]
+    public void TheEntryPoint_IsTheGatedOne() =>
+        Assembly.GetEntryAssembly()!.EntryPoint!.DeclaringType!.FullName.Should().Be("CoaiMcp.Tests.TestEntryPoint", "xUnit's generated Main is behind RunTemp.Gate");
 
     [Fact]
     public void AClassFixtureBuiltBeforeAnyTest_AlreadySawTheRunFolder() =>
@@ -100,46 +125,20 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
         reviewers.Should().NotBeEmpty();
         reviewers.Select(r => r.Invocation.OutputFile).Where(f => f.Length > 0).Should().OnlyContain(
             f => f.StartsWith(RunTemp.Folder, StringComparison.Ordinal) && f.Contains("coai-answers-", StringComparison.Ordinal),
-            "the round made its answers folder through the process's temp variables, so it is inside the run's folder");
-    }
-
-    [Fact]
-    public void TheRunFoldersClaim_NamesThisProcess_InE5sFormat()
-    {
-        var text = File.ReadAllText(RunTemp.Folder + ".owner");
-
-        OwnerClaim.IsWellFormed(text).Should().BeTrue("<host>@<os>:<pid>[:<start>], read STRICTLY (whole-text anchors): the family's owner claim");
-        text.Should().NotEndWith("\n", "no trailing newline: .NET's $ matches before a final line feed, so a lenient regex would let one through").And.NotContain("\r");
-        var fields = text.Split('@')[1].Split(':');
-        fields[1].Should().Be(Environment.ProcessId.ToString(), "the claim names THIS process");
-        fields.Length.Should().Be(OperatingSystem.IsLinux() ? 3 : 2, "only Linux gives a start time without spawning a process");
-        if (OperatingSystem.IsLinux())
-        {
-            long.TryParse(fields[2], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var recorded).Should().BeTrue("digits only, no whitespace");
-            Math.Abs(recorded - new DateTimeOffset(System.Diagnostics.Process.GetCurrentProcess().StartTime).ToUnixTimeSeconds())
-                .Should().BeLessThanOrEqualTo(2, "the start field is this process's own start");
-        }
-    }
-
-    [Fact]
-    public void TheClaimText_IsOneLine_AndCarriesTheStartOnlyWhereItIsGiven()
-    {
-        OwnerClaim.Format("host", "linux", 42, 1_700_000_000).Should().Be("host@linux:42:1700000000");
-        OwnerClaim.Format("host", "win32", 42, null).Should().Be("host@win32:42");
-        OwnerClaim.Format("host", "darwin", 42, null).Should().MatchRegex(Claim.ToString());
+            "the round made its answers folder through the process's temp variables, so it is inside the run folder");
     }
 
     /// <summary>A stand-in for the process environment, and the order everything happened in.</summary>
-    private sealed class FakeEnvironment(Dictionary<string, string?> values)
+    private sealed class FakeEnvironment(Dictionary<string, string?> values, string root)
     {
         public Dictionary<string, string?> Values { get; } = values;
 
         public List<string> Events { get; } = [];
 
-        public RunTempSeams Seams(string root) => new(Set, name => Values.GetValueOrDefault(name))
+        public RunTempSeams Seams() => new(Set, name => Values.GetValueOrDefault(name))
         {
-            RegisterRestore = _ => Events.Add($"registered folder={FolderExists(root)} claim={ClaimExists(root)} sets={Sets()}"),
-            WriteClaim = folder => WriteClaim(root, folder),
+            AfterClaim = claim => Events.Add($"after-claim claim={File.Exists(claim)} folder={FolderExists()}"),
+            RegisterRestore = _ => Events.Add($"registered folder={FolderExists()} claim={ClaimExists()} sets={Sets()}"),
             Warn = message => Events.Add("warn " + message),
         };
 
@@ -158,44 +157,43 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
             }
         }
 
-        private void WriteClaim(string root, string folder)
-        {
-            Events.Add($"claim folder={FolderExists(root)} sets={Sets()} registered={Events.Any(e => e.StartsWith("registered", StringComparison.Ordinal))}");
-            File.WriteAllText(folder + ".owner", "claim");
-        }
+        private bool FolderExists() => Directory.GetDirectories(root).Length > 0;
 
-        private static bool FolderExists(string root) => Directory.GetDirectories(root, "testsToDelete-coai-run-*").Length > 0;
-
-        private static bool ClaimExists(string root) => Directory.GetFiles(root, "testsToDelete-coai-run-*.owner").Length > 0;
+        private bool ClaimExists() => Directory.GetFiles(root, "*.owner").Length > 0;
     }
 
     private static Dictionary<string, string?> SomeoneElsesTemp() =>
         new(StringComparer.Ordinal) { ["TEMP"] = "old-temp", ["TMPDIR"] = "old-tmpdir" };
 
     [Fact]
-    public void TheClaimIsWrittenAfterTheFolderExists_AndTheRestoreIsRegistered()
+    public void TheRunFolder_IsOwnerForm_AndClaimedFirst()
     {
-        using var root = TempDir.For("testsToDelete-e2-root-");
-        var environment = new FakeEnvironment(SomeoneElsesTemp());
+        var root = _owned.Dir("s3-order");
+        var environment = new FakeEnvironment(SomeoneElsesTemp(), root);
 
-        var run = RunTempFolder.Create(root.Path, environment.Seams(root.Path));
+        var run = RunTempFolder.Create(root, environment.Seams());
 
         environment.Events.Should().Equal(
-            "registered folder=True claim=False sets=0",
+            "after-claim claim=True folder=False",
+            "registered folder=True claim=True sets=0",
             "set TEMP",
             "set TMP",
-            "set TMPDIR",
-            "claim folder=True sets=3 registered=True");
-        File.Exists(run.ClaimFile).Should().BeTrue();
+            "set TMPDIR");
+        var leaf = Path.GetFileName(run.Folder);
+        leaf.Should().MatchRegex(RunLeaf.ToString());
+        Owned.Classify(leaf).Should().Be(new NameForm.Owner(OwnerToken.This, "coai"));
+        var claim = File.ReadAllText(run.ClaimFile);
+        Owner.Parse(claim).Should().Be(Owner.RunRecord(), "the claim is this process's owner record, in the contract's grammar");
+        Owner.Parse(claim)!.Host.Should().MatchRegex("@(linux|macos|windows)\\z");
         run.Restore();
     }
 
     [Fact]
     public void RestoreIsIdempotent_AndPutsTheOldValuesBack()
     {
-        using var root = TempDir.For("testsToDelete-e2-root-");
-        var environment = new FakeEnvironment(SomeoneElsesTemp());
-        var run = RunTempFolder.Create(root.Path, environment.Seams(root.Path));
+        var root = _owned.Dir("s3-restore");
+        var environment = new FakeEnvironment(SomeoneElsesTemp(), root);
+        var run = RunTempFolder.Create(root, environment.Seams());
         File.WriteAllText(Path.Combine(run.Folder, "made-by-a-test.txt"), "x");
         environment.Values.Should().OnlyContain(pair => pair.Value == run.Folder, "all three variables point at the run folder");
 
@@ -214,36 +212,156 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     [Fact]
     public void AFolderThatCannotBeDeleted_IsWarnedAbout_AndRestoreNeverThrows()
     {
-        using var root = TempDir.For("testsToDelete-e2-root-");
-        var environment = new FakeEnvironment(SomeoneElsesTemp());
-        var run = RunTempFolder.Create(root.Path, environment.Seams(root.Path) with { Delete = _ => throw new IOException("held by a scanner") });
+        var root = _owned.Dir("s3-undeletable");
+        var environment = new FakeEnvironment(SomeoneElsesTemp(), root);
+        var run = RunTempFolder.Create(root, environment.Seams() with { Delete = _ => throw new IOException("held by a scanner") });
 
         var act = () => run.Restore();
 
-        act.Should().NotThrow("a leftover is the janitor's, never a reason to fail the end of a run");
-        environment.Events.Should().Contain(e => e.StartsWith("warn", StringComparison.Ordinal) && e.Contains(run.Folder, StringComparison.Ordinal),
-            "the warning names the folder a person has to delete");
+        act.Should().NotThrow("a leftover is the sweep's, never a reason to fail the end of a run");
         environment.Values["TEMP"].Should().Be("old-temp", "the variables are restored even when the delete fails");
     }
 
-    /// <summary>The verdict table of <see cref="OwnerClaim.Verdict"/>: what the sweeper may take, and what it must keep.</summary>
-    public static TheoryData<string, bool, ClaimVerdict> Verdicts() => new()
+    private string TheThreeVariablesAreAFolder(out string root)
     {
-        { "host@linux:4242:1000", true, ClaimVerdict.Keep },
-        { "host@win32:4242", true, ClaimVerdict.Keep },
-        { "host@win32:4242", false, ClaimVerdict.Leftover },
-        { "host@darwin:4242", false, ClaimVerdict.Leftover },
-        { "host@linux:4242:1000", false, ClaimVerdict.Leftover },
-        { "not a claim at all", false, ClaimVerdict.Keep },
-        { string.Empty, false, ClaimVerdict.Keep },
-        { "host@plan9:4242", false, ClaimVerdict.Keep },
-        { "host@win32:4242\nsecond line", false, ClaimVerdict.Keep },
-    };
+        root = _owned.Dir("s3-child");
 
+        return root;
+    }
+
+    [Fact]
+    public void ARunThatCannotMakeItsFolder_FailsBeforeAnyTest()
+    {
+        TheThreeVariablesAreAFolder(out var root);
+        var missing = Path.Combine(root, "missing");
+
+        var result = SuiteChild.Run(SuiteChild.MatchesNothing, AllThreeAt(missing), ChildTimeout);
+
+        TheOneLineRefusal(result, root, missing);
+    }
+
+    /// <summary>Exit 78, stdout without a result line, and exactly ONE non-empty stderr line that starts with the prefix and holds <paramref name="mentions"/>.</summary>
+    private static void TheOneLineRefusal(SuiteChild.Result result, string root, string mentions)
+    {
+        result.TimedOut.Should().BeFalse("the child must end by itself: " + result.StdErr);
+        result.ExitCode.Should().Be(RunTemp.RefusedExitCode, $"stdout: {result.StdOut} / stderr: {result.StdErr}");
+        LinesOf(result.StdErr).Should().ContainSingle().Which.Should().StartWith(RunTemp.RefusalPrefix).And.Contain(mentions);
+        result.StdOut.Should().NotContain("total:", "no test ran");
+        Directory.GetFileSystemEntries(root).Where(e => !e.EndsWith("missing", StringComparison.Ordinal)).Should().BeEmpty("the refused child left nothing in its root");
+    }
+
+    [Fact]
+    public void ARunThatCannotMakeItsFolder_InAReadOnlyRoot_FailsBeforeAnyTest()
+    {
+        TheThreeVariablesAreAFolder(out var root);
+        var readOnly = Path.Combine(root, "readonly");
+        Directory.CreateDirectory(readOnly);
+
+        using (OperatingSystem.IsWindows() ? DenyWriting(readOnly) : MakeReadOnlyPosix(readOnly))
+        {
+            var result = SuiteChild.Run(SuiteChild.MatchesNothing, AllThreeAt(readOnly), ChildTimeout);
+
+            result.TimedOut.Should().BeFalse(result.StdErr);
+            result.ExitCode.Should().Be(RunTemp.RefusedExitCode, $"stdout: {result.StdOut} / stderr: {result.StdErr}");
+            LinesOf(result.StdErr).Should().ContainSingle().Which.Should().StartWith(RunTemp.RefusalPrefix).And.Contain(readOnly);
+            Directory.GetFileSystemEntries(readOnly).Should().BeEmpty("nothing was made in a root nobody can write");
+        }
+    }
+
+    [UnsupportedOSPlatform("windows")]
+    private static Releaser MakeReadOnlyPosix(string folder)
+    {
+        if (Native.GetUid() == 0)
+        {
+            Assert.Skip("uid 0 writes into a mode 0555 folder, so the read-only root cannot be provoked");
+        }
+
+        var before = File.GetUnixFileMode(folder);
+        File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "probe"), "x");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new Releaser(() => File.SetUnixFileMode(folder, before));
+        }
+
+        File.SetUnixFileMode(folder, before);
+        Assert.Skip("the premise failed: a write into a mode 0555 folder succeeded");
+
+        return new Releaser(() => { });
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static Releaser DenyWriting(string folder)
+    {
+        var caller = WindowsIdentity.GetCurrent().User!;
+        var rule = new FileSystemAccessRule(
+            caller, FileSystemRights.CreateFiles | FileSystemRights.CreateDirectories | FileSystemRights.WriteData | FileSystemRights.AppendData,
+            InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Deny);
+        var info = new DirectoryInfo(folder);
+        var security = info.GetAccessControl();
+        security.AddAccessRule(rule);
+        info.SetAccessControl(security);
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "probe"), "x");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new Releaser(() =>
+            {
+                var restored = info.GetAccessControl();
+                restored.RemoveAccessRule(rule);
+                info.SetAccessControl(restored);
+            });
+        }
+
+        var undone = info.GetAccessControl();
+        undone.RemoveAccessRule(rule);
+        info.SetAccessControl(undone);
+        Assert.Skip("the premise failed: a write into a folder with a deny ACE for the caller succeeded");
+
+        return new Releaser(() => { });
+    }
+
+    private sealed class Releaser(Action release) : IDisposable
+    {
+        public void Dispose() => release();
+    }
+
+    [Fact]
+    public void AClaimThatCannotBeWritten_FailsTheRun()
+    {
+        var root = _owned.Dir("s3-claim");
+        var sentinel = Path.Combine(root, "sentinel");
+        var env = AllThreeAt(root);
+        env[RunTemp.SelfTestVariable] = "fail-claim";
+        env[RunTempChildren.SentinelVariable] = sentinel;
+
+        var result = SuiteChild.Run(["--filter-class", "*DiscoverySentinel"], env, ChildTimeout);
+
+        TheOneLineRefusal(result, root, "could not claim");
+        File.Exists(sentinel).Should().BeFalse("discovery never ran: the refusal is before it");
+    }
+
+    /// <summary>Each of the three variables, changed ALONE after the folder was made, is refused on its own: one combined case would pass for a check of only one of them.</summary>
     [Theory]
-    [MemberData(nameof(Verdicts))]
-    public void TheSweepersVerdict_KeepsWhatItCannotProveDead(string claim, bool pidAlive, ClaimVerdict expected) =>
-        OwnerClaim.Verdict(claim, pidAlive).Should().Be(expected, "a live pid — whatever its start, a reused pid included — and a claim that does not parse are LEAKS, never deletions");
+    [InlineData("mismatch-temp", "TEMP")]
+    [InlineData("mismatch-tmp", "TMP")]
+    [InlineData("mismatch-tmpdir", "TMPDIR")]
+    public void ARunWhoseVariableNoLongerNamesItsFolder_IsRefused_ForEachVariableAlone(string selfTest, string variable)
+    {
+        var root = _owned.Dir("s3-lost");
+        var env = AllThreeAt(root);
+        env[RunTemp.SelfTestVariable] = selfTest;
+
+        var result = SuiteChild.Run(SuiteChild.MatchesNothing, env, ChildTimeout);
+
+        TheOneLineRefusal(result, root, "TEMP, TMP and TMPDIR must all name this run's folder");
+        LinesOf(result.StdErr).Single().Should().Contain($"{variable}='").And.Contain("-mismatch'", $"only {variable} was changed");
+    }
 
     private static string TestsExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "CoaiMcp.Tests.exe" : "CoaiMcp.Tests");
 
@@ -253,7 +371,7 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     [InlineData("--filter-method")]
     public async Task ARunThatBuildsNoFixture_LeavesNothing(string flag)
     {
-        using var theMachinesTemp = TempDir.For("testsToDelete-e2-realtemp-");
+        using var theMachinesTemp = TempDir.For("e2-realtemp-");
         string[] arguments = flag == "--filter-method" ? [flag, "NoSuchTest_7f3a"] : [flag];
 
         var result = await new ProcessLauncher().RunAsync(

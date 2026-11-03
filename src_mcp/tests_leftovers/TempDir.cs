@@ -27,6 +27,9 @@ public sealed class TempDir : IDisposable
     /// <summary>Where it is. Also what an implicit conversion to <see cref="string"/> gives you.</summary>
     public string Path { get; }
 
+    /// <summary>The machine's temp root, as the one helper door gives it (the run folder's, once <c>RunTemp</c> moved the variables).</summary>
+    public static string Root => Leftovers.Owned.TempRoot();
+
     /// <summary>A fresh directory under the system temp root, named for the test that wanted it.</summary>
     public static TempDir For(string prefix) =>
         new(Directory.CreateTempSubdirectory(prefix).FullName);

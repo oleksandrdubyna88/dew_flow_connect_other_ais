@@ -217,25 +217,28 @@ internal static class TestSourceIndex
         return match.Success && Serial.IsMatch(match.Groups["args"].Value) ? match.Groups["name"].Value : string.Empty;
     }
 
-    private static IReadOnlyList<SourceFile> DiscoverFiles()
+    /// <summary>
+    /// The test sources every scan reads: the test project AND the leftovers library (<c>src_mcp/tests_leftovers</c>, E5 S3), where <c>RunTemp</c>, the run folder's writer of the
+    /// process temp variables, now lives. Without the second root the allow-lists below would name a file no scan reads.
+    /// </summary>
+    private static IEnumerable<string> SourceFilePaths()
     {
-        var tests = Path.Combine(RepoPaths.Root(), "src_mcp", "tests");
         var bin = $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}";
         var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
 
-        return [.. Directory.EnumerateFiles(tests, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !file.Contains(bin, StringComparison.Ordinal) && !file.Contains(obj, StringComparison.Ordinal))
-            .Select(file => ParseFile(Path.GetFileName(file), File.ReadAllText(file)))];
+        return new[] { "tests", "tests_leftovers" }
+            .Select(folder => Path.Combine(RepoPaths.Root(), "src_mcp", folder))
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            .Where(file => !file.Contains(bin, StringComparison.Ordinal) && !file.Contains(obj, StringComparison.Ordinal));
+    }
+
+    private static IReadOnlyList<SourceFile> DiscoverFiles()
+    {
+        return [.. SourceFilePaths().Select(file => ParseFile(Path.GetFileName(file), File.ReadAllText(file)))];
     }
 
     private static IReadOnlyList<TestClass> Discover()
     {
-        var tests = Path.Combine(RepoPaths.Root(), "src_mcp", "tests");
-        var bin = $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}";
-        var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
-
-        return [.. Directory.EnumerateFiles(tests, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !file.Contains(bin, StringComparison.Ordinal) && !file.Contains(obj, StringComparison.Ordinal))
-            .SelectMany(file => Parse(Path.GetFileName(file), File.ReadAllText(file)))];
+        return [.. SourceFilePaths().SelectMany(file => Parse(Path.GetFileName(file), File.ReadAllText(file)))];
     }
 }

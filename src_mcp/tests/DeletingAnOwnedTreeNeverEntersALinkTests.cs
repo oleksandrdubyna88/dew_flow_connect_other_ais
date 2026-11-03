@@ -140,6 +140,29 @@ public sealed class DeletingAnOwnedTreeNeverEntersALinkTests : IAsyncLifetime
     /// what the home still held is still there (the sign-in is the person's; a second loss is not made worse by a sweep that
     /// goes on).
     /// </summary>
+    /// <summary>E5 S3, scenario 6: the temp helper's own deleter still fails the test when a link's target lost a file — <c>Removal.Quietly</c> never throws, <see cref="TempDir"/> keeps this.</summary>
+    [Fact]
+    public async Task ALostLinkTarget_StillFailsTheTest()
+    {
+        var other = Path.Combine(Target, "kimi-code.json");
+        await File.WriteAllBytesAsync(other, Token, TestContext.Current.CancellationToken);
+        var outer = TempDir.For("coai-s3-lostlink-");
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), outer.At("credentials"), Target);
+        GitScratch.AfterUnlink = _ => File.Delete(other);
+        try
+        {
+            var dispose = outer.Dispose;
+
+            dispose.Should().Throw<LinkTargetLostException>("a lost target is a failing test, never a quiet leftover");
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
+
+        new DirectoryInfo(outer.Path).Delete(recursive: true);
+    }
+
     [Fact]
     public async Task ALinkWhoseTargetLostAName_StopsTheDeletion_AndSaysWhich()
     {
