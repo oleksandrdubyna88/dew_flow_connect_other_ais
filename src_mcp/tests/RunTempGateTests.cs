@@ -6,11 +6,11 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The gate's other scenarios (E5 S3): the refusal table, the pure information flags, <c>--list-tests</c>, the fallback behind the gate, and a killed run's
-/// collection by the sweep. The three forced-failure child runs the baseline's proof reads are in <c>RunTempTests</c>, the suite's proof file.
+/// collection by the sweep. The five forced-failure child runs the baseline's proof reads (a folder, a claim, and each of the three variables) are in <c>RunTempTests</c>, the suite's proof file.
 /// </summary>
 public sealed class RunTempGateTests : IDisposable
 {
-    private static readonly TimeSpan ChildTimeout = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan ChildTimeout = TimeSpan.FromSeconds(60);
 
     private const string Exe = "/the/test/exe";
 
@@ -115,6 +115,44 @@ public sealed class RunTempGateTests : IDisposable
 
         without.ExitCode.Should().NotBe(RunTemp.RefusedExitCode, $"still not refused with no folder: {without.StdErr}");
         Directory.GetFileSystemEntries(root).Should().BeEmpty("nothing was created");
+    }
+
+    /// <summary>An information flag passes the gate ONLY when it is the whole command line: beside another argument — a response file, <c>-automated</c>, a filter — the run is gated like any other.</summary>
+    [Theory]
+    [InlineData("@@", "--help")]
+    [InlineData("-automated", "--help")]
+    [InlineData("--help", "--list-tests")]
+    [InlineData("--list-tests", "--info")]
+    public void AnInformationFlag_BesideAnyOtherArgument_IsGatedLikeARun(string first, string second)
+    {
+        var root = _owned.Dir("s3-info-beside");
+        var sentinel = Path.Combine(root, "sentinel");
+        var env = AllThreeAt(Path.Combine(root, "missing"));
+        env[RunTempChildren.SentinelVariable] = sentinel;
+
+        var result = SuiteChild.Run([first, second], env, ChildTimeout);
+
+        result.TimedOut.Should().BeFalse(result.StdErr);
+        result.ExitCode.Should().Be(RunTemp.RefusedExitCode, $"'{first} {second}' is not an information request; stdout {result.StdOut.Length} bytes, stderr: {result.StdErr}");
+        LinesOf(result.StdErr).Should().ContainSingle().Which.Should().StartWith(RunTemp.RefusalPrefix);
+        File.Exists(sentinel).Should().BeFalse("nothing was discovered");
+    }
+
+    [Fact]
+    public void ABypassedGate_StillRefusesAFolderThatFailed()
+    {
+        var root = _owned.Dir("s3-bypass-failed");
+        var sentinel = Path.Combine(root, "sentinel");
+        var env = AllThreeAt(Path.Combine(root, "missing"));
+        env[RunTemp.SelfTestVariable] = "bypass-gate";
+        env[RunTempChildren.SentinelVariable] = sentinel;
+
+        var result = SuiteChild.Run(["--filter-class", "*DiscoverySentinel"], env, ChildTimeout);
+
+        result.TimedOut.Should().BeFalse(result.StdErr);
+        result.ExitCode.Should().Be(RunTemp.RefusedExitCode, $"bypass skips only IsActive, never the checks: {result.StdErr}");
+        LinesOf(result.StdErr).Should().ContainSingle().Which.Should().StartWith(RunTemp.RefusalPrefix);
+        File.Exists(sentinel).Should().BeFalse("nothing was discovered");
     }
 
     [Fact]

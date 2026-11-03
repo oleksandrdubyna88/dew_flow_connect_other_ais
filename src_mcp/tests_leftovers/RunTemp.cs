@@ -15,8 +15,8 @@ namespace CoaiMcp.Tests;
 /// <para><b>No order is assumed between test collections</b> (they run in parallel): the gate is the guarantee that nothing ran before the folder was proven. A host that bypasses
 /// <c>Main</c> (an IDE's own entry) is caught by <see cref="RunTempFixture"/>, the fallback.</para>
 /// <para><b>No fallback to the machine's temp.</b> The E2 behaviour — one warning and a run in the machine temp — is WITHDRAWN: a run that cannot make its folder, claim it, or point
-/// TEMP, TMP and TMPDIR at it does not start. The information flags (<c>--help</c>, <c>--version</c>, <c>--info</c>) run no test and no discovery and pass; <c>--list-tests</c>
-/// runs every <c>MemberData</c> and is gated.</para>
+/// TEMP, TMP and TMPDIR at it does not start. The information flags (<c>--help</c>, <c>--version</c>, <c>--info</c>), when they are the WHOLE command line, run no test and no discovery and pass; beside any other argument
+/// (<c>@@</c>, <c>-automated</c>, a filter) they are gated, and <c>--list-tests</c> runs every <c>MemberData</c> and is gated.</para>
 /// <para><b>The end.</b> <see cref="EndOfRun"/> runs from <see cref="RunTempFixture"/>'s disposal AND from the process-exit handler registered here, so a run that never builds a fixture
 /// (an information flag, a filter that matches nothing) leaves nothing either. A KILLED run leaves exactly one folder plus its claim, which the owner-aware sweep collects.</para>
 /// </remarks>
@@ -31,7 +31,7 @@ public static class RunTemp
     /// <summary>
     /// Test-only seams, read from the environment; each makes the run FAIL CLOSED, so a stray value is harmless. Values: <c>fail-claim</c> (the claim cannot be written),
     /// <c>drop-variables</c> (TEMP goes back to what it was), <c>mismatch-temp</c>, <c>mismatch-tmp</c>, <c>mismatch-tmpdir</c> (that ONE variable names another folder),
-    /// <c>bypass-gate</c> (<see cref="Gate"/> runs the platform without checking, as a host that bypassed <c>Main</c> would).
+    /// <c>bypass-gate</c> (<see cref="Gate"/> still runs every check and refuses what <see cref="Refusal()"/> refuses, but does not set <see cref="IsActive"/>, as a host that bypassed <c>Main</c> would leave it — so <see cref="RunTempFixture"/>, the fallback, is what refuses).
     /// </summary>
     public const string SelfTestVariable = "COAI_RUNTEMP_SELFTEST";
 
@@ -155,17 +155,15 @@ public static class RunTemp
     private static string OneLine(string text) => text.Replace('\r', ' ').Replace('\n', ' ');
 
     /// <summary>
-    /// The gate, in front of the platform: <c>Main</c> calls it with the arguments and xUnit's generated body. A start that is not an information flag and has no proven run
+    /// The gate, in front of the platform: <c>Main</c> calls it with the arguments and xUnit's generated body. A start that is not an information request (the information flags as the whole command line) and has no proven run
     /// folder is refused (stderr, <see cref="RefusedExitCode"/>) BEFORE the platform is built — so before discovery, any fixture, any <c>MemberData</c> and any test.
     /// </summary>
     public static int Gate(string[] args, Func<string[], int> run)
     {
-        if (Environment.GetEnvironmentVariable(SelfTestVariable) == "bypass-gate")
-        {
-            return run(args); // a host that bypassed Main: no check, IsActive stays false — RunTempFixture is the fallback
-        }
-
-        if (args.Any(arg => InformationFlags.Contains(arg)))
+        // An information request is the WHOLE command line: --help, --version, --info and nothing beside them. Beside a response file (@@), -automated, a filter or
+        // --list-tests it is just one more argument of a run that discovers and runs, so it is gated like any run.
+        var informationOnly = args.Length > 0 && args.All(arg => InformationFlags.Contains(arg));
+        if (informationOnly)
         {
             return run(args); // runs no test and no discovery; the initializer's folder, if made, is removed at exit like any run's
         }
@@ -177,7 +175,11 @@ public static class RunTemp
             return RefusedExitCode;
         }
 
-        _active = true;
+        // A host that bypassed Main (the self-test): every check above still ran. Only IsActive stays false, so RunTempFixture — the fallback — is what refuses.
+        if (Environment.GetEnvironmentVariable(SelfTestVariable) != "bypass-gate")
+        {
+            _active = true;
+        }
 
         return run(args);
     }
