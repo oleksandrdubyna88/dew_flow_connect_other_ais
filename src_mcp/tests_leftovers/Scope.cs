@@ -74,7 +74,7 @@ public static class Scope
     {
         var entry = Native.WindowsEntryOf(path);
         var profile = Native.FinalPathOfFollowing(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-        if (entry is null || profile is null || !IsStrictlyInside(entry.FinalPath, profile)) return false;
+        if (entry is null || profile is null || !IsStrictlyInside(Path.GetFullPath(path), profile)) return false;
         using var caller = WindowsIdentity.GetCurrent();
         return caller.User is not null && entry.Owner.Equals(caller.User);
     }
