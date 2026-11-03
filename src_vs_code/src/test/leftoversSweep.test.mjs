@@ -178,6 +178,9 @@ test('N-S5 the switch: the repository says collect; list-only calls no sweep and
 
   const table = [
     ['{"startOfRunSweep":"collect"}', 'collect', undefined],
+    // [S2-B Opus 4] a UTF-8 byte order mark: C# (File.ReadAllText) strips it, so Node must too, or the two languages would read ONE file as two switches.
+    ['\uFEFF{"startOfRunSweep":"collect"}', 'collect', undefined],
+    ['\uFEFF{"startOfRunSweep":"list-only"}', 'list-only', undefined],
     ['{"startOfRunSweep":"list-only"}', 'list-only', undefined],
     ['{"startOfRunSweep":"COLLECT"}', 'list-only', 'COLLECT'],
     ['{"startOfRunSweep":"yes"}', 'list-only', 'yes'],

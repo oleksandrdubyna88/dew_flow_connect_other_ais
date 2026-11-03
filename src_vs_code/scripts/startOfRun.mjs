@@ -55,7 +55,7 @@ export function readSweepSwitch(repoRoot, { io = fs, warn = () => {}, prefix = '
 function judge(repoRoot, io) {
   let document;
   try {
-    document = JSON.parse(io.readFileSync(path.join(repoRoot, 'shared', 'leftovers-sweep.json'), 'utf8'));
+    document = JSON.parse(io.readFileSync(path.join(repoRoot, 'shared', 'leftovers-sweep.json'), 'utf8').replace(/^\uFEFF/, '')); // a leading byte order mark is not part of the JSON: C#'s File.ReadAllText drops it too
   } catch (error) {
     return `unreadable: ${firstLine(error.message)}`;
   }
