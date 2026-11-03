@@ -572,7 +572,7 @@ jobs:
       # The same two uploads the other platforms' legs make, of the signed zip and its checksum.
       # `--clobber` so a re-run of a failed release replaces rather than fails.
       - name: Attach to the draft release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/mcp-v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
