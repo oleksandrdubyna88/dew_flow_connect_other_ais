@@ -378,17 +378,41 @@ public sealed class StartOfRunSweepTests : IDisposable
             () => first = LeftoversSweep.Run(Options(rootC)),
             () => second = LeftoversSweep.Run(Options(rootC)));
 
-        // MEASURED on the copy (6 runs of 6, Linux): the sweep that loses the rename of a folder the other already moved reports ONE error line naming that
-        // rename (ENOENT) — never a throw, never a removal of the other's work. The plan's "no report line" (spec B.4 B8 (c): both Errors empty) is NOT met by the
-        // copy in a real race; making it so is an edit of LeftoversSweep.cs (a manifest operation), which is the plan's to decide. Reported in the PR.
+        // MEASURED on the copy (6 runs of 6, Linux; macOS CI too): the sweep that loses the rename of a folder the other already moved reports ONE error line naming that
+        // rename (ENOENT) — never a throw, never a removal of the other's work. That is the template's behaviour and the plan's "template wins" rule keeps it: the
+        // spec's note (2026-11-03) says the arm asserts no throw, no folder lost twice, no foreign removal and the losers' Errors lines.
         foreach (var error in first.Errors.Concat(second.Errors))
         {
             error.Should().Contain(QuarantineWord, "an error, if any, is the lost rename of a folder the other sweep took");
         }
 
-        TestContext.Current.AddWarning($"E5 S2-B B8 (c): error lines of the two sweeps: {first.Errors.Count} + {second.Errors.Count}");
-        first.Removed.Concat(second.Removed).Should().BeEquivalentTo(twenty, "every folder is removed once, by exactly one of the two sweeps");
+        // A claim whose folder the other sweep had just removed is an ORPHAN claim to this sweep, and the copy removes it (and says so in Removed, with the claim's own path):
+        // measured on macOS (a CI leg, 21 entries for 20 folders). So Removed holds folders AND claims; the promises are on each kind.
+        var removed = first.Removed.Concat(second.Removed).ToList();
+        var folders = removed.Where(path => !path.EndsWith(".owner", StringComparison.Ordinal)).ToList();
+        var claims = removed.Where(path => path.EndsWith(".owner", StringComparison.Ordinal)).ToList();
+        TestContext.Current.AddWarning($"E5 S2-B B8 (c): error lines of the two sweeps: {first.Errors.Count} + {second.Errors.Count}; removed folders {folders.Count}, removed orphan claims {claims.Count}");
+        folders.Should().BeEquivalentTo(twenty, "no folder is lost twice and none is foreign: each is removed once, by exactly one of the two sweeps");
+        foreach (var claim in claims)
+        {
+            twenty.Should().Contain(claim.Substring(0, claim.Length - ".owner".Length), "an orphan claim removed is one of the twenty planted, never another name");
+        }
+
         Directory.GetFileSystemEntries(rootC).Should().BeEmpty("folders, claims and quarantines are all gone");
+
+        // (d) the interleaving macOS met in CI, made on purpose: the other sweep runs in the gap between this sweep's removal of the folder and its deletion of the claim.
+        // The claim has no folder any more, so the other sweep removes it as an ORPHAN claim and reports it in ITS Removed, by the claim's own path; this sweep then finds the
+        // claim gone and says nothing. One folder, one report; one claim, one report; nothing is removed twice and nothing is an error.
+        var rootD = _owned.Dir("b8-d");
+        var split = PlantFolder(rootD, Name("split"), Rec(dead));
+        SweepResult other = SweepResult.Empty;
+        var mine = LeftoversSweep.Run(Options(rootD, hooks: new SweepHooks(AfterRemove: (_, _) => other = LeftoversSweep.Run(Options(rootD)))));
+
+        mine.Removed.Should().Equal([split], "this sweep removed the folder");
+        other.Removed.Should().Equal([split + ".owner"], "the other sweep removed the claim, as an orphan, and reported the claim's path");
+        mine.Errors.Should().BeEmpty();
+        other.Errors.Should().BeEmpty();
+        Directory.GetFileSystemEntries(rootD).Should().BeEmpty();
         UnmatchablePid.AssertNoSuchProcess(dead);
     }
 
