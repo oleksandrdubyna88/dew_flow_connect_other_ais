@@ -309,7 +309,9 @@ test('N-S9 on windows the REAL wrapper and the PINNED reference keep an otherwis
 
 /** The static `import` specifiers of a module's text (side-effect imports and `from` imports; a dynamic `import(` is not read). */
 function importsOf(text) {
-  return [...text.matchAll(/^\s*(?:import|export)\s[^'";]*?\bfrom\s*['"]([^'"]+)['"]|^\s*import\s*['"]([^'"]+)['"]/gm)].map((m) => m[1] ?? m[2]);
+  const imports = [...text.matchAll(/^\s*(?:import|export)\s[^'";]*?\bfrom\s*['"]([^'"]+)['"]|^\s*import\s*['"]([^'"]+)['"]/gm)].map((m) => m[1] ?? m[2]);
+  // The guard modules are CommonJS (`runFolderGuard.cjs`): their `require('…')` is a static import too (E5 S4).
+  return [...imports, ...[...text.matchAll(/^[^/\n]*\brequire\(\s*['"]([^'"]+)['"]\s*\)/gm)].map((m) => m[1])];
 }
 
 test('L5 the Windows sweep step needs no npm package: the sweep test\'s import graph is node: modules and repository files only', () => {
@@ -318,6 +320,12 @@ test('L5 the Windows sweep step needs no npm package: the sweep test\'s import g
     path.join(here, '..', '..', 'scripts', 'run-tests.mjs'),
     path.join(here, '..', '..', 'scripts', 'owned.mjs'),
     path.join(here, '..', '..', 'scripts', 'startOfRun.mjs'),
+    // E5 S4: the Windows and macOS steps run the Node proofs THROUGH the runner, with no `npm ci` — so the run folder's modules, the guard and each listed
+    // test file are node: modules and repository files too.
+    ...['ownedRun.mjs', 'runFolderGuard.cjs', 'inRunFolder.cjs'].map((name) => path.join(here, '..', '..', 'scripts', name)),
+    ...['runFolder', 'owned', 'runTests'].map((name) => path.join(here, `${name}.test.mjs`)),
+    path.join(repoRoot, 'scripts', 'runFolder.test.mjs'),
+    path.join(repoRoot, 'scripts', 'run-lib-tests.mjs'),
     ...['leftovers-sweep.mjs', 'owned.mjs', 'owned-token.mjs', 'git.mjs'].map((name) => path.join(repoRoot, '.agents', 'conventions', 'tools', 'lib', name)),
   ];
   const seen = new Set();
