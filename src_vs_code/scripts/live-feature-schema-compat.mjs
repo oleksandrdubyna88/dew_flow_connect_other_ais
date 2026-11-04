@@ -40,7 +40,11 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readdirSync, readFil
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { flag, newServer, releasedServer, run } from './releasedHalves.mjs';
+import { flag, newServer, releasedServer, run as runServer } from './releasedHalves.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'compat-schema' });
+
 
 const broken = [];
 const say = (ok, what, detail = '') => {
@@ -134,7 +138,7 @@ console.log(`new: ${built}\n`);
 // ---------- 1. NEW writes step 16 and a skipped feature round; OLD reads the log ----------
 const dataA = path.join(work, 'a');
 plantConsultation(dataA, repo, 'a'.repeat(32));
-const migrated = await run(built, ['--close-consult', '--repo', repo, '--id', 'a'.repeat(32), '--outcome', 'solved'], dataA);
+const migrated = await runServer(built, ['--close-consult', '--repo', repo, '--id', 'a'.repeat(32), '--outcome', 'solved'], dataA);
 say(migrated.code === 0, 'this build opens a fresh data directory and migrates it', `exit ${migrated.code}`);
 {
   const db = new DatabaseSync(path.join(dataA, 'coai.db'));
@@ -146,19 +150,19 @@ say(migrated.code === 0, 'this build opens a fresh data directory and migrates i
            VALUES ('f1', 'FeatureReview', 1, 'PLAN_x.md', 'done', 'skipped', 0, '${started}', '${started}', 'abc123', 'no vendor is ticked for the feature review ×3')`);
   db.close();
 }
-const oldLog = await run(old, ['--log', '--paged'], dataA);
+const oldLog = await runServer(old, ['--log', '--paged'], dataA);
 say(oldLog.code === 0, 'the released binary still answers --log over a step-16 database', `exit ${oldLog.code}`);
 const oldRound = JSON.parse(oldLog.out || '{}').rounds?.find((one) => one.stage === 'FeatureReview');
 say(oldRound !== undefined, 'and lists the skipped feature round under its raw stage name');
 say(oldRound !== undefined && !('note' in oldRound), 'with no note member, which it has never heard of');
-const newLog = await run(built, ['--log', '--paged'], dataA);
+const newLog = await runServer(built, ['--log', '--paged'], dataA);
 const newRound = JSON.parse(newLog.out || '{}').rounds?.find((one) => one.stage === 'FeatureReview');
 say(newRound?.note === 'no vendor is ticked for the feature review ×3', 'this build reads the note back', `note: ${newRound?.note}`);
 
 // ---------- 2. OLD creates the database; NEW migrates it forward ----------
 const dataB = path.join(work, 'b');
 plantConsultation(dataB, repo, 'b'.repeat(32));
-const oldMade = await run(old, ['--close-consult', '--repo', repo, '--id', 'b'.repeat(32), '--outcome', 'solved'], dataB);
+const oldMade = await runServer(old, ['--close-consult', '--repo', repo, '--id', 'b'.repeat(32), '--outcome', 'solved'], dataB);
 say(oldMade.code === 0, 'the released binary creates a database at its own step count', `exit ${oldMade.code}`);
 let before = -1;
 {
@@ -168,7 +172,7 @@ let before = -1;
 }
 say(before > 0 && before < 16, 'which is below sixteen', `user_version ${before}`);
 plantConsultation(dataB, repo, 'c'.repeat(32));
-const forward = await run(built, ['--close-consult', '--repo', repo, '--id', 'c'.repeat(32), '--outcome', 'solved'], dataB);
+const forward = await runServer(built, ['--close-consult', '--repo', repo, '--id', 'c'.repeat(32), '--outcome', 'solved'], dataB);
 say(forward.code === 0, 'this build opens the released binary\'s database', `exit ${forward.code}`);
 {
   const db = new DatabaseSync(path.join(dataB, 'coai.db'));
@@ -178,18 +182,18 @@ say(forward.code === 0, 'this build opens the released binary\'s database', `exi
   say(after === 16, 'and migrates it forward to sixteen', `user_version ${after}`);
   say(hasNote === 1, 'with the note column present');
 }
-const oldAfter = await run(old, ['--log'], dataB);
+const oldAfter = await runServer(old, ['--log'], dataB);
 say(oldAfter.code === 0, 'and the released binary still reads it afterwards', `exit ${oldAfter.code}`);
 
 // ---------- 3. A feature session file: the OLD sweep leaves it alone, the NEW sweep takes it over ----------
 const dataC = path.join(work, 'c');
 const planted = plantFeatureSession(dataC, repo, 'todo/PLAN_x.md');
 const plantedBytes = readFileSync(planted, 'utf8');
-const oldServe = await run(old, [], dataC);
+const oldServe = await runServer(old, [], dataC);
 say(oldServe.code === 0, 'the released binary starts over a data directory holding a feature session and exits on EOF', `exit ${oldServe.code}`);
 say(readFileSync(planted, 'utf8') === plantedBytes, 'and its startup sweep left the file it cannot read untouched');
 say(sessionsIn(dataC).length === 1, 'without writing a second session file', `${sessionsIn(dataC).length} file(s)`);
-const newServe = await run(built, [], dataC);
+const newServe = await runServer(built, [], dataC);
 say(newServe.code === 0, 'this build starts over the same directory and exits on EOF', `exit ${newServe.code}`);
 const files = sessionsIn(dataC);
 say(files.length === 1, 'its sweep saved the session back under its own key — one file, not two', `${files.length} file(s)`);

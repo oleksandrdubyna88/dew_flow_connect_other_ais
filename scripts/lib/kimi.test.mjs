@@ -5,15 +5,19 @@
 // two mode-bit cases run; on Windows they skip, because Windows has no mode bits and the profile's ACL is what it relies on.
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, rmdirSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmdirSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, parse } from 'node:path';
-import { after, test } from 'node:test';
+import { after, before as beforeAll, test } from 'node:test';
 import { CredentialGuard, CredentialWatch, launchesOnCopiedCredentials, canaryCommand, copiedCredentialsRefusal, copyHome, credentialFingerprint, credentialShape, redactSlot, homeBin, isCredentialPath, kimiExecutable, manifest, manifestDiff, parseStreamJson, scratchRefusal, scrubHome, withoutTrailingSeparators, acpTurn } from './kimi.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 
 const WINDOWS = process.platform === 'win32';
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-scratch-test-'));
-after(() => rmSync(base, { recursive: true, force: true }));
+// The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
+let base;
+const scope = wrap.cleanupScope();
+beforeAll(() => { base = wrap.ownedDir(scope, 'kimi-scratch', { parent: realpathSync.native(wrap.tempRoot()) }); });
+after(() => scope.close());
 
 /** A junction on Windows (no privilege needed); a plain symlink on POSIX, where the type argument is ignored. */
 const makeLink = (target, at) => symlinkSync(target, at, 'junction');
@@ -223,9 +227,11 @@ process.on('exit', () => note('exited'));
 setInterval(() => {}, 1000);
 `;
 
-const acpBase = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-acp-'));
-after(() => rmSync(acpBase, { recursive: true, force: true }));
-writeFileSync(join(acpBase, 'fake-agent.mjs'), FAKE_AGENT);
+let acpBase;
+beforeAll(() => {
+  acpBase = wrap.ownedDir(scope, 'kimi-acp', { parent: realpathSync.native(wrap.tempRoot()) });
+  writeFileSync(join(acpBase, 'fake-agent.mjs'), FAKE_AGENT);
+});
 
 /** One turn of the small client against the fake agent; its log's lines and the turn's state. */
 async function fakeTurn(name, options) {

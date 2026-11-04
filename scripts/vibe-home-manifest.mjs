@@ -39,11 +39,11 @@
 //                      (VibeLaunch.Verdict matches exactly ONE entry), so a second 2.26.1 there would turn every Windows 2.26.1
 //                      launch into an "unmeasured" one. A staged entry is not enforced by anything until it is moved.
 //   --unstage <platform>  move that platform's staged entries into `versions` (no launch) — for the change that makes the C# read `platform` (E2).
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
+import { startDefaultScratch } from '../src_vs_code/scripts/ownedRun.mjs';
 import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, linkSignIn, personsVibeHome, run, vibeArgs } from './lib/vibe.mjs';
 import { inventoryOf, unstaged, withEntry, withoutSignInLink } from './lib/vibe-manifest.mjs';
 
@@ -68,7 +68,8 @@ if (unstage) {
 }
 
 const exe = from ? '' : flag('--vibe', '') || resolved('vibe');
-const scratch = from || flag('--scratch', '') || mkdtempSync(join(tmpdir(), 'testsToDelete-vhm-'));
+// Without --scratch the scratch is an owned folder of the wrap, removed at exit (one line says so): pass --scratch <dir> to keep a run for --from.
+const scratch = from || flag('--scratch', '') || (await startDefaultScratch({ what: 'vhm', prefix: 'vibe-home-manifest' })).path;
 mkdirSync(scratch, { recursive: true });
 
 /** The curated default model (D10): what a row with no model is launched on. */

@@ -54,10 +54,10 @@
 // the person's Vibe home's `.env` (made by lstat alone — never opened, read or copied), and an arm that would have run on the
 // person's real ~/.vibe runs on such a home instead: nothing is written into ~/.vibe by the probe. The person's Vibe home is
 // LISTED (names, sizes, mtimes — never contents) before and after the run, and the two listings are saved and compared.
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
+import { startDefaultScratch } from '../src_vs_code/scripts/ownedRun.mjs';
 import {
   builtEnv as builtEnvFor, dirLink, files, fwd, armFilterOf, armsCellsError, armWanted, homeListing, keyringArm, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
 } from './lib/vibe.mjs';
@@ -87,9 +87,11 @@ if (armsError) {
 }
 if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || !CLIS.includes(cli)) {
   console.error(`usage: probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats N] [--cli ${CLIS.join('|')}] [--cells ${ALL_CELLS.join(',')}]`);
+  console.error('without --scratch the scratch is an owned folder removed at exit; pass --scratch <dir> to keep a run for --reparse');
   process.exit(65);
 }
-const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(tmpdir(), 'testsToDelete-vcp-'));
+// Without --scratch the scratch is an owned folder of the wrap, removed at exit (one line says so): pass --scratch <dir> to keep a run for --reparse.
+const scratch = reparse || flag('--scratch', '') || (await startDefaultScratch({ what: 'vcp', prefix: 'probe-vibe-confinement' })).path;
 // The scratch path ends up inside a hook's SHELL command (a hook's `command` is a shell string by Vibe's design), so it is
 // held to characters that need no quoting beyond the double quotes the command puts around it — never a quote, `$`, `%`,
 // a backtick or a newline (the code round, codex, 2026-10-12: a crafted path could otherwise inject into the canary).

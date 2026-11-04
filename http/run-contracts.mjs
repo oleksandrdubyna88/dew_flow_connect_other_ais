@@ -8,12 +8,15 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHmac, randomBytes } from 'node:crypto';
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CONFIG, CONTRACT, ENVIRONMENT, PASS, verdictOf } from './verdict.mjs';
+import { startOwnedRun } from '../src_vs_code/scripts/ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'http-contracts' });
+
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -124,7 +127,8 @@ const port = await freePort();
 const baseUrl = `http://127.0.0.1:${port}`;
 // A throwaway data directory per run: no vendors, no accounts, no sessions. That emptiness is
 // deliberate — see the README on why no review ever reaches a vendor.
-const dataDir = mkdtempSync(path.join(tmpdir(), 'coai-contracts-'));
+const dataDir = path.join(run.folder, 'data');
+mkdirSync(dataDir);
 
 
 // ONE vendor in the allowlist, and no account signed in for it.

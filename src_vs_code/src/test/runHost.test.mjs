@@ -53,7 +53,7 @@ test('H1 a launch that resolves: both launches got the folders, and after main t
     launches.push({ options, workspace, data, profile: profileArg?.slice('--user-data-dir='.length), runFolder, existed: [workspace, `${workspace}.owner`, runFolder, `${runFolder}.owner`].map((file) => fs.existsSync(file)) });
   };
 
-  const code = await main({ launch, bundle: quiet, env, root, onExit: quiet, log: quiet, error: quiet });
+  const code = await main({ launch, bundle: quiet, env, root, onExit: quiet, log: quiet, error: quiet, socketLimit: 10_000 });
 
   assert.equal(code, 0);
   assert.equal(launches.length, 2);
@@ -91,4 +91,23 @@ test('H2 a launch that rejects: main returns 1 and still leaves nothing', async 
   assert.equal(seen.length, 2, 'both launches ran: the first failure does not hide the second');
   assert.ok(errors.join('\n').includes('the editor did not start'));
   assert.deepEqual(fs.readdirSync(root), []);
+});
+
+test('H3 a profile folder that would put the editor\'s socket over the limit is the short one (`hp`), and the run says so when even that is too long', async (t) => {
+  const { main, socketRoom } = await importHost();
+  assert.equal(socketRoom('x'.repeat(10), 107), 107 - 10 - '/1.999.9-main.sock'.length);
+  const profiles = [];
+  const run = async (socketLimit) => {
+    const root = owned.ownedDir(t, 'h3');
+    const lines = [];
+    const env = {};
+    await main({ launch: async (options) => { profiles.push(path.basename(options.launchArgs.find((arg) => arg.startsWith('--user-data-dir=')))); }, bundle: quiet, env, root, onExit: quiet, log: (line) => lines.push(line), error: quiet, socketLimit });
+    return lines;
+  };
+
+  await run(10_000);
+  const lines = await run(100);
+  assert.ok(profiles[0].startsWith(owned.ownedPrefix('host-profile')), profiles[0]);
+  assert.ok(profiles[2].startsWith(owned.ownedPrefix('hp')) && !profiles[2].startsWith(owned.ownedPrefix('host-profile')), profiles[2]);
+  assert.ok(lines.some((line) => /IPC socket path .* bytes over/u.test(line)), JSON.stringify(lines));
 });

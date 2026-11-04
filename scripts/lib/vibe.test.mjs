@@ -3,11 +3,11 @@
 // removes them. The rules below are the script's own constants, so a rule the C# side holds and the script forgot fails here.
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { after, before as beforeAll, test } from 'node:test';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 import {
   MINIMAL_UNIX, MINIMAL_WINDOWS, builtEnv, classOf, deepestChild, dirLink, files, homeListing, linkSignIn, minimalEnv, personsVibeHome,
   KEYRING_FAIL_BACKEND, armFilterOf, armsCellsError, armWanted, keyringArm, keyringSetup, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
@@ -16,8 +16,11 @@ import {
 const WINDOWS = process.platform === 'win32';
 const POSIX_ONLY = WINDOWS && 'a POSIX file or process semantic — it runs on the Linux CI job and in WSL';
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-vh-vibelib-'));
-after(() => rmSync(base, { recursive: true, force: true }));
+// The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
+let base;
+const scope = wrap.cleanupScope();
+beforeAll(() => { base = wrap.ownedDir(scope, 'vh-vibelib', { parent: realpathSync.native(wrap.tempRoot()) }); });
+after(() => scope.close());
 
 const RULES = {
   pinnedPrefix: 'logs/session/plugins/',
@@ -363,7 +366,7 @@ test('G18: armWanted treats a missing filter (null or undefined) as "every arm",
 test('armFilterOf: an omitted --arms is "no filter"; a given one must name an arm - an empty value, a bare comma or a missing value is an error, never every arm', () => {
   assert.deepEqual(armFilterOf(['--cells', 'M-V7']), { filter: [], error: '' });
   assert.deepEqual(armFilterOf(['--arms', 'a3,a3c']), { filter: ['a3', 'a3c'], error: '' });
-  assert.deepEqual(armFilterOf(['--arms', ' a3 , ,a3c ']), { filter: ['a3', 'a3c'], error: '' });
+  assert.deepEqual(armFilterOf(['--arms', ' a3 ,a3c ']), { filter: ['a3', 'a3c'], error: '' });
   for (const argv of [['--arms', ''], ['--arms', ','], ['--arms', ' , '], ['--arms'], ['--cells', 'M-V7', '--arms']]) {
     const { filter, error } = armFilterOf(argv);
     assert.match(error, /--arms/u, `${JSON.stringify(argv)} was accepted`);

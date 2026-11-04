@@ -10,20 +10,23 @@
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { after, before as beforeAll, test } from 'node:test';
 import * as kimi from './kimi.mjs';
 import * as owned from './kimi-home.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 
 const WINDOWS = process.platform === 'win32';
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
 const SHIM = join(repo, 'src_mcp', 'src', 'bin', 'Debug', 'net10.0', WINDOWS ? 'coai-mcp.exe' : 'coai-mcp');
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-shim-test-'));
-after(() => rmSync(base, { recursive: true, force: true }));
+// The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
+let base;
+const scope = wrap.cleanupScope();
+beforeAll(() => { base = wrap.ownedDir(scope, 'kimi-shim', { parent: realpathSync.native(wrap.tempRoot()) }); });
+after(() => scope.close());
 
 const exported = (module, names) => names.forEach((name) => assert.equal(typeof module[name], 'function', `${name} is not exported — the probe cannot speak the shim's contract`));
 const FULL = { cwd: 'C:\\w', model: 'kimi-code/k3-256k', deadlineSeconds: 240, executable: 'C:\\k\\kimi.exe', root: 'C:\\r', personsBin: 'C:\\p\\bin', locks: 'C:\\l' };

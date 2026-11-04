@@ -4,6 +4,8 @@
  * and begins the script's owned run folder: TEMP, TMP and TMPDIR name it from then on, so everything the script and its children make in temp lands inside and is removed
  * with it. A folder that cannot be made is ONE line and exit 78. No static import of the mount and no token here.
  */
+import { chmodSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { loadOwned } from './run-tests.mjs';
 
 /** A probe's owned SCRATCH instead (TEMP untouched): `startOwnedScratch({ what })` → `{ path, end }`. */
@@ -14,6 +16,20 @@ export async function startOwnedScratch({ what, prefix = what, importOwned, erro
 /** The run folder of an entry script: `{ folder, root, end }`. `prefix` names the script in the one line a refusal is; `importOwned`, `error` and `exit` are test seams. */
 export async function startOwnedRun({ what, prefix = what, importOwned, error = console.error, exit = process.exit, ...rest } = {}) {
   return start({ prefix, importOwned, error, exit, make: (owned) => owned.beginOwnedRun({ what, ...rest }) });
+}
+
+/**
+ * The DEFAULT scratch of a person-run probe that used to keep it for a later `--reparse` or `--from` (D-b, the rollout's epoch 5): an owned folder of the wrap in the real temp
+ * folder, mode 0700 on POSIX (a copied sign-in may live there until the scrub), removed at exit — and ONE stderr line at exit says so and how to keep it:
+ * `<prefix>: scratch was <path>, removed at exit — pass --scratch <dir> to keep it for --reparse`. `--scratch <dir>` stays a folder the person names and is never removed.
+ * Call it only when no `--scratch` was given. Answers `{ path, end }`.
+ */
+export async function startDefaultScratch({ what, prefix, ...rest } = {}) {
+  const scratch = await startOwnedScratch({ what, prefix, root: realpathSync.native(tmpdir()), ...rest });
+  if (scratch === undefined) return undefined;
+  if (process.platform !== 'win32') chmodSync(scratch.path, 0o700);
+  process.on('exit', () => process.stderr.write(`${prefix}: scratch was ${scratch.path}, removed at exit — pass --scratch <dir> to keep it for --reparse\n`));
+  return scratch;
 }
 
 async function start({ prefix, importOwned, error, exit, make }) {

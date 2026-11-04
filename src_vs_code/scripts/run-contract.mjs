@@ -38,6 +38,10 @@ import './lower-priority.mjs';
 import { nodeTestArgs } from './run-tests.mjs';
 // How the real server is started, waited for and stopped — shared with the seam's usage-counts leg.
 import { kill, startTeamServer } from './team-server-child.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'contract' });
+
 
 const DOMAIN = process.env.COAI_CONTRACT_DOMAIN ?? 'contract.test';
 // The admin persona the Team server tab's contract needs (teamUsage.contract.ts): an email in Coai:Admins. Pointed at

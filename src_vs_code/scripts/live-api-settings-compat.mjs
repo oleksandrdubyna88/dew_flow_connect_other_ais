@@ -37,7 +37,11 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { flag, HERE, newServer, releasedExtension, releasedServer, run } from './releasedHalves.mjs';
+import { flag, HERE, newServer, releasedExtension, releasedServer, run as runServer } from './releasedHalves.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'compat-api' });
+
 
 const broken = [];
 const say = (ok, what, detail = '') => {
@@ -98,7 +102,7 @@ if (old.length === 0 || oldExtension === undefined) {
 console.log(`new: ${built}\n`);
 const fresh = await modulesOf(ours);
 const released = await modulesOf(oldExtension.root);
-const oldVersion = (await run(old, ['--version'], work)).out.trim().split(/\s+/u).pop() ?? '';
+const oldVersion = (await runServer(old, ['--version'], work)).out.trim().split(/\s+/u).pop() ?? '';
 // The settings file is the only source the servers below may read: an inherited variable would win.
 const noEnv = { COAI_VENDORS: '', COAI_PROVIDERS: '', COAI_LOCAL_REASONING_EFFORT: '', COAI_FEATURE_API_REVIEW_MINUTES: '' };
 
@@ -122,8 +126,8 @@ const newFile = fresh.file.serverSettingsJson(fresh.settings.DEFAULTS, set, 'com
 const wire = JSON.parse(JSON.parse(newFile).COAI_VENDORS ?? '[]');
 say(wire.find((one) => one.id === 'qwen')?.reviewMinutes === 35,
   'against a server it cannot version, the settings cross into COAI_VENDORS (unknown is not old)', JSON.stringify(wire.find((one) => one.id === 'qwen')));
-const withSettings = await run(old, ['--providers'], dataDir(work, 'a', newFile), noEnv);
-const without = await run(old, ['--providers'], dataDir(work, 'a2', fresh.file.serverSettingsJson(fresh.settings.DEFAULTS, plain, 'compat-new', '')), noEnv);
+const withSettings = await runServer(old, ['--providers'], dataDir(work, 'a', newFile), noEnv);
+const without = await runServer(old, ['--providers'], dataDir(work, 'a2', fresh.file.serverSettingsJson(fresh.settings.DEFAULTS, plain, 'compat-new', '')), noEnv);
 say(withSettings.code === 0, `the released server (${oldVersion}) answers --providers over a file carrying the settings`, `exit ${withSettings.code}`);
 say(JSON.stringify(rowsOf(withSettings.out).map((one) => one.provider)) === '["codex","antigravity","qwen","grok"]',
   'and lists every vendor the file names — it did not refuse the list and fall back to its defaults',
@@ -150,7 +154,7 @@ const oldWire = JSON.parse(JSON.parse(released.file.serverSettingsJson(released.
 say(oldWire.every((one) => !('effort' in one) && !('thinking' in one) && !('reviewMinutes' in one)), 'what it writes carries none of them');
 
 // ---------- 4. THIS server over what THIS extension wrote ----------
-const live = await run(built, ['--providers'], dataDir(work, 'b', newFile), noEnv);
+const live = await runServer(built, ['--providers'], dataDir(work, 'b', newFile), noEnv);
 const report = fresh.providers.parseProviders(live.out) ?? {};
 const qwen = report['qwen']?.api;
 const grok = report['grok']?.api;
@@ -160,7 +164,7 @@ say(qwen?.effective.effort === 'xhigh' && qwen?.effective.thinkingOn === false &
 say(JSON.stringify(qwen?.capabilities.effortLevels) === '["low","medium","xhigh"]' && qwen?.defaults.effort === 'medium',
   'the levels and the calibrated default the dropdown is drawn from', JSON.stringify(qwen?.capabilities));
 say(/ultra/u.test(grok?.refusal ?? ''), 'an effort the module does not take comes back as its refusal', grok?.refusal ?? '');
-const defaults = await run(built, ['--providers'], dataDir(work, 'c', fresh.file.serverSettingsJson(fresh.settings.DEFAULTS, plain, 'compat-new', '')), noEnv);
+const defaults = await runServer(built, ['--providers'], dataDir(work, 'c', fresh.file.serverSettingsJson(fresh.settings.DEFAULTS, plain, 'compat-new', '')), noEnv);
 const unset = (fresh.providers.parseProviders(defaults.out) ?? {})['qwen']?.api;
 say(unset !== undefined && JSON.stringify(unset.effective) === JSON.stringify(unset.defaults),
   'a row that sets nothing runs on the calibrated default', JSON.stringify(unset?.effective));

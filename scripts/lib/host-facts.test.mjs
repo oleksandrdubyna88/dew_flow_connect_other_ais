@@ -5,18 +5,21 @@
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { after, test } from 'node:test';
+import { after, before as beforeAll, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { KEYRING_FAIL_BACKEND as FAIL_BACKEND } from './vibe.mjs';
 import { collectHostFacts, hostFactsMode, keyringSession, mountTypeOf, pathEntries, PY_DISTRIBUTIONS, PY_KEYRING_CLASS, readBanner, redactSlot, resolveTool, signInRecord } from './host-facts.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 
 const PROBE = join(dirname(fileURLToPath(import.meta.url)), '..', 'probe-native-linux-host.mjs');
 const LINUX = process.platform === 'linux';
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-host-facts-test-'));
-after(() => rmSync(base, { recursive: true, force: true }));
+// The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
+let base;
+const scope = wrap.cleanupScope();
+beforeAll(() => { base = wrap.ownedDir(scope, 'host-facts', { parent: realpathSync.native(wrap.tempRoot()) }); });
+after(() => scope.close());
 const SECRET = 'MISTRAL_API_KEY=SENTINEL-SECRET-DO-NOT-READ';
 const TOKEN = '{"refresh_token":"SENTINEL-TOKEN-DO-NOT-READ"}';
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');

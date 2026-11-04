@@ -3,12 +3,12 @@
 // (the repository's immutability rule) and the inputs it was given are left exactly as they were.
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { ownedRefusal, shimRefusal } from './kimi.mjs';
 import * as d19 from './kimi-d19.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 
 const classify = (path) => (path.endsWith('.toml') ? 'configuration' : 'data');
 
@@ -64,9 +64,9 @@ function d19Table() {
   return d19.d19Arms({ write, ownedHome, projectKit, KIT_PROMPT: 'p', KIT_EXPECT: {} });
 }
 
-test('G10: every D19 arm that runs on an owned home asks for one (requireOwned), is judged fine with it and refused without it', () => {
-  const root = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-d19-arms-'));
-  try {
+test('G10: every D19 arm that runs on an owned home asks for one (requireOwned), is judged fine with it and refused without it', (t) => {
+  const root = wrap.ownedDir(t, 'd19-arms', { parent: realpathSync.native(wrap.tempRoot()) });
+  {
     const arms = d19Table();
     const owned = Object.entries(arms).filter(([cell]) => cell !== 'M-K11b').flatMap(([cell, list]) => list.map((a, i) => ({ cell, a, spec: a.setup(join(root, `${cell}-${i}`), 1, {}) })));
 
@@ -76,14 +76,12 @@ test('G10: every D19 arm that runs on an owned home asks for one (requireOwned),
       assert.equal(ownedRefusal(spec), '', `${cell} ${a.arm}`);
       assert.match(ownedRefusal({ ...spec, home: undefined }), /no owned root/u, `${cell} ${a.arm} was not refused without its owned root`);
     }
-  } finally {
-    rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('G10: moving the arms onto the shared pattern keeps what they measure - shim arms are never given an empty OS home, the -p arms of M-K13 keep the REAL one', () => {
-  const root = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-d19-arms-'));
-  try {
+test('G10: moving the arms onto the shared pattern keeps what they measure - shim arms are never given an empty OS home, the -p arms of M-K13 keep the REAL one', (t) => {
+  const root = wrap.ownedDir(t, 'd19-arms', { parent: realpathSync.native(wrap.tempRoot()) });
+  {
     const arms = d19Table();
     const all = Object.entries(arms).flatMap(([cell, list]) => list.map((a, i) => ({ cell, a, spec: a.setup(join(root, `${cell}-${i}`), 1, {}) })));
 
@@ -91,8 +89,6 @@ test('G10: moving the arms onto the shared pattern keeps what they measure - shi
     const prompt = all.filter((s) => s.spec.kind === 'prompt');
     assert.equal(prompt.length, 2);
     for (const { spec } of prompt) assert.equal(spec.profile ?? '', '', 'M-K13 -p measures the pin with the real OS home, as before');
-  } finally {
-    rmSync(root, { recursive: true, force: true });
   }
 });
 

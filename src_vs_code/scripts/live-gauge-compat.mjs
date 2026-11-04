@@ -31,6 +31,10 @@ import { pathToFileURL } from 'node:url';
 
 import { flag, HERE, releasedExtension } from './releasedHalves.mjs';
 import { startTeamServer } from './team-server-child.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'compat-gauge' });
+
 
 let broken = [];
 const say = (ok, what, detail = '') => {

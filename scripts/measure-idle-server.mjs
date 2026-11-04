@@ -13,9 +13,12 @@
 // Run it on a machine you are not also loading, or say what else ran: on a CPU-saturated WSL the process start alone
 // took 5–9 s (with `nice -n 19`), whatever the data.
 import { spawn, execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { startOwnedRun } from '../src_vs_code/scripts/ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'measure-idle' });
+
 
 const [binary, snapshot, ...rest] = process.argv.slice(2);
 if (!binary || !snapshot) {
@@ -29,7 +32,9 @@ const option = (name, fallback) => {
 const settle = Number(option('--settle', '30'));
 const idle = Number(option('--idle', '120'));
 
-const data = mkdtempSync(join(tmpdir(), 'coai-idle-arm-'));
+// Inside this script's run folder (removed with it); the `finally` below still removes the copy as soon as the child has exited.
+const data = join(run.folder, 'idle-arm');
+mkdirSync(data);
 cpSync(snapshot, data, { recursive: true });
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('COAI_')));
 const envFile = option('--env', '');

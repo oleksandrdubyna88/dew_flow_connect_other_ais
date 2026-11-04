@@ -4,14 +4,17 @@
 // SIGKILL row needs (a survivor marker existing at the kill), and each orphan's NEW parent. Makes one folder under this user's temp folder.
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, realpathSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { after, before as beforeAll, test } from 'node:test';
 import { KILL_ARMS, armsRefusal, buildSchedule, defaultArms, isKilledArm, killRecord, killSignal, liveSurvivor, liveVerdict, nextRow, orphanRecord, refusalText, survivorMarkers, survivorsOf } from './kimi-schedule.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-schedule-'));
-after(() => rmSync(base, { recursive: true, force: true }));
+// The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
+let base;
+const scope = wrap.cleanupScope();
+beforeAll(() => { base = wrap.ownedDir(scope, 'kimi-schedule', { parent: realpathSync.native(wrap.tempRoot()) }); });
+after(() => scope.close());
 
 const labels = (schedule) => schedule.map((s) => s.label);
 

@@ -1,23 +1,27 @@
 // node --test scripts/lib/caller-transcripts.test.mjs — the caller-transcript harness (E1.S2): what it counts, and that nothing
-// it prints can carry text. Every tree is synthetic and lives under the OS temp folder (`testsToDelete-` named, removed in
-// `after`); nothing here reads the operator's ~/.claude or any real store. CI runs it on Linux (ci.yml, "Probe script tests"),
+// it prints can carry text. Every tree is synthetic and lives in an owned folder of the wrap, inside the run folder of the runner (removed with its
+// claim in `after`); nothing here reads the operator's ~/.claude or any real store. CI runs it on Linux (ci.yml, "Probe script tests"),
 // WSL's Node 20 runs it too, so no API newer than Node 20 appears in the .mjs files.
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { after, test } from 'node:test';
+import { after, before as beforeAll, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { compareOrdinal } from './ordinal.mjs';
 import { busiestDay, classifyPath, classifyRound, isSessionId, measure, percentile, safeModel, safeVersion } from './caller-transcripts.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, '..', 'measure-caller-transcripts.mjs');
 const EXPORTER = join(HERE, '..', 'export-code-rounds.py');
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-caller-transcripts-'));
-after(() => rmSync(base, { recursive: true, force: true }));
+// The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
+const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+let base;
+const scope = wrap.cleanupScope();
+beforeAll(() => { base = wrap.ownedDir(scope, 'caller-transcripts', { parent: realpathSync.native(wrap.tempRoot()) }); });
+after(() => scope.close());
 
 const SESSION = '11111111-1111-4111-8111-111111111111';
 const OTHER_SESSION = '22222222-2222-4222-8222-222222222222';
@@ -282,7 +286,7 @@ test('noFieldValueReachesTheReport', () => {
   const ran = spawnSync(process.execPath, [CLI, '--rounds', rounds, '--projects', projects, '--runs', '2'], { encoding: 'utf8' });
   assert.equal(ran.status, 0, ran.stderr);
   assert.doesNotMatch(ran.stdout, /ZZ-MARK/u, 'a marker planted in a free-text slot reached stdout');
-  assert.doesNotMatch(ran.stdout, /slug|rounds\.json|repo:|testsToDelete/u, 'a path or a folder name reached stdout');
+  assert.doesNotMatch(ran.stdout, new RegExp(`slug|rounds\\.json|repo:|${escaped(basename(base))}`, 'u'), 'a path or a folder name reached stdout');
   assert.equal(ran.stdout.trim().split('\n').length, 1, 'one JSON line');
 });
 
@@ -293,7 +297,7 @@ test('progressGoesToStderrAsCountsOnlyWhileStdoutStaysOneJsonLine', () => {
   assert.match(ran.stderr, /reading caller sessions 1\/1/);
   assert.match(ran.stderr, /timing session 1\/1: full parse run 2\/2/);
   assert.match(ran.stderr, /timing session 1\/1: day-gated parse run 2\/2/);
-  assert.doesNotMatch(ran.stderr, /ZZ-MARK|slug|rounds\.json|testsToDelete/u, 'progress names no value and no path');
+  assert.doesNotMatch(ran.stderr, new RegExp(`ZZ-MARK|slug|rounds\\.json|${escaped(basename(base))}`, 'u'), 'progress names no value and no path');
   assert.equal(ran.stdout.trim().split('\n').length, 1, 'stdout is still the single JSON result');
   JSON.parse(ran.stdout);
 });

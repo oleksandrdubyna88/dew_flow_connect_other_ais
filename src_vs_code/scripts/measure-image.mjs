@@ -32,6 +32,10 @@ import { fileURLToPath } from 'node:url';
 
 import { environment, linesOf, runCli } from './cliHarness.mjs';
 import { tokenPng } from './tokenPng.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'measure-image' });
+
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const OUT = new URL('../out/', import.meta.url).href;
