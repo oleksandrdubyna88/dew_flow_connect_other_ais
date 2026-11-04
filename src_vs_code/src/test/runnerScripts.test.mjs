@@ -87,3 +87,37 @@ for (const entry of ENTRIES) {
     assert.equal(result.stderr, '');
   });
 }
+
+test('E4 the folders that hold DATA inside a run folder are made owner-only (0700), as mkdtemp made them', () => {
+  const sites = [
+    ['scripts/measure-idle-server.mjs', /idle-arm'\)[\s\S]{0,80}?mkdirSync\(data, \{ mode: 0o700 \}\)/u],
+    ['scripts/live-consult-all.mjs', /mkdirSync\(data, \{ mode: 0o700 \}\)/u],
+    ['scripts/probe-native-linux-host.mjs', /mode: 0o700/u],
+    ['http/run-contracts.mjs', /mkdirSync\(dataDir, \{ mode: 0o700 \}\)/u],
+    ['scripts/dotenv-name-vectors.mjs', /mkdirSync\(scratch, \{ recursive: true, mode: 0o700 \}\)/u],
+  ];
+  for (const [file, pattern] of sites) assert.match(fs.readFileSync(path.join(repoRoot, file), 'utf8'), pattern, file);
+});
+
+test('D1 a runner started through a symbolic link still runs (a green tick over nothing otherwise)', (t) => {
+  const root = owned.ownedDir(t, 'd1');
+  try {
+    for (const [file, name] of [['scripts/run-lib-tests.mjs', 'lib.mjs'], ['src_vs_code/scripts/run-tests.mjs', 'rt.mjs'], ['src_vs_code/scripts/run-host.mjs', 'host.mjs']]) {
+      fs.symlinkSync(path.join(repoRoot, file), path.join(root, name));
+    }
+  } catch (error) {
+    t.skip(`a link cannot be made here (${error.code})`);
+    return;
+  }
+  const env = { ...process.env };
+  for (const name of ['NODE_TEST_CONTEXT', MARKER, 'TESTSTODELETE_RUN']) delete env[name];
+  const run = (link, args, extra = {}) => spawnSync(process.execPath, [path.join(root, link), ...args], { cwd: pkg, encoding: 'utf8', timeout: 60_000, env: { ...env, ...extra } });
+
+  const lib = run('lib.mjs', ['scripts/lib/no-such.test.mjs']);
+  assert.equal(lib.status, 2, `run-lib-tests ran nothing: ${lib.stdout}${lib.stderr}`);
+  assert.match(lib.stderr, /is not a test file/u);
+  const tests = run('rt.mjs', ['src/test/no-such.test.mjs']);
+  assert.equal(tests.status, 2, `run-tests ran nothing: ${tests.stdout}${tests.stderr}`);
+  const host = run('host.mjs', [], { [SELF_TEST]: 'exit-after-begin', TEMP: root, TMP: root, TMPDIR: root });
+  assert.equal(host.status, 3, `run-host ran nothing: ${host.stdout}${host.stderr}`);
+});

@@ -50,6 +50,13 @@ test('both runner scripts build their node --test command through nodeTestArgs a
   assert.match(read(path.join(scripts, 'run-contract.mjs')), /nodeTestArgs\(/);
 });
 
+test('the scripts runner caps its workers and starts lowered too (common.local-cpu-budget §1, §2) — S4 closed the only capped recipe, so it carries both itself', () => {
+  const source = read(path.join(root, 'scripts', 'run-lib-tests.mjs'));
+  assert.equal((source.match(/\[\s*'--test'\s*,/g) ?? []).length, 0, 'run-lib-tests.mjs builds a node --test argument list of its own');
+  assert.match(source, /nodeTestArgs\(/);
+  assert.match(source, /import\(\s*'\.\.\/src_vs_code\/scripts\/lower-priority\.mjs'\s*\)|import\s+'\.\.\/src_vs_code\/scripts\/lower-priority\.mjs'/, 'run-lib-tests.mjs never loads the priority preload');
+});
+
 test('the preload is the family template, verbatim but for its MOUNT line', () => {
   const template = read(path.join(root, '.agents/conventions/tools/templates/lower-priority-preload.mjs'));
   const copy = read(path.join(scripts, 'lower-priority.mjs'));

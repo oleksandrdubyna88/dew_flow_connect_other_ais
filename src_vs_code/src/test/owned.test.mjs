@@ -260,3 +260,47 @@ test('W12 startOwnedRun with no mount is one line and exit 2, and nothing is mad
   assert.match(errors[0], /git submodule update --init \.agents\/conventions/);
   assert.deepEqual(fs.readdirSync(root), []);
 });
+
+const childEnv = (root, extra = {}) => {
+  const env = { ...process.env };
+  for (const name of ['NODE_TEST_CONTEXT', MARKER, 'TESTSTODELETE_RUN', SELF_TEST_VARIABLE]) delete env[name];
+  return { ...env, TEMP: root, TMP: root, TMPDIR: root, ...extra };
+};
+const ownedRunUrl = pathToFileURL(path.join(pkg, 'scripts', 'ownedRun.mjs')).href;
+
+test('W13 the run folder and the scratch are owner-only (0700 on POSIX): mkdtemp gave that, the reference\'s mkdir gives 0755 under umask 022', (t) => {
+  const root = privateRoot(t, 'w13');
+  const run = beginOwnedRun({ what: 'w13', root, env: {}, onExit: quiet, exit: quiet, selfTest: '' });
+  t.after(() => run.end());
+  const scratch = ownedScratch('w13s', { root, onExit: quiet, selfTest: '' });
+  t.after(() => scratch.end());
+  if (process.platform === 'win32') {
+    t.skip('Windows has no mode bits: the profile\'s ACL is what it relies on');
+    return;
+  }
+  assert.equal(fs.statSync(run.folder).mode & 0o777, 0o700, 'the run folder');
+  assert.equal(fs.statSync(scratch.path).mode & 0o777, 0o700, 'the scratch');
+});
+
+test('W14 the default scratch of a probe says ONE line at exit: removed at exit, and how to keep it (two probes have no --reparse)', (t) => {
+  const root = privateRoot(t, 'w14');
+  const script = `import { startDefaultScratch } from ${JSON.stringify(ownedRunUrl)};\nconst s = await startDefaultScratch({ what: 'w14', prefix: 'probe-x' }); console.log(s.path);\n`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 60_000, env: childEnv(root) });
+
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  const lines = result.stderr.trimEnd().split('\n');
+  assert.equal(lines.length, 1, result.stderr);
+  assert.equal(lines[0], `probe-x: scratch was ${result.stdout.trim()}, removed at exit — pass --scratch <dir> to keep it`);
+  assert.deepEqual(fs.readdirSync(root), []);
+});
+
+test('W15 a temp root that is not there is ONE line and exit 78 for a default scratch, not a stack', (t) => {
+  const root = path.join(privateRoot(t, 'w15'), 'missing');
+  const script = `import { startDefaultScratch } from ${JSON.stringify(ownedRunUrl)};\nawait startDefaultScratch({ what: 'w15', prefix: 'probe-x' });\nconsole.log('went on');\n`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 60_000, env: childEnv(root) });
+
+  assert.equal(result.status, 78, `${result.stdout}${result.stderr}`);
+  assert.equal(result.stderr.trimEnd().split('\n').length, 1, result.stderr);
+  assert.match(result.stderr, /^probe-x: nothing ran — .*missing/u);
+  assert.doesNotMatch(result.stdout, /went on/u);
+});

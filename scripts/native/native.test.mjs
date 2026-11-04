@@ -664,8 +664,8 @@ linuxTest('a phase whose series is gone stops with ONE line and a non-zero exit,
 // The lead's real `stat` argv runs through a local-exec seam — the `ssh <host> --` prefix is dropped, nothing else — against real folders in each unsafe state. The script
 // in the series writes a SENTINEL: it exists only if a command from the folder ran.
 const localExec = (env) => async (argv) => {
-  const [program, ...args] = argv.slice(3); // ['ssh', host, '--', program, ...]
-  const r = spawnSync(program, args, { env, encoding: 'utf8', timeout: 30_000 });
+  // ssh joins the words after `--` with spaces and the REMOTE SHELL parses the result again: so does this seam (`sh -c`), or a word with a `|` would pass here and fail on the host.
+  const r = spawnSync('/bin/sh', ['-c', argv.slice(3).join(' ')], { env, encoding: 'utf8', timeout: 30_000 });
   return { status: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
 };
 
@@ -741,6 +741,101 @@ linuxTest('the lead\'s REAL stat check, run for real against real folders: the g
   assert.equal(r.status, 66);
   assert.equal(r.refused, `the series ${series} is gone; start a new one with make-series.sh`);
   assert.equal(existsSync(sentinel), false);
+});
+
+// ---------------------------------------------------------------- the seam cannot reach a root run (E5 S4 fix round, B5)
+// COAI_NATIVE_SERIES_OWNER_UID exists so CI can run the tests as its own user. Run as root with a non-zero value it would make the checks accept a folder of THAT user: so the two
+// root-run copies refuse it. Root cannot be used here; `id` is replaced by an exported bash function (a stubbed check), which bash imports from the environment.
+const AS_ROOT = { 'BASH_FUNC_id%%': '() {  echo 0\n}' };
+
+linuxTest('remove-series.sh and abort.sh refuse, as root, a non-zero COAI_NATIVE_SERIES_OWNER_UID — the test seam cannot reach a root run', () => {
+  const series = namedSeries('native-vibe-20261104-0000ab');
+  const removed = removeIn(series, ROOT, { COAI_NATIVE_SERIES_OWNER_UID: String(MY_UID()), ...AS_ROOT });
+  assert.equal(removed.status, 78, `${removed.stdout}${removed.stderr}`);
+  assert.match(removed.stdout, /^refused: .*root/u);
+  assert.equal(existsSync(series), true, 'nothing was removed');
+  const alsoRoot = removeIn(series, ROOT, { COAI_NATIVE_SERIES_OWNER_UID: '0', ...AS_ROOT });
+  assert.notEqual(alsoRoot.status, 78, `as root with the default uid the seam is not in play: ${alsoRoot.stdout}`);
+
+  const aborted = spawnSync('/bin/bash', ['--', join(provisioned(), 'run', 'abort.sh'), 'n-v2'], { env: scriptEnv({ COAI_NATIVE_SERIES_OWNER_UID: String(MY_UID()), ...AS_ROOT }), encoding: 'utf8', timeout: 30_000 });
+  assert.equal(aborted.status, 78, `${aborted.stdout}${aborted.stderr}`);
+  assert.match(aborted.stderr, /^refused: .*root/u);
+});
+
+// ---------------------------------------------------------------- the lead's driver (E5 S4 fix round, B4): scripts/native/lead.mjs, the ONLY entry
+// ssh and scp are replaced by a FAITHFUL seam: the words after `--` are joined with spaces and parsed by `sh -c`, as sshd does; scp is `cp -p` with the `host:` dropped.
+const leadSeam = (env) => {
+  const remote = localExec(env);
+  return async (argv) => {
+    if (argv[0] !== 'scp') return remote(argv);
+    const args = argv.slice(1).filter((word) => word !== '--');
+    const sources = args.slice(0, -1).filter((word) => !word.startsWith('-'));
+    const r = spawnSync('/bin/cp', ['-p', ...sources, args.at(-1).replace(/^[^:/]+:/u, '')], { encoding: 'utf8' });
+    return { status: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
+  };
+};
+
+linuxTest('lead.mjs drives a whole series through the stat check with the faithful seam: mkdir, copy, make, phase, abort, remove — and stops on a bad mkdir', async () => {
+  const { lead } = await import('./lead.mjs');
+  const root = join(ROOT, 'lead-root');
+  mkdirSync(root);
+  chmodSync(root, 0o755);
+  const series = join(root, 'native-vibe-20261104-1ead01');
+  const home = fakeHome();
+  const { clean } = pathDirs();
+  fakeServer(home, `${clean}:/usr/bin:/bin`);
+  const lines = [];
+  const deps = {
+    exec: leadSeam(scriptEnv({ HOME: home, COAI_NATIVE_SERIES_ROOT: root })), options: { root, ownerUid: MY_UID() }, out: (line) => lines.push(line), err: (line) => lines.push(line), tempDir: join(ROOT, 'lead-tmp'),
+  };
+  mkdirSync(deps.tempDir);
+  const step = (...args) => lead(['a-host', ...args], deps);
+
+  assert.equal(await step('mkdir', series), 0, lines.join('\n'));
+  assert.equal(statSync(series).mode & 0o777, 0o700);
+  const again = await step('mkdir', series);
+  assert.notEqual(again, 0, 'an existing folder fails (no -p), and the driver stops with that status');
+  assert.equal(await step('copy', series, 'make'), 0, lines.join('\n'));
+  assert.equal(existsSync(join(series, 'make-series.sh')), true);
+  assert.equal(await step('make', series), 0, lines.join('\n'));
+  assert.equal(readFileSync(join(series, 'SERIES_PATH'), 'utf8'), `${series}\n`);
+  assert.equal(await step('copy', series, 'tools'), 0, lines.join('\n'));
+  for (const file of ['abort.sh', 'remove-series.sh']) assert.equal(existsSync(join(series, 'run', file)), true, file);
+  writeFileSync(join(series, 'checkout', 'scripts', 'dummy-probe.mjs'), DUMMY, { flag: 'w' });
+  assert.equal(await step('copy', series, 'phase', 'n-v1', 'dummy-probe.mjs', '--mode=exit0'), 0, lines.join('\n'));
+  assert.equal(statSync(join(series, 'run', 'n-v1.sh')).mode & 0o777, 0o700);
+  assert.equal(await step('phase', series, 'n-v1'), 0, lines.join('\n'));
+  await waitFor('the phase wrote no .done', hasFile(join(series, 'logs', 'n-v1.done')));
+  assert.equal(await step('abort', series, 'n-v1'), 0, lines.join('\n'));
+  assert.equal(await step('remove', series), 0, lines.join('\n'));
+  assert.equal(existsSync(series), false, 'the remover removed it');
+});
+
+linuxTest('lead.mjs refuses a planted link before scp ever runs, takes NO root option, and refuses an unknown step', async () => {
+  const { lead } = await import('./lead.mjs');
+  const root = join(ROOT, 'lead-root-2');
+  mkdirSync(root);
+  chmodSync(root, 0o755);
+  const real = join(root, 'native-kimi-20261104-1ead02');
+  const planted = join(root, 'native-kimi-20261104-1ead03');
+  mkdirSync(real, { mode: 0o700 });
+  symlinkSync(real, planted);
+  const lines = [];
+  const calls = [];
+  const exec = leadSeam(scriptEnv({ COAI_NATIVE_SERIES_ROOT: root }));
+  const deps = { exec: async (argv) => { calls.push(argv[0]); return exec(argv); }, options: { root, ownerUid: MY_UID() }, out: (line) => lines.push(line), err: (line) => lines.push(line), tempDir: ROOT };
+
+  assert.equal(await lead(['a-host', 'copy', planted, 'make'], deps), 78, lines.join('\n'));
+  assert.match(lines.join('\n'), /symbolic link/u);
+  assert.equal(calls.includes('scp'), false, 'scp never ran');
+  assert.deepEqual(readdirSync(real), [], 'nothing was copied into the folder the link points to');
+
+  calls.length = 0;
+  for (const bad of [['a-host', 'phase', real, 'n-v2', '--root', '/tmp/evil'], ['a-host', '--root', '/tmp', 'phase', real, 'n-v2'], ['a-host', 'nonsense', real], ['a-host']]) {
+    assert.equal(await lead(bad, deps), 64, `${bad.join(' ')}: a usage error`);
+  }
+  assert.deepEqual(calls, [], 'nothing was executed for a usage error');
+  assert.match(readFileSync(join(NATIVE, 'lead.mjs'), 'utf8'), /NO root option/u, 'the header says so');
 });
 
 // ---------------------------------------------------------------- TEETH — the break-its of E1.S1 (B1, B2, B3, B5), kept as tests

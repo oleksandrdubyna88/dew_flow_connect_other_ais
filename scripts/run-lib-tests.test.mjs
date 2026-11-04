@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import * as mount from '../.agents/conventions/tools/lib/owned.mjs';
 import * as ownedModule from '../src_vs_code/scripts/owned.mjs';
+import { nodeTestArgs } from '../src_vs_code/scripts/run-tests.mjs';
 import { runLibTests } from './run-lib-tests.mjs';
 
 const MARKER = 'COAI_TEST_RUN_FOLDER';
@@ -76,7 +77,7 @@ test('L1 the sweep runs over the real root before node --test is started', async
   assert.equal(status, 0);
   assert.equal(spawned.length, 1, 'node --test is started once');
   assert.equal(spawned[0].folderStillThere, false, 'the planted gone-owner folder was collected before the spawn');
-  assert.deepEqual(spawned[0].args, [process.execPath, ['--test', 'scripts/**/*.test.mjs'], { cwd: repoRoot, stdio: 'inherit' }], 'node\'s own glob, inherited streams, the repository root');
+  assert.deepEqual(spawned[0].args, [process.execPath, nodeTestArgs(['scripts/**/*.test.mjs']), { cwd: repoRoot, stdio: 'inherit' }], 'node\'s own glob under the worker cap of nodeTestArgs, inherited streams, the repository root');
 });
 
 test('L2 ci.yml runs the lib tests through the runner, never bare', () => {
@@ -199,7 +200,7 @@ test('L-c file arguments are passed instead of the glob; a bad file is exit 2 be
   }));
 
   assert.equal(status, 0);
-  assert.deepEqual(spawned.map(([, args]) => args), [['--test', 'scripts/lib/kimi.test.mjs']]);
+  assert.deepEqual(spawned.map(([, args]) => args), [nodeTestArgs(['scripts/lib/kimi.test.mjs'])]);
 
   const errors = [];
   let loaded = 0;
