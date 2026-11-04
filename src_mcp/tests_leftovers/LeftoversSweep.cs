@@ -85,7 +85,7 @@ public static class LeftoversSweep
     {
         var pass = new Pass(options);
         using var lease = SweepLock.Take(options.Tmp, options.SweepLockWait, pass.Note); // Windows: one sweep at a time over a root (E5 entry 5.1); POSIX: holds nothing
-        if (lease is null) return pass.Result();
+        if (!lease.Granted) return pass.Result();
         try
         {
             pass.Go();

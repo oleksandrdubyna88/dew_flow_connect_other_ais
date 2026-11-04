@@ -13,7 +13,9 @@ namespace CoaiMcp.Tests.Leftovers;
 /// is gone, and — by reading — a sweep that sees its claim deleted by the other restores the folder under its old name, unclaimed. POSIX's <c>rename</c> has one winner: unchanged.</para>
 /// <para><b>What.</b> The name is <c>Global\coai-leftovers-sweep-&lt;sha256 of the real root, lower-cased&gt;</c>. The wait is 30 s; an <see cref="AbandonedMutexException"/> counts as
 /// acquired (a sweep was killed holding it). A wait that times out, or a mutex that cannot be opened (<see cref="UnauthorizedAccessException"/>, <see cref="IOException"/>, …), means
-/// NO sweep: the caller lists one line and returns — a sweep never throws and never fails the run. The mutex is released on the thread that took it, by <see cref="Dispose"/>.</para>
+/// NO sweep: <see cref="Granted"/> is false, the caller lists one line and returns — a sweep never throws and never fails the run. The mutex is released on the thread that took it, by <see cref="Dispose"/>.</para>
+/// <para><b>The name's text.</b> The kernel's final path of the root: one name for every spelling of a root (case, a trailing separator, a junction, a short name). A root that cannot be
+/// opened falls back to its full path: an absent root is met by the pass's own error, and a root one sweep can open and another cannot gets two names and no exclusion, which needs an ACL or a transient failure.</para>
 /// </remarks>
 internal sealed class SweepLock : IDisposable
 {
@@ -22,12 +24,19 @@ internal sealed class SweepLock : IDisposable
 
     private Mutex? _mutex;
 
-    private SweepLock(Mutex? mutex) => _mutex = mutex;
-
-    /// <summary>The lock, or null when the sweep must not run (<paramref name="note"/> was given the one line to list). On POSIX: a lock that holds nothing.</summary>
-    internal static SweepLock? Take(string tmp, TimeSpan? wait, Action<string> note)
+    private SweepLock(Mutex? mutex, bool granted)
     {
-        if (!OperatingSystem.IsWindows()) return new SweepLock(null);
+        _mutex = mutex;
+        Granted = granted;
+    }
+
+    /// <summary>May the sweep run? False: another sweep holds the root or the lock could not be taken, and the one line was listed.</summary>
+    internal bool Granted { get; }
+
+    /// <summary>Take the lock; when it is not <see cref="Granted"/>, <paramref name="note"/> was given the one line to list. On POSIX: granted, and it holds nothing.</summary>
+    internal static SweepLock Take(string tmp, TimeSpan? wait, Action<string> note)
+    {
+        if (!OperatingSystem.IsWindows()) return new SweepLock(null, granted: true);
 
         Mutex? mutex = null;
         try
@@ -39,7 +48,7 @@ internal sealed class SweepLock : IDisposable
                 {
                     mutex.Dispose();
                     note("another sweep holds this temp root: nothing swept");
-                    return null;
+                    return new SweepLock(null, granted: false);
                 }
             }
             catch (AbandonedMutexException)
@@ -47,18 +56,18 @@ internal sealed class SweepLock : IDisposable
                 // A sweep was killed while it held the mutex: this thread owns it now.
             }
 
-            return new SweepLock(mutex);
+            return new SweepLock(mutex, granted: true);
         }
         catch (Exception ex)
         {
             mutex?.Dispose();
             note($"the sweep lock for this temp root could not be taken ({ex.GetType().Name}): nothing swept");
-            return null;
+            return new SweepLock(null, granted: false);
         }
     }
 
     [SupportedOSPlatform("windows")]
-    internal static string NameFor(string tmp)
+    private static string NameFor(string tmp)
     {
         var real = Native.FinalPathOfFollowing(tmp) ?? Path.GetFullPath(tmp);
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(real.TrimEnd('\\', '/').ToLowerInvariant()));

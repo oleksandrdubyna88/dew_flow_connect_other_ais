@@ -161,8 +161,15 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
         paused.Wait(TimeSpan.FromSeconds(60)).Should().BeTrue("the first sweep reached its rename");
         var two = Task.Run(() => second = LeftoversSweep.Run(Options(root)));
 
-        (await Task.WhenAny(two, Task.Delay(TimeSpan.FromMilliseconds(1500)))).Should().NotBe(two, "the second sweep is held while the first is paused after its rename");
-        release.Set();
+        try
+        {
+            (await Task.WhenAny(two, Task.Delay(TimeSpan.FromMilliseconds(1500)))).Should().NotBe(two, "the second sweep is held while the first is paused after its rename");
+        }
+        finally
+        {
+            release.Set(); // a red assertion must not leave the first sweep paused, holding the lock, while the fixture removes its root
+        }
+
         await Task.WhenAll(one, two).WaitAsync(TimeSpan.FromSeconds(60));
 
         first.Errors.Concat(second.Errors).Should().BeEmpty();
@@ -185,17 +192,62 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
         using var paused = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
         var holder = Task.Run(() => LeftoversSweep.Run(Options(root, hooks: new SweepHooks(AfterRename: (_, _) => { paused.Set(); release.Wait(TimeSpan.FromSeconds(60)); }))));
-        paused.Wait(TimeSpan.FromSeconds(60)).Should().BeTrue("the holder reached its rename");
+        try
+        {
+            paused.Wait(TimeSpan.FromSeconds(60)).Should().BeTrue("the holder reached its rename");
 
-        var waiter = LeftoversSweep.Run(Options(root, lockWait: TimeSpan.FromMilliseconds(300)));
+            var waiter = LeftoversSweep.Run(Options(root, lockWait: TimeSpan.FromMilliseconds(300)));
 
-        waiter.Listed.Should().Equal(["another sweep holds this temp root: nothing swept"]);
-        waiter.Removed.Should().BeEmpty();
-        waiter.Preserved.Should().BeEmpty();
-        waiter.Errors.Should().BeEmpty("a sweep that cannot take the lock never fails the run");
-        Directory.Exists(b).Should().BeTrue("the waiter touched nothing");
+            waiter.Listed.Should().Equal(["another sweep holds this temp root: nothing swept"]);
+            waiter.Removed.Should().BeEmpty();
+            waiter.Preserved.Should().BeEmpty();
+            waiter.Errors.Should().BeEmpty("a sweep that cannot take the lock never fails the run");
+            Directory.Exists(b).Should().BeTrue("the waiter touched nothing");
+        }
+        finally
+        {
+            release.Set();
+        }
 
-        release.Set();
+        var held = await holder.WaitAsync(TimeSpan.FromSeconds(60));
+        held.Removed.Where(path => !path.EndsWith(".owner", StringComparison.Ordinal)).Should().BeEquivalentTo([a, b]);
+    }
+
+    [Fact]
+    public async Task OnWindows_EverySpellingOfOneRoot_TakesTheSameLock()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows only: the named mutex over the temp root is the Windows sweep lock");
+        }
+
+        var dead = Dead();
+        var root = _owned.Dir("lock-spell");
+        var a = PlantFolder(root, Name("lsa"), Rec(dead));
+        var b = PlantFolder(root, Name("lsb"), Rec(dead));
+        var link = Path.Combine(_owned.Dir("lock-spell-link"), "to-root");
+        DirectoryLinks.CreateOrSkip(link, root);
+        using var paused = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var holder = Task.Run(() => LeftoversSweep.Run(Options(root, hooks: new SweepHooks(AfterRename: (_, _) => { paused.Set(); release.Wait(TimeSpan.FromSeconds(60)); }))));
+        try
+        {
+            paused.Wait(TimeSpan.FromSeconds(60)).Should().BeTrue("the holder reached its rename");
+
+            foreach (var spelling in new[] { root.ToUpperInvariant(), root + Path.DirectorySeparatorChar, link })
+            {
+                var waiter = LeftoversSweep.Run(Options(spelling, lockWait: TimeSpan.FromMilliseconds(300)));
+
+                waiter.Listed.Should().Equal(["another sweep holds this temp root: nothing swept"], $"{spelling} is the root the holder holds");
+                waiter.Removed.Should().BeEmpty($"{spelling} is the root the holder holds");
+            }
+        }
+        finally
+        {
+            release.Set();
+            Unlink(link);
+        }
+
         var held = await holder.WaitAsync(TimeSpan.FromSeconds(60));
         held.Removed.Where(path => !path.EndsWith(".owner", StringComparison.Ordinal)).Should().BeEquivalentTo([a, b]);
     }
@@ -214,7 +266,7 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
     /// environment it does nothing (the ordinary run passes through it). With it: say ready, wait for the go file, sweep the root once, write the report as JSON.
     /// </summary>
     [Fact]
-    public void SweepChild_E551()
+    public void SweepChild_SweepsTheGivenRootOnce_WhenTheProcessTestStartsIt()
     {
         var root = Environment.GetEnvironmentVariable(ChildRoot);
         if (root is null) return;
@@ -223,6 +275,7 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
         var go = Environment.GetEnvironmentVariable(ChildGo)!;
         var until = DateTime.UtcNow.AddSeconds(60);
         while (!File.Exists(go) && DateTime.UtcNow < until) Thread.Sleep(2);
+        File.Exists(go).Should().BeTrue("the process test releases its children together; a child that sweeps alone proves nothing");
 
         var result = LeftoversSweep.Run(Options(root));
 
@@ -248,7 +301,9 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
             try
             {
                 var until = DateTime.UtcNow.AddSeconds(60);
-                while (!Enumerable.Range(0, 2).All(index => File.Exists(Path.Combine(control, $"ready{index}"))) && DateTime.UtcNow < until) await Task.Delay(10);
+                bool BothReady() => Enumerable.Range(0, 2).All(index => File.Exists(Path.Combine(control, $"ready{index}")));
+                while (!BothReady() && DateTime.UtcNow < until) await Task.Delay(10);
+                BothReady().Should().BeTrue($"round {round}: two children that do not overlap prove nothing");
                 File.WriteAllText(go, "go");
                 foreach (var child in children)
                 {
@@ -260,8 +315,8 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
                 foreach (var child in children.Where(c => !c.Process.HasExited)) child.Process.Kill(entireProcessTree: true);
             }
 
+            foreach (var child in children) child.Process.ExitCode.Should().Be(0, $"round {round}: {await child.StdOut}{await child.StdErr}"); // first: a crashed child wrote no report, and its output is the diagnosis
             var reports = Enumerable.Range(0, 2).Select(index => JsonSerializer.Deserialize<ChildReport>(File.ReadAllText(Path.Combine(control, $"out{index}.json")))!).ToList();
-            foreach (var child in children) child.Process.ExitCode.Should().Be(0, $"round {round}: {await child.StdOut}{await child.StdErr}");
             reports.SelectMany(r => r.Errors).Should().BeEmpty($"round {round}: no interleaving, no error line");
             reports.SelectMany(r => r.Listed).Should().BeEmpty($"round {round}: neither sweep gave up the lock");
             reports.SelectMany(r => r.Removed).Where(path => !path.EndsWith(".owner", StringComparison.Ordinal)).Should().BeEquivalentTo(twenty, $"round {round}: each folder removed exactly once across the two reports");
@@ -272,7 +327,7 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
     private static (System.Diagnostics.Process Process, Task<string> StdOut, Task<string> StdErr) StartChild(string root, string go, string ready, string output)
     {
         var env = new Dictionary<string, string?> { [ChildRoot] = root, [ChildGo] = go, [ChildReady] = ready, [ChildOut] = output };
-        var start = SuiteChild.StartInfoFor(Environment.ProcessPath!, ["--filter-method", "*SweepChild_E551"], env);
+        var start = SuiteChild.StartInfoFor(Environment.ProcessPath!, ["--filter-method", "*SweepChild_SweepsTheGivenRootOnce_WhenTheProcessTestStartsIt"], env);
         var process = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("the sweep child did not start");
 
         return (process, process.StandardOutput.ReadToEndAsync(), process.StandardError.ReadToEndAsync());
