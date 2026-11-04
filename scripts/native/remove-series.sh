@@ -15,7 +15,7 @@
 # readable through one (the E1 plan round, finding 3, rejected on exactly that ground; native.test.mjs asserts step 5's output).
 # Exit codes: 0 removed and the sign-ins identical; 3 removed but a sign-in fact changed; 65 usage; 78 this place is wrong.
 # Defence in depth (the lead's own `stat` checks run first and are the ones that protect: this copy lives IN the folder it judges): it also refuses a folder that is not
-# owned by the expected uid or is group- or world-writable, and a series ROOT that is not owned by that uid or is world-writable without the sticky bit.
+# owned by the expected uid or is group- or world-writable, and a series ROOT that is not owned by that uid or is group- or world-writable without the sticky bit.
 # Test seams (the shipped defaults are /tmp and 0): COAI_NATIVE_SERIES_ROOT, COAI_NATIVE_SERIES_OWNER_UID (the uid the series, its root and its files must belong to;
 # root on the host — the tests run as the CI user).
 # THE SERIES IS THE ONE BOUNDED EXCEPTION of the test-leftovers family (E5 S4): no test-leftovers prefix, no owner segment, no claim; THIS script is the only thing
@@ -52,7 +52,7 @@ if [ "${FACTS% *}" != "$OWNER_UID" ]; then refuse "'$FOLDER' is owned by uid ${F
 if (( (8#${FACTS#* } & 8#022) != 0 )); then refuse "'$FOLDER' is mode ${FACTS#* }: group- or world-writable"; fi
 ROOT_FACTS="$(stat -c '%u %a' -- "$SERIES_ROOT")"
 if [ "${ROOT_FACTS% *}" != "$OWNER_UID" ]; then refuse "the series root '$SERIES_ROOT' is owned by uid ${ROOT_FACTS% *}, not by uid $OWNER_UID"; fi
-if (( (8#${ROOT_FACTS#* } & 8#002) != 0 && (8#${ROOT_FACTS#* } & 8#1000) == 0 )); then refuse "the series root '$SERIES_ROOT' is world-writable (mode ${ROOT_FACTS#* }) without the sticky bit"; fi
+if (( (8#${ROOT_FACTS#* } & 8#022) != 0 && (8#${ROOT_FACTS#* } & 8#1000) == 0 )); then refuse "the series root '$SERIES_ROOT' is group- or world-writable (mode ${ROOT_FACTS#* }) without the sticky bit"; fi
 echo "step 1: SERIES_PATH names this folder: $SERIES"
 
 # Step 2.

@@ -23,7 +23,7 @@
 # What it cannot find: a process that left the group AND lost its parent before the snapshot (a double-forked daemon). No probe
 # here daemonizes (parent plan §6).
 # Defence in depth (the lead's own `stat` checks run first): it also refuses a series folder not owned by the expected uid or group- or world-writable, and a series ROOT not
-# owned by it or world-writable without the sticky bit.
+# owned by it or group- or world-writable without the sticky bit.
 # Test seams (the shipped defaults are /tmp, 10 and 0): COAI_NATIVE_SERIES_ROOT, COAI_NATIVE_ABORT_GRACE (seconds), COAI_NATIVE_SERIES_OWNER_UID.
 # The series is the ONE BOUNDED EXCEPTION of the test-leftovers family (E5 S4): no test-leftovers prefix, no owner, no claim — see make-series.sh.
 set -eu
@@ -53,7 +53,7 @@ if [ "${FACTS% *}" != "$OWNER_UID" ]; then refuse "'$SERIES' is owned by uid ${F
 if (( (8#${FACTS#* } & 8#022) != 0 )); then refuse "'$SERIES' is mode ${FACTS#* }: group- or world-writable"; fi
 ROOT_FACTS="$(stat -c '%u %a' -- "$SERIES_ROOT")"
 if [ "${ROOT_FACTS% *}" != "$OWNER_UID" ]; then refuse "the series root '$SERIES_ROOT' is owned by uid ${ROOT_FACTS% *}, not by uid $OWNER_UID"; fi
-if (( (8#${ROOT_FACTS#* } & 8#002) != 0 && (8#${ROOT_FACTS#* } & 8#1000) == 0 )); then refuse "the series root '$SERIES_ROOT' is world-writable (mode ${ROOT_FACTS#* }) without the sticky bit"; fi
+if (( (8#${ROOT_FACTS#* } & 8#022) != 0 && (8#${ROOT_FACTS#* } & 8#1000) == 0 )); then refuse "the series root '$SERIES_ROOT' is group- or world-writable (mode ${ROOT_FACTS#* }) without the sticky bit"; fi
 
 HANDLE="$SERIES/logs/$PHASE.handle"
 if [ ! -f "$HANDLE" ]; then echo "abort $PHASE: no handle — the run script never started, nothing to end"; exit 0; fi

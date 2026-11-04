@@ -146,7 +146,7 @@ const modeText = (mode) => mode.toString(8);
 /**
  * The refusal line for the facts `stat` printed, or `''` when the series is what it must be. `ownerUid` is the uid the series, its root and its files must belong
  * to (0: root on the host; the integration test names its own). The series folder and `run/` must be plain directories (a link is refused), that uid, mode 700; the
- * script must be a regular file of that uid and neither group- nor world-writable; the root must be a directory of that uid and, when world-writable, sticky.
+ * script must be a regular file of that uid and neither group- nor world-writable; the root must be a directory of that uid and, when group- OR world-writable, sticky (a group member could otherwise rename the checked folder).
  * A series that is not there at all is its own line ("gone") — the same one a phase prints at the host.
  */
 export function statRefusal(kind, series, phase, stdout, options) {
@@ -168,7 +168,7 @@ export function statRefusal(kind, series, phase, stdout, options) {
   if (rootFacts === undefined) return bad(`the series root ${root} cannot be read`);
   if (rootFacts.kind !== 'directory') return bad(`the series root ${root} is a ${rootFacts.kind}, not a plain directory`);
   if (rootFacts.uid !== uid) return bad(`the series root ${root} is owned by uid ${rootFacts.uid}, not ${uid}`);
-  if ((rootFacts.mode & 0o002) !== 0 && (rootFacts.mode & 0o1000) === 0) return bad(`the series root ${root} is world-writable (mode ${modeText(rootFacts.mode)}) without the sticky bit`);
+  if ((rootFacts.mode & 0o022) !== 0 && (rootFacts.mode & 0o1000) === 0) return bad(`the series root ${root} is group- or world-writable (mode ${modeText(rootFacts.mode)}) without the sticky bit`);
   const wrong = folder(dir, 'the series') || (run === undefined ? '' : folder(run, 'its run folder'));
   if (wrong !== '') return wrong;
   const file = facts.get(script);

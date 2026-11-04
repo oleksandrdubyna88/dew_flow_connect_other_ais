@@ -578,8 +578,15 @@ linuxTest('remove-series.sh also refuses (exit 78, one line) a folder of another
   chmodSync(unsafeRoot, 0o777);
   r = removeIn(inUnsafe, unsafeRoot);
   assert.equal(r.status, 78, r.stdout);
-  assert.match(r.stdout, /world-writable \(mode 777\) without the sticky bit/u, 'a world-writable root without the sticky bit');
+  assert.match(r.stdout, /group- or world-writable \(mode 777\) without the sticky bit/u, 'a world-writable root without the sticky bit');
   assert.equal(existsSync(inUnsafe), true);
+  for (const mode of [0o775, 0o770]) {
+    chmodSync(unsafeRoot, mode); // a group member could rename the checked folder
+    r = removeIn(inUnsafe, unsafeRoot);
+    assert.equal(r.status, 78, `root mode ${mode.toString(8)}: ${r.stdout}`);
+    assert.match(r.stdout, new RegExp(`group- or world-writable \\(mode ${mode.toString(8)}\\) without the sticky bit`, 'u'));
+    assert.equal(existsSync(inUnsafe), true);
+  }
 
   chmodSync(unsafeRoot, 0o1777); // sticky: no other user can rename or replace what was checked, so it is accepted
   r = removeIn(inUnsafe, unsafeRoot);
@@ -710,10 +717,18 @@ linuxTest('the lead\'s REAL stat check, run for real against real folders: the g
     rmSync(join(made.series, 'run', 'n-v2.sh'));
     symlinkSync(real, join(made.series, 'run', 'n-v2.sh'));
   }, { kind: 'phase' });
-  await refused('a non-sticky world-writable root', /world-writable \(mode 777\) without the sticky bit/u, (rootX) => { chmodSync(rootX, 0o777); });
+  for (const mode of [0o777, 0o775, 0o770]) {
+    await refused(`a non-sticky root of mode ${mode.toString(8)}`, new RegExp(`group- or world-writable \\(mode ${mode.toString(8)}\\) without the sticky bit`, 'u'), (rootX) => { chmodSync(rootX, mode); });
+  }
   await refused('a foreign uid (COAI_NATIVE_SERIES_OWNER_UID)', /is owned by uid \d+, not \d+/u, () => {}, { extra: { ownerUid: uid + 1 } });
 
-  // A sticky world-writable root is accepted, and a series that is GONE is its own line and runs nothing.
+  // The accepted forms of the root: 0700 and 0755 (not group- or world-writable) and 1777 (sticky); a series that is GONE is its own line and runs nothing.
+  root = fresh();
+  chmodSync(root, 0o700);
+  ({ series, sentinel } = stubSeries(root));
+  r = await runChecked('remove', series, undefined, options(root), exec);
+  assert.equal(r.status, 0, `root 0700: ${JSON.stringify(r)}`);
+  assert.equal(existsSync(sentinel), true);
   root = fresh();
   chmodSync(root, 0o1777);
   ({ series, sentinel } = stubSeries(root));

@@ -154,7 +154,9 @@ test('the stat check refuses each unsafe state with one line and "nothing was ru
     ['a script that is a link', 'abort', { [`${SERIES}/run/abort.sh`]: ['symbolic link', 0, 777] }, /is a symbolic link, not a regular file/],
     ['a script that is a directory', 'abort', { [`${SERIES}/run/abort.sh`]: ['directory', 0, 700] }, /is a directory, not a regular file/],
     ['a script that is missing', 'abort', { [`${SERIES}/run/abort.sh`]: null }, /is missing/],
-    ['a world-writable root without the sticky bit', 'abort', { '/tmp': ['directory', 0, 777] }, /world-writable \(mode 777\) without the sticky bit/],
+    ['a world-writable root without the sticky bit', 'abort', { '/tmp': ['directory', 0, 777] }, /group- or world-writable \(mode 777\) without the sticky bit/],
+    ['a group-writable root (775) without the sticky bit', 'abort', { '/tmp': ['directory', 0, 775] }, /group- or world-writable \(mode 775\) without the sticky bit/],
+    ['a group-writable root (770) without the sticky bit', 'abort', { '/tmp': ['directory', 0, 770] }, /group- or world-writable \(mode 770\) without the sticky bit/],
     ['a root of another owner', 'abort', { '/tmp': ['directory', 1000, 1777] }, /series root \/tmp is owned by uid 1000/],
     ['a root that is a link', 'abort', { '/tmp': ['symbolic link', 0, 777] }, /series root \/tmp is a symbolic link/],
   ];
@@ -164,7 +166,7 @@ test('the stat check refuses each unsafe state with one line and "nothing was ru
     assert.match(line, /^refused: .* — nothing was run$/u, `${name}: one line`);
     assert.equal(line.includes('\n'), false, name);
   }
-  assert.equal(check('abort', goodFacts('abort', 'n-v2', { '/tmp': ['directory', 0, 755] })), '', 'a root that is not world-writable needs no sticky bit');
+  for (const mode of [755, 700, 1777]) assert.equal(check('abort', goodFacts('abort', 'n-v2', { '/tmp': ['directory', 0, mode] })), '', `a root of mode ${mode} is accepted (not group/world-writable, or sticky)`);
   assert.match(check('abort', goodFacts('abort', 'n-v2', { '/tmp': ['directory', 0, 1777] }), { host: HOST, ownerUid: 1000 }), /owned by uid 0, not 1000/, 'the expected uid is a parameter');
   assert.equal(check('abort', goodFacts('abort').replaceAll('|0|', '|1000|'), { host: HOST, ownerUid: 1000 }), '', 'and the same facts pass for their own uid');
 });

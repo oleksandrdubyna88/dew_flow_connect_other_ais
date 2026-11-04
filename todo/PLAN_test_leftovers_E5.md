@@ -1306,6 +1306,11 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
     approval, the rename as entry 1.1 (`contract`), a dated note at each shape line; the E1 stories document gets
     dated notes only. Its size projection (`:606-607`: about 80 MB of Kimi cache plus under 50 MB of Vibe homes,
     exports and logs — "total under 150 MB, in `/tmp`") is the figure the `du -sh` measurement above starts from.
+  - *[epoch 5, 2026-11-04, the parent's CodeRabbit finding, accepted — evidence (4), the series ROOT]* The root check is **not owned by uid 0 (the seam
+    `COAI_NATIVE_SERIES_OWNER_UID`), or group-writable OR world-writable without the sticky bit** — in BOTH the caller's `stat` check
+    (`native-run.mjs` `statRefusal`) and the `remove-series.sh` copy (and `abort.sh`). "Sticky when world-writable" alone let a group member rename the
+    checked folder. Accepted forms of the root: `1777` (sticky), `0755`, `0700`; refused: `0777`, `0775` and `0770` without the sticky bit. Tests: the
+    `0775` and `0770` roots beside the `0777` one in the unit cases, in the real-`stat` integration test and in the remover's cases.
   - **A series in progress at the merge.** A series started under the OLD name before the producer PR merges is
     finished with the OLD checkout: the new `seriesOf` refuses the old shape, so the new lead cannot run, abort or
     remove it. The person finishes and removes it with the checkout that made it, then starts the next series under

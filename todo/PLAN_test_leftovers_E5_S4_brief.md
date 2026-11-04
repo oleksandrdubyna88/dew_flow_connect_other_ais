@@ -711,3 +711,10 @@ them first. In short:
   refusal line and that NO command from the folder ran (a sentinel the script would write stays absent).
 - **[gate 6] R5 checks the order too.** R5 plants a recognisable stale owned folder (a dead owner, older than ten minutes)
   before the invalid file argument and asserts it is still there after the exit 2: validation runs before the sweep.
+
+### 16.2 The series ROOT check, corrected (the parent's CodeRabbit finding, accepted 2026-11-04) — changes § 16 evidence (4) and § 16.1 [gate 4]
+
+The series ROOT check, in BOTH the caller's `stat` check and the `remove-series.sh` copy (built also in `abort.sh`), refuses a root that is not owned by uid 0
+(through `COAI_NATIVE_SERIES_OWNER_UID`), or that is **group-writable OR world-writable without the sticky bit**. The text "sticky when world-writable" let a group
+member rename the checked folder. Accepted forms: `1777` (sticky), `0755`, `0700`. Tests: the `0775` and `0770` roots next to `0777` in the unit cases, in the
+real-`stat` integration test and in the remover's cases (each seen red with the old mask `002` planted back).
