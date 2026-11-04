@@ -1326,6 +1326,13 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
     lines on stderr (`lower-priority`'s "this run is NOT lowered", then the mount line) and exit 2; a `.mjs` test started directly with the mount missing exits 1 with an
     `ERR_MODULE_NOT_FOUND` stack (ES modules link before they run, so the guard's line is never reached) and creates nothing. The D-b line is `scratch was <path>, removed at
     exit — pass --scratch <dir> to keep it` (two of the four probes have no `--reparse`). `scripts/run-lib-tests.mjs` carries the worker cap and the lowered priority itself.
+  - *[epoch 5, 2026-11-04, S4 final fix round]* **The driver grows to the run-book, and the check has one more road.** `lead.mjs` also does `copy <series> checkout <local-dir>`
+    (every entry of the folder, `scp -r -p`, after a bare check of the root, the series and `run/`), `done <series> <phase>` and `read <series> <phase>` (a check of the root and the
+    series, then `/bin/cat --` of the exit file and the log). `runChecked` has no builder parameter; the copies go through the narrow `copyChecked`, which builds the `scp` argv itself.
+    Every spawn has a finite timeout and a failed or hung one is reported. Exit 64 also covers a value refused by a pattern. **The first live use must verify, from the lead's machine,
+    the mode `scp -p` leaves on a copied script**; a refused mode is fixed by a CHECKED chmod step in the driver, never by relaxing the check. A server's `stop()` answers a promise that
+    settles when the process has ended (an exit code OR a signal), and every runner awaits it, or kills the tree synchronously from an `exit` listener, before the run folder holding the
+    server's data goes.
   - **A series in progress at the merge.** A series started under the OLD name before the producer PR merges is
     finished with the OLD checkout: the new `seriesOf` refuses the old shape, so the new lead cannot run, abort or
     remove it. The person finishes and removes it with the checkout that made it, then starts the next series under
