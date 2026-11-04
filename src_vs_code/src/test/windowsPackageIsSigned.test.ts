@@ -21,6 +21,16 @@ const workflow = fs
   .split('\r\n')
   .join('\n');
 
+/** Every regex metacharacter escaped, backslash included: text that is to be matched as itself. */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** A file-name glob (`*` and nothing else is a wildcard) as an anchored regex. */
+function globToRegex(glob: string): RegExp {
+  return new RegExp(`^${escapeRegExp(glob).replace(/\\\*/g, '.*')}$`);
+}
+
 /** One job's block: from its own key to the next job key. */
 function jobBlock(job: string): string {
   const start = workflow.indexOf(`\n  ${job}:\n`);
@@ -52,7 +62,7 @@ function stepsOf(job: string): string[] {
 
 /** The step with this name. */
 function step(job: string, name: string): string {
-  const found = stepsOf(job).find((s) => new RegExp(`^ {6}- name: ${name}\\s*$`, 'm').test(s));
+  const found = stepsOf(job).find((s) => new RegExp(`^ {6}- name: ${escapeRegExp(name)}\\s*$`, 'm').test(s));
   assert.ok(found, `${job} has no step named "${name}"`);
   return found;
 }
@@ -163,7 +173,7 @@ test('mcp-sign calls the shared workflow, pinned to the v1.1.0 commit, with the 
   assert.match(
     block,
     new RegExp(
-      `\\n {4}uses: oleksandrdubyna88/dew_flow_release_signing/\\.github/workflows/sign-windows\\.yml@${SHARED_PIN} # v1\\.1\\.0\\n`,
+      `\\n {4}uses: oleksandrdubyna88/dew_flow_release_signing/\\.github/workflows/sign-windows\\.yml@${escapeRegExp(SHARED_PIN)} # v1\\.1\\.0\\n`,
     ),
     'the v1.1.0 merge commit, with its tag as the comment',
   );
@@ -238,7 +248,7 @@ test('the libraries mcp-sign declares are the ones the Windows package ships', (
   const extra = /\n {6}extra-files: '(\[[^']*\])'/.exec(withoutComments(jobBlock('mcp-sign')));
   assert.ok(extra, 'it declares its libraries');
   const globs = JSON.parse(extra[1]!) as string[];
-  const toRegex = (glob: string) => new RegExp(`^${glob.replace(/[.]/g, '\\.').replace(/\*/g, '.*')}$`);
+  const toRegex = globToRegex;
 
   const kept = fs
     .readFileSync(path.join(__dirname, '..', '..', '..', 'shared', 'kept-grammars.txt'), 'utf8')
@@ -335,4 +345,15 @@ test('the release is published only after the final Windows packages are attache
   // Windows package, or hold the final one back until after the publish.
   assert.deepEqual(needsOf('mcp-release-complete').sort(), ['mcp-binaries', 'mcp-sign-attach']);
   assert.match(condition('mcp-release-complete'), /startsWith\(github\.ref, 'refs\/tags\/mcp-v'\)/);
+});
+
+test('a glob\'s regex metacharacters are literal, and only `*` is a wildcard', () => {
+  // The defect (CodeQL js/incomplete-sanitization): escaping the dot alone leaves `+ ? ( ) [ ] { } | ^ $ \\`
+  // live, so a declared name that carries one would match something else, or throw, and the
+  // library-list test above would pass or fail for a reason that is not about the package.
+  const glob = globToRegex('a+b(1)[x].dll');
+  assert.ok(glob.test('a+b(1)[x].dll'), 'the name itself matches');
+  assert.ok(!glob.test('aab1x.dll'), 'and the same text read as a pattern does not');
+  assert.ok(!globToRegex('tree-sitter.dll').test('tree-sitterXdll'), 'a dot is a dot');
+  assert.ok(globToRegex('tree-sitter*.dll').test('tree-sitter-rust.dll'), 'a star is a wildcard');
 });
