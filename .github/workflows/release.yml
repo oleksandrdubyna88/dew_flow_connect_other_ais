@@ -553,7 +553,7 @@ jobs:
   # `contents: write` and nothing else: it uploads to the draft release, and it holds no signing
   # permission — the package arrives from `mcp-sign`, signed or not.
   mcp-sign-attach:
-    name: attach the signed Windows coai-mcp
+    name: attach the final Windows coai-mcp
     if: ${{ !cancelled() && needs.mcp-sign.result == 'success' }}
     needs: [mcp-sign]
     runs-on: ubuntu-latest
@@ -567,11 +567,11 @@ jobs:
 
       # `mcp-win-*` and not `*`: the unsigned `unsigned-mcp-*` artifacts are in this run too. Each
       # artifact lands in a directory of its own name.
-      - name: Download the signed packages
+      - name: Download the final packages
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: mcp-win-*
-          path: signed
+          path: final
 
       - name: The product check on each final zip
         shell: bash
@@ -580,9 +580,9 @@ jobs:
           # One zip per Windows platform, found by name: a glob that matched nothing would make the
           # loop below a pass over nothing, which is the failure this step exists to prevent.
           for RID in win-x64 win-arm64; do
-            ZIPS=(signed/mcp-"$RID"/coai-mcp-*-"$RID".zip)
+            ZIPS=(final/mcp-"$RID"/coai-mcp-*-"$RID".zip)
             if [ "${#ZIPS[@]}" -ne 1 ] || [ ! -f "${ZIPS[0]}" ]; then
-              echo "expected exactly one signed zip for $RID under signed/mcp-$RID, found: ${ZIPS[*]}"
+              echo "expected exactly one final zip for $RID under final/mcp-$RID, found: ${ZIPS[*]}"
               exit 1
             fi
             ZIP=${ZIPS[0]}
@@ -598,7 +598,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for ZIP in signed/mcp-win-*/coai-mcp-*.zip; do
+          for ZIP in final/mcp-win-*/coai-mcp-*.zip; do
             gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
             gh release upload "$GITHUB_REF_NAME" "$ZIP.sha256" --clobber
           done
