@@ -16,6 +16,23 @@
 > [RESULTS_vibe_confinement.md](../research/RESULTS_vibe_confinement.md) §30–§31, [RESULTS_kimi_confinement.md](../research/RESULTS_kimi_confinement.md)
 > §29–§30. Module docs: [module_runners.md](../research/module_runners.md), [module_extension.md](../research/module_extension.md).
 
+## Plan changes
+
+> Epoch 1 · approved 2026-10-21 · by reviewers · state: open
+
+- 1.1 · 2026-11-04 · agent · contract — the series name leaves the testsToDelete- family: native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6} (the rollout's entry 4.2, E5 S4)
+  (This ledger opens at this change, as `common/plan-change-control.md` says for a plan approved before the rule
+  reached this repository: epoch 1 is dated at the plan's last approval — the plan gate `942810c1` (`good_enough`) and
+  the E1 plan round `b54f22f5` (`proceed`), both 2026-10-21; the findings folded before that stay in the body. The
+  rename is the test-leftovers rollout's decision (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`,
+  § *Epoch 5* item 4; its stories `todo/PLAN_test_leftovers_E5.md`, § S4) and lands in E5's S4 of that producer PR:
+  the series folder becomes `<root>/native-(vibe|kimi)-<yyyymmdd>-<6 hex>` under `/tmp` (or
+  `COAI_NATIVE_SERIES_ROOT`), with no `testsToDelete-` prefix, no owner segment and no claim; `SERIES_SHAPE`
+  (`scripts/lib/native-run.mjs:18`) and the literal in `make-series.sh`, `abort.sh` and `remove-series.sh` change
+  together. The shape lines of §6 and §12 below and of the E1 stories document carry dated notes. Nothing else of the
+  procedure changes: the lead still makes the bare folder, `make-series.sh` fills it, `remove-series.sh` removes it
+  by its recorded path.)
+
 ## 1. The symptom
 
 The owner works over VS Code Remote-SSH on a native Ubuntu host. coai-mcp 0.62.0 runs there (the extension installed it) and runs
@@ -310,6 +327,10 @@ branch's commit with P1 in it, recorded in the RESULTS header. Before copying, `
 **Where.** ONE folder per series, made with mode `700`: `/tmp/testsToDelete-native-<vibe|kimi>-<yyyymmdd>-<6 hex>/`, holding
 `checkout/` (the archive, extracted), `tmp/` (the probes' `TMPDIR`), `run/` (the run scripts), `logs/`, and one `--scratch` folder per
 phase. Every probe gets `--scratch` inside it, so no `mkdtemp` default lands anywhere else.
+*[epoch 5, 2026-11-04, Opus review — entry 1.1]* The folder's name becomes `/tmp/native-<vibe|kimi>-<yyyymmdd>-<6 hex>/`
+(no `testsToDelete-` prefix): the series is a durable, root-run, multi-phase folder that no test sweep, janitor or
+next run may collect, so it leaves the test-leftovers prefix family as the rollout's one bounded exception. The
+layout inside it is unchanged.
 
 The folder is made by ONE script, `scripts/native/make-series.sh`. The lead names the series on Windows, checks the name against the
 pattern below, makes the bare folder (`['ssh', 'ubuntu-claude', '--', '/bin/mkdir', '-m', '700', '--', '<folder>']` — no `-p`, so an
@@ -348,6 +369,13 @@ env -i HOME=/root USER=root LOGNAME=root SHELL=/bin/bash LANG=C.UTF-8 TMPDIR="$S
   "$NODE" scripts/<probe> … --scratch "$SERIES/$PHASE" &
 wait "$!"                                                                     # bash defers a trap while a FOREGROUND child runs; `wait` does not
 ```
+
+*[epoch 5, 2026-11-04, Opus review — entry 1.1]* The pattern `<folder>` must pass becomes
+`^/tmp/native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}$`, and the `SERIES_PATH` literal in the run script reads
+`/tmp/native-vibe-20261021-a1b2c3/SERIES_PATH` in the example above; the phase pattern and everything else of the
+script are unchanged. Before the lead runs any script out of a series folder (a phase, the abort, the removal), it
+also checks over ssh with `stat` that the folder and its `run/` are root-owned, mode 700, not symlinks, and that the
+script file is root-owned and not group- or world-writable (the rollout's § *Epoch 5* item 4, evidence 7).
 
 So the probe sees the environment the product's server has, not the login shell's, and the host's `PATH` is never interpolated into
 script text (gate finding 1); `.done` and `.exit` are written on EVERY exit, a crash, a `set -e` stop and a TERM, INT or HUP included
@@ -412,6 +440,11 @@ Everything it says goes to its STDOUT, which the lead's `ssh` captures — never
 `ls -d /tmp/testsToDelete-native-*` shows nothing of this series. **It removes its own file in step 4, and step 5 still runs** (E1 plan
 round b54f22f5, finding 3, rejected): bash reads a script through a descriptor it holds open, and on Linux an unlinked file stays readable
 through a descriptor already held, so the rest of the script is still read; S-N15's Linux test asserts step 5's output after the removal.
+*[epoch 5, 2026-11-04, Opus review — entry 1.1]* Step (1)'s shape becomes `^/tmp/native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}$`,
+and the listing afterwards is `ls -d /tmp/native-*`. `remove-series.sh` also refuses a folder not owned by uid 0 or
+group- or world-writable, and a series root not owned by uid 0 or world-writable without the sticky bit (defence in
+depth: the lead's own `stat` checks run first). The old `testsToDelete-native-…` name is refused by the new remover,
+so a series started under the old name is finished and removed with the checkout that made it.
 
 ## 7. Stop rules
 
@@ -608,6 +641,10 @@ The only thing this plan makes that grows is the series folder on the host. Proj
 retires it: the lead, at the end of each series, by its own literal path (§6). Interrupted: a run that dies leaves its folder; the next
 session lists `/tmp/testsToDelete-native-*` and removes each by its own path the same way. The product gains no new file, table or
 process — the admission is a branch in a pure function.
+*[epoch 5, 2026-11-04, Opus review — entry 1.1]* The listing becomes `ls -d /tmp/native-*`. Nothing else finds a
+forgotten series: the family's janitor and barrier scan match the `testsToDelete-` prefix, which the series no longer
+carries. The projection above ("under 150 MB") stands until E5's S4 measures a real series with `du -sh` before the
+rename lands; a reboot or a tmp cleaner (systemd-tmpfiles' age clean-up) clears `/tmp` and the series with it.
 
 ## 13. Risks
 

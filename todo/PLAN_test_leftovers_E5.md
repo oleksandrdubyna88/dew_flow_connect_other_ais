@@ -13,6 +13,13 @@
 > closed by the owner's written statement (the parent's PR #124); merge condition (c) for the WSL machine waits for one
 > administrator scan. This document keeps no ledger: its changes are entries of the parent. What epoch 5 supersedes
 > carries a dated note *[epoch 5, 2026-11-04]* in place; the S4 implementation notes of the same date are NOT changes.
+> *[epoch 5, 2026-11-04, Opus review]* "made only by `make-series.sh`" above is corrected: the LEAD makes the bare
+> folder over ssh (`scripts/lib/native-run.mjs:91` `mkdirArgv`: `/bin/mkdir -m 700 -- <series>`), and
+> `make-series.sh` refuses unless it exists with mode 700 and the running user's uid (`make-series.sh:43-45`), then
+> fills it. The scripts that own the series are `native-run.mjs` (`mkdirArgv`, `seriesOf`, `removeArgv`) and the four
+> `scripts/native/*.sh` files. The Opus review's other corrections carry the same marker in § S4, D8, D10, S2-B, S6,
+> the DoD and the notes for the parent; coai's native plan (`todo/PLAN_kimi_and_vibe_on_native_linux.md`) opens its
+> ledger for the rename the same day.
 >
 > Was: **revised 2026-11-03 at the parent's epoch-4 re-review (entries 3.1 and 3.2 of the parent's ledger, found
 > writing S3's build brief); epoch 4 waits for the owner's approval (the record says `Narrowed: yes`), and no E5 story
@@ -171,6 +178,14 @@ removed ONLY by S2-A's one-off clean-up; nothing collects it.
   | `node --test "scripts/**/*.test.mjs"` | `ci.yml:197` | the machine temp | each test's `after()` | S4 (and the start-of-run sweep of S2-B item 2) |
   | the measurement and probe scripts, run by a person | `scripts/*.mjs`, `scripts/native/*.sh` | the machine temp, or `/tmp` on a Linux box | the script | S4 |
   | *[epoch 5, 2026-11-04]* the native measurement SERIES, a person's root-run `make-series.sh` → the phases → `remove-series.sh` (a KEPT line of its own: the parent's § *Epoch 5*, item 4) | `scripts/native/make-series.sh`, `abort.sh`, `remove-series.sh`; `scripts/lib/native-run.mjs:18` `SERIES_SHAPE` | the series root: `/tmp`, or `COAI_NATIVE_SERIES_ROOT` | nobody collects it: `make-series.sh` makes it, `remove-series.sh` removes it (the shape validated, anything else refused); no claim, no sweep, no janitor | nothing is dropped: the name LEAVES the prefix family (`native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`) in S4, with the survival and grammar tests |
+
+  *[epoch 5, 2026-11-04, Opus review]* The series row's "`make-series.sh` makes it" is read as: the lead's `mkdirArgv`
+  (`scripts/lib/native-run.mjs:91`, `/bin/mkdir -m 700 -- <series>` over ssh) makes the bare folder, and
+  `make-series.sh` refuses unless it exists with mode 700 and the running user's uid, then fills it; the owners are
+  `native-run.mjs` (`mkdirArgv`, `seriesOf`, `removeArgv`) and the four `scripts/native/*.sh` files. The row is read
+  as "a kept line of the INVENTORY" — the name leaves the prefix family. The same shape is a contract line of coai's
+  native plan (`todo/PLAN_kimi_and_vibe_on_native_linux.md` `:310`, `:330`, `:336`, `:407`, `:412`, `:609`) and of
+  its E1 stories (`…_E1.md:97`): the rename revises them too (§ S4, *[epoch 5, Opus review]*).
 
 - **The bare-prefix lines, counted for S5** (`git grep -c -i teststodelete`): `src_mcp/tests` 263 lines in 120 files;
   `src_vs_code` 21 lines in 8 files; `scripts/lib` 49 lines in 15 files; `src_server/tests` 1 (`GaugeCaptureTests.cs:30`);
@@ -584,6 +599,15 @@ added by S3):
 at release time: release evidence, not a merge gate. **(l) NEW (finding r2):** before S6 creates the baseline, F24's
 acceptance check has passed against the RELEASED guard and THIS repository's real test host (S6's note). **(m) NEW
 (finding r1):** the rollback procedure of D11 is written in the PR description before it merges.
+*[epoch 5, 2026-11-04, Opus review]* **D8 read for epoch 5** (the parent's § *Epoch 5*, item 3). (c) is read as: the
+owner's Windows machine is met by the owner's written statement (the parent's PR #124: it does not build or test
+coai); the operator's WSL machine is met only when the administrator scan of its two root-only places
+(`sudo node tools/sweeper-scan.mjs --system`) is recorded in `research/security/machines.md`; a hosted runner needs
+no record. P1 is CLOSED by that statement; (c) stays a merge condition and is not waived. **(n) NEW:** the native
+measurement series' evidence (§ S4, *[epoch 5]*, items (1)–(7) of the S4 DoD line) is in the PR, each item green on
+the Linux leg and named in the PR record — the ownership refusals in the CALLER (the lead's argv builder) and in the
+copy, through the owner-uid seam. Also (g) is read with the exception: the series is a resource the PR renames and
+nothing collects. With this note, D8 "carries the same" as the parent's item 3; without it, it did not.
 
 **D9 — The end-of-run audit is copied, and bounded to the run folder.** `LeftoversAudit` (never-disposed,
 disposed-not-removed, claimed-in-temp-root) runs at the end of every C# suite as in the template — but coai's four
@@ -911,6 +935,12 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
   src_vs_code && npm test`; on Windows, inside WSL, and the macOS leg; after a full run of every suite `bash
   .agents/conventions/tools/janitor.sh --token coai --dry-run` on Windows (Git for Windows' bash) and in WSL lists only
   folders of a live run.
+  *[epoch 5, 2026-11-04, Opus review]* **The Windows dry-run is a hosted run — an OPEN ITEM of the producer PR.**
+  `research/module_tests.md:6129` records only the WSL run. The owner's Windows machine does not test E5 (the
+  parent's PR #124), so the Windows dry-run gets P4's treatment (§ S4, implementation notes): a deliberately started,
+  recorded run of `bash .agents/conventions/tools/janitor.sh --token coai --dry-run` after a full run on a hosted
+  `windows-latest` runner (Git for Windows' bash), its output in the PR record, before the producer PR merges. Not a
+  narrowing: the commands line already asks for the run; this names where it happens.
 - **DoD (B).** Every scenario RED then GREEN on Windows, Linux and macOS; the break-its red; `PanelService.cs` and the
   characterization test unchanged; the product sweep's tests green; legacy names listed (C#) / collected on `gone` only
   (Node); concurrent sweeps silent on not-found; `module_tests.md` describes the one sweep in two languages.
@@ -1241,6 +1271,51 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
   `remove-series.sh` — nothing else removes it; a reboot that clears `/tmp` clears it too, and the documents say so.
   **Bound:** one shape in one family of scripts; a second durable resource anywhere is a new plan change, never a
   second use of this note.
+- *[epoch 5, 2026-11-04, Opus review]* **Corrections to the series bullet above** (each verified against the code on
+  the branch at `0d03740d`; the parent's § *Epoch 5*, item 4 carries the same):
+  - **The real creator.** "made ONLY by `make-series.sh`" is read as: the LEAD makes the bare folder over ssh —
+    `mkdirArgv` is `ssh <host> -- /bin/mkdir -m 700 -- <series>` (`scripts/lib/native-run.mjs:91-93`, no `-p`, so an
+    existing folder fails) — then `make-series.sh` refuses (exit 78) unless its own folder matches the shape, is not a
+    symlink, is mode 700 and is owned by the user running it (`scripts/native/make-series.sh:37-46`), and fills it.
+    The scripts that own the series are `native-run.mjs` (`mkdirArgv`, `seriesOf`, `removeArgv`) and the four files
+    `scripts/native/*.sh` (`make-series.sh`, `abort.sh`, `remove-series.sh`, `run-template.sh`).
+  - **SAFETY — the ownership check moves to the CALLER.** The lead runs the series' COPY of the remover as root:
+    `removeArgv` is `ssh <host> -- /bin/bash -- <series>/run/remove-series.sh <series>` (`native-run.mjs:85-88`);
+    `abortArgv` and `launcherArgv` run `run/abort.sh` and `run/<phase>.sh` the same way (`:73-82`). A folder planted
+    in a shared `/tmp` under a valid name can carry its OWN `run/remove-series.sh`, so a check inside the copy
+    (evidence (4)) protects nothing by itself. So BEFORE the lead runs anything from a series folder (remove, abort,
+    any phase), it checks over ssh with `stat` — never a shell expansion of the folder's content — that: the series
+    folder and its `run/` are directories, not symlinks, owned by uid 0, mode 700; `run/remove-series.sh` (and the
+    phase script it is about to run) is a regular file owned by uid 0, not group- or world-writable; the series ROOT
+    is owned by uid 0 and, when world-writable, sticky. Any mismatch: one line, nothing runs. Evidence (4)'s checks in
+    the copy stay as defence in depth. Tests: the lead's argv builder refuses each mismatch (unit tests with a stubbed
+    `stat` result, in `native-run.test.mjs`, every platform), and the owner-uid seam (`COAI_NATIVE_SERIES_OWNER_UID`,
+    default 0) lets the CI user run the bash side. This is evidence item (4) of the DoD line, read in full.
+  - **The tests are NEW, not existing.** "the existing refusal cases of `native-run.test.mjs:31-33` and
+    `native.test.mjs:420` moved to the new shape" mislabels them: `native-run.test.mjs:31-33` tests
+    `renderRunScript`/`seriesOf` (the JS side); `native.test.mjs:420` is inside the `make-series.sh` refusal test
+    (`:418-439`); the remover's only refusal test today is the SERIES_PATH one near `:445`. So the wrong kind, the date
+    width, the upper-case hex, the separator in the leaf and the old prefix are NEW `remove-series.sh` tests, and the
+    JS `seriesOf` cases move to the new shape beside them. The native scripts set `LC_ALL=C` before the `=~` shape
+    test (`make-series.sh:42`, `remove-series.sh:38`, `abort.sh:43` today): the bracket range `[0-9a-f]` is
+    locale-dependent.
+  - **The documents the rename revises.** The shape is a contract line of coai's native plan,
+    `todo/PLAN_kimi_and_vibe_on_native_linux.md` (`:310`, `:330`, `:336`, `:407`, `:412`, `:609`), and of its E1
+    stories, `…_E1.md:97`. The plan is live in `todo/` and was approved before the change-control rule reached this
+    repository (its plan gate `942810c1`, 2026-10-21), so the rename opens its ledger: epoch 1 dated at that
+    approval, the rename as entry 1.1 (`contract`), a dated note at each shape line; the E1 stories document gets
+    dated notes only. Its size projection (`:606-607`: about 80 MB of Kimi cache plus under 50 MB of Vibe homes,
+    exports and logs — "total under 150 MB, in `/tmp`") is the figure the `du -sh` measurement above starts from.
+  - **A series in progress at the merge.** A series started under the OLD name before the producer PR merges is
+    finished with the OLD checkout: the new `seriesOf` refuses the old shape, so the new lead cannot run, abort or
+    remove it. The person finishes and removes it with the checkout that made it, then starts the next series under
+    the new name.
+  - **The old-prefix fixture.** The old-prefix case of evidence (2) is a `legacy-name` literal in `native.test.mjs`,
+    so S6's expected-exemption inventory lists it with the inline exemption (§ S6, *[epoch 5, Opus review]*).
+  - **A reboot or a tmp cleaner.** `/tmp` is cleared by a reboot AND by a tmp cleaner (systemd-tmpfiles' age
+    clean-up; Fedora's default is 10 days); evidence (5) and the size note read "a reboot or a tmp cleaner". A
+    forgotten series is invisible to the janitor (`tools/janitor.sh:156`, `RX='teststodelete[-_]'`) and to the barrier
+    scan (`sweeper-scan.mjs`); only `ls -d <root>/native-*` finds it.
 - *[epoch 5, 2026-11-04]* **Implementation notes of S4 — classified as NOT changes at the epoch-5 re-review** (fixes
   that satisfy this document as written, or approved constraints read more exactly; the coder and the reviewers read
   them with the bullets above):
@@ -1288,6 +1363,19 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
     into an owned folder of the wrap like the probes.
   - **P13 — for S6 (and F3's manifest scan):** no guard scans `src_vs_code/scripts/*.mjs` today; S6's Node guard must
     include that folder, or its zero is false for the runners. S6's Files bullet is read with this note.
+  - *[epoch 5, 2026-11-04, Opus review]* **P1, the wording.** "Every test file that needs the run folder" means EVERY
+    test file (the parent's reading: every test file gets the first import); a test file that makes no resource still
+    refuses a direct `node --test`, so the rule has no list to keep.
+  - *[epoch 5, 2026-11-04, Opus review]* **P2, the count.** The real count is 38 files (25 entry scripts plus 13
+    library modules), not 31; the 25 entry scripts own a folder each, the 13 libraries none.
+  - *[epoch 5, 2026-11-04, Opus review]* **D-c, which text wins.** Both: the three host folders are owned folders of
+    the wrap INSIDE the runner's run folder, each with its own claim (the rule: an owned folder always has its claim).
+    S4 also checks VS Code's IPC socket path length under the deeper `--user-data-dir` (creds E2.1 met macOS's
+    103-byte socket cap, its E2 document `:284`); if the path is too long, the profile folder stays short.
+  - *[epoch 5, 2026-11-04, Opus review]* **P4 for S2-B — the Windows janitor dry-run.** S2-B's commands line (the
+    `janitor.sh --token coai --dry-run` on Windows and in WSL) is recorded for WSL only (`module_tests.md:6129`); the
+    Windows run is a deliberately started, recorded dry-run on a hosted `windows-latest` runner (Git for Windows'
+    bash), an open item of the producer PR before it merges (§ S2-B, *[epoch 5, Opus review]*); not a narrowing.
 
 Scenarios: the guard (`leftovers-check.mjs --profile node --token coai`) on the whole repository reports zero
 `legacy-name` and `owner-blind` for every listed line; `sonarcloudRunsThroughTheRunner` — a test that reads
@@ -1519,6 +1607,13 @@ S6 creates the baseline:
   `raw-temp-baseline.json` at the repository root both when started from the project folder and when started from the
   binary output folder (`bin/Release/net10.0/`), as CI starts the executables.
 
+*[epoch 5, 2026-11-04, Opus review]* **The expected-exemption inventory and the native series.** Two lines of S4's
+series work land in S6's inventory: the series' own line, if the shipped guard classes `make-series.sh`'s `mkdir`
+under a class that takes the inline exemption (§ S4 evidence (3)); and the old-prefix refusal FIXTURE of
+`remove-series.sh`'s new grammar tests — a `testsToDelete-native-vibe-…` literal in `native.test.mjs`, a `legacy-name`
+the guard reports, which carries the inline `testsToDelete-exempt: legacy-name — <reason>` and is listed like the other
+legacy fixtures above. The parent's build order says the same ("the series' line and the old-prefix fixture").
+
 ## S7 — The drain: the `raw-temp` baseline to zero (stage C, after the producer PR)
 
 - **Models.** Brief by Opus (one brief per suite, listing the files and the helper call for each shape); code by one
@@ -1595,6 +1690,13 @@ S6 creates the baseline:
       exit; (6) the size figure measured before the rename, with its assumptions; (7) the native documents say what the
       series is, who removes it, how a forgotten one is found, that a reboot clearing `/tmp` ends it, and the bound. The S4 implementation notes
       (P1, D-b, D-c, P4, P8, P12, P2/P9/P10/P11) are each handled and named in the S4 commit; P13 in S6.
+      *[epoch 5, 2026-11-04, Opus review]* Read with § S4's *Corrections*: "made only by `make-series.sh`" means the
+      lead's `mkdirArgv` makes the bare folder and `make-series.sh` checks and fills it; item (2)'s tests are NEW
+      `remove-series.sh` tests (the `seriesOf` cases moved beside them), with `LC_ALL=C` set before the shape test;
+      item (4) includes the CALLER's `stat` checks before the lead runs anything from the series folder, the copy's
+      checks as defence in depth; item (5) reads "a reboot or a tmp cleaner"; item (7)'s documents include coai's
+      native plan (its ledger opened, entry 1.1) and its E1 stories; the P4-for-S2-B Windows janitor dry-run is an
+      open item of the PR.
 - [ ] S6: both guards red on every class, on an unregistered token and on a scan of nothing; `owner-blind`,
       `legacy-name`, `exemption`, `token` at zero; the `raw-temp` baseline in the released rule's form (membership +
       hash, only shrinking); the audit bounded to the run (#1); the self-tests on the three legs.
@@ -1880,3 +1982,12 @@ The October notes 1–12 are kept below with what changed; 13–18 are new.
     check). **The fix** (a few lines in `SweepOrphanClaim`/`RemoveOrphanClaim`): just before `File.Delete`, re-check that the folder is still absent AND take a FRESH `QuarantinedNames` scan — a claim
     whose folder sits in a sibling quarantine now is not an orphan. The Node reference has the same shape (`sweepOrphanClaims`); worth the same check there. Recorded in coai's `research/module_tests.md` as a
     known template gap; coai changes nothing until the template does (a manifest operation then follows the template's blob).
+22. *[epoch 5, 2026-11-04, Opus review]* **The numbering of this list, by reference** (the old notes are not
+    rewritten): two notes carry the number 19 — the D10 note after 13 ("Containment is per invocation") is read as
+    **19a**, and the template-defect note after 18 ("A defect in the TEMPLATE's orphan-claim pass") as **19b**; notes
+    20 and 21 stand before 14 because they were added in epoch order, and are read by their titles. And note 21's
+    "made only by `make-series.sh`" is read with § S4's *Corrections*: the lead's `mkdirArgv` makes the bare folder,
+    `make-series.sh` checks and fills it; the series' owners are `native-run.mjs` (`mkdirArgv`, `seriesOf`,
+    `removeArgv`) and the four `scripts/native/*.sh` files. For the parent: the ownership check moved to the CALLER
+    (the lead's `stat` checks before it runs anything from the series folder), and coai's native plan opened its
+    ledger for the rename (entry 1.1, `contract`).
