@@ -587,6 +587,10 @@ jobs:
             fi
             ZIP=${ZIPS[0]}
             .github/scripts/archive-carries.sh "$ZIP" coai-mcp.exe '*e_sqlite3*'
+            # `archive-carries.sh` matches basenames, so it passes a zip whose binary and library sit
+            # anywhere. The loader wants them beside each other in the package folder, whose name is the
+            # zip's own; this one asks that, and its contract is its own so the basename one stays as is.
+            .github/scripts/final-zip-layout.sh "$ZIP"
           done
 
       # The same two uploads the other platforms' legs make, of the final zip and its checksum.
