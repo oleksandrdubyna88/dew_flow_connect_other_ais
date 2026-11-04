@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { owned } from '../../scripts/owned.mjs';
+import { loadStartOfRunSweep, owned } from '../../scripts/owned.mjs';
 
 /**
  * The extension's test runner (`scripts/run-tests.mjs`) in the contract's grammar (E5 S4, `todo/PLAN_test_leftovers_E5_S4_brief.md` § 4.1, R1-R7; it replaces
@@ -192,7 +192,7 @@ test('R6 a killed runner\'s folder is collected by the next sweep', async (t) =>
   const runnerPid = owned.parseOwner(fs.readFileSync(path.join(fixture.machinesTemp, claimFile), 'utf8').trim()).pid;
   assert.equal(runnerPid, result.pid);
 
-  const sweep = await owned.loadStartOfRunSweep();
+  const sweep = await loadStartOfRunSweep();
   const outcome = await sweep({
     repo: repoRoot, tmp: fixture.machinesTemp, now: Date.now() + 11 * minute, probe: (pid) => (pid === runnerPid ? { state: 'dead' } : owned.processProbe(pid)),
   });

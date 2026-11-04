@@ -22,12 +22,12 @@
  * that reason. Per-file isolation costs a process start and removes the need for anybody to know
  * which file is the special one.</p>
  */
-import fs, { readFileSync, readdirSync } from 'node:fs';
+import fs, { readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { availableParallelism, hostname, tmpdir } from 'node:os';
-import { randomBytes } from 'node:crypto';
-import { join } from 'node:path';
+import { availableParallelism, tmpdir } from 'node:os';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import guard from './runFolderGuard.cjs';
 import { readRule, readSweepSwitch, startOfRun } from './startOfRun.mjs';
 
 /**
@@ -97,7 +97,7 @@ function run(files) {
 }
 
 /**
- * The machine's real temp root, captured when this module loads — BEFORE `beginRun` moves TEMP/TMP/TMPDIR into the run's folder, which makes `os.tmpdir()` answer
+ * The machine's real temp root, captured when this module loads — BEFORE `beginOwnedRun` moves TEMP/TMP/TMPDIR into the run's folder, which makes `os.tmpdir()` answer
  * the run folder from then on (S2-A gate 0). The count and the run folder are both made in this one root, as the C# runner uses `RunTemp.Real`.
  */
 export const REAL_TEMP_ROOT = tmpdir();
@@ -107,8 +107,8 @@ const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 /**
  * What earlier runs and the product left under `coai-` in temp, COUNTED and said BEFORE this run makes anything (`startOfRun.mjs`) — no test sweep
- * removes them since E5 S2-A, so a pile that grows tells somebody instead of hiding. The legacy `testsToDelete-coai-run-*` folders a killed run leaves are no
- * longer counted here: the start-of-run sweep (`startOfRunSweep`) lists each by name with its command. It never stops the run: housekeeping that fails is
+ * removes them since E5 S2-A, so a pile that grows tells somebody instead of hiding. The run folders a killed run leaves are not counted here: the start-of-run
+ * sweep (`startOfRunSweep`) collects or lists each by name with its command. It never stops the run: housekeeping that fails is
  * reported and stepped over. `log` and `count` are the seams its own test uses.
  */
 export function reportLeftoversFirst({
@@ -218,112 +218,79 @@ export async function startOfRunSweep({
   }
 }
 
-/** The family rule: `testsToDelete-` marks a folder only a test run makes, so a janitor may take it without asking whose it is. */
-const RUN_PREFIX = 'testsToDelete-coai-run-';
-
 /**
- * The owner claim, `<host>@<os>:<pid>[:<startUnixSeconds>]` — the C# runner writes the same text (`RunTemp`/`OwnerClaim`), so one sweeper
- * judges both. `os` is Node's own `process.platform` spelling; the start is given only where the OS tells it without spawning a process.
+ * Why `arg` is not a file this runner can start, or `null`: it must be an existing regular file named `*.test.js` (compiled) or `*.test.mjs` (source). Relative paths are
+ * read from `cwd`. Pure of side effects: validation is the FIRST step of a run (before the sweep), so a typo makes nothing.
  */
-export function claimText({ host, platform, pid, startSeconds }) {
-  const safeHost = host.replace(/[@:\s]/g, '-');
-  return startSeconds === undefined ? `${safeHost}@${platform}:${pid}` : `${safeHost}@${platform}:${pid}:${startSeconds}`;
-}
-
-/**
- * This process's start as unix seconds, from the text of `/proc/self/stat` (field 22, in ticks of 1/100 s since boot — the command name
- * may hold spaces and ")", so the fields are counted after the LAST ")") and of `/proc/stat` (`btime`). `undefined` when either does
- * not parse: no start is better than a wrong one.
- */
-export function linuxStartSeconds(statText, procStatText) {
-  const ticks = Number(statText.slice(statText.lastIndexOf(')') + 2).split(' ')[19]);
-  const boot = /^btime (\d+)$/m.exec(procStatText);
-  return Number.isFinite(ticks) && boot ? Number(boot[1]) + Math.floor(ticks / 100) : undefined;
-}
-
-function ownStartSeconds() {
-  if (process.platform !== 'linux') {
-    return undefined;
-  }
+export function testFileProblem(arg, cwd = process.cwd()) {
+  if (!/\.test\.m?js$/.test(arg)) return 'its name does not end in .test.js or .test.mjs';
   try {
-    return linuxStartSeconds(readFileSync('/proc/self/stat', 'utf8'), readFileSync('/proc/stat', 'utf8'));
+    return statSync(resolve(cwd, arg)).isFile() ? null : 'it is not a file';
   } catch {
-    return undefined;
+    return 'it does not exist';
   }
+}
+
+/** `null` when every argument is a test file, else the ONE line that says which is not (`prefix` names the runner, `command` how to start it). */
+export function filesRefusal(files, { cwd = process.cwd(), prefix = 'run-tests' } = {}) {
+  for (const arg of files) {
+    const why = testFileProblem(arg, cwd);
+    if (why !== null) return `${prefix}: '${arg}' is not a test file (${why}); give the path of an existing *.test.js or *.test.mjs, or none to run them all — nothing was run`;
+  }
+  return null;
 }
 
 /**
- * Makes this invocation's own temp folder inside `realTmp`, with its owner claim beside it, and answers its path. One per call: two
- * runners at once each get theirs, and never the C# run's.
- *
- * <p><b>Exclusive:</b> `mkdirSync` without `recursive` throws `EEXIST` on a name that exists, and a run that drew a taken name draws again (up to
- * `tries` times) — it never shares a folder, and never claims one it did not make. After the last collision it throws, and `beginRun` then runs
- * without a folder of its own (with a line saying so). `suffix` and `io` are seams for the test that forces a collision.</p>
+ * The runner's gate (K7), AFTER the folder is made and the variables are set and BEFORE any `node --test` is spawned: the SAME check a test file's first import makes,
+ * plus the folder's NAME — the owner form of this repository's token, `run` — which the guard module leaves to the runner. `null` or ONE reason.
  */
-export function makeRunTemp(realTmp, { suffix = () => randomBytes(3).toString('hex'), tries = 5, io = fs } = {}) {
-  const folder = freeFolder(realTmp, suffix, tries, io);
-  try {
-    io.writeFileSync(`${folder}.owner`, claimText({ host: hostname(), platform: process.platform, pid: process.pid, startSeconds: ownStartSeconds() }));
-  } catch (error) {
-    console.log(`run-tests: the owner claim for ${folder} could not be written (${error.message}); a killed run's folder is then collected only by the family janitor's age rule, after one hour`);
+export function gateRefusal(owned, { env = process.env } = {}) {
+  const reason = guard.refusal({ env });
+  if (reason !== null) return reason;
+  const folder = basename(env[guard.MARKER]);
+  const found = owned.owned.classifyName(folder);
+  if (found.form !== 'owner' || found.token !== owned.token || !folder.startsWith(owned.owned.ownedPrefix('run'))) {
+    return `the run folder '${env[guard.MARKER]}' is not an owned folder of the form of this repository's run`;
   }
-  return folder;
+  return null;
 }
 
-/** The first `tries` draws that `mkdirSync` can make; an existing name is skipped, any other failure is the caller's. */
-function freeFolder(realTmp, suffix, tries, io) {
-  for (let attempt = 0; attempt < tries; attempt += 1) {
-    const folder = join(realTmp, RUN_PREFIX + suffix());
-    try {
-      io.mkdirSync(folder);
-      return folder;
-    } catch (error) {
-      if (error.code !== 'EEXIST') {
-        throw error;
-      }
-    }
-  }
-  throw new Error(`no free name for a run folder in ${realTmp} after ${tries} draws (EEXIST each time)`);
+/** The ONE line a run folder that cannot be made is. */
+export function folderRefusalLine(reason, root, command) {
+  return `${guard.REFUSAL_PREFIX}${reason}. Make '${root}' writable, or point TMPDIR, TEMP and TMP at a folder you can write, then run ${command} again.`;
 }
 
 /**
- * Removes the folder, then its claim — the claim ONLY when the folder is gone, so a folder that could not be removed (a file still held) keeps the
- * claim that says whose it was. Idempotent, and it never throws: a leftover is reported and left to the family janitor.
+ * Begins the run folder and passes the gate: answers `{ run }` when both held, else `{ status: 78 }` with the ONE line already said and nothing left behind. The runners'
+ * common step (this one and `scripts/run-lib-tests.mjs`); `begin` and `error` are the seams of their tests.
  */
-export function removeRunTemp(folder, io = fs) {
-  if (folder === '') {
-    return;
+export function beginGated({ owned, root, command, begin = (options) => owned.beginOwnedRun(options), error = console.error }) {
+  let run;
+  try {
+    run = begin({ what: 'run', root });
+  } catch (caught) {
+    if (caught?.name !== 'RunFolderRefused') throw caught;
+    error(folderRefusalLine(caught.message, root, command));
+    return { status: 78 };
   }
-  if (removed(folder, io)) {
-    removed(`${folder}.owner`, io);
+  const gate = gateRefusal(owned);
+  if (gate !== null) {
+    run.end();
+    error(guard.line(gate));
+    return { status: 78 };
   }
+  return { run };
 }
 
-/** One removal; answers whether it went, and says why when it did not. */
-function removed(target, io) {
-  try {
-    io.rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-    return true;
-  } catch (error) {
-    console.log(`run-tests: ${target} could not be removed (${error.message}); the family janitor takes it later`);
-    return false;
+/** Exactly these files, in the batches `batches()` would make of them: the compiled ones together, each source test on its own. */
+function runFiles(files) {
+  const compiled = files.filter((file) => file.endsWith('.js'));
+  const sources = files.filter((file) => file.endsWith('.mjs'));
+  let status = 0;
+  for (const batch of [compiled, ...sources.map((one) => [one])].filter((one) => one.length > 0)) {
+    status = run(batch) || status;
   }
-}
-
-/**
- * Points this process's temp variables at a fresh run folder — ONCE, before the first child, so every `node --test` descendant inherits
- * it (`spawnSync` copies `process.env`). `os.tmpdir()` reads TEMP/TMP on Windows and TMPDIR on Unix at call time, so all three are set.
- * Answers the folder, or `''` when it could not be made (the run then behaves as it did before).
- */
-function beginRun() {
-  try {
-    const folder = makeRunTemp(REAL_TEMP_ROOT);
-    process.env.TEMP = process.env.TMP = process.env.TMPDIR = folder;
-    return folder;
-  } catch (error) {
-    console.log(`run-tests: no folder of its own could be made (${error.message}); the tests share the machine's temp as before`);
-    return '';
-  }
+  return status;
 }
 
 /** Every batch, in order; the worst status wins. 1 when there is nothing compiled to run. */
@@ -347,16 +314,25 @@ function runAll() {
 }
 
 async function main() {
+  const files = process.argv.slice(2);
+  const problem = filesRefusal(files);
+  if (problem !== null) {
+    console.error(problem);
+    process.exit(2);
+  }
   const owned = await loadOwned();
   await startOfRunSweep({ owned });
   reportLeftoversFirst();
-  const folder = beginRun();
+  const begun = beginGated({ owned, root: REAL_TEMP_ROOT, command: 'node scripts/run-tests.mjs' });
+  if (begun.run === undefined) {
+    process.exit(begun.status);
+  }
   let status = 1;
   try {
-    status = runAll();
+    status = files.length > 0 ? runFiles(files) : runAll();
   } finally {
-    // BEFORE process.exit, which ends the process without running anything after it — the trap leftovers-E5 recorded for run-host.mjs.
-    removeRunTemp(folder);
+    // BEFORE process.exit, which ends the process without running anything after it — the trap leftovers-E5 recorded for run-host.mjs. The wrap also removes it on exit.
+    begun.run.end();
   }
   process.exit(status);
 }

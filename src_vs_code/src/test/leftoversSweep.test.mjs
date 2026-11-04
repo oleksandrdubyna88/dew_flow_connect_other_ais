@@ -150,7 +150,8 @@ test('N-S4 the mount missing is one line and exit 2 before anything is made', as
   assert.match(errors[0], /^run-tests: the shared conventions are not mounted \(Cannot find module .*\) — run: git submodule update --init \.agents\/conventions$/);
   assert.ok(!errors[0].includes('\n'), 'only the first line of the error');
   const text = fs.readFileSync(path.join(here, '..', '..', 'scripts', 'run-tests.mjs'), 'utf8');
-  assert.match(text.slice(text.indexOf('async function main() {')), /^async function main\(\) \{\s*const owned = await loadOwned\(\);/, 'loadOwned is the first thing main does: nothing is spawned or made before it');
+  // E5 S4: the file arguments are validated first (a typo makes nothing, not even the sweep — R5); the mount is the first thing after that.
+  assert.match(text.slice(text.indexOf('async function main() {')), /^async function main\(\) \{\s*const files = process\.argv\.slice\(2\);\s*const problem = filesRefusal\(files\);\s*if \(problem !== null\) \{[^}]*\}\s*const owned = await loadOwned\(\);/, 'loadOwned is the first thing main does after validating its arguments: nothing is spawned or made before it');
 });
 
 test('N-S5 the switch: the repository says collect; list-only calls no sweep and lists the owner-form and legacy names only', async () => {
@@ -208,7 +209,7 @@ test('N-S6 main loads the mount, sweeps, counts, then makes its folder — in th
   const text = fs.readFileSync(path.join(here, '..', '..', 'scripts', 'run-tests.mjs'), 'utf8');
   const main = text.slice(text.indexOf('async function main() {'));
 
-  assert.match(main, /^async function main\(\) \{\s*const owned = await loadOwned\(\);\s*await startOfRunSweep\(\{ owned \}\);\s*reportLeftoversFirst\(\);\s*const folder = beginRun\(\);/,
+  assert.match(main, /^async function main\(\) \{[^]*?\s*const owned = await loadOwned\(\);\s*await startOfRunSweep\(\{ owned \}\);\s*reportLeftoversFirst\(\);\s*const begun = beginGated\(/,
     'a count or a sweep after the run starts would read the run\'s own folder');
 });
 

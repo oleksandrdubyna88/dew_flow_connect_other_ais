@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// <c>&lt;host&gt;@win32|darwin|linux</c> spellings are unreadable to both.
 /// </summary>
 /// <remarks>
-/// <c>shared/owner-claim-vectors.json</c> stays as it was: the Node <c>runTemp.test.mjs</c> reads it until S4 replaces that writer. This file no longer reads it.
+/// <c>shared/owner-claim-vectors.json</c> is deleted (E5 S4): its one reader, the Node <c>runTemp.test.mjs</c>, went with the legacy writer. This file stopped reading it in S3.
 /// The Node reader is asked ONCE, by one <c>node --input-type=module -e</c> that imports the conventions' own <c>owned.mjs</c>.
 /// </remarks>
 public sealed class OwnerClaimVectorsTests

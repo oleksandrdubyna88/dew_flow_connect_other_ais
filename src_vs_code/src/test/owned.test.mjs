@@ -1,4 +1,4 @@
-import * as fs from 'node:fs';
+import nodeFs, * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
@@ -31,14 +31,14 @@ const quiet = () => {};
 function withFs(replacements, fn) {
   const originals = {};
   for (const [name, make] of Object.entries(replacements)) {
-    originals[name] = fs[name];
-    fs[name] = make(originals[name]);
+    originals[name] = nodeFs[name];
+    nodeFs[name] = make(originals[name]);
   }
   syncBuiltinESMExports();
   try {
     return fn();
   } finally {
-    for (const [name, original] of Object.entries(originals)) fs[name] = original;
+    for (const [name, original] of Object.entries(originals)) nodeFs[name] = original;
     syncBuiltinESMExports();
   }
 }
@@ -251,7 +251,7 @@ test('W12 startOwnedRun with no mount is one line and exit 2, and nothing is mad
   const errors = [];
   const exits = [];
   await startOwnedRun({
-    what: 'w12', importOwned: async () => { throw new Error('Cannot find module owned.mjs'); }, error: (line) => errors.push(line), exit: (code) => exits.push(code), root,
+    what: 'w12', importOwned: async () => { throw new Error('Cannot find module owned.mjs'); }, error: (line) => errors.push(line), exit: (code) => { exits.push(code); }, root,
   });
 
   assert.deepEqual(exits, [2]);
