@@ -39,6 +39,8 @@ Narrowed: yes — the merge no longer waits for a provider; activation moved to 
   gate round on docs/windows-code-signing-epoch2, 2/2 reviewers, proceed; its accepted findings 0, 1, 3, 4 are wording
   in this text.)
 
+- 2.1 · 2026-11-04 · agent · approach — as the twin's ledger 3.1: release.yml's workflow_dispatch gains a boolean input `required`, and mcp-sign passes `required: ${{ startsWith(github.ref, 'refs/tags/') || inputs.required }}`, so a forced dispatch proves the caller's switch on the exact tag path before the merge
+
 ## 1. The symptom and the goal
 
 **Symptom.** On Windows 11 with Smart App Control (SAC) on, the extension's *Install the MCP server*
