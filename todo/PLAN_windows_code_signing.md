@@ -99,7 +99,7 @@ with:
   artifacts: '["mcp-win-x64","mcp-win-arm64"]'
   own-files: '["coai-mcp.exe"]'
   extra-files: '["e_sqlite3.dll","tree-sitter*.dll"]'
-  required: ${{ startsWith(github.ref, 'refs/tags/') }}
+  required: ${{ startsWith(github.ref, 'refs/tags/') || inputs.required }}
   allow-unsigned-release: ${{ vars.ALLOW_UNSIGNED_RELEASES == 'true' }}
 ```
 
