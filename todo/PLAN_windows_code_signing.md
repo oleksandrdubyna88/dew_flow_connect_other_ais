@@ -1,6 +1,6 @@
 # PLAN — the Windows `coai-mcp` package is signed, so Smart App Control lets it run and load its libraries
 
-> Status: **epoch 2 approved by the owner, 2026-11-04. Built and gated 2026-11-03 on `ci/windows-code-signing` (PR #944). Next: adopt the shared workflow v1.1.0 and merge with `ALLOW_UNSIGNED_RELEASES=true`; signing is activated later by the twin's E5 cutover.** Scope: the `mcp-binaries` and
+> Status: **wiring merged, activation open — 2026-11-04, epoch 2. #944 squash 7de8a74, pinned to the shared workflow's v1.1.0 (a9a7ecc), `ALLOW_UNSIGNED_RELEASES=true`. The Windows package stays UNSIGNED until the twin's E5 cutover; the goal is not reached yet.** Scope: the `mcp-binaries` and
 > `mcp-release-complete` jobs of `.github/workflows/release.yml`, one new caller job and one new
 > attach job, `.github/scripts/archive-carries.sh` (zip support), the owner's GitHub environment here.
 > No product code. Twin of `dew_flow_creds_for_devs · todo/PLAN_windows_code_signing.md`, which owns
@@ -177,10 +177,12 @@ retired by GitHub.
 ## 7. Definition of Done
 
 **Wiring (this PR):**
-- [ ] v1.1.0 pinned, the switch line in, the structure test green with its break-it; the docs grep empty;
+- [x] v1.1.0 pinned, the switch line in, the structure test green with its break-it; the docs grep empty;
       the whole suite and actionlint green; `coai` gate rounds resolved.
-- [ ] `ALLOW_UNSIGNED_RELEASES=true` set; the environment holds no variables; #944 squash-merged with a
-      `ci(release)` title; O9 done.
+- [x] `ALLOW_UNSIGNED_RELEASES=true` set; the environment holds no variables; #944 squash-merged with a
+      `ci(release)` title (7de8a74); O9 done. Forced trial 41835306447 green with `UNSIGNED RELEASE`, `to sign: 10`,
+      `check ok: 10 files`, and the attach job's product and layout checks passed. Still to observe: the first
+      real `mcp-v*` tag under the switch.
 
 **Activation (the twin's E5 — the goal; this plan stays in `todo/` until ticked):**
 - [ ] V1 and V2 observed; A6 done in settings and in code; the first signed mcp release out, its prose
