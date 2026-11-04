@@ -6,7 +6,7 @@
 // builds its own folders under <scratch>, and an arm that needs a user-level file (hooks.toml, an MCP server, trusted
 // folders) runs on a SHORT copied VIBE_HOME inside <scratch> — never the real one. A deep VIBE_HOME broke on a
 // >260-character path (RESULTS_vibe_and_kimi_first_probe.md §4), so the default <scratch> is an owned folder in the OS
-// temp dir (removed at exit; on Windows a default scratch path past 99 characters is refused with a line asking for a short --scratch).
+// temp dir (removed at exit; on Windows a default scratch path past 98 characters is refused with a line asking for a short --scratch).
 //
 //   node scripts/probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats 3] [--cells M-V1,M-V2,...]
 //                                           [--cli python|rust|inherit]   (default python: VIBE_CLI=python in every child)
@@ -94,8 +94,8 @@ if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || !CLIS.in
 const given = reparse || flag('--scratch', '');
 const scratch = given || (await startDefaultScratch({ what: 'vcp', prefix: 'probe-vibe-confinement' })).path;
 // Windows: the owned default scratch is about 17 characters longer than the short folder this probe used to make, and a deep VIBE_HOME broke on a >260-character path (header). The
-// room under the scratch is the path limit of a file, 259, less the deepest child Vibe makes under its home (VibePathBudget.Windows, 156) and `\h12`: past it, say so and stop.
-const SCRATCH_ROOM = 259 - 156 - 4;
+// room under the scratch: the longest home that fits is VibePathBudget.LongestHome = 259 - 1 - 156 = 102 (the file limit, its separator, the deepest child Vibe makes below its home), less `\h12` (4): 98. Past it, say so and stop.
+const SCRATCH_ROOM = 259 - 1 - 156 - 4;
 if (process.platform === 'win32' && !given && scratch.length > SCRATCH_ROOM) {
   console.error(`refusing the default scratch ${JSON.stringify(scratch)}: ${scratch.length} characters, more than the ${SCRATCH_ROOM} a Vibe home under it can have; pass --scratch <a short dir>`);
   process.exit(65);

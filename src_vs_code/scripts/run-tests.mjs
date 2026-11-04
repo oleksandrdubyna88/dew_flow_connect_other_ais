@@ -343,11 +343,16 @@ async function main() {
  */
 export function isMain(metaUrl, argv1 = process.argv[1]) {
   if (argv1 === undefined) return false;
-  try {
-    return realpathSync.native(argv1) === realpathSync.native(fileURLToPath(metaUrl));
-  } catch {
-    return false;
+  const own = fileURLToPath(metaUrl);
+  // It can only say "not main" on a REAL mismatch: where one way of resolving a path fails the next is tried, and last the resolved spellings are compared.
+  for (const real of [realpathSync.native, realpathSync]) {
+    try {
+      return real(argv1) === real(own);
+    } catch {
+      // try the next way
+    }
   }
+  return resolve(argv1) === resolve(own);
 }
 
 // Importable for its own test; still a script when node is pointed at it.
