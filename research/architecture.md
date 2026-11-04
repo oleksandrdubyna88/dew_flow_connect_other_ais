@@ -1514,7 +1514,8 @@ mcp-sign                 the shared workflow: signs coai-mcp.exe (own-files) and
                          (extra-files) once a provider is active, keeps a vendor signature, verifies,
                          makes <pkg>.zip + .sha256, uploads them as mcp-<rid>; with no provider it
                          leaves the files unsigned and still makes the zip
-mcp-sign-attach          archive-carries.sh on each FINAL zip, then (tag only) gh release upload --clobber
+mcp-sign-attach          archive-carries.sh and final-zip-layout.sh on each FINAL zip, then (tag only)
+                         gh release upload --clobber
 mcp-release-complete     needs [mcp-binaries, mcp-sign-attach]; verify-and-publish-release.sh is still the
                          last word on completeness
 ```
@@ -1542,7 +1543,9 @@ Facts a reader will need:
   publish produces, checked by the test against `shared/kept-grammars.txt`. A library a dependency bump renames fails the
   release that carries it.
 - **`archive-carries.sh` lists a `.zip` with `unzip -Z1`** as well as a `.tar.gz` with `tar tzf`; the match is the same
-  (basename glob, exact by default), and `TheArchiveCheckTests` runs it on zips built to be wrong.
+  (basename glob, exact by default), and `TheArchiveCheckTests` runs it on zips built to be wrong. A basename match
+  cannot see depth, so `final-zip-layout.sh` also requires `coai-mcp.exe` and the SQLite library directly in the package
+  folder, whose name it reads from the zip's (`coai-mcp-<v>-<rid>/`); the same test class drives it.
 - **Releases cut before activation say the package is unsigned.** The first signed release is the first one cut after
   the cutover; its notes announce the signature. This change touches only `.github/**`, tests and docs, so
   release-please proposes no mcp release for it.
