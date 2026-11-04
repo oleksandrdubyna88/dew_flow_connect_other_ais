@@ -6036,6 +6036,7 @@ N-S5 in Node. **Rehearsed (B-B12), Linux:** with the file at `list-only` the ser
 
 The prediction written before the run: the margin is positive and larger than the sweep's own duration. The sweep ended **201.8 / 203.1 / 207.2 / 197.2 ms** (first full run) and **193.4 / 217.2 / 205.7 / 194.1 ms** (second) before the first test started, in `CoaiMcp.Tests` / `CoaiServer.Tests` / `CoaiBugs.Tests` / `CoaiBench.Tests`
 (the warning line of `TheSweep_EndedBeforeTheFirstTestStarted`, one per suite per leg). macOS and Windows margins: to be copied here from the first green legs. (The sweep's own duration is not measured apart from it.)
+*[2026-11-04, the first green CI run on `6ec356a1` (`ci` run 41803072375), copied from each cell's warning line:]* **Linux** (`build · test · family checks`) 179.4 / 149.0 / 154.9 / 152.8 ms in `CoaiMcp.Tests` / `CoaiServer.Tests` / `CoaiBugs.Tests` / `CoaiBench.Tests`; **macOS** 149.0 / 102.1 / 144.7 ms in `CoaiMcp.Tests` / `CoaiServer.Tests` / `CoaiBench.Tests` (the leg runs no `CoaiBugs.Tests`); **Windows** (`Windows · mcp`) 203.9 / 147.0 ms in `CoaiMcp.Tests` / `CoaiServer.Tests` (the leg runs these two). Positive on every cell, smallest 102.1 ms (macOS, `CoaiServer.Tests`), so plan B is not needed. The second half of the prediction (larger than the sweep's own duration) is still not checked: no leg logs the sweep's duration on its own.
 
 ### The claim-first race and the startup order
 
