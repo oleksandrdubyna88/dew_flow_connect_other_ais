@@ -1228,10 +1228,16 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
   group- or world-writable, a test for each; a Fable security read of the four native scripts is part of S4's Opus
   review. It also refuses a series ROOT not owned by uid 0, or world-writable without the sticky bit: under a sticky,
   root-owned root no other user can rename or replace a uid-0 folder, so what was checked is what `rm -rf` removes
-  (the parent's re-review gate, finding 0; a test per refusal). (5) *a phase whose series is gone* — after a reboot
+  (the parent's re-review gate, finding 0; a test per refusal). *Tests as a non-root user* (the interim document gate,
+  finding 3): the expected owner uid is a test seam beside `COAI_NATIVE_SERIES_ROOT` — `COAI_NATIVE_SERIES_OWNER_UID`,
+  default 0, read only by the native scripts — so the tests run as the CI user: the accepted case sets it to the test's
+  own uid under a private root of mode `1777`; the refusals use a mismatched uid, a root of mode `0777` without the
+  sticky bit, and a group-writable series folder. (5) *a phase whose series is gone* — after a reboot
   that cleared `/tmp` or a removal, the next phase stops with one line (the series `<path>` is gone; start a new one
-  with `make-series.sh`) and a non-zero exit before it writes anything; a test (finding 1). *Size and a forgotten series:* the series' size is measured at its first use after S4 (`du -sh`) and written
-  in the native documents; a forgotten series is found with `ls -d <root>/native-*` and removed with
+  with `make-series.sh`) and a non-zero exit before it writes anything; a test (finding 1). *Size and a forgotten series:* BEFORE the rename lands, S4's first step measures a real series — the one
+  `native.test.mjs` makes under a private root with a full phase, and, where the person has one, a past series of a
+  real measurement (`du -sh`) — and writes the figure and its assumptions (phases, repeats) in S4's brief and the
+  native documents (the interim document gate, finding 0); it is measured again at the first real use after S4; a forgotten series is found with `ls -d <root>/native-*` and removed with
   `remove-series.sh` — nothing else removes it; a reboot that clears `/tmp` clears it too, and the documents say so.
   **Bound:** one shape in one family of scripts; a second durable resource anywhere is a new plan change, never a
   second use of this note.
@@ -1262,6 +1268,17 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
     of a run exports its record once, and a helper in a child uses it when it names a live run of the caller. So
     `run-tests.mjs`, `run-lib-tests.mjs` and the runner scripts export their own record, and withhold an INHERITED one
     only around their own claim (S2-B `6695ab36`: the run folder's claim names ITS process, never an inherited record).
+    *[the interim document gate, 2026-11-04, finding 2]* The scope, exactly: a child test process of a runner (every
+    `node --test` file under `run-tests.mjs` or `run-lib-tests.mjs`) is a LEAF inside that runner's run scope. Its
+    `ownedDir` folders are made inside the run folder (its temp variables point there) and their claims name the run's
+    record, as the detail asks; it makes no run folder of its own and is not a runner. Only a process that IS a runner —
+    a test that starts `run-tests.mjs` or `run-lib-tests.mjs` as a child (`runTests.test.mjs`) — makes a run folder,
+    and it withholds the inherited record around that one claim, then exports its own to its children.
+  - **P1 in ES modules** *[the interim document gate, finding 4]*. The guard is the FIRST static import of every test
+    file (`.mjs` and compiled `.js` alike): ES module evaluation runs the imports in source order, depth first, so the
+    first import and its dependencies evaluate before any later import. And no test helper or library a test imports
+    may make a folder or file when it is loaded (rule §2); the S4 commit checks the imported helpers for load-time
+    side effects and names any it moves into a hook.
   - **P12 — a targeted macOS Node CI step**, so that must-not-copy #12 (`/var` → `/private/var`; the wrap's `isMine`
     both ways) runs on macOS for the Node side too; row 12 already names S4.
   - **P2, P9, P10, P11 — counts and references.** The "31 runner scripts" of the Files bullet are 25 entry scripts plus
@@ -1569,9 +1586,14 @@ S6 creates the baseline:
       leaks; `release.yml` uses `RUNNER_TEMP`.
       *[epoch 5, 2026-11-04]* Read with ONE exception: the native measurement series (§ S4, *[epoch 5]*) owns no folder
       through the wrap — it leaves the prefix family as `native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`, made only by
-      `make-series.sh`, removed only by `remove-series.sh`, never collected. Its evidence is in S4's DoD: the survival
-      test between phases and the remover's grammar tests (a valid new name accepted, each malformed one refused) green
-      on the Linux leg; the native documents say what the series is and who removes it. The S4 implementation notes
+      `make-series.sh`, removed only by `remove-series.sh`, never collected. Its evidence, every item green on the Linux
+      leg and each result named in the PR record (the interim document gate, finding 1): (1) the survival test between
+      phases; (2) the remover's grammar tests (a valid new name accepted, each malformed one refused, the old prefix
+      included); (3) the guard's reading of the series lines (or the inline exemption and its inventory line, in S6);
+      (4) the remover's ownership refusals (folder uid, group/world-writable folder, root uid, non-sticky world-writable
+      root) through the owner-uid seam; (5) a phase on a series that is gone stops with its one line and a non-zero
+      exit; (6) the size figure measured before the rename, with its assumptions; (7) the native documents say what the
+      series is, who removes it, how a forgotten one is found, that a reboot clearing `/tmp` ends it, and the bound. The S4 implementation notes
       (P1, D-b, D-c, P4, P8, P12, P2/P9/P10/P11) are each handled and named in the S4 commit; P13 in S6.
 - [ ] S6: both guards red on every class, on an unregistered token and on a scan of nothing; `owner-blind`,
       `legacy-name`, `exemption`, `token` at zero; the `raw-temp` baseline in the released rule's form (membership +
