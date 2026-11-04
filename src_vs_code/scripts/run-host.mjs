@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadOwned } from './run-tests.mjs';
+import { isMain, loadOwned } from './run-tests.mjs';
 
 /**
  * Run the scenarios inside a REAL VS Code, and exit non-zero unless they actually ran.
@@ -163,6 +163,6 @@ export async function main({
 }
 
 // Importable for its own test; still a script when node is pointed at it.
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   process.exit(await main());
 }

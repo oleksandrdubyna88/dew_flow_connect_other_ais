@@ -27,7 +27,7 @@ const planted = 5417;
 const consultVendor = async (vendor) => {
   // Inside this script's run folder (one per vendor: the vendor id is part of the name, and the folder is removed with the run).
   const data = join(run.folder, `live-${vendor.id}`);
-  mkdirSync(data);
+  mkdirSync(data, { mode: 0o700 }); // owner-only, as mkdtemp made it
   const server = spawn(exe, [], {
     stdio: ['pipe', 'pipe', 'pipe'],
     env: {

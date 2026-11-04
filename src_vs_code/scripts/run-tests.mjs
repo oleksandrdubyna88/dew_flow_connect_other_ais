@@ -22,7 +22,7 @@
  * that reason. Per-file isolation costs a process start and removes the need for anybody to know
  * which file is the special one.</p>
  */
-import fs, { readdirSync, statSync } from 'node:fs';
+import fs, { readdirSync, realpathSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { availableParallelism, tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
@@ -337,8 +337,21 @@ async function main() {
   process.exit(status);
 }
 
+/**
+ * Is the module whose `import.meta.url` is `metaUrl` the script node was started with? Compared on REAL paths: a runner started through a symbolic link (or under another
+ * name) has an `argv[1]` that is not its own file, and a comparison of the spelled paths would find "not started as a script", run nothing and exit 0 — a green tick over nothing.
+ */
+export function isMain(metaUrl, argv1 = process.argv[1]) {
+  if (argv1 === undefined) return false;
+  try {
+    return realpathSync.native(argv1) === realpathSync.native(fileURLToPath(metaUrl));
+  } catch {
+    return false;
+  }
+}
+
 // Importable for its own test; still a script when node is pointed at it.
-if (process.argv[1]?.endsWith('run-tests.mjs')) {
+if (isMain(import.meta.url)) {
   // Lowered before anything is spawned, so every test process inherits it (BelowNormal on Windows,
   // nice 19 elsewhere; nothing under CI). Only the script lowers itself — importing this module
   // from a test does not.

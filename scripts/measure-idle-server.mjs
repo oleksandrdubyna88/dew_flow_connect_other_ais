@@ -34,7 +34,7 @@ const idle = Number(option('--idle', '120'));
 
 // Inside this script's run folder (removed with it); the `finally` below still removes the copy as soon as the child has exited.
 const data = join(run.folder, 'idle-arm');
-mkdirSync(data);
+mkdirSync(data, { mode: 0o700 }); // owner-only, as mkdtemp made it: the copy holds a person's sessions and settings
 cpSync(snapshot, data, { recursive: true });
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('COAI_')));
 const envFile = option('--env', '');

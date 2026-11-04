@@ -128,7 +128,7 @@ const baseUrl = `http://127.0.0.1:${port}`;
 // A throwaway data directory per run: no vendors, no accounts, no sessions. That emptiness is
 // deliberate — see the README on why no review ever reaches a vendor.
 const dataDir = path.join(run.folder, 'data');
-mkdirSync(dataDir);
+mkdirSync(dataDir, { mode: 0o700 }); // owner-only, as mkdtemp made it
 
 
 // ONE vendor in the allowlist, and no account signed in for it.

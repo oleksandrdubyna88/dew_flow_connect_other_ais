@@ -39,7 +39,7 @@ async function withExitSpy(run, fn) {
 function assertSafeToImport() {
   const text = fs.readFileSync(script, 'utf8');
   const code = text.split('\n').filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line));
-  assert.ok(code.some((line) => line.includes('process.argv[1]')), 'an argv guard: the script runs only when started as a script');
+  assert.ok(code.some((line) => line.includes('isMain(import.meta.url)')), 'an argv guard on REAL paths: the script runs only when started as a script (through a link too)');
   assert.equal(code.some((line) => /mkdtemp/.test(line)), false, 'no folder is made with mkdtemp (the wrap makes them)');
   assert.equal(code.some((line) => /^(await\s+)?main\(/.test(line) || /^main\(\)/.test(line)), false, 'no module-level call of main()');
 }

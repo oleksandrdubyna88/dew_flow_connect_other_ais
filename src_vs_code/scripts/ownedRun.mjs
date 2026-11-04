@@ -21,14 +21,26 @@ export async function startOwnedRun({ what, prefix = what, importOwned, error = 
 /**
  * The DEFAULT scratch of a person-run probe that used to keep it for a later `--reparse` or `--from` (D-b, the rollout's epoch 5): an owned folder of the wrap in the real temp
  * folder, mode 0700 on POSIX (a copied sign-in may live there until the scrub), removed at exit — and ONE stderr line at exit says so and how to keep it:
- * `<prefix>: scratch was <path>, removed at exit — pass --scratch <dir> to keep it for --reparse`. `--scratch <dir>` stays a folder the person names and is never removed.
+ * `<prefix>: scratch was <path>, removed at exit — pass --scratch <dir> to keep it`. `--scratch <dir>` stays a folder the person names and is never removed.
  * Call it only when no `--scratch` was given. Answers `{ path, end }`.
  */
-export async function startDefaultScratch({ what, prefix, ...rest } = {}) {
-  const scratch = await startOwnedScratch({ what, prefix, root: realpathSync.native(tmpdir()), ...rest });
+export async function startDefaultScratch({ what, prefix, importOwned, error = console.error, exit = process.exit, ...rest } = {}) {
+  // The real temp root is read INSIDE `start`'s try: a root that is not there is one line and exit 78, not a stack.
+  const scratch = await start({
+    prefix, importOwned, error, exit,
+    make: (owned) => {
+      let root;
+      try {
+        root = realpathSync.native(tmpdir());
+      } catch (cause) {
+        throw new owned.RunFolderRefused(`the temp folder '${tmpdir()}' cannot be read (${String(cause.message).split('\n')[0]})`, { cause });
+      }
+      return owned.ownedScratch(what, { root, ...rest });
+    },
+  });
   if (scratch === undefined) return undefined;
   if (process.platform !== 'win32') chmodSync(scratch.path, 0o700);
-  process.on('exit', () => process.stderr.write(`${prefix}: scratch was ${scratch.path}, removed at exit — pass --scratch <dir> to keep it for --reparse\n`));
+  process.on('exit', () => process.stderr.write(`${prefix}: scratch was ${scratch.path}, removed at exit — pass --scratch <dir> to keep it\n`));
   return scratch;
 }
 

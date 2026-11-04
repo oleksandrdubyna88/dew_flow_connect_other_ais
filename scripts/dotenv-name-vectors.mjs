@@ -132,7 +132,7 @@ const textOf = (input) => (typeof input === 'string' ? input : null);
 // Without --scratch the scratch is an owned folder of the wrap (claimed by this process, removed with its claim by `end()` — and at exit if the script ends first).
 const owned = given ? undefined : await startOwnedScratch({ what: 'dotenv-vectors', prefix: 'dotenv-name-vectors' });
 const scratch = given || owned.path;
-mkdirSync(scratch, { recursive: true });
+mkdirSync(scratch, { recursive: true, mode: 0o700 });
 const paths = VECTORS.map(([id, input], n) => {
   const path = join(scratch, `${String(n + 1).padStart(2, '0')}-${id}.env`);
   writeFileSync(path, bytesOf(input));

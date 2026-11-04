@@ -119,6 +119,8 @@ function claimedFolder({ what, root, selfTest }) {
   try {
     const make = () => owned.ownedDir(scope, what, { parent: root });
     const folder = withInheritedRunWithheld(() => (selfTest === 'fail-claim' ? withClaimFailure(make) : make()));
+    // Owner-only, as `mkdtemp` made it: the reference's mkdir gives 0777 & ~umask (0755 under the common umask 022), and a run folder holds sessions, settings and copies of sign-ins.
+    if (process.platform !== 'win32') fs.chmodSync(folder, 0o700);
     const claim = owned.parseOwner(fs.readFileSync(`${folder}.owner`, 'utf8'));
     if (claim.unreadable === true || claim.pid !== process.pid || claim.owner !== owned.thisOwnerToken()) {
       throw new RunFolderRefused(`the claim beside '${folder}' does not name this process`);

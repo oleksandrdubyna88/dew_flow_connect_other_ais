@@ -14,9 +14,8 @@
  * the child's status is the runner's, and only a missing mount ends the run (exit 2), before anything is spawned.
  */
 import { spawnSync } from 'node:child_process';
-import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beginGated, filesRefusal, mountMissingLine, reportLeftoversFirst, startOfRunSweep } from '../src_vs_code/scripts/run-tests.mjs';
+import { beginGated, filesRefusal, isMain, mountMissingLine, nodeTestArgs, reportLeftoversFirst, startOfRunSweep } from '../src_vs_code/scripts/run-tests.mjs';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PREFIX = 'run-lib-tests';
@@ -53,13 +52,16 @@ export async function runLibTests({
   if (begun.run === undefined) return begun.status;
   try {
     // The glob is node's own, quoted for no shell: a new `scripts/**/*.test.mjs` is picked up without touching this runner or the CI step.
-    const result = spawn(process.execPath, ['--test', ...(given.length > 0 ? given : ['scripts/**/*.test.mjs'])], { cwd: repoRoot, stdio: 'inherit' });
+    // Capped at min(8, CPUs - 1) workers through the one list of `nodeTestArgs` (common.local-cpu-budget §1): S4 closed the only capped recipe, so this runner carries it itself.
+    const result = spawn(process.execPath, nodeTestArgs(given.length > 0 ? given : ['scripts/**/*.test.mjs']), { cwd: repoRoot, stdio: 'inherit' });
     return result.status ?? 1;
   } finally {
     begun.run.end();
   }
 }
 
-if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
+  // Lowered before anything is spawned, so every test process inherits it (common.local-cpu-budget §2): only the script lowers itself, importing it from a test does not.
+  await import('../src_vs_code/scripts/lower-priority.mjs');
   process.exit(await runLibTests({ files: process.argv.slice(2) }));
 }

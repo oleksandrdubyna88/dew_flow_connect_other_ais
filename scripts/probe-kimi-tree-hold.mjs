@@ -83,7 +83,7 @@ const repeats = Number.parseInt(flag('--repeats', '3'), 10);
 const armNames = flag('--arms', defaultArms(Object.keys(ARMS)).join(',')).split(',').filter(Boolean);
 if (armNames.some((a) => !(a in ARMS)) || !Number.isInteger(repeats) || repeats <= 0) {
   console.error(`usage: probe-kimi-tree-hold.mjs [--shim <exe>] [--scratch <dir>] [--repeats N] [--arms ${Object.keys(ARMS).join(',')}] [--allow-live-survivor]`);
-  console.error('without --scratch the scratch is an owned folder removed at exit; pass --scratch <dir> to keep a run for --reparse');
+  console.error('without --scratch the scratch is an owned folder removed at exit; pass --scratch <dir> to keep a run');
   process.exit(65);
 }
 const liveRefusal = armsRefusal(armNames, { allowLive: argv.includes('--allow-live-survivor'), platform: process.platform });
