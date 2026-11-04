@@ -1727,3 +1727,12 @@ The October notes 1–12 are kept below with what changed; 13–18 are new.
 17. **Two sweepers of unequal strictness on Windows** until F16 (Q6) — resolved by F16 (b): the Node one only lists there.
 18. **The Darwin path is exercised here on three C# suites** (`ci.yml:281-287`), more than the template's one; any
     Darwin defect found here goes back to E3's owner as a note (the boundary table).
+19. **A defect in the TEMPLATE's orphan-claim pass (dew_flow_mcp `LeftoversSweep.cs`, found by the S2-B Opus review, 2026-11-03) — for the template, NOT fixed in coai's copy** (the copy is byte-identical;
+    the plan's rule: the template wins, and a defect goes back as a note). `SweepOrphanClaims` reads the quarantine names ONCE (`var quarantined = QuarantinedNames()`), and `SweepOrphanClaim`
+    decides on that snapshot (`Native.IdentityOf(folder) is not null` → return; `quarantined.Contains(name)` → return). **The interleaving:** sweep A's folder pass sees `X` and keeps it (its verdict
+    was `young` or a transient `Unknown`, or an mtime crossed the ten-minute line between the two sweeps' reads); sweep B (another suite, the Node runner) then judges `X` removable and renames it to the
+    sibling quarantine; A's orphan pass now finds `X.owner` with no folder at `X` and no `X` in its (older) snapshot, judges the claim by its gone owner, and DELETES `X.owner`; B's `IntactAt` check then
+    fails (the claim at its original path changed), so B restores `X` under its name WITHOUT a claim: `X` stays `unmarked` for ever (must-not-copy row 8's outcome, reached through a race instead of a missing
+    check). **The fix** (a few lines in `SweepOrphanClaim`/`RemoveOrphanClaim`): just before `File.Delete`, re-check that the folder is still absent AND take a FRESH `QuarantinedNames` scan — a claim
+    whose folder sits in a sibling quarantine now is not an orphan. The Node reference has the same shape (`sweepOrphanClaims`); worth the same check there. Recorded in coai's `research/module_tests.md` as a
+    known template gap; coai changes nothing until the template does (a manifest operation then follows the template's blob).

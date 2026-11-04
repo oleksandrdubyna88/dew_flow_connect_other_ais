@@ -1302,6 +1302,17 @@ Each is a dated note; the text above is history. Measured on WSL Linux, on the m
 10. **B.4, Node.** N-S4 tests `loadOwned({ importOwned, error, exit })` (`main` has no parameters, as N-S6's pattern fixes); `startOfRun.test.mjs` N5 is deleted (its content is N-S6); the expected value of the stat-less count test lost `legacyRuns: 0`.
 11. **B.1 § 5, N-S9.** N-S9 runs BOTH switch values: `collect` through the real default loader (the repository's own value), `list-only` through the `mode` seam.
 
+### B.11, continued — after the code gate and the Opus review (2026-11-03)
+
+12. **B.1 § 1, B.1 § 2 and B.0 F13/F14: what "the machine's temp" is.** `RunTemp.Real` is `Path.GetTempPath()` read in the module initializer, i.e. the temp folder this process INHERITED. A suite started with `TMPDIR`/`TEMP`/`TMP` pointing at another run's
+    folder sweeps that folder, and the keys (the name's owner, the kernel owner, `gone`, ten minutes) still protect what is in it. The Node runners' `REAL_TEMP_ROOT` is the same (`os.tmpdir()` at load).
+13. **B.1 § 2 (the claim-first race) — the run folder's claim.** `Owner.RunRecord` gives a helper's claim an inherited `TESTSTODELETE_RUN` when it names a live run of the caller. The run folder belongs to ONE process, so `RunTempFolder.Create` withholds
+    the variable around its claim (`RunTempSeams.WithholdInheritedRun`); a wrapper that dies while the suite runs can no longer leave the run folder claimed by a dead pid. Test: `TheRunFolderIsClaimedByItsOwnProcessTests`.
+14. **B.1 § 4 (the switch file).** A leading UTF-8 byte order mark is dropped by both readers (C# `File.ReadAllText` already did; Node's `readSweepSwitch` does since this note): one file, one switch.
+15. **B.1 § 7 (`run-lib-tests.mjs`).** The runner prints the `coai-*` count after the sweep and before `node --test`, as `run-tests.mjs` does (L6).
+16. **A template gap, not a coai change:** the orphan-claim pass of `LeftoversSweep.cs` decides on a quarantine snapshot read once (note 19 of the E5 plan's "Notes for the parent"; `research/module_tests.md`). Must-not-copy row 8's outcome can be reached through that race.
+17. **B.2 (files).** `StartOfRunSweepTests.cs` is split: `StartOfRunSweepTests` (B3-B7), `StartOfRunSweepSwitchTests` (B9), `StartOfRunSweepRaceAndRootTests` (B8, B10, B11, B13, B13-W), `StartOfRunSweepPlants` (shared); the `CoaiOwn` list names all four.
+
 ## Definition of Done (S2-B)
 
 - [ ] Step 0's probe recorded; the sweep is the registered `LeftoversSweepFixture` in all four assemblies (or plan B, with
