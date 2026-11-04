@@ -70,7 +70,8 @@ const POISONED = ['ELECTRON_RUN_AS_NODE', 'VSCODE_PID', 'VSCODE_CWD', 'VSCODE_IP
  * shorter); `socketRoom` is the measurement and `main` says one line when even that is too long.</p>
  */
 const SOCKET_LEAF = '/1.999.9-main.sock';
-const PLATFORM_SOCKET_LIMIT = process.platform === 'darwin' ? 103 : 107;
+// Windows has no socket path (the editor uses a named pipe), so nothing there is measured: the limit is unbounded.
+const PLATFORM_SOCKET_LIMIT = process.platform === 'win32' ? Number.POSITIVE_INFINITY : process.platform === 'darwin' ? 103 : 107;
 
 /** How many bytes are left under `limit` (the platform's by default) for the editor's socket path under a profile folder `profile`; negative when it would not fit. */
 export function socketRoom(profile, limit = PLATFORM_SOCKET_LIMIT) {
