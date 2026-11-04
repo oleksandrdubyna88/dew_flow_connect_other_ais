@@ -186,7 +186,13 @@ test('R6 a killed runner\'s folder is collected by the next sweep', async (t) =>
 
   const result = runTheRunner(fixture);
 
-  assert.equal(result.signal, 'SIGKILL', `${result.stdout}${result.stderr}`);
+  // A POSIX process killed by SIGKILL reports the signal; Windows has no signals: `process.kill` terminates the process and the exit status is non-zero, the signal null.
+  if (process.platform === 'win32') {
+    assert.notEqual(result.status, 0, `${result.stdout}${result.stderr}`);
+    assert.equal(result.signal, null);
+  } else {
+    assert.equal(result.signal, 'SIGKILL', `${result.stdout}${result.stderr}`);
+  }
   const left = fs.readdirSync(fixture.machinesTemp);
   assert.equal(left.length, 2, `the folder and its claim remain: ${left.join(', ')}`);
   const claimFile = left.find((name) => name.endsWith('.owner'));
@@ -200,7 +206,8 @@ test('R6 a killed runner\'s folder is collected by the next sweep', async (t) =>
 
   if (process.platform === 'win32') {
     assert.equal(fs.readdirSync(fixture.machinesTemp).length, 2, 'on Windows the sweep lists and changes nothing (F16 interim)');
-    assert.ok(outcome.listed.length > 0);
+    assert.deepEqual(outcome.removed, [], JSON.stringify(outcome));
+    assert.ok(outcome.listed.length > 0, JSON.stringify(outcome));
   } else {
     assert.deepEqual(fs.readdirSync(fixture.machinesTemp), [], `the sweep removed both: ${JSON.stringify(outcome)}`);
   }
