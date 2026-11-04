@@ -134,7 +134,7 @@ try {
 } catch (error) {
   say(false, 'the comparison ran to its end', error instanceof Error ? error.message : String(error));
 } finally {
-  server?.stop();
+  await server?.stop();
   rmSync(dataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
   rmSync(scratch, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 }

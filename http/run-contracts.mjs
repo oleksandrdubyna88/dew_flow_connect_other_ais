@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Runs the whole `.http` suite against a stack this script starts, and reports the verdict as an
-// exit code: 0 pass · 1 CONTRACT regression · 3 environment · 4 configuration.
+// exit code: 0 pass · 1 CONTRACT regression · 2 the conventions are not mounted · 3 environment · 4 configuration · 78 the run's temp folder could not be made.
 //
 // The lifecycle is here rather than in a README because a suite whose setup is prose is a suite that
 // runs on one machine. Everything it needs — the build, a free port, a throwaway data directory, the
@@ -8,7 +8,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHmac, randomBytes } from 'node:crypto';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -259,8 +259,8 @@ function stop() {
   } catch {
     // Already closed, or never opened. Nothing to do and nothing to say.
   }
-
-  rmSync(dataDir, { recursive: true, force: true });
+  // The data folder is NOT removed here: it is inside the run folder, which the wrap removes at exit. A throw from an rm of a folder a still-writing server holds would skip
+  // the wrap's own exit listener and leave the whole run folder behind.
 }
 
 // PREPENDED: this listener must run BEFORE the wrap's (registered at the top), which removes the run folder the server's data lives in — the server is killed first (E5 S4).
