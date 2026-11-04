@@ -70,9 +70,12 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
         // MEASURED on the copy (6 runs of 6, Linux; macOS CI too): the sweep that loses the rename of a folder the other already moved reports ONE error line naming that
         // rename (ENOENT) — never a throw, never a removal of the other's work. That is the template's behaviour and the plan's "template wins" rule keeps it: the
         // spec's note (2026-11-03) says the arm asserts no throw, no folder lost twice, no foreign removal and the losers' Errors lines.
+        // MEASURED on Windows too (ci run 41843872560): the loser can also meet the folder gone while it READS it, before its rename, and then the one line is the folder pass's own,
+        // `folder <path>: Could not find a part of the path ...`, with no quarantine in it. Same race, same harmless end: so a line names the quarantine or one of the twenty.
         foreach (var error in first.Errors.Concat(second.Errors))
         {
-            error.Should().Contain(QuarantineWord, "an error, if any, is the lost rename of a folder the other sweep took");
+            (error.Contains(QuarantineWord, StringComparison.Ordinal) || twenty.Exists(folder => error.StartsWith("folder " + folder + ":", StringComparison.Ordinal)))
+                .Should().BeTrue($"an error, if any, is the lost race for a folder the other sweep took, and this one is: {error}");
         }
 
         // A claim whose folder the other sweep had just removed is an ORPHAN claim to this sweep, and the copy removes it (and says so in Removed, with the claim's own path):
