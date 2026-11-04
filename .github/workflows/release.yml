@@ -36,6 +36,14 @@ on:
         # `server` is deliberately NOT here: an image is a released artefact, and releases start
         # from a `server-v*` tag cut on main. A dispatch build would publish one from a branch.
         options: [mcp, extension]
+      # Reaches `mcp-sign` only. A dispatch is not a tag, so by itself it takes the TRIAL path (a missing
+      # signing configuration is a fallback); ticking this makes it take the tag's path, which is how the
+      # unsigned-release switch is proven on a branch before a real tag has to prove it.
+      required:
+        description: 'force the signing decision as on a release tag'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -217,7 +225,9 @@ jobs:
     # 30, not 15: the Windows legs build AND run the whole mcp suite, and it grew past the old ceiling —
     # 10 min (0.38.0), 12.5 min (0.39.0), then both Windows legs of mcp-v0.40.1 were cancelled at 15 with
     # the other four platforms uploaded. A timeout is not a test failure; it only ever strands a draft.
-    timeout-minutes: 30
+    # 30 went the same way: real win-x64 legs took 27:48 and 29:41 of it, and on 2026-11-04 three trials were
+    # cancelled at 30, with `Build and test` alone at 27 to 30 minutes. 45, as `server-binaries`.
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
@@ -364,7 +374,12 @@ jobs:
           RID: ${{ matrix.rid }}
         run: |
           NAME="coai-mcp-$VERSION-$RID"
-          mkdir "$NAME"
+          # Where the package folder is made. The Windows folder is NOT zipped here: the zip is made
+          # after signing, by the shared signing workflow, and the folder travels to it as an
+          # artifact holding exactly one top-level directory. So it gets a parent of its own, because
+          # the workspace is the folder's natural parent and an upload of that is the whole checkout.
+          if [[ "$RID" == win-* ]]; then PARENT=unsigned; else PARENT=.; fi
+          mkdir -p "$PARENT/$NAME"
 
           # The SQLite library the server opens its own database through, and the tree-sitter
           # grammars `--normalize` reaches by P/Invoke in exactly the same way, with exactly the same
@@ -375,22 +390,25 @@ jobs:
           # directory" and truncates a name containing a newline.
           .github/scripts/publish-output-carries.sh out '*e_sqlite3*' '*tree-sitter*'
 
-          cp out/*e_sqlite3* out/*tree-sitter* "$NAME/"
+          cp out/*e_sqlite3* out/*tree-sitter* "$PARENT/$NAME/"
           if [[ "$RID" == win-* ]]; then
-            cp out/coai-mcp.exe "$NAME/"
-            7z a "$NAME.zip" "$NAME" > /dev/null
-            echo "ASSET=$NAME.zip" >> "$GITHUB_ENV"
-            LISTING=$(7z l "$NAME.zip")
+            cp out/coai-mcp.exe "$PARENT/$NAME/"
+            # The FOLDER's listing, prefix included, with the same `NAME/file` shape a tar listing has,
+            # so both checks below read it unchanged. The ZIP is checked again where it is made —
+            # `mcp-sign-attach` runs the product check on the final file — and that is the check that
+            # the shipped archive is whole; this one proves the folder handed to signing is.
+            LISTING=$(cd "$PARENT" && find "$NAME" -type f)
           else
             cp out/coai-mcp "$NAME/"
             tar czf "$NAME.tar.gz" "$NAME"
             echo "ASSET=$NAME.tar.gz" >> "$GITHUB_ENV"
             LISTING=$(tar tzf "$NAME.tar.gz")
           fi
-          # The ARCHIVE, not the directory it was made from. Checking the publish output proves the
-          # library was BUILT; what ships is this file, and an include filter or a copy that silently
-          # did nothing sits between the two. Raised by the review gate, and it is right: the check
-          # that reproduces the incident is the one performed on the artifact itself.
+          # The ARCHIVE, not the directory it was made from — except on Windows, where there is no
+          # archive yet. Checking the publish output proves the library was BUILT; what ships is this
+          # file, and an include filter or a copy that silently did nothing sits between the two. Raised
+          # by the review gate, and it is right: the check that reproduces the incident is the one
+          # performed on the artifact itself.
           # At the archive's TOP LEVEL, beside the binary — the only place the OS loader looks. A
           # library nested in a subdirectory would satisfy a bare name match and still ship a server
           # that cannot open its database.
@@ -420,9 +438,25 @@ jobs:
             exit 1
           fi
 
+      # The Windows package, UNSIGNED, for `mcp-sign`. The name keeps `unsigned-` in front on purpose:
+      # the shared workflow downloads `unsigned-NAME` and uploads its own zip as `NAME`, so a
+      # download of `mcp-win-*` can never pick this one up and this folder cannot be mistaken
+      # for the release's. A week is long enough for a re-run of the signing, and no longer.
+      - name: Upload the unsigned Windows package
+        if: startsWith(matrix.rid, 'win-')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-mcp-${{ matrix.rid }}
+          path: unsigned/
+          if-no-files-found: error
+          retention-days: 7
+
       # A checksum beside each archive, written by the job that BUILT it — four small files have
-      # no collector job to fail (the reasoning is spelled out in creds' release.yml).
+      # no collector job to fail (the reasoning is spelled out in creds' release.yml). The Windows
+      # zips are made, and summed, by the signing workflow: a sum of an UNSIGNED zip would be wrong
+      # the moment the file inside it was signed.
       - name: Checksum
+        if: ${{ !startsWith(matrix.rid, 'win-') }}
         shell: bash
         run: sha256sum "$ASSET" > "$ASSET.sha256"
 
@@ -436,8 +470,10 @@ jobs:
       # A draft is invisible to `GET /releases` for anyone but a writer, so there is no window at
       # all. `mcp-release-complete` publishes it once every expected asset is there — and a matrix
       # leg cannot make that decision, because it cannot see its five siblings.
+      #
+      # NOT the Windows legs: their package goes through `mcp-sign` first, and `mcp-sign-attach` attaches it.
       - name: Attach to the draft release
-        if: startsWith(github.ref, 'refs/tags/mcp-v')
+        if: startsWith(github.ref, 'refs/tags/mcp-v') && !startsWith(matrix.rid, 'win-')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -445,6 +481,133 @@ jobs:
           set -euo pipefail
           gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
           gh release upload "$GITHUB_REF_NAME" "$ASSET.sha256" --clobber
+
+  # The two Windows packages, passed through the signing step. The signing is the SHARED workflow's —
+  # this repository writes none of it: once a signing provider is active it signs `coai-mcp.exe` and the
+  # libraries declared below on `windows-2025` (the signing action does not run on a Windows ARM
+  # runner), keeps a vendor signature it finds, and in every case makes the zip and its checksum and
+  # uploads them as `mcp-win-x64` / `mcp-win-arm64`. No provider is active yet, so today the zip it
+  # makes holds UNSIGNED files; see the switch below.
+  #
+  # THE `if:` IS NOT mcp-binaries'. That one reads `needs.mcp-draft.result`; this job needs only
+  # `mcp-binaries`, so `mcp-draft` is not in its context and the same text would be `null ==
+  # 'success'` on every tag. What it wants is the one fact it can see: the build, every leg of it,
+  # succeeded — `needs.mcp-binaries.result == 'success'`, which a failed, cancelled or skipped build
+  # (a tag of another line, a dispatch for another target) does not satisfy.
+  #
+  # And it carries `!cancelled()` for the same reason `mcp-binaries` carries `always()`: a job `if:`
+  # with NO status function gets an implicit `success()`, and that one looks at EVERY upstream job, not
+  # only the `needs` — including `mcp-draft`, which a workflow_dispatch skips (actions/runner#491). So
+  # the bare comparison is skipped on every dispatch and the trial that proves the signing could never
+  # run. `!cancelled()` replaces the implicit check, so a cancel still stops it; a FAILED build still
+  # stops it, through the comparison. `mcp-release-complete` is tag-only and keeps its implicit
+  # `success()`: on a tag the draft ran, so there is nothing skipped upstream to trip it.
+  #
+  # The permissions are the shared contract's and nothing more: `id-token` is what lets the job ask
+  # Azure for a token, and no other job in this file has it. The federated trust names this
+  # repository's `release-signing` ENVIRONMENT, which the shared workflow selects through its
+  # `environment` input (its default) — the deployment rules on that environment are the owner's.
+  #
+  # `own-files` is the one binary built here. `extra-files` are the native libraries that ship
+  # beside it — Smart App Control blocks an unsigned DLL a process loads just as it blocks an
+  # unsigned exe, and a signed `coai-mcp.exe` over an unsigned `e_sqlite3.dll` starts and then fails
+  # on its first database write. They are the names the Windows publish produces (`e_sqlite3.dll`,
+  # `tree-sitter.dll` and `tree-sitter-<lang>.dll` from `shared/kept-grammars.txt`), and no wider: the
+  # shared workflow turns an unsigned PE that nothing declares red, which is how a library that a
+  # dependency bump renames is noticed on the release that carries it rather than on somebody's PC.
+  # `windowsPackageIsSigned.test.ts` holds both lists against the files.
+  #
+  # `required` is the signing DECISION, and a tag makes it: a trial from a branch may fall back where
+  # Azure is not set up; a tag may not, so a missing configuration on a tag is red — unless the switch
+  # below says otherwise. A dispatch can take the tag's path with its own `required` input, which is how
+  # the switch is proven before a tag has to. `allow-unsigned-release` is a PERMISSION for the period
+  # before a signing provider exists, read from the REPOSITORY variable `ALLOW_UNSIGNED_RELEASES` (a
+  # `with:` of a call cannot read an environment's variables). While that variable is `true` and none
+  # of the six signing variables is set, a tag packs the Windows zips UNSIGNED, with a warning and a
+  # job-summary banner; unset or anything else means enforcement, and a half configuration or a
+  # failing provider is red either way. The input is removed from this job at activation, with the
+  # variable (the shared plan's A6), and `windowsPackageIsSigned.test.ts` holds the exact text of both.
+  # The job passes no `environment`: the shared workflow's default is the one the federated trust names.
+  #
+  # The version is a commit, never a tag: this is the one place a moving ref would sign code a
+  # reviewer has not read.
+  mcp-sign:
+    name: sign the Windows coai-mcp
+    if: ${{ !cancelled() && needs.mcp-binaries.result == 'success' }}
+    needs: [mcp-binaries]
+    permissions:
+      contents: read
+      id-token: write
+    uses: oleksandrdubyna88/dew_flow_release_signing/.github/workflows/sign-windows.yml@a9a7eccdf76306d8fdbc67fc917cf8d5a362d851 # v1.1.0
+    with:
+      artifacts: '["mcp-win-x64","mcp-win-arm64"]'
+      own-files: '["coai-mcp.exe"]'
+      extra-files: '["e_sqlite3.dll","tree-sitter*.dll"]'
+      required: ${{ startsWith(github.ref, 'refs/tags/') || inputs.required }}
+      allow-unsigned-release: ${{ vars.ALLOW_UNSIGNED_RELEASES == 'true' }}
+
+  # The product check on the FINAL zips, then the attach. The signing workflow proves the zip holds
+  # the files it verified; it knows nothing of what this package is FOR, so the question that is
+  # ours — is the binary in it, and the SQLite library beside it — is asked here of the file that
+  # would ship, with the `archive-carries.sh` the coai-bugs release uses. It runs on a
+  # dispatch trial too, so the trial exercises it; only the upload waits for a tag.
+  #
+  # `contents: write` and nothing else: it uploads to the draft release, and it holds no signing
+  # permission — the package arrives from `mcp-sign`, signed or not.
+  mcp-sign-attach:
+    name: attach the final Windows coai-mcp
+    if: ${{ !cancelled() && needs.mcp-sign.result == 'success' }}
+    needs: [mcp-sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # `mcp-win-*` and not `*`: the unsigned `unsigned-mcp-*` artifacts are in this run too. Each
+      # artifact lands in a directory of its own name.
+      - name: Download the final packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: mcp-win-*
+          path: final
+
+      - name: The product check on each final zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          # One zip per Windows platform, found by name: a glob that matched nothing would make the
+          # loop below a pass over nothing, which is the failure this step exists to prevent.
+          for RID in win-x64 win-arm64; do
+            ZIPS=(final/mcp-"$RID"/coai-mcp-*-"$RID".zip)
+            if [ "${#ZIPS[@]}" -ne 1 ] || [ ! -f "${ZIPS[0]}" ]; then
+              echo "expected exactly one final zip for $RID under final/mcp-$RID, found: ${ZIPS[*]}"
+              exit 1
+            fi
+            ZIP=${ZIPS[0]}
+            .github/scripts/archive-carries.sh "$ZIP" coai-mcp.exe '*e_sqlite3*'
+            # `archive-carries.sh` matches basenames, so it passes a zip whose binary and library sit
+            # anywhere. The loader wants them beside each other in the package folder, whose name is the
+            # zip's own; this one asks that, and its contract is its own so the basename one stays as is.
+            .github/scripts/final-zip-layout.sh "$ZIP"
+          done
+
+      # The same two uploads the other platforms' legs make, of the final zip and its checksum.
+      # `--clobber` so a re-run of a failed release replaces rather than fails.
+      - name: Attach to the draft release
+        if: startsWith(github.ref, 'refs/tags/mcp-v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ZIP in final/mcp-win-*/coai-mcp-*.zip; do
+            gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
+            gh release upload "$GITHUB_REF_NAME" "$ZIP.sha256" --clobber
+          done
 
   # The check the mcp line never had, and the line that has now shipped incomplete TWICE:
   # `mcp-v0.16.0` (no win-x64, the tag was burned) and `mcp-v0.18.13` (no win-arm64, one leg's test
@@ -455,7 +618,9 @@ jobs:
   mcp-release-complete:
     name: the mcp release carries every platform
     if: startsWith(github.ref, 'refs/tags/mcp-v')
-    needs: [mcp-binaries]
+    # `mcp-sign-attach` too: the two Windows zips are attached by IT, after signing, so a release that
+    # waited only for the build would be counted and published before they were there.
+    needs: [mcp-binaries, mcp-sign-attach]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
