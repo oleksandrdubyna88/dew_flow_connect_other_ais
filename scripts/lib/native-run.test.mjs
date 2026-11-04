@@ -5,9 +5,9 @@
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { abortArgv, doneArgv, launcherArgv, makeSeriesArgv, mkdirArgv, removeArgv, renderRunScript } from './native-run.mjs';
+import { abortArgv, doneArgv, launcherArgv, makeSeriesArgv, mkdirArgv, removeArgv, renderRunScript, runChecked, statArgv, statRefusal } from './native-run.mjs';
 
-const SERIES = '/tmp/testsToDelete-native-vibe-20261021-a1b2c3';
+const SERIES = '/tmp/native-vibe-20261021-a1b2c3';
 const HOST = 'a-host';
 
 const rendered = (over = {}) => renderRunScript({ series: SERIES, phase: 'n-v2', probe: 'probe-vibe-confinement.mjs', args: ['--cells', 'M-V7', '--repeats=3'], ...over });
@@ -29,9 +29,17 @@ test('a phase or a series that fails its pattern is refused by the renderer — 
   refusal(() => rendered({ phase: 'a'.repeat(33) }));
   refusal(() => rendered({ series: '/tmp/../root' }), "renderRunScript wrote series '/tmp/../root' into a root-run script");
   refusal(() => rendered({ series: `${SERIES}/` }));
-  refusal(() => rendered({ series: '/tmp/testsToDelete-native-other-20261021-a1b2c3' }));
-  refusal(() => rendered({ series: '/var/tmp/testsToDelete-native-vibe-20261021-a1b2c3' }));
-  refusal(() => rendered({ series: '/tmp/testsToDelete-native-vibe-20261021-A1B2C3' }));
+  refusal(() => rendered({ series: '/tmp/native-other-20261021-a1b2c3' }), 'a wrong kind');
+  refusal(() => rendered({ series: '/var/tmp/native-vibe-20261021-a1b2c3' }), 'outside the root');
+  refusal(() => rendered({ series: '/tmp/native-vibe-20261021-A1B2C3' }), 'upper-case hex');
+  refusal(() => rendered({ series: '/tmp/native-vibe-2026102-a1b2c3' }), 'a date one digit short');
+  refusal(() => rendered({ series: '/tmp/native-vibe-202610211-a1b2c3' }), 'a date one digit long');
+  refusal(() => rendered({ series: '/tmp/native-vibe-20261021-a1b2c' }), 'hex one short');
+  refusal(() => rendered({ series: '/tmp/native-vibe-20261021-a1b2c3/x' }), 'a separator in the leaf');
+  refusal(() => rendered({ series: '/tmp/native-vibe-20261021-a1b2c3\n' }), 'a line break in the leaf');
+  // The OLD name (the test-leftovers prefix first) is no series any more: a series started under it is finished with the checkout that made it.
+  const OLD_PREFIX = ['testsTo', 'Delete-'].join('');
+  refusal(() => rendered({ series: `/tmp/${OLD_PREFIX}native-vibe-20261021-a1b2c3` }), 'the old prefixed name');
 });
 
 test('a probe name or a probe argument outside its pattern is refused — they are written into a script root runs', () => {
@@ -66,8 +74,8 @@ test('the flags that read or write the real home of the person are refused too (
 });
 
 test('a series root other than /tmp is accepted only when the caller names it, and only in a safe shape', () => {
-  const root = '/tmp/testsToDelete-native-root-x1';
-  const series = `${root}/testsToDelete-native-kimi-20261021-00ff00`;
+  const root = '/tmp/native-root-x1';
+  const series = `${root}/native-kimi-20261021-00ff00`;
   assert.ok(rendered({ series, root }).includes(`'${series}/SERIES_PATH'`));
   refusal(() => rendered({ series })); // the default root is /tmp
   refusal(() => rendered({ series, root: '/tmp/../x' }));
@@ -99,4 +107,89 @@ test('every other remote step is an array of absolute programs and a checked pat
   }
   refusal(() => abortArgv(SERIES, 'n-v2 && id', { host: HOST }));
   refusal(() => doneArgv(SERIES, '../x', { host: HOST }));
+});
+
+// ---------------------------------------------------------------- the caller's stat check (E5 S4, the rollout's epoch 5 item 4, evidence 4), every platform
+
+/** The text `stat -c '%n|%F|%u|%a'` prints for a series that is what it must be (uid 0), one line per path the check reads. */
+function goodFacts(kind = 'abort', phase = 'n-v2', over = {}) {
+  const script = { make: 'make-series.sh', remove: 'run/remove-series.sh', abort: 'run/abort.sh', phase: `run/${phase}.sh` }[kind];
+  const rows = {
+    '/tmp': ['directory', 0, 1777],
+    [SERIES]: ['directory', 0, 700],
+    [`${SERIES}/run`]: ['directory', 0, 700],
+    [`${SERIES}/${script}`]: ['regular file', 0, 700],
+    ...over,
+  };
+  return Object.entries(rows).filter(([, row]) => row !== null).map(([name, [type, uid, mode]]) => `${name}|${type}|${uid}|${mode}`).join('\n');
+}
+const check = (kind, stdout, options = { host: HOST }, phase = 'n-v2') => statRefusal(kind, SERIES, phase, stdout, options);
+
+test('the stat check reads the root, the series, run/ and the script with ONE absolute stat call, never following a link — and make has no run/ yet', () => {
+  assert.deepEqual(statArgv('abort', SERIES, 'n-v2', { host: HOST }),
+    ['ssh', HOST, '--', '/usr/bin/stat', '-c', '%n|%F|%u|%a', '--', '/tmp', SERIES, `${SERIES}/run`, `${SERIES}/run/abort.sh`]);
+  assert.deepEqual(statArgv('make', SERIES, undefined, { host: HOST }),
+    ['ssh', HOST, '--', '/usr/bin/stat', '-c', '%n|%F|%u|%a', '--', '/tmp', SERIES, `${SERIES}/make-series.sh`]);
+  assert.equal(statArgv('phase', SERIES, 'n-v2', { host: HOST }).at(-1), `${SERIES}/run/n-v2.sh`);
+  assert.equal(statArgv('remove', SERIES, undefined, { host: HOST }).at(-1), `${SERIES}/run/remove-series.sh`);
+  refusal(() => statArgv('abort', '/tmp/../root', 'n-v2', { host: HOST }));
+  refusal(() => statArgv('phase', SERIES, 'abort', { host: HOST }));
+  refusal(() => statArgv('other', SERIES, 'n-v2', { host: HOST }));
+});
+
+test('the stat check accepts a series that is what it must be, for every step', () => {
+  for (const kind of ['make', 'remove', 'abort', 'phase']) assert.equal(check(kind, goodFacts(kind)), '', kind);
+});
+
+test('the stat check refuses each unsafe state with one line and "nothing was run": a link, a wrong owner, a wrong mode, a writable script, an unsafe root', () => {
+  const cases = [
+    ['a symlinked series', 'abort', { [SERIES]: ['symbolic link', 0, 777] }, /is a symbolic link, not a plain directory/],
+    ['a symlinked run/', 'abort', { [`${SERIES}/run`]: ['symbolic link', 0, 777] }, /its run folder .* is a symbolic link/],
+    ['a series of another owner', 'remove', { [SERIES]: ['directory', 1000, 700] }, /is owned by uid 1000, not 0/],
+    ['a series of mode 755', 'abort', { [SERIES]: ['directory', 0, 755] }, /is mode 755, not 700/],
+    ['a run/ of mode 770', 'phase', { [`${SERIES}/run`]: ['directory', 0, 770] }, /is mode 770, not 700/],
+    ['a group-writable script', 'remove', { [`${SERIES}/run/remove-series.sh`]: ['regular file', 0, 770] }, /group- or world-writable/],
+    ['a world-writable script', 'abort', { [`${SERIES}/run/abort.sh`]: ['regular file', 0, 702] }, /group- or world-writable/],
+    ['a script of another owner', 'abort', { [`${SERIES}/run/abort.sh`]: ['regular file', 1000, 700] }, /is owned by uid 1000, not 0/],
+    ['a script that is a link', 'abort', { [`${SERIES}/run/abort.sh`]: ['symbolic link', 0, 777] }, /is a symbolic link, not a regular file/],
+    ['a script that is a directory', 'abort', { [`${SERIES}/run/abort.sh`]: ['directory', 0, 700] }, /is a directory, not a regular file/],
+    ['a script that is missing', 'abort', { [`${SERIES}/run/abort.sh`]: null }, /is missing/],
+    ['a world-writable root without the sticky bit', 'abort', { '/tmp': ['directory', 0, 777] }, /world-writable \(mode 777\) without the sticky bit/],
+    ['a root of another owner', 'abort', { '/tmp': ['directory', 1000, 1777] }, /series root \/tmp is owned by uid 1000/],
+    ['a root that is a link', 'abort', { '/tmp': ['symbolic link', 0, 777] }, /series root \/tmp is a symbolic link/],
+  ];
+  for (const [name, kind, over, expected] of cases) {
+    const line = check(kind, goodFacts(kind, 'n-v2', over));
+    assert.match(line, expected, name);
+    assert.match(line, /^refused: .* — nothing was run$/u, `${name}: one line`);
+    assert.equal(line.includes('\n'), false, name);
+  }
+  assert.equal(check('abort', goodFacts('abort', 'n-v2', { '/tmp': ['directory', 0, 755] })), '', 'a root that is not world-writable needs no sticky bit');
+  assert.match(check('abort', goodFacts('abort', 'n-v2', { '/tmp': ['directory', 0, 1777] }), { host: HOST, ownerUid: 1000 }), /owned by uid 0, not 1000/, 'the expected uid is a parameter');
+  assert.equal(check('abort', goodFacts('abort').replaceAll('|0|', '|1000|'), { host: HOST, ownerUid: 1000 }), '', 'and the same facts pass for their own uid');
+});
+
+test('a series that is gone is its own line, status 66 — and nothing is run', async () => {
+  const onlyRoot = '/tmp|directory|0|1777';
+  assert.equal(check('phase', onlyRoot), `the series ${SERIES} is gone; start a new one with make-series.sh`);
+  assert.match(check('phase', ''), /^refused: the host answered no facts/u);
+  const seen = [];
+  const result = await runChecked('phase', SERIES, 'n-v2', { host: HOST }, async (argv) => { seen.push(argv); return { status: 1, stdout: onlyRoot }; });
+  assert.equal(result.status, 66);
+  assert.match(result.refused, /is gone; start a new one with make-series\.sh/u);
+  assert.equal(seen.length, 1, 'only the stat call was made; the phase launcher never was');
+});
+
+test('runChecked runs the step only after the check passed, and runs NOTHING after a refusal', async () => {
+  const calls = [];
+  const exec = (facts) => async (argv) => { calls.push(argv); return argv[3] === '/usr/bin/stat' ? { status: 0, stdout: facts } : { status: 0, stdout: 'ran' }; };
+
+  const ok = await runChecked('abort', SERIES, 'n-v2', { host: HOST }, exec(goodFacts('abort')));
+  assert.deepEqual([ok.status, ok.stdout, calls.length], [0, 'ran', 2]);
+  assert.deepEqual(calls[1], abortArgv(SERIES, 'n-v2', { host: HOST }), 'the real step is the argv builder\'s');
+
+  calls.length = 0;
+  const bad = await runChecked('remove', SERIES, undefined, { host: HOST }, exec(goodFacts('remove', 'n-v2', { [`${SERIES}/run/remove-series.sh`]: ['regular file', 0, 777] })));
+  assert.equal(bad.status, 78);
+  assert.equal(calls.length, 1, 'only the stat call ran');
 });

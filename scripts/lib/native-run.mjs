@@ -14,8 +14,12 @@ const TEMPLATE = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..'
 /**
  * The shape of a series folder's name (below its root) — ONE literal, also carried by make-series.sh, abort.sh and
  * remove-series.sh (native.test.mjs fails unless all three hold exactly this text).
+ *
+ * THE SERIES IS THE ONE BOUNDED EXCEPTION of the test-leftovers family (E5 S4; the rollout's epoch 5, item 4): the name carries no test-leftovers prefix,
+ * no owner segment and no claim, because the series is a root-run, multi-phase folder that outlives every script that writes it. The LEAD makes it
+ * (`mkdirArgv`), `make-series.sh` fills it, `remove-series.sh` removes it; nothing else collects it. `ls -d <root>/native-*` finds a forgotten one.
  */
-export const SERIES_SHAPE = 'testsToDelete-native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}';
+export const SERIES_SHAPE = 'native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}';
 const PHASE = /^[a-z0-9-]{1,32}$/u;
 const PROBE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.mjs$/u;
 /** A probe argument: the lead's literals, but written into a root-run script, so checked like data. */
@@ -28,7 +32,7 @@ const refuse = (what, value) => {
 };
 const checked = (pattern, what, value) => (typeof value === 'string' && pattern.test(value) ? value : refuse(what, value));
 
-/** The series folder: `<root>/testsToDelete-native-(vibe|kimi)-<yyyymmdd>-<6 hex>`; the root is `/tmp` unless a test names its own. */
+/** The series folder: `<root>/native-(vibe|kimi)-<yyyymmdd>-<6 hex>`; the root is `/tmp` unless a test names its own. */
 function seriesOf(series, root = '/tmp') {
   checked(ROOT, 'the series root', root);
   const prefix = root === '/' ? '/' : `${root}/`;
@@ -101,4 +105,88 @@ export function makeSeriesArgv(series, options) {
 export function doneArgv(series, phase, options) {
   const dir = seriesOf(series, options?.root);
   return remote(options, '/usr/bin/test', '-f', `${dir}/logs/${phaseOf(phase)}.done`);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------
+// The caller's `stat` check (E5 S4, the rollout's epoch 5 item 4, evidence 4): BEFORE the lead runs anything out of a series folder, it asks the host, over
+// ssh, with `stat` (never a shell expansion of the folder's content), whether the folder is what it must be. The scripts in the folder run as root, and a
+// folder planted in a shared /tmp under a valid name can carry its OWN run/remove-series.sh: a check inside that copy protects nothing by itself.
+// ------------------------------------------------------------------------------------------------------------------------------------------------
+
+/** The scripts the lead may run out of a series: the one it copies in for `make`, and those it finds in `run/`. */
+const SCRIPT_OF = { make: () => 'make-series.sh', remove: () => 'run/remove-series.sh', abort: () => 'run/abort.sh', phase: (phase) => `run/${phaseOf(phase)}.sh` };
+const BUILDERS = {
+  make: (series, _phase, options) => makeSeriesArgv(series, options),
+  remove: (series, _phase, options) => removeArgv(series, options),
+  abort: (series, phase, options) => abortArgv(series, phase, options),
+  phase: (series, phase, options) => launcherArgv(series, phase, options),
+};
+
+/** Every path whose facts the check reads, in order: the root, the series, run/ (not for `make`, which has none yet) and the script. */
+function pathsOf(kind, series, phase, options) {
+  const dir = seriesOf(series, options?.root);
+  const script = SCRIPT_OF[kind]?.(phase);
+  if (script === undefined) refuse('the kind of step', kind);
+  const root = options?.root ?? '/tmp';
+  return { root, dir, run: kind === 'make' ? undefined : `${dir}/run`, script: `${dir}/${script}` };
+}
+
+/** The ssh argument array that reads the facts: `stat -c '%n|%F|%u|%a'` (name, kind WITHOUT following links, owner uid, octal mode) over every path of the check. */
+export function statArgv(kind, series, phase, options) {
+  const { root, dir, run, script } = pathsOf(kind, series, phase, options);
+  return remote(options, '/usr/bin/stat', '-c', '%n|%F|%u|%a', '--', root, dir, ...(run === undefined ? [] : [run]), script);
+}
+
+const factsOf = (text) => new Map(String(text).split('\n').filter((line) => line.includes('|')).map((line) => {
+  const [name, kind, uid, mode] = line.split('|');
+  return [name, { kind, uid: Number(uid), mode: Number.parseInt(mode, 8) }];
+}));
+const modeText = (mode) => mode.toString(8);
+
+/**
+ * The refusal line for the facts `stat` printed, or `''` when the series is what it must be. `ownerUid` is the uid the series, its root and its files must belong
+ * to (0: root on the host; the integration test names its own). The series folder and `run/` must be plain directories (a link is refused), that uid, mode 700; the
+ * script must be a regular file of that uid and neither group- nor world-writable; the root must be a directory of that uid and, when world-writable, sticky.
+ * A series that is not there at all is its own line ("gone") — the same one a phase prints at the host.
+ */
+export function statRefusal(kind, series, phase, stdout, options) {
+  const { root, dir, run, script } = pathsOf(kind, series, phase, options);
+  const uid = options?.ownerUid ?? 0;
+  const facts = factsOf(stdout);
+  if (facts.size === 0) return `refused: the host answered no facts for ${dir} — nothing was run`;
+  if (!facts.has(dir)) return `the series ${dir} is gone; start a new one with make-series.sh`;
+  const bad = (what, fact) => `refused: ${what} — nothing was run`;
+  const folder = (path, label) => {
+    const f = facts.get(path);
+    if (f === undefined) return bad(`${label} ${path} is missing`);
+    if (f.kind !== 'directory') return bad(`${label} ${path} is a ${f.kind}, not a plain directory`);
+    if (f.uid !== uid) return bad(`${label} ${path} is owned by uid ${f.uid}, not ${uid}`);
+    if (f.mode !== 0o700) return bad(`${label} ${path} is mode ${modeText(f.mode)}, not 700`);
+    return '';
+  };
+  const rootFacts = facts.get(root);
+  if (rootFacts === undefined) return bad(`the series root ${root} cannot be read`);
+  if (rootFacts.kind !== 'directory') return bad(`the series root ${root} is a ${rootFacts.kind}, not a plain directory`);
+  if (rootFacts.uid !== uid) return bad(`the series root ${root} is owned by uid ${rootFacts.uid}, not ${uid}`);
+  if ((rootFacts.mode & 0o002) !== 0 && (rootFacts.mode & 0o1000) === 0) return bad(`the series root ${root} is world-writable (mode ${modeText(rootFacts.mode)}) without the sticky bit`);
+  const wrong = folder(dir, 'the series') || (run === undefined ? '' : folder(run, 'its run folder'));
+  if (wrong !== '') return wrong;
+  const file = facts.get(script);
+  if (file === undefined) return bad(`the script ${script} is missing`);
+  if (file.kind !== 'regular file' && file.kind !== 'regular empty file') return bad(`the script ${script} is a ${file.kind}, not a regular file`);
+  if (file.uid !== uid) return bad(`the script ${script} is owned by uid ${file.uid}, not ${uid}`);
+  if ((file.mode & 0o022) !== 0) return bad(`the script ${script} is mode ${modeText(file.mode)}: group- or world-writable`);
+  return '';
+}
+
+/**
+ * Runs one step out of a series ONLY after its folder passed the `stat` check. `exec(argv)` runs an argument array (the lead's ssh, or a test's local stand-in) and
+ * answers `{ status, stdout }`; `kind` is `make`, `remove`, `abort` or `phase`. Answers `{ status: 78 | 66, refused }` and runs NOTHING from the folder when the check
+ * fails (66: the series is gone); else `exec`'s own answer for the step. Never throws for a refusal.
+ */
+export async function runChecked(kind, series, phase, options, exec) {
+  const probe = await exec(statArgv(kind, series, phase, options));
+  const refused = statRefusal(kind, series, phase, probe?.stdout ?? '', options);
+  if (refused !== '') return { status: refused.startsWith('the series ') ? 66 : 78, refused };
+  return exec(BUILDERS[kind](series, phase, options));
 }
