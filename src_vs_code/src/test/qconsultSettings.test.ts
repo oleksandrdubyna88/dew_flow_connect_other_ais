@@ -101,7 +101,7 @@ test('a server known to be older than QCONSULT_SINCE is sent none of it, and the
 
   assert.deepEqual(qconsultEnv(settings, '0.40.5'), {});
   assert.deepEqual(Object.keys(envBlock({ ...DEFAULTS, qconsult: settings }, undefined, '0.40.5')).filter((k) => k.startsWith('COAI_QCONSULT_')), []);
-  assert.match(qconsultSkewNote('0.40.5'), new RegExp(`update it to ${QCONSULT_SINCE.replace(/\./g, '\\.')}`));
+  assert.ok(qconsultSkewNote('0.40.5').includes(`update it to ${QCONSULT_SINCE}`));
   // Unknown is not old, and the version that ships it is not old either.
   assert.deepEqual(Object.keys(qconsultEnv(settings, '')), ['COAI_QCONSULT_MODE', 'COAI_QCONSULT_ROOTS']);
   assert.deepEqual(Object.keys(qconsultEnv(settings, QCONSULT_SINCE)), ['COAI_QCONSULT_MODE', 'COAI_QCONSULT_ROOTS']);
