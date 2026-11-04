@@ -914,6 +914,10 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
 - **DoD (B).** Every scenario RED then GREEN on Windows, Linux and macOS; the break-its red; `PanelService.cs` and the
   characterization test unchanged; the product sweep's tests green; legacy names listed (C#) / collected on `gone` only
   (Node); concurrent sweeps silent on not-found; `module_tests.md` describes the one sweep in two languages.
+  *[epoch 5, 2026-11-04]* "collected on `gone` only (Node)" is read with the parent's entry 4.1: at the pin the Node
+  reference collects NO legacy coai folder (`legacyOwnerState` answers `unknown` on Linux; Windows only lists; E2's
+  `win32`/`darwin` tags do not parse), so the Node sweep LISTS each one, exactly as the C# one; S2-A's one-off clean-up
+  is the only removal. S2-B as built (#945) already does this (N-S2, the C# `LegacyNames…` tests).
 - **The claim-first race (2026-11-03, re-review gate, finding 1).** S3's initializer claims and creates the run folder
   before S2-B's sweep runs in the assembly fixture. S2-B adds a scenario where a sweep runs AFTER this process's claim is
   written and BEFORE its folder exists (a hook between the two): the sweep never removes or quarantines a claim or folder
@@ -1219,8 +1223,14 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
   guard* — the name carries no `testsToDelete-` prefix, so rule §7's `legacy-name` class does not see it, and it is
   outside every run folder, so it is never a `raw-temp` baseline entry; if the shipped guard classes `make-series.sh`'s
   `mkdir` under another class, S6 names the line with the inline exemption and the reason `the native measurement
-  series — the parent's § Epoch 5 item 4`, and the expected-exemption inventory lists it. **Bound:** one shape in one
-  family of scripts; a second durable resource anywhere is a new plan change, never a second use of this note.
+  series — the parent's § Epoch 5 item 4`, and the expected-exemption inventory lists it. (4) *the remover's
+  ownership check* — `remove-series.sh` also refuses (exit 78, one line) a folder whose owner is not uid 0 or that is
+  group- or world-writable, a test for each; a Fable security read of the four native scripts is part of S4's Opus
+  review. *Size and a forgotten series:* the series' size is measured at its first use after S4 (`du -sh`) and written
+  in the native documents; a forgotten series is found with `ls -d <root>/native-*` and removed with
+  `remove-series.sh` — nothing else removes it; a reboot that clears `/tmp` clears it too, and the documents say so.
+  **Bound:** one shape in one family of scripts; a second durable resource anywhere is a new plan change, never a
+  second use of this note.
 - *[epoch 5, 2026-11-04]* **Implementation notes of S4 — classified as NOT changes at the epoch-5 re-review** (fixes
   that satisfy this document as written, or approved constraints read more exactly; the coder and the reviewers read
   them with the bullets above):
@@ -1549,7 +1559,8 @@ S6 creates the baseline:
       tests of every suite green on all three OSes; the counts reconciled by name.
 - [ ] S2-B: every C# suite and the extension runner sweep at their start on two keys, by identity, through the
       quarantine; legacy names listed (C#) or collected on `gone` only (Node); concurrent sweeps never fail; the sweep
-      never fails the run.
+      never fails the run. *[epoch 5, 2026-11-04]* Legacy names are LISTED by both languages and collected by
+      neither (the parent's entry 4.1); the S2-A clean-up is their only removal.
 - [ ] S4: every Node runner, script test and the editor-host run owns its folder through the ONE wrap module; nothing
       leaks; `release.yml` uses `RUNNER_TEMP`.
       *[epoch 5, 2026-11-04]* Read with ONE exception: the native measurement series (§ S4, *[epoch 5]*) owns no folder
