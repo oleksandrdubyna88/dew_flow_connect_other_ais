@@ -1,5 +1,9 @@
 # Build brief — coai E5 story S4: the Node producers wrap the reference (commit 3 of the producer PR)
 
+> Status: **plan only, nothing implemented yet, 2026-11-04 — the build brief of E5.S4 by Opus, with § 16 (the decisions of
+> the rollout's epoch-5 re-review, approved by the owner 2026-11-04), which wins where it differs; its plan gate runs on the
+> branch ref `docs/e5-s4-brief`.**
+
 Written 2026-11-04 by Opus, read-only, against the worktree `<the producer worktree>`, branch
 `feat/test-leftovers-e5-producer`, head `d3791c00` (docs-only over the pushed `6ec356a1`; every code line cited here is the
 same at both). Conventions pin: `cc24f9e` (the mount `.agents/conventions`). The plan is
