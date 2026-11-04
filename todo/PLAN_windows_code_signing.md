@@ -1,6 +1,6 @@
 # PLAN — the Windows `coai-mcp` package is signed, so Smart App Control lets it run and load its libraries
 
-> Status: **built and gated, 2026-11-03 — on `ci/windows-code-signing`, pinned to the shared workflow's v1.0.0 (609cc23); not merged: waits for the owner's Azure setup and the trials V1/V2.** Scope: the `mcp-binaries` and
+> Status: **stopped for re-review, 2026-11-04 — built and gated 2026-11-03 — on `ci/windows-code-signing`, pinned to the shared workflow's v1.0.0 (609cc23); not merged: waits for the owner's Azure setup and the trials V1/V2.** Scope: the `mcp-binaries` and
 > `mcp-release-complete` jobs of `.github/workflows/release.yml`, one new caller job and one new
 > attach job, `.github/scripts/archive-carries.sh` (zip support), the owner's GitHub environment here.
 > No product code. Twin of `dew_flow_creds_for_devs · todo/PLAN_windows_code_signing.md`, which owns
@@ -10,11 +10,13 @@
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-03 · by reviewers · state: open
+> Epoch 1 · approved 2026-11-03 · by reviewers · state: stopped
 
   (The approving round's accepted findings 0, 1, 2, 4 and 5 are part of the approved text, not changes of it.)
 
 - 1.1 · 2026-11-03 · reviewer · contract — the twin's re-review made the shared workflow sign only declared files: coai passes its libraries in `extra-files`, and an undeclared unsigned PE is red
+- 1.2 · 2026-11-04 · owner · merge-conditions, contract, approach — merge before any signing provider exists, behind the shared workflow's explicit `allow-unsigned-release` exception driven by the repository variable ALLOW_UNSIGNED_RELEASES (the twin's epoch 3)
+  (This second change stopped the plan.)
 
 ## 1. The symptom and the goal
 
