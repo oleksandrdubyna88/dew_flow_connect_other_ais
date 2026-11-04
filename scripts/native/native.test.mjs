@@ -560,7 +560,7 @@ linuxTest('remove-series.sh also refuses (exit 78, one line) a folder of another
   const foreign = namedSeries(name);
   let r = removeIn(foreign, ROOT, { COAI_NATIVE_SERIES_OWNER_UID: String(MY_UID() + 1) });
   assert.equal(r.status, 78, r.stdout);
-  assert.match(r.stdout, /is owned by uid \d+, not by uid \d+/u, 'a folder of another owner');
+  assert.match(r.stdout, /^refused: '[^']+' is owned by uid \d+, not by uid \d+/u, 'a folder of another owner (the folder\'s own check, not the root\'s)');
   assert.equal(existsSync(foreign), true);
 
   for (const [mode, hex] of [[0o770, 'b00770'], [0o707, 'b00707']]) {
@@ -586,9 +586,7 @@ linuxTest('remove-series.sh also refuses (exit 78, one line) a folder of another
   assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
   assert.equal(existsSync(inUnsafe), false);
 
-  const rootOfOther = namedSeries(name, join(ROOT, 'other-owner-root'));
-  r = removeIn(rootOfOther, join(ROOT, 'other-owner-root'), { COAI_NATIVE_SERIES_OWNER_UID: String(MY_UID() + 1) });
-  assert.equal(r.status, 78);
+  // Not testable unprivileged: a series ROOT of another owner than the folder in it (both are this user's). statRefusal's unit cases cover it with stubbed facts.
 });
 
 linuxTest('abort.sh also refuses a series folder that is group-writable or of another owner (defence in depth), signalling nothing', () => {

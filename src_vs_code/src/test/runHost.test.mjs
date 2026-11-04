@@ -20,6 +20,21 @@ const script = path.join(here, '..', '..', 'scripts', 'run-host.mjs');
 const MARKER = 'COAI_TEST_RUN_FOLDER';
 const quiet = () => {};
 
+/**
+ * `main` must RETURN the exit code: only the command line ends the process, after the `finally` removed the folders (#14). `process.exit` is replaced for the call by a recorder
+ * that notes whether the run folder still stood, and does not exit — so a `process.exit` planted before the `finally` is a red test, not a dead test file.
+ */
+async function withExitSpy(run, fn) {
+  const real = process.exit;
+  const calls = [];
+  process.exit = (code) => { calls.push({ code, folderStood: run.folder === undefined ? undefined : fs.existsSync(run.folder) }); };
+  try {
+    return { result: await fn(), calls };
+  } finally {
+    process.exit = real;
+  }
+}
+
 /** H0's source read: it comes BEFORE any import of the script, which would make two folders and run the editor at import today. */
 function assertSafeToImport() {
   const text = fs.readFileSync(script, 'utf8');
@@ -53,8 +68,10 @@ test('H1 a launch that resolves: both launches got the folders, and after main t
     launches.push({ options, workspace, data, profile: profileArg?.slice('--user-data-dir='.length), runFolder, existed: [workspace, `${workspace}.owner`, runFolder, `${runFolder}.owner`].map((file) => fs.existsSync(file)) });
   };
 
-  const code = await main({ launch, bundle: quiet, env, root, onExit: quiet, log: quiet, error: quiet, socketLimit: 10_000 });
+  const folderOf = { get folder() { return env[MARKER]; } };
+  const { result: code, calls } = await withExitSpy(folderOf, () => main({ launch, bundle: quiet, env, root, onExit: quiet, log: quiet, error: quiet, socketLimit: 10_000 }));
 
+  assert.deepEqual(calls, [], 'main never ends the process itself: it returns the code, and the command line exits after the finally has removed the folders');
   assert.equal(code, 0);
   assert.equal(launches.length, 2);
   const [first, second] = launches;
@@ -85,8 +102,11 @@ test('H2 a launch that rejects: main returns 1 and still leaves nothing', async 
   };
   const errors = [];
 
-  const code = await main({ launch, bundle: quiet, env: {}, root, onExit: quiet, error: (line) => errors.push(line) });
+  const env = {};
+  const folderOf = { get folder() { return env[MARKER]; } };
+  const { result: code, calls } = await withExitSpy(folderOf, () => main({ launch, bundle: quiet, env, root, onExit: quiet, error: (line) => errors.push(line) }));
 
+  assert.deepEqual(calls, [], 'main never ends the process itself');
   assert.equal(code, 1);
   assert.equal(seen.length, 2, 'both launches ran: the first failure does not hide the second');
   assert.ok(errors.join('\n').includes('the editor did not start'));
@@ -101,7 +121,8 @@ test('H3 a profile folder that would put the editor\'s socket over the limit is 
     const root = owned.ownedDir(t, 'h3');
     const lines = [];
     const env = {};
-    await main({ launch: async (options) => { profiles.push(path.basename(options.launchArgs.find((arg) => arg.startsWith('--user-data-dir=')))); }, bundle: quiet, env, root, onExit: quiet, log: (line) => lines.push(line), error: quiet, socketLimit });
+    const { calls } = await withExitSpy({}, () => main({ launch: async (options) => { profiles.push(path.basename(options.launchArgs.find((arg) => arg.startsWith('--user-data-dir=')))); }, bundle: quiet, env, root, onExit: quiet, log: (line) => lines.push(line), error: quiet, socketLimit }));
+    assert.deepEqual(calls, [], 'main never ends the process itself');
     return lines;
   };
 
