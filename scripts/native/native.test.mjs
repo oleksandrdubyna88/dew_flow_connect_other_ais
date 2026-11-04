@@ -334,9 +334,12 @@ function fakeServer(home, pathValue) {
   const dir = join(home, '.vscode-server', 'bin');
   mkdirSync(dir, { recursive: true });
   const exe = join(dir, 'server-node');
-  copyFileSync('/bin/sleep', exe);
+  // The server process is a COPY of the shell that blocks on a `read` from a pipe nothing writes (no child to leave behind when it is killed, and it ends when this
+  // process does): a copy of `sleep` itself renamed `server-node` is sleep on GNU coreutils, but where `sleep` is part of a multi-call binary (uutils, Ubuntu 25.10+)
+  // it answers "unknown program 'server-node'" and exits at once, so no server process would exist.
+  copyFileSync(realpathSync('/bin/sh'), exe);
   chmodSync(exe, 0o755);
-  const child = spawn(exe, ['600'], { env: { PATH: pathValue, SECRET_OTHER: 'must-not-be-kept' }, stdio: 'ignore' });
+  const child = spawn(exe, ['-c', 'read held'], { env: { PATH: pathValue, SECRET_OTHER: 'must-not-be-kept' }, stdio: ['pipe', 'ignore', 'ignore'] });
   child.on('error', () => {});
   return track(child.pid);
 }
