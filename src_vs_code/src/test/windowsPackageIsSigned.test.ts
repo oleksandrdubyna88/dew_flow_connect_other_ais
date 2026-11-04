@@ -144,7 +144,10 @@ test('the Windows package folder is listed, with its prefix, by BOTH carry check
   assert.match(pack, /kept-grammars\.txt/, 'and so is the grammar count');
 });
 
-test('mcp-sign calls the shared workflow, pinned to a commit, with the contract it expects', () => {
+/** The v1.1.0 merge commit of the shared workflow; the tag is only the comment beside it. */
+const SHARED_PIN = 'a9a7eccdf76306d8fdbc67fc917cf8d5a362d851';
+
+test('mcp-sign calls the shared workflow, pinned to the v1.1.0 commit, with the contract it expects', () => {
   const block = jobBlock('mcp-sign');
   const code = withoutComments(block);
 
@@ -152,6 +155,15 @@ test('mcp-sign calls the shared workflow, pinned to a commit, with the contract 
     code,
     /\n {4}uses: oleksandrdubyna88\/dew_flow_release_signing\/\.github\/workflows\/sign-windows\.yml@[0-9a-f]{40}\s/,
     'a 40-hex SHA, never a branch or a tag that can move',
+  );
+  // The defect: a pin left at v1.0.0 has no `allow-unsigned-release` input, so the switch line below
+  // would be an input the called workflow does not declare and the call would be refused.
+  assert.match(
+    block,
+    new RegExp(
+      `\\n {4}uses: oleksandrdubyna88/dew_flow_release_signing/\\.github/workflows/sign-windows\\.yml@${SHARED_PIN} # v1\\.1\\.0\\n`,
+    ),
+    'the v1.1.0 merge commit, with its tag as the comment',
   );
   // The artifact names are DERIVED from the matrix: a Windows RID added to it and not here would
   // ship an unsigned package, and a list retyped in two places is how that happens.
@@ -163,11 +175,56 @@ test('mcp-sign calls the shared workflow, pinned to a commit, with the contract 
     'one per Windows RID of the build matrix, without the unsigned- prefix',
   );
   assert.match(code, /\n {6}own-files: '\["coai-mcp\.exe"\]'/, 'the one binary this repository builds');
+  // The defect: a bare `startsWith(github.ref, 'refs/tags/')` leaves a dispatch trial no way to take the
+  // tag path, so the switch could be proven only by cutting a real tag. `inputs.required` is the force.
   assert.match(
     code,
-    /\n {6}required: \$\{\{ startsWith\(github\.ref, 'refs\/tags\/'\) \}\}/,
-    'a tag that is not signed is red; a trial may fall back',
+    /\n {6}required: \$\{\{ startsWith\(github\.ref, 'refs\/tags\/'\) \|\| inputs\.required \}\}\n/,
+    'a tag, or a dispatch that forces it, is a release decision; a plain trial may fall back',
   );
+});
+
+test('the unsigned-release switch is exactly the repository variable compared with the string true', () => {
+  // The defects, each of them quiet. A bare `${{ vars.ALLOW_UNSIGNED_RELEASES }}` is the STRING 'false'
+  // or 'banana' where the input is a boolean, and a non-empty string is not a clean refusal; a comparison
+  // with another spelling ('True', a number) is a switch nobody can read; and a trailing comment is
+  // text the next edit moves. Absent or misspelled must mean ENFORCEMENT, which `== 'true'` gives.
+  const code = withoutComments(jobBlock('mcp-sign'));
+  assert.match(
+    code,
+    /\n {6}allow-unsigned-release: \$\{\{ vars\.ALLOW_UNSIGNED_RELEASES == 'true' \}\}\n/,
+    'the variable compared with the string true, nothing after it',
+  );
+  assert.equal(code.match(/allow-unsigned-release:/g)?.length, 1, 'passed once');
+});
+
+test('the dispatch can force the signing decision as a tag does, and the force defaults off', () => {
+  // The defect: without the input, the caller's `required` expression has nothing to read on a
+  // dispatch (`inputs.required` is null), and the switch could not be proven before a real tag.
+  const head = workflow.slice(workflow.indexOf('\n  workflow_dispatch:\n'), workflow.indexOf('\npermissions:\n'));
+  const input = /\n {6}required:\n((?: {8}.*\n)+)/.exec(head);
+  assert.ok(input, 'workflow_dispatch has an input named required');
+  assert.match(input[1]!, /\n? {8}description: 'force the signing decision as on a release tag'\n/);
+  assert.match(input[1]!, /\n {8}type: boolean\n/, 'a boolean');
+  assert.match(input[1]!, /\n {8}default: false\n/, 'off unless asked');
+  assert.match(input[1]!, /\n {8}required: false\n/, 'and not itself required of the person who dispatches');
+});
+
+test('no job that calls the shared signing workflow passes `environment`', () => {
+  // The defect: the shared workflow's `environment` input defaults to `release-signing`, the
+  // environment the federated trust names. A caller that passes its own can send the signing job into
+  // an environment the trust does not cover, or — a typo — into one GitHub creates empty, where a
+  // trial takes skip and a tag, with the switch on, ships unsigned without a word. The default is the
+  // contract; no caller restates it.
+  const callers = jobNames().filter((job) =>
+    /\n {4}uses: oleksandrdubyna88\/dew_flow_release_signing\//.test(withoutComments(jobBlock(job))),
+  );
+  // The scan must still find its subject, or it passes forever over nothing.
+  assert.deepEqual(callers, ['mcp-sign'], 'the scan finds the one caller');
+  for (const job of callers) {
+    const code = withoutComments(jobBlock(job));
+    assert.doesNotMatch(code, /^\s+environment:/m, `${job} passes or sets an environment`);
+  }
 });
 
 test('the libraries mcp-sign declares are the ones the Windows package ships', () => {
