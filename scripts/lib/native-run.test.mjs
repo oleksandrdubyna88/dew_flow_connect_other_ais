@@ -6,7 +6,7 @@ import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as nativeRun from './native-run.mjs';
-import { doneArgv, mkdirArgv, renderRunScript, runChecked, statArgv, statRefusal } from './native-run.mjs';
+import { copyChecked, doneArgv, mkdirArgv, renderRunScript, runChecked, statArgv, statRefusal } from './native-run.mjs';
 
 const SERIES = '/tmp/native-vibe-20261021-a1b2c3';
 const HOST = 'a-host';
@@ -111,7 +111,19 @@ test('every other remote step is an array of absolute programs and a checked pat
 
 test('the check is the ONLY road: the raw builders of the steps that run out of a series are not exported', () => {
   for (const name of ['launcherArgv', 'abortArgv', 'removeArgv', 'makeSeriesArgv']) assert.equal(name in nativeRun, false, `${name} is exported`);
-  assert.deepEqual(Object.keys(nativeRun).sort(), ['SERIES_SHAPE', 'doneArgv', 'mkdirArgv', 'renderRunScript', 'runChecked', 'statArgv', 'statRefusal']);
+  assert.deepEqual(Object.keys(nativeRun).sort(), ['SERIES_SHAPE', 'copyChecked', 'doneArgv', 'mkdirArgv', 'renderRunScript', 'runChecked', 'statArgv', 'statRefusal']);
+  // No caller can pass its own argv: runChecked takes five arguments and ignores a sixth; the only other road in is copyChecked, which builds an scp argv itself.
+  assert.equal(runChecked.length, 5);
+  assert.equal(/makeArgv/u.test(String(runChecked)), false, 'runChecked still has a builder parameter');
+});
+
+test('runChecked ignores a sixth argument: a caller cannot hand it an argv of its own, and a bare kind has no step of its own', async () => {
+  const calls = [];
+  const exec = async (argv) => { calls.push(argv); return { status: 0, stdout: goodFacts('phase', 'n-v2') }; };
+  await runChecked('phase', SERIES, 'n-v2', { host: HOST }, exec, () => ['/bin/evil']);
+  assert.deepEqual(calls[1], ['ssh', HOST, '--', '/usr/bin/nohup', '/usr/bin/setsid', '/bin/bash', '--', `${SERIES}/run/n-v2.sh`]);
+  await assert.rejects(runChecked('bare', SERIES, undefined, { host: HOST }, async () => ({ status: 0, stdout: goodFacts('bare') }), () => ['/bin/evil']), Error);
+  await assert.rejects(runChecked('bare-run', SERIES, undefined, { host: HOST }, async () => ({ status: 0, stdout: goodFacts('bare-run') })), Error);
 });
 
 /** A word that ssh hands to the REMOTE SHELL is safe when it holds no shell metacharacter, or is wholly one single-quoted string. */
@@ -136,11 +148,11 @@ test('no word any builder emits holds an unquoted shell metacharacter — ssh jo
 /** The text `stat -c '%n|%F|%u|%d|%a'` prints for a series that is what it must be (uid 0, one device 64768), one line per path the check reads. A row is [kind, uid, mode, device?]. */
 const DEVICE = 64768;
 function goodFacts(kind = 'abort', phase = 'n-v2', over = {}) {
-  const script = { make: 'make-series.sh', remove: 'run/remove-series.sh', abort: 'run/abort.sh', phase: `run/${phase}.sh`, bare: null, 'bare-run': null }[kind];
+  const script = { make: 'make-series.sh', remove: 'run/remove-series.sh', abort: 'run/abort.sh', phase: `run/${phase}.sh`, bare: null, 'bare-run': null, read: null }[kind];
   const rows = {
     '/tmp': ['directory', 0, 1777],
     [SERIES]: ['directory', 0, 700],
-    ...(kind === 'make' || kind === 'bare' ? {} : { [`${SERIES}/run`]: ['directory', 0, 700] }),
+    ...(kind === 'make' || kind === 'bare' || kind === 'read' ? {} : { [`${SERIES}/run`]: ['directory', 0, 700] }),
     ...(script === null ? {} : { [`${SERIES}/${script}`]: ['regular file', 0, 700] }),
     ...over,
   };
@@ -173,7 +185,7 @@ test('the stat check reads the root, the series, run/ and the script with ONE ab
 });
 
 test('the stat check accepts a series that is what it must be, for every step', () => {
-  for (const kind of ['make', 'remove', 'abort', 'phase', 'bare', 'bare-run']) assert.equal(check(kind, goodFacts(kind)), '', kind);
+  for (const kind of ['make', 'remove', 'abort', 'phase', 'bare', 'bare-run', 'read']) assert.equal(check(kind, goodFacts(kind)), '', kind);
 });
 
 test('the stat check refuses each unsafe state with one line and "nothing was run": a link, a wrong owner, a wrong mode, a writable script, an unsafe root', () => {
@@ -235,13 +247,36 @@ test('runChecked runs the step only after the check passed, and runs NOTHING aft
   assert.equal(calls.length, 1, 'only the stat call ran');
 });
 
-test('a bare check (root and series only) lets scp run only for a plain series; the step is the caller\'s argv', async () => {
-  const scp = ['scp', '-p', 'make-series.sh', `${HOST}:${SERIES}/make-series.sh`];
-  const calls = await recorded('bare', SERIES, undefined, { host: HOST }, () => scp);
-  assert.deepEqual(calls[1], scp);
-  const seen = [];
-  const refused = await runChecked('bare', SERIES, undefined, { host: HOST }, async (argv) => { seen.push(argv); return { status: 0, stdout: goodFacts('bare', undefined, { [SERIES]: ['symbolic link', 0, 777] }) }; }, () => scp);
-  assert.equal(refused.status, 78);
-  assert.equal(seen.length, 1, 'scp never ran: a planted link is refused before it');
-  await assert.rejects(runChecked('bare', SERIES, undefined, { host: HOST }, async () => ({ status: 0, stdout: '' })), Error, 'a bare step has no builder of its own');
+test('copyChecked: a bare check (root and series, and run/) lets scp run only for a plain series; it builds the scp argv itself', async () => {
+  const run = async (kind, sources, dest, extra = {}, facts = goodFacts(kind)) => {
+    const calls = [];
+    const result = await copyChecked(kind, SERIES, sources, dest, { host: HOST }, async (argv, execOptions) => { calls.push({ argv, cwd: execOptions?.cwd }); return { status: 0, stdout: facts }; }, extra);
+    return { calls, result };
+  };
+
+  const one = await run('bare', ['/work/make-series.sh'], 'make-series.sh');
+  assert.deepEqual(one.calls[1].argv, ['scp', '-p', '-q', '--', './make-series.sh', `${HOST}:${SERIES}/make-series.sh`]);
+  assert.equal(one.calls[1].cwd, '/work', 'a local path is passed relative to its folder: scp reads "C:\\x" as host:path');
+  const two = await run('bare-run', ['/work/abort.sh', '/work/remove-series.sh'], 'run/');
+  assert.deepEqual(two.calls[1].argv, ['scp', '-p', '-q', '--', './abort.sh', './remove-series.sh', `${HOST}:${SERIES}/run/`]);
+  const tree = await run('bare-run', ['/work/scripts', '/work/shared'], 'checkout/', { recursive: true });
+  assert.deepEqual(tree.calls[1].argv, ['scp', '-r', '-p', '-q', '--', './scripts', './shared', `${HOST}:${SERIES}/checkout/`]);
+
+  const planted = await run('bare', ['/work/make-series.sh'], 'make-series.sh', {}, goodFacts('bare', undefined, { [SERIES]: ['symbolic link', 0, 777] }));
+  assert.equal(planted.result.status, 78);
+  assert.equal(planted.calls.length, 1, 'scp never ran: a planted link is refused before it');
+
+  for (const [why, kind, sources, dest] of [
+    ['a kind that runs something', 'phase', ['/work/x'], 'x'], ['a destination that climbs', 'bare', ['/work/x'], '../x'], ['an absolute destination', 'bare', ['/work/x'], '/etc/x'],
+    ['a source that is an option', 'bare', ['/work/-oProxyCommand=x'], 'x'], ['sources in two folders', 'bare', ['/work/a', '/other/b'], 'x'], ['no source', 'bare', [], 'x'],
+    ['a destination with a shell metacharacter', 'bare', ['/work/x'], 'x;id'],
+  ]) {
+    await assert.rejects(run(kind, sources, dest), Error, why);
+  }
+});
+
+test('runChecked can read a phase\'s outcome: kind read checks the root and the series, then cats the exit file and the log', async () => {
+  const calls = await recorded('read', SERIES, 'n-v2');
+  assert.deepEqual(calls[0].slice(9), ['/tmp', SERIES], 'the check reads the root and the series only');
+  assert.deepEqual(calls[1], ['ssh', HOST, '--', '/bin/cat', '--', `${SERIES}/logs/n-v2.exit`, `${SERIES}/logs/n-v2.log`]);
 });

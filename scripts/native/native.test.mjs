@@ -762,15 +762,44 @@ linuxTest('remove-series.sh and abort.sh refuse, as root, a non-zero COAI_NATIVE
   assert.match(aborted.stderr, /^refused: .*root/u);
 });
 
+// ---------------------------------------------------------------- lead.mjs: a hung or missing ssh is reported, never lost (the coai gate, item 10)
+linuxTest('lead.mjs: a ssh that hangs is stopped at the timeout and REPORTED (non-zero, the error on stderr); a ssh that cannot start is reported too', async () => {
+  const { lead } = await import('./lead.mjs');
+  const bin = join(ROOT, 'fake-bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'ssh'), '#!/bin/sh\nsleep 30\n', { mode: 0o755 });
+  const saved = process.env.PATH;
+  const lines = [];
+  const deps = { options: { root: ROOT, ownerUid: MY_UID() }, out: (line) => lines.push(line), err: (line) => lines.push(line), tempDir: ROOT, timeoutMs: 400 };
+  const series = join(ROOT, 'native-vibe-20261104-0ee001');
+  try {
+    process.env.PATH = `${bin}:/usr/bin:/bin`;
+    const started = Date.now();
+    const status = await lead(['a-host', 'mkdir', series], deps);
+    assert.notEqual(status, 0, lines.join('\n'));
+    assert.ok(Date.now() - started < 5000, 'stopped at the timeout, not after the sleep');
+    assert.match(lines.join('\n'), /ETIMEDOUT|timed out/u, 'the timeout is on stderr');
+
+    lines.length = 0;
+    process.env.PATH = '/nonexistent';
+    const missing = await lead(['a-host', 'mkdir', series], deps);
+    assert.notEqual(missing, 0);
+    assert.match(lines.join('\n'), /ENOENT/u, 'the spawn failure is on stderr');
+  } finally {
+    process.env.PATH = saved;
+  }
+});
+
 // ---------------------------------------------------------------- the lead's driver (E5 S4 fix round, B4): scripts/native/lead.mjs, the ONLY entry
 // ssh and scp are replaced by a FAITHFUL seam: the words after `--` are joined with spaces and parsed by `sh -c`, as sshd does; scp is `cp -p` with the `host:` dropped.
 const leadSeam = (env) => {
   const remote = localExec(env);
-  return async (argv) => {
+  return async (argv, execOptions = {}) => {
     if (argv[0] !== 'scp') return remote(argv);
     const args = argv.slice(1).filter((word) => word !== '--');
     const sources = args.slice(0, -1).filter((word) => !word.startsWith('-'));
-    const r = spawnSync('/bin/cp', ['-p', ...sources, args.at(-1).replace(/^[^:/]+:/u, '')], { encoding: 'utf8' });
+    // sources are relative to execOptions.cwd (a Windows path "C:\\x" would be read by scp as host:path); -r copies folders
+    const r = spawnSync('/bin/cp', [...(args.includes('-r') ? ['-r'] : []), '-p', ...sources, args.at(-1).replace(/^[^:/]+:/u, '')], { encoding: 'utf8', cwd: execOptions.cwd });
     return { status: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
   };
 };
@@ -800,6 +829,14 @@ linuxTest('lead.mjs drives a whole series through the stat check with the faithf
   assert.equal(await step('make', series), 0, lines.join('\n'));
   assert.equal(readFileSync(join(series, 'SERIES_PATH'), 'utf8'), `${series}\n`);
   assert.equal(await step('copy', series, 'tools'), 0, lines.join('\n'));
+  const local = join(deps.tempDir, 'to-copy');
+  mkdirSync(join(local, 'scripts'), { recursive: true });
+  writeFileSync(join(local, 'scripts', 'a.mjs'), 'export {};\n');
+  mkdirSync(join(local, 'shared'));
+  writeFileSync(join(local, 'shared', 'b.json'), '{}\n');
+  assert.equal(await step('copy', series, 'checkout', local), 0, lines.join('\n'));
+  assert.equal(readFileSync(join(series, 'checkout', 'scripts', 'a.mjs'), 'utf8'), 'export {};\n');
+  assert.equal(readFileSync(join(series, 'checkout', 'shared', 'b.json'), 'utf8'), '{}\n');
   for (const file of ['abort.sh', 'remove-series.sh']) assert.equal(existsSync(join(series, 'run', file)), true, file);
   mkdirSync(join(series, 'checkout', 'scripts'), { recursive: true });
   writeFileSync(join(series, 'checkout', 'scripts', 'dummy-probe.mjs'), DUMMY);
@@ -807,6 +844,11 @@ linuxTest('lead.mjs drives a whole series through the stat check with the faithf
   assert.equal(statSync(join(series, 'run', 'n-v1.sh')).mode & 0o777, 0o700);
   assert.equal(await step('phase', series, 'n-v1'), 0, lines.join('\n'));
   await waitFor('the phase wrote no .done', hasFile(join(series, 'logs', 'n-v1.done')));
+  assert.equal(await step('done', series, 'n-v1'), 0, 'done: the poll says it is');
+  assert.notEqual(await step('done', series, 'n-v9'), 0, 'done: a phase that never ran is not');
+  lines.length = 0;
+  assert.equal(await step('read', series, 'n-v1'), 0, lines.join('\n'));
+  assert.match(lines.join('\n'), /^0$/mu, 'read prints the exit file, then the log');
   assert.equal(await step('abort', series, 'n-v1'), 0, lines.join('\n'));
   assert.equal(await step('remove', series), 0, lines.join('\n'));
   assert.equal(existsSync(series), false, 'the remover removed it');
@@ -837,6 +879,11 @@ linuxTest('lead.mjs refuses a planted link before scp ever runs, takes NO root o
   }
   assert.deepEqual(calls, [], 'nothing was executed for a usage error');
   assert.match(readFileSync(join(NATIVE, 'lead.mjs'), 'utf8'), /NO root option/u, 'the header says so');
+  const header = readFileSync(join(NATIVE, 'lead.mjs'), 'utf8').split('\n').filter((line) => line.startsWith('//')).join('\n');
+  assert.match(header, /64 .*value refused by a pattern|refused by a pattern.*64/su, 'exit 64 also covers a value refused by a pattern');
+  assert.match(header, /scp -p/u, 'the first live use verifies the mode scp -p leaves');
+  assert.match(header, /checked chmod step/u, 'and a refused mode is fixed by a checked chmod step, never by relaxing the check');
+  for (const step of ['copy <series> checkout', 'done <series>', 'read <series>']) assert.ok(header.includes(step), `the header lists ${step}`);
 });
 
 // ---------------------------------------------------------------- TEETH — the break-its of E1.S1 (B1, B2, B3, B5), kept as tests

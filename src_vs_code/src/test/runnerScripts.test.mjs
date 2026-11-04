@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { owned } from '../../scripts/owned.mjs';
 
 /**
@@ -140,4 +140,42 @@ test('E6 the contracts runner stops its server BEFORE the wrap removes the run f
   const contract = fs.readFileSync(path.join(pkg, 'scripts', 'run-contract.mjs'), 'utf8');
   assert.match(contract, /await server\.stop\(\);\s*removeData\(data\)/u, 'run-contract waits for the server to exit before it removes the data');
   assert.match(contract, /finally \{\s*await runCleanUp\(\);/u);
+});
+
+test('D2 isMain only says "not main" on a REAL mismatch: when realpath fails it falls back to realpath, then to a resolved-path comparison', async () => {
+  const { isMain } = await import('../../scripts/run-tests.mjs');
+  const here2 = fileURLToPath(import.meta.url);
+  const url = import.meta.url;
+  assert.equal(isMain(url, here2), true);
+  assert.equal(isMain(url, path.join(path.dirname(here2), '.', path.basename(here2))), true);
+  assert.equal(isMain(url, undefined), false);
+  assert.equal(isMain(url, path.join(path.dirname(here2), 'some-other-file.mjs')), false, 'a real mismatch');
+  // realpathSync.native cannot resolve a name that is not there; the comparison of the resolved spellings still says "main" for the module\'s own, not-yet-existing path.
+  const missing = path.join(path.dirname(here2), 'not-there-yet.mjs');
+  assert.equal(isMain(pathToFileURL(missing).href, missing), true, 'fail open to "main", never to a silent no-op');
+  assert.equal(isMain(pathToFileURL(missing).href, `${missing}.other`), false);
+});
+
+test('H3b the Windows budget of the vibe scratch is 98 (the file limit 259, less the separator, the deepest child 156 and `\\h12`)', () => {
+  const source = fs.readFileSync(path.join(repoRoot, 'scripts', 'probe-vibe-confinement.mjs'), 'utf8');
+  assert.match(source, /SCRATCH_ROOM = 259 - 1 - 156 - 4;/u);
+  assert.match(source, /past 98 characters/u, 'the header says 98');
+  assert.equal(/\b99\b/u.test(source.split('\n').filter((line) => line.startsWith('//')).join('\n')), false, 'no 99 left in the comments');
+});
+
+test('E7 the contracts runner does not remove its data in stop(): a throw there would skip the wrap\'s exit listener; the wrap removes the folder. Its header lists exit 2 and 78', () => {
+  const text = fs.readFileSync(path.join(repoRoot, 'http', 'run-contracts.mjs'), 'utf8');
+  const stop = text.slice(text.indexOf('function stop()'), text.indexOf("process.prependListener('exit', stop)"));
+  assert.ok(stop.length > 50);
+  assert.equal(/rmSync\(/u.test(stop), false, 'stop() removes nothing');
+  assert.match(text.split('\n')[2], /\b2\b.*\b78\b/u, 'line 3: the exit codes include 2 and 78');
+});
+
+test('E8 every caller of a server\'s stop() awaits it before it removes the data (the seam legs, live-gauge-compat, run-contract)', () => {
+  for (const file of ['seam-gauge.mjs', 'seam-usage-counts.mjs', 'live-gauge-compat.mjs', 'run-contract.mjs']) {
+    const text = fs.readFileSync(path.join(pkg, 'scripts', file), 'utf8');
+    const calls = [...text.matchAll(/^(.*)\bserver\??\.stop\(\)/gmu)].map((m) => m[1]);
+    assert.ok(calls.length > 0, `${file} stops a server`);
+    for (const before of calls) assert.match(before, /await\s*$/u, `${file}: a stop() that is not awaited`);
+  }
 });
