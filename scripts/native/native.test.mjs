@@ -879,10 +879,10 @@ linuxTest('lead.mjs refuses a planted link before scp ever runs, takes NO root o
   }
   assert.deepEqual(calls, [], 'nothing was executed for a usage error');
   assert.match(readFileSync(join(NATIVE, 'lead.mjs'), 'utf8'), /NO root option/u, 'the header says so');
-  const header = readFileSync(join(NATIVE, 'lead.mjs'), 'utf8').split('\n').filter((line) => line.startsWith('//')).join('\n');
-  assert.match(header, /64 .*value refused by a pattern|refused by a pattern.*64/su, 'exit 64 also covers a value refused by a pattern');
-  assert.match(header, /scp -p/u, 'the first live use verifies the mode scp -p leaves');
-  assert.match(header, /checked chmod step/u, 'and a refused mode is fixed by a checked chmod step, never by relaxing the check');
+  const header = readFileSync(join(NATIVE, 'lead.mjs'), 'utf8').split('\n').filter((line) => line.startsWith('//')).map((line) => line.replace(/^\/\/ ?/u, '')).join(' ');
+  assert.match(header, /64 .*value refused by a pattern|refused by a pattern.*64/isu, 'exit 64 also covers a value refused by a pattern');
+  assert.match(header, /scp -p/iu, 'the first live use verifies the mode scp -p leaves');
+  assert.match(header, /checked chmod step/iu, 'and a refused mode is fixed by a checked chmod step, never by relaxing the check');
   for (const step of ['copy <series> checkout', 'done <series>', 'read <series>']) assert.ok(header.includes(step), `the header lists ${step}`);
 });
 

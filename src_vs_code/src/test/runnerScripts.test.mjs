@@ -148,7 +148,7 @@ test('D2 isMain only says "not main" on a REAL mismatch: when realpath fails it 
   const url = import.meta.url;
   assert.equal(isMain(url, here2), true);
   assert.equal(isMain(url, path.join(path.dirname(here2), '.', path.basename(here2))), true);
-  assert.equal(isMain(url, undefined), false);
+  assert.equal(isMain(url, ''), false, 'an empty argv[1]');
   assert.equal(isMain(url, path.join(path.dirname(here2), 'some-other-file.mjs')), false, 'a real mismatch');
   // realpathSync.native cannot resolve a name that is not there; the comparison of the resolved spellings still says "main" for the module\'s own, not-yet-existing path.
   const missing = path.join(path.dirname(here2), 'not-there-yet.mjs');
