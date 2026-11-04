@@ -1,6 +1,6 @@
 # PLAN — the Windows `coai-mcp` package is signed, so Smart App Control lets it run and load its libraries
 
-> Status: **stopped for re-review, 2026-11-04 — re-reviewed baseline for epoch 2, pending approval. Built and gated 2026-11-03 on `ci/windows-code-signing` (PR #944). Next: adopt the shared workflow v1.1.0 and merge with `ALLOW_UNSIGNED_RELEASES=true`; signing is activated later by the twin's E5 cutover.** Scope: the `mcp-binaries` and
+> Status: **epoch 2 approved by the owner, 2026-11-04. Built and gated 2026-11-03 on `ci/windows-code-signing` (PR #944). Next: adopt the shared workflow v1.1.0 and merge with `ALLOW_UNSIGNED_RELEASES=true`; signing is activated later by the twin's E5 cutover.** Scope: the `mcp-binaries` and
 > `mcp-release-complete` jobs of `.github/workflows/release.yml`, one new caller job and one new
 > attach job, `.github/scripts/archive-carries.sh` (zip support), the owner's GitHub environment here.
 > No product code. Twin of `dew_flow_creds_for_devs · todo/PLAN_windows_code_signing.md`, which owns
@@ -11,7 +11,7 @@
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-03 · by reviewers · state: stopped
+> Epoch 1 · approved 2026-11-03 · by reviewers · state: closed
 
   (The approving round's accepted findings 0, 1, 2, 4 and 5 are part of the approved text, not changes of it.)
 
@@ -31,6 +31,13 @@ Narrowed: yes — the merge no longer waits for a provider; activation moved to 
 
   (Sorted by the Opus judge of the twin's epoch-3 re-review, which judged these rows. Consultation 64934326: the
   changelog guard checks version headings only, so interim release prose must say the Windows package is unsigned.)
+
+
+> Epoch 2 · approved 2026-11-04 · by owner · state: open
+
+  (The owner approved merging #944 behind the switch in the same answer that approved the twin's epoch 3; re-review
+  gate round on docs/windows-code-signing-epoch2, 2/2 reviewers, proceed; its accepted findings 0, 1, 3, 4 are wording
+  in this text.)
 
 ## 1. The symptom and the goal
 
@@ -95,9 +102,14 @@ with:
 ```
 
 The globs are the shipped names (the count check against `shared/kept-grammars.txt` ties them to the
-list). The exception is a permission for MISSING configuration: with all six variables set it signs
-whatever the variable says; a partial configuration is red; an absent or misspelled variable means
-enforcement.
+list). The shared workflow downloads `unsigned-mcp-<rid>`, signs (or, in `skip`, leaves unsigned), verifies,
+and itself makes the final `coai-mcp-<v>-win-<arch>.zip` and its `.sha256` (today's 7z command and
+checksum format), uploaded as `mcp-win-<rid>` with `retention-days: 7` — that is what `mcp-sign-attach`
+downloads and attaches. Its mode decision, in order: partial configuration → red; all six set → sign
+(whatever the permission says); none set and the run is forced (a tag ref, or `required: true`) → red,
+unless `allow-unsigned-release` is true → `skip` with a warning and a summary banner; none set and not
+forced (a dispatch trial from a branch) → `skip`, whatever the permission says. An absent or misspelled
+variable means enforcement. The exception's own tests live in the shared workflow (twin E3).
 
 **`mcp-sign-attach`** — `needs: mcp-sign`, `if: ${{ !cancelled() && needs.mcp-sign.result == 'success' }}`,
 `ubuntu-latest`, `contents: write`: downloads `mcp-win-*`, runs `archive-carries.sh <zip> coai-mcp.exe
@@ -113,8 +125,9 @@ section added by a38e9b38 / 3bf899ea) and the `release.yml` comments that say a 
 
 **Releases during the switch-on period.** Each mcp release PR still carries its exact-version
 `src_vs_code/CHANGELOG.md` section, as the guard requires; its prose must not claim a signature — where it
-mentions Windows, it says the package is unsigned. The signing announcement belongs to the first release
-after the cutover.
+mentions Windows, it says the package is unsigned. The agent that prepares an interim release PR greps
+the new section for `sign` and `Smart App Control` before the PR is merged, and says the result in it. The
+signing announcement belongs to the first release after the cutover.
 
 **Merge.** #944 is squash-merged with a `ci(release): …` title and a clean body: nothing in it is a
 release trigger.
@@ -153,8 +166,9 @@ release trigger.
 
 ## 6. Growth surfaces
 
-None that grows on its own: two `unsigned-mcp-*` and two `mcp-win-*` artifacts per run, a few tens of MB
-each, `retention-days: 7`.
+None that grows on its own: two `unsigned-mcp-*` (retention set by the leg) and two `mcp-win-*` (retention
+set by the shared workflow's upload) artifacts per run, a few tens of MB each, both `retention-days: 7`,
+retired by GitHub.
 
 ## 7. Definition of Done
 
