@@ -415,7 +415,9 @@ function runFinalZipStep(zips: readonly string[], exits: { carries?: number; lay
       fs.writeFileSync(file, '');
     }
 
-    const ran = spawnSync('bash', ['-c', body], { cwd: dir, encoding: 'utf8', timeout: 30_000 });
+    const stepScript = path.join(dir, 'final-zip-step.sh');
+    fs.writeFileSync(stepScript, body, 'utf8');
+    const ran = spawnSync('bash', [stepScript], { cwd: dir, encoding: 'utf8', timeout: 30_000 });
     const calls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter((l) => l !== '') : [];
     return { code: ran.status, said: `${ran.stdout}${ran.stderr}`, calls };
   } finally {
