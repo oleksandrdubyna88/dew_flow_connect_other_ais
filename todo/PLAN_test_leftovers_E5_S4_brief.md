@@ -696,3 +696,18 @@ them first. In short:
 - **P2.** The real count: 25 entry scripts + 13 library modules = 38 files (the plan's "31" is wrong); only entries own folders.
 - **P13** stays for S6 (no guard reads `src_vs_code/scripts/*.mjs`).
 - **Merge condition (c)** for the WSL machine is still open (one administrator scan); it gates the PR's MERGE, not this build.
+
+### 16.1 The brief's own plan gate (session `e022c972`, 2026-11-04, proceed) — accepted findings
+
+- **[gate 3] The Windows evidence has a step.** Before S4's code round closes, ONE throwaway branch
+  `tmp/e5-s4-windows` (never merged; deleted after the record) runs on `windows-latest`: `npm run test:host` with the
+  `coai-host-*` / `testsToDelete-*` counts before and after, and S2-B's `janitor.sh --token coai --dry-run` under Git for
+  Windows' bash; the run id and the counts go into `module_tests.md` and the PR. § 11's "WSL only" means the person's
+  machines; a hosted runner is out of the barrier's scope (R2).
+- **[gate 4] The caller's `stat` check is tested on the REAL command.** Besides the unit tests with a stubbed result, an
+  integration test runs the lead's real `stat` argv through a local-exec seam (the `ssh host` prefix replaced, nothing
+  else) against real folders the test makes in each unsafe state — a symlinked series, mode 755, a group-writable
+  script, a non-sticky world-writable root, a foreign uid through `COAI_NATIVE_SERIES_OWNER_UID` — and asserts the
+  refusal line and that NO command from the folder ran (a sentinel the script would write stays absent).
+- **[gate 6] R5 checks the order too.** R5 plants a recognisable stale owned folder (a dead owner, older than ten minutes)
+  before the invalid file argument and asserts it is still there after the exit 2: validation runs before the sweep.
