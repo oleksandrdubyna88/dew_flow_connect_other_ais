@@ -31,7 +31,7 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
 
     private readonly ProcessLauncher _launcher = new();
     private IDisposable _steering = FakeCliSteering.Unwritten;
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimiflow-");
+    private readonly TempDir _dir = TempDir.For("kimiflow-");
     private readonly KimiFixture _person = new();
     private FakeAcpAgent? _agent;
 

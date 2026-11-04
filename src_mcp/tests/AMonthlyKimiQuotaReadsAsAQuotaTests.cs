@@ -15,7 +15,7 @@ public sealed class AMonthlyKimiQuotaReadsAsAQuotaTests : IDisposable
     /// <summary>The agent's answer — the measured monthly line behind the sign-in prefix (the ACP envelope is the plan's hypothesis, still unmeasured).</summary>
     private const string PromptError = "Authentication required: " + KimiMonthlyQuotaTests.MonthlyLine;
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-monthly-round-");
+    private readonly TempDir _dir = TempDir.For("kimi-monthly-round-");
 
     public void Dispose() => _dir.Dispose();
 

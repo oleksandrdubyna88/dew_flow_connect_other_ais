@@ -53,13 +53,17 @@ function plant(root, name, claim, { old = true } = {}) {
 
 const claimOf = (pid) => `${mount.formatOwner({ ...owner, pid })}\n`;
 
+// The legacy run folder the sweep must LIST and never remove: the name from before the owner segment is this test's meaning, so it is one plain literal.
+// testsToDelete-exempt: legacy-name — the sweep lists legacy run folders, so this fixture must be the legacy name itself
+const LEGACY_RUN = 'testsToDelete-coai-run-1a2b3c';
+
 /** What N-S2 plants: a dead owner's folder, a live one, another owner's, a legacy one, a chat that is nobody's business. */
 function plantTheFive(root) {
   return {
     dead: plant(root, `testsToDelete-${ownerToken}-coai-run-abc123`, claimOf(DEAD_PID)),
     live: plant(root, `testsToDelete-${ownerToken}-coai-run-live123`, claimOf(process.pid)),
     foreign: plant(root, `testsToDelete-${otherOwner}-coai-x-abc123`, undefined),
-    legacy: plant(root, 'testsToDelete-coai-run-1a2b3c', `devbox@linux:${DEAD_PID}:17`),
+    legacy: plant(root, LEGACY_RUN, `devbox@linux:${DEAD_PID}:17`),
     chat: plant(root, 'coai-chat-live', undefined),
   };
 }
@@ -95,8 +99,8 @@ test('N-S2 the reference collects a gone owner\'s coai folder, keeps a live one,
   const everything = [...result.removed, ...result.preserved.map((p) => p.path), ...result.listed, ...result.errors];
   assert.ok(!everything.some((line) => line.includes('coai-chat-live')), 'coai-chat-live is in no list');
   assert.ok(result.listed.some((line) => line.startsWith(`foreign: folder ${path.basename(planted.foreign)} — owner ${otherOwner}`)), `foreign line in ${JSON.stringify(result.listed)}`);
-  assert.ok(result.listed.some((line) => line.startsWith('legacy: folder testsToDelete-coai-run-1a2b3c — remove with: ')), `legacy line in ${JSON.stringify(result.listed)}`);
-  assert.ok(lines.some((line) => line.startsWith('run-tests: legacy: folder testsToDelete-coai-run-1a2b3c')), 'and the runner says it');
+  assert.ok(result.listed.some((line) => line.startsWith(`legacy: folder ${LEGACY_RUN} — remove with: `)), `legacy line in ${JSON.stringify(result.listed)}`);
+  assert.ok(lines.some((line) => line.startsWith(`run-tests: legacy: folder ${LEGACY_RUN}`)), 'and the runner says it');
   if (process.platform === 'win32') {
     assert.deepEqual(result.removed, [], 'on Windows the reference lists and changes nothing (F16)');
     assert.ok(result.listed.some((line) => line.startsWith('unverified: ')), 'it lists the dead one instead');
@@ -160,7 +164,7 @@ test('N-S5 the switch: the repository says collect; list-only calls no sweep and
   const document = JSON.parse(fs.readFileSync(path.join(repoRoot, 'shared', 'leftovers-sweep.json'), 'utf8'));
   assert.deepEqual(Object.keys(document).sort(), ['startOfRunSweep', 'why']);
 
-  const names = [`testsToDelete-${ownerToken}-coai-run-abc123`, `testsToDelete-${otherOwner}-coai-f-abc123`, 'testsToDelete-coai-run-1a2b3c', `.testsToDelete-${ownerToken}-coai-run-abc123.teststodelete-quarantine-4242-0a1b2c3d`,
+  const names = [`testsToDelete-${ownerToken}-coai-run-abc123`, `testsToDelete-${otherOwner}-coai-f-abc123`, LEGACY_RUN, `.testsToDelete-${ownerToken}-coai-run-abc123.teststodelete-quarantine-4242-0a1b2c3d`,
     `testsToDelete-${ownerToken}-mcp-x-abc123`, 'coai-x'];
   const calls = [];
   const lines = [];

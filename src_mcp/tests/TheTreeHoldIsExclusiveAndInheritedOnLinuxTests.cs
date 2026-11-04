@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 /// <remarks>Each arm is its own test, so a red names exactly the premise that broke: (a) the hold is EXCLUSIVE — a non-inheritable and a second inheritable take are both refused; (b) the descriptor is INHERITED — it outlives its opener's SIGKILL while a child started after the take lives.</remarks>
 public sealed class TheTreeHoldIsExclusiveAndInheritedOnLinuxTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-treehold-");
+    private readonly TempDir _dir = TempDir.For("treehold-");
 
     private readonly List<Process> _children = [];
 

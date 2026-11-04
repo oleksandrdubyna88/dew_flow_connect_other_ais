@@ -8,14 +8,14 @@ namespace CoaiMcp.Tests;
 /// The Windows flow of <see cref="PrivateFolder"/> — create, open ONE handle, verify path / owner / DACL, re-ACL through it, walk
 /// and reset the children — driven through a fake <see cref="IFolderShell"/> over real folders, so every branch runs on any OS
 /// (SonarCloud measures on Linux). The real shell (<c>PrivateFolderWindowsNative</c>) is exercised by
-/// <see cref="PrivateFolderWindowsTests"/> on Windows. Every root is a <c>testsToDelete-vh-*</c> folder.
+/// <see cref="PrivateFolderWindowsTests"/> on Windows. Every root is a <c>vh-*</c> folder.
 /// </summary>
 public sealed class PrivateFolderWindowsDecisionTests : IDisposable
 {
     private static readonly Sid Me = new("S-1-5-21-1111-2222-3333-1001");
     private static readonly Sid Everyone = new("S-1-1-0");
 
-    private readonly TempDir _root = TempDir.For("testsToDelete-vh-decide-");
+    private readonly TempDir _root = TempDir.For("vh-decide-");
 
     public void Dispose() => _root.Dispose();
 
@@ -289,7 +289,7 @@ public sealed class PrivateFolderWindowsDecisionTests : IDisposable
     public void ALinkInsideTheFolder_IsNeverEnteredOrTouched()
     {
         var shell = ExistingFolder(WideFolder(Me));
-        using var outside = TempDir.For("testsToDelete-vh-outside-");
+        using var outside = TempDir.For("vh-outside-");
         File.WriteAllText(outside.At("outside.txt"), "not ours");
         var link = Path.Combine(_root, "coai-vibe", "link");
         SnapshotTestKit.LinkNow(link, outside);
@@ -332,7 +332,7 @@ public sealed class PrivateFolderWindowsDecisionTests : IDisposable
     [Fact]
     public void ALinkThatCannotBeOpened_IsSaidToBeALink()
     {
-        using var target = TempDir.For("testsToDelete-vh-target-");
+        using var target = TempDir.For("vh-target-");
         var link = Path.Combine(_root, "coai-vibe");
         SnapshotTestKit.LinkNow(link, target);
         var shell = new FakeShell { OpenError = 5 };

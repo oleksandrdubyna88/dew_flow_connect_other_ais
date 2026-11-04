@@ -22,7 +22,7 @@ public sealed class KimiRuntimeTests : IDisposable
 {
     private static readonly string ShimExe = Path.Combine(Path.GetTempPath(), "coai", "coai-mcp.exe");
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-runtime-");
+    private readonly TempDir _dir = TempDir.For("kimi-runtime-");
 
     public void Dispose() => _dir.Dispose();
 

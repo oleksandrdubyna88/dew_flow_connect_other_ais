@@ -17,7 +17,7 @@ public sealed class AVibeDiskRowSaysWhatItSkippedTests : IDisposable
     private const string Advice = "Retry with a jittered backoff, three attempts.";
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _dir = TempDir.For("testsToDelete-vibe-notes-");
+    private readonly TempDir _dir = TempDir.For("vibe-notes-");
     private readonly VibeQuestionRowFixture _rows;
 
     public AVibeDiskRowSaysWhatItSkippedTests() => _rows = new VibeQuestionRowFixture(_dir, _launcher);

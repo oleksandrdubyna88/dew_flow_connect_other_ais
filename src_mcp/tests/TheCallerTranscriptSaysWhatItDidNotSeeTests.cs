@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheCallerTranscriptSaysWhatItDidNotSeeTests
 {
-    private const string Prefix = "testsToDelete-coai-unseen-";
+    private const string Prefix = "unseen-";
     private const string C02Agent = "303b2866f0b3022b2";
     private const string C05MetaOnly = "953030e2d167b42e0";
     private const string C07Depth1 = "207bc560f3fb5a452";

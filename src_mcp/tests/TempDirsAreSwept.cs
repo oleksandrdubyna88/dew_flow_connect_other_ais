@@ -144,7 +144,7 @@ public sealed class TempDirsAreSwept
     [InlineData(true)]
     public async Task ARoundsScratchHoldingAKimiHomeWithAJunction_IsSwept_AndThePersonsFolderKeepsItsFile(bool lossDuringTheUnlink)
     {
-        using var root = TempDir.For("testsToDelete-sweep-kh-");
+        using var root = TempDir.For("sweep-kh-");
         var persons = Directory.CreateDirectory(root.At("persons")).FullName;
         var secret = Path.Combine(persons, "kimi-code-env.json");
         var other = Path.Combine(persons, "kimi-code.json");

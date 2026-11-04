@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class KimiIsClassifiedFromItsReportTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-classify-");
+    private readonly TempDir _dir = TempDir.For("kimi-classify-");
 
     public void Dispose() => _dir.Dispose();
 

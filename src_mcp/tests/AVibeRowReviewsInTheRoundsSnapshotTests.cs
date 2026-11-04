@@ -95,7 +95,7 @@ public sealed class AVibeRowReviewsInTheRoundsSnapshotTests : IAsyncLifetime
     [Fact]
     public async Task ASnapshotCancelledWhileItIsMade_GivesTheRoundsOneShotFolderBack()
     {
-        using var homes = TempDir.For("testsToDelete-vh-roundcancel-");
+        using var homes = TempDir.For("vh-roundcancel-");
         var service = Service("worktree", homes);
 
         var making = () => service.Roster.ScratchAsync(new WithdrawnLauncher(), Stage.CodeReview, _repo.Path, readsCheckout: true, TestContext.Current.CancellationToken);

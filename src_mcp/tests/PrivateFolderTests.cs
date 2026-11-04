@@ -15,12 +15,12 @@ namespace CoaiMcp.Tests;
 /// another — and the handle is held for the reservation's life.
 /// </summary>
 /// <remarks>
-/// Windows only (E1–E8), plus E9 on the Unix legs. Every root is a <c>testsToDelete-vh-*</c> folder, never the machine's own. The
+/// Windows only (E1–E8), plus E9 on the Unix legs. Every root is a <c>vh-*</c> folder, never the machine's own. The
 /// CI runner is ELEVATED, so a folder it makes may be owned by Administrators rather than the user: E1 asserts the owner is either.
 /// </remarks>
 public sealed class PrivateFolderTests : IDisposable
 {
-    private readonly TempDir _root = TempDir.For("testsToDelete-vh-private-");
+    private readonly TempDir _root = TempDir.For("vh-private-");
 
     public void Dispose() => _root.Dispose();
 
@@ -142,7 +142,7 @@ public sealed class PrivateFolderTests : IDisposable
     [Fact]
     public async Task AConversationOnARootWhoseHomesFolderIsALink_IsRefused_NamingTheLink_AndNothingIsMadeBehindIt()
     {
-        using var target = TempDir.For("testsToDelete-vh-target-");
+        using var target = TempDir.For("vh-target-");
         var link = Path.Combine(_root, ConsultantHomes.Vibe);
         SnapshotTestKit.LinkNow(link, target);
         var places = new ConsultantPlaces(_root, "store", new ProcessLauncher(), _ => { });

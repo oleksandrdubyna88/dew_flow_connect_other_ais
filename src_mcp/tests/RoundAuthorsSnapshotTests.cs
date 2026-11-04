@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class RoundAuthorsSnapshotTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-coai-authors-snapshot-");
+    private readonly TempDir _dir = TempDir.For("authors-snapshot-");
 
     public void Dispose() => _dir.Dispose();
 

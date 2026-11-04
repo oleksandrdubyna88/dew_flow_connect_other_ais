@@ -57,7 +57,7 @@ public sealed class TreeGitTests : IAsyncLifetime
     [Fact]
     public async Task TheRoundManagerAsksForTheFlagOnEveryCall_OnWindowsOnly()
     {
-        var storage = Temp("testsToDelete-wt-argv-");
+        var storage = Temp("wt-argv-");
         var manager = new WorktreeManager(_launcher, storage);
 
         await using (await manager.AddAsync("repo", "abc123", "s1", round: 1))
@@ -73,7 +73,7 @@ public sealed class TreeGitTests : IAsyncLifetime
     [Fact]
     public async Task TheReviewTreeRootAsksForTheFlagOnEveryCall_OnWindowsOnly()
     {
-        var root = new ReviewTreeRoot(_launcher, Temp("testsToDelete-review-argv-"));
+        var root = new ReviewTreeRoot(_launcher, Temp("review-argv-"));
 
         await root.GitAsync(root.Path, ["status", "--porcelain"], TimeSpan.FromSeconds(5), CancellationToken.None);
 
@@ -84,8 +84,8 @@ public sealed class TreeGitTests : IAsyncLifetime
     [Fact]
     public async Task TheSubmodulePopulationAsksForTheFlagBeforeItsOwnSettings_OnWindowsOnly()
     {
-        var repo = Temp("testsToDelete-sub-repo-");
-        var tree = Temp("testsToDelete-sub-tree-");
+        var repo = Temp("sub-repo-");
+        var tree = Temp("sub-tree-");
         Directory.CreateDirectory(Path.Combine(repo, "mods", "sub"));
         await File.WriteAllTextAsync(Path.Combine(repo, "mods", "sub", ".git"), "gitdir: nowhere", TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(

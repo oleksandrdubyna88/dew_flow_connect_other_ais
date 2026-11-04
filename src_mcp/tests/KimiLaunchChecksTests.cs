@@ -13,7 +13,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class KimiLaunchChecksTests
 {
-    private static readonly string Tmp = Path.Combine(Path.GetTempPath(), "testsToDelete-kimi-checks");
+    private static readonly string Tmp = Path.Combine(Path.GetTempPath(), "kimi-checks");
 
     private static readonly string Root = Path.Combine(Tmp, "owned", "kh-x");
 

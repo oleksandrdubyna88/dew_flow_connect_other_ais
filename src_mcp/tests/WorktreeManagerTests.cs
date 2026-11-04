@@ -420,7 +420,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     /// <summary>git without long paths cannot check this commit out — so a pass above is the flag's doing.</summary>
     private async Task TheFixtureNeedsTheFlag(string sha)
     {
-        var control = Path.Combine(_storage, "testsToDelete-wt-control-longpaths");
+        var control = Path.Combine(_storage, "wt-control-longpaths");
         var refused = await _launcher.RunAsync(
             new ProcessRequest(
                 "git",

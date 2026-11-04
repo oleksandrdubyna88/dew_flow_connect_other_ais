@@ -3243,7 +3243,7 @@ written by this build). The extension's side is the section below.
 
 ## The round-authors report — `--round-authors` (2026-10-19, E6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md`)
 
-Seven suites (83 tests: 77 from the stories, 6 from the judge review and the code gate of 2026-10-19), real SQLite over `testsToDelete-` temp folders where a store is read, in-memory `RoundFacts` where only a rule is. Every store is
+Seven suites (83 tests: 77 from the stories, 6 from the judge review and the code gate of 2026-10-19), real SQLite over temp folders inside the run's own folder where a store is read, in-memory `RoundFacts` where only a rule is. Every store is
 seeded through the REAL writers (`RoundAuthorsSeed`: `RoundsDb.RecordRound` with the record's size and authors, `RecordDecisions` for the resolution);
 hand SQL exists for one thing, a database stopped at an older step, its stop index found by content (`Array.IndexOf(Schema.Steps, Schema.TheRoundsSize)`).
 `RoundAuthorsFacts` holds the in-memory builders every pure suite shares. Each suite was written against a shell that answered empty values (RED for the
@@ -3261,11 +3261,11 @@ real symptom, never a setup error), then GREEN, then each break-it applied to th
 | `RoundAuthorsShapeTests` (2, code gate findings 0, 4, 5) | No method of the report's types returns an outcome as a tuple and no `MergeOutcome`/`Step<T>` exists beside `Outcome<T>` (the C# doctrine §5); `RoundAuthorsQuery` opens the store through `RoundCounts.OpenReadOnly`, never a second `new SqliteConnection(` | RED: `Expected offenders to be empty … but found at least one item {"RoundAuthorsMode.Parse"}`, and the read still spelling its own connection string |
 
 `AReaderModeNeverMakesTheDataDirectoryTests` (+1 row, `--round-authors`) runs the mode against a missing named root; `EveryModeIsClassifiedForAMissingNamedRootTests` and
-`ARequestFaultIsNotAnOldBinaryTests` classify and name it. **NOT covered:** a live store, deliberately (every store is a `testsToDelete-` folder); the extension (no extension code reads this mode).
+`ARequestFaultIsNotAnOldBinaryTests` classify and name it. **NOT covered:** a live store, deliberately (every store is a temp folder of the run); the extension (no extension code reads this mode).
 
 ## The authors backfill — `--backfill-authors` (2026-10-19, E7 S1–S4 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md`)
 
-Eight classes and four helpers, every store a `testsToDelete-` temp folder built from E1's fixtures THROUGH THE LIVE WRITERS (`BackfillWorld.RecordLive`:
+Eight classes and four helpers, every store a temp folder of the run built from E1's fixtures THROUGH THE LIVE WRITERS (`BackfillWorld.RecordLive`:
 `RoundAuthorsStep`, `SessionStore`, `RoundsDb.RecordRound`) and then stripped of its authors, or — for the size — from a real `PanelService`, real git and FakeCli
 (`LiveSizedGateBase`). **No live store is named anywhere**: the one-shot process is always handed an explicit `COAI_DATA_DIR` and `COAI_AGENT_LOG_DIR`. Every
 behaviour was seen RED first (against a stub that answered `compute` for everything, a stub that made nothing, a writer shaped like `RecordRound`, a mode that
@@ -4183,7 +4183,7 @@ process — the exclusive open is the kernel's, so the second opener sees the sa
 ### Junction-safe ownership — E4.1 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md` (2026-10-15)
 
 The junction maker, the deleter's verification of a link's target, and every deleter that can meet a Kimi home. **No test
-makes a junction outside its own `testsToDelete-` folder, and none to the real `~/.kimi-code`**: the junction's target is a
+makes a junction outside its own temp folder, and none to the real `~/.kimi-code`**: the junction's target is a
 fake "person's credentials" folder (`persons`, read-only files) made beside it — a leftover is swept by a recursive remove, and
 Windows PowerShell 5.1's walks INTO a junction. `DirectoryLink` (`mklink /J`) stays the tests' independent oracle for the
 product's maker. The deleter's seam `GitScratch.AfterUnlink` is per async flow, so parallel tests do not see each other's.
@@ -4220,7 +4220,7 @@ Local Windows run (the PR's CI has no Windows leg): the junction tests above run
 
 ### The Kimi home, its locks and its launch control — E4.2 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md` (2026-10-15)
 
-Every fake person's home, junction and lock lives under the test's own `testsToDelete-kimi-…` folder (`KimiFixture`: an owner-shaped
+Every fake person's home, junction and lock lives under the test's own `kimi-…` folder (inside the run folder) (`KimiFixture`: an owner-shaped
 `config.toml` with a `moonshot-ai` row's `api_key`, a `[[hooks]]` entry and a person's own model block; read-only `credentials/`; `bin/` of empty
 `kimi.exe`, `rg.exe`, `fd.exe`); the lock root is overridden per async flow (`KimiCredentialsLock.RootFor`), never by assigning a static; no test
 holds an inheritable handle in the test host (S2.43 plays the shim as a `FakeCli.exe tree-hold` child; the first draft re-took the hold in the host
@@ -4249,7 +4249,7 @@ that returned empty answers or did nothing, and the first red is an assertion me
 
 Red first, against stubs that kept today's behaviour (the new members of `IAcpProfile` defaulted to the inherited request and no hold, `AcpUsageLine.Parse` and
 `AcpMessages.AnnouncedValues` answering "nothing"): one run of every new class, and each red below is an assertion message. A Kimi turn through the REAL binary is a
-child process on an owned home in the test's own `testsToDelete-kimi-…` folder (`KimiFixture.MadeHome`); the fake agent is started in the BUILT environment, so it
+child process on an owned home in the test's own `kimi-…` folder (inside the run folder) (`KimiFixture.MadeHome`); the fake agent is started in the BUILT environment, so it
 finds its script beside its working folder (`<cwd>/../agent.json`) and writes its own environment and a probe of both lock files at start (`envFile`, `probes`) —
 the hold is observed from inside the tree. No test holds an inheritable handle (`NoTestHoldsAnInheritableHandleTests` stays green). A `/usage` prompt is answered by
 the fake agent itself (`usageReply`, `promptErrorOnUsage`, `usageHang`; with none it answers a bare `end_turn`, replaying none of the script's steps).
@@ -4609,7 +4609,7 @@ behaviour and not a compile error. A row marked *guard* passed at once and says 
 | Extension: `kimiLinuxInstall.test.ts` — *G* (3 tests) and *H* (1), run in bash against stand-ins | a resolving link of the person's own at `~/.local/bin/fd` is left alone (a dangling one is replaced — *guard, it already was*); `~/.local` is not made when no link is needed; the target is absolute for a relative PATH entry; Debian's own `/usr/bin/fdfind` (the line's one literal path, pointed at a stand-in by the harness so a real one on the machine changes nothing) wins over the first `fdfind` on PATH; the closing check names a PATH hit before `~/.local/bin`. Reds: `the person’s own link was replaced`; `~/.local was made although no link was`; `the link was not made, or points elsewhere`; `the link points at the fdfind PATH found first, not at the distribution’s own`; `a PATH hit comes before ~/.local/bin (KimiTools.Directories: bin, PATH, then ~/.local/bin)`. |
 | same file — *I* | `KIMI_TOOLS_NOTE` and the Linux-install help of all five languages carry `sudo apt-get update`, `.bashrc` and `~/.local/bin`. Red: `the card’s note never says what to do when apt cannot find ripgrep or fd-find`. |
 | `KimiNetworkOverrideChainTests` (4) and `QuestionFanOutTests.AQuestionRowsLaunchSettings_Carry…` (2) (J) | the roster binds the panel's setting to the row's adapter (on and off); the providers answer shows the network warning with the override on and none with it off; a question row's launch settings carry it. **Break-it, once each, then restored:** the `RosterBuilder` line deleted → `Expected work[0].Invocation.Adapter to be True because the launch control of this row asks the setting the panel read`; the `PanelService` gate inverted → `Expected row.TryGetProperty("warning", …) to be True` and `Did not expect … "network storage (nfs4) …" to contain "network storage"`; the `QuestionFanOut` line deleted → `Expected fanOut.SettingsFor(admitted).KimiAllowNetworkSignIn to be True`. A Kimi question row is not admitted anywhere in this build, so that last test asks `SettingsFor` (made `internal`) with a plain row. |
-| `AKimiRowRunsThroughTheServiceOnWsl2Tests` (K) | its temp folder is `testsToDelete-kimiflow-…` (the leftovers rule); no behaviour, no test. 76 other `TempDir.For("coai-…")` prefixes in `src_mcp/tests` are older and were not touched. |
+| `AKimiRowRunsThroughTheServiceOnWsl2Tests` (K) | its temp folder is `kimiflow-…`, inside the run folder (the leftovers rule: what lives in an owned folder needs no prefix); no behaviour, no test. 76 other `TempDir.For("coai-…")` prefixes in `src_mcp/tests` are older and were not touched. |
 | Extension: `captureStops.test.ts` — *why a read did not finish* (L) | `capture` answers `ended: 'timeout' \| 'not-started' \| 'stopped'` beside `-1`, and nothing for a real exit. Red: `a child that outlived its cap`. |
 | Extension: `kimiClearMarker.test.ts` — the `-1` sentence, the notice per outcome, the reason handed through a press, the host's wiring, the pending button (L) | a program that never started is not said to have taken 20 seconds (and an unknown end is not given a cause); cleared / absent / kept / refused each have their own code; the panel says `...said.notice` and writes no code of its own; the button is disabled and reads `Clearing…` from the press and is itself again when the host settles that command. Reds: `a program that never started was said to have taken 20 seconds`; `nothing was cleared: there was none`; `The input did not match the regular expression /could not be started/u`; `a second press while the first runs would start a second run`. |
 
@@ -5290,7 +5290,7 @@ to the six-hour sweep; nothing is thrown. The product side is in [module_server.
 
 | Test | Seen red as | Green / break-it |
 |---|---|---|
-| `TheRoundsScratchRemovesItsEmptyFoldersTests` (7, `RoundScratch.At(...)` in the test's own `testsToDelete-` folder): `AnEmptyFolderTheScratchOwns_IsRemovedWhenTheScratchEnds`, `AnOwnedFolder_IsRemovedByItsRecordedPath_AndASiblingWithTheSamePrefixIsNotTouched`, `AFolderThatIsNotEmpty_IsKeptWithItsFile_AndWarnedAboutOnce_AndNothingIsThrown`, `AFolderThatIsAlreadyGone_IsNothing_AndNothingIsSaid`, `AFolderThatCannotBeRemoved_IsWarnedAboutOnce_AndNothingIsThrown`, `TheScratchThatIsNone_TakesNoRegistration_…`, `TheRegistry_IsCarriedBy_With_…` | against a registry that only recorded (no removal): `Expected Directory.Exists(repair) to be False because the round's empty repair folder went with the round, but found True.`; `Expected _notes to contain a single item, but the collection is empty.`; `…TheRegistry_IsCarriedBy_With…: Expected Directory.Exists(repair) to be False …, but found True.` (5 of 7 red; the gone-folder and `None` arms are guards, green from the start) | 7 green. Break-its: `Directory.Delete(folder, recursive: true)` → `Expected File.Exists(planted) to be True because the removal is NOT recursive …, but found False.`; `throw;` in the catch → `Did not expect any exception because a failed removal never fails the round, but found System.IO.IOException: The directory is not empty.` (and the held-handle twin: `…being used by another process`); `With` passing a new registry → the `With` test red (`…found True`); `Owns` without the `Directory.Length > 0` guard → `Expected RoundScratch.None.OwnedFolders to be empty because a list on the shared object would grow for ever …` |
+| `TheRoundsScratchRemovesItsEmptyFoldersTests` (7, `RoundScratch.At(...)` in the test's own temp folder): `AnEmptyFolderTheScratchOwns_IsRemovedWhenTheScratchEnds`, `AnOwnedFolder_IsRemovedByItsRecordedPath_AndASiblingWithTheSamePrefixIsNotTouched`, `AFolderThatIsNotEmpty_IsKeptWithItsFile_AndWarnedAboutOnce_AndNothingIsThrown`, `AFolderThatIsAlreadyGone_IsNothing_AndNothingIsSaid`, `AFolderThatCannotBeRemoved_IsWarnedAboutOnce_AndNothingIsThrown`, `TheScratchThatIsNone_TakesNoRegistration_…`, `TheRegistry_IsCarriedBy_With_…` | against a registry that only recorded (no removal): `Expected Directory.Exists(repair) to be False because the round's empty repair folder went with the round, but found True.`; `Expected _notes to contain a single item, but the collection is empty.`; `…TheRegistry_IsCarriedBy_With…: Expected Directory.Exists(repair) to be False …, but found True.` (5 of 7 red; the gone-folder and `None` arms are guards, green from the start) | 7 green. Break-its: `Directory.Delete(folder, recursive: true)` → `Expected File.Exists(planted) to be True because the removal is NOT recursive …, but found False.`; `throw;` in the catch → `Did not expect any exception because a failed removal never fails the round, but found System.IO.IOException: The directory is not empty.` (and the held-handle twin: `…being used by another process`); `With` passing a new registry → the `With` test red (`…found True`); `Owns` without the `Directory.Length > 0` guard → `Expected RoundScratch.None.OwnedFolders to be empty because a list on the shared object would grow for ever …` |
 | `TheRoundsEmptyFoldersAreRemovedTests.ARoundRemovesItsEmptyRepairAndWorkspaceFolders` (S7; a real code round, `none` workspace, scripted repair; the two folders are the ones the launches were GIVEN — the C10 recorder, widened) | `Expected Directory.Exists(folders.Repair) to be False because the round made its repair folder empty and must remove it when it ends, but found True.` | green. Break-it: `FrameFor` no longer registers the workspace folder → `Expected Directory.Exists(folders.Workspace) to be False …, but found True.` |
 | `TheRoundsEmptyFoldersAreRemovedTests.AFolderThatIsNotEmpty_IsKeptAndWarnedAbout_AndTheRoundStillEnds` (the repair hook writes a file into the folder before the launch) | `Expected WarningsAbout(sink, folders.Repair) to contain a single item because one warning, naming the folder, but the collection is empty.` | green: the file and the folder are still there, ONE warning names the folder, the verdict is `proceed`, the workspace folder is gone. Break-its: recursive → `Expected planted to contain only items matching Exists(file) because the removal is not recursive …`; `throw;` → `Expected parsed.RootElement.TryGetProperty("error", out var error) to be False because the round ended with an answer, not an error: {"error": "the round failed: The directory is not empty. …"}` |
 | `TheRoundsEmptyFoldersAreRemovedTests.AFolderThatCannotBeRemoved_IsLeftToTheSweep_AndTheRoundStillEnds` (**Windows only**; a directory handle held with `FolderHolds.Undeletable` from the repair hook) | `Expected WarningsAbout(sink, folders.Repair) to contain a single item … but the collection is empty.` | green: folder left, one warning, verdict `proceed`. Break-it `throw;` → `the round failed: The process cannot access the file … because it is being used by another process.` *A first version opened the handle with FILE_READ_ATTRIBUTES only and the removal SUCCEEDED — an attributes-only open takes no part in sharing; `FILE_LIST_DIRECTORY` holds the folder.* |
@@ -5691,8 +5691,8 @@ local word a live server can write — `roundClock` — which costs it a real mi
 
 ### The owned Kimi homes — E5.3 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-16, built on Fable)
 
-Every fake person is `KimiFixture`'s, inside its own `testsToDelete-kimi-…` folder and OUTSIDE every tree a test deletes (a person's folder inside the swept
-tree is deleted by enumeration order — a past CI failure); the homes root is a second `testsToDelete-` folder; the lock root is overridden per async flow; every
+Every fake person is `KimiFixture`'s, inside its own `kimi-…` folder (inside the run folder) and OUTSIDE every tree a test deletes (a person's folder inside the swept
+tree is deleted by enumeration order — a past CI failure); the homes root is a second temp folder; the lock root is overridden per async flow; every
 tree hold is a plain non-inheriting `HeldFile.Take` in the host; no test runs a real `kimi`; a network path is a seam's answer (`IJunctionShell.FinalDirectory`),
 never a real target. Red first: the by-nature reds against stubs that kept today's behaviour (`OneShotHome.Io` = today's whole-folder delete, `Junctions.ResolvedRefusal`
 answering empty); every pin was given teeth by a temporary break of the deciding line, run red, and the break reverted.
@@ -5817,7 +5817,7 @@ what was billed) is now a reset by decision 12, so the floor is pinned where it 
 and, once, the whole `ask_consultants` flow through `PanelService`. Both stand on `AKimiConsultationScenarioTests`' arrangement: the real `KimiLaunch` over
 `KimiFixture`'s fake person (a real junction on Windows, a symbolic link elsewhere through `WindowsStandIn`), a per-flow lock root, `KimiSeams.Using` for the adapter
 built by name, and only the shim and `kimi --version` played (`PlayedKimi`, which gained `Version` — a launch refused AFTER the home was made). The person, the homes
-root and the scratch are separate `testsToDelete-` folders. No test starts the real `kimi`. The table rows were red against the code as it stood; the check's and the
+root and the scratch are separate temp folders. No test starts the real `kimi`. The table rows were red against the code as it stood; the check's and the
 row's disposal rows went green on arrival (E5.3 and E5.4 had built the path — the plan's own prediction for S5.5.3) and were given teeth by a temporary break of the
 deciding line, run red, and reverted.
 
@@ -6313,3 +6313,108 @@ Counts after the round: see the end of this section. **A known limit, not S4's a
 **The GREEN, on the normal Windows job** (`Windows · mcp`, ci run **41881044878**, head `e250a14d`, attempt 1, job 126753533751): the Node steps as before (leftoversSweep 10/10, runFolder 6/6, owned 15 + 1 skip, runTests 7/7, `scripts/runFolder.test.mjs` 6/6); the C# step: **14337 tests, 14197 succeeded, 140 skipped, 0 failed**, including `TwoSweepsAtOnce_NeverFail_AndNeverRemoveEachOthersWork` (B8 (c): error lines of the two sweeps 0) and the four Windows-only lock tests; "Run folder — Team server" 9/9. The other jobs of that attempt (`extension · a real editor`, `macOS`, `build · test · family checks`, `extension · typecheck · test · package`, `actionlint`) succeeded.
 
 **The GREEN, held** (the same run re-run with `gh run rerun`, attempt 2, `Windows · mcp` job 126770650008): the Node steps identical; the C# step **14337 tests, 14197 succeeded, 140 skipped, 0 failed**, B8 (c) "error lines of the two sweeps: 0 + 0"; "Run folder — Team server" 9/9; all six jobs of the run succeeded. Both attempts ran with the lock; the RED branch `tmp/e5-s2b-mutex-red` (runs 41875636356 and 41878243091) and the coordinator's `tmp/e5-win-move-race` are deleted now that their run ids and lines are recorded here.
+
+
+## E5 S5 — the bare prefix leaves every eligible site: the names inside a run folder lose `testsToDelete-`, the legacy fixtures stay plain literals with the inline exemption (2026-11-04)
+
+S5, commit 4 of the producer PR (`todo/PLAN_test_leftovers_E5.md` § *S5 as revised at the epoch-3 re-review*). The list in the plan is from `a3b73534`; S3, S2-B and S4 moved it, so every site below was found by CONTENT on this branch (`git grep -n -i teststodelete`), not by the plan's line numbers. No producer, no sweep, no `.owner` writer, no product code, no guard, no baseline (those are S6). The local branches `feat/test-leftovers-e5-s5-{mcp,ext,scripts}` were material only; their `legacyNames` modules (a prefix built from pieces) are NOT used and nothing was merged from them.
+
+### The rule applied
+
+A name inside an owned run folder carries no prefix of its own (rule §1, *What dies with its container needs no name of its own*): the site drops `testsToDelete-` (and, where the repository token followed it, `coai-`: the product's own scratch prefix is `coai-`, and a test folder that starts with it would be one the product's `coai-*` sweeps and `neverSwept` scans could meet), keeps its `what`, and keeps the random part (`Directory.CreateTempSubdirectory` and `mkdtempSync` add it). A site whose meaning IS a legacy name stays one plain literal with `testsToDelete-exempt: legacy-name — <reason>` on the line or the line above. Nothing is built from pieces.
+
+### Per-site proof (D10: inside the run folder under EVERY invocation that runs it)
+
+| Tree | Invocations that run it | Why every one gives it the run folder |
+|---|---|---|
+| `src_mcp/tests` (`CoaiMcp.Tests`) | `ci.yml:58` (Linux), `:309`, `:317`, `:321` (macOS), `:406` (Windows `.exe`); `sonarcloud.yml:275` (`dotnet-coverage collect -- …/CoaiMcp.Tests`); a person starting the executable | every one starts the same executable, whose `[ModuleInitializer]` `RunTemp.Start` makes the owner-form run folder, claims it first, and points TEMP, TMP and TMPDIR at it (S3); a run that cannot is exit 78 before discovery (`RunTempGateTests`). `TempDir.For`, `Directory.CreateTempSubdirectory` and `Path.GetTempPath()` all read those variables, so a site that uses them is inside the run folder. |
+| `src_vs_code/src/test` (the two `.ts` sites) | `npm test` → `run-tests.mjs` (`package.json`, `ci.yml`, `release.yml`), `sonarcloud.yml` through the runner (S4), one source test through the runner | the first import of each file is `inRunFolder.cjs` (S4): a start outside the runner's run folder refuses (exit 1 under `--test`, 78 plain). TEMP is the run folder, so `os.tmpdir()` is inside it. |
+| `scripts/lib`, `src_vs_code/src/test/leftoversSweep.test.mjs` (legacy fixtures) | `run-lib-tests.mjs` / `run-tests.mjs` | the same first import. The fixtures live in the test's own `privateRoot(t)` / `plant(root, …)` folder, which is under the run folder; the legacy name is the fixture, not a leftover of the run. |
+
+For every renamed site the cleanup, the glob, the regex and every `StartsWith` that could look for the OLD name were searched for: `git grep -n -i teststodelete` over the whole tree lists no remaining reader of a renamed name (the remaining lines are in the tables below), and every renamed folder is removed by the exact path its owner holds (`TempDir.Dispose`, a `finally`, `_temps`), never by a prefix. The assertions that quoted a name were rewritten with it: `TheCallersTranscriptIsFoundByItsSessionIdTests.No_test_reads_the_developers_profile` asserted `.Contain("testsToDelete-")` on the empty Claude home; it now asserts `.StartWith(RunTemp.Folder)` (the home is inside this run's own folder, which is what the old text stood for) and the planted sentinel folder lost the prefix.
+
+### Counts, per tree (`git grep -c -i teststodelete`, lines; before = this branch at `ab789672`, after = this commit)
+
+| Tree | Before: lines / files | After: lines / files | What the after-lines are |
+|---|---|---|---|
+| `src_mcp/tests` | 244 / 118 | 7 / 4 | 5 are the NAMES of the environment variables `TESTSTODELETE_RUN` and `TESTSTODELETE_OWNER` (`Leftovers/OwnerTests.cs` ×3, `TheRunFolderIsClaimedByItsOwnProcessTests.cs` ×2: not folder names); 2 are doc comments that name a folder FORM on purpose (`StartOfRun.cs:11` the retired legacy `…-coai-run-*` folders; `TempDirsAreSwept.cs:24` the owner form) |
+| `src_server/tests`, `src_bugs`, `src_bench`, `http` | 0 / 0 | 0 / 0 | S3 took `GaugeCaptureTests.cs` |
+| `src_vs_code` | 44 / 14 | 41 / 12 | 17 → 14 lines that are not the env-var name `TESTSTODELETE_RUN`: the runner's own lines (`owned.mjs`, `run-tests.mjs:166`, `runFolderGuard.cjs`, `startOfRun.mjs:25`), the owner-form names of the S2-B/S4 tests, and in `leftoversSweep.test.mjs` the one legacy literal with its exemption comment |
+| `scripts` | 31 / 6 | 23 / 5 | 28 → 20 lines that are not an env-var name: `old-coai-leftovers.mjs` ×4 (helper-own), `old-coai-leftovers.test.mjs` ×14 (8 quarantine-marker lines, 2 legacy literals, 3 exemption comments, 1 line of two more legacy fixtures), `run-lib-tests.test.mjs:52` (owner form), `make-series.sh:29` (prose) |
+
+The raw-line count of a tree can rise where the exemption comment itself spells the word (`testsToDelete-exempt:`); the number that S5 owns is the guard's, below. The shipped guard (`node .agents/conventions/tools/leftovers-check.mjs --repo . --profile node --token coai --identity "the multi-model review extension and server"`; `yaml` and `picomatch` are in the mount's `node_modules`, so no `npm ci` and no dependency was added; `--identity` is the token row's text, which the helper of this repository will carry in S6):
+
+| Class | Before | After |
+|---|---|---|
+| `owner-blind` | 1 (`transcript-sanitise.test.mjs:687`) | **0** |
+| `legacy-name` | 22 | **3** (`old-coai-leftovers.mjs:35`, `:37`, `:139`: helper-own, S6 exempts them by name) |
+| `exemption` (a malformed inline exemption) | 0 | 0 |
+| `raw-temp` | 252 | 252 (not S5's class: the baseline of S6/S7) |
+
+The 22 before: 3 helper-own, 13 legacy fixtures in `old-coai-leftovers.test.mjs`, 4 in `leftoversSweep.test.mjs`, `kimiWindowsInstallRuns.test.ts:63`, `windowsPackageIsSigned.test.ts:401` (one of the two sites the plan calls new on `main`). Break-it: deleting the exemption comment above one literal brought its `legacy-name` finding back (seen, then restored). The guard reads `.mjs`/`.ts`/scripts only; the C# side has no guard until S6, so its count is the `git grep` above.
+
+### The classes of the changed groups
+
+| Group | Sites | Class | What was done |
+|---|---|---|---|
+| `TempDir.For("testsToDelete-X-")`, `Directory.CreateTempSubdirectory(…)`, the two `Temp(…)` helpers | 190 lines in `src_mcp/tests` (115 files of that tree changed in all) | a folder made by a helper that reads the run folder's TEMP | prefix dropped, `what` kept (`testsToDelete-coai-transcript-held-` → `transcript-held-`: the `coai-` of the repository token goes with the prefix so a test folder never starts with the product's own scratch prefix) |
+| `Path.Combine(Path.GetTempPath(), "testsToDelete-X")` | 10 lines (`KimiAcpProfileTests`, `KimiEnvironmentOnLinuxTests`, `KimiLaunchChecksTests`, `ForeignKimiTests`, `KimiPersonsConfigTests`, `BackfillAuthorsExitCodesTests`) | a leaf path under the run folder (`GetTempPath()` is the run folder) | prefix dropped |
+| `Prefix` constants of the transcript fixtures | 6 lines (`RecordedSession`, `NoTextLeavesTheCallerReader`, `TheCallerTranscript×3`, `TheReaderVersionIsPinned`) | the name is used only through `TempDir.For(Prefix)` | prefix dropped in the constant |
+| a leaf made inside an already-owned temp folder | 3 lines (`AReviewTreeWithALongPathTests` and `WorktreeManagerTests` `wt-control-longpaths` beside the tree root; `VibePathBudgetTests`) | inside `_root`/`_storage`, which are `TempDir`/`CreateTempSubdirectory` folders; `VibePathBudgetTests` is a string only (see below) | prefix dropped |
+| an assertion that quoted the prefix | 2 lines (`TheCallersTranscriptIsFoundByItsSessionIdTests`) | `Contain("testsToDelete-")` was a proxy for "inside the run's temp" | now `StartWith(RunTemp.Folder, …)`; the planted sentinel folder is `sentinel-folder` |
+| doc comments that named the prefix as the test's folder | 26 comment lines in 25 files | prose | reworded to "a temp folder" / the kept `what` |
+| `kimiWindowsInstallRuns.test.ts:63`, `windowsPackageIsSigned.test.ts:401` | 2 | `mkdtempSync(join(tmpdir(), …))` inside the runner's run folder | `kimi install run ` (spaces kept on purpose) and `finalzipstep-` |
+| `old-coai-leftovers.test.mjs`, `leftoversSweep.test.mjs` | 13 + 4 lines | legacy run-folder fixtures: the name IS the test | plain literals + inline exemption (next section) |
+| `transcript-sanitise.test.mjs:687` | 1 line | `owner-blind` (a prefix match with no owner segment) | the vacuous clause `!stderr.includes('testsToDelete')` removed: the test's folder (`:21`) has no prefix, so the clause could not fail; the `!includes(dir)` clause beside it is the real "no path" check |
+
+### Exempted lines (S6 counts these as exempted, never as absent)
+
+Every literal below has `testsToDelete-exempt: legacy-name — <reason>` on the line above it (the lines are the literals'). All are plain literals; none is built from pieces. S6 counts each as exempted.
+
+| File and line (after this commit) | Literal | Reason (as written) |
+|---|---|---|
+| `scripts/lib/old-coai-leftovers.test.mjs:27` | `LEGACY_RUN_A = 'testsToDelete-coai-run-abc123'` | the clean-up reads old run folders, so this fixture must be the legacy name itself (used by the eight tests that had it inline; the `.owner` names are `${LEGACY_RUN_A}.owner`) |
+| `scripts/lib/old-coai-leftovers.test.mjs:29` | `LEGACY_RUN_B = 'testsToDelete-coai-run-def456'` | the same |
+| `scripts/lib/old-coai-leftovers.test.mjs:99` | `'testsToDelete-coai-run-0a0a0a'`, `'testsToDelete-coai-run-112233'` (beside the two constants) | the listing of old run folders is the test, so its four fixtures are the legacy names |
+| `src_vs_code/src/test/leftoversSweep.test.mjs:58` | `LEGACY_RUN = 'testsToDelete-coai-run-1a2b3c'` | the sweep lists legacy run folders, so this fixture must be the legacy name itself (used at the plant, in two assertions on the listing, and in the call-list of the switch test) |
+
+The plan listed 13 lines in `old-coai-leftovers.test.mjs`; sharing a plain literal as a constant (the plan allows "one literal per language may serve many tests") turns them into three exempted lines. `src_mcp/tests` has NO legacy fixture of this kind left: its legacy tests were the E2 run-temp tests, which S3 rewrote and S2-B's `LeftoversSweepTests` replaced. The four lines of `leftoversSweep.test.mjs` are not in the plan's list by file (the plan names `startOfRun.test.mjs`, whose legacy fixtures S2-B moved here): the same kind, so they take the same form (a decision under an assumption, reported).
+
+### Sites NOT renamed, and why
+
+**Helper-own (S6 exempts by name; unchanged here):** `scripts/lib/old-coai-leftovers.mjs:35`, `:37`, `:139`; the 8 `.teststodelete-quarantine-` lines of `scripts/lib/old-coai-leftovers.test.mjs` (`:200`, `:254`, `:355`, `:414`, `:468`, `:587`, `:721`, `:729`); `src_vs_code/scripts/run-tests.mjs:166` (the runner's quarantine pattern, what is left of the plan's `:106-:125` after S4); `src_vs_code/scripts/startOfRun.mjs:25` (prose naming the retired legacy count; the plan's `:19`, `:28` code lines were removed by S2-B); the quarantine word of the copied C# library (`"teststo" + "delete-quarantine-"` in `tests_leftovers/LeftoversSweep.cs`, `StartOfRunSweep.cs`, `Leftovers/LeftoversSweepTests.cs`, `StartOfRunSweepPlants.cs`, `StartOfRunSweepRaceAndRootTests.cs`: the reference's own spelling, copied byte for byte with the manifest) and the library's own `Owned.cs` patterns.
+
+**Prose or data that names a form, not a site:** `src_mcp/tests/StartOfRun.cs:11` (the retired legacy count, in a doc comment), `src_mcp/tests/TempDirsAreSwept.cs:24` (the owner form), `shared/temp-sweep.json:16` (a sentence in the `why` of the shared data file that says what a run folder was called; not a test, not read for its text), `scripts/native/make-series.sh:29` and `src_vs_code/scripts/runFolderGuard.cjs:12-13` (comments). The env-var NAME `TESTSTODELETE_RUN`/`TESTSTODELETE_OWNER` lines are not folder names.
+
+**A name built from pieces, found and NOT touched (S4's, to be settled by S6):** `scripts/lib/native-run.test.mjs:42` (`OLD_PREFIX = ['testsTo', 'Delete-'].join('')`) and `scripts/native/native.test.mjs:506` (`OLD_PREFIXED = ['testsTo', 'Delete-'].join('') + 'native-vibe-…'`). The plan says a prefix built from pieces is a defect, never a pass, and that these legacy-series fixtures are S6's expected exemptions: S6 must turn each into one plain literal with the inline `legacy-name` exemption. Not renamed here, by instruction.
+
+**Not inside the run folder:** none of the renamed sites. One site is rooted outside it by design: `VibePathBudgetTests.HomeOfLength` builds a string rooted at the drive's root, to reach an exact length (its remark: "Pure: nothing is made on disk"; read in full, no `Directory.`/`File.` call in the class). It creates nothing, so there is no leftover to collect; its name lost the prefix because it is a fixture string (`vh-budget`), not because it is contained. Nothing in `src_mcp/tests` was found under a WSL distro's `/tmp`, the user profile, `LocalAppData` or a fixed path; `AKimiShimScenarioTests` sets `USERPROFILE` only in a child's environment, its folders come from `TempDir.For`. `TheCallersTranscript…` reads the profile only to assert the test never uses it.
+
+**Not S5's:** `scripts/lib/old-coai-leftovers.test.mjs:33` `mkdtempSync(os.tmpdir())` and the other 251 `raw-temp` findings (the S6 baseline / S7 drain); `shared/temp-sweep.json`'s sentence.
+
+### Deferred sites of the plan — the invocation, the missing containment, and where each was handled (all before this commit)
+
+| Plan item | Invocation that had no run folder | Handled by |
+|---|---|---|
+| `src_server/tests/GaugeCaptureTests.cs:30` | the `src_server/tests` executable (`ci.yml:77`, `:285`, `sonarcloud.yml`): no run folder | S3, `cf0e3be6` (the Team server suite's run folder and gate; the file lost its bare prefix) |
+| the lines of `RunTempTests` / E2's run-temp tests | the `src_mcp/tests` executable, whose folder still had the legacy name | S3, `9b0045d6` (rewritten to the owner form) |
+| `chatTestsLeaveNoTemp.test.mjs:30`, `runTemp.test.mjs` (deleted) | `run-tests.mjs` fell back to the machine temp | S4, `b4d889f3` and `bc3ecef2` |
+| `startOfRun.test.mjs:144-206` (legacy-count fixtures) | `run-tests.mjs` | S2-B, `e44bca3d` (the legacy count retired; the fixtures moved to `leftoversSweep.test.mjs`, which this commit covers) |
+| `kimiLinuxInstall.test.ts:60`, `runtimeSinceIsAhead.test.ts:147` | `sonarcloud.yml:302` ran the compiled tests with no run folder | S4, `b65701c1` (and `a86a48f7`, which routes SonarCloud through the runner) |
+| the 15 `scripts/lib` lines, `native-run.mjs`, `native-run.test.mjs`, the 12 `scripts/` `legacy-name` lines, `scripts/native/*.sh` | `ci.yml:197` ran a bare `node --test` in the machine temp; a person ran the scripts | S4: `b65701c1` (every runner and person-run script owns its folder; `run-lib-tests.mjs` for CI), `1edf7157` (the series leaves the family); the two old-series fixtures that S4 left are in *Sites NOT renamed* |
+
+### Tests
+
+Built and run on WSL (Ubuntu 26.04, lowered with `nice -n 19` / `low-priority.mjs`, `dotnet build -m:4`, one run at a time, a private short `TMPDIR=/tmp/s5t`, empty afterwards except node's own `node-compile-cache`):
+
+| Command | Result |
+|---|---|
+| `dotnet build src_mcp/tests/CoaiMcp.Tests.csproj -c Release -m:4` | 0 warnings, 0 errors |
+| `./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests` (the MTP executable) | **14341 tests, 14192 succeeded, 149 skipped, 0 failed**, 13 m 25 s |
+| `cd src_vs_code && npm test` | **6789 tests, 6768 pass, 21 skipped, 0 fail** (513 compiled, 23 source files): the totals of the last round before S5 (the head's own `npm test` line, above) |
+| `node scripts/run-lib-tests.mjs` | **437 tests, 433 pass, 4 skipped, 0 fail**: the totals before S5 |
+| `npx eslint` on the two changed `.ts` tests | clean |
+
+No test was added, removed or skipped by this commit: the diff touches no `[Fact]`, `[Theory]`, `InlineData`, test method or `test(…)` title, so the counts are the head's. (The C# total was not run at `ab789672` in this session; the Windows leg of the last round counts 14337 with 140 skipped, and the 4 Windows-only tests are skipped on Linux — a count across OSes is not a comparison. The comparison with `main`'s CI legs is for the PR's CI, which has not run on this commit.) The guard counts above were taken with the same tree.
+
+The suites that ran the changed folders: every `TempDir.For` site ran; the ones whose length matters on Windows (`AVibeHomesNeverLiveUnderTempTests`, `VibeLaunchControlTests`, `VibePathBudgetTests`, `AReviewTreeWithALongPathTests`) pad to an absolute length from the folder's actual length, so a shorter name keeps the case: they passed here, and the Windows leg is for CI. `kimiWindowsInstallRuns.test.ts` makes its folder only on Windows (a `WINDOWS ? … : ''` guard), so this commit's change to it is read, type-checked and linted here and run by the Windows leg only.

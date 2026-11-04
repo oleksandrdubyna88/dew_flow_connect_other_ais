@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 /// spelling; the shim's TREE HOLD outlives its opener while any process that inherited it lives.
 /// </summary>
 /// <remarks>
-/// Every lock folder and every sign-in folder here is under this test's own <c>testsToDelete-kimilock-</c> folder, and the lock root is
+/// Every lock folder and every sign-in folder here is under this test's own <c>kimilock-</c> folder, and the lock root is
 /// overridden per async flow (<see cref="KimiCredentialsLock.RootFor"/>), never by assigning a static: the suite runs eight tests at once.
 /// NO inheritable handle ever lives in the test host — S2.43 plays the shim as a child process.
 /// </remarks>
@@ -22,7 +22,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimilock-");
+    private readonly TempDir _dir = TempDir.For("kimilock-");
 
     private string Locks => _dir.At("locks");
 

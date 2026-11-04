@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A REAL <see cref="PanelService"/> over real git with FakeCli, after two live code rounds: what the size tests of E7 start from (S2 reconstructs the sizes,
-/// S3 writes them). The repository and the data directory are <c>testsToDelete-…</c> temp folders.
+/// S3 writes them). The repository and the data directory are temp folders.
 /// </summary>
 public abstract class LiveSizedGateBase : FakeCliGateBase
 {

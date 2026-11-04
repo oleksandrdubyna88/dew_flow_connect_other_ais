@@ -59,8 +59,8 @@ const HARNESS = [
 ].join('\n');
 
 const WINDOWS = process.platform === 'win32';
-// A folder named for the cleanup sweep, with spaces in its name: the line must work for a person whose paths have them.
-const root = WINDOWS ? mkdtempSync(join(tmpdir(), 'testsToDelete-kimi install run ')) : '';
+// A folder with spaces in its name, inside the run's own folder (TEMP is the run folder; the guard import refuses any start without one): the line must work for a person whose paths have them.
+const root = WINDOWS ? mkdtempSync(join(tmpdir(), 'kimi install run ')) : '';
 after(() => {
   if (root.length > 0) {
     rmSync(root, { recursive: true, force: true });

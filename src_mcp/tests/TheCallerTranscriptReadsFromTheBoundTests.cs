@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed partial class TheCallerTranscriptReadsFromTheBoundTests
 {
-    private const string Prefix = "testsToDelete-coai-bound-";
+    private const string Prefix = "bound-";
     private const string C02Agent = "303b2866f0b3022b2";
     private const string C14Agent = "2edf3ddec8861a853";
 

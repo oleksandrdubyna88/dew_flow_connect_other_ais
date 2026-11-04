@@ -17,7 +17,7 @@ public sealed class AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests : IDispo
 {
     private const int DeadPid = 999_999;
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-orphan-temp-");
+    private readonly TempDir _dir = TempDir.For("orphan-temp-");
 
     public void Dispose() => _dir.Dispose();
 

@@ -22,6 +22,12 @@ const MINUTE = 60_000;
 const now = Date.UTC(2026, 10, 2, 12, 0, 0);
 const posix = process.platform !== 'win32';
 
+// The legacy run-folder names the one-off clean-up exists to read: each is the test's MEANING, so each stays one plain literal, never built from pieces.
+// testsToDelete-exempt: legacy-name — the clean-up reads old run folders, so this fixture must be the legacy name itself
+const LEGACY_RUN_A = 'testsToDelete-coai-run-abc123';
+// testsToDelete-exempt: legacy-name — the clean-up reads old run folders, so this fixture must be the legacy name itself
+const LEGACY_RUN_B = 'testsToDelete-coai-run-def456';
+
 /** A legacy claim of THIS machine (`<host>@<os>:<pid>[:<start>]`), the grammar the runners wrote. */
 const claimOf = (pid, start) => `${thisOwner().host}:${pid}${start === undefined ? '' : `:${start}`}`;
 /** The probe of the injected world: pid 99999 has no process, 88888 is alive, anything else cannot be asked. */
@@ -89,7 +95,8 @@ test('S1 the listing holds coai-* names with age and identity, and leaves out th
 
 /** S2's four legacy run folders, each with the claim its state needs. */
 function legacyRuns(root) {
-  const runs = { gone: 'testsToDelete-coai-run-abc123', live: 'testsToDelete-coai-run-def456', unknown: 'testsToDelete-coai-run-0a0a0a', none: 'testsToDelete-coai-run-112233' };
+  // testsToDelete-exempt: legacy-name — the listing of old run folders is the test, so its four fixtures are the legacy names
+  const runs = { gone: LEGACY_RUN_A, live: LEGACY_RUN_B, unknown: 'testsToDelete-coai-run-0a0a0a', none: 'testsToDelete-coai-run-112233' };
   const claims = { gone: claimOf(99999, 1700000000), live: claimOf(88888), unknown: 'box@win32:5' };
   for (const [state, name] of Object.entries(runs)) {
     make(root, name, 120);
@@ -350,17 +357,17 @@ const quarantineOf = (name, suffix = '99999-0a1b2c3d') => `.${name}.teststodelet
 test('S14 the listing reports this script\'s own quarantines, and remove accepts them by name', (t) => {
   const root = privateRoot(t);
   const panel = quarantineOf('coai-panel-a');
-  const run = quarantineOf('testsToDelete-coai-run-abc123');
+  const run = quarantineOf(LEGACY_RUN_A);
   const chat = quarantineOf('coai-chat-x');
   make(root, panel, 60);
   make(root, run, 60);
-  fs.writeFileSync(path.join(root, 'testsToDelete-coai-run-abc123.owner'), `${claimOf(99999, 1700000000)}\n`);
+  fs.writeFileSync(path.join(root, `${LEGACY_RUN_A}.owner`), `${claimOf(99999, 1700000000)}\n`);
   make(root, chat, 60);
   fs.writeFileSync(path.join(root, quarantineOf('coai-panel-b')), 'a file');
   const listing = list(root);
 
   assert.deepEqual(listing.entries.map((e) => [e.name, e.kind, e.of]).sort(),
-    [[panel, 'quarantine', 'coai-panel-a'], [run, 'quarantine', 'testsToDelete-coai-run-abc123']].sort(),
+    [[panel, 'quarantine', 'coai-panel-a'], [run, 'quarantine', LEGACY_RUN_A]].sort(),
     'the protected original and the file are not interrupted clean-ups of this script');
 
   const edited = { ...listing, entries: [...listing.entries, { ...listing.entries[0], name: chat, of: 'coai-chat-x' }] };
@@ -376,7 +383,7 @@ test('S14 the listing reports this script\'s own quarantines, and remove accepts
   const runResult = remove(root, listing, [run])[0];
   assert.equal(runResult.outcome, 'removed');
   assert.ok(!fs.existsSync(path.join(root, run)));
-  assert.ok(!fs.existsSync(path.join(root, 'testsToDelete-coai-run-abc123.owner')), 'the original name\'s claim goes with it, last');
+  assert.ok(!fs.existsSync(path.join(root, `${LEGACY_RUN_A}.owner`)), 'the original name\'s claim goes with it, last');
 });
 
 test('S15 kill after the rename, a second run finishes it', (t) => {
@@ -508,7 +515,7 @@ test('S19 [S2-A Opus 4] a pick the caller does not own (kernel owner, rule §3) 
 
 test('S20 [S2-A Opus 5] a legacy run folder whose claim turned live after the move is kept, with its claim', (t) => {
   const root = privateRoot(t);
-  const name = 'testsToDelete-coai-run-abc123';
+  const name = LEGACY_RUN_A;
   make(root, name, 120);
   fs.writeFileSync(path.join(root, `${name}.owner`), `${claimOf(99999, 1700000000)}\n`);
   const listing = list(root);
@@ -613,11 +620,11 @@ test('S26 [S2-A code2 1] the uid is checked again after the move: a quarantined 
 
 test('S27 [S2-A code2 2] a claim that cannot be read is `unreadable`, refuses the pick, and never aborts the listing', (t) => {
   const root = privateRoot(t);
-  const name = 'testsToDelete-coai-run-abc123';
+  const name = LEGACY_RUN_A;
   make(root, name, 120);
   fs.mkdirSync(path.join(root, `${name}.owner`)); // a directory in the claim's place
-  make(root, 'testsToDelete-coai-run-def456', 120);
-  fs.writeFileSync(path.join(root, 'testsToDelete-coai-run-def456.owner'), `${claimOf(99999, 1700000000)}\n`);
+  make(root, LEGACY_RUN_B, 120);
+  fs.writeFileSync(path.join(root, `${LEGACY_RUN_B}.owner`), `${claimOf(99999, 1700000000)}\n`);
 
   const listing = list(root);
   assert.equal(byName(listing.entries)[name].claim, 'unreadable', 'a directory where the claim should be');
@@ -626,7 +633,7 @@ test('S27 [S2-A code2 2] a claim that cannot be read is `unreadable`, refuses th
   assert.equal(sentinel(root, name), `still ${name}`);
 
   const throwing = list(root, { readClaim: () => { throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); } });
-  assert.deepEqual(throwing.entries.map((e) => [e.name, e.claim]), [[name, 'unreadable'], ['testsToDelete-coai-run-def456', 'unreadable']], 'a read that throws is unreadable for that entry and the listing goes on');
+  assert.deepEqual(throwing.entries.map((e) => [e.name, e.claim]), [[name, 'unreadable'], [LEGACY_RUN_B, 'unreadable']], 'a read that throws is unreadable for that entry and the listing goes on');
 });
 
 test('S28 [S2-A code2 4/8] list says which temp root it is scanning before it scans', (t) => {
@@ -765,7 +772,7 @@ test('S34 [S2-A code4 8] a relative tmp is resolved ONCE at the start: the scan 
 
 test('S35 [S2-A code4 9] a legacy run folder removed whose claim cannot be unlinked is a partial success that names the leftover claim', (t) => {
   const root = privateRoot(t);
-  const name = 'testsToDelete-coai-run-abc123';
+  const name = LEGACY_RUN_A;
   make(root, name, 120);
   const claim = path.join(root, `${name}.owner`);
   fs.writeFileSync(claim, `${claimOf(99999, 1700000000)}\n`);
@@ -859,7 +866,7 @@ test('S40 [S2-A CodeRabbit 4] a quarantine that cannot be read is listed with an
 test('S41 [S2-A CodeRabbit 5] a claim swapped in while the folder is removed is kept and reported, never unlinked', (t) => {
   for (const variant of ['another text', 'the same text in a new file']) {
     const root = privateRoot(t);
-    const name = 'testsToDelete-coai-run-abc123';
+    const name = LEGACY_RUN_A;
     make(root, name, 120);
     const claim = path.join(root, `${name}.owner`);
     const text = `${claimOf(99999, 1700000000)}\n`;
@@ -895,7 +902,7 @@ test('S42 [S2-A CodeRabbit 7] list takes no names: a stray positional is a usage
 /** A legacy run folder with a gone claim, and the claim's paths. */
 function runWithClaim(t) {
   const root = privateRoot(t);
-  const name = 'testsToDelete-coai-run-abc123';
+  const name = LEGACY_RUN_A;
   make(root, name, 120);
   const claim = path.join(root, `${name}.owner`);
   const text = `${claimOf(99999, 1700000000)}\n`;

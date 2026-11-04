@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheSharedResolverFollowsEveryLinkRootDownTests : IDisposable
 {
-    private readonly TempDir _work = TempDir.For("testsToDelete-realpath-unit-");
+    private readonly TempDir _work = TempDir.For("realpath-unit-");
     private readonly string _real;
 
     public TheSharedResolverFollowsEveryLinkRootDownTests()

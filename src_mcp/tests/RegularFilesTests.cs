@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class RegularFilesTests : IDisposable
 {
-    private readonly TempDir _root = TempDir.For("testsToDelete-regular-files-");
+    private readonly TempDir _root = TempDir.For("regular-files-");
 
     public void Dispose() => _root.Dispose();
 

@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class KimiHostPredicateTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-host-predicate-");
+    private readonly TempDir _dir = TempDir.For("host-predicate-");
 
     public void Dispose() => _dir.Dispose();
 

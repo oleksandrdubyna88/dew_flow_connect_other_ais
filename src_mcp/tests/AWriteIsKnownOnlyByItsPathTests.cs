@@ -107,7 +107,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     [Fact]
     public void A_write_lands_in_the_nearest_checkout()
     {
-        using var root = TempDir.For("testsToDelete-coai-write-nearest-");
+        using var root = TempDir.For("write-nearest-");
         Directory.CreateDirectory(root.At("repo", ".git"));
         var file = MakeFile(root, "repo", "src", "a.cs");
 
@@ -120,7 +120,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     public void A_worktree_is_its_own_checkout()
     {
         // A linked worktree's .git is a FILE, and two worktrees are two checkouts: the common dir is the wrong tool here.
-        using var root = TempDir.For("testsToDelete-coai-write-worktree-");
+        using var root = TempDir.For("write-worktree-");
         Directory.CreateDirectory(root.At("repo", ".git"));
         MakeFile(root, "wt", ".git");
         var file = MakeFile(root, "wt", "src", "a.cs");
@@ -132,7 +132,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     public void A_submodule_write_resolves_to_the_submodule_root()
     {
         // Whether an inner root under the gate's repo_path counts as "here" is E4's rule; this only says where the file landed.
-        using var root = TempDir.For("testsToDelete-coai-write-submodule-");
+        using var root = TempDir.For("write-submodule-");
         Directory.CreateDirectory(root.At("repo", ".git"));
         MakeFile(root, "repo", "sub", ".git");
         var file = MakeFile(root, "repo", "sub", "lib", "a.cs");
@@ -143,7 +143,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     [Fact]
     public void A_scratch_file_is_outside_any_checkout()
     {
-        using var root = TempDir.For("testsToDelete-coai-write-scratch-");
+        using var root = TempDir.For("write-scratch-");
         AssertNoGitAbove(root.Path);
         var file = MakeFile(root, "scratch", "note.txt");
 
@@ -164,7 +164,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     {
         // The directory is gone and its parent folder is inside a checkout two levels up: walking up from a missing directory
         // would answer with whatever contains it, and be wrong.
-        using var root = TempDir.For("testsToDelete-coai-write-removed-");
+        using var root = TempDir.For("write-removed-");
         Directory.CreateDirectory(root.At("repo", ".git"));
         Directory.CreateDirectory(root.At("repo", "worktrees"));
         var gone = root.At("repo", "worktrees", "wt-gone", "src", "a.cs");
@@ -187,7 +187,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     public void Backslashes_and_case_give_one_key()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "drive letters and backslashes are a Windows spelling");
-        using var root = TempDir.For("testsToDelete-coai-write-keys-");
+        using var root = TempDir.For("write-keys-");
         Directory.CreateDirectory(root.At("X", "repo", ".git"));
         MakeFile(root, "X", "repo", "src", "a.cs");
         var roots = new CheckoutRoots();
@@ -207,7 +207,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     {
         // E1 Q8: on Windows 90 % of write paths use backslashes and 219 subagent writes have a lower-case drive.
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows spelling");
-        using var root = TempDir.For("testsToDelete-coai-write-mixed-");
+        using var root = TempDir.For("write-mixed-");
         Directory.CreateDirectory(root.At("repo", ".git"));
         MakeFile(root, "repo", "src", "p", "a.cs");
         var real = root.At("repo", "src", "p", "a.cs");
@@ -229,7 +229,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     [Fact]
     public void One_instance_answers_the_same_directory_from_its_cache()
     {
-        using var root = TempDir.For("testsToDelete-coai-write-cache-");
+        using var root = TempDir.For("write-cache-");
         AssertNoGitAbove(root.Path);
         Directory.CreateDirectory(root.At("repo", ".git"));
         var one = MakeFile(root, "repo", "src", "a.cs");
@@ -248,7 +248,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     {
         // The walk went up the path TEXT: `repo/../other/a.cs` climbed through `repo` and answered Checkout(repo) for a file
         // that is in `other`, which is no checkout.
-        using var root = TempDir.For("testsToDelete-coai-write-dotdot-");
+        using var root = TempDir.For("write-dotdot-");
         AssertNoGitAbove(root.Path);
         Directory.CreateDirectory(root.At("repo", ".git"));
         Directory.CreateDirectory(root.At("other"));
@@ -277,7 +277,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     public void Case_distinct_directories_are_two_answers_on_a_case_sensitive_file_system()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), "this needs a case-sensitive file system (WSL, Linux CI)");
-        using var root = TempDir.For("testsToDelete-coai-write-case-");
+        using var root = TempDir.For("write-case-");
         AssertNoGitAbove(root.Path);
         Directory.CreateDirectory(root.At("work", "App", ".git"));
         var withGit = MakeFile(root, "work", "App", "a.cs");
@@ -291,7 +291,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     [Fact]
     public void GitMarker_answers_for_a_folder_a_file_and_nothing()
     {
-        using var root = TempDir.For("testsToDelete-coai-write-marker-");
+        using var root = TempDir.For("write-marker-");
         Directory.CreateDirectory(root.At("clone", ".git"));
         MakeFile(root, "worktree", ".git");
         Directory.CreateDirectory(root.At("empty-mount"));

@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 public sealed class RepositoryFactsTests : IDisposable
 {
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _dir = TempDir.For("testsToDelete-repo-facts-");
+    private readonly TempDir _dir = TempDir.For("repo-facts-");
 
     public void Dispose() => _dir.Dispose();
 

@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// E7.S4 — <c>coai-mcp --backfill-authors</c>, end to end through the REAL process: a store recorded through the live writers from E1's fixtures,
 /// stripped of its authors, then backfilled twice. The parent's acceptance is the scenario: the second run changes no totals, and the newer row and every
-/// resolution survive. Every data directory is a <c>testsToDelete-</c> temp folder and the process is handed it explicitly — no live store is named.
+/// resolution survive. Every data directory is a temp folder and the process is handed it explicitly — no live store is named.
 /// </summary>
 public sealed class BackfillAuthorsCliScenarioTests
 {

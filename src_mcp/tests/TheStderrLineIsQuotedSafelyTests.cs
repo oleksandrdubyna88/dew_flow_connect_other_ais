@@ -27,7 +27,7 @@ public sealed class TheStderrLineIsQuotedSafelyTests : IDisposable
     /// <summary>The measured sentence from its phrase on.</summary>
     private static readonly string FromThePhrase = KimiMonthlyQuotaTests.MonthlyLine[KimiMonthlyQuotaTests.MonthlyLine.IndexOf(Phrase, StringComparison.Ordinal)..];
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-quoted-safely-");
+    private readonly TempDir _dir = TempDir.For("kimi-quoted-safely-");
 
     public void Dispose() => _dir.Dispose();
 

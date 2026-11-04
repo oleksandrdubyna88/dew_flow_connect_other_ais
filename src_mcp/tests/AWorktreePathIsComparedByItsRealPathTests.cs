@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class AWorktreePathIsComparedByItsRealPathTests : IDisposable
 {
-    private readonly TempDir _work = TempDir.For("testsToDelete-wtpaths-");
+    private readonly TempDir _work = TempDir.For("wtpaths-");
 
     public void Dispose() => _work.Dispose();
 

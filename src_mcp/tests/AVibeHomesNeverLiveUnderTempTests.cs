@@ -20,8 +20,8 @@ public sealed class AVibeHomesNeverLiveUnderTempTests : IDisposable
 {
     private static readonly string[] TempVariables = ["TEMP", "TMP", "TMPDIR"];
 
-    private readonly TempDir _long = TempDir.For("testsToDelete-vh-longtemp-");
-    private readonly TempDir _homes = TempDir.For("testsToDelete-vh-root-");
+    private readonly TempDir _long = TempDir.For("vh-longtemp-");
+    private readonly TempDir _homes = TempDir.For("vh-root-");
     private readonly Dictionary<string, string?> _before = TempVariables.ToDictionary(name => name, Environment.GetEnvironmentVariable);
 
     public void Dispose()
@@ -94,7 +94,7 @@ public sealed class AVibeHomesNeverLiveUnderTempTests : IDisposable
     [Fact]
     public void ARefusedReservation_LeavesTheHomeKeepingRowsOutOfTheRound_WithItsSentence()
     {
-        var target = TempDir.For("testsToDelete-vh-target-");
+        var target = TempDir.For("vh-target-");
         SnapshotTestKit.LinkNow(Path.Combine(_homes, VibeHomes.OneShotFolder), target);
         using var scratch = RoundScratch.Reserve(_ => { }, _homes, keepsAHome: true);
 

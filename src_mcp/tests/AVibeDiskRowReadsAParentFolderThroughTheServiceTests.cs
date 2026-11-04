@@ -25,7 +25,7 @@ public sealed class AVibeDiskRowReadsAParentFolderThroughTheServiceTests : IDisp
         "skipped 1 linked worktree whose main checkout is copied — its branch and uncommitted files were not read; grant a worktree directly to include it";
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _dir = TempDir.For("testsToDelete-vibe-flow-");
+    private readonly TempDir _dir = TempDir.For("vibe-flow-");
     private readonly VibeQuestionRowFixture _rows;
 
     public AVibeDiskRowReadsAParentFolderThroughTheServiceTests() => _rows = new VibeQuestionRowFixture(_dir, _launcher);

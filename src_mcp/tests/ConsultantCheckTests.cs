@@ -500,7 +500,7 @@ public sealed class ConsultantCheckTests : IDisposable
         {
             AnswerFor = seen => $"marker: {seen.Files["CHECK.md"].Trim().Split(' ')[^1].TrimEnd('.')}{Environment.NewLine}canary: CANNOT",
         };
-        using var homes = TempDir.For("testsToDelete-vh-check-");
+        using var homes = TempDir.For("vh-check-");
         var settings = Settings() with
         {
             ConsultantHomesRoot = homes,
@@ -535,7 +535,7 @@ public sealed class ConsultantCheckTests : IDisposable
         {
             AnswerFor = seen => $"marker: {seen.Files["CHECK.md"].Trim().Split(' ')[^1].TrimEnd('.')}{Environment.NewLine}canary: CANNOT",
         };
-        using var homes = TempDir.For("testsToDelete-vh-check-model-");
+        using var homes = TempDir.For("vh-check-model-");
         var settings = Settings() with
         {
             ConsultantHomesRoot = homes,
@@ -581,7 +581,7 @@ public sealed class ConsultantCheckTests : IDisposable
     [Fact]
     public async Task AVibeCheckThatEndsWithoutAnAnswer_LeavesNoFolderUnderCoaiVh()
     {
-        using var homes = TempDir.For("testsToDelete-vh-check-");
+        using var homes = TempDir.For("vh-check-");
         var vibe = new PlayedVibe(new ProcessLauncher(), string.Empty) { VersionExit = 1 };
 
         var (_, said, _) = await Check(VibeSettings(homes), vibe, TestContext.Current.CancellationToken, "--caller", "claude");

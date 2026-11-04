@@ -398,7 +398,7 @@ function runFinalZipStep(zips: readonly string[], exits: { carries?: number; lay
   const body = runBodies('mcp-sign-attach').find((b) => b.includes('for RID in'));
   assert.ok(body, 'the step has a run body with the platform loop');
 
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-finalzipstep-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'finalzipstep-'));
   try {
     const log = path.join(dir, 'calls.txt').replace(/\\/g, '/');
     const scripts = path.join(dir, '.github', 'scripts');

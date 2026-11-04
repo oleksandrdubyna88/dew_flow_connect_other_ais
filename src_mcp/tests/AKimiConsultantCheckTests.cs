@@ -25,14 +25,14 @@ namespace CoaiMcp.Tests;
 /// through <see cref="WindowsStandIn"/>) and a real gate file. Only the shim and <c>kimi --version</c> are played (<see cref="PlayedKimi"/>): the
 /// real <c>kimi</c> is never started and no turn is paid for.</para>
 /// <para>The check builds its Kimi adapter BY NAME, so the fake person and the measured host are stood in per async flow
-/// (<see cref="KimiSeams.Using"/>). The person's folder, the homes root and the check's temp root are three separate <c>testsToDelete-</c> folders:
+/// (<see cref="KimiSeams.Using"/>). The person's folder, the homes root and the check's temp root are three separate temp folders:
 /// the person's lives OUTSIDE every tree a disposal deletes.</para>
 /// </remarks>
 public sealed class AKimiConsultantCheckTests : IDisposable
 {
     private readonly KimiFixture _person = new();
-    private readonly TempDir _homes = TempDir.For("testsToDelete-kimi-check-homes-");
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-check-");
+    private readonly TempDir _homes = TempDir.For("kimi-check-homes-");
+    private readonly TempDir _dir = TempDir.For("kimi-check-");
     private readonly List<string> _warned = [];
     private readonly List<string> _unlinkedByTheDeleter = [];
 

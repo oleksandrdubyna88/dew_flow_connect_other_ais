@@ -21,7 +21,7 @@ public sealed class VibePathBudgetTests
     /// </summary>
     private static string HomeOfLength(int length, string tail = "")
     {
-        var home = Path.Combine(Path.GetPathRoot(Path.GetFullPath(AppContext.BaseDirectory)) ?? Path.DirectorySeparatorChar.ToString(), "testsToDelete-vh-budget") + tail;
+        var home = Path.Combine(Path.GetPathRoot(Path.GetFullPath(AppContext.BaseDirectory)) ?? Path.DirectorySeparatorChar.ToString(), "vh-budget") + tail;
         while (home.Length < length)
         {
             home += Path.DirectorySeparatorChar + new string('x', Math.Min(40, Math.Max(1, length - home.Length - 1)));

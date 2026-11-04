@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 internal sealed class RecordedSession : IDisposable
 {
-    private const string Prefix = "testsToDelete-coai-recorded-";
+    private const string Prefix = "recorded-";
 
     private RecordedSession(TempDir dir, CallerTranscriptFixture fixture, ObservedSession session, IReadOnlyList<GateTimeline> timelines)
     {
@@ -33,7 +33,7 @@ internal sealed class RecordedSession : IDisposable
 
     public IReadOnlyList<GateTimeline> Timelines { get; }
 
-    /// <summary>Materialises the case in a <c>testsToDelete-</c> folder the caller disposes; <paramref name="shape"/> may reshape every gate's journal (the one test-side extension).</summary>
+    /// <summary>Materialises the case in a temp folder the caller disposes; <paramref name="shape"/> may reshape every gate's journal (the one test-side extension).</summary>
     public static RecordedSession Open(string dirName, Func<IReadOnlyList<RoundRecord>, IReadOnlyList<RoundRecord>>? shape = null, Func<CallerTranscriptFixture, DateTime?>? truncateAfter = null)
     {
         var dir = TempDir.For(Prefix);
