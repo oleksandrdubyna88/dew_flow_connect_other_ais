@@ -71,10 +71,15 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
         // rename (ENOENT) — never a throw, never a removal of the other's work. That is the template's behaviour and the plan's "template wins" rule keeps it: the
         // spec's note (2026-11-03) says the arm asserts no throw, no folder lost twice, no foreign removal and the losers' Errors lines.
         // MEASURED on Windows too (ci run 41843872560): the loser can also meet the folder gone while it READS it, before its rename, and then the one line is the folder pass's own,
-        // `folder <path>: Could not find a part of the path ...`, with no quarantine in it. Same race, same harmless end: so a line names the quarantine or one of the twenty.
+        // `folder <path>: Could not find a part of the path ...`, with no quarantine in it. Same race, same harmless end: so a line names the quarantine, or (Windows only) is that folder line.
         foreach (var error in first.Errors.Concat(second.Errors))
         {
-            (error.Contains(QuarantineWord, StringComparison.Ordinal) || twenty.Exists(folder => error.StartsWith("folder " + folder + ":", StringComparison.Ordinal)))
+            // The quarantine word, OR — on Windows only — the folder pass's own line for one of the twenty (`folder <path>: Could not find a part of the path …`). Any other line fails.
+            var namesTheQuarantine = error.Contains(QuarantineWord, StringComparison.Ordinal);
+            var windowsLostTheFolder = OperatingSystem.IsWindows()
+                && twenty.Exists(folder => error.StartsWith("folder " + folder + ":", StringComparison.Ordinal))
+                && error.Contains("Could not find", StringComparison.Ordinal);
+            (namesTheQuarantine || windowsLostTheFolder)
                 .Should().BeTrue($"an error, if any, is the lost race for a folder the other sweep took, and this one is: {error}");
         }
 
