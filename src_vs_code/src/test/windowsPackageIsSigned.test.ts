@@ -10,8 +10,9 @@ import { test } from 'node:test';
  * The signing itself is not here and cannot be: it runs on a GitHub runner against Azure, in the
  * shared workflow `dew_flow_release_signing/.github/workflows/sign-windows.yml`, and is exercised by
  * a dispatch trial (`target: mcp`) on the pull request branch. What this file holds is the part this
- * repository owns: that an unsigned Windows package is never attached to a release, that the
- * signing job is called the way the shared contract says, that the product check runs on the FINAL
+ * repository owns: that the `unsigned-mcp-*` build artifact is never attached to a release (the
+ * attached zip is the shared workflow's: signed once a provider is active, unsigned with a warning
+ * until then), that the signing job is called the way the shared contract says, that the product check runs on the FINAL
  * zip before it is uploaded, and that the release is published only after all of it.</p>
  */
 
@@ -110,8 +111,9 @@ function runBodies(job: string): string[] {
 
 test('a Windows leg uploads its package UNSIGNED, under a name that no mcp-* pattern matches', () => {
   // The defect: the leg zips and attaches as it always did, and an unsigned `coai-mcp.exe` reaches a
-  // release that Smart App Control then blocks. The signed artifact is `mcp-<rid>`; the leg's own is
-  // `unsigned-mcp-<rid>`, so a download of `mcp-win-*` can never pick the unsigned one up.
+  // release that Smart App Control then blocks. The shared workflow's artifact is `mcp-<rid>` (signed
+  // once a provider is active, unsigned with a warning until then); the leg's own is
+  // `unsigned-mcp-<rid>`, so a download of `mcp-win-*` can never pick the build artifact up.
   const upload = step('mcp-binaries', 'Upload the unsigned Windows package');
 
   assert.match(upload, /uses: actions\/upload-artifact@[0-9a-f]{40} # v\d/, 'a pinned upload');
@@ -294,9 +296,10 @@ test('mcp-sign-attach checks the FINAL zip with the product check, then uploads 
   assert.match(code, /\n {4}permissions:\n {6}contents: write\n(?! {6}\S)/, 'it uploads, and only that');
   assert.doesNotMatch(code, /id-token/);
 
-  const download = step('mcp-sign-attach', 'Download the signed packages');
+  assert.match(block, /\n {4}name: attach the final Windows coai-mcp\n/, 'named for what it attaches, not for a signature it may not carry');
+  const download = step('mcp-sign-attach', 'Download the final packages');
   assert.match(download, /uses: actions\/download-artifact@[0-9a-f]{40} # v\d/, 'a pinned download');
-  assert.match(download, /\n\s+pattern: mcp-win-\*\s*\n/, 'the signed ones, never unsigned-mcp-*');
+  assert.match(download, /\n\s+pattern: mcp-win-\*\s*\n/, 'the shared workflow\'s zips, never unsigned-mcp-*');
 
   const check = withoutComments(step('mcp-sign-attach', 'The product check on each final zip'));
   const attach = withoutComments(step('mcp-sign-attach', 'Attach to the draft release'));
@@ -327,9 +330,9 @@ test('the new jobs hand no expression to a shell', () => {
   }
 });
 
-test('the release is published only after the signed packages are attached', () => {
+test('the release is published only after the final Windows packages are attached', () => {
   // The defect: a completeness job that needs only the build would publish a draft that holds no
-  // Windows package, or hold the signed one back until after the publish.
+  // Windows package, or hold the final one back until after the publish.
   assert.deepEqual(needsOf('mcp-release-complete').sort(), ['mcp-binaries', 'mcp-sign-attach']);
   assert.match(condition('mcp-release-complete'), /startsWith\(github\.ref, 'refs\/tags\/mcp-v'\)/);
 });
