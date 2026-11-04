@@ -26,8 +26,8 @@ internal static class SweepPlants
 
     internal static string Rec(long pid) => (Owner.This with { Pid = pid }).Format() + "\n";
 
-    internal static SweepOptions Options(string tmp, Func<string, bool>? mine = null, SweepHooks? hooks = null, DateTimeOffset? now = null) =>
-        new(tmp, now ?? DateTimeOffset.UtcNow, LeftoversSweep.MinAge, Liveness.ProbeProcess, mine ?? (_ => true), hooks);
+    internal static SweepOptions Options(string tmp, Func<string, bool>? mine = null, SweepHooks? hooks = null, DateTimeOffset? now = null, TimeSpan? lockWait = null) =>
+        new(tmp, now ?? DateTimeOffset.UtcNow, LeftoversSweep.MinAge, Liveness.ProbeProcess, mine ?? (_ => true), hooks, lockWait);
 
     internal static string? ReasonOf(SweepResult result, string path) =>
         result.Preserved.Where(p => p.Path == path).Select(p => p.Reason).SingleOrDefault();

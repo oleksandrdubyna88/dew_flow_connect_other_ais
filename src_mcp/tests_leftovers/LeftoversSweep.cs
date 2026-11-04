@@ -49,7 +49,7 @@ public sealed record SweepHooks(
 /// <summary>What one sweep needs: the folder to sweep, the clock, the age window, the liveness query, and the kernel-owner
 /// question (default <see cref="Scope.IsMine"/>; a seam, because a second uid cannot be had in a test).</summary>
 public sealed record SweepOptions(
-    string Tmp, DateTimeOffset Now, TimeSpan MinAge, Func<long, Probe> Probe, Func<string, bool>? Mine = null, SweepHooks? Hooks = null);
+    string Tmp, DateTimeOffset Now, TimeSpan MinAge, Func<long, Probe> Probe, Func<string, bool>? Mine = null, SweepHooks? Hooks = null, TimeSpan? SweepLockWait = null);
 
 /// <summary>What one sweep did: the folders and claims it removed, the entries it kept with their reasons, the
 /// <c>foreign:</c> / <c>legacy:</c> / <c>unmarked:</c> / <c>notice:</c> lines, and the errors it met.</summary>

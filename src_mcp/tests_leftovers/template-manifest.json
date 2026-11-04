@@ -45,7 +45,8 @@
         {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversSweep.cs", "target": "src_mcp/tests_leftovers/LeftoversSweep.cs", "blob": "64f97f5f7c8ba2b6f6cd1660c67df9f09a34de53", "replace": [
-        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
+        {"old": "    string Tmp, DateTimeOffset Now, TimeSpan MinAge, Func<long, Probe> Probe, Func<string, bool>? Mine = null, SweepHooks? Hooks = null);", "new": "    string Tmp, DateTimeOffset Now, TimeSpan MinAge, Func<long, Probe> Probe, Func<string, bool>? Mine = null, SweepHooks? Hooks = null, TimeSpan? SweepLockWait = null);", "count": 1, "reason": "entry 5.1 (consult e9d7aec0; F29 of the conventions' follow-ups plan): SweepOptions gains the wait of the Windows sweep lock, a test seam (default 30 s). Directory.Move has no single winner on Windows \u2014 two threads racing one source both succeed in 39951 of 40000 races (hosted windows-latest, run 41873954643) \u2014 so two sweeps at once can double-report and restore a folder unclaimed."}
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversSweepFixture.cs", "target": "src_mcp/tests_leftovers/LeftoversSweepFixture.cs", "blob": "797d7457806e79653f9204d7c73a525fe2b8ccc8", "replace": [
         {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},

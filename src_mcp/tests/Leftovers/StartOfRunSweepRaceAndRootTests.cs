@@ -67,20 +67,21 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
             () => first = LeftoversSweep.Run(Options(rootC)),
             () => second = LeftoversSweep.Run(Options(rootC)));
 
-        // MEASURED on the copy (6 runs of 6, Linux; macOS CI too): the sweep that loses the rename of a folder the other already moved reports ONE error line naming that
-        // rename (ENOENT) — never a throw, never a removal of the other's work. That is the template's behaviour and the plan's "template wins" rule keeps it: the
-        // spec's note (2026-11-03) says the arm asserts no throw, no folder lost twice, no foreign removal and the losers' Errors lines.
-        // MEASURED on Windows too (ci run 41843872560): the loser can also meet the folder gone while it READS it, before its rename, and then the one line is the folder pass's own,
-        // `folder <path>: Could not find a part of the path ...`, with no quarantine in it. Same race, same harmless end: so a line names the quarantine, or (Windows only) is that folder line.
-        foreach (var error in first.Errors.Concat(second.Errors))
+        // STRICT again (E5 entry 5.1). On POSIX the sweep that loses the rename of a folder the other already moved reports ONE error line naming that rename (ENOENT) — never a
+        // throw, never a removal of the other's work: the template's behaviour. On Windows `Directory.Move` has NO single winner (two threads racing one source both succeed in 39951
+        // of 40000 races, hosted windows-latest run 41873954643), so the sweeps no longer interleave there: a named mutex over the root holds the second until the first ends, and
+        // the arm expects ZERO error lines — the "Could not find" line and the double report of the run before were that race.
+        if (OperatingSystem.IsWindows())
         {
-            // The quarantine word, OR — on Windows only — the folder pass's own line for one of the twenty (`folder <path>: Could not find a part of the path …`). Any other line fails.
-            var namesTheQuarantine = error.Contains(QuarantineWord, StringComparison.Ordinal);
-            var windowsLostTheFolder = OperatingSystem.IsWindows()
-                && twenty.Exists(folder => error.StartsWith("folder " + folder + ":", StringComparison.Ordinal))
-                && error.Contains("Could not find", StringComparison.Ordinal);
-            (namesTheQuarantine || windowsLostTheFolder)
-                .Should().BeTrue($"an error, if any, is the lost race for a folder the other sweep took, and this one is: {error}");
+            first.Errors.Should().BeEmpty("the sweeps do not interleave on Windows: the second waits for the first");
+            second.Errors.Should().BeEmpty("the sweeps do not interleave on Windows: the second waits for the first");
+        }
+        else
+        {
+            foreach (var error in first.Errors.Concat(second.Errors))
+            {
+                error.Should().Contain(QuarantineWord, "an error, if any, is the lost rename of a folder the other sweep took");
+            }
         }
 
         // A claim whose folder the other sweep had just removed is an ORPHAN claim to this sweep, and the copy removes it (and says so in Removed, with the claim's own path):
@@ -111,6 +112,92 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
         other.Errors.Should().BeEmpty();
         Directory.GetFileSystemEntries(rootD).Should().BeEmpty();
         UnmatchablePid.AssertNoSuchProcess(dead);
+    }
+
+    // ---- the Windows sweep lock (E5 entry 5.1) ---------------------------------------------------------------------
+
+    [Fact]
+    public void OnWindows_TwoSweepsAtOnce_25Rounds_NeverInterleave()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows only: Directory.Move has no single winner there; POSIX's rename does (arm (c) above)");
+        }
+
+        var dead = Dead();
+        for (var round = 0; round < 25; round++)
+        {
+            var root = _owned.Dir($"lock-r{round}");
+            var twenty = Enumerable.Range(0, 20).Select(i => PlantFolder(root, Name("lk" + i), Rec(dead))).ToList();
+            SweepResult first = SweepResult.Empty, second = SweepResult.Empty;
+
+            Parallel.Invoke(
+                () => first = LeftoversSweep.Run(Options(root)),
+                () => second = LeftoversSweep.Run(Options(root)));
+
+            first.Errors.Concat(second.Errors).Should().BeEmpty($"round {round}: no interleaving, no error line");
+            first.Removed.Concat(second.Removed).Where(path => !path.EndsWith(".owner", StringComparison.Ordinal)).Should().BeEquivalentTo(twenty, $"round {round}: each folder once");
+            Directory.GetFileSystemEntries(root).Should().BeEmpty($"round {round}: folders, claims and quarantines are all gone");
+        }
+    }
+
+    [Fact]
+    public async Task OnWindows_ASecondSweepWaitsForTheFirst_AndEntersItsPassOnlyAfterItEnds()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows only: the named mutex over the temp root is the Windows sweep lock; POSIX's rename has one winner");
+        }
+
+        var dead = Dead();
+        var root = _owned.Dir("lock-wait");
+        var a = PlantFolder(root, Name("lka"), Rec(dead));
+        var b = PlantFolder(root, Name("lkb"), Rec(dead));
+        using var paused = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        SweepResult first = SweepResult.Empty, second = SweepResult.Empty;
+
+        var one = Task.Run(() => first = LeftoversSweep.Run(Options(root, hooks: new SweepHooks(AfterRename: (_, _) => { paused.Set(); release.Wait(TimeSpan.FromSeconds(60)); }))));
+        paused.Wait(TimeSpan.FromSeconds(60)).Should().BeTrue("the first sweep reached its rename");
+        var two = Task.Run(() => second = LeftoversSweep.Run(Options(root)));
+
+        (await Task.WhenAny(two, Task.Delay(TimeSpan.FromMilliseconds(1500)))).Should().NotBe(two, "the second sweep is held while the first is paused after its rename");
+        release.Set();
+        await Task.WhenAll(one, two).WaitAsync(TimeSpan.FromSeconds(60));
+
+        first.Errors.Concat(second.Errors).Should().BeEmpty();
+        first.Removed.Concat(second.Removed).Where(path => !path.EndsWith(".owner", StringComparison.Ordinal)).Should().BeEquivalentTo([a, b], "each folder once");
+        Directory.GetFileSystemEntries(root).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task OnWindows_ASweepThatCannotTakeTheLock_ListsOneLine_AndRemovesNothing()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows only: the named mutex over the temp root is the Windows sweep lock");
+        }
+
+        var dead = Dead();
+        var root = _owned.Dir("lock-timeout");
+        var a = PlantFolder(root, Name("lta"), Rec(dead));
+        var b = PlantFolder(root, Name("ltb"), Rec(dead));
+        using var paused = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var holder = Task.Run(() => LeftoversSweep.Run(Options(root, hooks: new SweepHooks(AfterRename: (_, _) => { paused.Set(); release.Wait(TimeSpan.FromSeconds(60)); }))));
+        paused.Wait(TimeSpan.FromSeconds(60)).Should().BeTrue("the holder reached its rename");
+
+        var waiter = LeftoversSweep.Run(Options(root, lockWait: TimeSpan.FromMilliseconds(300)));
+
+        waiter.Listed.Should().Equal(["another sweep holds this temp root: nothing swept"]);
+        waiter.Removed.Should().BeEmpty();
+        waiter.Preserved.Should().BeEmpty();
+        waiter.Errors.Should().BeEmpty("a sweep that cannot take the lock never fails the run");
+        Directory.Exists(b).Should().BeTrue("the waiter touched nothing");
+
+        release.Set();
+        var held = await holder.WaitAsync(TimeSpan.FromSeconds(60));
+        held.Removed.Where(path => !path.EndsWith(".owner", StringComparison.Ordinal)).Should().BeEquivalentTo([a, b]);
     }
 
     // ---- B10 ------------------------------------------------------------------------------------------------------
