@@ -2,6 +2,7 @@
 // (pid, parent, comm, and the NAME the product's listing reads) and the lock probe that asks flock(1) whether an EXCLUSIVE taker would
 // get in. The parser and the Kimi rule run everywhere over a fake /proc; the flock case needs util-linux and runs on the Linux CI job and in WSL.
 // Makes folders only under this user's own temp folder, and removes them; ends only the pid it started. Runs no real kimi.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';

@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
@@ -39,7 +40,7 @@ function jobText(text, job) {
   const start = text.search(new RegExp(`^  ${job}:\\s*$`, 'm'));
   assert.ok(start >= 0, `job ${job}`);
   const rest = text.slice(start + 1);
-  const next = rest.search(/^  [A-Za-z0-9_-]+:\s*$/m);
+  const next = rest.search(/^ {2}[A-Za-z0-9_-]+:\s*$/m);
   return next < 0 ? rest : rest.slice(0, next);
 }
 

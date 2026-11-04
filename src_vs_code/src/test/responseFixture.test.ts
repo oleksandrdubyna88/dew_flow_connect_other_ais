@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import * as assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

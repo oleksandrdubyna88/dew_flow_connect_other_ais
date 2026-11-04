@@ -2,6 +2,7 @@
 // todo/PLAN_kimi_and_vibe_on_native_linux.md §5; scenario S-N19). The probe runs on import and cannot be imported by a test, so
 // everything it decides lives in lib/host-facts.mjs and takes its world INJECTED: a file system, a process lister, a runner. Runs
 // on every platform over fakes; it opens no real file, starts no process, and never sees a real sign-in.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';

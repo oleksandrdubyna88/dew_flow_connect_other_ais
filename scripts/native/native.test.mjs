@@ -8,6 +8,7 @@
 // scripts' root is /tmp unless COAI_NATIVE_SERIES_ROOT names another — this test's seam), starts DUMMY workloads only (a node probe
 // that spawns a TERM-resistant child and a setsid child), keeps an unrelated SENTINEL `sleep` that nothing may end, and ends what it
 // started by pid + start time. No real sign-in is ever touched: the fake home holds fake files.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';

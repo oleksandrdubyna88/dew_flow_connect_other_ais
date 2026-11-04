@@ -7,6 +7,7 @@
 // executable that does not exist and an owned root without a sign-in, so it parses every flag and refuses at the hold — before any agent
 // could start. That second proof needs a Windows host and a shim already built at `src_mcp/src/bin/Debug`, which can be OLDER than the
 // source (the test does not build it), and it is skipped on the ubuntu runner, so a green CI run says nothing about it.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';

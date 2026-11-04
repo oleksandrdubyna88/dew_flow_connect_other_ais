@@ -1,6 +1,7 @@
 // node --test scripts/lib/old-coai-leftovers.test.mjs — the one-off clean-up of old `coai-*` test leftovers (E5 S2-A, D4;
 // todo/PLAN_test_leftovers_E5_S2_spec.md § A.3, S1–S16). Every case runs over a fresh private root, `now` fixed, the claim probe injected. CI runs it
 // on Linux ("Probe script tests").
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';

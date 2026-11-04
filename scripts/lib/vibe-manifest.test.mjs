@@ -1,6 +1,7 @@
 // node --test scripts/lib/*.test.mjs — the manifest script's per-platform write (DL3 of research/PLAN_kimi_and_vibe_on_linux.md) and its
 // inventory of a home that holds the .env sign-in link (DL2). Runs nothing of Vibe's; makes folders only under this user's own temp
 // folder, and removes them.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

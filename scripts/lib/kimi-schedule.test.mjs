@@ -2,6 +2,7 @@
 // see an abrupt shim death AND the very next launch. The pure parts of scripts/probe-kimi-tree-hold.mjs live in lib/kimi-schedule.mjs so they are
 // tested here without a shim, a kimi, or a process: the schedule of killed->normal PAIRS, the signal each killed arm sends, the evidence a
 // SIGKILL row needs (a survivor marker existing at the kill), and each orphan's NEW parent. Makes one folder under this user's temp folder.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

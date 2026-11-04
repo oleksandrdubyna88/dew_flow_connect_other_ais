@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { callsBlock } from '../callsBlock';
 import { CALLS, REVISIONS } from '../livePatch';

@@ -3,6 +3,7 @@
 // can read, and the copied refresh token would sit there until the scrub). Runs nothing of Kimi's; makes folders and links
 // only under this user's own temp folder, and removes them. CI runs it on Linux (ci.yml, "Probe script tests"), where the
 // two mode-bit cases run; on Windows they skip, because Windows has no mode bits and the profile's ACL is what it relies on.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, rmdirSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';

@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DbLog, EMPTY_LOG, EMPTY_TOTALS, findingsByRound, parseFindings, parseLog, roundKeyOf } from '../roundsDb';

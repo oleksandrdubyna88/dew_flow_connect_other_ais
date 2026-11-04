@@ -2,6 +2,7 @@
 // it prints can carry text. Every tree is synthetic and lives under the OS temp folder (`testsToDelete-` named, removed in
 // `after`); nothing here reads the operator's ~/.claude or any real store. CI runs it on Linux (ci.yml, "Probe script tests"),
 // WSL's Node 20 runs it too, so no API newer than Node 20 appears in the .mjs files.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';

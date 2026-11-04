@@ -2,6 +2,7 @@
 // todo/PLAN_kimi_and_vibe_on_native_linux_E1.md, DN11 of the parent plan): the lead renders a root-run script from a template and
 // builds every ssh argument array, and NOTHING that reaches a root shell may be unchecked. Pure: no process is started, no file
 // is written, so it runs on every platform. The bash scripts these strings are for are tested in scripts/native/native.test.mjs.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { abortArgv, doneArgv, launcherArgv, makeSeriesArgv, mkdirArgv, removeArgv, renderRunScript } from './native-run.mjs';

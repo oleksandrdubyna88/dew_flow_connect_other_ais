@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { capture } from '../versionProbe';
 import { test } from 'node:test';

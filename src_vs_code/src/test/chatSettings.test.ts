@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CHAT_AUTO_SEND, DEFAULT_AUTO_SEND, chatSettingsFrom, clearedByWriting, sendsImmediately } from '../chatSettings';

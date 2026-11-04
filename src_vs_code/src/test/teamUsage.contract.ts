@@ -10,6 +10,7 @@
  * answers is the bundled page harness's (`teamServerTabPage.test.ts`). Nor does a fresh server have spending to show —
  * its ledger is empty, so the people and vendor lists are checked for their shape, not their figures.</p>
  */
+import '../../scripts/inRunFolder.cjs';
 import * as assert from 'node:assert';
 import { createHmac } from 'node:crypto';
 import { test } from 'node:test';

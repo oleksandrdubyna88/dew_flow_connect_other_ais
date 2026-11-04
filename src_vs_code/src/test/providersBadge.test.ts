@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert';
 import { test } from 'node:test';
 import { availabilityOf, NO_NOTES, parseProviderNotes, parseProviders, ProviderHealth } from '../providers';

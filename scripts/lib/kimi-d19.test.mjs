@@ -1,6 +1,7 @@
 // node --test scripts/lib/*.test.mjs — M-K11c's step arithmetic. One step compares an owned home's inventory with the previous step's and
 // classifies what was ADDED; it is a pure function that returns a NEW object, so the run's list of steps is built without mutation
 // (the repository's immutability rule) and the inputs it was given are left exactly as they were.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
