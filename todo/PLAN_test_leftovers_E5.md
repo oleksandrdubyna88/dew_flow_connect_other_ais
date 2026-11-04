@@ -1,6 +1,20 @@
 # PLAN — Test leftovers, E5: coai's run folder takes the owner form, both test sweeps judge by owner, and the product's `coai-*` directories stay untouched
 
-> Status: **revised 2026-11-03 at the parent's epoch-4 re-review (entries 3.1 and 3.2 of the parent's ledger, found
+> Status: **revised 2026-11-04 at the parent's epoch-5 re-review (entries 4.1 and 4.2 of the parent's ledger: 4.1 found
+> writing the S2-B spec, 4.2 found writing S4's brief); epoch 5 waits for the owner's approval (the record says
+> `Narrowed: yes`), and no E5 story takes new code until then.** Epoch 4 was approved by the owner (2026-11-03), and this
+> document was merged for it as #943 (`8dc0765c`). The producer PR #945 (draft) holds S3 and S2-B at `6ec356a1`, CI green
+> on Linux, macOS and Windows; S4 is a brief only; S5, S6 and S7 are not started. Two changes: (4.1) the promise that a
+> killed OLD coai run (a legacy `testsToDelete-coai-run-*` folder) is collected by the next extension run is withdrawn —
+> only S2-A's one-off clean-up removes those folders (D4, corrected on this branch at `89494366`); (4.2) the native
+> measurement series (`scripts/lib/native-run.mjs` `SERIES_SHAPE`, `scripts/native/*.sh`) LEAVES the prefix family as
+> ONE bounded exception — its new shape `native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`, made only by `make-series.sh`,
+> removed only by `remove-series.sh`, never collected (§ S4, *[epoch 5]*; the parent's § *Epoch 5*, item 4). P1 is
+> closed by the owner's written statement (the parent's PR #124); merge condition (c) for the WSL machine waits for one
+> administrator scan. This document keeps no ledger: its changes are entries of the parent. What epoch 5 supersedes
+> carries a dated note *[epoch 5, 2026-11-04]* in place; the S4 implementation notes of the same date are NOT changes.
+>
+> Was: **revised 2026-11-03 at the parent's epoch-4 re-review (entries 3.1 and 3.2 of the parent's ledger, found
 > writing S3's build brief); epoch 4 waits for the owner's approval (the record says `Narrowed: yes`), and no E5 story
 > takes new code until then.** Epoch 3 was approved by the owner (2026-11-03), and this document was merged for it as
 > #942 (`004c55fb`). The producer branch has no code; S3's build brief exists. Two changes: D2 becomes an ADAPTED copy of
@@ -126,6 +140,11 @@ done BEFORE the producer got smaller; E5's final Done-when did not.
 back to the machine temp today (`RunTemp.cs:33-47`, `run-tests.mjs:221-230`), the run folder keeps its legacy name
 until S3, and a person can start a test file directly; by D10 no S5 site is contained until S3 and S4. So S5's
 renames are a commit of the producer PR, after S3, S2-B and S4.
+*[epoch 5, 2026-11-04]* The S4 clause ("every Node runner, script test and the editor-host run wraps the reference and
+leaks nothing") has ONE bounded exception: the native measurement series is not wrapped and is not a leak — it is a
+durable folder with its own maker and remover (§ S4, *[epoch 5]*). And the S2-B clause's "lists legacy names" is read
+with D4 as corrected for the parent's entry 4.1: a legacy `testsToDelete-coai-run-*` folder is listed by both sweeps and
+removed ONLY by S2-A's one-off clean-up; nothing collects it.
 
 ## Facts the split rests on
 
@@ -151,6 +170,7 @@ renames are a commit of the producer PR, after S3, S2-B and S4.
   | `npm run test:host`, `test:contract`, `test:seam`, `test:parity` | `package.json`; `ci.yml:425`, `:118`, `:125`, `:146` | the machine temp (each runner script) | the script; `run-host.mjs` leaks (must-not-copy #14) | S4 |
   | `node --test "scripts/**/*.test.mjs"` | `ci.yml:197` | the machine temp | each test's `after()` | S4 (and the start-of-run sweep of S2-B item 2) |
   | the measurement and probe scripts, run by a person | `scripts/*.mjs`, `scripts/native/*.sh` | the machine temp, or `/tmp` on a Linux box | the script | S4 |
+  | *[epoch 5, 2026-11-04]* the native measurement SERIES, a person's root-run `make-series.sh` → the phases → `remove-series.sh` (a KEPT line of its own: the parent's § *Epoch 5*, item 4) | `scripts/native/make-series.sh`, `abort.sh`, `remove-series.sh`; `scripts/lib/native-run.mjs:18` `SERIES_SHAPE` | the series root: `/tmp`, or `COAI_NATIVE_SERIES_ROOT` | nobody collects it: `make-series.sh` makes it, `remove-series.sh` removes it (the shape validated, anything else refused); no claim, no sweep, no janitor | nothing is dropped: the name LEAVES the prefix family (`native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`) in S4, with the survival and grammar tests |
 
 - **The bare-prefix lines, counted for S5** (`git grep -c -i teststodelete`): `src_mcp/tests` 263 lines in 120 files;
   `src_vs_code` 21 lines in 8 files; `scripts/lib` 49 lines in 15 files; `src_server/tests` 1 (`GaugeCaptureTests.cs:30`);
@@ -593,6 +613,10 @@ either makes it REFUSE — a test that needs the run folder checks the runner's 
 one line naming the command to use, before it creates anything — or names it as uncontained, and the site keeps its
 prefix. S3 does this for C#, S4 for Node. A runner's fallback is uncontained too, so S3 and S4 also make both runners
 fail closed. Until both are done, NO S5 site is contained.
+*[epoch 5, 2026-11-04]* The inventory has ONE line that drops nothing and is backed by no owned folder: the native
+measurement series (§ *Facts*, the last row of the table; § S4, *[epoch 5]*). It leaves the prefix family by a rename
+the inventory records; it is made and removed only by its own scripts and never collected. The parent's merge condition
+(i) is read so (its § *Epoch 5*, item 3).
 
 **D11 — Rolling back the producer PR** *[re-review plan gate, 2026-11-03, the parent's session `7c66b50d`, finding r1]*. A
 plain revert of the squash merge is NOT the first step: it brings back the legacy producers while owner-form folders
@@ -1164,6 +1188,75 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
   starts a Node test or script outside the runner — `sonarcloud.yml:302` (the coverage run), `ci.yml:197`, the runner
   scripts, a person's direct `node --test` — either runs inside an owned folder of the wrap, or refuses with one line
   before it creates anything. The S4 commit lists each row with its outcome.
+- *[epoch 5, 2026-11-04]* **The native measurement series — the ONE bounded exception (the parent's entry 4.2 and its
+  § *Epoch 5*, item 4; question consultants `b5c30429`, re-review consult `d7ad1ace`).** The two bullets above that
+  put `scripts/lib/native-run.mjs:18` (`SERIES_SHAPE`) and `scripts/native/abort.sh:31`, `make-series.sh:30`,
+  `remove-series.sh:22` under "an owned folder of the wrap, or the owner form through the wrap" are superseded for
+  the SERIES: neither option fits. The series is a root-run, multi-phase folder: `make-series.sh` creates it, each
+  phase (a root-run script) must find it again, `abort.sh` stops a phase, and `remove-series.sh` removes it when the
+  person is done — it outlives every script that writes it, on purpose. An owned folder of the wrap dies with its
+  script (rule §2); an owner-form claim names a pid that is gone when the script exits, and the next run's sweep would
+  remove the series after ten minutes (rule §4), destroying a measurement in progress.
+  **Decision:** the series LEAVES the prefix family. **Grammar:** `native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}` under the
+  series root (`/tmp`, or `COAI_NATIVE_SERIES_ROOT`): no `testsToDelete-` prefix, no owner segment, no claim.
+  `SERIES_SHAPE` stays the ONE literal the four files share, and `native.test.mjs` still fails unless all of them hold
+  exactly that text. It is still made ONLY by `make-series.sh` and removed ONLY by `remove-series.sh`, which keeps
+  validating the whole shape and refuses anything else (exit 78, one line); `abort.sh` keeps the same shape. **Nothing
+  collects it automatically** — not the test sweeps, not `run-lib-tests.mjs`, not the janitor (it matches
+  `^teststodelete[-_]`), not a next run. Its durable purpose, its two scripts and its grammar are written in the native
+  documents (the scripts' own headers and the native rows of `research/module_tests.md`, `:4514-4521` today) and it
+  stays in D10's inventory as a line of its own. The tests follow the shape: `native-run.test.mjs:9`, `:31-33`, `:68-69`; `native.test.mjs:26`
+  (the test's private root keeps its `testsToDelete-native-test-` name only if it is made through the wrap — else it
+  moves into an owned folder of the wrap like the other `scripts/lib` sites), `:112`, `:420`.
+  **Evidence (RED first, on the Linux leg — the series exists only on a Linux box):** (1) *survival between phases* —
+  a test makes a series with `make-series.sh` under a private root, runs one phase script to completion, then starts a
+  second phase: the folder and its phase-1 contents are still there, unchanged; the private root is swept in between
+  (S2-B's sweep, on purpose) and the series survives it. (2) *the remover's grammar* — `remove-series.sh` accepts a
+  valid NEW name (`native-kimi-20261104-0a1b2c`) and removes it; it refuses, with one line and exit 78, each malformed
+  one: the OLD prefixed name (`testsToDelete-native-vibe-…`), a wrong kind (`native-other-…`), a wrong date width,
+  upper-case hex, a path outside the series root, a leaf with a separator — the existing refusal cases of
+  `native-run.test.mjs:31-33` and `native.test.mjs:420` moved to the new shape, plus the old-prefix case. (3) *the
+  guard* — the name carries no `testsToDelete-` prefix, so rule §7's `legacy-name` class does not see it, and it is
+  outside every run folder, so it is never a `raw-temp` baseline entry; if the shipped guard classes `make-series.sh`'s
+  `mkdir` under another class, S6 names the line with the inline exemption and the reason `the native measurement
+  series — the parent's § Epoch 5 item 4`, and the expected-exemption inventory lists it. **Bound:** one shape in one
+  family of scripts; a second durable resource anywhere is a new plan change, never a second use of this note.
+- *[epoch 5, 2026-11-04]* **Implementation notes of S4 — classified as NOT changes at the epoch-5 re-review** (fixes
+  that satisfy this document as written, or approved constraints read more exactly; the coder and the reviewers read
+  them with the bullets above):
+  - **P1 — the first import refuses.** Every test file that needs the run folder gets a FIRST import (before any
+    import that can create a resource) that checks the runner's marker and refuses a direct `node --test` with one
+    line, before anything is created. The epoch-4 bullet above already says every direct invocation enters
+    containment or refuses; the order of the import is how it is done, and the reviewer checks that no
+    resource-creating dependency is imported above it.
+  - **D-b — the four person-run probes keep `--scratch`.** `probe-kimi-confinement.mjs:132`,
+    `probe-kimi-tree-hold.mjs:99`, `probe-vibe-confinement.mjs:92` and `vibe-home-manifest.mjs:71` already take
+    `--scratch <dir>`. Their DEFAULT scratch moves into an owned folder of the wrap (the first option of the bullet
+    above), removed at exit, with one printed line saying so. A person who keeps a run for `--reparse`/`--from` names a
+    folder with `--scratch` — a folder the person names, outside the machine temp's automatic lifecycle; the script's
+    usage line says so.
+  - **D-c — `run-host.mjs`'s three owned folders live inside the runner's run folder.** The paragraph *The change —
+    `run-host.mjs`* stands (`host-ws`, `host-data`, `host-profile` from the wrap, `--user-data-dir`, the
+    `try/finally`), AND the generic runner rule stands (one owned folder per runner, `TMPDIR`/`TEMP`/`TMP` handed to
+    every child): the three are made INSIDE the runner's own run folder, with the three variables moved there. Both
+    texts as written; nothing is dropped.
+  - **P4 — "`test:host` once on Windows" is a hosted run.** The owner's Windows machine does not test E5 (the parent's
+    PR #124). The Windows run of the commands line is a deliberately started, recorded run of `npm run test:host` on a
+    hosted `windows-latest` runner (a targeted job or a throwaway branch), with the before/after counts of `coai-host-*`
+    and `testsToDelete-*` in the record, taken BEFORE the runner is discarded.
+  - **P8 — the Node runners EXPORT `TESTSTODELETE_RUN`.** The detail (`common/test-leftovers-detail.md:120`): the top
+    of a run exports its record once, and a helper in a child uses it when it names a live run of the caller. So
+    `run-tests.mjs`, `run-lib-tests.mjs` and the runner scripts export their own record, and withhold an INHERITED one
+    only around their own claim (S2-B `6695ab36`: the run folder's claim names ITS process, never an inherited record).
+  - **P12 — a targeted macOS Node CI step**, so that must-not-copy #12 (`/var` → `/private/var`; the wrap's `isMine`
+    both ways) runs on macOS for the Node side too; row 12 already names S4.
+  - **P2, P9, P10, P11 — counts and references.** The "31 runner scripts" of the Files bullet are 25 entry scripts plus
+    13 library modules that get no folder of their own (only an entry script owns a folder); stale line numbers are
+    re-read at the commit; two script sites the lists above do not name are added: `scripts/live-consult-all.mjs:25`
+    (`coai-live-<vendor>-`) and `scripts/measure-idle-server.mjs:32` (`coai-idle-arm-`) — both person-run, both move
+    into an owned folder of the wrap like the probes.
+  - **P13 — for S6 (and F3's manifest scan):** no guard scans `src_vs_code/scripts/*.mjs` today; S6's Node guard must
+    include that folder, or its zero is false for the runners. S6's Files bullet is read with this note.
 
 Scenarios: the guard (`leftovers-check.mjs --profile node --token coai`) on the whole repository reports zero
 `legacy-name` and `owner-blind` for every listed line; `sonarcloudRunsThroughTheRunner` — a test that reads
@@ -1459,6 +1552,12 @@ S6 creates the baseline:
       never fails the run.
 - [ ] S4: every Node runner, script test and the editor-host run owns its folder through the ONE wrap module; nothing
       leaks; `release.yml` uses `RUNNER_TEMP`.
+      *[epoch 5, 2026-11-04]* Read with ONE exception: the native measurement series (§ S4, *[epoch 5]*) owns no folder
+      through the wrap — it leaves the prefix family as `native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`, made only by
+      `make-series.sh`, removed only by `remove-series.sh`, never collected. Its evidence is in S4's DoD: the survival
+      test between phases and the remover's grammar tests (a valid new name accepted, each malformed one refused) green
+      on the Linux leg; the native documents say what the series is and who removes it. The S4 implementation notes
+      (P1, D-b, D-c, P4, P8, P12, P2/P9/P10/P11) are each handled and named in the S4 commit; P13 in S6.
 - [ ] S6: both guards red on every class, on an unregistered token and on a scan of nothing; `owner-blind`,
       `legacy-name`, `exemption`, `token` at zero; the `raw-temp` baseline in the released rule's form (membership +
       hash, only shrinking); the audit bounded to the run (#1); the self-tests on the three legs.
@@ -1715,6 +1814,14 @@ The October notes 1–12 are kept below with what changed; 13–18 are new.
     *[epoch 4]*: D2 is an adapted copy (a manifest, permitted transformations, a diff check); the DoD names the suite ×
     OS matrix; S6 waits for F24 (the baseline proof rule). Upstream parameterisation of the template is a possible later
     follow-up for dew_flow_mcp's owner, if E2, E6 or E7 need the same adaptations.
+21. **The native measurement series is a durable resource outside the contract's form (the parent's entry 4.2)**
+    *[epoch 5, 2026-11-04]*: it leaves the prefix family as `native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`, made only by
+    `make-series.sh`, removed only by `remove-series.sh`, never collected; the parent's § *Epoch 5*, item 4 is the one
+    bounded exception, with its evidence on the producer PR. And for entry 4.1: nothing collects a legacy
+    `testsToDelete-coai-run-*` folder at the pin; S2-A's one-off clean-up is the only removal (D4 as corrected). For the
+    conventions: the goal of the family's rollout needs a sentence for a resource that is durable on purpose; this is
+    the first one. The parent's P1 is closed by the owner's statement (its PR #124); merge condition (c) for the WSL
+    machine waits for one administrator scan.
 14. **A shared rule change is needed before E5's producer PR** *[round-1 finding 7, consult `abcaae48`]*: rule §7's
     `raw-temp` class needs a baseline form — only for sites proven inside an owned run folder, exact membership plus
     content hash, only shrinking, the line number a hint — written as its own plan in `dew_flow_conventions`, released,
