@@ -28,6 +28,8 @@ const mode = process.env.FAKE_MODE ?? 'ok';
 const url = new URL(process.env.ASPNETCORE_URLS);
 if (process.env.FAKE_PIDFILE) fs.writeFileSync(process.env.FAKE_PIDFILE, String(process.pid));
 if (mode.includes('ignore-term')) process.on('SIGTERM', () => {});
+// A graceful shutdown that takes a moment and leaves proof (a flag file OUTSIDE the run folder) that it was allowed to finish.
+if (mode.includes('flush-on-term')) process.on('SIGTERM', () => setTimeout(() => { fs.writeFileSync(process.env.FAKE_FLAG, 'flushed'); process.exit(0); }, 600));
 if (mode.includes('kill-self')) process.kill(process.pid, 'SIGKILL');
 http.createServer((req, res) => { res.statusCode = mode.includes('unhealthy') ? 500 : 200; res.end('x'); }).listen(Number(url.port), '127.0.0.1');
 if (mode.includes('writer')) setInterval(() => { try { fs.writeFileSync(process.env.Coai__DataDir + '/w' + Date.now(), 'x'); } catch {} }, 20);
@@ -71,7 +73,7 @@ function fixture(t, { testMs = 300, withTests = true } = {}) {
   fs.writeFileSync(preload, PRELOAD);
   const temp = path.join(base, 'temp');
   fs.mkdirSync(temp);
-  return { ext, bin, preload, temp, pidfile: path.join(base, 'server.pid') };
+  return { ext, bin, preload, temp, pidfile: path.join(base, 'server.pid'), flag: path.join(base, 'server.flushed') };
 }
 
 function runContract(fx, { mode = 'ok', action = '', signalAfter } = {}) {
@@ -80,7 +82,7 @@ function runContract(fx, { mode = 'ok', action = '', signalAfter } = {}) {
   const child = spawn(process.execPath, [path.join(fx.ext, 'scripts', 'run-contract.mjs')], {
     cwd: fx.ext, stdio: ['ignore', 'pipe', 'pipe'],
     env: {
-      ...env, PATH: `${fx.bin}${path.delimiter}${env.PATH}`, TEMP: fx.temp, TMP: fx.temp, TMPDIR: fx.temp, FAKE_MODE: mode, FAKE_PIDFILE: fx.pidfile, FAKE_ACTION: action,
+      ...env, PATH: `${fx.bin}${path.delimiter}${env.PATH}`, TEMP: fx.temp, TMP: fx.temp, TMPDIR: fx.temp, FAKE_MODE: mode, FAKE_PIDFILE: fx.pidfile, FAKE_FLAG: fx.flag, FAKE_ACTION: action,
       NODE_OPTIONS: `--import=${pathToFileURL(fx.preload).href}`,
     },
   });
@@ -124,6 +126,22 @@ test('X2 fail() waits for the cleanup in flight: no tests to run, and a server t
   const result = await runContract(fx, { mode: 'ignore-term' });
   assert.equal(result.status, 1, result.output.slice(-800));
   assert.match(result.output, /no compiled tests/u);
+  await assertServerGoneAndNothingLeft(fx, result, 200);
+});
+
+test('X2b fail() lets a server that shuts down gracefully FINISH: the flush marker exists when the runner has exited', async (t) => {
+  const fx = fixture(t, { withTests: false });
+  const result = await runContract(fx, { mode: 'flush-on-term' });
+  assert.equal(result.status, 1, result.output.slice(-800));
+  assert.equal(fs.existsSync(fx.flag), true, 'fail() ended the process under a pending stop: the server was killed in the middle of its shutdown');
+  await assertServerGoneAndNothingLeft(fx, result, 200);
+});
+
+test('X3b an uncaught exception lets a server that shuts down gracefully FINISH, then exits 1', async (t) => {
+  const fx = fixture(t, { testMs: 6000 });
+  const result = await runContract(fx, { mode: 'flush-on-term', action: 'throw:1500' });
+  assert.equal(result.status, 1, result.output.slice(-800));
+  assert.equal(fs.existsSync(fx.flag), true, 'the process ended under a pending stop');
   await assertServerGoneAndNothingLeft(fx, result, 200);
 });
 

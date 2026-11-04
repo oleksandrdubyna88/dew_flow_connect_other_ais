@@ -267,7 +267,7 @@ test('copyChecked: a bare check (root and series, and run/) lets scp run only fo
   assert.equal(planted.calls.length, 1, 'scp never ran: a planted link is refused before it');
 
   for (const [why, kind, sources, dest] of [
-    ['a kind that runs something', 'phase', ['/work/x'], 'x'], ['a destination that climbs', 'bare', ['/work/x'], '../x'], ['an absolute destination', 'bare', ['/work/x'], '/etc/x'],
+    ['a kind that runs something', 'make', ['/work/x'], 'x'], ['a destination that climbs', 'bare', ['/work/x'], '../x'], ['a destination that climbs in the middle', 'bare-run', ['/work/x'], 'run/../x'], ['an absolute destination', 'bare', ['/work/x'], '/etc/x'],
     ['a source that is an option', 'bare', ['/work/-oProxyCommand=x'], 'x'], ['sources in two folders', 'bare', ['/work/a', '/other/b'], 'x'], ['no source', 'bare', [], 'x'],
     ['a destination with a shell metacharacter', 'bare', ['/work/x'], 'x;id'],
   ]) {
