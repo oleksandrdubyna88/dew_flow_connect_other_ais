@@ -755,7 +755,7 @@ linuxTest('remove-series.sh and abort.sh refuse, as root, a non-zero COAI_NATIVE
   assert.match(removed.stdout, /^refused: .*root/u);
   assert.equal(existsSync(series), true, 'nothing was removed');
   const alsoRoot = removeIn(series, ROOT, { COAI_NATIVE_SERIES_OWNER_UID: '0', ...AS_ROOT });
-  assert.notEqual(alsoRoot.status, 78, `as root with the default uid the seam is not in play: ${alsoRoot.stdout}`);
+  assert.doesNotMatch(alsoRoot.stdout, /test seam is not for a root run/u, 'as root with the default uid the seam is not in play (the folder check refuses for its own reason)');
 
   const aborted = spawnSync('/bin/bash', ['--', join(provisioned(), 'run', 'abort.sh'), 'n-v2'], { env: scriptEnv({ COAI_NATIVE_SERIES_OWNER_UID: String(MY_UID()), ...AS_ROOT }), encoding: 'utf8', timeout: 30_000 });
   assert.equal(aborted.status, 78, `${aborted.stdout}${aborted.stderr}`);
@@ -801,7 +801,8 @@ linuxTest('lead.mjs drives a whole series through the stat check with the faithf
   assert.equal(readFileSync(join(series, 'SERIES_PATH'), 'utf8'), `${series}\n`);
   assert.equal(await step('copy', series, 'tools'), 0, lines.join('\n'));
   for (const file of ['abort.sh', 'remove-series.sh']) assert.equal(existsSync(join(series, 'run', file)), true, file);
-  writeFileSync(join(series, 'checkout', 'scripts', 'dummy-probe.mjs'), DUMMY, { flag: 'w' });
+  mkdirSync(join(series, 'checkout', 'scripts'), { recursive: true });
+  writeFileSync(join(series, 'checkout', 'scripts', 'dummy-probe.mjs'), DUMMY);
   assert.equal(await step('copy', series, 'phase', 'n-v1', 'dummy-probe.mjs', '--mode=exit0'), 0, lines.join('\n'));
   assert.equal(statSync(join(series, 'run', 'n-v1.sh')).mode & 0o777, 0o700);
   assert.equal(await step('phase', series, 'n-v1'), 0, lines.join('\n'));

@@ -74,19 +74,19 @@ export function renderRunScript({ series, phase, probe, args = [], root = '/tmp'
 const remote = (options, program, ...rest) => ['ssh', hostOf(options), '--', program, ...rest];
 
 /** Starts a phase: nohup + setsid + bash, each by absolute path, the script by its path. */
-export function launcherArgv(series, phase, options) {
+function launcherArgv(series, phase, options) {
   const dir = seriesOf(series, options?.root);
   return remote(options, '/usr/bin/nohup', '/usr/bin/setsid', '/bin/bash', '--', `${dir}/run/${phaseOf(phase)}.sh`);
 }
 
 /** Aborts a phase: abort.sh, copied into run/, by path. */
-export function abortArgv(series, phase, options) {
+function abortArgv(series, phase, options) {
   const dir = seriesOf(series, options?.root);
   return remote(options, '/bin/bash', '--', `${dir}/run/abort.sh`, phaseOf(phase));
 }
 
 /** Removes a series: remove-series.sh, copied into run/, given the folder it must also read back from SERIES_PATH. */
-export function removeArgv(series, options) {
+function removeArgv(series, options) {
   const dir = seriesOf(series, options?.root);
   return remote(options, '/bin/bash', '--', `${dir}/run/remove-series.sh`, dir);
 }
@@ -97,7 +97,7 @@ export function mkdirArgv(series, options) {
 }
 
 /** Runs make-series.sh from the folder it was copied into. */
-export function makeSeriesArgv(series, options) {
+function makeSeriesArgv(series, options) {
   return remote(options, '/bin/bash', '--', `${seriesOf(series, options?.root)}/make-series.sh`);
 }
 
@@ -113,8 +113,8 @@ export function doneArgv(series, phase, options) {
 // folder planted in a shared /tmp under a valid name can carry its OWN run/remove-series.sh: a check inside that copy protects nothing by itself.
 // ------------------------------------------------------------------------------------------------------------------------------------------------
 
-/** The scripts the lead may run out of a series: the one it copies in for `make`, and those it finds in `run/`. */
-const SCRIPT_OF = { make: () => 'make-series.sh', remove: () => 'run/remove-series.sh', abort: () => 'run/abort.sh', phase: (phase) => `run/${phaseOf(phase)}.sh` };
+/** The steps that run something out of a series, and the file each runs; `bare` and `bare-run` run nothing from it (they guard an scp INTO the folder). */
+const SCRIPT_OF = { make: () => 'make-series.sh', remove: () => 'run/remove-series.sh', abort: () => 'run/abort.sh', phase: (phase) => `run/${phaseOf(phase)}.sh`, bare: () => null, 'bare-run': () => null };
 const BUILDERS = {
   make: (series, _phase, options) => makeSeriesArgv(series, options),
   remove: (series, _phase, options) => removeArgv(series, options),
@@ -122,24 +122,33 @@ const BUILDERS = {
   phase: (series, phase, options) => launcherArgv(series, phase, options),
 };
 
-/** Every path whose facts the check reads, in order: the root, the series, run/ (not for `make`, which has none yet) and the script. */
+/**
+ * Every path whose facts the check reads, in order: the root, the series, run/ (not for `make` and `bare`, which have none yet) and the script (none for the bare kinds).
+ * `bare` is the check before an `scp` INTO the series folder (the root and the series only), `bare-run` the one before an `scp` into `run/`: scp must never follow a planted link.
+ */
 function pathsOf(kind, series, phase, options) {
   const dir = seriesOf(series, options?.root);
   const script = SCRIPT_OF[kind]?.(phase);
   if (script === undefined) refuse('the kind of step', kind);
   const root = options?.root ?? '/tmp';
-  return { root, dir, run: kind === 'make' ? undefined : `${dir}/run`, script: `${dir}/${script}` };
+  return { root, dir, run: kind === 'make' || kind === 'bare' ? undefined : `${dir}/run`, script: script === null ? undefined : `${dir}/${script}` };
 }
 
-/** The ssh argument array that reads the facts: `stat -c '%n|%F|%u|%a'` (name, kind WITHOUT following links, owner uid, octal mode) over every path of the check. */
+/** `%n` name, `%F` kind WITHOUT following links, `%u` owner uid, `%d` device, `%a` octal mode. ONE single-quoted word: ssh joins the words with spaces and the REMOTE SHELL parses them again. */
+const STAT_FORMAT = '%n|%F|%u|%d|%a';
+
+/**
+ * The ssh argument array that reads the facts: `/usr/bin/env LC_ALL=C /usr/bin/stat -c '<format>' -- <paths>` — the locale is fixed for this one command because `%F` is
+ * TRANSLATED under a forwarded locale, and the format is quoted for the remote shell (an unquoted `|` there is a pipe: exit 127 and no facts).
+ */
 export function statArgv(kind, series, phase, options) {
   const { root, dir, run, script } = pathsOf(kind, series, phase, options);
-  return remote(options, '/usr/bin/stat', '-c', '%n|%F|%u|%a', '--', root, dir, ...(run === undefined ? [] : [run]), script);
+  return remote(options, '/usr/bin/env', 'LC_ALL=C', '/usr/bin/stat', '-c', quoted(STAT_FORMAT), '--', root, dir, ...(run === undefined ? [] : [run]), ...(script === undefined ? [] : [script]));
 }
 
 const factsOf = (text) => new Map(String(text).split('\n').filter((line) => line.includes('|')).map((line) => {
-  const [name, kind, uid, mode] = line.split('|');
-  return [name, { kind, uid: Number(uid), mode: Number.parseInt(mode, 8) }];
+  const [name, kind, uid, device, mode] = line.split('|');
+  return [name, { kind, uid: Number(uid), device, mode: Number.parseInt(mode, 8) }];
 }));
 const modeText = (mode) => mode.toString(8);
 
@@ -171,22 +180,29 @@ export function statRefusal(kind, series, phase, stdout, options) {
   if ((rootFacts.mode & 0o022) !== 0 && (rootFacts.mode & 0o1000) === 0) return bad(`the series root ${root} is group- or world-writable (mode ${modeText(rootFacts.mode)}) without the sticky bit`);
   const wrong = folder(dir, 'the series') || (run === undefined ? '' : folder(run, 'its run folder'));
   if (wrong !== '') return wrong;
+  // A FUSE mount with allow_other can fake owner, mode and kind of everything below it; it cannot share the root's device.
+  const sameDevice = (path, label) => (facts.get(path).device === rootFacts.device ? '' : bad(`${label} ${path} is on another device (${facts.get(path).device}) than the series root (${rootFacts.device})`));
+  const elsewhere = sameDevice(dir, 'the series') || (run === undefined ? '' : sameDevice(run, 'its run folder'));
+  if (elsewhere !== '') return elsewhere;
+  if (script === undefined) return '';
   const file = facts.get(script);
   if (file === undefined) return bad(`the script ${script} is missing`);
   if (file.kind !== 'regular file' && file.kind !== 'regular empty file') return bad(`the script ${script} is a ${file.kind}, not a regular file`);
   if (file.uid !== uid) return bad(`the script ${script} is owned by uid ${file.uid}, not ${uid}`);
   if ((file.mode & 0o022) !== 0) return bad(`the script ${script} is mode ${modeText(file.mode)}: group- or world-writable`);
-  return '';
+  return sameDevice(script, 'the script');
 }
 
 /**
- * Runs one step out of a series ONLY after its folder passed the `stat` check. `exec(argv)` runs an argument array (the lead's ssh, or a test's local stand-in) and
- * answers `{ status, stdout }`; `kind` is `make`, `remove`, `abort` or `phase`. Answers `{ status: 78 | 66, refused }` and runs NOTHING from the folder when the check
- * fails (66: the series is gone); else `exec`'s own answer for the step. Never throws for a refusal.
+ * Runs one step out of a series ONLY after its folder passed the `stat` check — and this is the ONLY road: the raw argument builders of the steps that run out of a series
+ * are not exported. `exec(argv)` runs an argument array (the lead's ssh, or a test's local stand-in that parses the words with a shell as sshd does) and answers
+ * `{ status, stdout }`; `kind` is `make`, `remove`, `abort` or `phase` (the builder is ours), or `bare` / `bare-run` (an scp INTO the folder: `makeArgv` is the caller's).
+ * Answers `{ status: 78 | 66, refused }` and runs NOTHING from the folder when the check fails (66: the series is gone); else `exec`'s own answer for the step. Never throws for a refusal.
  */
-export async function runChecked(kind, series, phase, options, exec) {
+export async function runChecked(kind, series, phase, options, exec, makeArgv = BUILDERS[kind]) {
+  if (typeof makeArgv !== 'function') refuse('a step with no argument builder', kind);
   const probe = await exec(statArgv(kind, series, phase, options));
   const refused = statRefusal(kind, series, phase, probe?.stdout ?? '', options);
   if (refused !== '') return { status: refused.startsWith('the series ') ? 66 : 78, refused };
-  return exec(BUILDERS[kind](series, phase, options));
+  return exec(makeArgv(series, phase, options));
 }

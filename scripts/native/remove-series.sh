@@ -47,6 +47,8 @@ if [ "$SERIES" != "$FOLDER" ]; then refuse "SERIES_PATH says '$SERIES' but the f
 if [ "$SERIES" != "$REAL" ]; then refuse "SERIES_PATH says '$SERIES' but the folder it was read from is '$REAL'"; fi
 # Defence in depth: who owns and who can write what `rm -rf` is about to remove.
 if ! [[ $OWNER_UID =~ ^[0-9]{1,10}$ ]]; then refuse "COAI_NATIVE_SERIES_OWNER_UID '$OWNER_UID' is not a uid"; fi
+# The seam exists so the tests can run as their own user. As root it would make every check below accept a folder of THAT user: a root run never takes it.
+if [ "$(id -u)" = 0 ] && [ "$OWNER_UID" != 0 ]; then refuse "running as root with COAI_NATIVE_SERIES_OWNER_UID=$OWNER_UID: the test seam is not for a root run"; fi
 FACTS="$(stat -c '%u %a' -- "$FOLDER")"
 if [ "${FACTS% *}" != "$OWNER_UID" ]; then refuse "'$FOLDER' is owned by uid ${FACTS% *}, not by uid $OWNER_UID"; fi
 if (( (8#${FACTS#* } & 8#022) != 0 )); then refuse "'$FOLDER' is mode ${FACTS#* }: group- or world-writable"; fi

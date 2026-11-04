@@ -48,6 +48,8 @@ if [ "$NAME" = "$SERIES" ]; then refuse "'$SERIES' is not under $SERIES_ROOT"; f
 [[ $NAME =~ ^${SHAPE}$ ]] || refuse "'$NAME' does not match $SHAPE"
 if [ "$(cat -- "$SERIES/SERIES_PATH" 2>/dev/null)" != "$SERIES" ]; then refuse "SERIES_PATH does not name '$SERIES'"; fi
 if ! [[ $OWNER_UID =~ ^[0-9]{1,10}$ ]]; then refuse "COAI_NATIVE_SERIES_OWNER_UID '$OWNER_UID' is not a uid"; fi
+# The seam exists so the tests can run as their own user. As root it would make every check below accept a folder of THAT user: a root run never takes it.
+if [ "$(id -u)" = 0 ] && [ "$OWNER_UID" != 0 ]; then refuse "running as root with COAI_NATIVE_SERIES_OWNER_UID=$OWNER_UID: the test seam is not for a root run"; fi
 FACTS="$(stat -c '%u %a' -- "$SERIES")"
 if [ "${FACTS% *}" != "$OWNER_UID" ]; then refuse "'$SERIES' is owned by uid ${FACTS% *}, not by uid $OWNER_UID"; fi
 if (( (8#${FACTS#* } & 8#022) != 0 )); then refuse "'$SERIES' is mode ${FACTS#* }: group- or world-writable"; fi
