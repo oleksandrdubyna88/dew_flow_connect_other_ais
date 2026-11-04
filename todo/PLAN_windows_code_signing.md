@@ -86,7 +86,9 @@ owner asked for the MCP binary. The same call fits those jobs later. macOS/Linux
 **The build leg** (`mcp-binaries`), Windows RIDs only: `Package` builds `unsigned/coai-mcp-$VERSION-$RID/`
 with the binary, `e_sqlite3` and the grammars, and runs both carry checks on a listing of that folder
 (prefix `NAME/` included); no zip, no checksum, no attach on Windows legs; `unsigned/` is uploaded as
-`unsigned-mcp-<rid>`, `retention-days: 7`. Non-Windows RIDs are untouched.
+`unsigned-mcp-<rid>`, `retention-days: 7`. Non-Windows RIDs are untouched. The job's `timeout-minutes` goes from 30 to 45, as
+`server-binaries`: the forced trial this plan asks for could not finish at 30 (real legs took 27:48 and 29:41; three trials
+were cancelled on 2026-11-04). It only makes the planned trial runnable (consultation ad5f684d).
 
 **`mcp-sign`** — `needs: mcp-binaries`, `if: ${{ !cancelled() && needs.mcp-binaries.result == 'success' }}`
 (a bare result test would get an implicit `success()` over ALL upstream jobs, and the skipped `mcp-draft` of

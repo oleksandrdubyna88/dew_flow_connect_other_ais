@@ -225,7 +225,9 @@ jobs:
     # 30, not 15: the Windows legs build AND run the whole mcp suite, and it grew past the old ceiling —
     # 10 min (0.38.0), 12.5 min (0.39.0), then both Windows legs of mcp-v0.40.1 were cancelled at 15 with
     # the other four platforms uploaded. A timeout is not a test failure; it only ever strands a draft.
-    timeout-minutes: 30
+    # 30 went the same way: real win-x64 legs took 27:48 and 29:41 of it, and on 2026-11-04 three trials were
+    # cancelled at 30, with `Build and test` alone at 27 to 30 minutes. 45, as `server-binaries`.
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
