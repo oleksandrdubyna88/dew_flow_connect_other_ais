@@ -263,7 +263,8 @@ function stop() {
   rmSync(dataDir, { recursive: true, force: true });
 }
 
-process.on('exit', stop);
+// PREPENDED: this listener must run BEFORE the wrap's (registered at the top), which removes the run folder the server's data lives in — the server is killed first (E5 S4).
+process.prependListener('exit', stop);
 process.on('SIGINT', () => { stop(); process.exit(ENVIRONMENT); });
 
 const readiness = await waitForReady(baseUrl, server, 40);

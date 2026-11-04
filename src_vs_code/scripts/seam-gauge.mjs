@@ -129,7 +129,7 @@ export async function gaugeSeam({ fail, extensionRoot = resolve(import.meta.dirn
   } catch (error) {
     outcome = error instanceof Error ? error.message : String(error);
   } finally {
-    server?.stop();
+    await server?.stop();
     try {
       rmSync(dataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
     } catch {

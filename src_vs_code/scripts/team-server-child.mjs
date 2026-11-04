@@ -82,7 +82,7 @@ async function waitForHealth(url, child, say) {
 /**
  * Start the server over `dataDir`, with a fresh signing key, `domain` allowed and `admins` in `Coai:Admins`.
  *
- * @returns {Promise<{ url: string, key: string, stop: () => void }>}
+ * @returns {Promise<{ url: string, key: string, stop: () => Promise<void> }>}
  */
 export async function startTeamServer({ extensionRoot, dataDir, domain, admins, say = () => {}, stdio = 'inherit' }) {
   const assembly = serverAssembly(extensionRoot);
@@ -135,16 +135,30 @@ export async function startTeamServer({ extensionRoot, dataDir, domain, admins, 
   return { url, key, stop };
 }
 
-/** SIGTERM, then the whole tree — in that order and never conditionally. */
-function stopServer(child) {
-  if (child.exitCode === null && child.pid !== undefined) {
-    kill(child, 'SIGTERM');
+/**
+ * SIGTERM, then the whole tree — in that order and never conditionally. Answers a promise that settles when the server has EXITED (or, past the grace and a further
+ * bound, anyway): a caller that is about to remove the server's data folder awaits it, because a graceful shutdown writes into that folder (E5 S4: the run folder's removal
+ * at exit would otherwise race a server still shutting down). A caller on its way out of the process cannot await and calls it as before.
+ */
+export function stopServer(child) {
+  return new Promise((settled) => {
+    if (child.exitCode !== null || child.pid === undefined) {
+      settled();
+      return;
+    }
     // A server that ignores the polite signal still has to release the port before the next run.
     // NOT unref'd: this timer is the escalation, and a timer nothing waits for is a timer that
     // never fires when the process is on its way out.
     const hard = setTimeout(() => kill(child, 'SIGKILL'), STOP_GRACE_MS);
-    child.on('exit', () => clearTimeout(hard));
-  }
+    const give = setTimeout(settled, STOP_GRACE_MS + 5_000);
+    give.unref();
+    child.once('exit', () => {
+      clearTimeout(hard);
+      clearTimeout(give);
+      settled();
+    });
+    kill(child, 'SIGTERM');
+  });
 }
 
 /**

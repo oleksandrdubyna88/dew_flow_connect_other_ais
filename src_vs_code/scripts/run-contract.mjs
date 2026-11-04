@@ -63,10 +63,10 @@ let cleaned = false;
 
 function runCleanUp() {
   if (cleaned) {
-    return;
+    return undefined;
   }
   cleaned = true;
-  cleanUp();
+  return cleanUp();
 }
 
 process.on('exit', runCleanUp);
@@ -148,8 +148,9 @@ async function startServer() {
       admins: ADMIN,
       say: (line) => console.log(`run-contract: ${line}`),
     });
-    cleanUp = () => {
-      server.stop();
+    cleanUp = async () => {
+      // The server has EXITED before its data goes: a graceful shutdown writes there, and the run folder is removed right after (E5 S4).
+      await server.stop();
       removeData(data);
     };
 
@@ -247,6 +248,6 @@ try {
     COAI_CONTRACT_SEEDED: '1',
   });
 } finally {
-  runCleanUp();
+  await runCleanUp();
 }
 process.exit(status);

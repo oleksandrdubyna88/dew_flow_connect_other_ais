@@ -176,7 +176,7 @@ export async function usageCountsSeam({ fail, extensionRoot = resolve(import.met
     outcome = error instanceof Error ? error.message : String(error);
   } finally {
     // Before any `fail`, which exits the process and would skip a `finally` that ran after it.
-    server?.stop();
+    await server?.stop();
     removeData(dataDir);
   }
   if (typeof outcome === 'string') {

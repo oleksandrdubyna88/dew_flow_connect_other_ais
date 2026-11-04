@@ -2,7 +2,7 @@ import '../../scripts/inRunFolder.cjs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { owned } from '../../scripts/owned.mjs';
@@ -120,4 +120,24 @@ test('D1 a runner started through a symbolic link still runs (a green tick over 
   assert.equal(tests.status, 2, `run-tests ran nothing: ${tests.stdout}${tests.stderr}`);
   const host = run('host.mjs', [], { [SELF_TEST]: 'exit-after-begin', TEMP: root, TMP: root, TMPDIR: root });
   assert.equal(host.status, 3, `run-host ran nothing: ${host.stdout}${host.stderr}`);
+});
+
+test('E5 a server\'s stop is awaitable: the promise settles when the process has EXITED, so its data folder is removed after it, not under it', async () => {
+  const { stopServer } = await import('../../scripts/team-server-child.mjs');
+  const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => setTimeout(() => process.exit(0), 300)); setInterval(() => {}, 1000); console.log('up')"],
+    { stdio: ['ignore', 'pipe', 'inherit'], detached: process.platform !== 'win32' });
+  await new Promise((up) => child.stdout.once('data', up));
+  const started = Date.now();
+
+  await stopServer(child);
+
+  assert.notEqual(child.exitCode ?? child.signalCode, null, 'the child had exited when stop settled');
+  assert.ok(Date.now() - started >= 250, 'and stop waited for its graceful shutdown');
+});
+
+test('E6 the contracts runner stops its server BEFORE the wrap removes the run folder it lives in (the server\'s exit listener is prepended)', () => {
+  assert.match(fs.readFileSync(path.join(repoRoot, 'http', 'run-contracts.mjs'), 'utf8'), /process\.prependListener\('exit', stop\)/u);
+  const contract = fs.readFileSync(path.join(pkg, 'scripts', 'run-contract.mjs'), 'utf8');
+  assert.match(contract, /await server\.stop\(\);\s*removeData\(data\)/u, 'run-contract waits for the server to exit before it removes the data');
+  assert.match(contract, /finally \{\s*await runCleanUp\(\);/u);
 });
