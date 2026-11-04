@@ -36,6 +36,14 @@ on:
         # `server` is deliberately NOT here: an image is a released artefact, and releases start
         # from a `server-v*` tag cut on main. A dispatch build would publish one from a branch.
         options: [mcp, extension]
+      # Reaches `mcp-sign` only. A dispatch is not a tag, so by itself it takes the TRIAL path (a missing
+      # signing configuration is a fallback); ticking this makes it take the tag's path, which is how the
+      # unsigned-release switch is proven on a branch before a real tag has to prove it.
+      required:
+        description: 'force the signing decision as on a release tag'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -429,8 +437,8 @@ jobs:
           fi
 
       # The Windows package, UNSIGNED, for `mcp-sign`. The name keeps `unsigned-` in front on purpose:
-      # the shared workflow downloads `unsigned-NAME` and uploads the signed one as `NAME`, so a
-      # download of `mcp-win-*` can never pick this one up and an unsigned package cannot be mistaken
+      # the shared workflow downloads `unsigned-NAME` and uploads its own zip as `NAME`, so a
+      # download of `mcp-win-*` can never pick this one up and this folder cannot be mistaken
       # for the release's. A week is long enough for a re-run of the signing, and no longer.
       - name: Upload the unsigned Windows package
         if: startsWith(matrix.rid, 'win-')
@@ -461,7 +469,7 @@ jobs:
       # all. `mcp-release-complete` publishes it once every expected asset is there — and a matrix
       # leg cannot make that decision, because it cannot see its five siblings.
       #
-      # NOT the Windows legs: their package is signed first, and `mcp-sign-attach` attaches it.
+      # NOT the Windows legs: their package goes through `mcp-sign` first, and `mcp-sign-attach` attaches it.
       - name: Attach to the draft release
         if: startsWith(github.ref, 'refs/tags/mcp-v') && !startsWith(matrix.rid, 'win-')
         env:
@@ -472,10 +480,12 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
           gh release upload "$GITHUB_REF_NAME" "$ASSET.sha256" --clobber
 
-  # The two Windows packages, signed. The signing is the SHARED workflow's — this repository writes
-  # none of it: it signs `coai-mcp.exe` and the libraries declared below on `windows-2025` (the
-  # signing action does not run on a Windows ARM runner), keeps a vendor signature it finds, makes
-  # the zip and its checksum, and uploads them as `mcp-win-x64` / `mcp-win-arm64`.
+  # The two Windows packages, passed through the signing step. The signing is the SHARED workflow's —
+  # this repository writes none of it: once a signing provider is active it signs `coai-mcp.exe` and the
+  # libraries declared below on `windows-2025` (the signing action does not run on a Windows ARM
+  # runner), keeps a vendor signature it finds, and in every case makes the zip and its checksum and
+  # uploads them as `mcp-win-x64` / `mcp-win-arm64`. No provider is active yet, so today the zip it
+  # makes holds UNSIGNED files; see the switch below.
   #
   # THE `if:` IS NOT mcp-binaries'. That one reads `needs.mcp-draft.result`; this job needs only
   # `mcp-binaries`, so `mcp-draft` is not in its context and the same text would be `null ==
@@ -505,8 +515,17 @@ jobs:
   # dependency bump renames is noticed on the release that carries it rather than on somebody's PC.
   # `windowsPackageIsSigned.test.ts` holds both lists against the files.
   #
-  # `required` is tied to a tag: a trial from a branch may fall back where Azure is not set up, a
-  # release may not — a tag whose Windows package is unsigned fails and stays a draft.
+  # `required` is the signing DECISION, and a tag makes it: a trial from a branch may fall back where
+  # Azure is not set up; a tag may not, so a missing configuration on a tag is red — unless the switch
+  # below says otherwise. A dispatch can take the tag's path with its own `required` input, which is how
+  # the switch is proven before a tag has to. `allow-unsigned-release` is a PERMISSION for the period
+  # before a signing provider exists, read from the REPOSITORY variable `ALLOW_UNSIGNED_RELEASES` (a
+  # `with:` of a call cannot read an environment's variables). While that variable is `true` and none
+  # of the six signing variables is set, a tag packs the Windows zips UNSIGNED, with a warning and a
+  # job-summary banner; unset or anything else means enforcement, and a half configuration or a
+  # failing provider is red either way. The input is removed from this job at activation, with the
+  # variable (the shared plan's A6), and `windowsPackageIsSigned.test.ts` holds the exact text of both.
+  # The job passes no `environment`: the shared workflow's default is the one the federated trust names.
   #
   # The version is a commit, never a tag: this is the one place a moving ref would sign code a
   # reviewer has not read.
@@ -517,12 +536,13 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: oleksandrdubyna88/dew_flow_release_signing/.github/workflows/sign-windows.yml@609cc23bd9d39f61032849fc4910e4447f04e872 # v1.0.0
+    uses: oleksandrdubyna88/dew_flow_release_signing/.github/workflows/sign-windows.yml@a9a7eccdf76306d8fdbc67fc917cf8d5a362d851 # v1.1.0
     with:
       artifacts: '["mcp-win-x64","mcp-win-arm64"]'
       own-files: '["coai-mcp.exe"]'
       extra-files: '["e_sqlite3.dll","tree-sitter*.dll"]'
-      required: ${{ startsWith(github.ref, 'refs/tags/') }}
+      required: ${{ startsWith(github.ref, 'refs/tags/') || inputs.required }}
+      allow-unsigned-release: ${{ vars.ALLOW_UNSIGNED_RELEASES == 'true' }}
 
   # The product check on the FINAL zips, then the attach. The signing workflow proves the zip holds
   # the files it verified; it knows nothing of what this package is FOR, so the question that is
@@ -531,7 +551,7 @@ jobs:
   # dispatch trial too, so the trial exercises it; only the upload waits for a tag.
   #
   # `contents: write` and nothing else: it uploads to the draft release, and it holds no signing
-  # permission — the package arrives already signed.
+  # permission — the package arrives from `mcp-sign`, signed or not.
   mcp-sign-attach:
     name: attach the signed Windows coai-mcp
     if: ${{ !cancelled() && needs.mcp-sign.result == 'success' }}
@@ -569,7 +589,7 @@ jobs:
             .github/scripts/archive-carries.sh "$ZIP" coai-mcp.exe '*e_sqlite3*'
           done
 
-      # The same two uploads the other platforms' legs make, of the signed zip and its checksum.
+      # The same two uploads the other platforms' legs make, of the final zip and its checksum.
       # `--clobber` so a re-run of a failed release replaces rather than fails.
       - name: Attach to the draft release
         if: startsWith(github.ref, 'refs/tags/mcp-v')
