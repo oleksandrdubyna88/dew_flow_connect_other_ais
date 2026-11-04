@@ -2011,3 +2011,4 @@ The October notes 1–12 are kept below with what changed; 13–18 are new.
     `removeArgv`) and the four `scripts/native/*.sh` files. For the parent: the ownership check moved to the CALLER
     (the lead's `stat` checks before it runs anything from the series folder), and coai's native plan opened its
     ledger for the rename (entry 1.1, `contract`).
+23. *[2026-11-04, the S4 fix round]* **For dew_flow_mcp's session (the template), low:** on Windows a sweep that loses a race can read a folder the other sweep just took, and `ForEachEntry` reports one line `folder <path>: Could not find a part of the path …` (coai ci run 41843872560). Nothing is lost or removed twice, but S2-B's DoD says concurrent sweeps are silent on not-found, and this path is not. coai keeps the copy as it is ("template wins") and its test accepts that line. The template's owner decides whether a not-found in the folder pass should be silent.
