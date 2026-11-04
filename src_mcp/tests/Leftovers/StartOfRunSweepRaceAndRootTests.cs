@@ -200,6 +200,84 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
         held.Removed.Where(path => !path.EndsWith(".owner", StringComparison.Ordinal)).Should().BeEquivalentTo([a, b]);
     }
 
+    // ---- two sweep PROCESSES on one root (E5 entry 5.1) --------------------------------------------------------------
+
+    private const string ChildRoot = "COAI_E5_SWEEP_ROOT";
+    private const string ChildGo = "COAI_E5_SWEEP_GO";
+    private const string ChildReady = "COAI_E5_SWEEP_READY";
+    private const string ChildOut = "COAI_E5_SWEEP_OUT";
+
+    private sealed record ChildReport(List<string> Removed, List<string> Listed, List<string> Errors, int Preserved);
+
+    /// <summary>
+    /// The CHILD of <see cref="OnWindows_TwoSweepProcessesOnOneRoot_NeverInterleave"/>: this same test executable, started with a filter that names only this method. Without the
+    /// environment it does nothing (the ordinary run passes through it). With it: say ready, wait for the go file, sweep the root once, write the report as JSON.
+    /// </summary>
+    [Fact]
+    public void SweepChild_E551()
+    {
+        var root = Environment.GetEnvironmentVariable(ChildRoot);
+        if (root is null) return;
+
+        File.WriteAllText(Environment.GetEnvironmentVariable(ChildReady)!, "ready");
+        var go = Environment.GetEnvironmentVariable(ChildGo)!;
+        var until = DateTime.UtcNow.AddSeconds(60);
+        while (!File.Exists(go) && DateTime.UtcNow < until) Thread.Sleep(2);
+
+        var result = LeftoversSweep.Run(Options(root));
+
+        File.WriteAllText(Environment.GetEnvironmentVariable(ChildOut)!, JsonSerializer.Serialize(new ChildReport([.. result.Removed], [.. result.Listed], [.. result.Errors], result.Preserved.Count)));
+    }
+
+    [Fact]
+    public async Task OnWindows_TwoSweepProcessesOnOneRoot_NeverInterleave()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows only: the named mutex over the root is the Windows sweep lock, and a mutex exists for PROCESSES — threads in one process do not prove it");
+        }
+
+        var dead = Dead();
+        for (var round = 0; round < 5; round++)
+        {
+            var root = _owned.Dir($"lock-p{round}");
+            var twenty = Enumerable.Range(0, 20).Select(i => PlantFolder(root, Name("pr" + i), Rec(dead))).ToList();
+            var control = _owned.Dir($"lock-c{round}");
+            var go = Path.Combine(control, "go");
+            var children = Enumerable.Range(0, 2).Select(index => StartChild(root, go, Path.Combine(control, $"ready{index}"), Path.Combine(control, $"out{index}.json"))).ToList();
+            try
+            {
+                var until = DateTime.UtcNow.AddSeconds(60);
+                while (!Enumerable.Range(0, 2).All(index => File.Exists(Path.Combine(control, $"ready{index}"))) && DateTime.UtcNow < until) await Task.Delay(10);
+                File.WriteAllText(go, "go");
+                foreach (var child in children)
+                {
+                    child.Process.WaitForExit(120_000).Should().BeTrue($"round {round}: a sweep process ended");
+                }
+            }
+            finally
+            {
+                foreach (var child in children.Where(c => !c.Process.HasExited)) child.Process.Kill(entireProcessTree: true);
+            }
+
+            var reports = Enumerable.Range(0, 2).Select(index => JsonSerializer.Deserialize<ChildReport>(File.ReadAllText(Path.Combine(control, $"out{index}.json")))!).ToList();
+            foreach (var child in children) child.Process.ExitCode.Should().Be(0, $"round {round}: {await child.StdOut}{await child.StdErr}");
+            reports.SelectMany(r => r.Errors).Should().BeEmpty($"round {round}: no interleaving, no error line");
+            reports.SelectMany(r => r.Listed).Should().BeEmpty($"round {round}: neither sweep gave up the lock");
+            reports.SelectMany(r => r.Removed).Where(path => !path.EndsWith(".owner", StringComparison.Ordinal)).Should().BeEquivalentTo(twenty, $"round {round}: each folder removed exactly once across the two reports");
+            Directory.GetFileSystemEntries(root).Should().BeEmpty($"round {round}: folders, claims and quarantines are all gone");
+        }
+    }
+
+    private static (System.Diagnostics.Process Process, Task<string> StdOut, Task<string> StdErr) StartChild(string root, string go, string ready, string output)
+    {
+        var env = new Dictionary<string, string?> { [ChildRoot] = root, [ChildGo] = go, [ChildReady] = ready, [ChildOut] = output };
+        var start = SuiteChild.StartInfoFor(Environment.ProcessPath!, ["--filter-method", "*SweepChild_E551"], env);
+        var process = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("the sweep child did not start");
+
+        return (process, process.StandardOutput.ReadToEndAsync(), process.StandardError.ReadToEndAsync());
+    }
+
     // ---- B10 ------------------------------------------------------------------------------------------------------
 
     private static readonly Regex QuarantineShape = new(@"^\.(.+)\." + "teststo" + @"delete-quarantine-([0-9]+)-[0-9a-f]{8}\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
