@@ -1226,7 +1226,11 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
   series — the parent's § Epoch 5 item 4`, and the expected-exemption inventory lists it. (4) *the remover's
   ownership check* — `remove-series.sh` also refuses (exit 78, one line) a folder whose owner is not uid 0 or that is
   group- or world-writable, a test for each; a Fable security read of the four native scripts is part of S4's Opus
-  review. *Size and a forgotten series:* the series' size is measured at its first use after S4 (`du -sh`) and written
+  review. It also refuses a series ROOT not owned by uid 0, or world-writable without the sticky bit: under a sticky,
+  root-owned root no other user can rename or replace a uid-0 folder, so what was checked is what `rm -rf` removes
+  (the parent's re-review gate, finding 0; a test per refusal). (5) *a phase whose series is gone* — after a reboot
+  that cleared `/tmp` or a removal, the next phase stops with one line (the series `<path>` is gone; start a new one
+  with `make-series.sh`) and a non-zero exit before it writes anything; a test (finding 1). *Size and a forgotten series:* the series' size is measured at its first use after S4 (`du -sh`) and written
   in the native documents; a forgotten series is found with `ls -d <root>/native-*` and removed with
   `remove-series.sh` — nothing else removes it; a reboot that clears `/tmp` clears it too, and the documents say so.
   **Bound:** one shape in one family of scripts; a second durable resource anywhere is a new plan change, never a
