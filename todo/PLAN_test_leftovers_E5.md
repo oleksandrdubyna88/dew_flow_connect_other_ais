@@ -1311,6 +1311,21 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
     (`native-run.mjs` `statRefusal`) and the `remove-series.sh` copy (and `abort.sh`). "Sticky when world-writable" alone let a group member rename the
     checked folder. Accepted forms of the root: `1777` (sticky), `0755`, `0700`; refused: `0777`, `0775` and `0770` without the sticky bit. Tests: the
     `0775` and `0770` roots beside the `0777` one in the unit cases, in the real-`stat` integration test and in the remover's cases.
+  - *[epoch 5, 2026-11-04, S4 fix round (the Opus review and the Fable security read)]* **What the caller's `stat` check had to become, and the text it changes.**
+    (a) Over a real ssh the check never worked: ssh joins the words and the REMOTE shell parsed the unquoted `%n|%F|%u|%a` (exit 127, no facts). The command is
+    `/usr/bin/env LC_ALL=C /usr/bin/stat -c '%n|%F|%u|%d|%a' -- …` — the format ONE quoted word, the locale fixed for this one command (`%F` is translated under a
+    forwarded locale). The tests' local-exec seam parses the words with `sh -c`, as sshd does. (b) `%d`: a series, `run/` or the script on another DEVICE than the root is
+    refused (a FUSE `allow_other` mount can fake every other fact). (c) The check is the only road: `launcherArgv`, `abortArgv`, `removeArgv` and `makeSeriesArgv` are not
+    exported; `scripts/native/lead.mjs <host> name|mkdir|copy|make|phase|abort|remove` is the lead's only entry, through `runChecked`, with NO root option (`/tmp`, always:
+    the ancestors of a custom root are not checked), a bare `stat` of the root and the series before every `scp`, and a stop on a non-zero `mkdir`. (d) `remove-series.sh` and
+    `abort.sh` refuse, as root (`id -u` 0), a non-zero `COAI_NATIVE_SERIES_OWNER_UID`: the test seam cannot reach a root run. The "evidence (4)" and "SAFETY" bullets above are
+    read with this.
+  - *[epoch 5, 2026-11-04, S4 fix round]* **Small corrections of S4's text.** The count of "P2": 27 listed entry scripts (24 in `src_vs_code/scripts`, `http/run-contracts.mjs`,
+    two in `scripts/`), plus `run-host`, `run-tests`, `run-lib-tests` and `lead.mjs` as run-folder owners, plus 13 libraries that own none (neither "31" nor "38"). A run folder is
+    owner-only (0700 on POSIX, as `mkdtemp` made it; the reference's `mkdir` gives 0755 under umask 022). With the mount missing, `run-tests.mjs` and `run-contract.mjs` print TWO
+    lines on stderr (`lower-priority`'s "this run is NOT lowered", then the mount line) and exit 2; a `.mjs` test started directly with the mount missing exits 1 with an
+    `ERR_MODULE_NOT_FOUND` stack (ES modules link before they run, so the guard's line is never reached) and creates nothing. The D-b line is `scratch was <path>, removed at
+    exit — pass --scratch <dir> to keep it` (two of the four probes have no `--reparse`). `scripts/run-lib-tests.mjs` carries the worker cap and the lowered priority itself.
   - **A series in progress at the merge.** A series started under the OLD name before the producer PR merges is
     finished with the OLD checkout: the new `seriesOf` refuses the old shape, so the new lead cannot run, abort or
     remove it. The person finishes and removes it with the checkout that made it, then starts the next series under

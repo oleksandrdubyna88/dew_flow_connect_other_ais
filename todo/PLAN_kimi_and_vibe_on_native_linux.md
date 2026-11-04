@@ -370,6 +370,8 @@ env -i HOME=/root USER=root LOGNAME=root SHELL=/bin/bash LANG=C.UTF-8 TMPDIR="$S
 wait "$!"                                                                     # bash defers a trap while a FOREGROUND child runs; `wait` does not
 ```
 
+*[epoch 5, 2026-11-04, E5 S4 fix round — entry 1.1]* The lead's ONLY entry to a series is `scripts/native/lead.mjs <host> name|mkdir|copy|make|phase|abort|remove`: every step that runs something out of the folder, and every `scp` into it, goes through the `stat` check first (`LC_ALL=C`, the format quoted for the remote shell, one device, no links, the expected uid, the root not group/world-writable without the sticky bit), and it takes no root option (`/tmp` always). The raw argument builders of the library are not exported; the run-book steps above name this driver, not a hand-built `ssh` line.
+
 *[epoch 5, 2026-11-04, Opus review — entry 1.1]* The pattern `<folder>` must pass becomes
 `^/tmp/native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}$`, and the `SERIES_PATH` literal in the run script reads
 `/tmp/native-vibe-20261021-a1b2c3/SERIES_PATH` in the example above; the phase pattern and everything else of the

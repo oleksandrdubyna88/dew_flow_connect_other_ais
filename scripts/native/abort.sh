@@ -25,6 +25,7 @@
 # Defence in depth (the lead's own `stat` checks run first): it also refuses a series folder not owned by the expected uid or group- or world-writable, and a series ROOT not
 # owned by it or group- or world-writable without the sticky bit.
 # Test seams (the shipped defaults are /tmp, 10 and 0): COAI_NATIVE_SERIES_ROOT, COAI_NATIVE_ABORT_GRACE (seconds), COAI_NATIVE_SERIES_OWNER_UID.
+# The lead reaches this script ONLY through `node scripts/native/lead.mjs <host> <step>` (the caller's `stat` check runs first; it takes no root option) — never by a hand-built ssh line.
 # The series is the ONE BOUNDED EXCEPTION of the test-leftovers family (E5 S4): no test-leftovers prefix, no owner, no claim — see make-series.sh.
 set -eu
 export PATH=/usr/bin:/bin

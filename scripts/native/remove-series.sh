@@ -18,6 +18,7 @@
 # owned by the expected uid or is group- or world-writable, and a series ROOT that is not owned by that uid or is group- or world-writable without the sticky bit.
 # Test seams (the shipped defaults are /tmp and 0): COAI_NATIVE_SERIES_ROOT, COAI_NATIVE_SERIES_OWNER_UID (the uid the series, its root and its files must belong to;
 # root on the host — the tests run as the CI user).
+# The lead reaches this script ONLY through `node scripts/native/lead.mjs <host> <step>` (the caller's `stat` check runs first; it takes no root option) — never by a hand-built ssh line.
 # THE SERIES IS THE ONE BOUNDED EXCEPTION of the test-leftovers family (E5 S4): no test-leftovers prefix, no owner segment, no claim; THIS script is the only thing
 # that removes it (see make-series.sh). `ls -d <root>/native-*` finds a forgotten one.
 set -eu

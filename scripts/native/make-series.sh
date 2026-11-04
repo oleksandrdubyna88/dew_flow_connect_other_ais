@@ -23,6 +23,7 @@
 # Exit codes: 0 made; 69 no VS Code server; 77 PATH refused; 78 this place is wrong.
 # Test seams (the shipped default is /tmp): COAI_NATIVE_SERIES_ROOT names the folder the series sits in (native.test.mjs sets it).
 #
+# The lead reaches this script ONLY through `node scripts/native/lead.mjs <host> <step>` (the caller's `stat` check runs first; it takes no root option) — never by a hand-built ssh line.
 # THE SERIES IS THE ONE BOUNDED EXCEPTION of the test-leftovers family (E5 S4; the rollout's epoch 5, item 4): its name carries NO test-leftovers prefix, no owner
 # segment and no claim. It is a durable, root-run, multi-phase folder that outlives every script that writes it, on purpose. The LEAD makes the bare folder
 # (`mkdirArgv`), this script fills it, `remove-series.sh` removes it — NOTHING else does: no test sweep, no janitor (it matches `^teststodelete[-_]`), no next run, no
