@@ -114,12 +114,14 @@ export function doneArgv(series, phase, options) {
 // ------------------------------------------------------------------------------------------------------------------------------------------------
 
 /** The steps that run something out of a series, and the file each runs; `bare` and `bare-run` run nothing from it (they guard an scp INTO the folder). */
-const SCRIPT_OF = { make: () => 'make-series.sh', remove: () => 'run/remove-series.sh', abort: () => 'run/abort.sh', phase: (phase) => `run/${phaseOf(phase)}.sh`, bare: () => null, 'bare-run': () => null };
+const SCRIPT_OF = { make: () => 'make-series.sh', remove: () => 'run/remove-series.sh', abort: () => 'run/abort.sh', phase: (phase) => `run/${phaseOf(phase)}.sh`, read: () => null, bare: () => null, 'bare-run': () => null };
 const BUILDERS = {
   make: (series, _phase, options) => makeSeriesArgv(series, options),
   remove: (series, _phase, options) => removeArgv(series, options),
   abort: (series, phase, options) => abortArgv(series, phase, options),
   phase: (series, phase, options) => launcherArgv(series, phase, options),
+  // Reads what a phase left: the exit file and the log, `cat` by absolute path. It runs nothing from the folder, so the check is the root and the series only.
+  read: (series, phase, options) => remote(options, '/bin/cat', '--', `${seriesOf(series, options?.root)}/logs/${phaseOf(phase)}.exit`, `${seriesOf(series, options?.root)}/logs/${phaseOf(phase)}.log`),
 };
 
 /**
@@ -131,7 +133,7 @@ function pathsOf(kind, series, phase, options) {
   const script = SCRIPT_OF[kind]?.(phase);
   if (script === undefined) refuse('the kind of step', kind);
   const root = options?.root ?? '/tmp';
-  return { root, dir, run: kind === 'make' || kind === 'bare' ? undefined : `${dir}/run`, script: script === null ? undefined : `${dir}/${script}` };
+  return { root, dir, run: kind === 'make' || kind === 'bare' || kind === 'read' ? undefined : `${dir}/run`, script: script === null ? undefined : `${dir}/${script}` };
 }
 
 /** `%n` name, `%F` kind WITHOUT following links, `%u` owner uid, `%d` device, `%a` octal mode. ONE single-quoted word: ssh joins the words with spaces and the REMOTE SHELL parses them again. */
@@ -194,15 +196,40 @@ export function statRefusal(kind, series, phase, stdout, options) {
 }
 
 /**
- * Runs one step out of a series ONLY after its folder passed the `stat` check — and this is the ONLY road: the raw argument builders of the steps that run out of a series
- * are not exported. `exec(argv)` runs an argument array (the lead's ssh, or a test's local stand-in that parses the words with a shell as sshd does) and answers
- * `{ status, stdout }`; `kind` is `make`, `remove`, `abort` or `phase` (the builder is ours), or `bare` / `bare-run` (an scp INTO the folder: `makeArgv` is the caller's).
- * Answers `{ status: 78 | 66, refused }` and runs NOTHING from the folder when the check fails (66: the series is gone); else `exec`'s own answer for the step. Never throws for a refusal.
+ * Runs one step out of a series ONLY after its folder passed the `stat` check — and this is the ONLY road: the raw argument builders are not exported and `runChecked` takes
+ * NO builder of its own. `exec(argv)` runs an argument array (the lead's ssh, or a test's local stand-in that parses the words with a shell as sshd does) and answers
+ * `{ status, stdout }`; `kind` is `make`, `remove`, `abort`, `phase` (what runs out of the folder) or `read` (the exit file and the log of a phase). Answers
+ * `{ status: 78 | 66, refused }` and runs NOTHING when the check fails (66: the series is gone); else `exec`'s own answer for the step. Never throws for a refusal.
  */
-export async function runChecked(kind, series, phase, options, exec, makeArgv = BUILDERS[kind]) {
-  if (typeof makeArgv !== 'function') refuse('a step with no argument builder', kind);
+export async function runChecked(kind, series, phase, options, exec) {
+  const build = BUILDERS[kind];
+  if (typeof build !== 'function') refuse('a step with no argument builder', kind);
   const probe = await exec(statArgv(kind, series, phase, options));
   const refused = statRefusal(kind, series, phase, probe?.stdout ?? '', options);
   if (refused !== '') return { status: refused.startsWith('the series ') ? 66 : 78, refused };
-  return exec(makeArgv(series, phase, options));
+  return exec(build(series, phase, options));
+}
+
+/** A destination INSIDE the series: relative, no `..`, no shell metacharacter (the remote side of an old-protocol scp is parsed by a shell). */
+const DESTINATION = /^[A-Za-z0-9_-][A-Za-z0-9_./-]*$/u;
+
+/**
+ * The other road in: an `scp` INTO the series folder (`bare`: the series itself; `bare-run`: its `run/`), after a bare `stat` of the root and the series (and `run/`) — so scp
+ * never follows a link someone planted there. It builds the `scp -p -q --` argv ITSELF: the caller names local `sources` (absolute paths in ONE folder) and a `dest` inside the
+ * series, and cannot pass an argv. Sources are handed to scp relative to their folder (`exec(argv, { cwd })`): a Windows path `C:\x` would be read by scp as `host:path`.
+ * `recursive` adds `-r` (a folder). Answers like `runChecked`.
+ */
+export async function copyChecked(kind, series, sources, dest, options, exec, { recursive = false } = {}) {
+  if (kind !== 'bare' && kind !== 'bare-run') refuse('a copy of a kind that is not bare', kind);
+  if (!Array.isArray(sources) || sources.length === 0) refuse('the sources of a copy', sources);
+  const dir = seriesOf(series, options?.root);
+  if (typeof dest !== 'string' || !DESTINATION.test(dest) || dest.split('/').includes('..')) refuse('the destination inside the series', dest);
+  const folders = new Set(sources.map((source) => (typeof source === 'string' ? source.replace(/[\\/][^\\/]*$/u, '') : '')));
+  const names = sources.map((source) => String(source).slice(String(source).search(/[^\\/]*$/u)));
+  if (folders.size !== 1 || names.some((name) => name === '' || name.startsWith('-'))) refuse('the sources of a copy (one folder, no option-like name)', sources);
+  const probe = await exec(statArgv(kind, series, undefined, options));
+  const refused = statRefusal(kind, series, undefined, probe?.stdout ?? '', options);
+  if (refused !== '') return { status: refused.startsWith('the series ') ? 66 : 78, refused };
+  const argv = ['scp', ...(recursive ? ['-r'] : []), '-p', '-q', '--', ...names.map((name) => `./${name}`), `${hostOf(options)}:${dir}/${dest}`];
+  return exec(argv, { cwd: [...folders][0] });
 }
