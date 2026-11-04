@@ -1494,20 +1494,26 @@ a later edit cannot confine half a launch. **This is not filesystem isolation**:
 `antigravity` are bound to read-only rather than to a directory, and the process is still root — a
 cross-slot READ is what the unprivileged plan above is for.
 
-## The Windows `coai-mcp` package is signed after it is built (2026-11-03)
+## The Windows `coai-mcp` package is wired for signing, and ships unsigned until a provider is active (2026-11-03, 2026-11-04)
 
 An `mcp-v*` release carries six packages. The four Linux and macOS ones are made and attached by their
-build legs, as before. The two Windows ones are not: Smart App Control blocks an unsigned `coai-mcp.exe`
+build legs, as before. The two Windows ones are not: Smart App Control (SAC) blocks an unsigned `coai-mcp.exe`
 AND the unsigned native libraries a process loads (`e_sqlite3.dll`, the tree-sitter grammars), so the
-Windows package is signed before it becomes a zip. The signing is not written here: it is the reusable
-workflow `dew_flow_release_signing/.github/workflows/sign-windows.yml`, called at a pinned commit.
+Windows package passes through a signing step before it becomes a zip. The signing is not written here: it is the
+reusable workflow `dew_flow_release_signing/.github/workflows/sign-windows.yml`, called at a pinned commit (v1.1.0).
+
+**State today: no signing provider is configured, so the Windows zips are still UNSIGNED.** The wiring is in the
+workflow and tested; nothing signs until the owner activates a provider (the shared plan's E5 cutover). Until then the
+Windows package behaves as it did before this change, and a person with SAC on can still be blocked by it. Do not read
+this section as a statement that a released package carries a signature.
 
 ```
 mcp-binaries (win legs)  builds + tests + packs the FOLDER, runs both carry checks on it,
                          uploads it as unsigned-mcp-<rid>      (7 days; no zip, no checksum, no attach)
 mcp-sign                 the shared workflow: signs coai-mcp.exe (own-files) and the declared libraries
-                         (extra-files), keeps a vendor signature, verifies, makes <pkg>.zip + .sha256,
-                         uploads them as mcp-<rid>
+                         (extra-files) once a provider is active, keeps a vendor signature, verifies,
+                         makes <pkg>.zip + .sha256, uploads them as mcp-<rid>; with no provider it
+                         leaves the files unsigned and still makes the zip
 mcp-sign-attach          archive-carries.sh on each FINAL zip, then (tag only) gh release upload --clobber
 mcp-release-complete     needs [mcp-binaries, mcp-sign-attach]; verify-and-publish-release.sh is still the
                          last word on completeness
@@ -1515,8 +1521,16 @@ mcp-release-complete     needs [mcp-binaries, mcp-sign-attach]; verify-and-publi
 
 Facts a reader will need:
 
+- **The switch-on period is explicit.** `mcp-sign` passes `required: ${{ startsWith(github.ref, 'refs/tags/') ||
+  inputs.required }}` (a tag, or a dispatch that ticks `required`, takes the release path) and
+  `allow-unsigned-release: ${{ vars.ALLOW_UNSIGNED_RELEASES == 'true' }}`. While the REPOSITORY variable
+  `ALLOW_UNSIGNED_RELEASES` is `true` and none of the six signing variables is set, a tag packs the Windows zips
+  unsigned, with a warning and a job-summary banner. Unset, or any other value, means enforcement, and a half
+  configuration or a failing provider is red either way. At activation the variable is deleted and the input is
+  removed from `mcp-sign` in code; the shared plan calls that step A6.
 - **`id-token: write` is held by `mcp-sign` alone**, and the federated trust names this repository's
-  `release-signing` environment. `windowsPackageIsSigned.test.ts` fails for a second holder.
+  `release-signing` environment, which the shared workflow selects by default; no caller passes `environment`.
+  `windowsPackageIsSigned.test.ts` fails for a second holder and for a caller that passes `environment`.
 - **`mcp-sign`'s `if:` is `!cancelled() && needs.mcp-binaries.result == 'success'`** (and `mcp-sign-attach`'s the same
   over `mcp-sign`), not a copy of `mcp-binaries`' own. That one reads `needs.mcp-draft.result`, which the sign job does not
   need, so the copy would be `null == 'success'` on every tag. The status function is not optional either: an `if:` with
@@ -1529,10 +1543,11 @@ Facts a reader will need:
   release that carries it.
 - **`archive-carries.sh` lists a `.zip` with `unzip -Z1`** as well as a `.tar.gz` with `tar tzf`; the match is the same
   (basename glob, exact by default), and `TheArchiveCheckTests` runs it on zips built to be wrong.
-- **The release stays unsigned until the next real `src_mcp` change ships.** This change touches only `.github/**` and
-  tests, so release-please proposes no mcp release for it.
+- **Releases cut before activation say the package is unsigned.** The first signed release is the first one cut after
+  the cutover; its notes announce the signature. This change touches only `.github/**`, tests and docs, so
+  release-please proposes no mcp release for it.
 
-Plan and verification (V1 trial package, V2 on a Smart App Control machine, V3 after the next release):
+Plan and verification (V1 trial package, V2 on a SAC machine, V3 after the first signed release):
 [../todo/PLAN_windows_code_signing.md](../todo/PLAN_windows_code_signing.md).
 
 ## Cross-cutting decisions already in force
