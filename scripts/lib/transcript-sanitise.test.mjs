@@ -684,13 +684,13 @@ test('theCliExplainsAMissingSessionAnInvalidSpecAndADirectoryWithoutAPath', () =
   const missing = runCli(['--session-file', join(dir, `${SESSION}.jsonl`), ...flags]);
   assert.equal(missing.status, 74);
   assert.match(missing.stderr, /does not exist/);
-  assert.ok(!missing.stderr.includes(dir), 'no path');
+  assert.ok(!missing.stderr.includes(base), 'no path: not the session file, not --out, not the run folder');
   const spec = join(dir, 'spec.json');
   writeFileSync(spec, '{ not json at all');
   const invalid = runCli(['--case-spec', spec, ...flags]);
   assert.equal(invalid.status, 65, invalid.stderr);
   assert.match(invalid.stderr, /not valid JSON/);
-  assert.ok(!invalid.stderr.includes(dir) && !invalid.stderr.includes('not json at all'));
+  assert.ok(!invalid.stderr.includes(base) && !invalid.stderr.includes('not json at all'));
   mkdirSync(join(dir, `${OTHER_SESSION}.jsonl`));
   const isDir = runCli(['--session-file', join(dir, `${OTHER_SESSION}.jsonl`), ...flags]);
   assert.equal(isDir.status, 74);
