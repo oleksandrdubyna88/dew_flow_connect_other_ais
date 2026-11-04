@@ -84,6 +84,8 @@ public static class LeftoversSweep
     public static SweepResult Run(SweepOptions options)
     {
         var pass = new Pass(options);
+        using var lease = SweepLock.Take(options.Tmp, options.SweepLockWait, pass.Note); // Windows: one sweep at a time over a root (E5 entry 5.1); POSIX: holds nothing
+        if (lease is null) return pass.Result();
         try
         {
             pass.Go();
@@ -112,6 +114,8 @@ public static class LeftoversSweep
         public SweepResult Result() => new(_removed, _preserved, _listed, _errors);
 
         public void Fail(string label, Exception ex) => _errors.Add($"{label}: {FirstLine(ex)}");
+
+        public void Note(string line) => _listed.Add(line);
 
         public void Go()
         {
