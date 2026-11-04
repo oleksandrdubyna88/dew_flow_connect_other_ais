@@ -1,5 +1,7 @@
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
@@ -362,6 +364,105 @@ test('mcp-sign-attach checks the FINAL zip with the product check, then uploads 
     names.indexOf('The product check on each final zip') < names.indexOf('Attach to the draft release'),
     'the check runs BEFORE the upload',
   );
+});
+
+// ---------------------------------------------------------------------------------------------------
+// THE FINAL-ZIP STEP, RUN. Release-only shell is shell nothing executes until the day it matters
+// (common/testing.md), and the loop that picks one zip per Windows platform and hands it to the two
+// checks is exactly that: the tests above match its TEXT, which cannot see a glob that selects the
+// wrong file or a loop that tolerates two. This one takes the step's own `run:` body out of the
+// workflow and executes it under bash, in a folder of fixtures, with the two scripts replaced by stubs
+// that record what they were given. (CodeRabbit, #944.)
+//
+// A checkout without bash skips rather than fails, as `draftReleaseNotes.test.ts` does; CI has it.
+// ---------------------------------------------------------------------------------------------------
+
+const hasBash = spawnSync('bash', ['-c', 'exit 0'], { encoding: 'utf8' }).status === 0;
+const needsBash = hasBash ? false : 'no bash on this checkout; ubuntu-latest has it and runs this';
+
+interface StepRun {
+  readonly code: number | null;
+  readonly said: string;
+  /** The stubs' calls, in order, one `<script> <zip>` per line. */
+  readonly calls: string[];
+}
+
+/**
+ * Run the product-check step's `run:` text in a temp folder.
+ *
+ * @param zips the final zips to create, as paths under `final/`
+ * @param exits the exit code each stub answers with (0 unless named)
+ */
+function runFinalZipStep(zips: readonly string[], exits: { carries?: number; layout?: number } = {}): StepRun {
+  const body = runBodies('mcp-sign-attach').find((b) => b.includes('for RID in'));
+  assert.ok(body, 'the step has a run body with the platform loop');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-finalzipstep-'));
+  try {
+    const log = path.join(dir, 'calls.txt').replace(/\\/g, '/');
+    const scripts = path.join(dir, '.github', 'scripts');
+    fs.mkdirSync(scripts, { recursive: true });
+    for (const [name, code] of [['archive-carries', exits.carries ?? 0], ['final-zip-layout', exits.layout ?? 0]] as const) {
+      fs.writeFileSync(
+        path.join(scripts, `${name}.sh`),
+        `#!/bin/sh\necho "${name} $*" >> "${log}"\nexit ${code}\n`,
+        { encoding: 'utf8', mode: 0o755 },
+      );
+    }
+    for (const zip of zips) {
+      const file = path.join(dir, 'final', zip);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '');
+    }
+
+    const ran = spawnSync('bash', ['-c', body], { cwd: dir, encoding: 'utf8', timeout: 30_000 });
+    const calls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter((l) => l !== '') : [];
+    return { code: ran.status, said: `${ran.stdout}${ran.stderr}`, calls };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const bothZips = ['mcp-win-x64/coai-mcp-0.1.0-win-x64.zip', 'mcp-win-arm64/coai-mcp-0.1.0-win-arm64.zip'];
+
+test('the final-zip step hands each Windows platform its own zip to BOTH checks, basename first', { skip: needsBash }, () => {
+  const ran = runFinalZipStep(bothZips);
+
+  assert.equal(ran.code, 0, ran.said);
+  const asks = ' coai-mcp.exe *e_sqlite3*';
+  // Each platform's zip, never the other's; the layout check on the same file, right after.
+  assert.deepEqual(
+    ran.calls.map((c) => (c.endsWith(asks) ? c.slice(0, -asks.length) : c)),
+    [
+      'archive-carries final/mcp-win-x64/coai-mcp-0.1.0-win-x64.zip',
+      'final-zip-layout final/mcp-win-x64/coai-mcp-0.1.0-win-x64.zip',
+      'archive-carries final/mcp-win-arm64/coai-mcp-0.1.0-win-arm64.zip',
+      'final-zip-layout final/mcp-win-arm64/coai-mcp-0.1.0-win-arm64.zip',
+    ],
+  );
+  // The basename check still asks for the binary and the library, whatever the zip.
+  assert.ok(ran.calls.filter((c) => c.startsWith('archive-carries')).every((c) => c.endsWith(asks)), 'the binary and the library');
+});
+
+test('the final-zip step is red when a platform has no zip, and the other platform\'s zip does not stand in', { skip: needsBash }, () => {
+  const ran = runFinalZipStep([bothZips[0]!]);
+
+  assert.notEqual(ran.code, 0, 'a missing arm64 zip is not a pass over the x64 one');
+  assert.match(ran.said, /expected exactly one final zip for win-arm64/);
+});
+
+test('the final-zip step is red when one platform has two zips', { skip: needsBash }, () => {
+  const ran = runFinalZipStep([...bothZips, 'mcp-win-x64/coai-mcp-0.2.0-win-x64.zip']);
+
+  assert.notEqual(ran.code, 0, 'two candidates is a step that cannot say which one ships');
+  assert.match(ran.said, /expected exactly one final zip for win-x64/);
+});
+
+test('the final-zip step is red when either check refuses the zip', { skip: needsBash }, () => {
+  assert.notEqual(runFinalZipStep(bothZips, { carries: 1 }).code, 0, 'the basename check failing fails the step');
+  const layout = runFinalZipStep(bothZips, { layout: 1 });
+  assert.notEqual(layout.code, 0, 'the layout check failing fails the step');
+  assert.ok(layout.calls.some((c) => c.startsWith('final-zip-layout')), 'and it was reached');
 });
 
 test('the new jobs hand no expression to a shell', () => {
