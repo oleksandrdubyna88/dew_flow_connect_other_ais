@@ -272,6 +272,17 @@ jobs:
       - name: Conventions submodule
         run: git submodule update --init --depth 1 .agents/conventions
 
+      # E5 S4 (must-not-copy #12, the plan's P12): the Node run folder on macOS, where `os.tmpdir()` is /var/folders/… and a link into /private/var. W10 (owned.test.mjs) makes the
+      # run folder under it and asserts the wrap's `isMine` both ways; the proofs and the runner's refusals run here for the first time. Seconds, not minutes; no `npm ci`.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: The Node run folder and its refusals (macOS, #12)
+        working-directory: src_vs_code
+        run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs
+      - name: The scripts' run folder and its refusals (macOS)
+        run: node scripts/run-lib-tests.mjs scripts/runFolder.test.mjs
+
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
@@ -374,9 +385,15 @@ jobs:
       # fixture that is collectible on every other key — a valid owner-form claim of this owner, an old mtime, a gone owner,
       # inside the profile — so that survival can come only from the Windows gate, never from a malformed claim. It needs no
       # `npm ci`: its import graph is node: modules and repository files only (L5 of the same file pins that).
-      - name: The Node sweep lists and changes nothing on Windows (F16, Q6)
+      #
+      # E5 S4: through the RUNNERS, never a bare `node --test` (a test file refuses to start outside its run folder). The extension's runner makes the owned run folder,
+      # fails closed before any test (exit 78 and one line when it cannot make or claim it), and runs exactly these files; the scripts' runner does the same for the proof
+      # of the `scripts/` scope. Both proofs force the five failures (no folder, no claim, each of TEMP, TMP, TMPDIR different) and assert the sentinel test never loaded.
+      - name: The Node sweep lists and changes nothing on Windows (F16, Q6); the Node run folder and its refusals
         working-directory: src_vs_code
-        run: node --test src/test/leftoversSweep.test.mjs
+        run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs
+      - name: The scripts' run folder and its refusals
+        run: node scripts/run-lib-tests.mjs scripts/runFolder.test.mjs
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:

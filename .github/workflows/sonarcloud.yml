@@ -307,7 +307,11 @@ jobs:
           # supply-chain hole in CI with a token in the environment (SonarCloud githubactions:S6505,
           # S8543). c8 is a declared dev dependency, so npm ci has already put it here at the version
           # the lock file pins.
-          ./node_modules/.bin/c8 --reporter=lcovonly --report-dir=../coverage/c8 --src=src node --test "out/test/"*.test.js
+          # Through the extension's RUNNER, not a bare `node --test` (E5 S4): the runner makes ONE owned run folder, points TEMP, TMP and TMPDIR at it, and fails closed
+          # before any test; every test file refuses to run outside it. c8 still covers: it sets NODE_V8_COVERAGE to an ABSOLUTE folder under its report dir, the runner
+          # starts `node --test` with the inherited environment, and `node --test` hands it to every test file, so each test process writes its V8 data there. The sonar job
+          # mounts the conventions (above), so the runner's wrap loads.
+          ./node_modules/.bin/c8 --reporter=lcovonly --report-dir=../coverage/c8 --src=src node scripts/run-tests.mjs "out/test/"*.test.js
           # c8 writes them relative to THIS folder, with the platform's separators; Sonar wants them
           # relative to the repository root.
           sed -e 's|^SF:|SF:src_vs_code/|' -e 's|\\|/|g' ../coverage/c8/lcov.info > ../coverage/extension.lcov
