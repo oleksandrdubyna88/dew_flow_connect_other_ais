@@ -156,6 +156,23 @@ test('the Windows package folder is listed, with its prefix, by BOTH carry check
   assert.match(pack, /kept-grammars\.txt/, 'and so is the grammar count');
 });
 
+test('the folder the Package step stages for signing is the folder the upload sends', () => {
+  // The defect: the upload sends a path that is not where the Windows package was made. With
+  // `if-no-files-found: error` that is red on every leg; with a parent that is the workspace instead
+  // (`.`) it is worse — the upload would carry the whole checkout, and the shared workflow's "exactly
+  // one top-level directory" check would be the only thing that noticed. So both names are pinned,
+  // and pinned to each other.
+  const pack = withoutComments(step('mcp-binaries', 'Package'));
+  const upload = step('mcp-binaries', 'Upload the unsigned Windows package');
+
+  const parent = /if \[\[ "\$RID" == win-\* \]\]; then PARENT=([^;\s]+); else PARENT=\.; fi/.exec(pack);
+  assert.ok(parent, 'the Package step sets PARENT for the Windows RIDs, and the workspace for the others');
+  assert.equal(parent[1], 'unsigned', 'a parent of its own, never the workspace');
+  assert.match(pack, /mkdir -p "\$PARENT\/\$NAME"/, 'the package folder is made under it');
+  assert.match(upload, /\n\s+path: unsigned\/\s*\n/, 'the upload sends that parent, with its trailing slash');
+  assert.match(upload, new RegExp(`\\n\\s+path: ${escapeRegExp(parent[1]!)}/\\s*\\n`), 'and it is the one the step made');
+});
+
 /** The v1.1.0 merge commit of the shared workflow; the tag is only the comment beside it. */
 const SHARED_PIN = 'a9a7eccdf76306d8fdbc67fc917cf8d5a362d851';
 
@@ -322,6 +339,23 @@ test('mcp-sign-attach checks the FINAL zip with the product check, then uploads 
   );
   assert.match(attach, /gh release upload "\$GITHUB_REF_NAME" "\$ZIP" --clobber/, 'the zip');
   assert.match(attach, /gh release upload "\$GITHUB_REF_NAME" "\$ZIP\.sha256" --clobber/, 'and its checksum');
+
+  // The defect (CodeRabbit): the text of the check is matched, and a loop narrowed to `win-x64` would
+  // still contain it, so the arm64 zip would ship unchecked and the suite stay green. The platforms the
+  // loop visits are DERIVED from the build matrix, the way the artifact list above is, and the layout
+  // check has to sit inside the loop, after the basename check.
+  const loop = /for RID in ([^;\n]+); do\n([\s\S]*?)\n\s+done\b/.exec(check);
+  assert.ok(loop, 'the check is a loop over the platforms');
+  assert.deepEqual(
+    loop[1]!.trim().split(/\s+/).sort(),
+    windowsRids().sort(),
+    'exactly the Windows RIDs of the build matrix',
+  );
+  const body = loop[2]!;
+  const carries = body.indexOf('archive-carries.sh "$ZIP"');
+  const layout = body.indexOf('final-zip-layout.sh "$ZIP"');
+  assert.ok(carries !== -1, 'the basename check is inside the loop');
+  assert.ok(layout > carries, 'and the layout check is inside it too, after it, on the same zip');
 
   const names = stepsOf('mcp-sign-attach').map((s) => /- name: (.*)/.exec(s)?.[1]);
   assert.ok(
