@@ -796,7 +796,7 @@ transport, so `Ranking.Order` is exercised and nothing produces a real reply for
 | `TheArchiveCheckTests` | the RELEASE's own shell, executed | an archive shipped without the executable, or without the library it dlopens |
 | `TheSchemaIsFrozenTests` | step 1 of `CorpusSchema` against a fixture copied from the RELEASED tree | step 1 edited after it shipped — two shapes under one version number |
 | `TheMigrationTests` | a file written by step 1 ONLY, at `user_version = 0` — the shape the host has | a column `IF NOT EXISTS` never adds; a second open re-running an `ALTER`; a concurrent opener failing instead of waiting |
-| `SqliteMigratorTests` (in `src_mcp/tests`) | the shared runner over a fresh and a part-way file | a step run twice; WAL or the busy timeout not set |
+| `SqliteMigratorTests` (in `src_mcp/tests`) | the shared runner over a fresh and a part-way file | a step run twice; WAL or the busy timeout not set; the switch to WAL retried by the provider instead of waited for inside SQLite (counts the statement's starts from SQLite's trace, with a reader held inside a running statement) |
 | `TheLimitIsASettingTests` | `RatePerMinute.Parse` over every shape of the value | a clamp where a refusal is owed; a default or the off switch lost |
 | `TheRateLimiterTests` | the limiter on a frozen clock, and THREADS released by a barrier | a fixed bucket; an over-admit under a race; a stamp evicted from under an admit |
 | `TheLastSeenMonthTests` | the real server on a frozen clock, either side of a UTC month boundary | a day or an hour stored; the month moved by a 401, a 429, a 400 or an admin call; an increment lost to a race |
