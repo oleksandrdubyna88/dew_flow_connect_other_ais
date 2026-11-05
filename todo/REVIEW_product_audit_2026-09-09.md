@@ -1,285 +1,289 @@
-# ConnectOtherAIs: аудит продукта, 2026-09-09
+# ConnectOtherAIs: product audit, 2026-09-09
 
-Проверен checkout `D:/rsd/dew_flow_connect_other_ais`; зафиксированный в ходе аудита HEAD
-`aa91a7a9e6b08aeaa58e68d937e47aaa77b66199`, расширение `0.31.17`.
-Область: общий Team server, локальный MCP, расширение VS Code, запуск процессов,
-сбор review-контекста, очередь, авторизация и эксплуатационные ограничения.
+> Status: **the audit of 2026-09-09 — NOT confirmed against the current code. Re-check every finding against the code before anyone acts on it.** The ten plans that close this audit and their build order are in [PLAN_the_audit_of_2026_09_09_is_built.md](PLAN_the_audit_of_2026_09_09_is_built.md) (partly built on 2026-09-11, seven stories shipped and five cut by the operator), so some findings below are fixed or cut already; which ones is not established here. The six-direction backlog that was written from this audit is [PLAN_product_improvements.md](PLAN_product_improvements.md), which that build order does not mention. Byte-identical to `research/REVIEW_product_audit_2026-09-09.md` on main before this translation.
+>
+> Translated from Russian (2026-11-05). Every finding, number and path is kept; the translation changes no content.
 
-Это аудит исходников и локальные воспроизведения на синтетических данных. Рабочий
-сервер, реальные credentials, prompts сотрудников и платные вызовы моделей не
-использовались. Исходники продукта не изменены. Описанное в deploy-документации
-состояние production отдельно не подтверждалось.
+The checkout `D:/rsd/dew_flow_connect_other_ais` was examined; the HEAD recorded during the audit
+is `aa91a7a9e6b08aeaa58e68d937e47aaa77b66199`, extension `0.31.17`.
+Scope: the shared Team server, the local MCP, the VS Code extension, process launching,
+review-context collection, the queue, authorization and operational limits.
 
-К завершению аудита в рабочем дереве появились параллельные правки chatPage,
-его тестов, changelog и документации. Автор аудита их не вносил. Приведённые
-результаты тестов относятся к собранному во время проверки состоянию и не
-подтверждают эти поздние UI-изменения.
+This is an audit of the sources plus local reproductions on synthetic data. A production
+server, real credentials, employees' prompts and paid model calls were not
+used. The product sources were not changed. The production state described in the
+deploy documentation was not confirmed separately.
 
-Приоритеты: **P1** — исправлять в ближайшем цикле стабилизации, поскольку возможны
-неверное review, потеря доступности или нарушение границы доверия; **P2** — следующий
-цикл. Наличие P1 не означает, что инцидент уже произошёл. Доказанного P0 в этой
-проверке нет; это не гарантия отсутствия иных уязвимостей.
+By the end of the audit, parallel edits to chatPage, its tests, the changelog and the
+documentation appeared in the working tree. The author of the audit did not make them. The test
+results given here refer to the state built during the check and do not
+confirm those late UI changes.
 
-**1. P1, security: общий сервер не изолирует файловые данные между заданиями.**
+Priorities: **P1** — fix in the nearest stabilization cycle, because an incorrect review,
+a loss of availability or a violation of a trust boundary is possible; **P2** — the next
+cycle. The presence of a P1 does not mean that an incident has already happened. There is no proven P0 in this
+check; this is not a guarantee that there are no other vulnerabilities.
 
-Основание: `src_server/src/Jobs/ReviewLauncher.cs:89` создаёт временный cwd, но
-`src_mcp/runners/Processes/ProcessLauncher.cs:66` запускает обычный дочерний процесс
-под тем же пользователем. На строках 93–95 окружение дополняется, а не заменяется
-разрешённым списком. `src_server/src/Slots/SlotEnvironment.cs:29` меняет HOME/XDG,
-но это выбор каталога конфигурации, а не запрет чтения остальных каталогов.
-`deploy/README.md:48` описывает запуск сервиса от root.
+**1. P1, security: the shared server does not isolate file data between jobs.**
 
-Задание поступает от обычного авторизованного сотрудника и содержит произвольный
-prompt. CLI с инструментами чтения работает в том же пространстве файлов, где
-лежат credentials аккаунтов, история CLI и данные других заданий. При описанном
-root-развёртывании последствия шире самого CoAI. Режим plan/read-only сам по себе
-не устанавливает межпользовательскую границу конфиденциальности: это согласуется с
-[описанием permissions Claude](https://code.claude.com/docs/en/permissions) и
-[описанием read-only Codex](https://github.com/openai/codex/blob/main/codex-rs/prompts/templates/permissions/sandbox_mode/read_only.md).
+Basis: `src_server/src/Jobs/ReviewLauncher.cs:89` creates a temporary cwd, but
+`src_mcp/runners/Processes/ProcessLauncher.cs:66` starts an ordinary child process
+under the same user. On lines 93–95 the environment is extended, not replaced
+by an allowed list. `src_server/src/Slots/SlotEnvironment.cs:29` changes HOME/XDG,
+but that is a choice of the configuration directory, not a ban on reading the other directories.
+`deploy/README.md:48` describes running the service as root.
 
-Статус: подтверждено отсутствие такой границы в launcher; доступ конкретного
-production CLI к конкретному файлу не проверялся. Дополнительное системное
-ограничение на живом хосте может изменить оценку.
+A job comes from an ordinary authorized employee and contains an arbitrary
+prompt. A CLI with read tools works in the same file space where the
+accounts' credentials, the CLI history and the data of other jobs are kept. With the described
+root deployment the consequences are wider than CoAI itself. The plan/read-only mode by itself
+does not establish a confidentiality boundary between users: this is consistent with the
+[description of Claude permissions](https://code.claude.com/docs/en/permissions) and the
+[description of Codex read-only](https://github.com/openai/codex/blob/main/codex-rs/prompts/templates/permissions/sandbox_mode/read_only.md).
 
-Исправление: отдельный непривилегированный пользователь сервиса, затем изоляция
-worker/job с явно разрешёнными mounts, сетью и переменными окружения. Для задания,
-которому нужен только переданный текст, отключить файловые/command tools. Разделить
-хранилище credentials и доступный модели контекст; не давать общую историю CLI
-всем заданиям. Проверить границу тестом с синтетическим файлом соседнего задания.
+Status: the absence of such a boundary in the launcher is confirmed; the access of a specific
+production CLI to a specific file was not checked. An additional system
+restriction on the live host may change the assessment.
 
-**2. P1, availability/security: отменённые задания позволяют накапливать prompts в RAM.**
+Fix: a separate unprivileged service user, then isolation of the
+worker/job with explicitly allowed mounts, network and environment variables. For a job
+that needs only the text it was given, disable the file/command tools. Separate the
+credentials store from the context available to the model; do not give the shared CLI history
+to all jobs. Check the boundary with a test using a synthetic file of a neighboring job.
 
-`src_server/src/Jobs/JobStore.cs:124` ограничивает только число Queued. Cancel
-на строках 294–308 оставляет JobRecord, включая Prompt; удаление terminal-заданий
-на строках 338–349 происходит через час. Лимита суммарных байтов/terminal-записей
-нет. `deploy/nginx/coai:51` разрешает тело до 4 МБ.
+**2. P1, availability/security: cancelled jobs allow prompts to accumulate in RAM.**
 
-Воспроизведение: лимит очереди 20, последовательные 40 Submit+Cancel с разными
-prompts по 1 МиБ. После Sweep остались 40 записей и 40 МиБ символов prompt.
-ASCII-текст в .NET string занимает примерно вдвое больше памяти, не считая прочих
-объектов. Все запросы можно делать последовательно, не превышая queued-cap.
-HTTP rate limit замедляет накопление, но не ограничивает его размер за час.
+`src_server/src/Jobs/JobStore.cs:124` limits only the number of Queued. Cancel
+on lines 294–308 leaves the JobRecord, including the Prompt; the removal of terminal jobs
+on lines 338–349 happens after an hour. There is no limit on the total bytes or on terminal records.
+`deploy/nginx/coai:51` allows a body of up to 4 MB.
 
-Последствия: авторизованный клиент, в том числе неисправный, может исчерпать RAM
-общего сервера. MemoryMax ограничивает ущерб соседним сервисам, но не сохраняет
-доступность CoAI.
+Reproduction: queue limit 20, 40 sequential Submit+Cancel calls with different
+prompts of 1 MiB each. After Sweep, 40 records and 40 MiB of prompt characters remained.
+ASCII text in a .NET string takes about twice as much memory, not counting other
+objects. All the requests can be made sequentially without exceeding the queued-cap.
+The HTTP rate limit slows the accumulation down, but does not limit its size within an hour.
 
-Исправление: ограничить размер prompt и общие байты принятых заданий; освобождать
-Prompt сразу после окончания/отмены; хранить необходимую историю вне RAM;
-сохранить компактные записи idempotency отдельно. Ввести общий admission limit.
-Также ограничить объём stdout/stderr: launcher сейчас накапливает их без потолка
-в StringBuilder (`ProcessLauncher.cs:99`).
+Consequences: an authorized client, including a faulty one, can exhaust the RAM
+of the shared server. MemoryMax limits the damage to neighboring services, but does not keep
+CoAI available.
 
-**3. P1, reliability: timeout и cancellation не охватывают отправку stdin.**
+Fix: limit the size of a prompt and the total bytes of accepted jobs; release the
+Prompt immediately after completion/cancellation; keep the necessary history outside RAM;
+keep compact idempotency records separately. Introduce a common admission limit.
+Also limit the volume of stdout/stderr: the launcher currently accumulates them with no ceiling
+in a StringBuilder (`ProcessLauncher.cs:99`).
 
-`src_mcp/runners/Processes/ProcessLauncher.cs:138` сначала ожидает WriteStdInAsync,
-и только на строках 140–144 запускает таймаут/ожидание с cancellation. Сам
-WriteAsync на строке 184 не получает CancellationToken.
+**3. P1, reliability: timeout and cancellation do not cover sending stdin.**
 
-Воспроизведение: `/bin/sleep 3`, который не читает stdin, prompt 1 МиБ, timeout
-100 мс и cancellation через 100 мс. Вызов завершился через **3021 мс**, причём
-`TimedOut=False`. Бесконечно живущий не читающий CLI удерживал бы вызов и слот.
+`src_mcp/runners/Processes/ProcessLauncher.cs:138` first awaits WriteStdInAsync,
+and only on lines 140–144 starts the timeout/wait with cancellation. WriteAsync itself
+on line 184 does not receive a CancellationToken.
 
-Исправление: один deadline от начала операции, запись stdin и ожидание выхода
-под тем же cancellation; общий finally гарантирует завершение дерева процессов
-на любой ошибке. Нужен регрессионный тест с заполнением pipe, а не только sleep
-при пустом stdin.
+Reproduction: `/bin/sleep 3`, which does not read stdin, a prompt of 1 MiB, a timeout of
+100 ms and a cancellation after 100 ms. The call finished after **3021 ms**, and
+`TimedOut=False`. A CLI that lives forever and does not read would hold the call and the slot.
 
-**4. P1, correctness: review теряет diff переименований и имён с Unicode.**
+Fix: one deadline from the start of the operation, the stdin write and the wait for exit
+under the same cancellation; a common finally guarantees that the process tree is ended
+on any error. A regression test with a filled pipe is needed, not only sleep
+with an empty stdin.
 
-`src_mcp/runners/Context/ContextAssembler.cs:53` разбирает человекочитаемый
-`git diff --numstat` через Split, затем на строке 71 передаёт третью колонку как
-обычный pathspec. Git выводит переименование как `old.cs => new.cs`, а Unicode
-при стандартном core.quotePath — как строку в кавычках с escape-последовательностями.
-Это не настоящие имена файлов.
+**4. P1, correctness: review loses the diff of renames and of Unicode names.**
 
-Воспроизведение на отдельном git-репозитории: файл переименован с изменением
-поведения; второй изменённый файл называется `файл.cs`. Обычный git diff содержит
-изменения, но ContextAssembler возвращает для **обоих Text=""**. Для режима Fast
-это непосредственно лишает reviewer содержимого изменения, без явной ошибки.
+`src_mcp/runners/Context/ContextAssembler.cs:53` parses the human-readable
+`git diff --numstat` through Split, then on line 71 passes the third column as an
+ordinary pathspec. Git prints a rename as `old.cs => new.cs`, and Unicode
+with the standard core.quotePath as a quoted string with escape sequences.
+These are not the real file names.
 
-Исправление: машинный формат `-z` с корректным разбором old/new path либо один
-структурно разобранный patch. Проверки: rename+edit, Unicode, кавычки, табуляции,
-переводы строк в имени и delete. Дополнительно убрать отдельный git-процесс на
-каждый файл: сейчас N файлов требуют порядка N вызовов git.
+Reproduction on a separate git repository: a file renamed with a change of
+behavior; a second changed file is called `файл.cs`. An ordinary git diff contains the
+changes, but ContextAssembler returns **Text="" for both**. For Fast mode
+this directly deprives the reviewer of the content of the change, without an explicit error.
 
-**5. P1, performance: дополнительные account slots простаивают.**
+Fix: the machine format `-z` with correct parsing of the old/new path, or one
+structurally parsed patch. Checks: rename+edit, Unicode, quotes, tabs,
+newlines in a name, and delete. Additionally remove the separate git process for
+each file: now N files take on the order of N git calls.
 
-`src_server/src/Jobs/JobRunner.cs:54` выбирает только один least-recently-used slot.
-На строках 63–68 неудачный Acquire заканчивает попытку; другие slots не пробуются.
-`AccountSlot.IsReady` не учитывает занятость, а LastUsed обновляется при освобождении
-(`SlotRegistry.cs:311`). Пока выбранный слот занят, он остаётся первым кандидатом.
+**5. P1, performance: the additional account slots sit idle.**
 
-Воспроизведение реального JobRunner/SlotRegistry, без vendor CLI: два готовых
-аккаунта, два queued jobs; первая задача заблокирована fake launcher. Второй
-PumpAsync возвращает false: **launched=1, queued=1 при двух slots**.
+`src_server/src/Jobs/JobRunner.cs:54` selects only one least-recently-used slot.
+On lines 63–68 a failed Acquire ends the attempt; the other slots are not tried.
+`AccountSlot.IsReady` does not take being busy into account, and LastUsed is updated on release
+(`SlotRegistry.cs:311`). While the chosen slot is busy, it stays the first candidate.
 
-Исправление: атомарно выбирать и захватывать первый доступный слот, перебирая
-кандидатов при занятом lock; тестировать два действительно одновременных запуска
-через JobRunner, не только два независимых вызова TryClaim.
+Reproduction of the real JobRunner/SlotRegistry, without a vendor CLI: two ready
+accounts, two queued jobs; the first job is blocked by a fake launcher. The second
+PumpAsync returns false: **launched=1, queued=1 with two slots**.
 
-**6. P1, availability: ошибка перед запуском может навсегда остановить JobPump.**
+Fix: atomically select and acquire the first available slot, trying the
+candidates when a lock is busy; test two truly simultaneous launches
+through JobRunner, not only two independent TryClaim calls.
 
-`src_server/src/Jobs/JobPump.cs:111` получает task запуска, но затем на строке 118
-ждёт только started.Task. Если PumpAsync выбросит исключение до TrySetResult,
-continuation пишет ошибку в лог, но started никогда не завершается. Основной цикл
-больше не дойдёт даже до Sweep и других vendors.
+**6. P1, availability: an error before the launch can stop JobPump forever.**
 
-Воспроизведение: вместо файла `.lock` синтетического слота находится каталог.
-Acquire бросает UnauthorizedAccessException; task запуска faulted,
-**startSignalCompleted=False**. Аналогичный класс — файловая ошибка до signal.
-`/api/health` при этом проверяет только работающий HTTP endpoint.
+`src_server/src/Jobs/JobPump.cs:111` gets the launch task, but then on line 118
+awaits only started.Task. If PumpAsync throws an exception before TrySetResult,
+the continuation writes the error to the log, but started never completes. The main loop
+then does not even reach Sweep and the other vendors.
 
-Исправление: единый awaitable outcome запуска или обязательное завершение
-started на каждом выходе, в том числе exception/cancellation. Отдельный тест:
-неисправный слот одного vendor не останавливает следующий vendor. Добавить
-наблюдение за прогрессом pump в readiness/метрики.
+Reproduction: instead of the file `.lock` of a synthetic slot there is a directory.
+Acquire throws UnauthorizedAccessException; the launch task is faulted,
+**startSignalCompleted=False**. A similar class is a file error before the signal.
+`/api/health` meanwhile checks only that the HTTP endpoint works.
 
-**7. P1, functionality: выбранная модель локального чата не попадает в запуск.**
+Fix: a single awaitable launch outcome, or a mandatory completion of
+started on every exit, including exception/cancellation. A separate test:
+a faulty slot of one vendor does not stop the next vendor. Add
+observation of the pump's progress to readiness/metrics.
 
-`src_vs_code/src/cliChatLaunch.ts:176` передаёт адаптеру только resume. Поле
-vendor.model не используется ни в argv, ни в другом параметре запуска.
-`agyAdapter.ts`, `claudeAdapter.ts`, `codexAdapter.ts` не добавляют выбранную модель.
+**7. P1, functionality: the model selected for local chat does not reach the launch.**
 
-Воспроизведение через скомпилированную launchSpecFor: для каждого из трёх runtime
-замена `selected-model-A` на `selected-model-B` даёт **полностью одинаковый launch**.
-Выбор в UI не управляет моделью — её определяет default/config самого CLI.
-Remote chat передаёт model, и к нему эта находка не относится.
+`src_vs_code/src/cliChatLaunch.ts:176` passes only resume to the adapter. The field
+vendor.model is used neither in argv nor in any other launch parameter.
+`agyAdapter.ts`, `claudeAdapter.ts`, `codexAdapter.ts` do not add the selected model.
 
-Исправление: типизированный launch context с model, runtime, resume, permissions;
-vendor-specific model flags и проверка фактически выбранной модели из init/usage,
-если vendor её сообщает. Тест «сменили модель → изменился реальный argv».
+Reproduction through the compiled launchSpecFor: for each of the three runtimes,
+replacing `selected-model-A` with `selected-model-B` gives a **completely identical launch**.
+The choice in the UI does not control the model — it is determined by the CLI's own default/config.
+Remote chat passes model, and this finding does not apply to it.
 
-**8. P2, performance/reliability: закрытие чата оставляет дочерние процессы в Unix.**
+Fix: a typed launch context with model, runtime, resume, permissions;
+vendor-specific model flags and a check of the model actually selected from init/usage,
+if the vendor reports it. A test "changed the model → the real argv changed".
 
-`src_vs_code/src/processLauncher.ts:373` в Linux/macOS идёт в child.kill(),
-что завершает только непосредственный процесс. То же относится к native Windows
-ветке без shell: запуск tree-kill там также не происходит.
+**8. P2, performance/reliability: closing a chat leaves child processes on Unix.**
 
-Воспроизведение в WSL: собственный node-child запускает `/bin/sleep 3`; после
-handle.kill родитель завершается, но **grandchild остаётся жив через 100 мс**.
-Все синтетические процессы завершились сами по трёхсекундному сроку. Поведение
-ветки native Windows отдельно не воспроизводилось.
+`src_vs_code/src/processLauncher.ts:373` on Linux/macOS goes to child.kill(),
+which ends only the immediate process. The same applies to the native Windows
+branch without a shell: a tree-kill does not happen there either.
 
-Исправление: управляемая группа процессов в Unix и корректная tree/job-object
-модель Windows; ждать фактического завершения. Тест с вложенным процессом вместо
-mock, подтверждающего только факт вызова kill.
+Reproduction in WSL: our own node child starts `/bin/sleep 3`; after
+handle.kill the parent ends, but the **grandchild stays alive after 100 ms**.
+All the synthetic processes ended by themselves at the three-second limit. The behavior
+of the native Windows branch was not reproduced separately.
 
-**9. P1 при включённом Google, security: допустима авторизация без audience.**
+Fix: a managed process group on Unix and a correct tree/job-object
+model on Windows; wait for the actual termination. A test with a nested process instead of
+a mock that confirms only the fact of a kill call.
 
-`src_server/src/Auth.cs:71` устанавливает ValidateAudience=false при пустом
-Google Audiences. `Startup.Guard` требует audience для Microsoft, но не для Google.
-Локальная проверка настроек подтвердила: Google enabled + [] проходит startup,
-JWT bearer options имеют **ValidateAudience=False**.
+**9. P1 when Google is enabled, security: authorization without an audience is allowed.**
 
-Тогда валидный Google-токен сотрудника, выданный другому приложению, может быть
-принят этим сервисом. Подпись, срок и разрешённый email-domain остаются проверяемыми;
-это не означает вход произвольного анонимного пользователя. На Microsoft-only
-развёртывание находка не распространяется.
+`src_server/src/Auth.cs:71` sets ValidateAudience=false when the
+Google Audiences are empty. `Startup.Guard` requires an audience for Microsoft, but not for Google.
+A local check of the settings confirmed: Google enabled + [] passes startup,
+and the JWT bearer options have **ValidateAudience=False**.
 
-Исправление: обязательный непустой allowlist audiences для каждого внешнего IdP
-и тест токена чужого приложения. Требование сверять aud описано в
+Then a valid Google token of an employee, issued to another application, may be
+accepted by this service. The signature, the expiry and the allowed email domain remain checked;
+this does not mean a login by an arbitrary anonymous user. The finding does not apply to a
+Microsoft-only deployment.
+
+Fix: a mandatory non-empty allowlist of audiences for every external IdP
+and a test with a token of another application. The requirement to check aud is described in
 [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect).
 
-**10. P2, performance: стоимость статистики растёт со всей историей компании.**
+**10. P2, performance: the cost of the statistics grows with the whole history of the company.**
 
-`src_server/src/Usage/UsageReader.cs:75` перечитывает и десериализует весь JSONL
-до фильтрации по датам. `/api/usage?scope=me` фильтрует сотрудника ещё позднее.
-Расширение обновляет Team server примерно раз в минуту; локальный readUsage
-(`panelProvider.ts:1993`) также каждый раз читает весь файл.
+`src_server/src/Usage/UsageReader.cs:75` rereads and deserializes the entire JSONL
+before filtering by date. `/api/usage?scope=me` filters by employee even later.
+The extension refreshes the Team server about once a minute; the local readUsage
+(`panelProvider.ts:1993`) also reads the whole file every time.
 
-Измерение на синтетической истории, после прогрева: 1000 старых записей —
-4–5 мс; 100 000 — **284–303 мс**, хотя обе выборки «за сегодня» возвращают 0.
-Это локальный microbenchmark, не измерение latency production. Сложность одного
-запроса O(всей истории), совокупная нагрузка зависит и от числа открытых клиентов.
+Measurement on a synthetic history, after warm-up: 1000 old records —
+4–5 ms; 100 000 — **284–303 ms**, although both "for today" selections return 0.
+This is a local microbenchmark, not a measurement of production latency. The complexity of one
+request is O(the whole history), and the total load also depends on the number of open clients.
 
-Исправление: индексируемое хранилище/агрегаты по дню, сотруднику, vendor и модели;
-инкрементальное чтение по offset и кэширование там, где достаточно JSONL. Ввести
-retention для prompts, CLI history и evidence отдельно от долгосрочных агрегатов.
+Fix: an indexable store/aggregates by day, employee, vendor and model;
+incremental reading by offset and caching where JSONL is enough. Introduce
+retention for prompts, CLI history and evidence separately from the long-term aggregates.
 
-**Что улучшить в продукте после стабилизации.**
+**What to improve in the product after stabilization.**
 
-1. **Показывать полноту review.** Сейчас RoundMachine.cs:117 запрещает proceed
-   только при нуле ответивших; одного ответа достаточно, чтобы проверять gate по
-   findings. Это существующая политика, не новый регрессионный баг. Для компании
-   стоит ввести обязательные роли/минимум ответивших независимых vendors и отдельный
-   статус «проверка неполная». Отдельно решить, может ли Blocking укладываться в
-   обычный численный threshold или всегда требует решения человека.
-2. **Сделать результат review проверяемым.** Хранить SHA, base SHA, hash scope/diff,
-   конфигурацию, фактические модели, полноту проверок и решения. Использовать это
-   для PR-check/CI и инвалидировать результат при изменении reviewed content.
-   MCP-протокол сам по себе не запрещает пользователю/агенту обойти вызов gate.
-3. **Общая операционная панель.** Видимые очередь и выполняемые jobs, возраст самой
-   старой задачи, busy/ready/cooldown каждого аккаунта, возможность отмены,
-   queue/run latency p50/p95, число таймаутов и ошибок разбора по vendor.
-   Это сразу проявит дефекты 5 и 6, которые обычный health endpoint скрывает.
-4. **Переживать deploy/restart.** Сейчас jobs и их idempotency keys находятся в
-   памяти, а потерянный job распознаётся через epoch. Для общего сервиса нужны
-   durable jobs/results/idempotency, восстановление с явным interrupted-состоянием
-   и осторожная политика retry: уже потраченный внешний вызов нельзя считать
-   несуществовавшим после перезапуска.
-5. **Политики компании и расходы.** Централизованные allowlists моделей и endpoints,
-   дневные бюджеты/справедливость очереди, настройки хранения и удаления данных,
-   управляемая блокировка сотрудника и отзыв всех его sessions. Локальный выбор
-   reviewers может оставаться удобным, но обязательные проверки должен задавать
-   администратор на сервере.
-6. **Измерять пользу reviewer.** Accepted/rejected с причиной, повторные findings,
-   доля уникальных полезных замечаний, стоимость и время до устранения; отображать
-   знаменатель и размер выборки. Это более полезный критерий добавления ещё одной
-   модели, чем суммарное число замечаний.
-7. **Улучшить chat continuity.** Восстановление вкладки/черновика, понятное поведение
-   при смене модели, retry с сохранением контекста. Ограничивать разговор бюджетом
-   токенов/стоимости и явным summary вместо единственного жёсткого числа ходов.
+1. **Show the completeness of a review.** Now RoundMachine.cs:117 forbids proceed
+   only when zero reviewers answered; one answer is enough to check the gate by
+   findings. This is the existing policy, not a new regression bug. For a company
+   it is worth introducing mandatory roles/a minimum number of independent vendors that answered and a separate
+   status "review incomplete". Separately decide whether Blocking may fit within the
+   ordinary numeric threshold or always requires a human decision.
+2. **Make the review result verifiable.** Keep the SHA, the base SHA, the hash of the scope/diff,
+   the configuration, the actual models, the completeness of the checks and the decisions. Use this
+   for a PR check/CI and invalidate the result when the reviewed content changes.
+   The MCP protocol by itself does not forbid a user/agent to bypass a gate call.
+3. **A shared operations panel.** A visible queue and running jobs, the age of the oldest
+   task, busy/ready/cooldown of each account, the ability to cancel,
+   queue/run latency p50/p95, the number of timeouts and parse errors by vendor.
+   This immediately exposes defects 5 and 6, which an ordinary health endpoint hides.
+4. **Survive a deploy/restart.** Now the jobs and their idempotency keys are kept in
+   memory, and a lost job is recognized through an epoch. A shared service needs
+   durable jobs/results/idempotency, recovery with an explicit interrupted state
+   and a careful retry policy: an external call that has already been spent cannot be considered
+   as never having existed after a restart.
+5. **Company policies and costs.** Centralized allowlists of models and endpoints,
+   daily budgets/queue fairness, settings for data retention and deletion,
+   managed blocking of an employee and revocation of all of their sessions. The local choice of
+   reviewers can stay convenient, but the mandatory checks must be set
+   by the administrator on the server.
+6. **Measure the usefulness of a reviewer.** Accepted/rejected with a reason, repeated findings,
+   the share of unique useful findings, the cost and the time to resolution; show
+   the denominator and the sample size. This is a more useful criterion for adding one more
+   model than the total number of findings.
+7. **Improve chat continuity.** Restoring a tab/draft, clear behavior
+   when the model is changed, retry with the context kept. Limit a conversation by a budget of
+   tokens/cost and an explicit summary instead of a single hard number of turns.
 
-**Что улучшить в коде и проверках.**
+**What to improve in the code and the checks.**
 
-- Оставить разделение pure core/runners/hosts: оно уже позволило воспроизвести
-  проблемы без платных vendors. Согласовать C# и TypeScript launch policy через
-  общий набор контрактных векторов, включая model, permissions, timeout и cancel.
-- Отделить управление Team servers, usage и settings от большого panelProvider;
-  существующий shared URL-vector contract использовать как образец проверки швов.
-- Перенести длинную историю предыдущих исправлений из комментариев в research;
-  рядом с кодом оставить действующие инварианты. Встречаются устаревшие комментарии
-  — например, chatModels описывает отказ для Team server, который код уже поддерживает.
-- Дополнить сильную unit-базу сценариями реальных границ: занятые slots, отказ
-  файловой системы до start-signal, pipe backpressure, процесс-внук, rename/Unicode,
-  выбор модели, restart при незавершённом внешнем запросе, отзыв session одновременно
-  с Validate. Последний заслуживает отдельной проверки: Validate может писать
-  last-used после чтения, а Revoke удаляет файл без общей синхронизации.
-- Не подменять этими unit-тестами extension-host и установленные артефакты.
-  Нужны короткие canary-сценарии на упакованном расширении и published AOT binary,
-  плюс ограниченные реальные vendor-проверки в отдельном окружении.
+- Keep the split into pure core/runners/hosts: it has already made it possible to reproduce
+  the problems without paid vendors. Align the C# and TypeScript launch policy through
+  a common set of contract vectors, including model, permissions, timeout and cancel.
+- Separate the management of Team servers, usage and settings from the large panelProvider;
+  use the existing shared URL-vector contract as a model for checking the seams.
+- Move the long history of earlier fixes out of the comments into research;
+  keep the invariants in force next to the code. There are outdated comments
+  — for example, chatModels describes a refusal for the Team server which the code already supports.
+- Complement the strong unit base with scenarios of real boundaries: busy slots, a file system
+  failure before the start-signal, pipe backpressure, a grandchild process, rename/Unicode,
+  model selection, a restart with an unfinished external request, session revocation at the same time
+  as Validate. The last one deserves a separate check: Validate may write
+  last-used after reading, while Revoke deletes the file without common synchronization.
+- Do not substitute these unit tests for the extension host and the installed artifacts.
+  Short canary scenarios on the packaged extension and the published AOT binary are needed,
+  plus limited real vendor checks in a separate environment.
 
-Порядок работ: сначала shared-server isolation, ограничение памяти, stdin timeout и
-pump; затем потерянные diffs, использование slots и model selection; далее process
-tree, статистика и durable jobs. Google-audience поднять в первый этап, если этот
-IdP используется. Redis/Kubernetes/разделение на микросервисы не нужны, чтобы
-устранить перечисленные дефекты.
+Order of work: first shared-server isolation, the memory limit, the stdin timeout and
+the pump; then the lost diffs, the use of slots and model selection; then the process
+tree, statistics and durable jobs. Raise the Google audience to the first stage if that
+IdP is used. Redis/Kubernetes/a split into microservices are not needed to
+eliminate the listed defects.
 
-**Выполненные проверки.**
+**Checks performed.**
 
-| Проверка | Результат |
+| Check | Result |
 |---|---|
 | .NET solution build, Debug, WSL Ubuntu | 0 warnings, 0 errors |
 | MCP test executable | 1113 passed, 0 failed |
 | Team-server test executable | 226 passed, 0 failed |
 | Extension npm test, Windows | 1020 passed, 0 failed, 1 skipped |
-| Реальный TS client ↔ локальный Team server contract | 3 passed |
-| Extension settings ↔ свежий MCP binary seam | passed |
-| NuGet vulnerable packages, включая transitive | Не обнаружены текущим nuget.org advisory feed |
-| Изолированные probes | Подтвердили findings 2–10; 9 — через startup/options |
+| Real TS client ↔ local Team server contract | 3 passed |
+| Extension settings ↔ fresh MCP binary seam | passed |
+| NuGet vulnerable packages, including transitive | Not detected by the current nuget.org advisory feed |
+| Isolated probes | Confirmed findings 2–10; 9 — through startup/options |
 
-Первый запуск npm test в WSL не дошёл до тестов: установленный node_modules
-содержал Windows-native TypeScript, без linux-x64 compiler. Тесты расширения затем
-собраны и выполнены в Windows; скомпилированный JS использован для локальных WSL
-contract/probes. Зелёный unit suite не опровергает показанные воспроизведения.
-Аудит зависимостей не покрывает установленные на production версии vendor CLI,
-ОС и nginx; npm dev-toolchain advisory scan не выполнялся.
+The first npm test run in WSL did not reach the tests: the installed node_modules
+contained a Windows-native TypeScript, without a linux-x64 compiler. The extension tests were then
+built and run on Windows; the compiled JS was used for the local WSL
+contract/probes. A green unit suite does not refute the reproductions shown.
+The dependency audit does not cover the versions of the vendor CLIs, the OS and nginx
+installed in production; an npm dev-toolchain advisory scan was not performed.
 
-Локальные материалы проверки находятся в игнорируемом каталоге
-`artifacts/audit-20260909/`: `Program.cs`, `Audit.csproj`, `chat.cjs`, логи.
-Воспроизведение: в WSL из корня репозитория выполнить
-`dotnet run --project artifacts/audit-20260909/Audit.csproj`, затем
-`node artifacts/audit-20260909/chat.cjs` после компиляции расширения.
-Это диагностические программы, фиксирующие текущее поведение; исправлений они не
-вносят и регрессионные тесты в основном suite не заменяют.
+The local materials of the check are in the ignored directory
+`artifacts/audit-20260909/`: `Program.cs`, `Audit.csproj`, `chat.cjs`, logs.
+Reproduction: in WSL from the repository root run
+`dotnet run --project artifacts/audit-20260909/Audit.csproj`, then
+`node artifacts/audit-20260909/chat.cjs` after compiling the extension.
+These are diagnostic programs that record the current behavior; they make no fixes
+and do not replace the regression tests in the main suite.
