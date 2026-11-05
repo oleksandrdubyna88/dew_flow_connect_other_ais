@@ -929,7 +929,7 @@ internal static IReadOnlyList<OwnedDir> RegistryWithoutTheRunFolder() =>
     [.. OwnedDir.Unreclaimed().Where(dir => !ReferenceEquals(dir, _run.Dir))];
 ```
 
-Also change the `<para><b>The end.</b>` of the class comment: `EndOfRun` runs from the sweep fixture's disposal, after the audit, and from the process-exit handler. `RunTemp.Start`'s process-exit handler (`RegisterRestore` in `Seams`) stays. Do not touch it.
+Also change the `<para><b>The end.</b>` of the class comment: `EndOfRun` runs from the sweep fixture's disposal, after the audit, and from the process-exit handler; and its "which the owner-aware sweep collects" says that on an elevated Windows process the folder waits for a person (the parent's § *Epoch 7*). `RunTemp.Start`'s process-exit handler (`RegisterRestore` in `Seams`) stays. Do not touch it.
 
 `src_mcp/tests_leftovers/RunTempFixture.cs`. Remove `public void Dispose() => RunTemp.EndOfRun();` and `: IDisposable`. It stays an assembly fixture: the fallback refusal. Correct its comments. In `src_mcp/tests/RunTempTests.cs` and the three `RunFolderTests.cs`, change the text `"the run folder's fallback refusal and teardown"` to `"the run folder's fallback refusal"`.
 
@@ -949,7 +949,7 @@ Also change the `<para><b>The end.</b>` of the class comment: `EndOfRun` runs fr
 | A child under an inherited `TESTSTODELETE_RUN` | `Owner.RunRecord(env, …) != Owner.This`: `Discover` returns nothing. The registry covers this process's own. Row 1's fix, from the template. |
 | The sweep fixture's constructor threw, a host aborted before disposal, or `RunTempFixture` refused | The process-exit handler ends the folder. No audit runs. That run has already failed or been killed. |
 | The run was killed | One folder plus its claim. The next run's sweep collects it; on an elevated Windows process it is kept as `foreign-uid` and waits for a person (the parent's § *Epoch 7*). |
-| The run folder cannot be removed at the end | It stays with its claim and one warning (S3's contract), and it is not a red run. The next sweep judges it. |
+| The run folder cannot be removed at the end | It stays with its claim and one warning (S3's contract), and it is not a red run. The next sweep judges it; on an elevated Windows process it keeps it as `foreign-uid`, and it waits for a person. |
 
 ### 11.4 The self-test per suite: the orphan-claim plant (R16)
 
@@ -1012,7 +1012,7 @@ public void AnOrphanClaim_IsReportedByTheAudit_BeforeTheRunFolderEnds()
 }
 ```
 
-**The pin of the limit, `CoaiMcp.Tests` only.** `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun`, in `src_mcp/tests/RunTempTests.cs`. It uses the parent's lines with `COAI_S6_ORPHAN_CLAIM_UNTOUCHED=1` as well. It skips, saying why, unless the process is on Windows AND elevated (Administrators) AND a new file made in another `_owned.Dir`, never in `root` (the empty-root line reads `root`), reads `Scope.IsMine` false. It asserts `result.ExitCode` is 0 and the output has no `this run left`. It goes red when F31 changes the helper, and that is its purpose.
+**The pin of the limit, `CoaiMcp.Tests` only.** `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun`, in `src_mcp/tests/RunTempTests.cs`. It uses the parent's lines with `COAI_S6_ORPHAN_CLAIM_UNTOUCHED=1` as well. It skips, saying why, unless the process is on Windows AND elevated (Administrators). It asserts `result.ExitCode` is 0 and the output has no `this run left`. It also makes `var natural = _owned.Dir("s6-natural");` and asserts that `Scope.IsMine(natural)` and `Scope.IsMine(natural + ".owner")` are false: the helper's own output, inside the profile. That assertion goes red when F31 changes the helper, and that is its purpose. The final CI log on Windows must show this test as PASSED, not skipped; quote it in `module_tests.md`.
 
 **What the plant does not prove.** A real claim of an elevated run (the pin says so). And who removed the claim: the final empty-root assertion cannot tell the audit from the end of the run; the template's test proves the removal.
 
