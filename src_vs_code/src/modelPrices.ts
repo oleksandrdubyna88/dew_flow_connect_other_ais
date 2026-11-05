@@ -85,7 +85,7 @@ export const LITELLM_PRICES =
  * <p>Three differences, each real and each observed in the lists themselves:</p>
  *
  * <ul>
- *   <li>A reasoning EFFORT is not a model. `gemini-3.7-flash-high` and `-low` are one model at two
+ *   <li>A reasoning EFFORT is not a model. `gemini-3.8-flash-high` and `-low` are one model at two
  *       settings, priced identically, and no list has the suffix.</li>
  *   <li>Anthropic writes versions with a dot; this panel's ids use a dash, because they came from a
  *       CLI's own naming. `claude-opus-4-6-thinking` is `claude-opus-4.6`.</li>
