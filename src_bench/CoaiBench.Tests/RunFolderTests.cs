@@ -80,7 +80,7 @@ public sealed class RunFolderTests : IDisposable
 
         var fixtures = assembly.GetCustomAttributes<AssemblyFixtureAttribute>().Select(a => a.AssemblyFixtureType).ToList();
         fixtures.Should().Contain(typeof(LeftoversSweepFixture), "the start-of-run sweep is an assembly fixture of THIS suite");
-        fixtures.Should().Contain(typeof(RunTempFixture), "the run folder's fallback refusal and teardown");
+        fixtures.Should().Contain(typeof(RunTempFixture), "the run folder's fallback refusal");
         assembly.GetCustomAttributes<StartOfRunOrderAttribute>().Should().ContainSingle("the order proof runs on every test of THIS suite");
     }
 

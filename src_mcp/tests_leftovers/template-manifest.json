@@ -54,7 +54,7 @@
         {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
         {"old": "typeof(Mcp.Tests.Leftovers.LeftoversSweepFixture)", "new": "typeof(CoaiMcp.Tests.Leftovers.LeftoversSweepFixture)", "count": 1},
         {"old": "LeftoversSweep.Run(new SweepOptions(Owned.TempRoot(), DateTimeOffset.UtcNow, LeftoversSweep.MinAge, Liveness.ProbeProcess, Scope.IsMine))", "new": "StartOfRunSweep.Run(RunTemp.Real)", "count": 1},
-        {"old": "() => RealAudit(Owned.TempRoot(), OwnedDir.Unreclaimed())", "new": "() => RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder())", "count": 1}
+        {"old": "() => RealAudit(Owned.TempRoot(), OwnedDir.Unreclaimed())", "new": "() => { try { RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder()); } finally { RunTemp.EndOfRun(); } }", "count": 1}
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversAudit.cs", "target": "src_mcp/tests_leftovers/LeftoversAudit.cs", "blob": "f1a93747b118936746aca9cffc6c8a981a297d79", "replace": [
         {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}

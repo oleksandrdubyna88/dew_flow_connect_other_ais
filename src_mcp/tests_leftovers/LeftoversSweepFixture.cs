@@ -18,7 +18,7 @@ public sealed class LeftoversSweepFixture : IAsyncDisposable
     private readonly Action _audit;
 
     public LeftoversSweepFixture()
-        : this(RealSweep, Console.Error.WriteLine, () => RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder()))
+        : this(RealSweep, Console.Error.WriteLine, () => { try { RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder()); } finally { RunTemp.EndOfRun(); } })
     {
     }
 

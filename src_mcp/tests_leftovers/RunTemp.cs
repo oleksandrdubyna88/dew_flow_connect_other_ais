@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// <para><b>No fallback to the machine's temp.</b> The E2 behaviour — one warning and a run in the machine temp — is WITHDRAWN: a run that cannot make its folder, claim it, or point
 /// TEMP, TMP and TMPDIR at it does not start. The information flags (<c>--help</c>, <c>--version</c>, <c>--info</c>), when they are the WHOLE command line, run no test and no discovery and pass; beside any other argument
 /// (<c>@@</c>, <c>-automated</c>, a filter) they are gated, and <c>--list-tests</c> runs every <c>MemberData</c> and is gated.</para>
-/// <para><b>The end.</b> <see cref="EndOfRun"/> runs from <see cref="RunTempFixture"/>'s disposal AND from the process-exit handler registered here, so a run that never builds a fixture
+/// <para><b>The end.</b> <see cref="EndOfRun"/> runs from the sweep fixture's disposal, right AFTER the end-of-run audit (E5 S6, D9: the audit reads the run folder while it exists), AND from the process-exit handler registered here, so a run that never builds a fixture
 /// (an information flag, a filter that matches nothing) leaves nothing either. A KILLED run leaves exactly one folder plus its claim, which the owner-aware sweep collects.</para>
 /// </remarks>
 public static class RunTemp
