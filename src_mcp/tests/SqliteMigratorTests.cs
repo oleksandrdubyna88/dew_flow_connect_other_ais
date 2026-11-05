@@ -151,6 +151,72 @@ public sealed class SqliteMigratorTests : IDisposable
         Column(read, "SELECT name FROM pragma_table_info('t')").Should().Equal(["a", "b"]);
     }
 
+    /// <summary>
+    /// The switch to WAL waits INSIDE SQLite for a reader to leave, and is never retried by the
+    /// provider.
+    /// </summary>
+    /// <remarks>
+    /// <para>The defect (CI runs 39661513211 and 41895449249, <c>TheMigrationTests.TwoOpeners…</c>): both
+    /// openers failed with <c>SQLite Error 5: 'database is locked'</c> after the full five seconds,
+    /// on the first statement, <c>PRAGMA journal_mode=WAL</c>. That statement ran BEFORE
+    /// <c>busy_timeout</c>, so SQLite had no busy handler. Its commit needs the EXCLUSIVE lock, and with
+    /// no handler a single reader's SHARED lock turned it into an instant <c>SQLITE_BUSY</c>. The
+    /// provider then released every lock, slept a fixed 150 ms and ran the statement again from the
+    /// start. Two openers — or an opener and any reader — that do this at the same moment meet again
+    /// at the same moment, every 150 ms, until the budget is spent. A wait inside SQLite does not
+    /// have that shape: the waiter holds PENDING, no new reader can enter, the readers already in
+    /// leave, and the waiter goes through.</para>
+    /// <para>Made deterministic: a reader holds a SHARED lock on a rollback-journal file for about a
+    /// second while the runner opens it. The file ends up migrated either way — the provider's loop
+    /// does get through once the reader has left — so the thing counted is how many times the
+    /// statement was STARTED, from SQLite's own trace. One start is a wait inside SQLite. More is the
+    /// provider's retry loop, which is what a race can keep alive for the whole budget.</para>
+    /// </remarks>
+    [Fact]
+    public async Task TheSwitchToWalWaitsInsideSqliteForAReader_AndTheProviderNeverRetriesIt()
+    {
+        var path = Path.Combine(_dir, "wal-switch.db");
+        using (var seed = new SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            seed.Open();
+            Run(seed, Three[0]);
+        }
+
+        using var reader = new SqliteConnection($"Data Source={path};Pooling=False");
+        reader.Open();
+        Column(reader, "PRAGMA journal_mode").Should().Equal(["delete"], "the file must still be a rollback-journal file");
+        using var readTransaction = reader.BeginTransaction();
+        Column(reader, "SELECT count(*) FROM sqlite_master"); // takes the SHARED lock and keeps it
+
+        var starts = 0;
+        using var opener = new SqliteConnection(
+            $"Data Source={path};Pooling=False;{SqliteMigrator.DefaultTimeoutFragment}");
+        opener.Open();
+        SQLitePCL.raw.sqlite3_trace(
+            opener.Handle,
+            (_, sql) =>
+            {
+                if (sql.StartsWith("PRAGMA journal_mode=WAL", StringComparison.Ordinal))
+                {
+                    Interlocked.Increment(ref starts);
+                }
+            },
+            null);
+
+        var migrating = Task.Run(() => SqliteMigrator.Migrate(opener, Three));
+        SpinWait.SpinUntil(() => Volatile.Read(ref starts) >= 1, TimeSpan.FromSeconds(30))
+            .Should().BeTrue("the opener must reach the switch");
+        await Task.Delay(TimeSpan.FromMilliseconds(900)); // the reader stays: six of the provider's sleeps
+        readTransaction.Commit();
+
+        await migrating.WaitAsync(TimeSpan.FromSeconds(30)); // goes through once the reader has left
+        SqliteMigrator.Version(opener).Should().Be(3);
+        Volatile.Read(ref starts).Should().Be(
+            1,
+            "a wait inside SQLite starts the statement once; a second start is the provider releasing"
+            + " every lock and trying again, and two openers doing that together meet again every 150 ms");
+    }
+
     /// <summary>The two pragmas a second opener depends on, read back from the connection.</summary>
     [Fact]
     public void TheFileIsLeftInWalModeWithTheBusyTimeoutSet()
