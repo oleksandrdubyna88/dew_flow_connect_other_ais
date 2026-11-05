@@ -424,6 +424,34 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
         Directory.GetFileSystemEntries(root).Should().BeEmpty("the audit removes what it names, and the run's end removes the rest");
     }
 
+    /// <summary>
+    /// The pin of the limit (E5 S6, the parent's epoch 7, F31): on an ELEVATED Windows process a new file is owned by <c>BUILTIN\Administrators</c>, so the audit reads a real claim as a stranger's and does not see it. The plant above
+    /// re-owns its claim on Windows and proves the ORDER; this one leaves the claim as the process made it and asserts that it stays unseen, beside the helper's own output (a folder and its claim) which is not the caller's either.
+    /// When F31 changes the helper, the second half goes red, and that is its purpose. Skips, saying why, unless the process is on Windows and elevated.
+    /// </summary>
+    [Fact]
+    public void AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() || !IsElevatedOnWindows(), "pins the limit of an elevated Windows process only: elsewhere the process owns the files it makes");
+        var root = _owned.Dir("s6-untouched");
+        var env = AllThreeAt(root);
+        env["COAI_S6_ORPHAN_CLAIM"] = "1";
+        env["COAI_S6_ORPHAN_CLAIM_UNTOUCHED"] = "1";
+        env["TESTSTODELETE_RUN"] = null;
+
+        var result = SuiteChild.Run(["--filter-class", "*OrphanClaimChild"], env, ChildTimeout);
+
+        result.TimedOut.Should().BeFalse(result.StdErr);
+        result.ExitCode.Should().Be(0, "a real claim of an elevated run reads as a stranger's, so the audit does not see it: " + result.StdOut + result.StdErr);
+        (result.StdOut + result.StdErr).Should().NotContain("this run left");
+        var natural = _owned.Dir("s6-natural");
+        Scope.IsMine(natural).Should().BeFalse("the helper's own folder, inside the profile, is Administrators' on an elevated run");
+        Scope.IsMine(natural + ".owner").Should().BeFalse("and so is its claim");
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool IsElevatedOnWindows() => new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+
     private static string TestsExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "CoaiMcp.Tests.exe" : "CoaiMcp.Tests");
 
     [Theory]

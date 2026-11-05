@@ -90,7 +90,19 @@ public sealed class OrphanClaimChild
             Assert.Skip("child-only: AnOrphanClaim_IsReportedByTheAudit_BeforeTheRunFolderEnds starts the suite on this class with COAI_S6_ORPHAN_CLAIM=1");
         }
 
-        File.WriteAllText(Path.Combine(RunTemp.Folder, Owned.NameFor("orphan") + ".owner"), Owner.This.Format() + "\n");
+        var claim = Path.Combine(RunTemp.Folder, Owned.NameFor("orphan") + ".owner");
+        File.WriteAllText(claim, Owner.This.Format() + "\n");
+
+        // An elevated Windows process makes files Administrators own, and the audit reads those as a stranger's (F31). Re-own this one, so the plant tests the ORDER.
+        if (OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("COAI_S6_ORPHAN_CLAIM_UNTOUCHED") != "1")
+        {
+            using var windows = new WindowsOwnership();
+            windows.OwnedByCaller(claim);
+            if (!Scope.IsMine(claim))
+            {
+                throw new InvalidOperationException("the plant is not the caller's after re-owning: the profile key does not hold for " + claim);
+            }
+        }
     }
 }
 
