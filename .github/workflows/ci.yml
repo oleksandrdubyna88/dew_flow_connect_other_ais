@@ -57,6 +57,25 @@ jobs:
       - name: Test
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
 
+      # The end-of-run audit has teeth (E5 S6, plan D9; the template's step). LeftoversSelfTest leaks a folder on purpose, ONLY when COAI_LEFTOVERS_SELFTEST
+      # is set; this step is green only on a NON-zero exit with the audit's first line and the folder's name on its own line, and with nothing of the case left.
+      - name: The audit fails a run that leaves a claimed folder
+        run: |
+          set -o pipefail
+          owner="u$(id -u)"
+          for entry in "1:never disposed:selftest" "failed-dispose:disposed but not removed:selftest-failed"; do
+            IFS=: read -r value words what <<< "$entry"
+            if COAI_LEFTOVERS_SELFTEST="$value" ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests --filter-class "*LeftoversSelfTest" 2>&1 | tee "$RUNNER_TEMP/selftest.log"; then
+              echo "the end-of-run audit did not fail the run ($value)"; exit 1; fi
+            first=$(grep -E "(^|[[:space:]]:[[:space:]])coai tests: this run left [0-9]+ folder\(s\) it claimed.*[0-9]+ $words" "$RUNNER_TEMP/selftest.log" | grep -v "testsToDelete-[uw][0-9]" || true)
+            [ -n "$first" ] || { echo "the run failed, but not with the audit's first line (counts and '$words', no path) ($value)"; exit 1; }
+            grep -Eq "^[[:space:]]+$words: .*/testsToDelete-[uw][0-9]{1,10}-coai-$what-[A-Za-z0-9]{6}" "$RUNNER_TEMP/selftest.log" \
+              || { echo "the audit's message does not name the folder on a line of its own under '$words' ($value)"; exit 1; }
+            left=$(find "${TMPDIR:-/tmp}" -maxdepth 1 \( -iname "teststodelete-${owner}-coai-$what-*" -o -iname "teststodelete-${owner}-coai-run-*" \)) \
+              || { echo "the temp root could not be listed"; exit 1; }
+            [ -z "$left" ] || { echo "the run left this behind: $left"; exit 1; }
+          done
+
       # The bench is BUILT by the solution and is deliberately not a release asset, so this step is
       # the only thing that would ever notice it breaking. An instrument nobody checks reports
       # whatever it last happened to compile to.
@@ -187,6 +206,15 @@ jobs:
           fi
           node .github/scripts/suppressions-only-shrink.mjs ${ABSENT:+"$ABSENT"} \
             src_vs_code/eslint-suppressions.json "$RUNNER_TEMP/base-suppressions.json"
+      # The raw-temp baseline only shrinks (E5 S6; common/test-leftovers-baseline.md, The ratchet). Never the creation flag here. PR 945 is the one creation, recorded there.
+      - name: The raw-temp baseline only shrinks
+        if: github.event_name == 'pull_request' && github.event.pull_request.number != 945
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin "$BASE_SHA"
+          node .agents/conventions/tools/leftovers-check.mjs --repo . --baseline-shrinks --base "$BASE_SHA"
       - name: Plan lifecycle
         run: node .agents/conventions/tools/plan-lifecycle.mjs
       # The measurement scripts' own tests — today `scripts/lib/kimi.test.mjs`, the refusal of a Kimi probe scratch another
@@ -277,9 +305,12 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-      - name: The Node run folder and its refusals (macOS, #12)
+      # E5 S6: the Node guard (testLeftovers.test.mjs) reads workflows and needs `yaml`, which the mount carries after this `npm ci`; the C# guard needs only node and the mount.
+      - name: Shared instruction dependencies
+        run: npm ci --ignore-scripts --prefix .agents/conventions
+      - name: The Node run folder and its refusals (macOS, #12), and the Node guard
         working-directory: src_vs_code
-        run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs
+        run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs src/test/testLeftovers.test.mjs
       - name: The scripts' run folder and its refusals (macOS)
         run: node scripts/run-lib-tests.mjs scripts/runFolder.test.mjs
 
@@ -319,6 +350,25 @@ jobs:
       - name: Test
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
+
+      # E5 S6: the same teeth as build-test's step, on macOS (bash 3.2 and BSD grep and find: the commands are the template's portable subset).
+      - name: The audit fails a run that leaves a claimed folder
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          owner="u$(id -u)"
+          for entry in "1:never disposed:selftest" "failed-dispose:disposed but not removed:selftest-failed"; do
+            IFS=: read -r value words what <<< "$entry"
+            if COAI_LEFTOVERS_SELFTEST="$value" ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests --filter-class "*LeftoversSelfTest" 2>&1 | tee "$RUNNER_TEMP/selftest.log"; then
+              echo "the end-of-run audit did not fail the run ($value)"; exit 1; fi
+            first=$(grep -E "(^|[[:space:]]:[[:space:]])coai tests: this run left [0-9]+ folder\(s\) it claimed.*[0-9]+ $words" "$RUNNER_TEMP/selftest.log" | grep -v "testsToDelete-[uw][0-9]" || true)
+            [ -n "$first" ] || { echo "the run failed, but not with the audit's first line (counts and '$words', no path) ($value)"; exit 1; }
+            grep -Eq "^[[:space:]]+$words: .*/testsToDelete-[uw][0-9]{1,10}-coai-$what-[A-Za-z0-9]{6}" "$RUNNER_TEMP/selftest.log" \
+              || { echo "the audit's message does not name the folder on a line of its own under '$words' ($value)"; exit 1; }
+            left=$(find "${TMPDIR:-/tmp}" -maxdepth 1 \( -iname "teststodelete-${owner}-coai-$what-*" -o -iname "teststodelete-${owner}-coai-run-*" \)) \
+              || { echo "the temp root could not be listed"; exit 1; }
+            [ -z "$left" ] || { echo "the run left this behind: $left"; exit 1; }
+          done
 
       - name: Test the Team server
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
@@ -380,18 +430,22 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
+      # E5 S6: the Node guard reads workflows and needs `yaml`, which the mount carries after this `npm ci` (the C# guard needs only node and the mount).
+      - name: Shared instruction dependencies
+        run: npm ci --ignore-scripts --prefix .agents/conventions
       # E5 S2-B (plan Q6, D8): the extension's start-of-run sweep is the MOUNTED reference with the coai token; on Windows it
       # must list and change nothing (F16 interim). The test file runs the real wrapper against the real reference here, with a
       # fixture that is collectible on every other key — a valid owner-form claim of this owner, an old mtime, a gone owner,
       # inside the profile — so that survival can come only from the Windows gate, never from a malformed claim. It needs no
-      # `npm ci`: its import graph is node: modules and repository files only (L5 of the same file pins that).
+      # `npm ci`: its import graph is node: modules and repository files only (L5 of the same file pins that). That sentence is about the sweep test; `testLeftovers.test.mjs` (E5 S6) runs the
+      # mounted Node guard, which needs the mount's `npm ci` of the step above.
       #
       # E5 S4: through the RUNNERS, never a bare `node --test` (a test file refuses to start outside its run folder). The extension's runner makes the owned run folder,
       # fails closed before any test (exit 78 and one line when it cannot make or claim it), and runs exactly these files; the scripts' runner does the same for the proof
       # of the `scripts/` scope. Both proofs force the five failures (no folder, no claim, each of TEMP, TMP, TMPDIR different) and assert the sentinel test never loaded.
       - name: The Node sweep lists and changes nothing on Windows (F16, Q6); the Node run folder and its refusals
         working-directory: src_vs_code
-        run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs
+        run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs src/test/testLeftovers.test.mjs
       - name: The scripts' run folder and its refusals
         run: node scripts/run-lib-tests.mjs scripts/runFolder.test.mjs
 
@@ -404,6 +458,34 @@ jobs:
 
       - name: Test
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe
+
+      # The same teeth in PowerShell (the template's step). Both values; a listing error is red, never ignored.
+      - name: The audit fails a run that leaves a claimed folder
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $exe = './src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe'
+          $cases = @(
+            @{ Value = '1'; Words = 'never disposed'; What = 'selftest' },
+            @{ Value = 'failed-dispose'; Words = 'disposed but not removed'; What = 'selftest-failed' }
+          )
+          foreach ($case in $cases) {
+            $env:COAI_LEFTOVERS_SELFTEST = $case.Value
+            $log = (& $exe --filter-class '*LeftoversSelfTest' 2>&1 | Out-String)
+            $code = $LASTEXITCODE
+            Remove-Item Env:COAI_LEFTOVERS_SELFTEST
+            Write-Host $log
+            if ($code -eq 0) { throw "the end-of-run audit did not fail the run ($($case.Value))" }
+            $firstLines = @($log -split "`r?`n" | Where-Object { $_ -match ('coai tests: this run left \d+ folder\(s\) it claimed.*\d+ ' + [regex]::Escape($case.Words)) -and $_ -notmatch 'testsToDelete-[uw][0-9]' })
+            if ($firstLines.Count -eq 0) { throw "the run failed, but not with the audit's first line (counts and '$($case.Words)', no path) ($($case.Value))" }
+            $named = '(?m)^\s*' + [regex]::Escape($case.Words) + ': .*[\\/]testsToDelete-[uw][0-9]{1,10}-coai-' + [regex]::Escape($case.What) + '-[A-Za-z0-9]{6}\s*$'
+            if ($log -notmatch $named) { throw "the audit's message does not name the folder on a line of its own under '$($case.Words)' ($($case.Value))" }
+            $left = @(Get-ChildItem -Force -LiteralPath $env:TMP -ErrorAction Stop | Where-Object { $_.Name -match ('^testsToDelete-[uw][0-9]{1,10}-coai-(' + [regex]::Escape($case.What) + '|run)-') })
+            if ($left.Count -gt 0) { throw "the run left this behind: $($left.FullName -join ', ')" }
+          }
+          # Actions appends `exit $LASTEXITCODE` to a pwsh step: the self-test's EXPECTED non-zero exit would leak out as the step's result
+          # (measured on dew_flow_mcp PR #58). Every check above throws on failure, so reaching here is green.
+          exit 0
 
       # The Team server's own wiring of the run folder (E5 S3): its RunTempStart.cs made the folder, its TestEntryPoint.cs gates the run. The whole
       # server suite runs on Windows at release time (release.yml, server-binaries); here only the run-folder proofs, which need no server.
