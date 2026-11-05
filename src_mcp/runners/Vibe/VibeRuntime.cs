@@ -61,7 +61,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
     /// in are the id alone (the machine's host, <see cref="VibeHost.Current"/>) and a <see cref="VibeHost"/>.
     /// </summary>
     internal VibeRuntime(string id, HostKind host, VibePathBudget? budget = null, VibeSignIn? signIn = null, WslGeneration? wsl = null)
-        : this(id, new VibeHost(host, wsl ?? (host == HostKind.Wsl ? WslGenerations.Current : WslGeneration.None), signIn ?? VibeSignIn.None), budget)
+        : this(id, new VibeHost(host, wsl ?? WslGenerations.ForHost(host), signIn ?? VibeSignIn.None), budget)
     {
     }
 

@@ -55,10 +55,24 @@ public sealed class EveryClassThatSetsTheProcessEnvironmentTests
     }
 
     [Fact]
-    public void NoStaticHelperSetsTheProcessEnvironment_ButFakeCliSteeringItself()
+    public void NoStaticHelperSetsTheProcessEnvironment_ButFakeCliSteeringAndTheRunTempInitializer()
     {
-        TestSourceIndex.StaticOffenders(TestSourceIndex.Classes, SetsTheEnvironment, allowed: nameof(FakeCliSteering)).Should().BeEmpty(
-            "a static class is placed in no collection, so an environment write from a helper runs in whichever class called it");
+        TestSourceIndex.StaticOffenders(TestSourceIndex.Classes, SetsTheEnvironment, allowed: [nameof(FakeCliSteering), nameof(RunTemp)]).Should().BeEmpty(
+            "a static class is placed in no collection, so an environment write from a helper runs in whichever class called it; "
+            + "RunTemp's module initializer is the one other writer — it runs once, before any test, and never again");
+    }
+
+    [Fact]
+    public void TheRunTempInitializerIsTheOnlyOtherStaticWriter_AnyOtherStaticHelperStillIsAnOffender()
+    {
+        var classes = TestSourceIndex.Parse("Synthetic.cs", Definition + """
+            public static class RunTemp { public static void Start() => Environment.SetEnvironmentVariable("TEMP", "x"); }
+            public static class FakeCliSteering { public static void Reset() => Environment.SetEnvironmentVariable("FAKECLI_X", null); }
+            public static class Other { public static void A() => Environment.SetEnvironmentVariable("TEMP", "y"); }
+            """);
+
+        TestSourceIndex.StaticOffenders(classes, SetsTheEnvironment, allowed: [nameof(FakeCliSteering), nameof(RunTemp)])
+            .Should().BeEquivalentTo(["Synthetic.cs: Other"]);
     }
 
     [Fact]

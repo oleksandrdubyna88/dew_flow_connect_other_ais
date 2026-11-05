@@ -1,7 +1,7 @@
 import { member } from './rounds';
 
 /**
- * The round card's "written with" line (E5.S6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`): who wrote the
+ * The round card's "written with" line (E5.S6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`): who wrote the
  * code a round reviewed, and how much, as ONE line — from the session file's `authors` snapshot and `size`, never from the database.
  *
  * <p>Its own module, not more lines in `rounds.ts`: that file is past the family's ceiling with the line's helpers in it, and this is

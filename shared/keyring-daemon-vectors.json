@@ -1,0 +1,17 @@
+{
+  "about": "The ONE definition of 'a process name that counts as a desktop keyring daemon' (DN10 of todo/PLAN_kimi_and_vibe_on_native_linux.md, E1.S2). Each vector is a process name, as a process's executable name or its kernel comm (cut at 15 characters), and whether the keyring-session fact counts it. Read by the product's reading (src_mcp/runners/Platform/KeyringSessionFacts.cs, through src_mcp/tests/KeyringSessionFactsTests.cs) AND by the facts script's own independent reading (scripts/lib/host-facts.mjs, through host-facts.test.mjs). The two READINGS stay independent code; only this definition is shared, so changing what counts as a daemon in one place turns the other side red until it is changed too.",
+  "vectors": [
+    { "name": "gnome-keyring-daemon", "daemon": true, "why": "GNOME's keyring, by its executable name" },
+    { "name": "gnome-keyring-d", "daemon": true, "why": "the same daemon by its comm, which the kernel cuts at fifteen characters" },
+    { "name": "kwalletd", "daemon": true, "why": "KDE Wallet, unversioned" },
+    { "name": "kwalletd5", "daemon": true, "why": "KDE Wallet 5" },
+    { "name": "kwalletd6", "daemon": true, "why": "KDE Wallet 6" },
+    { "name": "keepassxc", "daemon": true, "why": "KeePassXC serves the Secret Service itself" },
+    { "name": "keepassxc-proxy", "daemon": false, "why": "the browser-integration helper: it brokers a browser and never serves the Secret Service" },
+    { "name": "gnome-keyring", "daemon": false, "why": "a bare prefix of the daemon's name is not the daemon" },
+    { "name": "gnome-shell", "daemon": false, "why": "a lookalike of the GNOME family" },
+    { "name": "my-kwallet-note", "daemon": false, "why": "kwallet inside a name, not at its start" },
+    { "name": "python3", "daemon": false, "why": "an ordinary process" },
+    { "name": "sshd", "daemon": false, "why": "an ordinary process" }
+  ]
+}

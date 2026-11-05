@@ -1,5 +1,5 @@
 // node --test scripts/lib/transcript-sanitise.test.mjs — the privacy boundary of the caller-transcript fixtures
-// (todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S3). Everything here is a SYNTHETIC session built in
+// (research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S3). Everything here is a SYNTHETIC session built in
 // a temp folder: the real ~/.claude is never named, listed or read. CI runs it on Linux ("Probe script tests").
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

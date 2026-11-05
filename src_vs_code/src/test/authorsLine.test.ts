@@ -5,7 +5,7 @@ import path from 'node:path';
 import { isWellFormedAuthorsState, modelShown, writtenWith } from '../authorsLine';
 
 /**
- * The round card's "written with" line (E5.S6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`): what the
+ * The round card's "written with" line (E5.S6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`): what the
  * session file's `authors` snapshot and `size` say, as one line — or nothing for a round that recorded neither.
  *
  * <p>The snapshot is JSON off a disk five processes write, so every parameter is `unknown` and no test uses a type assertion: a

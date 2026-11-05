@@ -89,13 +89,22 @@ public sealed partial class Corpus : IDisposable
     /// <para>A file that is not a database throws <see cref="SqliteException"/> from here. That is an
     /// infrastructure fault, not an expected answer, and the two process edges — the server's start
     /// and a one-shot's run — catch it and say what and where.</para>
+    /// <para>A failed open disposes the connection it made rather than leaving it for a finalizer.</para>
     /// </remarks>
     public static Corpus Open(string path)
     {
         var db = new SqliteConnection(
             $"Data Source={path};Pooling=False;{SqliteMigrator.DefaultTimeoutFragment}");
-        db.Open();
-        SqliteMigrator.Migrate(db, CorpusSchema.Steps);
+        try
+        {
+            db.Open();
+            SqliteMigrator.Migrate(db, CorpusSchema.Steps);
+        }
+        catch
+        {
+            db.Dispose();
+            throw;
+        }
 
         return new Corpus(db);
     }

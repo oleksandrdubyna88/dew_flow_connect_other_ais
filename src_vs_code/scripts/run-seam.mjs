@@ -58,6 +58,8 @@ const { securitySeam } = await import('./seam-security.mjs');
 const { securityTextSeam } = await import('./seam-security-text.mjs');
 const { catalogSeam } = await import('./seam-catalog.mjs');
 const { usageCountsSeam } = await import('./seam-usage-counts.mjs');
+// E3's ledger fields: the lines the REAL writer leaves, read through the extension's own parseUsageLine.
+const { ledgerFieldsSeam } = await import('./seam-ledger-fields.mjs');
 // The vendor gauge (story 6.2): the slot's reading and the derived figures, read and drawn by the extension's own code.
 const { gaugeSeam } = await import('./seam-gauge.mjs');
 const { consultantRowSeam } = await import('./seam-consultant-row.mjs');
@@ -517,6 +519,11 @@ console.log(`  ok  the vendor gauge and ${gauges.figures} rounds-per-1 % figures
 // its effort, system prompt and timeout, is read by the server's own parser — and never handed to a binary without it.
 const consultantRow = await consultantRowSeam({ binary, fail, timeoutMs: TIMEOUT_MS });
 console.log(`  ok  a consultant's catalog row (effort ${consultantRow.effort}) crosses to a server that lists consultantRow, and it keeps the consultant available`);
+
+// The ledger-fields leg (E3): a consultation and a round cut by its clock, written by the real binary against the stand-in CLI, whose
+// consultation / label / local-cause keys must come back from the extension's own parser — and must each have been written at all.
+const ledgerFields = await ledgerFieldsSeam({ binary, fakeCli: fakeCli(), fail, timeoutMs: TIMEOUT_MS });
+console.log(`  ok  ${ledgerFields.lines} ledger lines the real writer left carry ${ledgerFields.keys.join(', ')}, each read back by parseUsageLine`);
 
 // The ELEVENTH leg: the binary lists every capability the extension knows (PLAN_one_model_catalog.md E2) — a field
 // is sent only when `--features` lists it, so the two lists must agree on the real binary.

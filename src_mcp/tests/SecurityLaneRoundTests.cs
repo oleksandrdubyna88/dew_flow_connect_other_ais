@@ -118,6 +118,38 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
             .Single().Diff.Text.Should().BeEmpty("oversized source must not enter a context pack");
     }
 
+    /// <summary>
+    /// D4 / S7 of <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>: the folders a roster makes empty — the ordinary round's repair and workspace folders
+    /// AND the lane's own workspace folder — are all registered with the scratch the roster was given, and gone when it ends. The lane's reaches the same scratch
+    /// through <c>ordinary.Scratch</c>, not through a global.
+    /// </summary>
+    [Fact]
+    public void TheEmptyFoldersOfTheOrdinaryRoundAndOfTheLane_AreAllRemovedWithTheScratchTheRosterWasGiven()
+    {
+        var lane = SecurityLaneSetting.Parse("""
+            {"enabled":true,"runs":[{"vendor":"codex","prompt":"redteam-sql"}]}
+            """, [new("codex")]);
+        using var dir = TempDir.For("testsToDelete-security-empty-folders-");
+        var scratch = RoundScratch.At(dir.At("round"), _ => { });
+        var work = Service(laneSetting: lane).Roster.BuildWork([RoleCatalog.ArchitectureRole], _repo.Path,
+            "fixture", 1, Stage.CodeReview, true, securityFiles: Files, codexTiers: CodexTiers.None, scratch: scratch);
+        string[] prefixes = ["coai-repair-", "coai-noworkspace-"];
+        var made = work.Reviewers
+            .SelectMany(w => new[] { w.Invocation, w.Repair }.OfType<ReviewerInvocation>())
+            .Select(i => i.Request.WorkingDirectory)
+            .Where(folder => prefixes.Any(prefix => Path.GetFileName(folder).StartsWith(prefix, StringComparison.Ordinal)))
+            .Distinct()
+            .ToList();
+
+        made.Should().HaveCountGreaterThanOrEqualTo(3, "the ordinary round's repair and workspace folders, and the lane's workspace folder");
+        made.Should().OnlyContain(folder => Directory.Exists(folder), "they are made when the roster is built");
+        work.Reviewers.Should().Contain(w => w.IsSecurity);
+
+        work.Scratch.Dispose();
+
+        made.Should().OnlyContain(folder => !Directory.Exists(folder), "every one of them was registered with the round's scratch");
+    }
+
     private Task<string> Run(PanelService service, bool laneOnly = false, FileDiff[]? files = null)
     {
         var stage = new StageRun(RoundMachine.BeginCodeRound, false, Stage.CodeReview, false,

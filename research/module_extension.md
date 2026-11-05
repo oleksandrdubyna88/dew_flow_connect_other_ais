@@ -2729,7 +2729,7 @@ family that answered:
 | `claudeModels.ts` | the pure half: `familyOf`, `answeredAsAsked`, `modelThatAnswered`, `stillGood`, `claudeModels`, `claudeNote` |
 | `claudeProbe.ts` | the run: one small request per candidate, SEQUENTIALLY, through `versionProbe.ts`'s `capture` |
 | `claudeProbeFile.ts` | `claude-models.json` in the data directory — parsed entry by entry, written atomically |
-| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `research/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
+| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `research/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Since E3.S3 each line also says what it ran with: `cli: claude` and, when the probe already asked one, the `cliVersion` `claudeProbe.ts` read before spending a request (`claudeProbeCache` hands it to `recordingRun`; absent, never empty, when none was asked) Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
 
 **A discovery that cannot run never subtracts.** The three ways the probe fails are all states this
 installation is really in: an allowance that is spent (issue #165 measured four reviewers meeting
@@ -6487,7 +6487,7 @@ Tests: `rounds.test.ts` (the function), `roundsLog.test.ts` (the row, the line, 
 `bundledPage.test.ts` (the page as it ships, opened with and without a source); `LogRow` gained a required field, so the five
 fixtures that build one carry `reviewedFrom: ''`.
 
-**The "written with" line — who wrote what a round reviewed** (E5.S6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+**The "written with" line — who wrote what a round reviewed** (E5.S6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
 An opened round shows one more dimmed line under *asked by* and *reviewed from*: *written with Opus 5.5 (main) · 3 Sonnet coders · +412 −88 in 9
 files*, *… · partial — peer running*, *authors not observed — transcript not found*, and nothing for a round without a snapshot.
 `RoundRecord` gains `authors?: unknown` and `size?: unknown` (E2 added no TypeScript). `writtenWith(authors, size)` lives in `src/authorsLine.ts` — its own
@@ -7825,7 +7825,7 @@ and the money (`Estimate`). `rollUp` makes a vendor row or the window from group
 when every group's is). `perUnit(money, unitDivisor(kind, count, turns, linesAreLaunches))` divides: a MODEL line by the
 rounds that used it when the caller knows them, else by its lines — per launch when they are launches, else per
 recorded turn (`perUnit` pluralises `launch` as `launches`); a vendor row or the total by
-every round in the window; consultations and questions by their own counts. Every unit is the denominator, never only
+every round in the window; questions by their own count, and consultations by DISTINCT consultations (E3.S4 — see below). Every unit is the denominator, never only
 the priced ones; the floor is carried (`≥ ~$0.31`); nothing priced is a dash; zero units is a dash with *no rounds in
 this window*. How many rounds were FULLY priced is not knowable until a line carries its round (story 4.1), so the note
 says only that some of it was not. The round counts come from `coai-mcp --round-counts` (story 2.1), read as below.
@@ -7866,7 +7866,7 @@ sidebar-only render spawns nothing — without awaiting (a read that lands repai
 tab's own tick (`usageTab`). The tab's
 FIRST block, above the window buttons — its windows are its own — is `roundsBlock.ts`'s `roundsBlock(input)`, rendered
 by the host and handed to `usageTabHtml` as `extras.rounds`: per vendor row, rounds over 5 h / 24 h / 7 d, the 7 d rounds
-by stage, the consultations / questions / chat beside them as recorded turns, reviewers per round from the database's
+by stage, the consultations / questions / chat beside them (consult money per CONSULTATION, the other two per recorded turn — E3.S4), reviewers per round from the database's
 history, the median output (`medianOutputLabel`: the header names the unit the drawn medians share — *per launch*
 when every one is, *per recorded turn* when none is, no unit on a mixed page or an unread ledger — and a cell whose
 unit differs from the header's names it beside its number, the recorded-turn one with a tooltip), tokens in / cached
@@ -7914,6 +7914,8 @@ launch line (see `isLaunchLine` above). The help's spending article says both, i
 (`helpCoverage.test.ts` asks every language for `**probe**`, `--probe-api --model` and `` `turn` ``).
 The extension's own Claude model probe (`claudeProbe.ts`) still writes nothing — no sanctioned writer fits; see the
 plan's deviations.
+
+**E3 (2026-10-20), the extension half — [PLAN_the_round_counter_tail_E3.md](../todo/PLAN_the_round_counter_tail_E3.md).** *S3, the lines the extension writes name their CLI.* `ChatTurnRecord` gains optional `cli` and `cliVersion` (absent = not recorded, the `vendor?` precedent). `cli` is the row's RUNTIME, written by `chatTurn.ledger` as `turn.vendor.runtime` and never derived from `vendor` by a reader (D7: `vendor` says whose row the line belongs in, `cli` says what ran; an old line reads no `cli`). `cliVersion` is the catalog probe's LAST answer, read from `cliVersionMemory.ts` — `PanelViewProvider.vendorCliStatus` hands its `cliStatus` to `rememberCliStatus`, `cachedCliVersion(vendorId)` answers empty for a row nobody probed — so a chat turn never spawns a process to fill a ledger field (`aChatTurnNamesItsCli.test.ts` pins the source: no `askVersion`/`versionProbe` in `chatTurn.ts`). `chatLedgerLines` carries `cli` onto the ledger line; a chat line is still not a launch line (no `attempt`). The probe ledger's lines carry `cli: claude` and the version (see the `probeUsageFile.ts` row). Effort and tier stay absent on both; nothing displays them, so there is no *not recorded* text. *S4, per-consultation money per consultation.* `UsageEntry` gains `consultation` (`consultationOf`: present only when the line says it; an empty id is absent, so a check cannot group as one phantom consultation). `MoneyGroup` gains `consultations` (the distinct ids of a consult group and the count of lines without one); `consultationUnits(groups)` unions the ids across the row's model groups (one consultation in two model groups is one) and adds each id-less line as its own unit; `unitDivisor('consult', units.count, …)` divides by it. `roundsBlock.kindLine` says *per consultation* when every consult line carries an id, *per consultation (some lines per turn)* when any does not (D9, `consultationLabel`; code round of 2026-10-21: "older lines" was false for the other two reasons an id is empty), with a tooltip sentence counting the lines taken one each and naming which kinds are PRESENT (`consultationNote` over `IdLessKinds`): lines written before the consultation field existed, consultant checks (role `consult-check`), consultations refused before their launch (no `cli` and a failing outcome — an older failed line looks the same, and the tooltip says so); question and chat stay *per recorded turn*; the card's *consult turns* still counts turns; the footnote says so. Help: one sentence in each of the five `what-each-ai-has-used` bodies naming the three reasons (the field's arrival as "written before the consultation field existed", no release number), pinned per language by `helpCoverage.test.ts` (`ID_LESS_REASONS`). `cliVersion` has two spellings: coai-mcp writes the first line of `--version` (`codex-cli 0.131.0`), the extension's own lines the bare number the panel's probe parsed (`0.131.0`), and a chat line's is the panel's LAST probe of that CLI, not proof of the binary that ran (documented on `ChatTurnRecord.cliVersion`, `UsageEntry.cliVersion` and `LaunchOptions.CliVersion`). The live cross-side check is `scripts/seam-ledger-fields.mjs`, a leg of `npm run test:seam`. The `consultation` field is written by the coai-mcp half (E3.S4 C#); until that release every consult line is its own unit, which is exactly the old per-turn division under the qualified label.
 
 **Story 3.4 (2026-10-11): the parser keeps what a launch ran with.** `usage.ts`'s `UsageEntry` gains the eight ledger
 fields `cli`, `cliVersion`, `effort`, `effortFrom`, `tier`, `tierFrom`, `job` and `slot`, and `ranWithFields` reads them —
@@ -11256,7 +11258,7 @@ eight keys and says so.
   life (heartbeat, last write, start) is older than two minutes — the server's `HeartbeatStale` — as
   `interrupted`, its consulting rows too, with the terminal chip and a stage of its own, *Interrupted — its server
   stopped answering*; nothing on disk changes (the server's sweep does that, when a server runs). The watcher asks
-  `nextStaleAt` and reads again at that moment, because no file event announces a server that died.
+  `nextStaleAt` and reads again at that moment, because no file event announces a server that died. **E3 S4:** a server that is alive but whose heartbeat writes the disk refused (a missed beat is now logged and skipped, `module_server.md`) can be shown `interrupted` after those two minutes; the display recovers on the next heartbeat that is written — accepted, and the server's sweep still keeps such a question while its pid is alive. **E3 judge J1:** this extension reads `sessions/*.json` without the server's turn (`extension.ts` and `panelProvider.ts` `readSessions`, `vscode.workspace.fs.readFile`; Node opens share-all), and the server's session save is a move over the file, which Windows refuses whatever the holder's share mode: one extension read held longer than the 500 ms retry window can fail a round's final save ("completed but could not be recorded"). Impossible before the save became atomic; a read of a few kilobytes does not last that long, and the limit is written down in `module_server.md`.
 - **The wait's default is the server's (item 6).** `DEFAULTS.escalationMinutes` and `package.json` say 15, the
   server's `PanelSettings.DefaultEscalationMinutes`; `settingsShape.test.ts` reads the constant out of the C# and
   checks a person's 30 still reaches the server.
@@ -11793,11 +11795,14 @@ flowchart LR
   record parser; research/PLAN_local_effort_reaches_every_local_launch.md, S1.3).
 - **✓ Check is a CONSULTANT check, so it is offered only where a consultation can run (2026-10-20, D7 / S8 of
   `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`).** `modelCardWorld.offersCheck(runtime)` asks the generated
-  `CONSULTING` list (`shared/feature-availability.json` → `features.consultant`; today codex, claude, antigravity, local,
-  api, vibe). For any other row — today **kimi, gemini and remote** — `checkButton(id, runtime, check)` draws the button
+  `CONSULTING` list (`shared/feature-availability.json` → `features.consultant`; codex, claude, antigravity, local,
+  api, vibe, and kimi since S5). For any other row — today **gemini and remote** — `checkButton(id, runtime, check, serverVersion)` draws the button
   `disabled`, WITHOUT `data-command` / `data-id` (nothing is bound, nothing is posted, no paid-turn prompt), with the title
   `checkNotOffered(runtime)` = "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation".
-  The wording lives in that one function. The button stays on the card; a runtime added to `features.consultant` turns
+  The wording lives in that one function. **And on a KNOWN installed coai-mcp older than the runtime's `CONSULTANT_SINCE`**
+  (E5.4 deviation 37, 2026-10-27; kimi from 0.64.0) the button is drawn the same way with `consultantRuntimeNote` as its title — the
+  server version reaches the card as `ModelCardFacts.serverVersion`, empty unless `server.kind` is `known`, so an unknown server is never
+  called old. The button stays on the card; a runtime added to `features.consultant` turns
   its Check on with no code change. Why: the press used to ask the person to pay for a turn the server then refused by
   name (`ConsultantCheckMode.CheckRowAsync`), seen on the Kimi card 2026-10-19; that server refusal stays as the backstop
   for a stale page, and `ConsultantHealthPanel.checkModel` and its paid-turn prompt are unchanged. A reviewer-shaped
@@ -13163,3 +13168,66 @@ The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9,
   marker button against a real marker; whether the providers field is named as proposed (server half); `KimiTools.Refusal` must say the
   same generic sentence (lower-case first letter); the three texts E3 listed as still Windows-only (`architecture.md:39`,
   `research/README.md`, the `coai.vibeHomesDirectory` help) are untouched.
+
+## Kimi Code as a consultant — the extension's half (2026-10-16, E5.7 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+The server's half (`KimiConsultant`, the seed, the question row) is E5.4–E5.6 and is documented in `module_runners.md` /
+`module_server.md` / `module_core.md`. This section is what the extension adds beside it: a gate for an installed `coai-mcp` that cannot
+consult on a runtime, and the help. **No picker code**: `CONSULTING` is generated from `shared/feature-availability.json`'s
+`features.consultant` (E5.4 adds `kimi` there), and `modelCardFields.ts` enables the consultant and question-consultant ticks from it.
+
+```mermaid
+flowchart LR
+  P["a caller's consultant, or a question row, on runtime kimi"] --> W["COAI_CONSULTANTS / COAI_QCONSULT_ROWS: the entry crosses as it is"]
+  P --> G{"consultantOnServer('kimi', installed)"}
+  G -->|"installed >= 0.58.0, or unknown"| Q["nothing to say"]
+  G -->|"installed < 0.64.0"| N["consultantRuntimeNote: named in the Consultant section and beside the question row"]
+  W --> S["an older server refuses it BY NAME (ConsultantResolution.CannotConsult)"]
+```
+
+- **The consultant table** (`runtimeSince.ts`): `KIMI_CONSULTANT_SINCE = '0.64.0'` and `CONSULTANT_SINCE = { vibe: '0.54.0', kimi }`
+  beside `RUNTIME_SINCE`. Two tables because knowing a runtime and consulting on it ship in different releases: Vibe reviewed from 0.53.0
+  and consulted from 0.54.0 (#811, with no gate); Kimi reviews from 0.57.0. **Why 0.64.0:** it was 0.58.0 when E5.7 was written
+  (2026-10-16, the newest release then 0.57.0); main then released 0.58.0–0.63.0 without S5, so at the merge with main (2026-10-27) the
+  first release that can carry the consultant is the next minor, 0.64.0 — release-please bumps the minor for a `feat`, and whoever cuts
+  the release keeps it level with the tag. `consultantOnServer` reads it by `runtimeOnServer`'s one rule (main's `sinceMet`: a runtime
+  outside the table, or an UNKNOWN server, is never old).
+- **A note, never a withheld entry** (decision 2). Unlike the runtime gate, nothing is kept out of the settings file: an older server
+  refuses a consultant on a runtime it cannot consult with, by name, while a withheld `COAI_CONSULTANTS` entry would make it consult with
+  the shipped default pair, silently. `consultantRuntimeNote(installed, runtime)` says "The coai-mcp you have installed ({version}) cannot
+  consult on {runtime}; update it to {since} or later — the MCP server tab." — only for a KNOWN server strictly older.
+  `consultSettings.consultantRuntimeSkewNote` names each runtime of the RESOLVED caller map once; `panelView.consultantSkew` draws it in the
+  Consultant section beside the definition skew note, in the `stale` class. A question row on such a runtime carries it as
+  `QuestionRowView.serverNote`, drawn beside the row (`qconsultView.ts`, `data-server-note`); the row and its switch stay.
+- **The guard reads both tables** (`runtimeSinceIsAhead.test.ts`). One `refusal` with a per-table `Gate`: `KNOWS` (the runtime's name
+  anywhere in the release's `## Server <SINCE>` section, `api` exempt with its reason) and `CONSULTS` — stricter, because 0.57.0's
+  section names Kimi all through, as a REVIEWER: the section must name the runtime and a consultant in ONE sentence (split after a full
+  stop, also inside a bold run), and the table has no exemptions. `vibe: '0.54.0'` passes on "Added: Mistral Vibe as a consultant …";
+  a planted `kimi: '0.57.0'` is refused "… does not name kimi as a consultant …".
+- **The homes folder names both CLIs** (decision 6). The key `coai.vibeHomesDirectory` is unchanged (a rename is a migration); the label
+  is "Vibe and Kimi homes folder", and the box's hint, `HELP.vibeHomesDirectory`, the manifest's description, the path notice
+  (`pathFindings.ts` owner and consequence, `pathSettings.ts` noun) and *The consultant* article in five languages say that Kimi's
+  conversation homes (`coai-kimi`) and one-shot homes (`coai-vh`) live there too, each holding a LINK to the Kimi sign-in that coai removes
+  first when it deletes the home, and that the 156-character rule is Vibe's (Kimi writes long paths without trouble). The help-coverage
+  alias is `vibe and kimi homes folder`.
+- **Help, five languages** (decision 5). *The question consultant* says, after the Vibe sentence: a Kimi row gets an empty folder on
+  **none** and a copy of each folder on **disk**, but its search tools read any file the person can, so on both it can read this machine
+  and the **Can read this machine** tick is on and cannot be taken off; a **web** prompt is disabled (nothing measured Kimi on the web);
+  Windows only; a folder outside a Git repository is refused; its launches wait for one another and for a Kimi review on the same sign-in.
+  Nothing about "the home never receives code" (M-K12 (c) unrecorded) and nothing about the web for `none`/`disk` (M-K17 not run).
+  *The consultant* article's *What can go wrong* gains **A Kimi consultant waits its turn** (E5.3 decision e): the gate's wait counts inside
+  the turn's time limit, so a consult turn that waits behind a Kimi review round can time out, and is then *interrupted* — the sidebar
+  reads *resumable* — as any stopped turn is.
+- **Tests**: `runtimeSince.test.ts` (4; S5.7.1 and the rule), `consultant.test.ts` (S5.7.2 pure, S5.7.3 the entry crosses, S5.7.7, and
+  S5.7.5's two picker assertions), `panelView.test.ts` and `qconsultSection.test.ts` (S5.7.2 on the page), `runtimeSinceIsAhead.test.ts`
+  (10; S5.7.4 and the consultant rule's teeth), `helpCoverage.test.ts` (S5.7.6, two), `kimiRuntime.test.ts` (kimi is a consultant).
+- **Waits on E5.4's seed:** S5.7.5 (`kimiIsOfferedAsAConsultant`) and the lists that pin `CONSULTING` (`consultant.test.ts`,
+  `kimiRuntime.test.ts`, and E5.4's own `featureAvailability.test.ts`) are green only once `features.consultant` holds `kimi` and
+  `featureAvailability.generated.ts` is regenerated — which is E5.4's change (S5.4.12), not this story's.
+- **The question row's half (E5.6, 2026-10-27).** `shared/runtime-capabilities.json` gained the three `kimi` rows, and
+  `runtimeCapabilities.generated.ts` was regenerated (`node scripts/generate-runtime-capabilities.mjs`; 21 rows over 7 runtimes, `--check`
+  clean): `RUNTIMES` and `QuestionRuntime` name `kimi`, and `capabilityAdmission.admit` — no code change — admits `kimi × none` and
+  `kimi × disk` FLAGGED `unconfined` (the row's **Can read this machine** tick on and disabled, its reason `Kimi has no setting that limits
+  what it reads …` from `qconsultView.whyItStaysOn`) and refuses `kimi × web`, naming research/RESULTS_kimi_confinement.md; the picker
+  disables that pair with the table's reason. Tests: `capabilityAdmission.test.ts` (S5.6.8 and the three vectors), `qconsultSection.test.ts`
+  (`VENDOR_OF` gains `kimi`, so the A3 picker test walks the Kimi vectors).

@@ -282,14 +282,15 @@ test('a release of a lock that is already gone is nothing, not a throw', async (
 });
 
 test('a claim in a directory that is not there yet makes it — a first save is what creates a store', async () => {
-  const dir = join(home(), 'chat-conversations');
+  const root = home();
+  const dir = join(root, 'chat-conversations');
   try {
     const claim = await claimConversation(dir, 'a1', 'save 1', NOW);
 
     assert.equal(claim.kind, 'claimed', 'the first claim of an installation was refused for want of a directory');
     await letGo(claim);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

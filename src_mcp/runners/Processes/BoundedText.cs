@@ -19,6 +19,9 @@ internal sealed class BoundedText(int maxChars)
     /// <summary>True when what this holds is a HEAD rather than the whole stream.</summary>
     public bool Truncated => _dropped > 0 || _cutShort;
 
+    /// <summary>The text kept, WITHOUT the sentence <see cref="ToString"/> appends when the stream was cut. Display adds the sentence; a reader that must treat vendor text as vendor text reads this and <see cref="Truncated"/>, never the rendered text.</summary>
+    public string Kept => _text.ToString();
+
     /// <summary>True when the stream was still open at the drain grace — its OWN fact, distinct from the size ceiling: something outlived the child and holds the pipe.</summary>
     public bool HeldOpen => _cutShort;
 

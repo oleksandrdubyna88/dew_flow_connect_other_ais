@@ -66,7 +66,7 @@ public sealed class EpicTwoReviewThreadsTests
     [Fact]
     public async Task CheckModel_IsDispatchedToTheModelCheck_NotTheCallerKindsCheck()
     {
-        var dir = Directory.CreateTempSubdirectory("coai-check-model-").FullName;
+        using var dir = TempDir.For("coai-check-model-");
         var info = new ProcessStartInfo(ServerBinary.Path)
         {
             RedirectStandardInput = true,
@@ -76,7 +76,7 @@ public sealed class EpicTwoReviewThreadsTests
         };
         info.ArgumentList.Add("--check-model");
         // Its own store: a test child must never read or write the machine's.
-        info.Environment["COAI_DATA_DIR"] = dir;
+        info.Environment["COAI_DATA_DIR"] = dir.Path;
 
         using var process = Process.Start(info)!;
         await process.StandardInput.WriteAsync("{}");

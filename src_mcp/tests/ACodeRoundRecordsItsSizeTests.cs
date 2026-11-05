@@ -15,7 +15,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A live code round measures itself (E2.S4 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>): its
+/// A live code round measures itself (E2.S4 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>): its
 /// <see cref="RoundSize"/> is computed from the diff the round built and shaped, rides out of <c>MakeWork</c> beside the resolved
 /// base, and finishes on the record — the session file and <c>round_changes</c> — while a size that cannot be measured never
 /// touches the round.

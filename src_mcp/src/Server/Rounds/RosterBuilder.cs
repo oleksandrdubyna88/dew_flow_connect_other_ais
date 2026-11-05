@@ -281,9 +281,13 @@ internal sealed class RosterBuilder(
         _pruneOldAnswerDirs();
         var repairDir = Directory.CreateTempSubdirectory("coai-repair-").FullName;
         var (launchDir, hasCheckout) = RosterFrame.Directories(_settings.CodeWorkspace, worktreePath, readsCheckout);
+        var roundScratch = scratch ?? RoundScratch.None;
+        // D4: the two folders that are always empty are the round's to remove when it ends; `coai-answers-` keeps the six-hour sweep.
+        roundScratch.Owns(repairDir);
+        RosterFrame.OwnTheWorkspace(roundScratch, launchDir, worktreePath);
 
         return new RosterFrame(stage, row, context, schemaFile, outputDir, repairDir, launchDir, hasCheckout,
-            source ?? Runners.Feature.SourceTurns.None, tiers, scratch ?? RoundScratch.None);
+            source ?? Runners.Feature.SourceTurns.None, tiers, roundScratch);
     }
 
     /// <summary>

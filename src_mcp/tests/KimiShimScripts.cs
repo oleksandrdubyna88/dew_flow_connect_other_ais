@@ -17,20 +17,27 @@ internal static class KimiShimScripts
     public const string CleanReview = """{"findings": []}""";
 
     /// <summary>The report the shim prints for a turn that ended as given.</summary>
+    /// <param name="session">The session the report names — the one the agent minted, or the one <c>--session</c> asked for (E5.2).</param>
+    /// <param name="tokensIn">The session's CUMULATIVE input total, as <c>/usage</c> gives it (M-K5b) — when <paramref name="tokens"/> is captured.</param>
+    /// <param name="tokensOut">The session's cumulative output total.</param>
     public static string Report(
         AcpEnd end = AcpEnd.Answered,
         string answer = CleanReview,
         string reason = "",
         string failure = "",
+        string failureLine = "",
         bool tokens = true,
         IReadOnlyList<AcpReadRecord>? reads = null,
-        IReadOnlyList<AcpToolCall>? calls = null)
+        IReadOnlyList<AcpToolCall>? calls = null,
+        string session = "session-1",
+        long tokensIn = 19973,
+        long tokensOut = 31)
     {
-        var outcome = new AcpOutcome(end, answer, reason, end == AcpEnd.Answered ? "end_turn" : string.Empty, "session-1", AcpUsage.Unknown, [], calls ?? [], reads ?? [], string.Empty, 0)
+        var outcome = new AcpOutcome(end, answer, reason, end == AcpEnd.Answered ? "end_turn" : string.Empty, session, AcpUsage.Unknown, [], calls ?? [], reads ?? [], string.Empty, 0)
         {
-            Tokens = tokens ? new AcpTokens(19973, 31, true) : AcpTokens.Unknown,
+            Tokens = tokens ? new AcpTokens(tokensIn, tokensOut, true) : AcpTokens.Unknown,
         };
-        var diagnosis = failure.Length > 0 ? new AcpDiagnosis(failure, "the cure", AcpFailureKind.Refused) : AcpDiagnosis.None;
+        var diagnosis = failure.Length > 0 ? new AcpDiagnosis(failure, "the cure", AcpFailureKind.Refused, failureLine) : AcpDiagnosis.None;
 
         return AskAcpMode.Report(outcome, diagnosis);
     }
@@ -39,8 +46,8 @@ internal static class KimiShimScripts
     public static ProcessResult Answered(string answer = CleanReview) => new(0, Report(answer: answer), string.Empty, TimedOut: false);
 
     /// <summary>A turn the shim ended with <paramref name="exit"/>, its report on stdout and its sentence on stderr.</summary>
-    public static ProcessResult Ended(int exit, AcpEnd end, string reason, string failure = "", string stderr = "", IReadOnlyList<AcpReadRecord>? reads = null, IReadOnlyList<AcpToolCall>? calls = null) =>
-        new(exit, Report(end, string.Empty, reason, failure, tokens: false, reads, calls), stderr, TimedOut: false);
+    public static ProcessResult Ended(int exit, AcpEnd end, string reason, string failure = "", string stderr = "", IReadOnlyList<AcpReadRecord>? reads = null, IReadOnlyList<AcpToolCall>? calls = null, string failureLine = "") =>
+        new(exit, Report(end, string.Empty, reason, failure, failureLine, tokens: false, reads, calls), stderr, TimedOut: false);
 }
 
 /// <summary>

@@ -6,7 +6,7 @@ namespace CoaiMcp.Server;
 /// <summary>
 /// What a backfill may do to each stored round — the whole of "never overwrite a newer or equal reader" with its two exceptions, and of "never
 /// replace a stronger observation with a weaker one", in ONE pure place (E7.S1 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md</c>). No I/O, no clock: every fact it reads is an argument.
+/// <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md</c>). No I/O, no clock: every fact it reads is an argument.
 /// </summary>
 /// <remarks>
 /// <para><b>The rule order</b> is E5 §10 item 11's as corrected by the 2026-10-17 judge review and the 2026-10-18 consultants: selection,

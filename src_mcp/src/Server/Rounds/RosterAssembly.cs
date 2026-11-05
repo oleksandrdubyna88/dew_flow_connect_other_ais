@@ -42,6 +42,18 @@ internal sealed record RosterFrame(
         return (fastCode ? Directory.CreateTempSubdirectory("coai-noworkspace-").FullName : worktreePath, hasCheckout);
     }
 
+    /// <summary>
+    /// The <c>coai-noworkspace-</c> folder <see cref="Directories"/> made, registered with the round's scratch to be removed when the round ends (D4). Nothing when the launch
+    /// folder is the worktree itself — that is the person's checkout, and no round removes it.
+    /// </summary>
+    public static void OwnTheWorkspace(RoundScratch scratch, string launchDir, string worktreePath)
+    {
+        if (launchDir != worktreePath)
+        {
+            scratch.Owns(launchDir);
+        }
+    }
+
     /// <summary>The feature stage's source conversation for a reviewer, or a single turn for every other stage (S3.2).</summary>
     public IReviewerContinuation ContinueFor(Func<string, ReviewerWork> turn) =>
         Turns is Runners.Feature.SourceTurns.On conversation && Stage == Stage.FeatureReview

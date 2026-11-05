@@ -8,7 +8,7 @@ namespace CoaiMcp.Server;
 internal sealed record MeasuredSize(RoundSize? Size, int? Gitlinks);
 
 /// <summary>
-/// A live code round's <see cref="RoundSize"/> (E2.S4 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>):
+/// A live code round's <see cref="RoundSize"/> (E2.S4 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>):
 /// assembled from the diff the round actually built and shaped, never from a second look at the repository.
 /// </summary>
 /// <remarks>

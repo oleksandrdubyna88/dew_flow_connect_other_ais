@@ -140,7 +140,7 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// The base and the eight tier rules spend exactly 80 008 characters of the budget — the number every
+    /// The base and the eight tier rules spend exactly 79 998 characters of the budget — the number every
     /// other pin in this file stands on.
     /// </summary>
     /// <remarks>
@@ -161,6 +161,16 @@ public sealed class StageRulesTests : IDisposable
     /// name every one-shot mode (`ARequestFaultIsNotAnOldBinaryTests`) and now names both `--round-authors` (E6, +19, 17 925 above) and
     /// `--backfill-authors` (E7, +22). The total is 80 008, leaving 9 992 of 90 000; the tail canaries below are unaffected (the three smallest
     /// tail rules are 8 683, the fourth adds 3 460). Measured once on the merged tree from this test's own failure message.</para>
+    /// <para><b>Re-baselined again 2026-10-21 (E1.S2 of the native-Linux plan, merged with `main`).</b> `.agents/PROJECT.md` also names the one-shot mode
+    /// `--host-facts` (+16, which it must — `ARequestFaultIsNotAnOldBinaryTests`). The base is 17 963, the total 80 024, leaving 9 976 of 90 000; the tail
+    /// canaries below ran unchanged and green (the fourth smallest tail rule, 3 460, still does not fit). Measured on the merged tree: the pinned numbers above
+    /// are the ones this test reads back.</para>
+    /// <para><b>Re-baselined 2026-11-01 (the conventions pin moved to release <c>105d53c</c>).</b> The tier is 62 035, 26 fewer than
+    /// 62 061: the shared rules the tier names changed by 26 characters between <c>115bbf8</c> and <c>105d53c</c>. The base is unchanged at 17 963.
+    /// The pair is 79 998, leaving 10 002 of 90 000 (9 976 until then). <c>common/test-leftovers.md</c> is now an 8 403-character core
+    /// (8 483 bytes) and its detail, <c>common/test-leftovers-detail.md</c> (30 893 characters), does not fit any tail; <c>common/plan-change-control.md</c>
+    /// (12 204 characters) is larger than the free tail, so no branch shows it — by owner decision it is for agents only, not for reviewers. The tail
+    /// canaries below were re-measured in the same change.</para>
     /// <para>The unit is the one the collector spends: characters of the line-ending-normalised text
     /// (<c>RuleFile.Text.Length</c>), which is what <c>RuleFiles.DefaultBudgetBytes</c> calls bytes. They
     /// differ for the non-ASCII characters in these files, and are equal on every platform.</para>
@@ -178,13 +188,13 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
             .Sum(file => file.Text.Length);
 
-        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 947 + 62 061 = 80 008 of 90 000, since E7's --backfill-authors met E6's --round-authors on 2026-10-20; 17 925 + 62 061 = 79 986 before). "
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 963 + 62 035 = 79 998 of 90 000, since the conventions pin moved to 105d53c on 2026-11-01; 17 963 + 62 061 = 80 024 until then; 17 947 + 62 061 = 80 008 before E1.S2's --host-facts; 17 925 + 62 061 = 79 986 before E7). "
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
-        tierBytes.Should().Be(62_061, message);
-        baseBytes.Should().Be(17_947, message);
-        (baseBytes + tierBytes).Should().Be(80_008, message);
+        tierBytes.Should().Be(62_035, message);
+        baseBytes.Should().Be(17_963, message);
+        (baseBytes + tierBytes).Should().Be(79_998, message);
     }
 
     /// <summary>
@@ -206,6 +216,10 @@ public sealed class StageRulesTests : IDisposable
     /// of the wrong three. And over one hundred fixed branch names no branch reaches more than three, the
     /// measured maximum, so a tail that grows — a bigger budget, a shrinking base or tier, a pin that moves a
     /// rule — fails here as news rather than as a defect.</para>
+    /// <para><b>Re-measured 2026-11-01 (pin 105d53c).</b> The leftover is 10 002 of 90 000. The identities and the count are unchanged: the canary
+    /// branch's tail is still these three rules, now 88 721 characters in all with the base and the tier. The smallest rules outside the tier are
+    /// 2 197, 3 066, 3 421 and 3 460: the three smallest are 8 684 and the fourth adds 3 460 (12 144 together), still more than 10 002, so
+    /// never four. Over 3 000 branch names: one rule on 35 %, two on 58 %, three on 7 %.</para>
     /// <para>The identities are a pure function of (branch, rule name, sizes): the SHA-256 order is the same
     /// on every machine. They move when the budget, a rule's size or this repository's own files move —
     /// which the base-and-tier test above turns red first.</para>
@@ -229,7 +243,7 @@ public sealed class StageRulesTests : IDisposable
 
         widest.Tail.Should().HaveCountLessThanOrEqualTo(3,
             $"branch '{widest.Branch}' reached [{string.Join(", ", widest.Tail)}] and at most three rules can "
-            + "fit: the leftover is 9 992, and the smallest rules outside the tier are 2 197, 3 065, 3 421 "
+            + "fit: the leftover is 10 002 (9 976 before 2026-11-01, 9 992 before 2026-10-21), and the smallest rules outside the tier are 2 197, 3 066, 3 421 "
             + "and 3 460. That number is the same on every platform since the collector stopped spending the "
             + "budget on carriage returns.");
     }
@@ -261,25 +275,31 @@ public sealed class StageRulesTests : IDisposable
     /// </summary>
     /// <remarks>
     /// <para>The rule the budget was raised for. It is outside the tier, so it is drawn, not owed: over
-    /// 3 000 branch names it was shown on 9.8 %. Two branches that draw it and two that do not are
+    /// 3 000 branch names it was shown on 9.8 % when it was 4 706 bytes. Two branches that draw it and two that do not are
     /// pinned, because "reaches reviewers" is only true while BOTH halves hold — a rule that every
     /// branch shows belongs in the tier, and one no branch shows is the 80 000-byte state again. The
     /// branches are arbitrary and the draw is a pure function of (branch, rule), so the answer is the same
     /// on every machine.</para>
     /// <para>Fails when the rule is resized, the budget or base moves, or the hash order changes — each is
     /// news. Re-measure and re-pick the branches in the same change.</para>
+    /// <para><b>Re-picked 2026-11-01 (pin 105d53c), from the documented population.</b> The rule is now an 8 403-character core (8 483 bytes) and
+    /// the free tail is 10 002, so it fits only as the first rule the branch draws. Measured through the production collector over the
+    /// hundred names of <c>TheFixedBranches</c> (<c>feat/branch-&lt;i&gt;</c> for even i, <c>fix/issue-&lt;i&gt;-thing</c> for odd, i in 0..99):
+    /// <b>7 of 100 draw it</b> (indexes 0, 9, 21, 34, 36, 42, 95); over 3 000 names of the same shape 147 do (4.9 %). The pinned rows are the
+    /// two LOWEST indexes that draw it (<c>feat/branch-0</c>, <c>fix/issue-9-thing</c>) and the two lowest that do not (<c>fix/issue-1-thing</c>,
+    /// <c>feat/branch-2</c>). Both halves hold, so the rule is neither a tier rule nor out of reach.</para>
     /// </remarks>
     [Theory]
-    [InlineData("fix/x", true)]
-    [InlineData("feat/e5", true)]
-    [InlineData("main", false)]
-    [InlineData("feat/a", false)]
+    [InlineData("feat/branch-0", true)]
+    [InlineData("fix/issue-9-thing", true)]
+    [InlineData("fix/issue-1-thing", false)]
+    [InlineData("feat/branch-2", false)]
     public void AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt(string branch, bool shown)
     {
         var bundle = CollectTheRealCorpus(branch, out _);
 
         TailOf(bundle).Contains("common/test-leftovers.md").Should().Be(shown,
-            $"measured 2026-10-16 at 90 000 bytes: branch '{branch}' {(shown ? "draws" : "does not draw")} "
+            $"measured 2026-11-01 at 90 000 bytes (pin 105d53c, 7 of the 100 fixed branches draw it): branch '{branch}' {(shown ? "draws" : "does not draw")} "
             + "common/test-leftovers.md into the rotated tail");
     }
 

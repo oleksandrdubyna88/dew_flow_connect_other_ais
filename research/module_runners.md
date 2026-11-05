@@ -43,12 +43,13 @@ sequenceDiagram
 | `ProcessEnvironment` | `Processes/ProcessEnvironment.cs` | the allowlist a confined launch starts from — an allowlist because what is being kept out is not a known name; compared the platform's way (`Path` is `PATH` on Windows and is not on Linux); `HOME` is on it for a measured reason, below |
 | `ExecutableResolver` | `Processes/ExecutableResolver.cs` | npm Windows shims: the PATHEXT resolution `Process.Start` does not do |
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage (`%LOCALAPPDATA%\coai-mcp\round-worktrees`, or `COAI_ROUND_WORKTREES` — a LOCAL path; a shorter root is also the way to more path ceiling on a git that ignores `core.longpaths`; review trees move with `COAI_REVIEW_ROOT` instead, never with this one); prune-on-open; disposal = finally; never touches a human's worktree |
+| `RealPath` (`Entry`, `EntryReader`, `RealPathResult`) | `Files/RealPath.cs` | the ONE place a path is resolved through links: `realpath(3)`-like, root-down, a link's RAW text, one budget of 40 expansions, `..` after a missing name fails, a failure is a value. `DocumentReader`, `WorkspaceLookup`, `WorktreeManager.IsUnderOurRoot` (the `coai-wt-*` deletion guard: REAL path strictly under the REAL root, leaf not a link, any failure = not ours) and `WorktreePaths` all use it; `TheLinkResolverIsOneRoadTests` keeps it one (2026-11-01, `SECURITY.md`) |
 | `SubmodulePopulator` | `Worktrees/SubmodulePopulator.cs` | fills the round tree's submodules from the PARENT checkout, not the remote — git populates none in a linked worktree, and in this family the project's rules ARE one; offline, pinned, never fatal, and refused when the source is reached through a reparse point |
 | `TreeGit` | `Worktrees/TreeGit.cs` | how git is started in a tree coai MADE: on Windows every launch point that works in a round tree or a review tree (`WorktreeManager.Git`, `ReviewTreeRoot.GitAsync`, `SubmodulePopulator.OneAsync`) leads its argv with `-c core.longpaths=true`, so a tracked path past Windows' 259 UTF-16 units checks out, reads clean, populates in a submodule and is removed; per command, never a config write; on Linux and macOS the argv is unchanged |
 | `WorktreeFailure` | `Worktrees/WorktreeFailure.cs` | what a failed round-tree `worktree add` says: reads git's own `error: unable to create file <rel>: <reason>` / `fatal: cannot create directory at '<rel>': <reason>` line and names the path, its length in UTF-16 units and git's reason, instead of only the closing `fatal: Could not reset index file` (which names the index); for `Filename too long` it adds the Windows limit of the KIND of path git could not make (`WindowsPathLimits.FileUnits` = 259 for a file, `WindowsPathLimits.FolderUnits` = 247 for a folder, read from the one shared type, Windows only) and `COAI_ROUND_WORKTREES`; a failure with no such line reads exactly as `FatalLine` always did. Round trees only — a review tree keeps its wire word `git_failed` |
 | `GitModules`, `SubmoduleMount` | `Git/GitModules.cs` | `.gitmodules` as (name, path); a file inside the repository under review, so absolute/traversing paths and names that could spell another config key drop the mount |
 | `DiffExclusions`, `ContextAssembler`, `CollectedDiff`, `DiffBase` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s`; every one of the three taken against the MERGE BASE, which the result names. `DiffExclusions.Excludes(path)` / `WhichExcludes` answer the same glob table for ONE path — the source resolver's question, since it has no git call to hand the pathspecs to. Each glob's matcher carries a 1000 ms match ceiling (SonarCloud S6444), and a match that hits it FAILS CLOSED — the path counts as excluded and is never served, the refusal naming that glob (`WhenMatchTimesOut`, reached by a test through the `FirstExcluding` seam) |
-| `SourceResolver` | `Feature/SourceResolver.cs` | source on demand for a feature reviewer (plan §4.9, S3.1): git objects at the round's pinned head and nothing else, one read per file per round, every name check before any process, every byte through `Redaction.SafeSource`, every cap from `SourceBudget` — the section below |
+| `SourceResolver` | `Feature/SourceResolver.cs` | source on demand for a feature reviewer (plan §4.9, S3.1): git objects at the round's pinned head and nothing else, one read per file per round, every name check before any process, every byte through `Redaction.SafeSource`, every cap from `SourceBudget` — the section below; the per-file read deadline is a timer source on its injectable `TimeProvider` (E4 S4) |
 | `CommittedFile.ReadAtAsync` | `Collecting/CommittedFile.cs` | the read without the commit check, for a caller that pinned the commit itself; `ReadAsync` is this after checking |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted. **An adapter records on the invocation what it LAUNCHED** — `Model:` always, `Effort:` where it actually passed a reasoning flag (only `LocalRuntime` does) — which four of six adapters silently did not until 2026-09-12, issue #129; `EveryAdapterRecordsWhatItLaunchedTests` drives every adapter's own `Build` rather than a hand-made invocation, because the test it replaces built the value it asserted. `ReviewerSettings.Confined` ("handed everything in its prompt, may reach nothing else") makes `ClaudeRuntime` extend `--disallowedTools` to every tool that reaches past the prompt — flag re-read on claude 2.1.258; codex and antigravity take no new flag, their sandboxes are already the strongest each offers |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
@@ -56,7 +57,7 @@ sequenceDiagram
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below; a launch is the reviewer's whole CONVERSATION (`ReviewerWork.Continue`, S3.2 — the section at the end), one terminal outcome either way |
 | `IReviewerContinuation`, `TurnDecision`, `ReviewerContinuation.None`, `TurnUsage` | `Reviewers/ReviewerContinuation.cs` | the seam a stage plugs a conversation into: after each answered turn, the next turn's whole work (launch AND repair) or a stop; `None` is every stage but one |
-| `TurnLoop` | `Reviewers/TurnLoop.cs` | the loop inside the held slot: the ladder per turn, each turn under its own deadline and the whole under `timeout × (1 + follow-ups)` — or under `ReviewerWork.ConversationCap` when the stage set a shorter one (the feature stage's whole-review limit for an api reviewer, `COAI_FEATURE_API_REVIEW_MINUTES`, twenty minutes by default, 2026-09-27) — every answered turn's usage on the outcome's base |
+| `TurnLoop` | `Reviewers/TurnLoop.cs` | the loop inside the held slot: the ladder per turn, each turn under its own deadline and the whole under `timeout × (1 + follow-ups)` — or under `ReviewerWork.ConversationCap` when the stage set a shorter one (the feature stage's whole-review limit for an api reviewer, `COAI_FEATURE_API_REVIEW_MINUTES`, twenty minutes by default, 2026-09-27) — every answered turn's usage on the outcome's base; its cap and its turns' elapsed read ONE injectable `TimeProvider` — the scheduler's, handed at construction (E4 S4, the section *The deadline classes read one injectable clock*) |
 | `SourceTurns`, `SourceConversation` | `Feature/SourceConversation.cs` | the feature stage's continuation: serves the requests through the round's one resolver, renders the tail, stops on no request, the cap or the spent budget; immutable across turns |
 | `RepairInstruction` | `Reviewers/RepairInstruction.cs` | the repair launch's closing paragraph — one text, appended to whichever prompt the launch it repairs was given |
 | `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
@@ -116,11 +117,11 @@ sequenceDiagram
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
-  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **80 008** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20), which
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 998** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20, 80 008 until 2026-10-21, 80 024 until 2026-11-01, when the conventions pin moved to `105d53c`), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **9 992** now (10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`); the smallest rule outside the tier is 2 197. Over 3 000 branch
-  names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
-  `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
+  reviewer) and leave **10 002** now (9 976 until 2026-11-01, 10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
+  names the tail takes one rule on 35 %, two on 58 %, three on 7 % (mean 1.72; 30 / 62 / 8 % and 1.78 at 9 976), and
+  `common/test-leftovers.md` (an 8 403-character core since 2026-11-01; 8 794 since 2026-11-02, pin 5863c60) is drawn on 4.9 % (4.7 % at 8 794) (it was 9.8 % at 4 706 bytes) — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
 
   **That number is the same on every platform only since 2026-09-18.** Until then `RuleFiles.Read`
@@ -137,7 +138,7 @@ sequenceDiagram
   The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
   and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
   `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (the measuring test and drift
-  guard: 17 925 + 62 061 since 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
+  guard: 17 963 + 62 035 since 2026-11-01 (the conventions pin at 105d53c), re-measured and unchanged on 2026-11-02 (the pin at 5863c60: free tail still 10 002, `common/test-leftovers.md` an 8 794-character core, 8 403 before; the new `common/test-leftovers-baseline.md` is 9 123 characters and a tail rule outside the tier; the same 7 of 100 fixed names draw the core, 142 of 3 000 (4.7 %) against 147); 17 963 + 62 061 before that; 17 947 + 62 061 before E1.S2's --host-facts; 17 925 + 62 061 from 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
   `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
   the measured maximum elsewhere),
   `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
@@ -576,8 +577,9 @@ Twelve reviewers of twelve answered; thirty-five findings, and these are the one
   `TimedOut` (the consultation decides from the TOKENS what killed it, and hands that in), and the ledger writes it
   as one line saying `cancelled` with `usageNote: usage not captured`, a billed first launch kept beside it on its
   own line (`AfterTheRepair` folds a terminal second launch the same way for every failure). WHY the token fired is
-  not the executor's to know — see `EndCauses` and the Team server's `JobRecord.EndCause`
-  ([module_team_server.md](module_team_server.md)). The question row is the one caller whose word changes: a row
+  not the executor's to know — see `EndCauses`, the Team server's `JobRecord.EndCause`
+  ([module_team_server.md](module_team_server.md)), and, for a LOCAL round, the engine's own reading of its three tokens
+  (*A local cancellation says which token fired*, below). The question row is the one caller whose word changes: a row
   killed by the caller's cancellation now ends `failed` / `cancelled` rather than `timed_out` "ran past its budget",
   which was never true of it; a row past its OWN budget is still `timed_out`, because its launch's timeout fires
   before the row's token (`ConsultationDeadline.For` is the budget plus a grace).
@@ -621,7 +623,8 @@ The list, and why each name is on it: `PATH` (the CLI is found through it and st
 through it); `LANG`, `LC_ALL`, `LC_CTYPE`, `TERM`, `TZ`, `NO_COLOR` (encoding and colour); `TMPDIR`,
 `TMP`, `TEMP`; the six proxy spellings, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS` (a box
 behind a corporate proxy reaches its vendor through them, and a reviewer that cannot reach its vendor
-is a review that never happens); `XDG_RUNTIME_DIR`. On Windows also `SystemRoot`, `SystemDrive`,
+is a review that never happens); `XDG_RUNTIME_DIR`. (`TMPDIR`, `TMP` and `TEMP` are also how a TEST run's per-run temp folder reaches every child: `CoaiMcp.Tests`' module initializer points all three at
+`testsToDelete-coai-run-<6>`, so the answers/repair/no-workspace folders and the loose prompt files a round makes land inside it — `research/module_tests.md`, "epic E2". Do not drop one of the three from either list without reading that section.) On Windows also `SystemRoot`, `SystemDrive`,
 `windir`, `ComSpec`, `PATHEXT` (every vendor CLI is an npm `.cmd` shim there), the profile and program
 directories, `NUMBER_OF_PROCESSORS` and `PROCESSOR_ARCHITECTURE`. Names are compared the way the
 platform compares them — case-insensitive on Windows, where `Path` and `PATH` are one variable, and
@@ -1416,6 +1419,27 @@ give-back are the server's half ([module_server.md](module_server.md)).
   64 KB, never fatal, and answering `string.Empty` rather than null when nothing was kept. `ReviewerExecutor.KeepIn` calls it with the same name and note as before; the consultation's
   `KeepEvidence` — which wrote unbounded and non-atomically — calls it too, now for every failed launch with a
   transcript, not only an empty answer.
+- **`AtomicFile` after E3 S4 (C18's product side, 2026-10-20).** The move's retry covers the refusal Windows really gives: a move over a file another handle holds open
+  throws `UnauthorizedAccessException` (HResult 0x80070005, measured for EVERY share mode of the holder), not `IOException`, so the old
+  `catch (IOException)` never retried the case its own remark documented. It now retries `IOException or UnauthorizedAccessException` inside the window
+  `AtomicFile.SharingRetry` (500 ms, the ONE constant; `ConsultHealthPaths.SharingRetry` points at it), measured on the **monotonic clock**
+  (`TimeProvider.GetTimestamp`/`GetElapsedTime`), not `DateTime.UtcNow`: a stepped wall clock cannot stretch or cut it. The window is a tolerance, not a guarantee —
+  a holder that never lets go fails the write after it, the ORIGINAL bytes survive and the temp file is removed; a persistent ACL denial is thrown, not worked
+  round. The three callers that pass a window (`ConsultantsFile`, `ConsultCheckState`, `ConsultHealth`) gain the retry; the callers with window zero still try once.
+  The seam is `internal sealed record AtomicSeams` (`Clock`, `Pause`, `LivenessOf`, `WriteText`, `AfterTemp`) on an `internal` `Write` overload.
+  **The temp name carries the writer's pid** — `<record>.<pid>.<guid>.tmp` — and **a write first removes the orphans of ITS OWN record**: temp files named exactly
+  so, older than one hour (`OrphanAge`, by the clock's UTC) AND whose writer is PROVEN gone: **a file is removed only when `ProcessLiveness.Check(pid) is Liveness.Gone`**
+  (`ProcessLiveness` moved here from `CoaiMcp.Server` because this layer cannot reference the server — moved, never copied). `Check` is a three-answer check:
+  `ArgumentException` (no process has that id) or an exited process = `Gone`; `Win32Exception` (not ours to open), `NotSupportedException` and a pid of 0 or less =
+  `Unknown`; a running process = `Alive`. `Alive` and `Unknown` keep the file. Never another record's, never a fresh one, never one without a pid in its name, never a live
+  writer's (a writer suspended after its temp file keeps it, and its move still lands); best effort, a failure to remove is ignored and tried again on the next write.
+  `ProcessLiveness.IsAlive` is `Check(pid) is Alive` — the sweeps' two-state answer is unchanged, one class, one place. **The narrow limit (decided, no behaviour change):**
+  a pid in ANOTHER pid namespace is not `Unknown` — on Linux that process is invisible, `GetProcessById` throws `ArgumentException` and the answer is `Gone` — so two pid
+  namespaces sharing one data folder (a container and its host) can see a live writer's aged temp file removed by the other; that writer's move then fails loudly and the
+  record it was replacing stays whole. A reused pid on the same machine keeps the file: a leak, never a deletion.
+  `AtomicJson.WriteUnderTurn` (`Escalations.cs`) writes through it, so `AtomicFile`'s list of open-coded copies is three now
+  (`ConsultSchemaFile`, `RemoteRuntime`, `ArtifactStore`); `SessionStore.Write` writes through it too since E3 S5 (its ten-attempt `MoveOverExisting` loop was removed, not extracted), and the seam gained `WriteText` (fail the temp write half way).
+  `MoveOver` catches `IOException` and `UnauthorizedAccessException` explicitly. Tests: `AMoveOverAHeldFileIsRetriedTests`, `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests`.
 - **`FilesystemInvariant.SnapshotAsync`** throws `OperationCanceledException` for a cancelled token. The
   launcher never throws on cancellation (it reports `TimedOut: true, Cancelled: true`), so a `git status` killed
   by the turn's deadline surfaced as a `ContextException` and the turn said "the answer could not be recorded";
@@ -1753,9 +1777,61 @@ flowchart LR
 - **Where it is labelled.** `RowLaunchOptions.Labelled` (`src_mcp/src/Server/Rounds/RowLaunchOptions.cs`), called by
   `RosterBuilder`'s turn builder (the launch and its repair) and `SecurityRoster.Build`; the ledger records the round's
   first invocation, so every launch line of one reviewer carries the same options.
-- **Not labelled yet**: a consultation, a question row, a probe and a chat turn write their lines through `RecordJob`
-  with these fields empty — "not recorded", never "none". Claude's own settings (`fastMode`, `effortLevel`) are not read
-  for a label; only codex's configuration is.
+- **Labelled since E3.S1 (2026-10-20, `todo/PLAN_the_round_counter_tail_E3.md`)**: a consultation turn (answered or failed),
+  a consultant check, a question row and an api probe line now say what they ran with. The local `UsageLedger.RecordJob`
+  overload takes a REQUIRED `LaunchOptions ranWith` (after `stage`; `consultation` then `resetsUtc` stay defaulted, in that order in `RecordJob`, `ConsultantTurnBooks.Billed` and
+  `ConsultationFailedTurns.Billed` alike, so two adjacent strings cannot be swapped silently) — a caller with
+  nothing to say passes `LaunchOptions.None` on purpose (a check or a consultation refused before its launch). A check that ends by an
+  exception AFTER a launch landed (cancelled by its caller, a snapshot that threw) is billed for that launch and carries its labels too:
+  `ConsultantCheckTurn` keeps the built launch's `RanWith` where `RunAsync` can read it, and versions it by the last landed launch. The labeller is the
+  review's own: `RowLaunchOptions.Of` takes a nullable `IReviewerRuntime`, and `RowLaunchOptions.Answering(built, row, launch)`
+  labels a consultant invocation from the reviewer adapter every consultant carries (`built.Adapter`). The release rule moved to
+  `LaunchOptions.VersionedBy(asked)` — the tier probe's `Printed`, else the final launch's `CliVersion` (Vibe's launch control),
+  else empty — and `UsageLedger.VersionedBy` calls it, so a review line is byte-identical. A claude consultation and an api probe
+  ask no version: nothing is spawned for a label. The probe's effort (`--probe-api` sends `variant.Effort`) is labelled `row`,
+  `cli: api`. **The code contradicted the brief on one point:** `ClaudeConsultant` does send an effort (`--effort`) and a fast-mode
+  file, and never set `Sent`, so its lines would have read `effortNotSent: ignored` for a value that WAS sent — it sets `Sent` now
+  (as `ClaudeRuntime.Build` does); `CodexConsultant.Build` sets the tier `Sent` as the codex reviewer's does. Claude's own settings
+  (`fastMode`, `effortLevel`) are not read for a label; only codex's configuration is. A chat turn is the extension's line and is
+  labelled there.
+
+## A local cancellation says which token fired (E3.S2, 2026-10-20)
+
+`todo/PLAN_the_round_counter_tail_E3.md` S2. A local review line that ends `Cancelled` now carries `endCause`, on the turn's **last**
+line only (like `resetsUtc`), decided by `RoundEngine` where the tokens are held — never inferred below the executor
+(`ProcessLauncher.ResultOf` and `ReviewerExecutor.KilledAsync` are unchanged) and never read from the outcome's sentence.
+
+- **The cause is the FIRST source to END the round, recorded when it fires** (code round of 2026-10-21, tightened by the review of 94deb725c; `RoundCancellation` in
+  `src_mcp/src/Server/Rounds/`). The first version sampled `IsCancellationRequested` of the host, the call and the clock when the line was
+  written, which says what had fired by then, not what ended the turn: a reviewer that ended `Cancelled` for its own reason could be filed
+  `roundClock` because the clock fired before the line was classified, and a host that cancelled the request it was serving as well could
+  make the call look like the cause. Now a callback on each token that **cancels the round** sets the first cause once (`Interlocked.CompareExchange`) with its
+  `Stopwatch` timestamp, and `CauseAt(landedAt)` names it only when it fired at or before the moment the outcome landed
+  (`ReviewerProgress.LandedAt`) — an outcome that landed before anything fired is `unknown`, whatever fires afterwards. The round's own
+  token is cancelled BY those callbacks, after the record, instead of being a linked source, so no reviewer can see the round cancelled
+  before the cause is written down. **What each source does:** the call's token cancels the round and records `withdrawn`, or `hostStopped`
+  when the host's token is already cancelled (a stopping host takes its in-flight requests' tokens down with it); the round's clock cancels the
+  round and records `roundClock` always; the host's token is only OBSERVED, it cancels nothing and records nothing itself, so a host stop that
+  ends no round is never a cause (before the review it was registered too and could win "first" with the round still running, filing a later
+  clock kill as `hostStopped`). Tokens already fired when the round began: the call's callback runs at once and sees the host's token, so that
+  tie resolves **`hostStopped` over `withdrawn`**; `unknown` is a `Cancelled` turn when none fired (a Team-server
+  row whose server ended it) — never empty. `EndCauses.OfLocal` is gone: the decision lives where the tokens are.
+- `EndCauses.RoundClock` and `Unknown` are **local-only words** (`EndCauses.LocalOnly`, the `UsageKinds.LocalOnly` shape);
+  `Known` names all seven. The Team server writes neither and is unchanged (`HowAJobEndedIsSaidTests` pins its four words, not `Known`).
+- `UsageLedger.Record(..., endCause = "")` writes it on the last line of the last turn; the engine passes it only when the finished
+  outcome `is ReviewerOutcome.Cancelled`. Consultation and question-row endings write no cause (a withdrawn consultation writes no
+  line; a cut question row is `Interrupted`).
+- **The host token:** `Program.StartedAsync` hands its `stop` to `PanelServiceHost` (a REQUIRED constructor parameter, so the production
+  road cannot forget it), which hands it to every `PanelService` it builds — the rebuilds on a settings change included — and
+  `PanelService(…, CancellationToken hostStopping = default)` hands it to `RoundEngine`. `default` never fires: a service built
+  directly (every test) belongs to no host that stops. The token is read, not linked: it does not cancel a round by itself.
+- **The deadline sentence is read from the same record.** `RoundEngine.WhatEndedIt` asks `RoundCancellation.CauseNow()` and says "the round
+  reached its N minute limit" only when the recorded first cause is `roundClock` (the word the ledger files), instead of the flags "the
+  clock fired and the caller did not", which went silent when a person cancelled AFTER the clock had struck while the ledger said `roundClock`.
+- `UsageLedger.AppendTurn`'s cause parameter is `lastLineEndCause`: written on the turn's last line only.
+- The fast-mode arguments and the record of what was sent are computed once per build (`ClaudeConsultant.Options`, `ClaudeRuntime.Build`);
+  `AFastModeReachesEveryClaudeLaunchTests.TheTierRecordedAsSent_IsTheTierOfTheFileTheArgvNames` reads the file the argv names and compares it with
+  `Sent.Tier`, with no timing.
 
 ## The local reviewer stands down after a quiet cloud (2026-09-24, issue #485)
 
@@ -2323,7 +2399,7 @@ sequenceDiagram
   participant E as ReviewerExecutor (ladder per turn)
   participant C as IReviewerContinuation
   participant R as SourceResolver (one per round)
-  B->>L: RunAsync(work) — cap = timeout × (1 + FollowUps)
+  B->>L: RunAsync(work) — cap = timeout × (1 + FollowUps), read on the scheduler's _clock
   loop turn k
     L->>E: RunWithLadderAsync(work bounded by min(own timeout, cap left))
     E-->>L: Ok | TimedOut | NonZeroExit | …
@@ -2398,6 +2474,57 @@ sequenceDiagram
   `cacheReadInputTokens` as the cached subset beside counting it as billed input, `UsageParser` reads
   codex's `cached_input_tokens`; `RoundAudit`'s answered line says `over N turns`, `(N cached)` and
   `source: …`. That number, per turn, is what decides whether C3 gets its own plan (D25).
+
+## The deadline classes read one injectable clock — the ACP client, the turn loop, the source resolver (2026-10-21, E4 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md`)
+
+Three classes in this module decide an outcome by a deadline, and tests that raced those deadlines against wall time lost on a loaded machine (C5, C23, C13 — the cold start of a process was paid out of the budget under test). Each now owns ONE optional
+`TimeProvider` (`TimeProvider? clock = null`, `_clock = clock ?? TimeProvider.System`) that every budget deciding the outcome reads; the product runs on the system clock and a test hands a `ManualClock`. The contract, the inventory with line numbers, the
+structural scan that guards it and the REDs per story are in [module_tests.md](module_tests.md) (*The suite is deterministic — E4 S1…S5*); the class-side facts are here. **Nothing is threaded through `PanelService` or `RoundEngine`** (plan D3).
+
+```mermaid
+flowchart TD
+  subgraph acp["AcpClient (runners/Acp) — one _clock"]
+    turn["TurnAsync: turnTimer = CancellationTokenSource(ask.Deadline, _clock)<br/>deadline = linked(ct, turnTimer.Token)"]
+    usage["UsageAsync: session/prompt WaitAsync(usageBound, _clock)"]
+    graces["SettledAsync DrainGrace · AcpTransport.EndAsync · AcpSession graces<br/>SYSTEM clock — teardown, bound a real pipe"]
+  end
+  subgraph sched["BoundedScheduler (runners/Reviewers) — _clock"]
+    loop["TurnLoop(runTurn, onProgress, _clock)<br/>cap = timeout x (1 + follow-ups) · each turn's elapsed"]
+    stopwatches["queue and conversation Stopwatches (reports)<br/>429 ladder Stopwatch + Task.Delay<br/>SYSTEM clock — named in the scan's allow-list"]
+  end
+  subgraph resolver["SourceResolver (runners/Feature) — one _clock"]
+    read["ReadWithinDeadlineAsync: readTimer = CancellationTokenSource(_readDeadline, _clock)<br/>deadline = linked(ct, readTimer.Token)"]
+  end
+  turn -->|"ends Deadline; a caller's cancellation still reads Cancelled"| out1["AcpOutcome"]
+  usage -->|"never changes the first prompt's end"| out1
+  loop -->|"left = cap - elapsed; launch while anything is left"| out2["ReviewerOutcome.Ok / TimedOut"]
+  read -->|"deadline struck: not served - timed out"| out3["Reading refused, transient"]
+```
+
+**The ACP client (S2).** `AcpClient` (`runners/Acp/AcpClient.cs`; the clock is the last constructor parameter, `:31`, field `:34`). The turn's deadline is its own timer source on the clock, declared BEFORE the linked source (`:126-127`) so the link is disposed first and a timer
+firing between the two disposals meets a disposed link; the old `CreateLinkedTokenSource(ct)` + `CancelAfter(ask.Deadline)` is gone. `ct.IsCancellationRequested` still separates a caller's cancellation (`Failed(e, true, …)`, end `Cancelled`) from the deadline (`Deadline`). The timer
+now starts a few microseconds before the session exists (before `new AcpSession`); a preemption between the two can observe it, so nothing claims otherwise — the tests assert only that the TIMER decides the turn's end. The `/usage` bound is `.WaitAsync(usageBound, _clock)` (`:223`) and still
+never changes the first prompt's end, answer or exit. A deadline of zero or less (or past the one-day `MaxDeadline`) is refused before any start, so no zero reaches the new source. **On the SYSTEM clock, on purpose** — the teardown: `SettledAsync`'s `DrainGrace` (`:267`), `AcpTransport.EndAsync`'s `_draining.CancelAfter(DrainGrace)`
+(`AcpTransport.cs:234`), `AcpSession.NotifyAsync`'s `GraceWait` source (`:175`), `WaitUntilQuietAsync` (`:186-197`) and `WatchExitAsync`'s `Task.Delay(ExitGrace, ct)` (`:265`) each bound how long a REAL pipe may still deliver bytes after the end — `WatchExitAsync`'s 300 ms lets a buffered
+answer through before the pending requests are broken, so it is a grace on real pipe progress, not "after the outcome is decided". On a manual clock nobody advances they would turn a bounded wait on a real pipe into a hang; the structural scan allows `SettledAsync`'s site by name and a remark there says why.
+A test therefore does not advance anything for the teardown: after the last advance the assertions run in real time, bounded by `GraceWait` + `DrainGrace` (3.5 s), and still find the received answer kept and the agent gone.
+
+**`TurnLoop` (S4)** (`runners/Reviewers/TurnLoop.cs`; clock last constructor parameter, `:29-32`, `_clock` `:34`). The conversation's elapsed and each turn's elapsed are `_clock.GetTimestamp()` / `GetElapsedTime(…)` (`:50`, `:79`, `:86`, `:89`) — the old single `Stopwatch` and its five reads. The
+per-turn TIMER is not here: it is the launcher's (or the test's stand-in), so the loop's arithmetic is the only thing the clock moves. **A turn is launched whenever ANYTHING is left** (`left <= TimeSpan.Zero` is the only no-launch case, which answers `TimedOut` with `Usage.None`), bounded to what is left
+(`Within`/`Bounded`) — so `timeout × (1 + follow-ups)` made of exact turns gives a final launch bounded to the remainder unless the remainder is exactly zero. That is what makes the counts exact on a manual clock: 400 ms turns under a 700 ms timeout and one follow-up (cap 1.4 s) are four launches
+(timeouts 700, 700, 600, 200 ms) and three earlier turns; 300 ms turns under a 900 ms `ConversationCap` are three launches and three earlier turns. The same arithmetic is what S5 pins for the round (`RoundDeadline.For`, `src/Server/Rounds/RoundDeadline.cs`).
+
+**`BoundedScheduler`'s one-clock rule (S4).** The scheduler already owned `_clock` (`BoundedScheduler.cs:103`, the reading a stated rate-limit reset is judged against — *Only the ladder's decision changes* above). It now also hands that clock to the loop it builds: `new TurnLoop((turn, token) => RunWithLadderAsync(…), onProgress, _clock)`
+(`:463`). The rule is "a loop inside a scheduler on clock X is on clock X": one clock per scheduler, not a new parameter anywhere above it (`PanelService` still constructs the scheduler with the default). **What it does not claim:** the scheduler's own five `Stopwatch`/`Task.Delay` sites stay on the system clock and are
+named in the scan's allow-list — the two queue `Stopwatch`es (`:291`, `:366`) and the conversation's reported `Stopwatch watch` (`:462`) only REPORT; the 429 ladder's `Stopwatch` (`:617`, judged against the ladder's budget beside a `_clock.GetUtcNow()` reset reading at `:675`) and its `Task.Delay(wait, ct)` (`:686`) decide
+and are DEFERRED — named, not moved, until a 429-ladder failure is kept (decision D5; plan Q4). The ladder therefore still mixes a `Stopwatch` elapsed with an injectable reset clock; the plan records that as the pattern it names and defers, not as sound.
+
+**`SourceResolver` (S4)** (`runners/Feature/SourceResolver.cs`; `clock` after `readDeadline`, `:45`, `_clock` `:48`). One file's read deadline is its own timer source on the clock, declared before the link (`:203-204`); `deadline.IsCancellationRequested && !ct.IsCancellationRequested` still names OUR deadline, so a read the deadline ends is
+`not served: path — timed out: git did not answer within 30 s; ask again next turn`, transient, and the turn goes on with what was served. A zero `readDeadline` (a test's value only: the three product construction sites pass none and get `SourceBudget.ReadDeadline`, 30 s) is out synchronously and refuses the read the same way. The launcher's own per-process timer
+(`GitHistory.RunAsync`, `Timeout = Budget`) is a callee and is not seamed here (it is the gated story S6, C4).
+
+**Not seamed on purpose.** `ReviewSnapshots`' `MaxElapsed` (60 s) is a host safety ceiling that protects a person's machine from one copy that never ends; a seam without a RED is refused (D3) and a ceiling on a manual clock nobody advances would turn a runaway copy into a hang — it stays on the system clock ([module_server.md](module_server.md), *the conversation's place*).
+`ProcessLauncher`'s timers and `ReviewerExecutor`'s `Stopwatch spent` are callees none of the E4 REDs races; `ProcessLauncher` is the subject of the gated S6 (`AReaderIsEndedWithItsTreeTests`, C4 — opens only when a failure of it is kept).
 
 ## A codex row on an endpoint with no model is refused (2026-10-03, PLAN_refuse_an_endpoint_row_without_a_model)
 
@@ -3425,7 +3552,7 @@ CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runner
 **The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
 `ExecutableResolver` (Windows only when this was written, so no path was guessed elsewhere — the `agy` rule; WSL2 and Linux paths have been found since E6, DL5 under *Kimi on WSL2*);
 arguments `["acp"]`; the model through config option `model`; the names declined at any depth: `AGENTS.md`,
-`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences — **six rows, first match wins** (`KimiAcpProfile.Failures`, public; `AcpDiagnosis.Of`). Kimi puts the same `Authentication required:` prefix on a 401, on a
+`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences — **seven rows, first match wins** (`KimiAcpProfile.Failures`, public; `AcpDiagnosis.Of`). Kimi puts the same `Authentication required:` prefix on a 401, on a
 spent 5-hour quota (429) and on a spent balance, so the prefix says nothing: the words after it decide, and only a bare prefix is a lost sign-in
 (story 1 of `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`):
 
@@ -3433,6 +3560,7 @@ spent 5-hour quota (429) and on a spent balance, so the prefix says nothing: the
 |---|---|---|---|---|
 | 1 | `Your current subscription does not have access to` | `subscription_model` | Refused → 77 | pick a model the plan has, or upgrade |
 | 2 | `reached your 5-hour usage limit` | `kimi_quota_spent` | Spent → 75 | `KimiQuotaWords.Fixed`: "the Kimi plan quota is used up — signing in again will not help" |
+| 2b | `reached your monthly usage limit` (story 5, D8 — Kimi 2.3.0, 2026-10-21; seen in prompt mode, the ACP form is unmeasured) | `kimi_quota_spent` | Spent → 75 | the same `KimiQuotaWords.Fixed` |
 | 3 | `insufficient balance` (D14) | `balance_spent` | Spent → 75 | "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset" |
 | 4 | `Authentication required: 401` | `not_signed_in` | Refused → 77 | run `kimi login` in a terminal and try again |
 | 5 | `Authentication required:` (the colon is the discriminator) | `provider_error` | **Failed → 70** (`AcpFailureKind.Failed`) | none — the vendor's words stand: the shim writes `provider_error: <reason>` and nothing after it |
@@ -3440,8 +3568,8 @@ spent 5-hour quota (429) and on a spent balance, so the prefix says nothing: the
 
 Row 1 stands before 4–6 because the measured 401 subscription line contains them all; rows 2 and 3 stand before 4–6 so a quota or a balance wrapped in the sign-in prefix
 reaches its own row; 4 before 5 because its phrase contains 5's. Row 2's phrase names the window, so it is in neither codex's "hit your usage limit" nor the sales footer
-"rate limit reached; upgrade"; the monthly form is unmeasured and has no row. The marker is Kimi-specific (`kimi_quota_spent`, not `quota_spent`): `VendorDiagnosis`
-matches a marker in every vendor's stderr. The names of the Spent rows are DERIVED from the table (`KimiAcpProfile.SpentNames`, `SpentPhraseOf`), never a second list.
+"rate limit reached; upgrade". Row 2b is its MONTHLY twin (the line: "provider.api_error: 429 You've reached your monthly usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: …"): the row fires when the sentence is in the agent's REASON, or in its stderr when the reason names no other row (K4: a reason that names a row wins — `Authentication required` plus the monthly sentence in stderr stays `not_signed_in`), so a monthly answer that carries Kimi's measured sentence reads as a spent quota; that ACP delivers the sentence at all is still unmeasured (RESULTS §31). The profile's table is thus seven rows (two share the name `kimi_quota_spent`; `SpentNames` stays two names). The marker is Kimi-specific (`kimi_quota_spent`, not `quota_spent`): `VendorDiagnosis`
+matches a marker in every vendor's stderr. The names of the Spent rows are DERIVED from the table (`KimiAcpProfile.SpentNames`, `SpentPhrasesOf`), never a second list.
 
 **The three blocks the shim owns** (each measured in RESULTS §2 before it was written):
 
@@ -3545,7 +3673,7 @@ sequenceDiagram
   Note over S: asked model not among them: model_not_offered (65), nothing set or spent
   S->>A: set_config_option, prompt
   A-->>S: end_turn
-  S->>A: /usage (own bound)
+  S->>A: /usage (own bound, on the client's clock)
   A-->>S: Session total: N input, M output
   Note over S,A: tree kill by pid, then the hold disposed, then the report
 ```
@@ -3687,7 +3815,7 @@ flowchart TD
   `42 + u` (60), conversation `68 + u` (34).
 - **`VibeHomes`** (`Vibe/VibeHomes.cs`) makes `<root>\coai-vh\<8 hex>` (the pinned `coai-vh` handle is released on EVERY way out of `ReserveOneShot` that does not move it into the home: a refused lock, a throw while the folder is made; `OneShotSteps` / `HomeIo` are the seams a test uses for a folder that cannot be made, listed or removed). `ReserveOneShot` returns an `OneShotReservation` (`None` for an
   empty root, so settings built by hand keep their old scratch home; `Refused(sentence)`; `Reserved(OneShotHome)`). The `OneShotHome`
-  holds the folder's `coai-turn.lock` and the private folder's handle for its life and deletes the folder on every way out.
+  holds the folder's `coai-turn.lock` and the private folder's handle for its life and, on every way out, empties the folder UNDER the lock (its Kimi homes junction-first — a stop keeps it, said) and deletes the lock file and the folder after the release (E5.3, *The owned Kimi homes* below).
   `SweepOneShot` (called from `PanelService.PruneOldAnswerDirs(homesRoot)`, at most every ten minutes) removes a folder older than six
   hours under its lock; the lock, not the age, protects a live home across two servers on one root, and a link is never entered.
   `coai-vh` is a sibling of `coai-vibe` OUTSIDE `ConsultantHomes.All`, so the D20 conversation sweep never judges it. Home names: round
@@ -3717,6 +3845,53 @@ flowchart TD
 - **M-V18 note (2026-10-15, the judge).** `VibePathBudget` measures `Path.GetFullPath`, which keeps 8.3 short names as written. If Vibe's interpreter resolves the real path, a folder named `RUNNER~1` is longer than the budget counted. M-V18 must measure that before the budget is relaxed or trusted at its edge.
 - **`LaunchTurn.Refused` states its cause** (code gate 2026-10-15): `RefusalCause { LaunchControl, CliMissing }` is REQUIRED, so an adapter's refusal never reads as coai's own launch check by default (Kimi's launch will call it too); `ReviewerExecutor` maps only `LaunchControl` to `NotStarted.ByLaunchControl`.
 - **Install cure is per OS** (`VendorDiagnosis.InstallCure`: `uv tool install mistral-vibe` on Windows, Mistral's script on Linux), so `VibeLaunchControlTests.TheKind_…` compares with the platform's own cure instead of spelling the Windows one. Fixed after: the default was `OperatingSystem.IsLinux()`, which gave macOS the Windows commands (uv, and Google's PowerShell line) although the vendors' scripts serve Linux and macOS; `InstallCure(runtime, HostKind)` is the seam, and only Windows gets the uv and PowerShell forms (`EveryHostButWindows_GetsTheVendorsShellScript`, first red: the `MacOs` case got `install it with uv…`).
+
+## The owned Kimi homes — a conversation's kept across turns, every one-shot disposed junction-first (2026-10-16, E5.3 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+Built on Fable by the plan gate's command (authentication: the home holds a junction to the person's ROTATING sign-in). Two shapes, one disposal:
+
+```mermaid
+flowchart TD
+  subgraph conversation [a conversation: coai-kimi/id — ConsultantPlaces.ForConversationAsync]
+    F[folder: tree/, the stamp, coai-turn.lock] --> K["kh-&lt;10 hex&gt; — KimiHome.HomeFor(OwnedScratch = the folder)"]
+    K --> J[home/credentials → the person's folder, config.toml, os/]
+  end
+  subgraph oneshot [a question row, a check: coai-vh/8 — VibeHomes.ReserveOneShot]
+    O[OneShotHome: coai-turn.lock held for its life] --> K2[kh-* made by KimiLaunch]
+  end
+  T[a turn: KimiRuntime.TakeTurnAsync] -->|A folder turn, B folder lock, C kh turn, D sign-in gate| K
+  D1[OneShotHome.Dispose / SweepOneShot] -->|under the lock: KimiHome.DisposeAllUnder, then every entry| E[release, then the lock file and the folder]
+  D1 -->|a Stopped: a live tree, a lost name| KEEP[kept with its lock file, said; the sweep takes it later]
+```
+
+- **The conversation's root is `<folder>\kh-<10 hex>`, never the folder itself** (decision a, R1). The place holds the FOLDER's in-process turn until the launch has
+  been read (`ConsultantPlaces.cs`), and `KimiLaunch.TakeAsync` takes the ROOT's turn; both are one non-re-entrant `SemaphoreSlim(1, 1)` per path (`VibeHomeTurns`),
+  so a root that were the folder would wait for its own caller until the token cancels. `KimiRuntime.Build` already roots at `KimiHome.HomeFor(OwnedScratch, …)`; E5.3 pins it
+  (`AConversationsKimiHomeTests.AConversationTurn_StartsOnItsKhRoot_AndNeverWaitsForItself`, red against the folder-as-root in 5 s). The home is made at the first turn
+  (`KimiHome.Made`, fresh only) and written by nobody after; a junction retargeted or a re-login between turns is refused before any process starts, the home kept as it is.
+- **The lock order** (decision d, R2): a turn takes (A) the folder's in-process turn → (B) `coai-turn.lock` → (C) the `kh` root's turn → (D) the sign-in GATE → in the shim (E) the
+  foreign-`kimi` wait → (F) the sign-in's tree hold → (G) the per-home `coai-tree.lock`. **Every disposer takes with NO wait** (`HeldFile.Take`, `VibeHomeTurns.TryTake`, one
+  probe of G) and never D, E or F; so the sweep's reversed order B → A is safe, and a new wait may only ever be added on the acquirer's side, on something no disposer holds.
+- **Where the sign-in really is, re-asked before every turn** (decision j, R8): `Junctions.ResolvedRefusal(target)` — the make-time `Resolved` check made public, one sentence,
+  two callers — runs twice per turn, both BEFORE any lock: on the person's HOME as the last check of `KimiLaunch.Prepare`'s pre-read list, before their
+  `config.toml` is read from it (the review's M1 — a swapped ancestor gets no read from the share, not one; asked only of a folder that exists, so a
+  sign-out keeps its own sentence), and on the `credentials` folder in `KimiLaunch.Rendered` right after its existence check. An ancestor swapped for a
+  link to a share since the home was made refuses the turn ("resolves to … not a local drive path … (D19)") and leaves no file under `kimi-locks`.
+- **Every coai Kimi launch on one sign-in passes the one gate** (decision k): two conversations' turns started together peak at one live launch, the second starting after the
+  first's end; a gate held by another process is waited for in one-second slices and the launch starts within two seconds of its release (`AConversationsKimiHomeTests`, S5.3.16).
+- **A one-shot home ends junction-first, UNDER its lock** (decision g, R5 — the judgement overruled step 3 of the brief): `VibeHomes.EmptiedUnderItsLock(folder, kept, io)` is
+  the ONE helper the owner (`OneShotHome.Dispose`) and the sweep (`SweepOneShot` → `RemovedUnderItsLock`) share: `KimiHome.DisposeAllUnder` first; on any `Stopped` → false, nothing
+  more deleted, the folder KEPT with its lock file and the stop said in its own words (the owner: `the Kimi home in {folder} is kept: {reason}; the scratch sweep takes it once
+  its tree has ended`; the sweep: `one-shot Vibe homes: {folder} is kept this pass: {said}`); otherwise every entry but the lock file, under the lock. Then the lock (and the pin)
+  given back, then `RemovedAfterItsLock`: the lock file and the folder — "already gone" (a sweep took it in the window) is silent. `HomeIo.Delete` is `GitScratch.DeleteEntry`
+  (public since E5.3: a link by its own name, a folder whole, a FILE as a file — the old `DeleteEvenIfReadOnly(entry)` threw on a file beside the home), and `OneShotHome.Io`
+  replaces the old whole-folder `Remove` seam so a test can see the lock's state at the moment each entry goes.
+- **The root-less fallbacks** (R6): `QuestionRowLaunch.RemoveScratch` disposes the scratch's `kh-*` homes before the bare deleter; `ConsultCheckScratch.Delete` disposes
+  `<root>\own` (`ConsultantCheck.OwnName` — the check's home is one level DOWN) and the root. A stop keeps the scratch for the six-hour scratch sweep, which asks the same probe.
+- **No path budget for Kimi** (J3, S5.3.11): coai's walk reads and disposes a home whose `sessions\wd_…\session_…\agents\main\wire.jsonl` passes 300 characters.
+
+Tests: `AConversationsKimiHomeTests`, `AOneShotKimiHomeIsDisposedJunctionFirstTests`, the E5.3 rows of `ConsultantHomeSweepTests`, `KimiHomeTests.AHomeWhoseDataPathPasses260_…`,
+`PrivateFolderWindowsTests.AReAclOfCoaiKimi_NeverCrossesTheJunction_IntoTheSignIn` — [module_tests.md](module_tests.md).
 
 ## The Kimi home, its sign-in locks and its launch control — `src_mcp/runners/Kimi/` (2026-10-15, E4.2 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
 
@@ -3769,15 +3944,17 @@ flowchart LR
   opened), (2) `credentials` unlinked by its own name, (3) the person's folder's entry names verified (200 ms settle, `GitScratch.StillMissing`),
   (4) only then `GitScratch.DeleteEvenIfReadOnly`. A `Stopped` deletes nothing more and every caller LOGS it. `DisposeAllUnder` does steps
   1–3 on a folder's own home and every `kh-*` child and leaves the rest to the caller's deleter; the D20 sweep calls it under its locks
-  (a stop keeps the folder this beat), the round's scratch does (E4.4, *The Kimi reviewer* below: a stop keeps the scratch). **Stated limit:** the deleter's link checks are path checks at one
+  (a stop keeps the folder this beat), the round's scratch does (E4.4, *The Kimi reviewer* below: a stop keeps the scratch), and since E5.3 so do the
+  one-shot owner and sweep (`VibeHomes.EmptiedUnderItsLock`) and the row's and the check's root-less fallbacks (*The owned Kimi homes* above). **Stated limit:** the deleter's link checks are path checks at one
   moment; closing the swap needs handle-based deletion, and a same-user process able to swap folders in coai's tree could touch the
   credentials directly.
 - **An ancestor of the credentials target may be a link** (a relocated profile); the target itself may not. `Junctions.Refusal` asks the
   kernel where the target really is and refuses only a resolution that leaves the local drives.
 - **The built environment** (`KimiEnvironment.Built`, its own unit; `KimiLaunch` is the checks and the launch): not inherited, `ProcessEnvironment.Minimal`, exactly seven names — `KIMI_CODE_HOME`,
   `KIMI_CODE_NO_AUTO_UPDATE=1`, `USERPROFILE`, `HOME`, `HOMEDRIVE`, `HOMEPATH` (all into the owned `os/`) and `PATH`; `EnvironmentRefusal` admits
-  exactly what `Built` makes. The version probe is built from the LAUNCH request's own PATH (`KimiEnvironment.PathOf`), so one PATH source feeds both, and a person's home that is not on a local drive is refused by its spelling before any read, so a UNC home is never connected to. An unmeasured Kimi (`KimiAcpProfile.MeasuredVersions` = `2.1.1`) is warned about and run (`VersionWarnings`, the one
-  builder, Vibe's sentence unchanged); a version-less or unstartable one is refused.
+  exactly what `Built` makes. The version probe is built from the LAUNCH request's own PATH (`KimiEnvironment.PathOf`), so one PATH source feeds both, and a person's home that is not on a local drive is refused by its spelling before any read, so a UNC home is never connected to. An unmeasured Kimi (`KimiAcpProfile.MeasuredVersions` = `2.1.1`) is run; it is WARNED about only when its MAJOR was never
+  measured (`VersionWarnings.MajorWasMeasured`, the owner's order of 2026-10-27, E5.4 deviation 38: 2.3.3 says nothing, 3.x warns; Vibe the
+  same, against the versions measured on its own platform, `VibeHomeManifest.MeasuredOn`); a version-less or unstartable one is refused.
 - **Nothing of the sign-in is ever written by coai:** it reads only the slot's NAME and `type`/`base_url`/`storage`/`oauth_host` and the credentials
   folder's entry NAMES, and never opens a credentials file. `KimiCanaryTests` pins that no string coai composes contains a canary from the
   sign-in or from the `moonshot-ai` row's `api_key`; the agent's own stderr and error text are vendor text, outside the pin.
@@ -3793,7 +3970,7 @@ Mechanical pieces, built before the Kimi launch is opened on Linux (when this wa
 | Mount locality | `Files/MountLocality.cs` | DL6's rule: `Refusal(target, realPath, mountInfo)` — a drvfs mount (`9p` + `aname=drvfs`, `drvfs`, `virtiofs`) is refused wherever it is mounted; an unreadable table, one no mount of which holds the path, or a mount that cannot be PROVEN is refused too. The 3-argument overload asks the kernel (`Identify` = `statx` with `STATX_MNT_ID`, retried without it for the device alone); the 4-argument overload takes the answer as a seam (tests hand a `MountIdentity`). | `MountLocalityTests` (S-K12, everywhere; the real-kernel arm on Linux) |
 | File status | `Files/FileStatus.cs`, `Files/LinuxStatx.cs` | `FileStatus` + `SameFileAs` verbatim (plus the init-only `MountId`, `stx_mnt_id` u64 at 144, asked with `STATX_MNT_ID` 0x1000); `LinuxStatx` is the one `statx` import (`"libc"`): `OfPath`, `OfHandle`, the offsets decoder, a closed `StatxRead`. An answer without ANY trusted field it was asked for (type, owner, inode, mount id) is `Failed(0)` — a zero is never a value. `FolderIdentity`/`KeyFor` are the spec-driven half. | `FileStatusTests` |
 | `/proc` stat | `Processes/ProcStat.cs`, `Processes/ProcReads.cs` | The one `stat` reader: `ProcStat.Parse/ReadFor` → `Read` / `Gone` (ENOENT) / `Unreadable`, over the `IProcReads` seam (`ProcReads.Real`). `ProcStatLine` carries `StartTicks` (field 22) from the same line; `Parse` refuses a line whose leading pid is not the one asked for. `ProcessTree`'s parent walk and exited-entry rule read through it. | `ProcStatTests`, `TheTreeIsReadByIdentityTests` (unchanged) |
-| Liveness | `Processes/Liveness.cs` | `Alive` / `Gone(why)` / `Unknown(reason)`; only a PROVEN `Gone` is evidence that a process left: ENOENT on `/proc/<pid>` (same pid namespace, no `hidepid=invisible`), another start time, or an exited entry. An unreadable start time re-reads the `stat` and is `Unknown("start time unreadable")` unless that proves it gone; off Linux it is `Unknown` unless absence is provable. The start time is read ONCE. `Of(identity, startTicks)` compares EXACT ticks from one read of the line. `CoaiMcp.Server.ProcessLiveness` (two-state, for the sweeps) is untouched. | `LivenessCheckTests` |
+| Liveness | `Processes/Liveness.cs` | `Alive` / `Gone(why)` / `Unknown(reason)`; only a PROVEN `Gone` is evidence that a process left: ENOENT on `/proc/<pid>` (same pid namespace, no `hidepid=invisible`), another start time, or an exited entry. An unreadable start time re-reads the `stat` and is `Unknown("start time unreadable")` unless that proves it gone; off Linux it is `Unknown` unless absence is provable. The start time is read ONCE. `Of(identity, startTicks)` compares EXACT ticks from one read of the line. `CoaiMcp.Runners.Processes.ProcessLiveness` (two-state, for the sweeps; moved down from `CoaiMcp.Server` in E3 S4) is untouched. | `LivenessCheckTests` |
 | pidfd layer | `Processes/LinuxPidfd.cs` | `IPidfdCalls`; `LibcPidfdCalls` (ported); `RawSyscallPidfdCalls` (`syscall(434)` / `syscall(424)`, new); `PidfdLayer.Current` → `Wrapper` / `Raw` / `Missing`, resolved once, with a per-flow `Using(...)` test seam (S-K21). The probe must PROVE the road: a descriptor for coai's own pid AND `signal 0` through it answering 0; ENOSYS keeps the plan's sentence, any other errno (a seccomp EPERM on either call) is `Missing` with `RefusalFor(call, errno)` naming it. **This widens DL9** (it refused only ENOSYS, so a filtered `EPERM` kept the road open and every kill then failed after Kimi was launched). | `PidfdLayerTests` |
 | By-identity signal | `Processes/TreeSignals.cs` | `Kill(members, calls)`: pin (`pidfd_open`) → check liveness on the pin → `SIGKILL` through the descriptor → close; `Sent` / `Gone` / `Unknown` / `Failed`. Never a signal by number. `Kill(IReadOnlyList<PinnedMember>, calls)` checks EXACT start ticks (`PinnedMember(identity, startTicks)`, `PinnedMember.Of(identity, reads)`) from the same `stat` line as the state — no 1 s slack; the `ProcessIdentity` overload keeps the slack (its start is a clock estimate). | `PidfdLayerTests` |
 
@@ -3946,15 +4123,16 @@ flowchart LR
   an unknown; never a cost (D9). `WhyItFailed` is the shim's word and reason, led by the cure when the word is one `VendorDiagnosis` knows
   (`not_signed_in`, `subscription_model`, `balance_spent`, `kimi_quota_spent`, and the end word `model_not_offered`). For a quota the lead cure is `KimiQuotaWords.Said(text)`, produced by `VendorDiagnosis.CureOn` for the `kimi_quota_spent:` marker (K1 of the code gate, so EVERY reader of the diagnosis — this road, the round summary, the ledger, the log — leads with the clause):
   the fixed sentence with Kimi's own reset clause QUOTED between its opening and its closing — "the Kimi plan quota is used up — "Your quota will reset at 14:00 UTC."; signing in
-  again will not help (the shim said: kimi_quota_spent: …)", or "the vendor named no reset" when it said none. The clause runs from `Your quota will reset` to the first period
+  again will not help (the shim said: kimi_quota_spent: …)", or "the vendor named no reset" when it said none. The clause runs from the earliest of `KimiQuotaWords.ResetOpenings` (`Your quota will reset`, `Your quota will be refreshed` — the monthly form, "Your quota will be refreshed in the next cycle.", D10: ONE list, `ClauseOf` takes the earliest) to the first period
   followed by any whitespace — a space, a newline, a tab (a decimal point does not end it), through `Redaction.SafeText`, capped at 160; it is never parsed into a time. This lead cure is what `WhyItFailed` returns
   (the executor's `saidElsewhere`, read only when stderr is silent). The `RateLimited` road below does NOT lead with a cure of its own: its reason is the vendor's words, and `Because` puts this same cure (clause included) in front.
 - **Classification is by the report's FIELDS, never by text** (the risk consultation `ba5f661a`). `IReviewerRuntime.RateLimited(invocation, result)` — a new
   default member whose body is exactly today's (`RateLimitVerdict.ByText`: `RateLimit.Hit` over the text, no usage) — is asked by `ReviewerExecutor.Classified` before
   the exit is judged. Kimi's override is limited ONLY for exit **75** AND a `failure` named by a Spent row of the table (`KimiAcpProfile.SpentNames`: `balance_spent` (D14) or
   `kimi_quota_spent`); the reason is the shim's OWN words, `<name>: <reason>`, with NO cure in front (`SpentReason`, S7, 2026-10-20: the summary, the ledger and the log put the table's cure in front of the vendor's line themselves in `Because`, and a reason that already led with it said the cure twice on every line) — `RateLimit.Hopeless` stops the ladder because the vendor's words ride in it
-  (`RateLimit.Spent` holds `insufficient balance` and `reached your 5-hour usage limit`, each with its observed sample), and only when they would not does the matched row's own
-  phrase follow in brackets — and carries the report's usage; no ladder step is taken for a quota, whatever its clause says; `ReviewerOutcome.RateLimited` gained `Usage` for it (default `None`). Everything else —
+  (`RateLimit.Spent` holds `insufficient balance`, `reached your 5-hour usage limit` and `reached your monthly usage limit` (D9), each with its observed sample), and whenever the report carries a MATCHED LINE (the sentence reached the shim on stderr only) it is quoted FIRST, as `(Kimi said: …)`, BEFORE the reason is asked whether it is hopeless (feature gate F2, 2026-10-22: a reason such as `Internal error: daily worker failed` holds the hopeless word `daily`, and the old order returned it bare and dropped the monthly sentence the shim had matched; the non-spent path `KimiRuntime.Said` already quoted the line unconditionally, so it never had the defect) —
+  the shim's report carries it as `failureLine` (`AcpDiagnosis.Line`: the one stderr line that held the row's phrase — found with one `IndexOf` and isolated at the nearest `\r` or `\n` so CR-only and CRLF lines never join or leak a control character; the ORDER is the contract (feature gate F1 and the risk consult 722eeb66, 2026-10-22): **redact the WHOLE captured stderr (`Redaction.SafeSource`: layout kept, nothing cut), THEN find the phrase in the redacted text, isolate its line, trim, and cut a window of at most 400 characters (`LineCap`) that starts `WindowLeadIn` (60) characters before the phrase** — a window cut first can start exactly at a credential's value and take its label (`Authorization: Bearer `) away, so the bare token survives; and a line isolated first is cut from its block: a PEM private-key block spans lines, the one redaction shape that does, and its body line quoted beside the phrase had no `BEGIN` above it (a label on the PREVIOUS line of a value on the next one is NOT masked even by a whole-text pass, because `SafeSource`'s labelled rule stops at each line's end by design; that is the redactor's contract, shared with the extension, and unchanged here). LAST, the window is made one line of a notice by `Redaction.SafeText(window, LineCap)` (CodeRabbit on PR #917): `SafeSource` keeps a tab, the layout of a source, and the quoted line holds no control character at all — a second pass over at most `LineCap` characters of already-redacted text, which can only take more out. One whole-text redaction pass over at most 64 Ki characters, on a failure path. A redaction that fails closed (`Redaction.WhenRedactionTimesOut`: a 2 s per-pattern and about 4 s whole-call ceiling) answers the marker `[redacted]` for the whole text, which holds no phrase: the line is empty and nothing of the raw text is quoted. The window keeps surrogate pairs whole (`WholeStart`/`WholeEnd`). **What bounds the text:** the agent's stderr capture, `AcpTransport.StdErrChars` = 64 Ki characters (`AcpTransport.cs:45`; a `BoundedText` at `:52`, appended at `:255`), which keeps the HEAD and drops the rest — so a CUT capture ends in a line the boundary broke, possibly inside a credential shorter than the redactor's minimum (`Bearer ` + 5 characters; the rule wants 8), and its DISPLAY (`BoundedText.ToString()`, never `Kept`) then adds a sentence (`\n[coai: output truncated at N characters; M more were dropped]\n`, or `… — the stream was still open when the drain grace ran out]\n` when the pipe was held open). **Truncation is STATE carried from the capture, never parsed out of its rendered text** (code gate cf1948aa): `BoundedText.Kept` is the text without the sentence and `BoundedText.Truncated` its own flag (dropped output, or the pipe held open); `AcpTransport.StdErr` / `StdErrTruncated` carry both, `AcpClient` copies them to `AcpOutcome.StdErr` (the kept head, no sentence of ours in it) and `AcpOutcome.StdErrTruncated`, and `AskAcpMode.Diagnose` hands both to `AcpDiagnosis.Of(reason, stderr, known, stderrTruncated)`. The sentence exists for display (`BoundedText.ToString()`) only: a vendor line that merely begins `[coai: output truncated` is vendor text and names its row. The ROW is read from the whole kept head (the phrase is intact whenever it matches, and the sentence is not in the text at all) and only the QUOTE from complete lines: `CompleteLines(stderr, truncated)` is everything up to the last line break when the capture was cut and all of it otherwise, so the last (incomplete) line of a cut capture is never quoted. A phrase only on that line still names its row, the line is empty, and the reason falls back to the table's phrases, which are hopeless (an unclassified spent quota would be retried by the 429 ladder). A truncated capture with no line break at all quotes nothing: a single unbroken truncated line is never quoted, by design. A text without the phrase never reaches the redactor (`RedactionNeverTouchesAnyPhraseOfTheTable`: redaction neither creates nor destroys a table phrase). An untruncated stderr keeps its last line, newline or not. Absent when the reason itself matched; `KimiReport.FailureLine`, absent = empty for an older shim) —
+  and whatever was quoted, the reason must STOP THE LADDER: the scheduler climbs while its `Hopeless` is false (the loop at `BoundedScheduler.cs:624`; `Hopeless` at `:673-675` is `RateLimit.Hopeless(limited.Reason)` or a stated reset that outlasts the budget), so a quoted line the redactor reduced to its marker, or one that holds no spent word, gets the table's phrases appended (risk consult R3) — the reason with no line at all, whose words are not already hopeless, falls back to the same phrases for the name (`KimiAcpProfile.SpentPhrasesOf`, every window of the name joined by " or ") — and carries the report's usage; no ladder step is taken for a quota, whatever its clause says; `ReviewerOutcome.RateLimited` gained `Usage` for it (default `None`). Everything else —
   exit 77 with a trace that names `src/quota.cs` and a tool titled `check rate limit` included — is an ordinary `NonZeroExit`, one launch. Exit **69** is also "another
   Kimi holds the sign-in past the deadline" (report `not_started`, the sentence on stderr and in `reason`); exit **65** also covers `model_not_offered` and an
   unusable hold. The exit and end words are shared with the shim (`AcpWords.SpentExit`, `AnsweredWord`, `NotStartedWord`, `ModelNotOfferedWord`), declared in a profile-neutral unit both read, as
@@ -3969,8 +4147,8 @@ flowchart LR
   holds the per-home file) and its next refresh would sign the person out (E4.2 decision 11). The six-hour scratch sweep (`PanelService.PruneOldScratchDirs`) finishes it once the tree has ended: it calls `KimiHome.DisposeAllUnder` on each due `coai-answers-*` folder BEFORE the deleter, asks the same per-home hold, and on any `Stopped` skips the folder for that beat (warned) — a folder's last-write time cannot say a `kimi` is still running, because writes deep inside a home never move it (E4.4 review B1).
 - **Registered** in `ReviewerRuntimeSelector.Default`, `RuntimeNames` and `Named("kimi", vendorId)`, and in `MachineOnlyRuntimes` (D12: the Team server derives its accepted set as
   `RuntimeNames` minus that one, so it refuses a `kimi` row by name). `shared/feature-availability.json` names it: effort and thinking `unmeasured` (the k3 models announce
-  `low`/`high`/`max`, M-K7; nothing showed one taking effect), fast mode `none`; NOT a consultant, NOT in `runtime-capabilities.json` (S5 — a runtime may not enter it without its
-  own `ConfinementPlanner` arm). The extension's `RUNTIMES` and the two manifest enums name it too (the seed's `runtimes` must equal them); its preset, models, colour, terminal, install and update are E4.5's and are
+  `low`/`high`/`max`, M-K7; nothing showed one taking effect), fast mode `none`; at S4 NOT a consultant and NOT in `runtime-capabilities.json` (a runtime may not enter it without its
+  own `ConfinementPlanner` arm) — S5 made it both: a consultant since E5.4, and a question-consultant runtime with its own planner arm since E5.6 (below). The extension's `RUNTIMES` and the two manifest enums name it too (the seed's `runtimes` must equal them); its preset, models, colour, terminal, install and update are E4.5's and are
   described in [module_extension.md](module_extension.md).
 - **The vendor's words after the cure (story 2, 2026-10-20; D4).** `Diagnosis` carries the table's `Marker` that matched (empty for the unreachable-engine cure). `ReviewerSummaryFactory.Because` writes a diagnosed failure as `{cure} — the vendor said: {line}`: the FIRST stderr line that holds the marker, our `[coai-mcp] ` tag removed, redacted through `VendorReason.Written` FIRST and cut SECOND with a plain cut (not `Quote`, which never cuts a tagged line) — 160 characters in the summary `Describe`, `VendorReason.SafetyCap` (4,000) in `DescribeWhole`, which is what the ledger and the log write. The cure is always whole. Moonshot account ids (`org-…`, `ak-…`: 8–128 letters and digits with at least one digit) are taken out by the redactor's `moonshot-id` pattern. Tests: `TheVendorsWordsSurviveTheCureTests`.
 - **The cure once, the id never (story 3 follow-ups, 2026-10-20).** Two rules hold on EVERY road a vendor's line takes into the summary, the ledger and the log. (1) The cure is said once: the shim's note is `<name>: <reason> — <cure>` (`AcpDiagnosis.Note`, the one place that shape is written), and `Because` puts the table's own cure in front, so it quotes the note WITHOUT the shim's tail (`AcpDiagnosis.WithoutCure` over `KimiAcpProfile.Failures`; the vendor's reason stays whole). (2) Redact BEFORE any cut: `Quote` — the road of every undiagnosed line (the shim's tagged `provider_error`, a plain stderr line) — now runs `VendorReason.Written` first and `Cut` second, and a line we wrote (tagged) is redacted whole; before this a tagged line reached the summary whole and unredacted, and a cut line could show the head of an id (`org-0a1b`) that no pattern matches. Tests: `TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests`. Not covered: the reasons of `NotStarted`, `StoodDown` and `Unparseable` outcomes, which are adapter-composed and not cut.
@@ -3981,6 +4159,7 @@ flowchart LR
   `kimi login` nor `exit 77`; the outcome is `RateLimited`, hopeless, one attempt, one shim launch; an `org-…`/`ak-…` id in the agent's sentence reaches none of the three lines. The summary's copy of the clause is the vendor's
   line cut at 160 characters, so it survives only while the vendor's sentence is short; the ledger and the log hold it whole (4,000). **The plan's capture step** (the real ACP sentence is NOT yet measured — the envelope of the fixture
   is constructed) is written in `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` §5 and `RESULTS_kimi_confinement.md` §31: it is a procedure, not a run, and it is checked against the `moonshot-id` pattern before any fixture is replaced.
+- **The evidence tails (feature gate round 2, 2026-10-22, T1–T3 of `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`; code gate G-A…G-C).** T1: `AskAcpMode.DiagnosedNote` hands `diagnosis.Note` the reason AND the matched line — `AcpDiagnosis.Said(reason)` is `<reason>; the agent's stderr: <line>` when `Line` is non-empty, the reason alone when the reason itself held the phrase. The line is passed through `Redaction.SafeText(Line, LineCap)` once more inside `Said` (idempotent, bounded: the record is public, and a caller can construct one whose line never saw `LineWith`). The cure is still LAST in `Note`, so `WithoutCure` and `CurelessReason` read the note back; the note — which `BoundedScheduler.Because` prefers over the adapter's recovered text — now carries the provider's sentence for a `provider_error` (`Internal error` + stderr `Authentication required: 503 Service Unavailable`) and for a `not_signed_in` found only on stderr, on the round summary, the ledger and the log. `KimiRuntime` reads the REPORT (`Said`, `SpentReason`), never the note, so a line is quoted once per road. **No parenthesis of ours around the vendor's line (code gate G-A):** `KimiRuntime.Quoted` is `<said>; Kimi said: <line>` and `SpentReason` appends the table's phrases BEFORE the quoted line (`<said>; <phrases>; Kimi said: <line>`), so the vendor's line is always the LAST thing in the reason and nothing of ours closes after its last character. The separator is `; `, not the cure's ` — ` (`AcpDiagnosis.CureSeparator`, which `WithoutCure`/`CurelessReason` and `BoundedScheduler.VendorSaid` parse by) and not a bracket (a vendor line may open or close its own). T2: `KimiQuotaWords.ClauseOf` is back to the original rule — a clause ends at a period followed by whitespace or at the end of the text, with NO parenthesis counting (the first fix of this round counted depth and broke on a vendor line `(Your quota will reset at 14:00 UTC.)`, which lost its own `)`, and on nested vendor parentheses). **Deviation from the plan's preferred wording, unchanged:** the clause is not taken from unwrapped vendor words, because it is computed in `VendorDiagnosis.CureOn` from composed strings (the scheduler's reason and the shim's stderr tail), where no unwrapped text exists; removing our brackets at the source makes the plain rule exact. Open edge: a line quoted WITHOUT a final period and followed by our cure (the shim's stderr note, ` — <cure>`) runs the clause on to the 160-character cap; the reason road (the one the summary reads) has the line last and is unaffected. T3 (a security finding of the plan round, ac5234cb; code gate G-C): the Moonshot id rule masks `org-`/`ak-` plus the WHOLE run of `[A-Za-z0-9_-]` (8–4096, one digit in its first 128 characters) — see [module_core.md](module_core.md); the capture step writes the vendor's first real line to the ledger and the log before anyone reads it.
 - **Diagnosis.** `VendorDiagnosis.Known` carries the five NAMES the shim writes (`not_signed_in:`, `subscription_model:`, `balance_spent:`, `kimi_quota_spent:`, `model_not_offered`; `provider_error` has none, so the vendor's words stand downstream) — the shim files a
   known failure as `<name>: <reason> — <cure>` on stderr (`<name>: <reason>` alone for a row with no cure) — never a phrase of Kimi's trace. `InstallCure("kimi")` is Moonshot's own: `irm https://code.kimi.com/kimi-code/install.ps1 | iex`
   (Git for Windows first, `winget install Git.Git`) on Windows, `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash` on Linux and macOS (read 2026-10-14).
@@ -3998,7 +4177,11 @@ flowchart TD
   H -->|"Windows, a Windows kimi"| P
   H -->|"WSL, generation WSL2"| P
   H -->|"WSL1"| R1["refused: this is WSL1 - wsl --set-version distro 2, from Windows"]
-  H -->|"native Linux"| R2["refused: Kimi runs on WSL2 only for now"]
+  H -->|"native Linux"| S{"Kimi in HostAdmission.MeasuredOnNativeLinux? (the set is EMPTY: E3 adds Kimi)"}
+  S -->|"no - asked first, so every answer is today's"| R2["refused: Kimi runs on WSL2 only for now"]
+  S -->|"yes"| B{"kernel banner read? (WslGeneration)"}
+  B -->|"Unreadable"| R6["refused: the kernel banner /proc/version could not be read"]
+  B -->|"read, not WSL"| P
   H -->|"wsl.exe bridge on Windows, macOS, other"| R3["refused: D18"]
   P["places: ~/.kimi-code/bin/kimi; rg and fd in bin, then PATH, then ~/.local/bin"] --> E["built environment: HOME to os/, XDG_CACHE_HOME to cache/ beside it"]
   E --> M{"MountLocality.Judge of the sign-in's real path, on EVERY launch before any process starts"}
@@ -4014,6 +4197,19 @@ flowchart TD
   shared `shared/wsl-banner-vectors.json`). Refused: WSL1 (the WSL1 sentence and its cure, run from Windows), native Linux (*Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host*), a
   Windows host that would start `wsl.exe` or a `\\wsl$` path, macOS and every other host. `KimiHost` (kind + generation, with the `AsyncLocal` flow seam `KimiHost.Using` that `VibeHost` has) reaches
   `KimiLaunch.TakeAsync` and `KimiRuntime`; the bare-`HostKind` constructors are `internal` test doors. `KimiSeams.Using` is the same kind of seam for the person's places and the shim's binary.
+- **Native Linux, E1.S2 of `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md` (2026-10-21) — the shared plumbing, with BOTH runtimes still refused.** The `HostKind.Linux` arm of `HostAdmission.Refusal` asks a per-runtime
+  set, `HostAdmission.MeasuredOnNativeLinux` (a public read-only set, **EMPTY**; names compared case-insensitively), and an `internal` overload takes the set so a test can inject one. **Membership is asked FIRST**: a runtime
+  not in the set gets the sentence above unchanged whatever the banner says, so with the empty set no answer of any host changed (the pins in `KimiLaunchChecksTests` and `VibeLaunchRulesTests` stand). A runtime IN
+  the set is admitted only on a banner that was READ; `WslGeneration.Unreadable` gets its own sentence, written once beside the others (*{runtime} is refused on this Linux host — the kernel banner /proc/version could not
+  be read, so coai cannot tell a native Linux host from WSL1 (DN6 of todo/PLAN_kimi_and_vibe_on_native_linux.md)*) — reachable today only through an injected set. `Unreadable` is produced ONLY by
+  `WslGenerations.Of(onLinux, BannerReading)` — Linux with a `/proc/version` that is absent, throws or is empty (`ProcVersion.ReadFrom` over a seam; `ProcVersion.Reading` is the one read, `Text` unchanged for
+  `VendorDiagnosis`); `WslGenerations.Of(string)` never answers it, so `shared/wsl-banner-vectors.json` and the extension's parity test do not move. `WslGenerations.ForHost(kind)` is now the ONE place `VibeHost`,
+  `KimiHost` and `VibeRuntime`'s test door decide whether to read the kernel: WSL **and native Linux** (it was WSL only, three copies). `KeyringSessionFacts.Of(environment, isSocket, listing, uid)` (`runners/Platform/`) reads
+  the three keyring-session facts of DN10 — `DBUS_SESSION_BUS_ADDRESS` set, a socket at `$XDG_RUNTIME_DIR/bus` (else `/run/user/<uid>/bus`), a `gnome-keyring-daemon` / `kwalletd*` / `keepassxc` in the listing (what counts as a daemon is ONE file, `shared/keyring-daemon-vectors.json`, which this class's test and the facts script's own independent reading both read; `keepassxc-proxy` is not one) — each its own
+  value, an unreadable listing `cannot tell`; **no admission reads them** (coai closes the keyring road itself in E2). **`coai-mcp --host-facts`** (`src/HostFactsMode.cs`, `Startup.HostFacts`, listed in `.agents/PROJECT.md`)
+  prints ONE line — `{"server","hostKind","banner":{"read","text","generation"},"admission":{"Vibe","Kimi"},"keyringSession":{"busAddressSet","busSocket","daemons","listing"},"decides"}` — and exits 0, never 64; it is
+  read-only (no home, lock, network or data folder), NOT a writer mode, and classified in `EveryModeIsClassifiedForAMissingNamedRootTests` as a mode that never reaches the data directory. It is the product's own
+  reading, set beside the facts script's raw one (two readings, on purpose). The report is `HostFactsReport` (`runners/Platform/HostFactsReport.cs`); the mode only serialises it (source-generated JSON, Native AOT).
 - **DL5 — the CLI and the tools are found where the installers put them.** `KimiAcpProfile.InstalledExecutableFor` and `KimiPlaces` find `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` on Linux and WSL
   (spelled with `/` by the HOST, never `Path.Combine`); macOS still guesses nothing. `KimiTools` searches the person's bin, then `PATH`, then `~/.local/bin` (a third place — where DL12's `fd` link goes), and the
   directory each of `rg` and `fd` was found in joins the built `PATH` through `ToolFolders`, so a `~/.local/bin/fd` is found though the editor's `PATH` lacks it. A candidate counts only when it is an executable file
@@ -4053,3 +4249,187 @@ flowchart TD
 **Not built here, by the plan's own scope:** a Kimi consultant and a Kimi question row (`RuntimeCapabilities.Runtimes` and `ConsultantResolution` do not list Kimi; that is `feat/kimi-consultant`'s), so the harness
 has a plan round and a code round and no consult or question flow for Kimi. Tests: `KimiLaunchChecksTests` (S-K20), `KimiToolsOnLinuxTests`, `KimiPlacesOnLinuxTests`, `KimiEnvironmentOnLinuxTests`, `MountLocalityNetworkTests`,
 `KimiNetworkSignInSettingTests`, `KimiSurvivorMarkerReportTests`, `AKimiRowRunsThroughTheServiceOnWsl2Tests` — listed in [module_tests.md](module_tests.md).
+
+## The probe instruments measure the product's road — E1.S3 of the native-Linux plan (2026-10-21, `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md`; DN4, DN5)
+
+Scripts only (`scripts/`); no product code changed and no answer of any runner changed. What the probes now do that they did not, and where it lives:
+
+- **Vibe's M-V7 measures the closed keyring road** (`scripts/lib/vibe.mjs` `keyringArm` / `keyringSetup` / `writeProbeKeyring`, wired in `scripts/probe-vibe-confinement.mjs`). On Linux arms a and a2 carry
+  `PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring` — the environment the launch E2 ships; arm a3 carries it AND a `HOME` whose `.config/python_keyring/keyringrc.cfg` names the probe's own AVAILABLE backend
+  (`keyring-backend/probe_marker.py`, `MarkerKeyring`: appends the SERVICE name to a marker file, returns `None`, so no key exists); a3c is the same fake HOME without the variable. The row's `keyringMarker`
+  flag says whether the backend was reached: a3 must NOT (the forced backend wins), a3c MUST (else a3 proved nothing). Everything is written inside the arm's scratch. On Windows nothing changes and a3/a3c do not run.
+  `--arms a3,a3c` (`armWanted`) runs just those two, so the free live check never reaches the paid arm b. The precedence claim stays "to be proven" until a3/a3c are run (the lead's WSL check, then N-V1).
+- **One Kimi rule for every probe** (`scripts/lib/proc.mjs`). `linuxProcesses` returns `{ pid, ppid, comm, name }` with `name` read as `LinuxProcessListing` reads it, and `isKimi` is a port of
+  `ForeignKimiWatch.IsKimi`, so a running `kimi acp` (comm `MainThread`) is seen. The "no other kimi" wait is `waitForNoOtherKimi`, shared: `probe-kimi-tree-hold.mjs` runs it before every run and
+  `probe-kimi-confinement.mjs` now runs it before every launch (a kimi that does not end in 10 minutes stops the run). Parity with the product is pinned by `proc.test.mjs`, whose cases are the product's own, and — since the code gate on E1 (G22) — by ONE shared file, `shared/kimi-identity-vectors.json` (process by `exe` / hidden-exe `argv[0]` and `comm` → listed name → `isKimi`),
+  read by `proc.test.mjs` AND by the C# `KimiIdentityVectorTests` over `ForeignKimiWatch.IsKimi`: changing the product's identities forces the probe's. `lockState` names every flock ending (75 Held, any other exit by its number, a signal or a spawn error by its name).
+- **An owned launch of the confinement probe reads no credential** (`scripts/lib/kimi.mjs` `manifest`, `credentialShape`, `CredentialWatch`). Its record of the person's `~/.kimi-code` around each launch hashes every file except `credentials/`, which is recorded by
+  `lstat` only (names with the slot's hex redacted, size, mode, mtime); the hash function is injected so a test proves it is never called for those paths. M-K3's and M-K6's arms moved to `scripts/lib/kimi-arms.mjs`
+  and now run on an owned root (shim arms) / an owned home with `owned: true` (the `-p` controls); `lib/kimi-home.mjs` `unixBuiltEnv` names `XDG_CACHE_HOME` beside `os/` as `KimiEnvironment` does (DL11), and
+  `ownedRoot` makes the 0700 `cache/` folder on a Linux host. `XDG_CACHE_HOME` is named whenever `home` is an owned `<root>/home`, with or without the OS-home redirect (J2 of the Opus judge: M-K12 arm (a) and its `-p` control keep the real `HOME`
+  but no longer extract into the person's `~/.cache`), or outright by a `cacheDir` option. **The sentence this bullet used to open with, "never reads a credential", was false until 2026-10-21**: the probe built `CredentialGuard(REAL_HOME)` at
+  start (its constructor parses every `credentials/*.json` and hashes the `refresh_token`) and re-read after every owned launch. Now every launch is watched by `CredentialWatch` through an `lstat` SHAPE (name, inode, size, mtime;
+  rotation is `null` = unknown); the content-reading `CredentialGuard` is built lazily, only for the legacy cells that COPY the sign-in into a scratch home (M-K8, M-K9's user-hook and trust arms, M-K10 — NOT M-K7: its empty home and its `credentials: false` copy carry none), and those are
+  refused (`copiedHome()` throws before any byte is copied) unless `--allow-copied-credentials` is passed — the native series template never passes it (`native-run.mjs` `RESERVED_FLAGS`). A launch counts as a copied-credentials one only when its home is in `filledHomes`, the set of homes
+  `copiedHome` actually filled (`launchesOnCopiedCredentials`); before the re-check of 2026-10-21 it was "has a home, not shared, not owned", so M-K7's arms built the content guard without the flag and every later launch re-read the sign-in. S-N2's twin injects the reader and proves it is never called for an owned-only run or for M-K7's launches.
+  The probe's own `kimi --version` (before any cell) now runs after the no-other-kimi wait, in `versionEnv(<scratch>/version)` — the built environment of an owned root, its cache named — and after `homeBefore` is recorded; it used to inherit the real `HOME` and `~/.kimi-code`.
+  Off Windows the default `--cells` is the OWNED set (`OWNED_CELLS` in `lib/kimi-d19.mjs`: M-K3–M-K6, M-K11, M-K11c, M-K12, M-K13, M-K9e, M-K7b, M-K5b); a requested cell that launches on the real home (M-K1, M-K2, M-K7, M-K8, M-K8b, M-K9, M-K10, M-K11b) is refused unless `--allow-real-home` is passed, which the series template can never pass.
+- **Judge and gate fixes of the Kimi probes (2026-10-21)** (details in `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md`, *Code gate and judge fixes*): `makeAgentsCanary` creates both `~/.agents` files exclusively (`wx`) and takes its own skill back if `AGENTS.md` appeared; the survivor's start time is
+  read when it is first listed and must match at the kill (`survivorsOf`); the D19 cells build their specs through `ownedSpecFor` like the 2.2.0 window's, so `requireOwned` covers them; `armWanted` accepts a missing filter; one `redactSlot` (exported from `lib/kimi.mjs`) replaces the three copies of the slot-hex redaction.
+- **N-K2 sees an abrupt death and the next launch** (`scripts/lib/kimi-schedule.mjs`, `scripts/probe-kimi-tree-hold.mjs`). A new arm `killed-hard` ends the shim with SIGKILL (the shim handles SIGTERM and ends the agent's
+  tree itself, so TERM proves nothing about an abandoned survivor marker); it counts only when a `*.survivors.json` existed in the lock folder at the kill. Every killed arm's repetition is a PAIR — `<arm>-<n>`, then at
+  once `<arm>-<n>-next`, a normal launch recording the marker before it, the shim's report and the marker after it — repeat-outer; each survivor of a kill is recorded with its NEW parent (pid, comm, exe basename).
+- **The live-survivor arm** (`killed-hard-live`, `scripts/probe-kimi-tree-hold.mjs`; N-K2 / cornerstone C2): SIGKILL, then a `-next` launch started WHILE the killed arm's own kimi runs — the probe's "no other kimi"
+  wait is bypassed for exactly that process, by pid and start time (`waitForNoOtherKimi({ except })`), every other kimi still blocking — then an `-after` launch once it has ended. It records the marker before and after,
+  the refusal text, the survivor's new parent and a verdict against `KimiSurvivorGate`'s promise (Busy naming the survivor, nothing started, the marker stands). Runs only with `--allow-live-survivor`, on a host
+  where the owner allowed the window: a failure of the gate would put two refreshers on one sign-in. (The gate's reconcile may also END an orphan by identity when the writing shim is gone; the verdict reports that as `UNEXPECTED`.)
+- **The 2.2.0 window's cells run on owned roots** (`scripts/lib/kimi-arms.mjs`: M-K3, M-K4, M-K6, M-K12). Every arm carries `requireOwned` and the launch refuses one with no `<root>/home` beside `<root>/os`
+  (`ownedRefusal`). M-K12's `~/.agents` canary still lives in the person's real `~/.agents`, written and removed by exact paths only.
+
+Tests: `proc.test.mjs`, `kimi.test.mjs`, `kimi-home.test.mjs`, `kimi-arms.test.mjs`, `vibe.test.mjs`, `kimi-schedule.test.mjs` — listed in [module_tests.md](module_tests.md) (section *E1.S3*). No paid or live run was made.
+
+## The shim continues a session — `--ask-acp … --session <id>` (2026-10-16, E5.1–E5.2 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+The second turn of a Kimi conversation is a `session/load` of the session the first turn's report named, run by the same shim, under the same three
+blocks (every permission refused, reads served only from the cwd, the tree hold) and in the same built environment. What the load does was measured
+first (M-K16, `research/RESULTS_kimi_confinement.md` §33, Kimi 2.1.1): the load's RESULT announces the `model` option like `session/new`'s; Kimi REPLAYS
+the history as `session/update` (the earlier user and agent chunks, verbatim) BEFORE it answers the load; an id it does not hold is JSON-RPC `-32602`
+`Invalid params: Unknown sessionId: <id>`; and `/usage` stays cumulative over three turns, the output delta equal to that turn's own output tokens.
+
+```mermaid
+sequenceDiagram
+  participant H as host (E5.4)
+  participant S as coai-mcp --ask-acp --session id
+  participant A as kimi acp
+  H->>S: argv: --session id, the SAME --cwd · prompt on stdin
+  Note over S: id not a vendor handle (ConsultantHandle.IsWellFormed),<br/>or --session with no value → 65, nothing started
+  S->>A: initialize
+  S->>A: session/load {sessionId, cwd, mcpServers: []}
+  A-->>S: session/update × n (the replayed history — dropped)
+  alt the load answered with an error
+    A-->>S: error (code, message)
+    S-->>H: end session_lost, exit 70 — or the known failure (not_signed_in 77, end agent_failed)
+  else the load answered
+    A-->>S: result {configOptions: model …}
+    Note over S: model not among the LOAD's values → model_not_offered, 65
+    S->>A: session/set_config_option model → session/prompt → /usage
+    A-->>S: the turn's chunks (the answer) · Session total (cumulative)
+    S-->>H: report: answer, end answered, sessionId = id, usage = the SESSION's totals
+  end
+```
+
+- **The flag.** `AcpWords.SessionFlag` (`--session`) is the shim's own (parsed apart from `--findings`'s by `Program.Flags` from the mode on). `AcpAsk.Session`
+  carries it (empty = a new session, byte for byte what the shim did before — S5.2.8 pins the client's lines). `AskAcpMode.SessionRefusal` refuses, 65 and before
+  any process, an id that `ConsultantHandle.IsWellFormed` refuses (its pattern ends `\z`, not `$`: .NET's `$` also matches before a final newline, so `abc\n` passed), and `WithBareSession` keeps a `--session` with no value as an EMPTY id so it is refused too —
+  `Program.Flags` drops a flag whose value is missing, and a continuation that lost its id must never quietly become a new session. The refused value is not echoed.
+- **The load.** `AcpClient.OpenedAsync` chooses `CreatedAsync` (`session/new`, unchanged) or `LoadedAsync`: `session.SessionId = ask.Session` first (the result
+  need not repeat it, and the teardown's `session/cancel` names it), then `session/load` through `AcpSession.ReplayedAsync`, whose window drops every
+  `session/update` that arrives while the request is open — not the answer, not the trace, not the usage. The pump handles messages in order, so every replayed
+  update is handled before the load's response completes the request; nothing of the turn's own can arrive before its prompt is sent. The model check
+  (`NotOffered`, D10) then runs on the LOAD's announcement, exactly as on a new session's (E5.1 (a), the first branch).
+- **The lost session.** Any `AcpAgentException` on `session/load` becomes `AcpSessionLostException` → `AcpEnd.SessionLost`, word `AcpWords.SessionLostWord`
+  (`session_lost`), exit 70 — never keyed on the code (a bad `cwd` is the same `-32602`). Its reason is `AcpClient.LostLead` (the id in coai's words), then the
+  agent's code and message, with only Kimi's own echo `Unknown sessionId: <the id>` rewritten `Unknown sessionId: <id>` — a short id written over every
+  occurrence would garble the agent's words. The diagnosis reads the reason WITHOUT that lead (`AskAcpMode.Diagnosable`), so an id can never spell a known failure
+  and turn a lost session into a refusal or a spent allowance; it still reads the agent's message: `AskAcpMode.Named` turns a `SessionLost` that a known failure names into
+  `AgentFailed` with that failure (a load refused with `Authentication required` is `not_signed_in`, 77, end `agent_failed`), because the host reads `session_lost` as
+  "the conversation is gone" and a sign-in failure is not that. Nothing is prompted after a refused load.
+- **Every end has its own arms** (decision 9). `EndWord` and `EndExit` (now `internal`) name every `AcpEnd` explicitly — `Answered` → 0, `SessionLost` → 70,
+  `NotStarted`/`Deadline`/`Cancelled` → 69 — and keep a default arm only for a value nobody named; `EveryEnd_HasItsOwnWordAndExit_NoneFallsToADefaultArm` fails
+  when a new value falls to it (the default prints `cancelled` and exits 69). `KimiReport.End`'s remark lists `session_lost`.
+- **What the report carries for E5.4.** `sessionId` is the asked id on EVERY exit of a `--session` turn that prints a report — an agent refusal (65), a hold busy past
+  the deadline or taken too late (69), an executable that cannot start (69), a failure before or during the load, `session_lost`, a known failure — through
+  `AcpOutcome.NotStarted(why, session)` and the client's `Named` (the id the agent minted or loaded, else the asked one); a refusal of the argv (65 before any report)
+  prints none. `usage.tokensIn/tokensOut` are
+  the SESSION's totals from `/usage`, cumulative over every turn so far (the per-turn share is the host's, `ConsultationUsage.Less`); `end` is `session_lost` only when no
+  known failure named the refused load. `KimiReport` has no `SessionId` field yet — E5.4 decision 3 widens it.
+- **The probe's client** (`scripts/lib/kimi.mjs`, `acpTurn`) gained the two features M-K16 needed, after the measurement ran on a scratch driver: `loadUpdates`
+  (every `session/update` between the load request and its response — its kind, and for a text chunk the first 120 characters) and `endLikeTheShim`
+  (`session/cancel`, a quiet of 250 ms with no output and at most 1 s, the tree kill while the agent lives, and only then stdin closed). Its tree kill is by pid on
+  every host (`taskkill /T /F` on Windows; the pid's `SIGKILL` on POSIX, where only the unit tests' fake agent runs), and only while `stillRunning(child)` — neither
+  exited nor killed — so a late kill never reaches a pid another process holds now. `args` (default `['acp']`) lets a test start a node fake agent.
+- **A replayed tool call stays history.** While the replay window is open, `AcpSession` keeps only the tool-call ids it hears; a later `tool_call` or
+  `tool_call_update` of one of those ids is dropped, never merged into the turn's trace as an entry with an empty title and kind.
+
+Not covered by a test: a live load through the released binary (owed after the code, RESULTS §35), and the probe's M-K16 cell as a `--cells` arm (it ran on a
+scratch driver outside the repository, so it cannot be re-run from the repository yet). Tests: `AskAcpSessionTests`,
+`AKimiShimScenarioTests.TheTreeHold_IsTakenForALoadTurnToo`, and `scripts/lib/kimi.test.mjs` (S5.1.1–S5.1.2) — listed in [module_tests.md](module_tests.md).
+
+## The Kimi consultant — `KimiConsultant` (2026-10-16, E5.4 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+A `kimi` row answers `consult`. `ConsultantResolution.OnACli` gains `"kimi" => KimiOn(vendor)` — `VibeOn`'s shape: the `KimiRuntime` the row resolves to, else a
+new one, never another runtime — and `features.consultant` names `kimi`, so `Consulting` and `QuestionResolution.Answering` hold it (a question row on Kimi is
+refused by the capability matrix until E5.6 — *The Kimi question row and the consultant check* below).
+
+```mermaid
+flowchart LR
+  L[ConsultantLaunch<br/>Workdir = coai-kimi/id/tree<br/>OwnedScratch = coai-kimi/id<br/>Handle = sessionId or empty] --> B[KimiConsultant.Build]
+  B -->|MustBeLaunchable · model = row's or KimiModels.Default| R[KimiRuntime.Build<br/>role consult · cwd = the snapshot]
+  R --> Q["--ask-acp --profile kimi --model m --cwd tree --home coai-kimi/id/kh-&lt;10 hex&gt; … [--session id]"]
+  Q -->|adapter = KimiRuntime| X[executor → KimiLaunch.TakeAsync → the shim]
+  X --> P[report] -->|sessionId| H[ReadHandle]
+  P -->|end = session_lost| D[DroppedTheConversation]
+  P -->|usage = the SESSION's totals| U[UsageIsCumulative → ConsultationUsage.Less]
+```
+
+- **Composed, never a second builder** (decision 1). `Build` validates the launch (`ConsultantLaunches.MustBeLaunchable`), resolves the model (the row's, else
+  `KimiModels.Default`, so the shim, the invocation's `Model` and the ledger name the same one — E4 decision 75), calls `inner.Build(RoleOf(launch), prompt, cwd, "",
+  OutputDir, settings)` and appends `AcpWords.SessionFlag <handle>` LAST when the launch carries a handle. The invocation's adapter is `inner`, so the executor asks
+  `KimiLaunch` (the host, the tools, the model, the built environment, the sign-in, the home's shape, the gate) exactly as for a reviewer. A planned launch goes through
+  `ConsultantLaunches.ForQuestion` (idempotent on Kimi's built environment) and stands where its plan says — E5.6's business.
+- **The cwd and the home are both required** (decision 2). The cwd is `Workdir` — the conversation's ONE stable snapshot (D6; a loaded session resolves paths against the
+  folder it was made in, M-K5) — and the home is `KimiHome.HomeFor(OwnedScratch, …)` = `<folder>\kh-<10 hex>`, never the folder itself (E5.3 decision a). A missing
+  `Workdir` or `OwnedScratch` is an `ArgumentException` naming it: never the checkout, never TEMP or the answers folder (D19).
+- **Memory, handle, usage, drop** (decisions 3–5). `Memory = VendorRemembers`; `ReadHandle` is `KimiReport.SessionId` — the report's `sessionId`, which `KimiReport`
+  now reads (a trailing, defaulted field: widened, not copied) — when `ConsultantHandle.IsWellFormed`, else empty. `UsageIsCumulative = true` (M-K5b): the service bills
+  each turn `ConsultationUsage.Less` of the session's total. `DroppedTheConversation` is the report's END word `AcpWords.SessionLostWord` — never its `reason`, never the
+  agent's text, so a reason that SAYS `session_lost` is not a drop.
+- **Declared, not decided by name** (decisions 6–7): `NeedsASanitisedSnapshot = true`, `HomesFolder = ConsultantHomes.Kimi`; `Toolbox` names `Read` inside the copy and
+  `Grep`/`Glob`, says writes and shell commands are refused, and never calls `Grep` or `Glob` bounded (M-K6: they read the disk directly).
+- **A test's seam for a runtime built BY NAME** — `KimiSeams.Using(host, seams)`, per async flow (the `VibePathBudget.Using` precedent): `new KimiRuntime(id)` reads
+  `KimiSeams.ForThisFlow` (this machine's host and seams unless a test stood in), so a scenario that drives the real `ConsultationService` runs the real launch control
+  over a fake person on any OS. `null` in the product; nothing else reads it.
+- **The limitation rows** (decision 8, `shared/consultant-limitations.json`): Windows `unconfined` — `Read` bounded to coai's copy, `Grep`/`Glob` read any file this user
+  can, every write and shell command refused — `measured` 2026-10-13 on kimi 2.1.1 (M-K6, M-K3, M-K4, M-K5, M-K5b); Linux, WSL and macOS `unmeasured` with a `source`
+  naming D18, as Vibe's rows do.
+
+Tests: `KimiConsultantTests` (S5.4.1–S5.4.6 and the declarations), `ConfinementPlannerTests` (S5.4.13), `ConsultantLimitationsTests` (S5.4.11), `FeatureAvailabilityTests`
+(S5.4.12), `CumulativeUsageTests` (S5.4.14, pure) and the service arms in `AKimiConsultationScenarioTests` — listed in [module_tests.md](module_tests.md).
+
+## The Kimi question row and the consultant check (2026-10-27, E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+Both are ONE-SHOT Kimi launches through the same `KimiConsultant`, and neither needed a new branch in the server: the question row and the check
+already reserve a one-shot home for a runtime that declares `HomesFolder` (`VibeHomes.ReserveOneShot`) and make a copy for one that declares
+`NeedsASanitisedSnapshot`, and E5.3 decision g already disposes every one-shot folder junction-first. What E5.6 added is the planner arm and the table rows
+(the core's half, [module_core.md](module_core.md)) and one guard here.
+
+```mermaid
+flowchart LR
+  R[question row kimi × none / disk] --> M[CapabilityMatrix: unconfined → admitted FLAGGED]
+  R2[kimi × web] --> M2[unmeasured → refused, naming RESULTS_kimi_confinement.md]
+  M --> P["ConfinementPlanner.Kimi: no flags · none → Scratch · disk → Snapshot of the roots"]
+  P --> B["KimiConsultant.Build (planned)<br/>MustBeLaunchable (no handle) · MustCarryNoFlags<br/>cwd = row's empty cwd / its copy · home = OwnedScratch\kh-&lt;10 hex&gt;"]
+  C["coai-mcp --check-consultant"] --> B2["KimiConsultant.Build (consult role)<br/>cwd = &lt;scratch&gt;\own\tree\&lt;copy&gt; · home = coai-vh\&lt;8&gt;\kh-&lt;10 hex&gt;"]
+  B --> S[the shim, through KimiLaunch]
+  B2 --> S
+  S --> D["finally: OneShotHome.Dispose / ConsultCheckScratch.Delete / QuestionRowLaunch.RemoveScratch — junction-first (E5.3 g)"]
+```
+
+- **A planned Kimi launch** (E5.6 decision 3): the cwd is the plan's (`Scratch` → the row's EMPTY `cwd` folder beside its home; `Snapshot` → the copy of the
+  roots), the home is `KimiHome.HomeFor(OwnedScratch, …)` in the row's one-shot folder (`<root>\coai-vh\<8>\kh-<10 hex>`, or the row's own `coai-question-*`
+  folder with no homes root), there is never a `--session` (`MustBeLaunchable` refuses a handle on a planned launch: one shot), and the request goes through
+  `ConsultantLaunches.ForQuestion` (the minimal environment — a no-op for Kimi, whose `KimiEnvironment.Built` already makes the request minimal and not
+  inherited). **New: `MustCarryNoFlags`** — a plan whose `Flags`, `Leading` or `AddDirs` is not empty is an `ArgumentException` ("a Kimi row's confinement is
+  the shim's; a plan with flags is not one coai made for kimi"): the planner never gives Kimi a flag or a flag-spelled root (a disk row's roots are its copy's
+  `SnapshotSources`), so such a plan was made for another runtime, and splicing it would hand the CLI an argument nobody measured. `SnapshotSources` is not
+  checked: the adapter never reads it — the copy is made by `QuestionRowLaunch` and only its path (`Workdir`) reaches the launch. `QuestionRowLaunch` turns that exception into a
+  `failed` row with the sentence.
+- **The consultant check** (E5.5): `ConsultantCheck` gives Kimi a copy of the scratch repository (`<scratch>\own\tree\<copy>`) and a one-shot home under
+  `<root>\coai-vh\<8>` — or, with no homes root (settings built by hand), at `<scratch>\own\kh-*`, which `ConsultCheckScratch.Delete` disposes by name
+  (`ConsultantCheck.OwnName`, R6) before the root. The confinement recorded on the check is empty: Kimi's does not depend on its CLI's version.
+- **What the rows mean for the person.** `none` and `disk` are admitted FLAGGED `unconfined`: `Read` is bounded by the shim, `Grep` and `Glob` are not (M-K6),
+  so the row's **Can read this machine** tick is on and cannot be taken off. `web` is refused until a cell measures `WebSearch`/`FetchURL` (M-K17 would only
+  say whether they ASK; admitting `web` needs its own cell).
+
+Tests: `CapabilityMatrixTests` (S5.6.1, S5.6.2, S5.6.4), `ConfinementPlannerTests` (S5.6.3, S5.6.5, S5.6.6), `AKimiQuestionRowTests` (S5.6.7 and the service arm),
+`AKimiConsultantCheckTests` (S5.5.1–S5.5.4), `capabilityAdmission.test.ts` (S5.6.8) — listed in [module_tests.md](module_tests.md).

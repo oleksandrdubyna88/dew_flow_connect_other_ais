@@ -36,9 +36,9 @@ internal sealed class AKimiRound(TempDir dir)
         new("kimi", RoleCatalog.ArchitectureRole, new ProcessRequest("coai-mcp.exe", ["--ask-acp"], dir) { Timeout = TimeSpan.FromSeconds(30) }, string.Empty, new KimiReadSide(Kimi()), Model: "kimi-code/k3");
 
     /// <summary>What the real shim leaves for a turn whose agent answers with <paramref name="promptError"/>: exit, stdout report, and stderr as the parent captures it (tagged).</summary>
-    public static async Task<ProcessResult> TheShimSaysAsync(string promptError)
+    public static async Task<ProcessResult> TheShimSaysAsync(string promptError, string stderr = "")
     {
-        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")], $$""","promptError":"{{promptError}}" """);
+        using var agent = new FakeAcpAgent(stderr.Length > 0 ? [FakeAcpAgent.StdErrText(stderr), FakeAcpAgent.Chunk("x")] : [FakeAcpAgent.Chunk("x")], $$""","promptError":"{{promptError}}" """);
         var notes = new List<string>();
         var stdout = new StringWriter();
 
@@ -50,7 +50,7 @@ internal sealed class AKimiRound(TempDir dir)
     }
 
     /// <summary>One round whose agent answers the turn with <paramref name="promptError"/>.</summary>
-    public async Task<TheRound> RunAsync(string promptError) => await RunAsync(await TheShimSaysAsync(promptError));
+    public async Task<TheRound> RunAsync(string promptError, string stderr = "") => await RunAsync(await TheShimSaysAsync(promptError, stderr));
 
     /// <summary>One round whose launch ends as <paramref name="said"/> says — for a launch the real shim cannot produce (a vendor line with no tag).</summary>
     public async Task<TheRound> RunAsync(ProcessResult said)

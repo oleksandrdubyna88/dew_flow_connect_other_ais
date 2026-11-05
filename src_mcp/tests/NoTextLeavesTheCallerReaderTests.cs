@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// E3.S5 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>: an independent guard that nothing leaves the
+/// E3.S5 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>: an independent guard that nothing leaves the
 /// caller-transcript reader as text. Over every fixture E1 cut — enumerated from the folder, compared with the manifest — no string
 /// anywhere in an <see cref="ObservedSession"/> carries a byte of text, and every reason is a code of the one closed vocabulary.
 /// </summary>

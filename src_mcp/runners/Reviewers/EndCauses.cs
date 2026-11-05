@@ -13,9 +13,11 @@ namespace CoaiMcp.Runners.Reviewers;
 /// sentence; a measurement over the ledger could not count withdrawals against backstops at all.</para>
 /// <para>Here, in the library both halves compile against, for <see cref="UsageKinds"/>' and
 /// <see cref="LaunchAttempts"/>' reason: one spelling of a ledger column, so a writer and a reader cannot disagree
-/// about it. Only the server writes one today; a local line's <c>endCause</c> is empty, because a local round's clock
-/// and the MCP client's own cancellation reach the executor as one token (<c>RoundEngine</c> links them) and nothing
-/// above it records which fired. Empty is "not said", never a cause.</para>
+/// about it. A LOCAL review line carries one too since E3.S2 of todo/PLAN_the_round_counter_tail_E3.md: the executor sees only
+/// the round's one token, so the cause is decided ABOVE it, where the three tokens are held: the server's <c>RoundCancellation</c> owns the
+/// cancellation — callbacks on the caller's token and the round's clock record the FIRST cause to fire and only then cancel the round's own
+/// token — and the cause is written on the cancelled turn's last line. Empty is "not said",
+/// never a cause — and on a local line it now means the turn was not cancelled.</para>
 /// </remarks>
 public static class EndCauses
 {
@@ -43,6 +45,21 @@ public static class EndCauses
     /// </summary>
     public const string HostStopped = "hostStopped";
 
+    /// <summary>
+    /// The local round's own deadline ended it — the engine's clock was the FIRST of the three sources to fire. A LOCAL word: the
+    /// Team server never writes it (its backstop is <see cref="Backstop"/>).
+    /// </summary>
+    public const string RoundClock = "roundClock";
+
+    /// <summary>
+    /// A cancellation whose token nobody above the executor can name — a Team-server row whose server ended it, any token linked
+    /// elsewhere. A LOCAL word, and the answer for a cancelled turn when none of the three tokens fired: never empty, never guessed.
+    /// </summary>
+    public const string Unknown = "unknown";
+
     /// <summary>Every cause this build names, in the order a job meets them.</summary>
-    public static IReadOnlyList<string> Known { get; } = [Withdrawn, Abandoned, Backstop, QueueExpired, HostStopped];
+    public static IReadOnlyList<string> Known { get; } = [Withdrawn, Abandoned, Backstop, QueueExpired, HostStopped, RoundClock, Unknown];
+
+    /// <summary>The words only a LOCAL line carries — the shape of <c>UsageKinds.LocalOnly</c>. The server writes neither and is unchanged.</summary>
+    public static IReadOnlyList<string> LocalOnly { get; } = [RoundClock, Unknown];
 }

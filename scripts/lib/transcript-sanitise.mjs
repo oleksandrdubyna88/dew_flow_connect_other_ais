@@ -1,4 +1,4 @@
-// The sanitiser behind the caller-transcript fixtures (todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S3).
+// The sanitiser behind the caller-transcript fixtures (research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S3).
 // Claude Code's transcript is full of the operator's prompts, tool inputs, file contents and paths; a fixture cut from it is
 // published in a PUBLIC repository. So the rule is not "remove the secrets" — it is "keep only what is named":
 //

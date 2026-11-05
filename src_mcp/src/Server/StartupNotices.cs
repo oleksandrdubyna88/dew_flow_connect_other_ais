@@ -61,7 +61,7 @@ internal static class StartupNotices
     /// Every setting this build could not use — the half a settings RELOAD can produce.
     /// </summary>
     /// <remarks>
-    /// Its own method because <see cref="PanelServiceHost.Build"/> calls it and must not call the
+    /// Its own method because <see cref="PanelServiceHost.Assemble"/> calls it and must not call the
     /// other one: the storage notes come from a survey of the DISK taken once at startup, and a
     /// rebuild that re-ran it would stat a configured NAS on a settings change (issue #115). What a
     /// reload can newly produce is a value somebody just typed. (The code round, five findings.)

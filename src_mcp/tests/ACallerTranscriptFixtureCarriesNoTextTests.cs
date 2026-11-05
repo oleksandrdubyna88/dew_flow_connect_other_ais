@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The fixtures under <c>fixtures/caller-transcripts</c> are cut from real Claude Code sessions and PUBLISHED, so this class is
-/// the privacy boundary of the repository's tests (todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S5).
+/// the privacy boundary of the repository's tests (research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S5).
 /// EVERY file of every case is classified and validated — transcripts, metas, <c>rounds.json</c>, registry entries and the
 /// manifest — and a file that is none of those fails by name. Every string is the sentinel, an allowlisted shape or an approved
 /// vocabulary; every key is structural or <c>k&lt;n&gt;</c>; every path sits under a fixture root; every instant is on the

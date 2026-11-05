@@ -617,7 +617,7 @@ internal static class Schema
 
     /// <summary>
     /// Step 22: what a code round CHANGED — its size by scope, coverage and kind — and the effort each reviewer applied
-    /// (<c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>, story E2.S3, contract C2).
+    /// (<c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>, story E2.S3, contract C2).
     /// </summary>
     /// <remarks>
     /// <para><c>round_changes</c> holds one row per (scope, coverage, kind) cell that has at least one file; no path is
@@ -670,7 +670,7 @@ internal static class Schema
 
     /// <summary>
     /// Step 24: who wrote the code a round reviewed — the authors snapshot as a table and as columns
-    /// (<c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>, story E5.S2).
+    /// (<c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>, story E5.S2).
     /// </summary>
     /// <remarks>
     /// <para><c>round_authors</c> holds one row per row of the round's snapshot: who (<c>main</c> | <c>subagent</c>), the agent's opaque id

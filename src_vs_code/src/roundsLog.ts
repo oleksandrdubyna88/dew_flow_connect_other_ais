@@ -159,7 +159,7 @@ export interface LogRow {
    */
   readonly reviewedFrom: string;
   /**
-   * Who wrote what this round reviewed, as one line (E5.S6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`) — from the
+   * Who wrote what this round reviewed, as one line (E5.S6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`) — from the
    * session file's `authors` snapshot and `size`, never from the database. Empty for a round that recorded none: an older server's, a
    * skipped one, a chat turn. Empty is "not recorded", and the page then draws no line at all.
    */
