@@ -1,3 +1,4 @@
+using CoaiMcp.Tests.Leftovers;
 using FluentAssertions;
 using Xunit;
 
@@ -75,5 +76,20 @@ public sealed class KilledRunChild
         }
 
         Environment.FailFast("E5 S3: killed on purpose");
+    }
+}
+
+/// <summary>A fact that plants an ORPHAN CLAIM inside its own run folder (a claim whose folder is missing), absent from the registry: the end-of-run audit must name it before the run folder ends (E5 S6, D8 (o)).</summary>
+public sealed class OrphanClaimChild
+{
+    [Fact]
+    public void PlantsAClaimWhoseFolderIsMissing()
+    {
+        if (Environment.GetEnvironmentVariable("COAI_S6_ORPHAN_CLAIM") != "1")
+        {
+            Assert.Skip("child-only: AnOrphanClaim_IsReportedByTheAudit_BeforeTheRunFolderEnds starts the suite on this class with COAI_S6_ORPHAN_CLAIM=1");
+        }
+
+        File.WriteAllText(Path.Combine(RunTemp.Folder, Owned.NameFor("orphan") + ".owner"), Owner.This.Format() + "\n");
     }
 }

@@ -18,7 +18,7 @@ public sealed class LeftoversSweepFixture : IAsyncDisposable
     private readonly Action _audit;
 
     public LeftoversSweepFixture()
-        : this(RealSweep, Console.Error.WriteLine, audit: null /* the end-of-run audit is wired in E5 S6 (D9); until then this fixture's disposal does nothing */)
+        : this(RealSweep, Console.Error.WriteLine, () => RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder()))
     {
     }
 

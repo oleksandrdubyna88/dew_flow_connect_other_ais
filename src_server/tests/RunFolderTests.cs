@@ -135,6 +135,27 @@ public sealed class RunFolderTests : IDisposable
         TheOneLineRefusal(result, root, "TEMP, TMP and TMPDIR must all name this run's folder", sentinel);
         LinesOf(result.StdErr).Single().Should().Contain($"{variable}='").And.Contain("-mismatch'", $"only {variable} was changed");
     }
+
+    /// <summary>
+    /// D9, merge condition (o) (E5 S6): the end-of-run audit reads the run folder BEFORE the run ends. A child plants an orphan claim (a claim whose folder is missing) inside
+    /// its own run folder, absent from the registry and with no inherited <c>TESTSTODELETE_RUN</c>; only <c>Discover</c> sees it, and <c>Discover</c> answers nothing once the run folder is
+    /// gone. So the audit must run first, and the run must fail with its message.
+    /// </summary>
+    [Fact]
+    public void AnOrphanClaim_IsReportedByTheAudit_BeforeTheRunFolderEnds()
+    {
+        var root = _owned.Dir("s6-orphan");
+        var env = AllThreeAt(root);
+        env["COAI_S6_ORPHAN_CLAIM"] = "1";
+        env["TESTSTODELETE_RUN"] = null; // SuiteChild removes a variable given as null: the child's own record is what the audit reads
+
+        var result = SuiteChild.Run(["--filter-class", "*OrphanClaimChild"], env, ChildTimeout);
+
+        result.TimedOut.Should().BeFalse(result.StdErr);
+        result.ExitCode.Should().NotBe(0, "the audit fails the run");
+        (result.StdOut + result.StdErr).Should().Contain("coai tests: this run left 1 folder(s) it claimed").And.Contain("1 claimed in the temp root");
+        Directory.GetFileSystemEntries(root).Should().BeEmpty("the audit removes what it names, and the run's end removes the rest");
+    }
 }
 
 /// <summary>A theory whose <c>MemberData</c> runs at DISCOVERY: with the sentinel variable set it appends a line, so a refused child proves discovery never ran. Skips in a normal run.</summary>
@@ -166,5 +187,20 @@ public sealed class DiscoverySentinel
 
         Append("test body");
         row.Should().Be(1);
+    }
+}
+
+/// <summary>A fact that plants an ORPHAN CLAIM inside its own run folder (a claim whose folder is missing), absent from the registry: the end-of-run audit must name it before the run folder ends (E5 S6, D8 (o)).</summary>
+public sealed class OrphanClaimChild
+{
+    [Fact]
+    public void PlantsAClaimWhoseFolderIsMissing()
+    {
+        if (Environment.GetEnvironmentVariable("COAI_S6_ORPHAN_CLAIM") != "1")
+        {
+            Assert.Skip("child-only: AnOrphanClaim_IsReportedByTheAudit_BeforeTheRunFolderEnds starts the suite on this class with COAI_S6_ORPHAN_CLAIM=1");
+        }
+
+        File.WriteAllText(Path.Combine(RunTemp.Folder, Owned.NameFor("orphan") + ".owner"), Owner.This.Format() + "\n");
     }
 }

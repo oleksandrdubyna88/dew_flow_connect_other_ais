@@ -74,3 +74,5 @@ src_mcp/tests_leftovers/UnmatchablePid.cs -text
 src_mcp/tests_leftovers/Unremovable.cs -text
 src_mcp/tests_leftovers/WindowsOwnership.cs -text
 src_mcp/tests_leftovers/template-manifest.json -text
+src_mcp/tests/Leftovers/LeftoversAuditTests.cs -text
+src_mcp/tests/Leftovers/LeftoversSelfTest.cs -text

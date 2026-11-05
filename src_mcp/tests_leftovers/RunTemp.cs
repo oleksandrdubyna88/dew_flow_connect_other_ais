@@ -194,6 +194,10 @@ public static class RunTemp
         stderr.Flush();
     }
 
+    /// <summary>What the end-of-run audit reads: every folder the helper still holds, without this run's own folder, which <see cref="EndOfRun"/> ends right after the audit (D9).</summary>
+    internal static IReadOnlyList<OwnedDir> RegistryWithoutTheRunFolder() =>
+        [.. OwnedDir.Unreclaimed().Where(dir => !ReferenceEquals(dir, _run.Dir))];
+
     /// <summary>Restores the three variables and removes the folder and its claim. Idempotent: whichever of the fixture and the process exit comes first does the work.</summary>
     internal static void EndOfRun() => _run.Restore();
 

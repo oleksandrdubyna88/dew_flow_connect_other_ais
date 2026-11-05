@@ -54,7 +54,7 @@
         {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
         {"old": "typeof(Mcp.Tests.Leftovers.LeftoversSweepFixture)", "new": "typeof(CoaiMcp.Tests.Leftovers.LeftoversSweepFixture)", "count": 1},
         {"old": "LeftoversSweep.Run(new SweepOptions(Owned.TempRoot(), DateTimeOffset.UtcNow, LeftoversSweep.MinAge, Liveness.ProbeProcess, Scope.IsMine))", "new": "StartOfRunSweep.Run(RunTemp.Real)", "count": 1},
-        {"old": "() => RealAudit(Owned.TempRoot(), OwnedDir.Unreclaimed())", "new": "audit: null /* the end-of-run audit is wired in E5 S6 (D9); until then this fixture's disposal does nothing */", "count": 1}
+        {"old": "() => RealAudit(Owned.TempRoot(), OwnedDir.Unreclaimed())", "new": "() => RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder())", "count": 1}
     ] },
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversAudit.cs", "target": "src_mcp/tests_leftovers/LeftoversAudit.cs", "blob": "f1a93747b118936746aca9cffc6c8a981a297d79", "replace": [
         {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
@@ -136,6 +136,15 @@
         {"old": "private const string Janitor = \".claude/rules/shared/tools/janitor.sh\";", "new": "private const string Janitor = \".agents/conventions/tools/janitor.sh\";", "count": 1},
         {"old": "git submodule update --init .claude/rules/shared", "new": "git submodule update --init .agents/conventions", "count": 1},
         {"old": "exactly as Path.GetTempPath does", "new": "exactly as the temp-path API does", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversAuditTests.cs", "target": "src_mcp/tests/Leftovers/LeftoversAuditTests.cs", "blob": "72d421d227bd667fb230bdb0ecd3b67897148db0", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
+        {"old": "mcp tests:", "new": "coai tests:", "count": 6},
+        {"old": "bash .claude/rules/shared/tools/janitor.sh --token mcp --dry-run", "new": "bash .agents/conventions/tools/janitor.sh --token coai --dry-run", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversSelfTest.cs", "target": "src_mcp/tests/Leftovers/LeftoversSelfTest.cs", "blob": "b1ebd5592ad3da828f1dae58d444b73ff2580c79", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
+        {"old": "MCP_LEFTOVERS_SELFTEST", "new": "COAI_LEFTOVERS_SELFTEST", "count": 2}
     ] }
   ]
 }

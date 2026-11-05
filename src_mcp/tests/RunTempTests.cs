@@ -402,6 +402,27 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
         LinesOf(result.StdErr).Single().Should().Contain($"{variable}='").And.Contain("-mismatch'", $"only {variable} was changed");
     }
 
+    /// <summary>
+    /// D9, merge condition (o) (E5 S6): the end-of-run audit reads the run folder BEFORE the run ends. A child plants an orphan claim (a claim whose folder is missing) inside
+    /// its own run folder, absent from the registry and with no inherited <c>TESTSTODELETE_RUN</c>; only <c>Discover</c> sees it, and <c>Discover</c> answers nothing once the run folder is
+    /// gone. So the audit must run first, and the run must fail with its message.
+    /// </summary>
+    [Fact]
+    public void AnOrphanClaim_IsReportedByTheAudit_BeforeTheRunFolderEnds()
+    {
+        var root = _owned.Dir("s6-orphan");
+        var env = AllThreeAt(root);
+        env["COAI_S6_ORPHAN_CLAIM"] = "1";
+        env["TESTSTODELETE_RUN"] = null; // SuiteChild removes a variable given as null: the child's own record is what the audit reads
+
+        var result = SuiteChild.Run(["--filter-class", "*OrphanClaimChild"], env, ChildTimeout);
+
+        result.TimedOut.Should().BeFalse(result.StdErr);
+        result.ExitCode.Should().NotBe(0, "the audit fails the run");
+        (result.StdOut + result.StdErr).Should().Contain("coai tests: this run left 1 folder(s) it claimed").And.Contain("1 claimed in the temp root");
+        Directory.GetFileSystemEntries(root).Should().BeEmpty("the audit removes what it names, and the run's end removes the rest");
+    }
+
     private static string TestsExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "CoaiMcp.Tests.exe" : "CoaiMcp.Tests");
 
     [Theory]
