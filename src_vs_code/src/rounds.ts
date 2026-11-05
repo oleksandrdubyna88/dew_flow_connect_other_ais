@@ -37,7 +37,7 @@ export interface ReviewerState {
    *
    * <p>Which today is every hosted one: no hosted adapter puts a reasoning flag on its CLI's
    * command line, so recording an effort for one would claim something that did not happen.
-   * Antigravity's effort is inside its model id (`gemini-3.7-flash-high`) rather than beside it.</p>
+   * Antigravity's effort is inside its model id (`gemini-3.8-flash-high`) rather than beside it.</p>
    */
   readonly effort?: string;
   /**

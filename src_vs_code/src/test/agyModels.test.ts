@@ -82,3 +82,21 @@ test('the line under the dropdown says where the list actually came from', () =>
   assert.match(modelsProvenance('antigravity', [], { discoveredAgy: parseAgyModels(AGY_OUTPUT) }), /14 models/);
   assert.match(modelsProvenance('antigravity', [], { discoveredAgy: [] }), /did not answer/);
 });
+
+test('the curated fallback offers the 3.8 Flash ids agy 1.4.4 lists, not the 3.7 ones it refuses', () => {
+  // Found 2026-10-21 (research/PLAN_the_agy_default_is_a_model_agy_offers.md): agy 1.4.4 lists
+  // gemini-3.8-flash-{low,medium,high} and refuses gemini-3.7-flash-* ("not recognized") before any model call,
+  // so a dropdown built from the fallback offered three ids that could never run.
+  const fallback = modelsFor('antigravity', [], '', undefined, []).map((m) => m.id);
+
+  for (const effort of ['low', 'medium', 'high']) {
+    assert.ok(fallback.includes(`gemini-3.8-flash-${effort}`), `gemini-3.8-flash-${effort} is offered`);
+  }
+  assert.ok(!fallback.some((id) => id.startsWith('gemini-3.7-flash')), 'no 3.7 id agy refuses is offered');
+});
+
+test('when agy answers its list still wins over the curated one', () => {
+  const answered = [{ id: 'gemini-4-argon-low', label: 'Gemini 4 Argon (Low)' }];
+
+  assert.equal(modelsFor('antigravity', [], '', undefined, answered)[0]?.id, 'gemini-4-argon-low');
+});
