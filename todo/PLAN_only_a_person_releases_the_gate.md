@@ -427,6 +427,7 @@ These override the sections above where they differ.
 5. **Pending findings under a person's Proceed (finding 4).** `resolve` with no decisions, consuming a recorded Proceed, records every still-Pending finding with the disposition `proceeded over by a person` (a decision record, not a silent drop). Earlier recorded decisions are kept. The stage then advances. Test: `AProceedOverUndecidedFindings_RecordsThemAsProceededOver`.
 6. **The agent learns of the Proceed (finding 5).** While a Proceed is on file and not yet consumed, `status` and every refused `review_*` say: *a person pressed Proceed on the held gate — call resolve to advance*. The `resolve` reply then names the decision as the person's.
 7. **One refusal for every review entry (finding 6).** `review_plan`, `review_code`, `review_document` and `review_feature` share one hold check in the engine. They answer `GateHeld` while no person has answered, and the item-6 sentence once a Proceed is on file. Test over all four tools.
+   A new session is not a way past that check: `review_document` with `newReview: true` over a held document review is refused with the same two sentences (`PanelService.WhyNotAFreshReview`, `RoundEngine.HeldSentence`) and starts only after a person's Proceed has been resolved; a feature review asked again against another base is refused by the begin and saves nothing.
 
 ## 12. What was built, and what shipped differently (2026-10-22, one branch, not merged)
 

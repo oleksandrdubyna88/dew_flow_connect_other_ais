@@ -129,6 +129,17 @@ internal sealed class RoundEngine(
             : string.Empty;
 
     /// <summary>
+    /// What a review entry that would START a session beside a held one is told: the sentence naming <c>resolve</c> once a Proceed is
+    /// on file, else <c>GateHeld</c> — the sentences the held session's own entries answer. A new session is not a door out of a hold.
+    /// </summary>
+    internal string HeldSentence(PersistedSession held)
+    {
+        _escalations.OfferHeldNotices(held);
+
+        return ProceedOnFile(held) is { Length: > 0 } pressed ? pressed : RoundMachine.GateHeld;
+    }
+
+    /// <summary>
     /// A held gate that records no question — a hold an older build raised — is released by NO answer:
     /// the notice is re-issued through the same road a round's <c>call_human</c> takes, its id recorded on
     /// the session under the claim, so the person answers a question this build can bind.

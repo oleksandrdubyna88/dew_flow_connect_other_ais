@@ -613,6 +613,74 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         resolved.GetProperty("stage").GetString().Should().Be("Done");
     }
 
+    /// <summary>A document review held by <c>call_human</c>, its round resolved by the AI — still held, no longer awaiting a resolve.</summary>
+    private async Task<PanelService> HeldAndResolvedByTheAiAsync()
+    {
+        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), threshold: 0);
+        await service.OpenAsync(_repo, "main");
+        Script(WithNotes);
+        Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()))
+            .GetProperty("verdict").GetString().Should().Be("call_human", "the fixture must hold the document's gate");
+        var resolved = Parse(await service.ResolveAsync(_repo, "main", """[{"finding":0,"action":"accept"}]""", document: "docs/spec.md"));
+        resolved.TryGetProperty("error", out var error).Should().BeFalse($"the AI's own decisions are recorded: {error}");
+
+        return service;
+    }
+
+    private bool ASessionExists(string identity) => new SessionStore(_data).Exists(_repo, "main", identity);
+
+    /// <summary>
+    /// A held document review cannot be walked out of by starting another: <c>newReview</c> over a hold that the AI already
+    /// resolved (so no round awaits it) would make <c>docs/spec.md#2</c> with no hold and a fresh budget, and
+    /// <c>resolve</c> and <c>status</c> would then address it (<c>todo/PLAN_only_a_person_releases_the_gate.md</c>).
+    /// </summary>
+    [Fact]
+    public async Task ANewReviewOfAHeldDocument_IsRefused_AndTheHoldStays()
+    {
+        var service = await HeldAndResolvedByTheAiAsync();
+
+        var reply = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument(), newReview: true));
+
+        reply.TryGetProperty("error", out var error).Should().BeTrue($"a held review is not started over, but the reply was {reply}");
+        error.GetString().Should().Contain("a person has to decide");
+        ASessionExists("docs/spec.md#2").Should().BeFalse("the refusal made no second review");
+        var status = Parse(await service.StatusAsync(_repo, "main", "docs/spec.md"));
+        status.GetProperty("rounds").GetArrayLength().Should().Be(1, "status still addresses the held review");
+    }
+
+    [Fact]
+    public async Task ANewReviewOfAHeldDocument_AfterAPersonsProceed_SaysToResolve()
+    {
+        var service = await HeldAndResolvedByTheAiAsync();
+        var id = (await TheCardAsking("The document review gate")).GetProperty("id").GetString()!;
+        await File.WriteAllTextAsync(
+            Path.Combine(_data, "escalations", $"{id}.answer.json"),
+            $$"""{"id":"{{id}}","answer":"Proceed despite the findings","decision":"proceed","answeredUtc":"{{DateTime.UtcNow:O}}"}""");
+
+        var reply = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument(), newReview: true));
+
+        reply.TryGetProperty("error", out var error).Should().BeTrue($"a Proceed on file is consumed by resolve, not by a new review, but the reply was {reply}");
+        error.GetString().Should().Contain("a person pressed Proceed on the held gate — call resolve to advance");
+        ASessionExists("docs/spec.md#2").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ANewReviewOfADocument_StartsOnceAPersonsProceedWasResolved()
+    {
+        var service = await HeldAndResolvedByTheAiAsync();
+        var id = (await TheCardAsking("The document review gate")).GetProperty("id").GetString()!;
+        await File.WriteAllTextAsync(
+            Path.Combine(_data, "escalations", $"{id}.answer.json"),
+            $$"""{"id":"{{id}}","answer":"Proceed despite the findings","decision":"proceed","answeredUtc":"{{DateTime.UtcNow:O}}"}""");
+        Parse(await service.ResolveAsync(_repo, "main", "[]", document: "docs/spec.md"))
+            .GetProperty("stage").GetString().Should().Be("Done");
+
+        var reply = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument(), newReview: true));
+
+        reply.TryGetProperty("error", out var error).Should().BeFalse($"the hold was released by a person, so a fresh review may start: {error}");
+        ASessionExists("docs/spec.md#2").Should().BeTrue();
+    }
+
     /// <summary>The card a question asked, found by its text — a held gate also carries its own call_human notice.</summary>
     private async Task<JsonElement> TheCardAsking(string beginning)
     {

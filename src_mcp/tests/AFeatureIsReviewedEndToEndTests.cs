@@ -629,6 +629,35 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
         Session().State.Stage.Should().Be(Stage.Done);
     }
 
+    /// <summary>
+    /// The sweep of the same shape as a new document review over a hold: another base is a different review
+    /// (<c>RoundMachine.FreshFeatureReview</c>), but it must not be a way out of a held gate. The begin still refuses it and
+    /// nothing is saved.
+    /// </summary>
+    [Fact]
+    public async Task AHeldFeatureReview_IsNotStartedOverByAnotherBase_AndTheHoldStays()
+    {
+        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
+        Script(BlockingFinding);
+        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise");
+        await service.ResolveAsync(_repo, "any-branch", AcceptTheFinding, feature: PlanPath);
+        Write("src/Shop.cs", Shop("var total = n * 3;"));
+        await Commit("the fix pull request");
+        Parse(await ReviewAsync(service, again: true)).GetProperty("verdict").GetString().Should().Be("call_human");
+        var held = Session();
+        var laterBase = await Rev("HEAD");
+        await CommitMore(1);
+
+        var reply = Parse(await ReviewAsync(service, again: true, baseRef: laterBase));
+
+        reply.TryGetProperty("error", out var error).Should().BeTrue($"another base is not a door out of a hold, but the reply was {reply}");
+        error.GetString().Should().Contain("a person has to decide");
+        var after = Session();
+        after.State.HumanGate.Should().BeTrue();
+        after.FeatureBase.Should().Be(held.FeatureBase, "the base is saved only with a round that runs");
+        after.State.RoundsRunThisStage.Should().Be(held.State.RoundsRunThisStage);
+    }
+
     // ---------- D23: a partly failed round retries only the reviewers that failed ----------
 
     [Fact]

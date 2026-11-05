@@ -1126,14 +1126,9 @@ public sealed class PanelService
             return new DocumentTurn.Refused(reserved);
         }
 
-        // A FRESH review may not be started over a round nobody has decided on: the old session
-        // would sit awaiting a resolve that now has no way to reach it, which is the orphaning this
-        // whole design was rewritten to prevent — one ordinal further along. (codex, the code round.)
-        var current = _store.Load(repoPath, branch, DocumentSessions.Which(
-            document.Id, newReview: false, id => _store.Exists(repoPath, branch, id)));
-        if (newReview && current is { State.AwaitingResolve: true })
+        if (newReview && WhyNotAFreshReview(repoPath, branch, document.Id) is { } why)
         {
-            return new DocumentTurn.Refused(DocumentSessions.StillOpen(document.Id));
+            return new DocumentTurn.Refused(why);
         }
 
         var identity = DocumentSessions.Which(
@@ -1143,6 +1138,24 @@ public sealed class PanelService
             ? new DocumentTurn.Refused(DocumentSessions.TooMany(document.Id))
             : ContinuingOrNew(repoPath, branch, identity, purposeText);
     }
+
+    /// <summary>
+    /// Why a FRESH review of this document may not start beside the current one, or null.
+    /// </summary>
+    /// <remarks>
+    /// <para>Not over a held gate: a new session has no hold and a fresh budget, and <c>resolve</c> and <c>status</c> would address
+    /// it, so the AI would leave the hold on its own. It is told what the held session's own entries are told
+    /// (<see cref="RoundEngine.HeldSentence"/>) — ask the person, or call <c>resolve</c> once a Proceed is on file.</para>
+    /// <para>Not over a round nobody has decided on: the old session would sit awaiting a resolve that now has no way to reach it,
+    /// which is the orphaning this whole design was rewritten to prevent — one ordinal further along. (codex, the code round.)</para>
+    /// </remarks>
+    private string? WhyNotAFreshReview(string repoPath, string branch, string document) =>
+        _store.Load(repoPath, branch, DocumentSessions.Which(document, newReview: false, id => _store.Exists(repoPath, branch, id))) switch
+        {
+            { State.HumanGate: true } held => _engine.HeldSentence(held),
+            { State.AwaitingResolve: true } => DocumentSessions.StillOpen(document),
+            _ => null,
+        };
 
     /// <summary>
     /// The session at this identity: the one that is there, or a new one.
