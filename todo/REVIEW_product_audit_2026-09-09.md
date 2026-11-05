@@ -2,7 +2,7 @@
 
 > Status: **the audit of 2026-09-09 — NOT confirmed against the current code. Re-check every finding against the code before anyone acts on it.** The ten plans that close this audit and their build order are in [PLAN_the_audit_of_2026_09_09_is_built.md](PLAN_the_audit_of_2026_09_09_is_built.md) (partly built on 2026-09-11, seven stories shipped and five cut by the operator), so some findings below are fixed or cut already; which ones is not established here. The six-direction backlog that was written from this audit is [PLAN_product_improvements.md](PLAN_product_improvements.md), which that build order does not mention. Byte-identical to `research/REVIEW_product_audit_2026-09-09.md` on main before this translation.
 >
-> Translated from Russian (2026-11-05). Every finding, number and path is kept; the translation changes no content.
+> Translated from Russian (2026-11-05). Every finding, number and path is kept; the translation changes no content. The Russian original stays at [research/REVIEW_product_audit_2026-09-09.md](../research/REVIEW_product_audit_2026-09-09.md), unchanged.
 
 The checkout `D:/rsd/dew_flow_connect_other_ais` was examined; the HEAD recorded during the audit
 is `aa91a7a9e6b08aeaa58e68d937e47aaa77b66199`, extension `0.31.17`.
