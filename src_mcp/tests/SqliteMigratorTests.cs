@@ -184,14 +184,20 @@ public sealed class SqliteMigratorTests : IDisposable
 
         // A reader whose statement is RUNNING: it holds the SHARED lock until the test lets it go.
         using var entered = new ManualResetEventSlim();
-        using var leave = new ManualResetEventSlim();
+        using var switched = new ManualResetEventSlim();
         using var reader = new SqliteConnection($"Data Source={path};Pooling=False");
         reader.Open();
         Column(reader, "PRAGMA journal_mode").Should().Equal(["delete"], "the file must still be a rollback-journal file");
         reader.CreateFunction("hold", () =>
         {
             entered.Set();
-            leave.Wait();
+            if (!switched.Wait(TimeSpan.FromSeconds(30)))
+            {
+                throw new TimeoutException("the migrator never reached the switch to WAL");
+            }
+
+            // Timed from the switch's first start, inside the reader: a late test thread cannot spend the five-second budget. Six of the provider's sleeps.
+            Thread.Sleep(TimeSpan.FromMilliseconds(900));
 
             return 1;
         });
@@ -209,15 +215,12 @@ public sealed class SqliteMigratorTests : IDisposable
                 if (sql.StartsWith("PRAGMA journal_mode=WAL", StringComparison.Ordinal))
                 {
                     Interlocked.Increment(ref starts);
+                    switched.Set();
                 }
             },
             null);
 
         var migrating = Task.Run(() => SqliteMigrator.Migrate(opener, Three));
-        SpinWait.SpinUntil(() => Volatile.Read(ref starts) >= 1, TimeSpan.FromSeconds(30))
-            .Should().BeTrue("the opener must reach the switch");
-        await Task.Delay(TimeSpan.FromMilliseconds(900)); // the reader stays: six of the provider's sleeps
-        leave.Set();
 
         await reading;
         await migrating.WaitAsync(TimeSpan.FromSeconds(30)); // goes through once the reader has left
