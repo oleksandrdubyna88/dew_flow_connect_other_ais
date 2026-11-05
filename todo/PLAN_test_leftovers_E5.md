@@ -1,8 +1,8 @@
 # PLAN — Test leftovers, E5: coai's run folder takes the owner form, both test sweeps judge by owner, and the product's `coai-*` directories stay untouched
 
 > Status: **revised 2026-11-05 at the parent's epoch-6 re-review (entries 5.2 and 5.3 of the parent's ledger, both found
-> writing the S6 build brief; entry 5.1, the Windows sweep mutex, is built on #945 and unchanged); epoch 6 waits for the
-> owner's approval (the record says `Narrowed: yes`), and no E5 story takes new code until then.** Epoch 5 was approved
+> writing the S6 build brief; entry 5.1, the Windows sweep mutex, is built on #945 and unchanged); epoch 6 was approved by
+> the owner on 2026-11-05 (the record says `Narrowed: yes`).** Epoch 5 was approved
 > by the owner (2026-11-04). The producer PR #945 (draft) holds S3, S2-B, S4, entry 5.1 and S5 at `524df50e`, every job
 > green but the pin check (the release `bd795847` is promoted; coai's pin bump #947 merged 2026-11-05, and this branch has not taken it yet) and the `continue-on-error`
 > real-editor job (transient); S6 is a brief only (`todo/PLAN_test_leftovers_E5_S6_brief.md`, to be revised by an Opus
