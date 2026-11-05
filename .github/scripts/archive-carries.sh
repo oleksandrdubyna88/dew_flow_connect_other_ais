@@ -1,7 +1,11 @@
 #!/bin/sh
 # Does this archive carry every file it is supposed to?
 #
-#   archive-carries.sh <archive.tar.gz> <pattern>...
+#   archive-carries.sh <archive.tar.gz|archive.zip> <pattern>...
+#
+# A `.zip` is listed with `unzip -Z1` (one bare entry name per line), anything else with `tar tzf`.
+# The Windows package is a zip made AFTER signing, so the product check runs on that final file;
+# the matching below is the same for both, and so is "exact by default".
 #
 # Each pattern is matched as a shell glob against the BASENAME of each entry, so `coai-bugs` means
 # a file called exactly that and `'*e_sqlite3*'` means one whose name contains it — which is what
@@ -29,12 +33,17 @@
 set -eu
 
 ARCHIVE=${1:-}
-[ -n "$ARCHIVE" ] || { printf 'usage: archive-carries.sh <archive.tar.gz> <pattern>...\n' >&2; exit 2; }
+[ -n "$ARCHIVE" ] || { printf 'usage: archive-carries.sh <archive.tar.gz|archive.zip> <pattern>...\n' >&2; exit 2; }
 shift
 [ "$#" -gt 0 ] || { printf 'archive-carries.sh: nothing to look for\n' >&2; exit 2; }
 [ -f "$ARCHIVE" ] || { printf 'archive-carries.sh: %s is not a file\n' "$ARCHIVE" >&2; exit 2; }
 
-LISTING=$(tar tzf "$ARCHIVE") || { printf 'archive-carries.sh: %s could not be listed\n' "$ARCHIVE" >&2; exit 2; }
+# `unzip -Z1` and not `unzip -l`: -Z1 is zipinfo's bare listing, an entry name per line and nothing else,
+# which is the shape `tar tzf` has and the loop below reads.
+case "$ARCHIVE" in
+    *.zip) LISTING=$(unzip -Z1 "$ARCHIVE") ;;
+    *) LISTING=$(tar tzf "$ARCHIVE") ;;
+esac || { printf 'archive-carries.sh: %s could not be listed\n' "$ARCHIVE" >&2; exit 2; }
 
 missing=0
 for WANTED in "$@"; do

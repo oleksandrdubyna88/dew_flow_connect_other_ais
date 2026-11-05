@@ -78,6 +78,9 @@ internal static class ConsultantTurnInputs
         McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
         // The row's fast mode, as for a reviewer (research/PLAN_fast_mode.md).
         Fast = row.Fast,
+        // May a Kimi sign-in folder on network storage be used (DL6, coai.kimiAllowNetworkSignIn) — the panel's answer, as the roster
+        // and the question fan-out hand it; only a Kimi launch reads it.
+        KimiAllowNetworkSignIn = panel.KimiAllowNetworkSignIn,
     };
 
     /// <summary>

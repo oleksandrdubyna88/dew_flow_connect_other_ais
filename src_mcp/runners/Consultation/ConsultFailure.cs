@@ -222,15 +222,29 @@ public abstract record ConsultFailure
     }
 
     /// <summary>The TURN ran past its own deadline — the backstop beyond the launch's timeout.</summary>
-    public sealed record Deadline(TimeSpan Budget) : ConsultFailure
+    /// <param name="NothingLaunched">
+    /// The deadline struck while coai's launch control was still waiting, before anything was launched (E5.4 deviation 32). Said as what it is; the
+    /// kind is the same word.
+    /// </param>
+    /// <param name="WaitedOn">
+    /// What that wait was for, in the adapter's own words (<see cref="IConsultantRuntime.LaunchWait"/>) — for Kimi, the sign-in's gate, held by
+    /// another coai Kimi launch on the same sign-in (E5.3 decision e); empty for an adapter that names none, which is then told nothing it did not have.
+    /// </param>
+    public sealed record Deadline(TimeSpan Budget, bool NothingLaunched = false, string WaitedOn = "") : ConsultFailure
     {
         public override string Kind => ConsultFailureKinds.Deadline;
 
-        public override string What(string vendor) =>
-            $"the turn with the consultant ({vendor}) ran past its {Budget.TotalMinutes:0.#}-minute deadline without an answer being recorded";
+        public override string What(string vendor) => NothingLaunched
+            ? $"the turn with the consultant ({vendor}) waited past its {Budget.TotalMinutes:0.#}-minute deadline before anything was launched — coai's launch "
+              + "check was still waiting" + (WaitedOn.Length > 0 ? $": {WaitedOn}" : string.Empty)
+            : $"the turn with the consultant ({vendor}) ran past its {Budget.TotalMinutes:0.#}-minute deadline without an answer being recorded";
 
-        public override string Cure =>
-            "consult again; if it repeats, check `providers` — something around the launch is not finishing";
+        public override string Cure => (NothingLaunched, WaitedOn.Length > 0) switch
+        {
+            (true, true) => "consult again once that launch has ended — a consult turn waits for it inside its own deadline",
+            (true, false) => "consult again; if it repeats, check `providers` — coai's launch check is not finishing",
+            _ => "consult again; if it repeats, check `providers` — something around the launch is not finishing",
+        };
 
         public override bool Transient => true;
     }
@@ -269,7 +283,13 @@ public abstract record ConsultFailure
 
         public override string What(string vendor) => $"the consultant ({vendor}) no longer holds this conversation — its own store dropped the thread";
 
-        public override string Cure => "start a new consultation";
+        /// <remarks>
+        /// Widened for a consultant with a coai-owned home (E5.4 decision 11 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): this consultation has
+        /// ENDED (failed), so <c>close_consult</c> would refuse it — the home goes with the consultation sweep's next pass (D20), and nothing need be
+        /// closed by hand. coai never starts a fresh session in its place.
+        /// </remarks>
+        public override string Cure =>
+            "start a new consultation — this one has ended, and whatever coai kept for it (a consultant's home) goes with the next sweep";
     }
 
     /// <summary>The answer — or the failure — could not be written to the record.</summary>

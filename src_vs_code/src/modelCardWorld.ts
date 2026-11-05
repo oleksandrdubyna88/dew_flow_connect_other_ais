@@ -10,6 +10,7 @@ import { CLI_RUNTIMES, type Runtime } from './models';
 import { help } from './panelControls';
 import { type CardContext, endpointButton, headButtons } from './panelView';
 import { availabilityOf } from './providers';
+import { consultantOnServer, consultantRuntimeNote } from './runtimeSince';
 import type { TeamServerState } from './teamServerView';
 import type { Vendor } from './vendors';
 
@@ -101,10 +102,17 @@ export function checkNotOffered(runtime: Runtime): string {
 /**
  * ✓ Check — on a runtime that can hold a consultation: one paid turn of this row, asked first by the host (D10), held while
  * one runs. On any other row: drawn disabled with the reason, and bound to nothing — no command, no row, so a press posts
- * nothing and no paid-turn prompt can open (D7). The server's refusal by name stays the backstop for a stale page.
+ * nothing and no paid-turn prompt can open (D7). The same, with the update note as the reason, on a runtime this extension
+ * consults on but the INSTALLED server is known to be older for (`CONSULTANT_SINCE`; deviation 37 of
+ * todo/PLAN_vibe_and_kimi_runtimes_E5.md) — an unknown server is never called old. The server's refusal by name stays the
+ * backstop for a stale page.
  */
-export function checkButton(id: string, runtime: Runtime, check: CheckFacts): string {
-  return offersCheck(runtime) ? offeredCheck(id, check) : refusedCheck(runtime);
+export function checkButton(id: string, runtime: Runtime, check: CheckFacts, serverVersion: string): string {
+  if (!offersCheck(runtime)) {
+    return refusedCheck(checkNotOffered(runtime));
+  }
+
+  return consultantOnServer(runtime, serverVersion) ? offeredCheck(id, check) : refusedCheck(consultantRuntimeNote(serverVersion, runtime));
 }
 
 function offeredCheck(id: string, check: CheckFacts): string {
@@ -112,8 +120,8 @@ function offeredCheck(id: string, check: CheckFacts): string {
     + ` title="One real, paid turn of this model in a scratch folder — you are asked first"${check.checking ? ' disabled' : ''}>✓ Check</button>`;
 }
 
-function refusedCheck(runtime: Runtime): string {
-  return `<button type="button" class="link" disabled title="${escapeHtml(checkNotOffered(runtime))}">✓ Check</button>`;
+function refusedCheck(why: string): string {
+  return `<button type="button" class="link" disabled title="${escapeHtml(why)}">✓ Check</button>`;
 }
 
 export function healthBadge(check: CheckFacts): string {

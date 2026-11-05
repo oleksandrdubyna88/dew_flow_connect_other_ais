@@ -61,6 +61,9 @@ internal static class AcpMessages
     /// <summary><c>session/new</c>: the working folder, and no MCP server (the #514 rule, D8b).</summary>
     public static JsonObject NewSession(string cwd) => new() { ["cwd"] = cwd, ["mcpServers"] = new JsonArray() };
 
+    /// <summary><c>session/load</c>: the session to continue, the SAME working folder it was made in (a loaded session resolves paths against it, M-K5), and no MCP server.</summary>
+    public static JsonObject LoadSession(string sessionId, string cwd) => new() { ["sessionId"] = sessionId, ["cwd"] = cwd, ["mcpServers"] = new JsonArray() };
+
     public static JsonObject SetConfigOption(string sessionId, string configId, string value) =>
         new() { ["sessionId"] = sessionId, ["configId"] = configId, ["value"] = value };
 

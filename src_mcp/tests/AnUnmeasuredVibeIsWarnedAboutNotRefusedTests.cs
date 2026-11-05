@@ -22,10 +22,10 @@ public sealed class AnUnmeasuredVibeIsWarnedAboutNotRefusedTests
     [Fact]
     public async Task AnUnmeasuredVersion_IsHealthyAndWarnedAbout_NamingBothVersionsAndWhatToRerun()
     {
-        var health = await ProbeAsync("python.exe C:\\Users\\p\\.local\\bin\\vibe 2.27.0\r\n");
+        var health = await ProbeAsync("python.exe C:\\Users\\p\\.local\\bin\\vibe 3.0.0\r\n");
 
         health.Auth.Should().NotBe("unavailable", "an unmeasured version is still run");
-        health.Warning.Should().Contain("2.27.0").And.Contain("2.26.1").And.Contain("vibe-home-manifest.mjs").And.Contain("probe-vibe-confinement.mjs");
+        health.Warning.Should().Contain("3.0.0").And.Contain("2.26.1").And.Contain("vibe-home-manifest.mjs").And.Contain("probe-vibe-confinement.mjs");
     }
 
     /// <summary>Measured is per PLATFORM (DL3): 2.26.1 is measured on win32 and linux, so the host is given — a macOS runner has no entry of its own and would rightly warn.</summary>
@@ -56,13 +56,13 @@ public sealed class AnUnmeasuredVibeIsWarnedAboutNotRefusedTests
                 DataDir = Path.Combine(Path.GetTempPath(), $"coai-vibewarn-{Guid.NewGuid():N}"),
                 Providers = PanelSettings.ParseVendors("""[{"id":"vibe","runtime":"vibe","model":"glm-5-3"},{"id":"codex","runtime":"codex"}]"""),
             },
-            VaultKeys.None("no vault"), default, new RecordingLauncher(stdOut: "vibe 2.27.0\n"), Serilog.Core.Logger.None, Noticing.None);
+            VaultKeys.None("no vault"), default, new RecordingLauncher(stdOut: "vibe 3.0.0\n"), Serilog.Core.Logger.None, Noticing.None);
 
         var answer = System.Text.Json.JsonDocument.Parse(await service.ProvidersAsync(TestContext.Current.CancellationToken)).RootElement;
         var rows = answer.GetProperty("providers").EnumerateArray().ToDictionary(row => row.GetProperty("provider").GetString()!);
 
         rows["vibe"].TryGetProperty("warning", out var warning).Should().BeTrue("the card reads the warning from providers");
-        warning.GetString().Should().Contain("2.27.0");
+        warning.GetString().Should().Contain("3.0.0");
         rows["codex"].TryGetProperty("warning", out _).Should().BeFalse("every other row's JSON reads as it did");
     }
 }

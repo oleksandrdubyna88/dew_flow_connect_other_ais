@@ -43,6 +43,9 @@ public static class ConsultantResolution
         // Mistral Vibe on the person's own subscription (S3 of todo/PLAN_vibe_and_kimi_runtimes.md), on the reviewer
         // adapter its row resolves to — the one launch control and the export reading live there.
         "vibe" => VibeOn(vendor),
+        // Kimi Code on the person's own sign-in (E5.4 of todo/PLAN_vibe_and_kimi_runtimes_E5.md), composed over the reviewer adapter its row
+        // resolves to — the one launch control (KimiLaunch) and the report's reading live there.
+        "kimi" => KimiOn(vendor),
         _ => null,
     };
 
@@ -51,6 +54,14 @@ public static class ConsultantResolution
     {
         Vibe.VibeRuntime vibe => new Vibe.VibeConsultant(vibe, vendor.Provider),
         null => new Vibe.VibeConsultant(new Vibe.VibeRuntime(vendor.Provider), vendor.Provider),
+        _ => null,
+    };
+
+    /// <summary>A kimi row's consultant, on the Kimi runtime its row resolves to — never another, which could not launch it (decision 10).</summary>
+    private static Kimi.KimiConsultant? KimiOn(VendorIdentity vendor) => RuntimeResolution.For(vendor) switch
+    {
+        Kimi.KimiRuntime kimi => new Kimi.KimiConsultant(kimi, vendor.Provider),
+        null => new Kimi.KimiConsultant(new Kimi.KimiRuntime(vendor.Provider), vendor.Provider),
         _ => null,
     };
 

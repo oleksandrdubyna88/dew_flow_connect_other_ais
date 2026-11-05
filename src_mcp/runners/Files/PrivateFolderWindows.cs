@@ -110,7 +110,14 @@ internal static class PrivateFolderWindows
 
     private static PrivateFolderOutcome Verdict(IFolderShell shell, IDisposable handle, Target target)
     {
-        var expected = Path.Combine(HandleRead.CanonicalDirectory(target.Root), target.Name);
+        var canonical = HandleRead.CanonicalDirectory(target.Root);
+        if (canonical.Length == 0)
+        {
+            // The root has no real path: nothing resolved it, so the folder cannot be said to be under it.
+            return new PrivateFolderOutcome.Refused(PrivateAcl.NotTheFolder(target.Path));
+        }
+
+        var expected = Path.Combine(canonical, target.Name);
         if (!HandleRead.SameByComponents(shell.FinalPathOf(handle), expected, StringComparison.OrdinalIgnoreCase))
         {
             return new PrivateFolderOutcome.Refused(PrivateAcl.NotTheFolder(target.Path));

@@ -1,5 +1,6 @@
 using System.Text;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Files;
 
 namespace CoaiMcp.Server;
 
@@ -49,13 +50,12 @@ public static class DocumentReader
         "review_document takes the document as documentPath (a file inside this repository) or as "
       + "documentText with a documentName";
 
-    /// <param name="followLink">
-    /// Resolves a symlink to its target. Injected because the rule it exists for — a link INSIDE the
-    /// repository pointing outside it, which a prefix check misses — is a decision worth a unit test
-    /// rather than a privilege the CI runner may not have. The same seam
-    /// <see cref="RoundSubject.From"/> takes for the same reason.
+    /// <param name="read">
+    /// How one path entry is looked at (<see cref="RealPath.Lstat"/> by default). Injected because the rule it exists
+    /// for — a link INSIDE the repository pointing outside it, which a prefix check misses — is a decision worth a unit
+    /// test rather than a privilege the CI runner may not have.
     /// </param>
-    public static DocumentOutcome Read(string repoPath, DocumentRequest request, Func<string, string> followLink)
+    public static DocumentOutcome Read(string repoPath, DocumentRequest request, EntryReader? read = null)
     {
         var path = request.Path?.Trim() ?? string.Empty;
         var text = request.Text ?? string.Empty;
@@ -66,72 +66,47 @@ public static class DocumentReader
         }
 
         return path.Length > 0
-            ? FromPath(repoPath, path, request.Name, followLink)
+            ? FromPath(repoPath, path, request.Name, read)
             : FromText(text, request.Name);
     }
 
     /// <summary>
-    /// The real resolver, for ONE path entry — file or directory.
+    /// The real path of <paramref name="path"/>, with EVERY component's links followed — <see cref="RealPath"/>, root-down —
+    /// or the sentence saying why it has none.
     /// </summary>
     /// <remarks>
-    /// <c>returnFinalTarget</c> walks a chain of links to its end, which is why one call is enough
-    /// per entry. What it does NOT do is look at the entry's parents, which is the hole
-    /// <see cref="Canonical"/> exists to close.
-    /// <para><b>A path with nothing at it is its own answer.</b> .NET does not return null for an entry
-    /// that does not exist: it throws <see cref="FileNotFoundException"/>. So every identity asked of a
-    /// document that was never on disk — <c>status</c>, <c>resolve</c> or <c>ask_human</c> with a
-    /// <c>document</c> path nobody reviewed, or a missing plan — threw instead of answering "no review of
-    /// it", and the caller read an SDK-level error. (Found by S2.2b, D12.)</para>
-    /// </remarks>
-    public static string FollowLink(string path)
-    {
-        try
-        {
-            return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName
-                ?? Directory.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName
-                ?? path;
-        }
-        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return path;
-        }
-    }
-
-    /// <summary>
-    /// The real path of <paramref name="path"/>, with EVERY component's links followed.
-    /// </summary>
-    /// <remarks>
-    /// <para><b>Resolving only the last component is an escape.</b> With <c>repo/docs</c> a symlink
-    /// to <c>/outside</c>, the path <c>repo/docs/secret.md</c> has a perfectly ordinary final
-    /// component: the resolver returns it unchanged, the syntactic containment check passes, and the
-    /// read follows the parent link and hands <c>/outside/secret.md</c> to three vendors. Three
-    /// reviewers found it independently on this change's own code round.</para>
-    /// <para>So the walk is from the root DOWN, re-resolving after every step: a link found halfway
-    /// moves the whole remaining walk, which is exactly what the attack relies on.</para>
+    /// <para><b>Resolving only the last component is an escape, and so is resolving only the LINK.</b> With <c>repo/docs</c>
+    /// a symlink to <c>/outside</c>, <c>repo/docs/secret.md</c> has an ordinary final component, and the read follows the
+    /// parent link (found by three reviewers on this change's first code round). The second form, found 2026-11-01: this
+    /// walk took <c>ResolveLinkTarget(...).FullName</c> for a link — the target's own directories were never resolved and a
+    /// <c>..</c> in its text was folded as a string — so <c>root/alias</c> → <c>root/l2/secret.md</c>, with
+    /// <c>root/l2</c> a link outside, read the outside file and sent it to three vendors. The walk is now
+    /// <see cref="RealPath.Resolve"/>: a stack of pending segments, every link's RAW text pushed in front of the rest, a
+    /// budget of <see cref="RealPath.MaxLinkExpansions"/> expansions, and a failure — never a guess — for a loop, an
+    /// over-budget chain, a <c>..</c> after a missing name or a NUL.</para>
+    /// <para>Containment is decided by the caller on this result and on <see cref="CanonicalRoot"/>, both resolved the same way.</para>
     /// </remarks>
     /// <param name="repoRoot">
-    /// What a RELATIVE path is resolved against. It was the process working directory — which for an
-    /// MCP server is wherever its client happened to launch it — and both callers happened to pass an
-    /// absolute path already. gemini's point is the one worth taking: a guarantee that holds because
-    /// of what two callers do today is a guarantee the third caller breaks.
+    /// What a RELATIVE path is resolved against — never the process working directory, which for an MCP server is wherever
+    /// its client happened to launch it. It is joined as spelled, not folded: a <c>..</c> in the path is the disk's to apply.
     /// </param>
-    public static string Canonical(string repoRoot, string path, Func<string, string> followLink)
-    {
-        var full = Absolute(repoRoot, path);
-        var root = Path.GetPathRoot(full) ?? string.Empty;
-        var rest = full[root.Length..].Split(
-            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+    /// <param name="read">How one entry is looked at; the real file system when null.</param>
+    public static RealPathResult Canonical(string repoRoot, string path, EntryReader? read = null) =>
+        RealPath.Resolve(path, repoRoot, read);
 
-        var at = root;
-        foreach (var step in rest)
-        {
-            // Re-resolved at every step, not once at the end: the previous step may have moved this
-            // one somewhere else entirely.
-            at = Path.GetFullPath(followLink(Path.Combine(at, step)));
-        }
-
-        return at.Length == 0 ? full : at;
-    }
+    /// <summary>
+    /// The real path of <paramref name="path"/> walked from an ALREADY RESOLVED repository root — a relative path is taken against the
+    /// resolved root, so the links in the root's own spelling are not spent again on the request.
+    /// </summary>
+    /// <remarks>
+    /// The budget is one for the whole resolution, and a request walked through the root's SPELLING paid for the root's links too:
+    /// on macOS the temp folder is <c>/var/folders/…</c> and <c>/var</c> is a link, so a chain of exactly <see cref="RealPath.MaxLinkExpansions"/>
+    /// links under a perfectly ordinary repository was one over and refused. The root is resolved once, by <see cref="CanonicalRoot"/>;
+    /// the request starts from what it resolved to. An absolute request is its own spelling and is walked as written.
+    /// The result is the root's failure when the root could not be resolved: nothing is placed under a folder nobody can place.
+    /// </remarks>
+    public static RealPathResult CanonicalUnder(RealPathResult root, string path, EntryReader? read = null) =>
+        root.Ok ? RealPath.Resolve(path, root.Path, read) : root;
 
     /// <summary>
     /// The session identity a caller's word for a document means — the same one <c>Read</c> derives.
@@ -143,7 +118,7 @@ public static class DocumentReader
     /// types — could then never resolve their own round. Five findings on one code round said so;
     /// one resolution, called from all three places, is the answer.
     /// </remarks>
-    public static string IdentityOf(string repoPath, string said, Func<string, string> followLink)
+    public static string IdentityOf(string repoPath, string said, EntryReader? read = null)
     {
         var trimmed = said.Trim();
         if (trimmed.Length == 0)
@@ -154,8 +129,10 @@ public static class DocumentReader
         // A name given to raw text is its own identity and is not a path; it can never contain a
         // separator, so anything that does is a path and anything that does not is tried as a name
         // first and falls back to a path.
-        var asPath = DocumentId.Of(
-            CanonicalRoot(repoPath, followLink), Canonical(repoPath, trimmed, followLink));
+        // A path that cannot be resolved (a loop, an over-long one) is not a path of this repository: it is tried as a name.
+        var root = CanonicalRoot(repoPath, read);
+        var resolved = CanonicalUnder(root, trimmed, read);
+        var asPath = root.Ok && resolved.Ok ? DocumentId.Of(root.Path, resolved.Path) : string.Empty;
 
         return asPath.Length > 0 ? asPath : trimmed;
     }
@@ -173,20 +150,21 @@ public static class DocumentReader
     /// through a link and a root spelled directly are one directory, and a containment check that
     /// says otherwise is wrong in the direction that refuses honest work.</para>
     /// </remarks>
-    public static string CanonicalRoot(string repoPath, Func<string, string> followLink) =>
-        Canonical(repoPath, repoPath, followLink);
+    public static RealPathResult CanonicalRoot(string repoPath, EntryReader? read = null) =>
+        Canonical(repoPath, repoPath, read);
 
     /// <summary>
-    /// A caller's path, made absolute against the REPOSITORY rather than the process.
+    /// A caller's path, made absolute against the REPOSITORY rather than the process — joined, never folded.
     /// </summary>
     /// <remarks>
     /// <c>Path.GetFullPath(path)</c> resolves a relative path against the current working directory,
     /// which for this server is wherever the MCP client happened to launch it — never the repository
     /// the session was opened for. A caller passing <c>docs/spec.md</c>, which is the ordinary thing
-    /// to pass, therefore named a file nobody meant.
+    /// to pass, therefore named a file nobody meant. And <c>GetFullPath</c> folds a <c>..</c> as a string:
+    /// <c>alias/../x</c> with <c>alias</c> a link is not <c>x</c>, so the spelling is kept for the resolver.
     /// </remarks>
     private static string Absolute(string repoPath, string path) =>
-        Path.IsPathRooted(path) ? path : Path.GetFullPath(path, repoPath);
+        Path.IsPathRooted(path) ? path : Path.Join(repoPath, path);
 
     private static DocumentOutcome FromText(string text, string? name)
     {
@@ -205,7 +183,7 @@ public static class DocumentReader
             : new DocumentOutcome.Ready(name!.Trim(), name.Trim(), text, DocumentRules.ArtifactIdOf(text));
     }
 
-    private static DocumentOutcome FromPath(string repoPath, string path, string? name, Func<string, string> followLink)
+    private static DocumentOutcome FromPath(string repoPath, string path, string? name, EntryReader? read)
     {
         if (name is not null && name.Trim().Length > 0)
         {
@@ -214,34 +192,37 @@ public static class DocumentReader
               + "and two names for one thing would be two sessions for it.");
         }
 
-        // Made absolute against the REPOSITORY before anything looks at the disk, so every later
-        // step — existence, extension, containment, the read itself — is about the same file.
-        var absolute = Absolute(repoPath, path);
-        if (OnDisk(absolute) is DocumentOutcome.Refused missing)
+        // Made absolute against the REPOSITORY, and resolved root-down, before anything asks the disk what is at it: the existence
+        // checks FOLLOW links, so asked of the spelling first they answered "is a directory" for a link to an OUTSIDE folder — telling
+        // the caller what an outside path is. Containment is decided on the resolved path; only a path that is inside is looked at.
+        var root = CanonicalRoot(repoPath, read);
+        var resolved = CanonicalUnder(root, path, read);
+        if (!resolved.Ok)
         {
-            return missing;
+            return new DocumentOutcome.Refused(Unresolvable(path, resolved));
         }
 
-        var resolved = Canonical(repoPath, absolute, followLink);
-        var id = DocumentId.Of(CanonicalRoot(repoPath, followLink), resolved);
+        var id = DocumentId.Of(root.Path, resolved.Path);
+        if (id.Length == 0)
+        {
+            return new DocumentOutcome.Refused(Outside(path, Absolute(repoPath, path), resolved.Path, repoPath));
+        }
 
-        return id.Length == 0
-            ? new DocumentOutcome.Refused(Outside(path, resolved, repoPath))
-            : Contents(resolved, id);
+        return OnDisk(resolved.Path) is DocumentOutcome.Refused missing ? missing : Contents(resolved.Path, id);
     }
 
-    /// <summary>Three things that are not a readable file, each said as itself.</summary>
+    /// <summary>Three things that are not a readable file, each said as itself — asked of a path already known to be INSIDE the repository, and already resolved.</summary>
     private static DocumentOutcome? OnDisk(string path)
     {
         if (Directory.Exists(path))
         {
-            return new DocumentOutcome.Refused($"'{path}' is a directory — name the document itself.");
+            return new DocumentOutcome.Refused($"'{RealPath.Shown(path)}' is a directory — name the document itself.");
         }
 
         if (!File.Exists(path))
         {
             return new DocumentOutcome.Refused(
-                $"there is no file at '{path}'. documentPath is a path on THIS machine, inside the "
+                $"there is no file at '{RealPath.Shown(path)}'. documentPath is a path on THIS machine, inside the "
               + "repository you opened the session for.");
         }
 
@@ -250,30 +231,49 @@ public static class DocumentReader
             : null;
     }
 
-    private static string Outside(string said, string resolved, string repoPath)
+    /// <summary>A path that could not be resolved is refused, and the sentence says it is the resolution that failed — never "no such file".</summary>
+    private static string Unresolvable(string said, RealPathResult failed) =>
+        $"'{RealPath.Shown(said)}' cannot be resolved safely, so it is not read: {failed.Why}. First check the path and the links on it: a link "
+      + "that loops, that leads through more than 40 links, or that goes where you did not mean is the usual cause. A document reviewed here is read "
+      + "and sent to other vendors' models, so a path this gate cannot follow to its end is refused. Only if the file is the right one, pass its text as "
+      + "documentText with a documentName.";
+
+    private static string Outside(string said, string absolute, string resolved, string repoPath)
     {
         // The resolved path is named separately ONLY when it differs, because the case it exists
         // for is the confusing one: a link inside the repository whose target is not, where saying
         // only what the caller typed would look like a refusal of a path that is plainly inside.
-        var target = string.Equals(Path.GetFullPath(said), resolved, DocumentId.Comparison)
+        var target = string.Equals(absolute, resolved, DocumentId.Comparison)
             ? string.Empty
-            : $" It resolves to '{resolved}'.";
+            : $" It resolves to '{RealPath.Shown(resolved)}'.";
 
-        return $"'{said}' is not inside '{repoPath}'.{target} A document reviewed here is read and "
+        return $"'{RealPath.Shown(said)}' is not inside '{repoPath}'.{target} A document reviewed here is read and "
              + "sent to other vendors' models, so this gate reads only what is inside the repository "
              + "you opened the session for. Anything else: convert or copy it, and pass it as "
              + "documentText with a documentName.";
     }
 
+    /// <summary>
+    /// The text of the file the resolver named. Everything that touches the disk — the size too — is inside the one try: the path was
+    /// judged a moment ago, and the file it names may be gone (a dangling link whose target is inside the repository, a file removed
+    /// since), which is "no file", never an unhandled exception.
+    /// </summary>
     private static DocumentOutcome Contents(string resolved, string id)
     {
-        if (DocumentRules.SizeRefusal(new FileInfo(resolved).Length) is { } tooBig)
-        {
-            return new DocumentOutcome.Refused(tooBig);
-        }
-
         try
         {
+            if (!File.Exists(resolved))
+            {
+                return new DocumentOutcome.Refused(
+                    $"there is no file at '{RealPath.Shown(resolved)}' — the path resolves there (through a link, or as written) and nothing is at it. "
+                  + "documentPath is a path on THIS machine, inside the repository you opened the session for.");
+            }
+
+            if (DocumentRules.SizeRefusal(new FileInfo(resolved).Length) is { } tooBig)
+            {
+                return new DocumentOutcome.Refused(tooBig);
+            }
+
             var text = StrictUtf8.GetString(File.ReadAllBytes(resolved));
 
             return new DocumentOutcome.Ready(
@@ -285,6 +285,10 @@ public static class DocumentReader
                 $"'{Path.GetFileName(resolved)}' is not UTF-8 text — its bytes do not decode. Convert "
               + "it and pass the result as documentText with a documentName; reviewing a bad decode "
               + "means three reviewers reading whatever the decoder guessed.");
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return new DocumentOutcome.Refused($"there is no file at '{RealPath.Shown(resolved)}' — it was removed while it was being read.");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
