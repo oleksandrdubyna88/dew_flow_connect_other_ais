@@ -139,7 +139,7 @@ and one inventory row. **This brief is written so.** The other option is a shell
    `src_mcp/tests_leftovers/LeftoversAudit.cs`; `src_mcp/tests_leftovers/RunTemp.cs`, `RunTempFolder.cs`, `RunTempFixture.cs`,
    `TempDir.cs`; the proof files of § 8.2; `research/module_tests.md` § *E5 S5* (`:6318`).
 4. The template at `197cc76`, read with `git -C <dew_flow_mcp checkout> show 197cc76:tests/Mcp.Tests/Leftovers/<name>.cs`, the 12
-   files of § 6.1, the template's `LeftoversRepositoryGuardTests.cs` for its shape,, and its CI `git -C <dew_flow_mcp checkout> show 197cc76:.github/workflows/ci.yml`, lines 48-71, 103-133, 186-210.
+   files of § 6.1, the template's `LeftoversRepositoryGuardTests.cs` for its shape, and its CI `git -C <dew_flow_mcp checkout> show 197cc76:.github/workflows/ci.yml`, lines 48-71, 103-133, 186-210.
 5. The guard at the pin: `.agents/conventions/tools/leftovers-check.mjs`, `tools/lib/raw-temp-baseline.mjs`.
 
 ## 1. Goal
@@ -286,6 +286,7 @@ Changed:
 | `.github/workflows/ci.yml` | § 12. |
 | `.github/workflows/release.yml` | Two comment lines (§ 10.4). |
 | `research/module_tests.md` | § *E5 S6*, appended. Never trim an older section. |
+| `todo/README.md` | One index line for this brief, as for the S4 brief. `plan-lifecycle.mjs` is red until it is there. The brief's own commit touched no other file, by instruction, so the first S6 commit (or the coordinator) adds it. |
 
 Not changed: any file in `.agents/conventions` or `dew_flow_mcp`; product code; `sonarcloud.yml` (it already has node, the mount and `npm ci`, and
 runs both wrappers through the suites; check that with the first CI run); the `.csproj` files (an SDK glob takes the new `.cs` files); `.slnx`.
