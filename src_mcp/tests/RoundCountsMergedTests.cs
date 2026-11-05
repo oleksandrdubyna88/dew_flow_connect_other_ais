@@ -40,7 +40,9 @@ public sealed class RoundCountsMergedTests : IDisposable
         _elsewhere.Dispose();
     }
 
-    private SnapshotStore ThisSide => RoundCountsSnapshot.StoreOf(Dir, Environment.GetEnvironmentVariable);
+    // No distribution of its own, wherever the suite runs: these tests name "Ubuntu" and "Debian" as the OTHER sides, and on a
+    // WSL machine whose distribution is called Ubuntu the real variable made this side one of them.
+    private SnapshotStore ThisSide => RoundCountsSnapshot.StoreOf(Dir, name => name == "WSL_DISTRO_NAME" ? null : Environment.GetEnvironmentVariable(name));
 
     private RoundCountsMergedAnswer Merge(params string[] paths) => RoundCountsMerged.Read(Dir, ThisSide, "0.0.0-test", paths, Now);
 
