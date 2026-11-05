@@ -6,6 +6,7 @@ using Xunit;
 
 namespace CoaiBench.Tests;
 
+// testsToDelete-baseline-proof: src_bench/CoaiBench.Tests/
 /// <summary>
 /// This suite's run folder, and the refusal of a run that cannot have one (E5 S3, <c>todo/PLAN_test_leftovers_E5.md</c>). The library
 /// (<c>src_mcp/tests_leftovers</c>) is shared; what is proven HERE is this suite's own wiring: its <c>RunTempStart.cs</c> made, claimed and registered the folder

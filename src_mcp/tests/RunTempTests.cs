@@ -12,6 +12,7 @@ using Xunit;
 
 namespace CoaiMcp.Tests;
 
+// testsToDelete-baseline-proof: src_mcp/tests/
 /// <summary>
 /// A test run keeps everything it makes in "temp" inside ONE folder of its own, in the owner form, claimed first, and a run that cannot have it does not start
 /// (<c>todo/PLAN_test_leftovers_E5.md</c>, S3; the run folder first came with E2, scenarios S5a-S5i).

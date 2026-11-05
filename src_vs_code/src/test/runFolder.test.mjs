@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { owned } from '../../scripts/owned.mjs';
 
+// testsToDelete-baseline-proof: src_vs_code/src/test/
 /**
  * The PROOF FILE of the scope `src_vs_code/src/test/` (E5 S4, `todo/PLAN_test_leftovers_E5_S4_brief.md` § 5; the rule's baseline names it as the scope's proof):
  * `TEMP` names the run folder, and a run that cannot make or claim its folder, or whose temp variables disagree with it, fails BEFORE any test.
