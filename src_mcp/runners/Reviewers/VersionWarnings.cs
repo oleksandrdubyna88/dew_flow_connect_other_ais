@@ -23,6 +23,16 @@ public static class VersionWarnings
     public static string Unmeasured(string runtime, string running, string measured, string numbersCover, string advised) =>
         $"{runtime} {running} is not a version coai has measured (it measured {measured}); it is run anyway, but {numbersCover} — {advised}";
 
+    /// <summary>
+    /// Whether <paramref name="running"/> shares its MAJOR with one of <paramref name="measured"/> — then no warning is said (the owner,
+    /// 2026-10-27: a warning for every minor release is noise; only a major coai never measured is worth one). Only the sentence follows this;
+    /// what a launch admits or refuses does not.
+    /// </summary>
+    public static bool MajorWasMeasured(string running, IEnumerable<string> measured) =>
+        Major(running) is { Length: > 0 } major && measured.Any(one => Major(one) == major);
+
+    private static string Major(string version) => VersionIn(version) is { Length: > 0 } found ? found[..found.IndexOf('.')] : string.Empty;
+
     /// <summary>The version a CLI's <c>--version</c> printed (<c>kimi 2.1.1</c>, <c>python.exe …\vibe 2.26.1</c>), or empty.</summary>
     public static string VersionIn(string printed) =>
         VersionPattern.Match(printed) is { Success: true } found ? found.Groups[1].Value : string.Empty;

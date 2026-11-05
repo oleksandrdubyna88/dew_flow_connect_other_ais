@@ -55,11 +55,14 @@ public sealed record CopiedRoots(IReadOnlyList<string> Paths, IReadOnlyList<stri
 /// <summary>One turn of a row: the launches it made — one, or a launch and its follow-up — and what stopped a follow-up.</summary>
 /// <param name="Launches">Never empty; the last is the one the turn's answer stands on.</param>
 /// <param name="ChangesBeforeFollowUp">The watched roots' changes that stopped a follow-up; empty when none did.</param>
-/// <param name="Usage">This turn's SHARE of the row's bill — for a cumulative vendor its report less what earlier turns billed.</param>
+/// <param name="Usage">This turn's SHARE of the row's bill — for a cumulative vendor its report less the vendor's counter as it last reported it.</param>
 /// <param name="Handle">The vendor's conversation id the turn left — what a lookup continuation resumes.</param>
 /// <param name="Invocation">The invocation the turn launched — what a lookup continuation is built from.</param>
 internal sealed record RowTurn(IReadOnlyList<ReviewerLaunch> Launches, IReadOnlyList<TreeChange> ChangesBeforeFollowUp, Usage Usage, string Handle, ReviewerInvocation Invocation)
 {
+    /// <summary>The vendor's counter after this turn — what the row's next turn is measured against (E5.4 deviation 31).</summary>
+    public ConsultationBilled Counter { get; init; } = new();
+
     public ReviewerLaunch Final => Launches[^1];
 
     public bool FollowedUp => Launches.Count > 1;
@@ -256,13 +259,13 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     {
         var memory = AnsweringMemory.Start(launch.Prompt);
         var usage = Usage.None;
-        var billed = new ConsultationBilled();
+        var counter = new ConsultationBilled();
         var note = seed;
         ReviewerInvocation? ready = null;
         while (true)
         {
-            var turn = await TurnAsync(input, launch, ready, billed, ct);
-            (usage, billed) = (usage.Add(turn.Usage), billed.Plus(turn.Usage));
+            var turn = await TurnAsync(input, launch, ready, counter, ct);
+            (usage, counter) = (usage.Add(turn.Usage), turn.Counter);
             if (Unanswered(input.Row.Runtime, turn) is { } ended)
             {
                 return Ended(start, ended.Status, ended.Reason, started.Elapsed, usage, note);
@@ -316,8 +319,8 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// (plan round, gemini). Every runtime a row resolves to is a consultant runtime (<see cref="QuestionResolution.For"/>).
     /// </summary>
     /// <param name="ready">A continuation the runtime built (an agy lookup), launched as is; null builds <paramref name="launch"/>.</param>
-    /// <param name="billed">What the row's earlier turns billed — a cumulative vendor's report is billed only past it.</param>
-    private async Task<RowTurn> TurnAsync(RowLaunchInput input, ConsultantLaunch launch, ReviewerInvocation? ready, ConsultationBilled billed, CancellationToken ct)
+    /// <param name="counter">A cumulative vendor's counter as the row's earlier turns last reported it — its report is billed only past it.</param>
+    private async Task<RowTurn> TurnAsync(RowLaunchInput input, ConsultantLaunch launch, ReviewerInvocation? ready, ConsultationBilled counter, CancellationToken ct)
     {
         var consultant = input.Row.Runtime;
         // The row's system prompt is redacted from what the child says, as a reviewer's is (research/PLAN_one_model_catalog.md, C2)
@@ -336,7 +339,9 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             ended = true;
             SaySilentFirst(input, consultant, turned);
 
-            return new RowTurn(turned.Launches, turned.ChangesBeforeFollowUp, Share(consultant, turned.TurnUsage, billed), turned.SurvivingHandle, invocation);
+            var bill = Bill(consultant, turned.TurnUsage, counter);
+
+            return new RowTurn(turned.Launches, turned.ChangesBeforeFollowUp, bill.Share, turned.SurvivingHandle, invocation) { Counter = bill.Counter };
         }
         finally
         {
@@ -345,18 +350,19 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
                 // A turn that THREW has only the launches that landed before it, and the last of those may have exited
                 // cleanly — its own outcome would read "ok" for a turn that never answered (code round, codex).
                 Record(input, invocation.Model, invocation.RanWith.VersionedBy(landed[^1].CliVersion), ended ? Outcome(landed[^1]) : Interrupted,
-                    Share(consultant, ConsultantTurn.UsageOf(consultant, landed), billed), clock.Elapsed,
+                    Bill(consultant, ConsultantTurn.UsageOf(consultant, landed), counter).Share, clock.Elapsed,
                     ended ? ConsultantTurnBooks.StatedResetOf(landed[^1]) : string.Empty);
             }
         }
     }
 
     /// <summary>
-    /// This turn's share of the bill: a cumulative vendor (agy) reports the whole conversation, so a continued turn is
-    /// billed only past what earlier turns billed — the consultation's own rule (<see cref="ConsultationUsage.Less"/>).
+    /// This turn's share of the bill, and the vendor's counter after it: a cumulative vendor (agy) reports the whole conversation, so a
+    /// continued turn is billed only past the counter as it last reported it — the consultation's own rule (<see cref="ConsultationUsage.Next"/>;
+    /// never the sum of the shares, which a restart billed whole leaves inflated: E5.4 deviation 31).
     /// </summary>
-    private static Usage Share(IConsultantRuntime consultant, Usage reported, ConsultationBilled billed) =>
-        consultant.UsageIsCumulative ? ConsultationUsage.Less(reported, billed) : reported;
+    private static CumulativeShare Bill(IConsultantRuntime consultant, Usage reported, ConsultationBilled counter) =>
+        consultant.UsageIsCumulative ? ConsultationUsage.Next(reported, counter, consultant.UsageCounterMayRestart) : new CumulativeShare(reported, counter);
 
     /// <summary>Said in the log because the record keeps no launch count: the next "why did this row take two" is answered here.</summary>
     private void SaySilentFirst(RowLaunchInput input, IConsultantRuntime consultant, ConsultantTurnResult turned)
@@ -464,7 +470,11 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 
     private void Remove(string scratch) => RemoveScratch(scratch, log);
 
-    /// <summary>A question row's scratch removed through the shared deleter; a failure is logged, a lost link target as a warning.</summary>
+    /// <summary>
+    /// A question row's scratch removed: its Kimi homes junction-first (the row-less fallback keeps the home HERE, so this caller knows it may
+    /// hold one — E5.3 decision g, judgement R6), then the shared deleter; a failure is logged, a lost link target as a warning, and a Kimi stop
+    /// (a live tree) keeps the scratch for the six-hour scratch sweep, which asks the same probe.
+    /// </summary>
     internal static void RemoveScratch(string scratch, Serilog.ILogger log)
     {
         if (scratch.Length > 0)
@@ -477,6 +487,11 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     {
         try
         {
+            if (!KimiHomesDisposed(scratch, log))
+            {
+                return;
+            }
+
             // The shared deleter: a home's read-only files go too, and a link in the folder is unlinked, never entered.
             Runners.Files.GitScratch.DeleteEvenIfReadOnly(scratch);
         }
@@ -488,5 +503,18 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         {
             log.Debug("a question row's scratch directory at {Path} could not be removed yet: {Reason}", scratch, e.Message);
         }
+    }
+
+    /// <summary>D19's order for the Kimi homes a row's scratch may hold: every <c>kh-*</c> child disposed by <see cref="Runners.Kimi.KimiHome.DisposeAllUnder"/>; a stop is a warning and keeps the scratch whole.</summary>
+    private static bool KimiHomesDisposed(string scratch, Serilog.ILogger log)
+    {
+        var stopped = false;
+        Runners.Kimi.KimiHome.DisposeAllUnder(scratch, said =>
+        {
+            stopped = true;
+            log.Warning("a question row's scratch directory at {Path} is kept for the scratch sweep: {Reason}", scratch, said);
+        });
+
+        return !stopped;
     }
 }

@@ -77,8 +77,9 @@ campaigns.
 titles are similar. A PLAN finding has no file and no line, so it falls to Jaccard ≥ 0.5 on titles
 alone.
 
-Measured, on five real plans across five models: **32 distinct defects, 31 raised by two models or
-more when read by a person — and the rule detects essentially none of them.** So on a plan round the
+Measured, on five real plans across five models: **32 defect clusters, 31 raised by two models or
+more when read by a person — and the rule detects essentially none of them.** (32 more findings were
+raised by one model only, so they are in no cluster.) So on a plan round the
 same defect from two vendors counts TWICE against the threshold, and the "two vendors agreed" signal
 the product calls its strongest never appears. Seen directly the same day: codex, gemini and a local
 model each raised the delete-destroys-history defect, in three separate entries with one provider
@@ -116,7 +117,8 @@ and wrote it down; the note did not prevent the repeat, and the harness now pins
 ### 4.2 The agreement matcher said 0–5 % where a reader says 55–76 %
 
 A Jaccard-0.5 title comparison across five models on five plans found almost no agreement. Reading
-the same findings found 31 of 32 defects raised by two models or more. Had the number been reported
+the same findings put 31 of its 32 defect clusters under two models or more, and 83 of the 129
+findings in a cluster with another model. Had the number been reported
 as measured, the campaign's headline would have been "the models agree on nothing" — the opposite of
 the truth, and it would have been believed because it came from code.
 

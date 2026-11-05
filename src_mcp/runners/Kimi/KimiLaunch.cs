@@ -38,7 +38,7 @@ public static class KimiLaunch
     public static string VersionWarning(string printed) => WarningFor(VersionWarnings.VersionIn(printed));
 
     private static string WarningFor(string version) =>
-        version.Length == 0 || KimiAcpProfile.MeasuredVersions.Contains(version)
+        version.Length == 0 || VersionWarnings.MajorWasMeasured(version, KimiAcpProfile.MeasuredVersions)
             ? string.Empty
             : VersionWarnings.Unmeasured(
                 "Kimi", version, string.Join(", ", KimiAcpProfile.MeasuredVersions),
@@ -198,7 +198,10 @@ public static class KimiLaunch
             ? string.Empty
             : $"the Kimi sign-in folder '{places.Credentials}' is not on a local drive — coai reads and links the sign-in from a local drive only, and never connects out to a network or roaming location (D19)";
 
-    /// <summary>Everything that can be said before any lock is taken, in order — the first refusal wins; the config bytes the home must hold otherwise.</summary>
+    /// <summary>
+    /// Everything that can be said before any lock is taken — and before any FILE of the person's is read — in order; the first refusal
+    /// wins; the config bytes the home must hold otherwise.
+    /// </summary>
     private static Prepared Prepare(KimiHost host, ProcessRequest request, KimiPlaces places, bool allowNetworkSignIn)
     {
         var first = FirstOf(
@@ -207,18 +210,35 @@ public static class KimiLaunch
             () => places.ToolsRefusal,
             () => LocalHome(host, places, allowNetworkSignIn),
             () => ModelRefusal(ModelOf(request)),
-            () => KimiEnvironment.Refusal(request, places));
-        if (first.Length > 0)
-        {
-            return Prepared.Refuse(first);
-        }
+            () => KimiEnvironment.Refusal(request, places),
+            () => PersonsHomeElsewhere(host, places, allowNetworkSignIn));
 
+        return first.Length > 0 ? Prepared.Refuse(first) : Slotted(host, request, places, allowNetworkSignIn);
+    }
+
+    /// <summary>
+    /// Where the person's HOME really is, asked BEFORE their <c>config.toml</c> is read from it (the E5.3 review's M1 of decision j): an ancestor of
+    /// <c>~\.kimi-code</c> swapped for a link to a share since the last turn would otherwise be read from — once — before the refusal. Asked only of a
+    /// folder that exists, so a sign-out that removed it keeps its own sentence (<c>KimiPersonsConfig.ReadFile</c>'s "not signed in"). The
+    /// checks of <see cref="Junctions.Locality(HostKind, string, bool)"/>, the ones the credentials folder gets below, so the two cannot disagree.
+    /// </summary>
+    private static string PersonsHomeElsewhere(KimiHost host, KimiPlaces places, bool allowNetworkSignIn) =>
+        Directory.Exists(places.PersonsHome) ? Junctions.Locality(host.Kind, places.PersonsHome, allowNetworkSignIn) : string.Empty;
+
+    /// <summary>The person's slot read — the first read of anything of theirs — then the render and the home.</summary>
+    private static Prepared Slotted(KimiHost host, ProcessRequest request, KimiPlaces places, bool allowNetworkSignIn)
+    {
         var slot = KimiPersonsConfig.ReadFile(places.PersonsConfig);
 
         return slot is SlotRead.Found found ? Rendered(host, ModelOf(request), places, found.Slot, allowNetworkSignIn) : Prepared.Refuse(((SlotRead.Refused)slot).Reason);
     }
 
-    /// <summary>The slot is read: the credentials folder, the model block and the render, then the home made.</summary>
+    /// <summary>
+    /// The slot is read: the credentials folder — there, and where it REALLY is still a local drive (E5.3 decision j; B of the review of
+    /// 2026-10-18: judged on EVERY launch, because a conversation's home lives for hours and the junction keeps only a spelling, the override
+    /// may have been switched off, or a mount may have changed under the same folder; before any lock, so a refused turn makes no file under
+    /// <c>kimi-locks</c>) — then the model block and the render, then the home made.
+    /// </summary>
     private static Prepared Rendered(KimiHost host, string model, KimiPlaces places, KimiOauthSlot slot, bool allowNetworkSignIn)
     {
         if (!Directory.Exists(places.Credentials))
@@ -226,7 +246,6 @@ public static class KimiLaunch
             return Prepared.Refuse($"not signed in to Kimi Code — {places.PersonsHome} has no credentials folder; run `kimi login` in a terminal and try again");
         }
 
-        // B of the review of 2026-10-18: where the folder IS is judged on EVERY launch, not only when the home is made — the override may have been switched off, or a mount may have changed under the same folder.
         var locality = Junctions.Locality(host.Kind, places.Credentials, allowNetworkSignIn);
         if (locality.Length > 0)
         {

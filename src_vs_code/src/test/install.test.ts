@@ -1026,7 +1026,7 @@ test('a completeness job waits for every leg of its matrix', () => {
   // A job that published before the last upload would recreate the window with more steps in it.
   const workflow = releaseWorkflow();
 
-  assert.match(jobBlock(workflow, 'mcp-release-complete'), /needs:\s*\[\s*mcp-binaries\s*\]/);
+  assert.match(jobBlock(workflow, 'mcp-release-complete'), /needs:\s*\[\s*mcp-binaries,\s*mcp-sign-attach\s*\]/);
   assert.match(jobBlock(workflow, 'server-release-complete'), /needs:\s*\[\s*server-binaries\s*\]/);
 });
 

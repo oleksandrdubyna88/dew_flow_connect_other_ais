@@ -84,7 +84,7 @@ public static partial class Redaction
         NotAsciiWordBefore + @"(sk-|ghp_|gho_|ghu_|ghs_|github_pat_|xox[baprs]-)[A-Za-z0-9._-]{8,512}";
 
     /// <summary>
-    /// A Moonshot account id as Kimi writes one into its own errors: <c>org-…</c> or <c>ak-…</c>, an alphanumeric body of 8–128 with AT LEAST ONE digit.
+    /// A Moonshot account id as Kimi writes one into its own errors: <c>org-…</c> or <c>ak-…</c>, a body of 8–4096 letters, digits, <c>_</c> and <c>-</c> with AT LEAST ONE digit within its first 128 characters — the WHOLE run of those is masked up to 4096, the bound every long body here carries (a 128 bound left a readable suffix), because the real shape is not measured and an id with an underscore or a hyphen in it must not slip past a rule written for plain alphanumerics.
     /// </summary>
     /// <remarks>
     /// Not part of <see cref="VendorPattern"/>: that list is "unmistakable on sight" and <c>org-</c> is not — a plain
@@ -94,7 +94,7 @@ public static partial class Redaction
     /// story 3 of todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md checks the first real line against this pattern.
     /// </remarks>
     private const string MoonshotIdPattern =
-        NotAsciiWordBefore + @"(org-|ak-)(?=[A-Za-z0-9]{0,127}[0-9])[A-Za-z0-9]{8,128}";
+        NotAsciiWordBefore + @"(org-|ak-)(?=[A-Za-z0-9_-]{0,127}[0-9])[A-Za-z0-9_-]{8,4096}";
 
     private const string ParameterPattern =
         @"([?&#])([^" + JsSpace + @"=&#]{1,64})=([^" + JsSpace + @"&#]{1,4096})";

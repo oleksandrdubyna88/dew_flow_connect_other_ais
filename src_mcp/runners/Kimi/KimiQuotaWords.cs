@@ -35,7 +35,7 @@ public static class KimiQuotaWords
 
     /// <summary>
     /// Kimi's reset clause out of <paramref name="reason"/> — from the earliest of <see cref="ResetOpenings"/> to the first period followed by whitespace — a space, a newline or a tab (so "reset in 2.5 hours."
-    /// stays whole), or to the end of the text when it has no such period — redacted through the product's one redactor and capped. Empty when Kimi said none.
+    /// stays whole), or to the end of the text when it has no such period (see <see cref="ClauseEnd"/>) — redacted through the product's one redactor and capped. Empty when Kimi said none.
     /// </summary>
     public static string ClauseOf(string reason) =>
         EarliestOpening(reason) is var start and >= 0
@@ -48,24 +48,23 @@ public static class KimiQuotaWords
 
     private static string Middle(string reason) => ClauseOf(reason) is { Length: > 0 } clause ? $"\"{clause}\"" : NoReset;
 
-    private static string Cut(string reason, int start)
-    {
-        var stop = SentenceEnd(reason, start);
+    private static string Cut(string reason, int start) => reason[start..ClauseEnd(reason, start)].Trim();
 
-        return (stop < 0 ? reason[start..] : reason[start..(stop + 1)]).Trim();
-    }
-
-    /// <summary>The index of the first period followed by whitespace of any kind — a space, a newline, a tab — from <paramref name="from"/>, or -1. A decimal point ("2.5") is not one.</summary>
-    private static int SentenceEnd(string text, int from)
+    /// <summary>
+    /// Where the clause that begins at <paramref name="from"/> ends (exclusive): after the first period followed by whitespace of any kind — a space, a newline, a tab; a decimal point ("2.5") is not one — or at
+    /// the end of the text. Nothing else ends it: our own wrappers around the vendor's line (<c>; Kimi said: …</c>, <c>; the agent's stderr: …</c>) carry no closing punctuation, so every parenthesis in the clause
+    /// is the vendor's and is kept — counting them would break on a vendor line that opens or closes one of its own.
+    /// </summary>
+    private static int ClauseEnd(string text, int from)
     {
         for (var dot = text.IndexOf('.', from); dot >= 0; dot = text.IndexOf('.', dot + 1))
         {
             if (dot + 1 < text.Length && char.IsWhiteSpace(text[dot + 1]))
             {
-                return dot;
+                return dot + 1;
             }
         }
 
-        return -1;
+        return text.Length;
     }
 }

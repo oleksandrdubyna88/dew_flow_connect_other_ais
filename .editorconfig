@@ -99,6 +99,11 @@ dotnet_diagnostic.CA1502.severity = error
 [src_mcp/src/Store/SecurityPreviewFork.cs]
 dotnet_diagnostic.CA1502.severity = error
 
+# THE PATH RESOLVER'S METHODS STAY WITHIN CYCLOMATIC COMPLEXITY 4 (the doctrine's bound, csharp/doctrine.md §6; a code round of 2026-11-01 found its first walk
+# at far over it). Same switch and threshold file as the sections around it.
+[src_mcp/runners/Files/RealPath.cs]
+dotnet_diagnostic.CA1502.severity = error
+
 # THE ATTRIBUTION CORE'S METHODS STAY WITHIN CYCLOMATIC COMPLEXITY 4 (E4 §2 / §S2.9 item 5).
 #
 # Same switch as the security lane above, same threshold file. Measured 2026-10-19: 10 methods of the

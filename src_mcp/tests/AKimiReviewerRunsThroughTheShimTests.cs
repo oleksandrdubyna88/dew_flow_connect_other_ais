@@ -105,13 +105,13 @@ public sealed class AKimiReviewerRunsThroughTheShimTests : IDisposable
     {
         OnWindows();
         using var rooted = Rooted();
-        var launcher = new ScriptedKimi(version: "2.2.0");
+        var launcher = new ScriptedKimi(version: "3.0.0");
 
         var outcome = await new ReviewerExecutor(launcher).RunAsync(Invocation(), ct: TestContext.Current.CancellationToken);
 
         outcome.Should().BeOfType<ReviewerOutcome.Ok>("the owner's rule: warn and run");
-        outcome.Warning.Should().Be(((IReviewerRuntime)Runtime()).VersionWarning("kimi, version 2.2.0")).And.Contain("2.2.0").And.Contain("2.1.1");
-        outcome.CliVersion.Should().Be("kimi 2.2.0");
+        outcome.Warning.Should().Be(((IReviewerRuntime)Runtime()).VersionWarning("kimi, version 3.0.0")).And.Contain("3.0.0").And.Contain("2.1.1");
+        outcome.CliVersion.Should().Be("kimi 3.0.0");
     }
 
     // ---------- the control refuses, the shim never starts ----------

@@ -85,4 +85,33 @@ public sealed class KimiNetworkOverrideChainTests : IDisposable
 
         (row.TryGetProperty("warning", out var warning) ? warning.GetString() ?? string.Empty : string.Empty).Should().NotContain("network storage", $"nothing is admitted, so nothing is warned about ({row})");
     }
+
+    /// <summary>
+    /// The consultant's hand-over (S5 meeting DL6 at the merge with main, 2026-10-27): a consultation's launch settings are composed by
+    /// <c>ConsultantTurnInputs</c>, not by the roster or the fan-out, so the panel's answer must be copied there too — and the Kimi
+    /// consultant's built launch must carry an adapter bound to it, or a person who admitted a network sign-in is refused on every consult.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AConsultationsLaunch_CarriesThePanelsOverride_ToTheKimiAdapter(bool allow)
+    {
+        var row = new ProviderSettings("kimi") { Enabled = true, Runtime = "kimi", Model = "kimi-code/k3" };
+        var data = Directory.CreateDirectory(Path.Combine(_person.Folder, "data")).FullName;
+        var settings = ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), new PanelSettings { DataDir = data, KimiAllowNetworkSignIn = allow },
+            VaultKeys.None("no vault"));
+
+        settings.KimiAllowNetworkSignIn.Should().Be(allow, "the consultation's launch reads the panel's answer, as a reviewer's and a question row's do");
+
+        // The conversation's own folder and its snapshot, as the service hands them (ConsultantPlaces) — a Kimi consultant refuses a launch
+        // without either (D19, D6).
+        var owned = settings with { OwnedScratch = Directory.CreateDirectory(Path.Combine(data, "conversation")).FullName };
+        var built = new KimiConsultant(new KimiRuntime("kimi")).Build(
+            new Runners.Consultation.ConsultantLaunch(_person.Folder, "a question", string.Empty, Directory.CreateDirectory(Path.Combine(data, "out")).FullName, owned)
+            {
+                Workdir = Directory.CreateDirectory(Path.Combine(data, "snapshot")).FullName,
+            });
+
+        built.Adapter.Should().BeOfType<KimiRuntime>().Which.AllowsNetworkSignIn.Should().Be(allow, "the launch control of this turn asks the setting the panel read");
+    }
 }
