@@ -294,7 +294,7 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
         var host = new PanelServiceHost(
             name => name == "COAI_DATA_DIR" ? _dir.Path : null,
             VaultKeys.None("no vault in this test"), default, new ProcessLauncher(),
-            Serilog.Core.Logger.None, mine);
+            Serilog.Core.Logger.None, mine, CancellationToken.None);
 
         Held(host.Current).Should().BeSameAs(mine, "the service the host built has the host's own");
 

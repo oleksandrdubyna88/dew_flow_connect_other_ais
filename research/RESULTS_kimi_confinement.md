@@ -44,6 +44,12 @@
 > `rg` running). **One finding is not about the hold:** Kimi writes a `device_id` file into the owned home when a launch's token refresh rotates the
 > sign-in (2 of 2 refreshing launches, none of 13 others observed) — `KimiHome`'s allowlist did not admit it and would have refused the next launch
 > on that home; it does now.
+>
+> **E5.1's cell (§33, 2026-10-16): M-K16 — `session/load` as the shim will use it.** 12 paid turns and 3 unpaid loads, turn 1 always through the shipped shim:
+> the load result **announces the `model` option** (the home's one model, 9 of 9 loads); Kimi **replays the history** as `session/update` during the load,
+> BEFORE its response (the earlier answers verbatim, 9 of 9); an unknown id is JSON-RPC **-32602** `Invalid params: Unknown sessionId: <id>` (3 of 3, 30–48 ms);
+> three turns keep one id and a cumulative total that only rises, the output delta equal to that turn's `outputTokens` (6 of 6 loaded turns). Each fact took
+> the first branch of E5.1's table. Not measured: whether `tool_call` updates are replayed.
 
 ## 1. Prompt mode cannot carry a review prompt
 
@@ -577,6 +583,8 @@ exits. From the first coai-mcp release after 0.62.0 that carries story 2 of that
 
 Added 2026-10-15 (E4.3 review): **many `device_id`s per sign-in** — each refreshed owned home writes a NEW `device_id` (§27), so one sign-in accumulates one id per home that refreshed; whether many ids per sign-in matter to the vendor is unmeasured.
 
+Added 2026-10-16 (M-K16, §33): whether `session/load` replays `tool_call` updates (no measured turn used a tool); a `session/new` on the same owned home side by side with the load's announcement; a load after the conversation's `cwd` folder was removed or renamed; a conversation of more than three turns; a load by a second process while the first still runs.
+
 ## 26. What this changes in the plan (for the plan's owner to decide)
 
 | Decision | Measured here | Effect |
@@ -959,7 +967,7 @@ DL10, re-decided 2026-10-17 on the owner's WSL2 (`systemd` and `(sd-pam)` hide `
 
 ## 31. The quota answer over ACP — the CAPTURE STEP (written 2026-10-20, NOT yet run; `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` §5 step 1, S9)
 
-Status: **no real line has been captured yet.** (Since 2026-10-20 the shim also keeps a JSON-RPC error's `data` member in the reason — `message (data: …)`, redacted, capped at 2,000 — so if Kimi puts the 429 detail there, the captured line shows it and S9's "bare `Authentication required`" is no longer possible by omission.) Everything below the line "The record" is empty on purpose. This section is the procedure, so the next person does not have to
+Status: **no real line has been captured yet over ACP.** (A second sighting, 2026-10-21, is from a different road: Kimi 2.3.0 in PROMPT mode — `kimi -p`, which is not the product's road — answered a spent MONTHLY quota, three of three launches, with `provider.api_error: 429 You've reached your monthly usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota` (then exit 127 and a libuv assertion — a prompt-mode crash, not the product's concern). Seen in prompt mode on 2.3.0; the ACP form is still unmeasured. Story 5 of the plan reads it as a spent quota wherever the sentence arrives.) (Since 2026-10-20 the shim also keeps a JSON-RPC error's `data` member in the reason — `message (data: …)`, redacted, capped at 2,000 — so if Kimi puts the 429 detail there, the captured line shows it and S9's "bare `Authentication required`" is no longer possible by omission.) Everything below the line "The record" is empty on purpose. This section is the procedure, so the next person does not have to
 rediscover it, and the place where the answer is written down. The fixture in `KimiAcpProfileTests` and in `ASpentKimiQuotaReadsAsAQuotaTests` (`PromptError`) is CONSTRUCTED:
 the inner sentence is the owner's own CLI line (kimi 2.2.0, 2026-10-19: "You've reached your 5-hour usage limit. Your quota will reset …"), and the wrapper
 `Authentication required: 429 …` is a hypothesis. What Kimi really sends over ACP is unknown.
@@ -976,7 +984,7 @@ while any coai session launches Kimi (a probe of `kimi acp` takes no `KimiCreden
 The text to copy is what follows ` — the vendor said: `. Copy it with the tool, do not retype it.
 
 **How the first real line is checked against the redaction pattern (the real Moonshot id shape is NOT measured).** The `moonshot-id` pattern (`Redaction.cs` and its twin in
-`src_vs_code/src/notifications.ts`) takes `org-` or `ak-` followed by 8–128 letters and digits with at least one digit. Before the line goes anywhere:
+`src_vs_code/src/notifications.ts`) takes `org-` or `ak-` followed by 8–4096 letters, digits, `_` and `-` with at least one digit in the first 128 (the whole run is masked; widened 2026-10-22 from letters and digits; an id with NO digit is still not matched). Before the line goes anywhere:
 1. Look at the copied line. Anything shaped like an account id (`org-…`, `ak-…`, or any long opaque token next to the word "account") must already read `[redacted]` (`Redaction.Redacted`) — the ledger and the log are
    written through the redactor, so an id that is still readable there was NOT matched. That is a defect in the pattern, not in the copy.
 2. If an id is readable: write down only its SHAPE in this section (prefix, length, the character classes it uses — letters, digits, `_`, `-`, upper case), never the id. If the real id has no digit,
@@ -1004,3 +1012,153 @@ fires over ACP: `not_signed_in` is then what the vendor said, and the kept sente
 | The line (after ` — the vendor said: `, ids redacted by hand) | *not captured yet* |
 | `moonshot-id` matched the real id | *not captured yet* |
 | Outcome (quota text over ACP / S9: bare sign-in) | *not captured yet* |
+
+## 32. Kimi Code 2.2.0 on Windows — what was re-measured, and what was not (2026-10-20)
+
+Asked by the owner on 2026-10-20, because `providers` warned that Kimi 2.2.0 is not a version coai has measured. Kimi Code
+**2.2.0** (self-updated from 2.1.1), Windows 11, the SHIPPED shim `coai-mcp 0.62.0` (the extension's own binary), the same
+default model `kimi-code/k3-256k`. Run in a window with no other `kimi` process on the machine (the refresh token rotates;
+both other sessions held their Kimi rounds). 12 + 52 + 41 launches. Every value below is copied from the probe scripts' own
+result tables of those three runs (kept outside the repository, as for §27).
+
+**Re-measured on 2.2.0 — the same final outcome as 2.1.1 in each cell; intermediate runs differ where the row says so (M-K11's Grep + Glob rung):**
+
+| Cell | Result on 2.2.0 |
+|---|---|
+| M-K15 tree hold (§27), 4 arms × 3 | normal and normal-with-tools: both lock files free 153–164 ms after the shim's exit; shim killed: held while `kimi` lived, free 0–1994 ms after `kimi`'s own exit; killed during `rg`: `kimi` took ~5.1–5.2 s to end, free at once after it. No process of Kimi's outlived it; the credentials folder's names intact, not rotated. |
+| M-K11 owned-home inventory, 3 runs per step | the junction alone → `not_signed_in` (77); + `config` → `model_not_offered` (65); + `config-models` → answered. Grep + Glob inside the working folder on `config` + `config-models`: 2 of 3. The miss was the model's own malformed Grep call (an empty `type` parameter, retried in the answer), not a missing file. The probe's ladder then added the person's `bin` (it placed `rg.exe`/`fd.exe` in the owned home itself) and got 3 of 3. **The needed set is the same as 2.1.1: `config`, `config-models` (§17).** `bin` was admitted by the ladder, not shown to be needed. Kimi wrote no `bin/` into the owned home in any run without it: `rg.exe` came from `PATH`. |
+| M-K11c, 3 runs | 4 files made; unchanged after `kimi --version` (2.2.0); 16 after turn 1, 24 after a second start — Kimi's own session store. |
+| M-K13, 3 launches | with `KIMI_CODE_NO_AUTO_UPDATE=1`: no `updates/`, version 2.2.0 → 2.2.0; the `-p` control without the variable wrote `updates/latest.json` and `rollout.log`. The pin holds. |
+| M-K8b, 3 runs | an owned home whose `credentials` is a junction to the person's answers; nothing copied. |
+| M-K9e (untrusted, no `.git`) | the project's hooks (`config.toml`, `local.toml`) and both project MCP files NOT loaded, 3 of 3; project AGENTS.md, skills and sub-agents ARE loaded, as on 2.1.1. Trusted control: both MCP files load. |
+| M-K7b | `kimi-code/k3` and `kimi-code/kimi-for-coding` answer; `kimi-for-coding-highspeed` → 403 (subscription), as on 2.1.1. |
+| M-K5b, 3 runs | `/usage` after `session/load` prints only `Context: …` and `Session total: …` — cumulative over the session, and no plan-quota line. |
+
+**NOT measured on 2.2.0, so `KimiAcpProfile.MeasuredVersions` stays `["2.1.1"]`:** the write refusals through the shim
+(M-K3, M-K4) and the reads (M-K6). Their shim arms were never given an owned root (`--home`, `--persons-bin`, `--locks`),
+so the shipped shim refuses them by design (`launch failed: no owned root`); only their `-p` positive controls ran — they
+show Kimi writes when nothing refuses, not that coai refuses. M-K12 (the OS-home redirect, writes canaries into the real
+`~/.agents`) needs the owner's permission again. M-K8, M-K9 and M-K10 copy the credentials folder into a scratch home —
+skipped, because a copy duplicates a refresh token that rotates. The script fix is owned by
+`todo/PLAN_vibe_and_kimi_runtimes_E4.md`'s session (planned after the Kimi quota fix); M-K3/M-K4/M-K6 re-run when that
+fix lands, and M-K12 when the owner allows the `~/.agents` canaries again — both in one paid window, asked for together.
+
+**The sign-in survived:** one token refresh rotated the file in place through the junction (M-K11), and one `kimi -p` turn
+on the real home answered afterwards.
+
+## 33. M-K16 — `session/load` as the shim will use it: it announces the model, it REPLAYS the history before it answers, an unknown id is `-32602`, and three turns stay cumulative (2026-10-16)
+
+> Numbered §29 while it lived on `feat/kimi-consultant`; renumbered §33 when that branch merged with main (2026-10-27), where §29–§32 were
+> already taken (§29 is Kimi on WSL2).
+
+E5.1 of [PLAN_vibe_and_kimi_runtimes_E5.md](../todo/PLAN_vibe_and_kimi_runtimes_E5.md), run by a scout with the owner's yes for the 12 paid turns. Branch `feat/kimi-consultant`,
+Windows 11, Kimi Code 2.1.1, model `kimi-code/k3-256k`. The raw rows (two JSON files) stay outside the repository: they hold local paths. This section is their redacted summary.
+
+**How it was run.** A scratch driver (outside the repository) built on the probe library (`scripts/lib/kimi.mjs`, `kimi-home.mjs`). Every owned root is the product's layout (E4.2):
+`<root>/home` = `KIMI_CODE_HOME` (`credentials` a JUNCTION to the person's folder, one coai-written `config.toml` with the model block), `<root>/os` = empty OS home. The environment is the
+runtime's (minimal names + `KIMI_CODE_HOME`, `KIMI_CODE_NO_AUTO_UPDATE=1`, every OS-home name set to `<root>/os`, the person's `bin` first on `PATH`).
+- **Turn 1 of every paid run: the SHIPPED shim**, `coai-mcp --ask-acp --profile kimi --home <root> --persons-bin … --locks …`, built from this branch (`src_mcp` 0.57.0, Debug, into the scratch).
+- **Every load: the driver's own small ACP client** (`initialize` → `session/load {sessionId, cwd, mcpServers: []}` → `session/set_config_option model` → `session/prompt` → `/usage`). The probe library's
+  `acpTurn` could not do this arm when it ran: it had no `loadUpdates` and no `endLikeTheShim`. The driver had both: it records every `session/update` by phase (during the load,
+  after the load, in the prompt, in `/usage`), and it ends a turn as `AcpClient` does — `session/cancel`, at most 1 s of quiet (measured 251–282 ms), the tree kill of the PID it started, stdin closed after.
+  After every kill the PID was verified gone (`aliveAfterEnd` false 12 of 12). The probe library gained the same two features afterwards, unit-tested against a fake agent
+  (`scripts/lib/kimi.test.mjs`, S5.1.1–S5.1.2: `acpTurn({ load })` records `loadUpdates`; `acpTurn({ endLikeTheShim: true })` ends cancel → quiet → tree kill → stdin). The rows below are the driver's.
+- **Safety, every launch:** the process list was read first and no `kimi` ran (none waited, none skipped); one `kimi` at a time; each home disposed junction-first (link removed by its own name, the
+  person's folder checked to still hold every name, then the rest): **9 of 9 clean**. The person's credentials folder was never read, copied or printed — names, sizes and mtimes only: both names
+  kept at the end. One file's mtime moved (a token refresh through the junction), sizes unchanged. `kimi login` never ran.
+- **Working-folder redaction:** scratch folder `testsToDelete-kimi-mk16-main` (in `%TEMP%`); deleted at the end (no reparse point inside, checked first). Session ids are written `<id>`.
+
+### Predictions (set before any launch)
+
+| Fact | Prediction |
+|---|---|
+| (a) the load result announces `model` | Likely yes (~60 %): the result of `session/new` does, and the load builds the same session. Values would be what the home's config holds, i.e. one model. |
+| (b) replay during the load | Likely yes (~60 %): `initialize` said `loadSession: true`, and ACP agents usually replay history as `session/update` during the load. |
+| (c) unknown id | A JSON-RPC error, probably `-32602` or a `-32000` range code, with "session not found" wording. Fast (no model call). |
+| (d) three turns | Same id 3 of 3, total only rises, `delta_out` = that turn's `outputTokens`, home still valid between turns, session found on the next load. |
+
+### `unknown` (free, n = 3)
+
+A fresh owned root, the client loads a well-formed random UUID (no session was ever made for it).
+
+| Run | JSON-RPC answer | Time | Agent after the error |
+|---|---|---|---|
+| 1 | code **-32602**, message `Invalid params: Unknown sessionId: <id>`, `data: {"sessionId": "<id>"}` | 30 ms | alive; killed by the driver |
+| 2 | the same | 32 ms | the same |
+| 3 | the same | 48 ms | the same |
+
+The message and `data` carry the id back (the id is in the error text: any mapping that quotes it must treat it as data). The code is the generic invalid-params one, so on its own it does NOT say
+"session lost" (a bad `cwd` would also be `-32602`): the signal is the pair, a `session/load` that answered an error, which is the plan's rule.
+Home check after the arm: junction to the person's folder true, `config.toml` bytes unchanged, `os/` empty (3 of 3).
+
+### `announce` (1 paid turn per run, n = 3)
+
+Turn 1 through the shim (`Reply with exactly: OK`): exit 0, `end: answered` 3 of 3 (5.0–6.5 s; `Session total` 19 969 input and 30 / 24 / 46 output). The shim's report keys: `answer, end, stopReason,
+reason, sessionId, usage, refusals, toolCalls, reads, droppedTraceEntries, truncatedTraceFields` — the `sessionId` is there. Then the client loaded that id on the SAME cwd path and the SAME
+owned root, sent no prompt, and ended like the shim.
+
+| Run | Session found | Load result keys | `model` option | Load time |
+|---|---|---|---|---|
+| 1 | yes | `configOptions`, `modes` | present; `currentValue` `kimi-code/k3-256k`; values **[`kimi-code/k3-256k`]** | 204 ms |
+| 2 | yes | the same | the same | 256 ms |
+| 3 | yes | the same | the same | 176 ms |
+
+The same result also announces `thinking` (values [`on`]) and `mode` (`default`, `plan`, `auto`, `yolo`); each option object has the keys `type, id, name, category, currentValue, options`.
+`AcpMessages.AnnouncedValues(result, "model")` would return one value, the one in the home's `config.toml`. This home is written for ONE model (RESULTS §17, §22: a home answers only the id it was
+written for), so the list is that one model — not the six `session/new` showed on the person's own home (§2). What was NOT measured here: a `session/new` on this same home, side by side.
+
+### `three-turns` (3 paid turns per run, n = 3)
+
+Turn 1 through the shim (`OK1`); turns 2 and 3 by the client: load, `set_config_option model`, `Reply with exactly: OK<n>`, `/usage`, end like the shim. Between turns `notes.txt` was rewritten in
+place, and the home was checked.
+
+| Run | Turn | Same id | Found | `Session total` in / out | delta out | log `outputTokens` (calls) | delta from the log | Total only rises |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 1 (shim) | — | yes | 19 970 / 36 | 36 | 36 | 36 | — |
+| 1 | 2 | yes | yes | 40 000 / 67 | 31 | 36+31 | 31 | yes |
+| 1 | 3 | yes | yes | 60 085 / 93 | 26 | 36+31+26 | 26 | yes |
+| 2 | 1 (shim) | — | yes | 19 970 / 26 | 26 | 26 | 26 | — |
+| 2 | 2 | yes | yes | 39 990 / 46 | 20 | 26+20 | 20 | yes |
+| 2 | 3 | yes | yes | 60 054 / 64 | 18 | 26+20+18 | 18 | yes |
+| 3 | 1 (shim) | — | yes | 19 970 / 46 | 46 | 46 | 46 | — |
+| 3 | 2 | yes | yes | 40 010 / 96 | 50 | 46+50 | 50 | yes |
+| 3 | 3 | yes | yes | 60 124 / 124 | 28 | 46+50+28 | 28 | yes |
+
+The id was the same on every load (the load asks for it and the result is not an error; the shim's turn 1 gave it). The output delta equals the new calls' `outputTokens` **6 of 6 loaded turns**,
+and the input total rises by about 20 000 per turn (a loaded turn pays the whole context again: +20 030, +20 085, +20 020, +20 064, +20 040, +20 114). Every loaded turn answered `end_turn`,
+the answer counted only after the prompt was exactly `OK2` / `OK3` 6 of 6, 0 refusals, 0 reads.
+
+**The replay (b).** Kimi replays the history as `session/update` notifications **during the load, before the load's response** — and nothing after it:
+
+| Load | `user_message_chunk` | `agent_thought_chunk` | `agent_message_chunk` | `agent_message_chunk` text (first 120 chars) | Updates after the load (before the prompt) |
+|---|---|---|---|---|---|
+| turn 2's load (after 1 turn) | 2 | 1 | 1 | `OK1` | `available_commands_update` 1, `config_option_update` 1 (after the model was set) |
+| turn 3's load (after 2 turns) | 3 | 2 | 2 | `OK1`, `OK2` | the same two |
+| the three `announce` loads (after 1 turn) | 2 | 1 | 1 | `OK` | `available_commands_update` (no model was set) |
+
+Identical in all three runs. The replayed assistant text is exactly the earlier answers. So a collector that keeps EVERY chunk from the moment of the load request gives `OK1OK2` for turn 2 and
+`OK1OK2OK3` for turn 3 (6 of 6); a collector marked at the load's response gives `OK2` / `OK3`. Kinds seen anywhere: `user_message_chunk`, `agent_thought_chunk`, `agent_message_chunk`,
+`available_commands_update`, `config_option_update`, `usage_update`. No `tool_call` or `tool_call_update` was replayed — none of these turns used a tool, so **the replay of tool calls is NOT measured**.
+The `/usage` prompts (a user prompt and a reply each) are not visible as extra replayed agent chunks (2 agent chunks after 2 turns), so a slash command's answer is not replayed as an answer.
+
+**Between the turns (3 of 3 runs, checked before each load and after each turn).** The `credentials` link is still a junction and its target is the person's folder; the `config.toml`'s bytes are
+the ones coai wrote; `os/` has no entry; the home holds `cache, config.toml, credentials, logs, session_index.jsonl, sessions, workspaces.json` (a refresh adds `device_id`, as §27 said — seen once).
+**Every end of a turn:** `session/cancel`, quiet 251–282 ms, tree kill; the agent was gone after each (aliveAfterEnd false); the next launch found no `kimi` process running.
+
+### Spend
+
+**12 paid turns** (3 `announce` + 9 `three-turns`), all answered, none refused, none cut. The three `announce` turns 1 reported 19 969 input / 100 output in all. The three-turn runs ended at 60 085 / 93,
+60 054 / 64 and 60 124 / 124 (input / output, cumulative); the three turns-1 inside them are part of these. Altogether about **240 000 input and 380 output tokens**. The 3 `unknown` runs and the three
+`announce` loads spent nothing (no prompt). No `kimi` was running before any launch; none waited.
+
+### What the results select (the plan's table)
+
+| Fact | Result | E5.2 / E5.4 takes … |
+|---|---|---|
+| (a) the load result | **announces the `model` option with values** (3 of 3 in `announce`, and 6 of 6 loads in `three-turns`) | **the first branch:** the same in-session check as a new session (`NotOffered`) on the LOAD's announcement. Caveat for the code: the values are the home's own model blocks (one on a product-shaped home), so the check is as strict as on `session/new` of the same home; a home written for another model gives `ModelNotOffered` before a prompt is spent |
+| (b) the replay | **replays chunks during the load** (9 of 9 loads; the previous answers, verbatim) | **the first branch:** mark the answer AFTER the load returns. The trace-list mark for `tool_call` replays is not measured (no tool ran); the plan's rule (mark the three lists the same way) stays as written, and S5.2.2's fake agent should replay a `tool_call` too |
+| (c) an unknown id | JSON-RPC **-32602** `Invalid params: Unknown sessionId: <id>`, 30–48 ms, 3 of 3 | **the first branch:** every error answer to `session/load` that no known failure names → `session_lost`. The words for help: "Kimi no longer holds the session". Do not key on the code alone; do not quote the id from the error |
+| (d) three turns | same id 3 of 3 per turn; totals only rise 6 of 6; delta out = that turn's `outputTokens` 6 of 6; session found on the next load 9 of 9 | **keep `UsageIsCumulative = true`** (E5.4). Nothing stops; no owner decision is needed |
+
+Not measured here, and not claimed: the replay of tool calls; a `session/new` on the same home side by side with the load's announcement; a load after the session's `cwd` folder was removed or
+renamed (the cwd is the conversation's one stable snapshot path); more than three turns; a load by a second process while the first is still alive (never run: one `kimi` at a time).

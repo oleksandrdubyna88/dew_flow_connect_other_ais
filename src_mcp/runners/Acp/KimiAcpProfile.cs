@@ -67,7 +67,8 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
     /// <remarks>
     /// <para>1 the plan lacks the model (measured 2026-10-12, RESULTS §2 — it begins with the sign-in words, hence first). 2 the 5-hour plan quota is spent (the
     /// owner's kimi 2.2.0, 2026-10-19) — before the sign-in rows it hides behind; its phrase is in neither codex's "hit your usage limit" nor the sales footer
-    /// "rate limit reached; upgrade", so it takes nothing of theirs. 3 a spent balance — before the sign-in rows, so the wrapped sample reaches it.</para>
+    /// "rate limit reached; upgrade", so it takes nothing of theirs. 2b the MONTHLY quota (kimi 2.3.0, 2026-10-21; seen in prompt mode — the ACP form is unmeasured, the row
+    /// matches the sentence wherever it arrives): the same name and the same words, beside its 5-hour twin. 3 a spent balance — before the sign-in rows, so the wrapped sample reaches it.</para>
     /// <para>4 a 401 keeps the login cure, listed before 5 because its phrase contains 5's. 5 <b>the colon is the discriminator</b>: any
     /// <c>Authentication required: &lt;status&gt; …</c> the rows above did not claim is the vendor's own failure — quoted in its words, no cure, the agent's own exit (70);
     /// a 503 or a plain "Too Many Requests" is not a lost sign-in and not a spent allowance. 6 the bare form (RESULTS §2: no colon) is the one sign-in refusal measured.</para>
@@ -80,6 +81,7 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
             "the Kimi Code plan does not include this model — pick one the plan has (kimi-code/k3-256k answered on this one) or upgrade the plan",
             AcpFailureKind.Refused),
         new("reached your 5-hour usage limit", QuotaSpent, KimiQuotaWords.Fixed, AcpFailureKind.Spent),
+        new("reached your monthly usage limit", QuotaSpent, KimiQuotaWords.Fixed, AcpFailureKind.Spent),
         new(
             "insufficient balance",
             BalanceSpent,
@@ -97,9 +99,13 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
     public static readonly IReadOnlySet<string> SpentNames =
         Failures.Where(failure => failure.Kind == AcpFailureKind.Spent).Select(failure => failure.Name).ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>The phrase of the Spent row called <paramref name="name"/>, as the table writes it — empty for a name that is not a Spent row.</summary>
-    public static string SpentPhraseOf(string name) =>
-        Failures.Where(failure => failure.Kind == AcpFailureKind.Spent && failure.Name == name).Select(failure => failure.Phrase).FirstOrDefault() ?? string.Empty;
+    /// <summary>
+    /// The phrases of the Spent rows called <paramref name="name"/>, as the table writes them, joined by " or " — empty for a name that is not a Spent row. A name can cover
+    /// several rows (<c>kimi_quota_spent</c>: the 5-hour and the monthly window), so this never stands for the ONE the vendor wrote: only the report's matched line does that.
+    /// It is the fallback for a report that carries no line.
+    /// </summary>
+    public static string SpentPhrasesOf(string name) =>
+        string.Join(" or ", Failures.Where(failure => failure.Kind == AcpFailureKind.Spent && failure.Name == name).Select(failure => failure.Phrase));
 
     /// <summary>
     /// The Kimi versions coai has measured. Every number in <c>research/RESULTS_kimi_confinement.md</c> — the write refusals, the

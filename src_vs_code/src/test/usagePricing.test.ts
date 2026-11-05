@@ -275,3 +275,24 @@ test('AnUnpricedLine_MakesTheTotalAFloor — a model no list prices, or a line w
   assert.equal(spend(whole!), '~$2.00');
   assert.equal(spend(nothing!), '—', 'nothing priced is a dash, never ≥ $0');
 });
+
+test('ConsultationIsRead_AndAnOldLineHasNone — E3.S4: the consult line keeps the consultation its turn belongs to', () => {
+  const [new1, empty, old] = parseUsage([
+    '{"utc":"2026-10-20T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok","kind":"consult","consultation":"c-0a1b2c"}',
+    '{"utc":"2026-10-20T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok","kind":"consult","consultation":""}',
+    '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1,"kind":"consult"}',
+  ].join('\n'));
+
+  assert.equal(new1?.consultation, 'c-0a1b2c', 'the consultation id was dropped on the way in');
+  assert.equal(empty?.consultation, undefined, 'an empty id is absent — an empty-string id would group every check as one phantom consultation');
+  assert.equal('consultation' in (old ?? {}), false, 'an old consult line has no consultation');
+});
+
+test('ALocalCauseWord_IsReadLikeAnyOther — E3.S2 guard: roundClock and unknown parse whole', () => {
+  const [clock, unknown] = parseUsage([
+    '{"utc":"2026-10-20T10:00:00Z","provider":"codex","tokensIn":1,"tokensOut":1,"outcome":"Cancelled","endCause":"roundClock"}',
+    '{"utc":"2026-10-20T10:00:00Z","provider":"codex","tokensIn":1,"tokensOut":1,"outcome":"Cancelled","endCause":"unknown"}',
+  ].join('\n'));
+
+  assert.deepEqual([clock?.endCause, unknown?.endCause], ['roundClock', 'unknown']);
+});

@@ -11,7 +11,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The authors step (E5.S4 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>) over E1's real fixtures in a temp home:
+/// The authors step (E5.S4 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>) over E1's real fixtures in a temp home:
 /// what it records for a settled round, what it refuses to record, what it hands E4 and under which budget. The identity is always the
 /// step's INJECTED environment — no test here sets a caller-identity variable on the process — and the home is always a temp folder.
 /// </summary>
@@ -442,7 +442,7 @@ public sealed class RoundAuthorsStepTests : IDisposable
     public void ADeadlineThatPassesInThePeerPhase_StopsThere_NoReaderNoAssign_AndEverythingUnknown()
     {
         using var h = AuthorsStepHarness.Of("resumed-agent");
-        var clock = new MovableClock(new DateTimeOffset(T0));
+        var clock = new ManualClock(new DateTimeOffset(T0));
         var (reads, assigns) = (0, 0);
         var round = h.Round(1);
 
@@ -479,7 +479,7 @@ public sealed class RoundAuthorsStepTests : IDisposable
     public void ADeadlineThatPassesAfterTheRead_NeverAttributes_ButSaysTheReaderRan()
     {
         using var h = AuthorsStepHarness.Of("resumed-agent");
-        var clock = new MovableClock(new DateTimeOffset(T0));
+        var clock = new ManualClock(new DateTimeOffset(T0));
         var assigns = 0;
         var round = h.Round(1);
 
@@ -517,7 +517,7 @@ public sealed class RoundAuthorsStepTests : IDisposable
             world.Add(id, T0.AddSeconds(2), [PeerRound(1, T0.AddSeconds(5), T0.AddSeconds(9))]);
         }
 
-        var clock = new MovableClock(new DateTimeOffset(T0));
+        var clock = new ManualClock(new DateTimeOffset(T0));
         var loaded = new List<string>();
         var round = h.Round(1);
 

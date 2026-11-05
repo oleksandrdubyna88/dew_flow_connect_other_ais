@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.14.0...server-v0.14.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **launcher:** a fast macOS child is not 'not started', and no test run sees another ([#893](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/893)) ([e86fe17](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e86fe17f86bfad9e154237141e3c0d4a1819e78b))
+
 ## [0.14.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.13.1...server-v0.14.0) (2026-10-19)
 
 

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using CoaiMcp.Runners.Collecting;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Worktrees;
@@ -133,13 +134,17 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
         && name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) < 0;
 
     /// <summary>Whether a path really is under this root — asked before anything is deleted.</summary>
-    public bool Holds(string candidate)
-    {
-        var below = System.IO.Path.GetFullPath(path).TrimEnd(System.IO.Path.DirectorySeparatorChar)
-            + System.IO.Path.DirectorySeparatorChar;
+    public bool Holds(string candidate) => Real(candidate).Ok;
 
-        return System.IO.Path.GetFullPath(candidate).StartsWith(below, StringComparison.OrdinalIgnoreCase);
-    }
+    /// <summary>
+    /// The REAL path of a tree strictly under this root's REAL path, whose last name is not a link — or a failure. The path to act on:
+    /// <see cref="EnsureGoneAsync"/> deletes THIS path, the one that was judged, never the spelling it was handed
+    /// (<see cref="RealPath.ResolveBelow"/>; <c>GetFullPath</c> and a prefix test, the first form, passed a name under the root whose
+    /// parent is a link to an outside folder).
+    /// </summary>
+    /// <remarks>Case: <c>OrdinalIgnoreCase</c> on Windows and macOS, as before; <c>Ordinal</c> on Linux, where names differing by case are different folders.</remarks>
+    internal RealPathResult Real(string candidate) => RealPath.ResolveBelow(
+        path, candidate, OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>Where the tree of this name is.</summary>
     public string TreeAt(string name) => System.IO.Path.Combine(path, name);
@@ -184,12 +189,14 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
     /// "could not clear it". The catch answers the QUESTION rather than the exception, for the same
     /// reason — a directory another process removed first is a success.
     /// </remarks>
-    public async Task<bool> EnsureGoneAsync(string candidate, CancellationToken ct)
+    public async Task<bool> EnsureGoneAsync(string spelled, CancellationToken ct)
     {
-        if (!Holds(candidate))
+        if (Real(spelled) is not { Ok: true } judged)
         {
             return false;
         }
+
+        var candidate = judged.Path;
 
         if (!Directory.Exists(candidate))
         {

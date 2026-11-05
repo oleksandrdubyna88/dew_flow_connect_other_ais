@@ -7,7 +7,7 @@
 >
 > Related: [module_server.md](../research/module_server.md), [module_extension.md](../research/module_extension.md),
 > [architecture.md](../research/architecture.md) (§ *A field added to the round list*),
-> [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md) (schema steps 22/23).
+> [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](../research/PLAN_a_round_records_who_wrote_the_code_and_how_much.md) (schema steps 22/23).
 
 ## 1. The symptom (measured 2026-10-15)
 

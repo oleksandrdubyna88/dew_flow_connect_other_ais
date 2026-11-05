@@ -220,9 +220,12 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     /// <summary>The shipped catalog with its FeatureReview role on, and one vendor — the fake CLI on codex.</summary>
     /// <param name="gate">Every role's gate; the shipped feature budget (two rounds, a threshold of five) unless a test needs another.</param>
     /// <param name="secondVendor">A second vendor on the same fake CLI, told apart by its model — for a round that partly fails.</param>
+    /// <param name="roundTimeout">The operator's explicit whole for the round; none (the derivation) unless a test needs one.</param>
+    /// <param name="log">What the engine logs to; nothing unless a test reads it.</param>
     private PanelService Service(
         bool ticked = true, int minEpics = 3, TimeSpan? escalationBudget = null, IProcessLauncher? launcher = null, RoleGate? gate = null,
-        int followUps = 3, TimeSpan? reviewerTimeout = null, bool secondVendor = false, int promptCapKib = 0) =>
+        int followUps = 3, TimeSpan? reviewerTimeout = null, bool secondVendor = false, int promptCapKib = 0,
+        TimeSpan? roundTimeout = null, Serilog.ILogger? log = null) =>
         new(
             new PanelSettings
             {
@@ -237,11 +240,12 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
                 FeatureMinEpics = minEpics,
                 FeatureSourceFollowUps = followUps,
                 EscalationBudget = escalationBudget ?? TimeSpan.FromMinutes(30),
+                RoundTimeout = roundTimeout ?? TimeSpan.Zero,
             },
             VaultKeys.None("no vault in tests"),
             default,
             launcher ?? _launcher,
-            Logger.None, Noticing.None);
+            log ?? Logger.None, Noticing.None);
 
     private PersistedSession Session() =>
         new SessionStore(_data).Load(_repo, SessionKey.FeatureBranch, string.Empty, PlanPath)!;
@@ -439,22 +443,57 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// The round's deadline is derived from <c>reviewerTimeout × (1 + follow-ups)</c>, not from one turn: four
-    /// turns of 0.7 s under a 2 s reviewer timeout take 3–4 s, and a round bounded by one turn's 2 s would
-    /// cancel the conversation halfway and call a person over a reviewer that was answering.
+    /// A real-process SMOKE TEST of the wiring (E4 S5, C6): a reviewer that asks on every turn and gets its three follow-ups is
+    /// reviewed end to end — proceed, four prompts, the reviewer answered — under the 2 s reviewer timeout and the round deadline the
+    /// engine derives.
     /// </summary>
+    /// <remarks>
+    /// <para><b>What it pins.</b> The turns now cost no sleep (the fake used to wait 700 ms per turn so that four of them would overrun a
+    /// round bounded by ONE turn's 2 s — a claim about arithmetic, paid for in wall time). The ARITHMETIC is pinned without wall time by
+    /// two deterministic tests: <c>RoundDeadlineTests</c> (the round earns <c>2 s × (1 + 3)</c>, four times a single turn's) and
+    /// <c>AConversationIsCutAtTimeoutTimesItsTurns_NotAtOneTurnsTimeout</c> (the loop cuts a conversation at that number, on a manual
+    /// clock), and the engine's HANDING of the follow-ups to the derivation by the arm below.</para>
+    /// <para><b>What it still pays.</b> The 2 s reviewer timeout and the REAL round timer stay: the engine arms
+    /// <c>new CancellationTokenSource(budget)</c> on the system clock BEFORE it warms the roles, resolves the sha, builds the worktree,
+    /// the diff and the outline — so the setup plus four cold <c>FakeCli</c> launches must fit the derived 8 s of wall time. On a machine
+    /// where they do not, this fails with "the round reached its limit": a kept failure of it reopens C6 against the SETUP COST of that
+    /// machine, never against the arithmetic. No timeout is lengthened for it.</para>
+    /// </remarks>
     [Fact]
-    public async Task TheRoundsDeadline_IsScaledByTheFollowUps_SoAConversationIsNotCutByAOneTurnBudget()
+    public async Task AReviewerThatAsksOnEveryTurn_IsReviewedEndToEnd_ARealProcessSmokeTestOfTheWiring()
     {
         var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), reviewerTimeout: TimeSpan.FromSeconds(2));
         Script(AsksForSell);
-        Environment.SetEnvironmentVariable("FAKECLI_SLEEP_MS", "700");
 
         var answer = Parse(await ReviewAsync(service));
 
         answer.GetProperty("verdict").GetString().Should().Be("proceed", $"the round waited for the whole conversation: {answer}");
         Prompts().Should().HaveCount(4, "the reviewer asked on every turn and got its three follow-ups");
         answer.GetProperty("reviewers").GetString().Should().Contain("all 1 reviewers answered");
+    }
+
+    /// <summary>
+    /// The engine hands the stage's follow-ups to the round's derivation (E4 S5, B16): an explicit one-minute round and a 20-minute
+    /// reviewer with three follow-ups make the derivation warn that the whole is shorter than ONE reviewer's own scaled budget — and the
+    /// number it names is <c>20 × (1 + 3) = 80</c>, so a follow-up count that never arrived reads <c>20</c> instead.
+    /// </summary>
+    /// <remarks>
+    /// The budget is a local of the engine, written to no record, so this reads the one place it is observable without a seam: the warning
+    /// <c>RoundDeadline.For</c> logs through the logger the engine was given. It proves the PASS-THROUGH, not the arithmetic
+    /// (<c>RoundDeadlineTests</c>) — and under a derived whole no warning fires, which is why the explicit minute is here.
+    /// </remarks>
+    [Fact]
+    public async Task TheRoundsDeadline_IsScaledByTheFollowUps_TheEngineHandsThemToTheDerivation()
+    {
+        var sink = new ListSink();
+        var log = new Serilog.LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+        var service = Service(
+            reviewerTimeout: TimeSpan.FromMinutes(20), roundTimeout: TimeSpan.FromMinutes(1), followUps: 3, log: log);
+
+        await ReviewAsync(service);
+
+        var warnings = sink.Events.Where(e => e.Level == Serilog.Events.LogEventLevel.Warning).Select(e => e.RenderMessage()).ToList();
+        warnings.Should().Contain(w => w.Contains("own 80"), "the 20-minute reviewer asked three more times is allowed 20 × (1 + 3) = 80 minutes, which the 1-minute round is shorter than");
     }
 
     // ---------- D15: a credential-shaped file is withheld ----------

@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Schema step 24: <c>round_authors</c> and the authors columns of <c>rounds</c> (E5.S2 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>) — appended after step 23, reached by every database shape in the
+/// <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>) — appended after step 23, reached by every database shape in the
 /// field, and left alone by what an OLDER server runs on a file that already has it. Shaped as step 23's test is
 /// (<see cref="ThePlanSourceIsStepTwentyThreeTests"/>).
 /// </summary>

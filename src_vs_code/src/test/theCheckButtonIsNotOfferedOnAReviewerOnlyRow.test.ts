@@ -4,6 +4,8 @@ import { catalogHtml } from '../catalogPage';
 import type { ConsultantHealthState } from '../consultantHealthState';
 import { CONSULTING } from '../featureAvailability.generated';
 import { checkNotOffered } from '../modelCardWorld';
+import type { PanelState } from '../panelView';
+import { consultantRuntimeNote, KIMI_CONSULTANT_SINCE } from '../runtimeSince';
 import { RUNTIMES } from '../models';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { panelState } from './panelPageHarness';
@@ -49,8 +51,9 @@ interface RunningModelsPage {
 }
 
 /** The Models page for these rows, drawn by the real render path and then RUN — its script over what it drew. */
-function runningModelsPage(rows: readonly Vendor[], health?: ConsultantHealthState): RunningModelsPage {
-  const html = catalogHtml({ ...panelState('reviewers'), vendors: rows, catalogRows: [...rows], consultantHealth: health }, 'test-nonce', 'models');
+function runningModelsPage(rows: readonly Vendor[], health?: ConsultantHealthState, server?: PanelState['server']): RunningModelsPage {
+  const base = panelState('reviewers');
+  const html = catalogHtml({ ...base, server: server ?? base.server, vendors: rows, catalogRows: [...rows], consultantHealth: health }, 'test-nonce', 'models');
   const tree = pageTree(html);
 
   return { tree, page: runPageHtml(html, selectorsOf(tree, AT_LOAD), undefined, { value: undefined }) };
@@ -71,7 +74,8 @@ function checksPostedBy(running: RunningModelsPage, button: PageNode): readonly 
 
 const ROWS = [KIMI, GEMINI, REMOTE, CODEX];
 
-for (const row of [KIMI, GEMINI, REMOTE]) {
+// Kimi left this list with S5 (E5.4 of todo/PLAN_vibe_and_kimi_runtimes_E5.md): it holds a consultation, so its card is offered like codex's.
+for (const row of [GEMINI, REMOTE]) {
   test(`a ${row.runtime} card shows ✓ Check disabled, with the reason as its title, and pressing it posts no checkModel`, () => {
     const running = runningModelsPage(ROWS);
     const check = checkOf(running.tree, row.id);
@@ -84,16 +88,18 @@ for (const row of [KIMI, GEMINI, REMOTE]) {
   });
 }
 
-test('a codex card is unchanged: enabled, the paid-turn title, and its press posts checkModel for that row', () => {
-  const running = runningModelsPage(ROWS);
-  const check = checkOf(running.tree, CODEX.id);
+for (const row of [CODEX, KIMI]) {
+  test(`a ${row.runtime} card is offered: enabled, the paid-turn title, and its press posts checkModel for that row`, () => {
+    const running = runningModelsPage(ROWS);
+    const check = checkOf(running.tree, row.id);
 
-  assert.equal(check.attrs['data-command'], 'checkModel');
-  assert.equal(check.attrs['data-id'], 'codex');
-  assert.equal(check.attrs['title'], PAID_TURN);
-  assert.equal('disabled' in check.attrs, false);
-  assert.equal(checksPostedBy(running, check).filter((one) => one['id'] === 'codex').length, 1, 'the offered Check no longer posts');
-});
+    assert.equal(check.attrs['data-command'], 'checkModel');
+    assert.equal(check.attrs['data-id'], row.id);
+    assert.equal(check.attrs['title'], PAID_TURN);
+    assert.equal('disabled' in check.attrs, false);
+    assert.equal(checksPostedBy(running, check).filter((one) => one['id'] === row.id).length, 1, 'the offered Check no longer posts');
+  });
+}
 
 test('an offered row that is checking is still held, with the paid-turn title', () => {
   const running = runningModelsPage(ROWS, checkingHealth('codex'));
@@ -118,5 +124,38 @@ test('the rule is the generated list, not a hand list — read off a running pag
 });
 
 test('the reason is one sentence, said in one place', () => {
-  assert.equal(checkNotOffered('kimi'), 'the consultant check is not offered for kimi — this runtime cannot hold a consultation');
+  assert.equal(checkNotOffered('gemini'), 'the consultant check is not offered for gemini — this runtime cannot hold a consultation');
+});
+
+// Deviation 37 of todo/PLAN_vibe_and_kimi_runtimes_E5.md, fixed (the owner, 2026-10-27): the list says what THIS extension can consult on; the
+// installed server may be older. A known server below the runtime's CONSULTANT_SINCE refuses the check by name, so the card says so before
+// the press — the button disabled, the update note as its title, bound to nothing — and a server at the release offers it.
+const known = (version: string): PanelState['server'] => ({ kind: 'known', version, remembered: false, updateOffered: false });
+
+test('a kimi card on a server older than KIMI_CONSULTANT_SINCE shows ✓ Check disabled, naming the update, and posts no checkModel', () => {
+  const running = runningModelsPage(ROWS, undefined, known('0.63.0'));
+  const check = checkOf(running.tree, KIMI.id);
+
+  assert.equal(check.attrs['title'], consultantRuntimeNote('0.63.0', 'kimi'));
+  assert.ok(check.attrs['title']!.includes(KIMI_CONSULTANT_SINCE), 'the title names the release to update to');
+  assert.equal('disabled' in check.attrs, true, 'the button is not disabled');
+  assert.equal('data-command' in check.attrs, false, 'the button is still bound to a command');
+  assert.deepEqual(checksPostedBy(running, check), [], 'a press posted a checkModel the server would refuse');
+});
+
+test('a kimi card on a server at KIMI_CONSULTANT_SINCE, or one nobody has versioned, offers ✓ Check', () => {
+  // An unknown server that still carries an old version string (a remembered read) is not called old either: only `known` is judged.
+  const unknownServer: PanelState['server'] = { kind: 'unknown', version: '0.63.0', remembered: true, updateOffered: false };
+  for (const server of [known(KIMI_CONSULTANT_SINCE), unknownServer]) {
+    const check = checkOf(runningModelsPage(ROWS, undefined, server).tree, KIMI.id);
+
+    assert.equal(check.attrs['data-command'], 'checkModel', `on ${server.kind} ${server.version}`);
+    assert.equal(check.attrs['title'], PAID_TURN);
+  }
+});
+
+test('a codex card is never held by the consultant table: an old server still checks codex', () => {
+  const check = checkOf(runningModelsPage(ROWS, undefined, known('0.40.0')).tree, CODEX.id);
+
+  assert.equal(check.attrs['data-command'], 'checkModel');
 });

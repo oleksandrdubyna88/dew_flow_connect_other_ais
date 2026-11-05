@@ -38,8 +38,13 @@ export interface ProbeRun {
 
 export type ProbeRunner = (args: readonly string[]) => Promise<ProbeRun>;
 
-/** The ledger line one candidate's request writes, newline included. */
-export function probeLine(asked: string, ran: ProbeRun, startedMs: number, endedMs: number): string {
+/**
+ * The ledger line one candidate's request writes, newline included.
+ *
+ * <p>`cli` is `claude` — the one CLI this probe runs — and `cliVersion` the version `claudeProbe.ts` already asked before it
+ * spent a request (E3.S3 of todo/PLAN_the_round_counter_tail_E3.md); it is absent, never empty, when none was asked.</p>
+ */
+export function probeLine(asked: string, ran: ProbeRun, startedMs: number, endedMs: number, cliVersion = ''): string {
   const entry: UsageEntry = {
     utc: new Date(endedMs).toISOString(),
     provider: 'claude',
@@ -50,6 +55,8 @@ export function probeLine(asked: string, ran: ProbeRun, startedMs: number, ended
     ...spentOf(ran.code === -1 ? undefined : reportedUsage(ran.output)),
     outcome: outcomeOf(ran),
     kind: 'probe',
+    cli: 'claude',
+    ...(cliVersion.length > 0 ? { cliVersion } : {}),
   };
 
   return `${JSON.stringify(entry)}\n`;
@@ -69,11 +76,11 @@ function spentOf(usage: ReportedUsage | undefined): Pick<UsageEntry, 'tokensIn' 
  * advice): every billed request is one line. The append is not awaited — nothing a person waits on may wait on a disk
  * (`jsonlLedger.ts`) — and the answer is handed back exactly as `run` gave it.</p>
  */
-export function recordingRun(run: ProbeRunner, path: string, now: () => number): ProbeRunner {
+export function recordingRun(run: ProbeRunner, path: string, now: () => number, cliVersion = ''): ProbeRunner {
   return async (args) => {
     const started = now();
     const ran = await run(args);
-    void appendLine(path, probeLine(askedIn(args), ran, started, now()), 'a model probe');
+    void appendLine(path, probeLine(askedIn(args), ran, started, now(), cliVersion), 'a model probe');
 
     return ran;
   };

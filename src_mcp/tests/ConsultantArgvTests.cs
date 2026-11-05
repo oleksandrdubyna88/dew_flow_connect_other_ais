@@ -161,6 +161,7 @@ public sealed class ConsultantHandleTests
     [InlineData("has space", false)]
     [InlineData("has\"quote", false)]
     [InlineData("../escape", false)]
+    [InlineData("abc\n", false)] // .NET's `$` matches before a final newline; the end is `\z` (E5.2 review)
     public void TheGuardIsTheSameShapeTheExtensionUses(string candidate, bool wellFormed)
     {
         ConsultantHandle.IsWellFormed(candidate).Should().Be(wellFormed);

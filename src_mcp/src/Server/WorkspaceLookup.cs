@@ -6,6 +6,7 @@ using CoaiMcp.Core.Notices;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Context;
+using CoaiMcp.Runners.Files;
 
 namespace CoaiMcp.Server;
 
@@ -26,7 +27,7 @@ namespace CoaiMcp.Server;
 /// <para>It reads the working tree, never git: a granted root is usually a folder of projects, not a checkout. Reads
 /// only; it opens nothing for writing.</para>
 /// </remarks>
-public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? limits = null, Func<string, string>? followLink = null)
+public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? limits = null, EntryReader? read = null)
     : IWorkspaceLookup
 {
     private const string GitFolder = ".git";
@@ -36,7 +37,7 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
     private const int SmallestSection = 256;
 
     private readonly LookupLimits _limits = limits ?? LookupLimits.Default;
-    private readonly Func<string, string> _follow = followLink ?? DocumentReader.FollowLink;
+    private readonly EntryReader? _read = read;
 
     public IReadOnlyList<string> Roots { get; } = [.. roots.Select(Path.GetFullPath)];
 
@@ -133,7 +134,8 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
             return said;
         }
 
-        return Roots.Count == 1 ? Path.GetFullPath(said.Length == 0 ? "." : said, Roots[0]) : null;
+        // Joined, never folded: a `..` after a link is the disk's to apply, not the string's.
+        return Roots.Count == 1 ? Path.Join(Roots[0], said.Length == 0 ? "." : said) : null;
     }
 
     private string SeveralRoots(string said) =>
@@ -142,20 +144,25 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
 
     private Resolution Contained(string said, string full)
     {
-        var resolved = DocumentReader.Canonical(full, full, _follow);
+        var resolved = DocumentReader.Canonical(full, full, _read);
+        if (!resolved.Ok)
+        {
+            return new Resolution.Refused($"'{RealPath.Shown(said)}' is not a valid path, or cannot be resolved safely, so it is not served: {resolved.Why}");
+        }
+
         foreach (var root in Roots)
         {
-            var canonicalRoot = DocumentReader.CanonicalRoot(root, _follow);
-            var relative = Relative(canonicalRoot, resolved);
+            var canonicalRoot = DocumentReader.CanonicalRoot(root, _read);
+            var relative = canonicalRoot.Ok ? Relative(canonicalRoot.Path, resolved.Path) : null;
             if (relative is not null)
             {
-                return Hidden(relative) is { Length: > 0 } why ? new Resolution.Refused(why) : new Resolution.Inside(canonicalRoot, resolved);
+                return Hidden(relative) is { Length: > 0 } why ? new Resolution.Refused(why) : new Resolution.Inside(canonicalRoot.Path, resolved.Path);
             }
         }
 
-        var target = string.Equals(Path.GetFullPath(full), resolved, DocumentId.Comparison) ? string.Empty : $" (it resolves to '{resolved}')";
+        var target = string.Equals(full, resolved.Path, DocumentId.Comparison) ? string.Empty : $" (it resolves to '{RealPath.Shown(resolved.Path)}')";
 
-        return new Resolution.Refused($"'{said}' is outside the granted roots{target}: {string.Join(", ", Roots)}");
+        return new Resolution.Refused($"'{RealPath.Shown(said)}' is outside the granted roots{target}: {string.Join(", ", Roots)}");
     }
 
     /// <summary>The path relative to the root — empty for the root itself — or null when it is not inside it.</summary>

@@ -134,4 +134,38 @@ public sealed class AFastModeReachesEveryClaudeLaunchTests : IDisposable
 
         File.GetLastWriteTimeUtc(path).Should().Be(written, "several processes start launches; an unchanged file is left alone");
     }
+
+    private ReviewerInvocation ReviewerBuilt(FastMode fast, string model) =>
+        new ClaudeRuntime().Build(RoleCatalog.ArchitectureRole, "review this", Repo, "D:/s.json", "D:/out", Settings(fast, model));
+
+    private ReviewerInvocation ConsultantBuilt(FastMode fast, string model) =>
+        new ClaudeConsultant(new ClaudeRuntime()).Build(new ConsultantLaunch(Repo, "help me", string.Empty, "D:/answers", Settings(fast, model)));
+
+    /// <summary>The ledger's tier word for the file the argv names: what that one-key file tells the CLI.</summary>
+    private static string TierOfTheFileNamed(IReadOnlyList<string> args) => SettingsSent(args) switch
+    {
+        null => string.Empty,
+        "{\"fastMode\":true}" => "fast",
+        "{\"fastMode\":false}" => "default",
+        var other => throw new InvalidOperationException($"an unexpected fast-mode file: {other}"),
+    };
+
+    [Theory]
+    [InlineData(FastMode.On, "opus", false)]
+    [InlineData(FastMode.Off, "opus", false)]
+    [InlineData(FastMode.Cli, "opus", false)]
+    [InlineData(FastMode.On, "sonnet", false)]
+    [InlineData(FastMode.On, "claude-opus-5-5", true)]
+    [InlineData(FastMode.Off, "claude-opus-5-5", true)]
+    [InlineData(FastMode.Cli, "claude-opus-5-5", true)]
+    [InlineData(FastMode.On, "sonnet", true)]
+    public void TheTierRecordedAsSent_IsTheTierOfTheFileTheArgvNames(FastMode fast, string model, bool consultant)
+    {
+        // The argv and the record of what was sent come from ONE computation (as ClaudeRuntime.Build does). Read the file the argv
+        // names and compare what IT says with what the record claims: a second, independent computation of either side that
+        // picks a different file makes the record lie about the launch — and no timing is involved.
+        var built = consultant ? ConsultantBuilt(fast, model) : ReviewerBuilt(fast, model);
+
+        built.Sent.Tier.Should().Be(TierOfTheFileNamed(built.Request.Arguments), $"{(consultant ? "consultant" : "reviewer")} {model} {fast}");
+    }
 }

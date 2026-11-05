@@ -204,13 +204,108 @@ public sealed class CumulativeUsageTests
     }
 
     [Fact]
-    public void AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative()
+    public void ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative()
     {
-        // A number this arithmetic does not understand; a negative spending row would be worse than
-        // a flat one — and every field is floored, the cached and reasoning counts included.
-        var share = ConsultationUsage.Less(new Usage(500, 10, null, TokensCached: 3, TokensReasoning: 1), new ConsultationBilled(9_000, 100, 0, 40, 5));
+        // The totals moved on, the cached and reasoning counts did not: a number this arithmetic does not understand, and a
+        // negative spending row would be worse than a flat one — every field is floored.
+        var share = ConsultationUsage.Less(new Usage(9_500, 110, null, TokensCached: 3, TokensReasoning: 1), new ConsultationBilled(9_000, 100, 0, 40, 5));
 
-        share.Should().Be(new Usage(0, 0, null));
+        share.Should().Be(new Usage(500, 10, null));
+    }
+
+    /// <summary>
+    /// E5.4 deviation 31, antigravity's half: only agy's INPUT counter is measured cumulative (research/RESULTS_agy_consult_follow_up.md §3 — its output
+    /// is not settled), so an output below what was billed is no restarted counter: the input is billed as its delta, the output floored.
+    /// </summary>
+    [Fact]
+    public void AnAgyReport_WhoseOutputIsBelowWhatWasBilled_IsNoReset_AndItsInputIsADelta()
+    {
+        IConsultantRuntime agy = new AntigravityConsultant(new AntigravityRuntime());
+
+        var share = ConsultationUsage.Less(Reported(30_843, 50), new ConsultationBilled(14_138, 1_342), agy.UsageCounterMayRestart);
+
+        agy.UsageCounterMayRestart.Should().BeFalse("only agy's input is measured cumulative, so it declares no restart");
+        share.TokensIn.Should().Be(16_705, "the input counter moved on by 16 705; billing its whole 30 843 again would count turn 1 twice");
+        share.TokensOut.Should().Be(0);
+    }
+
+    /// <summary>
+    /// E5.4 deviation 31: three reports of a vendor that declares a restart — a total, a restarted total, the restarted session's next total.
+    /// The third is measured against the SECOND report (the counter), never against the sum of the shares (25 000 / 39), which would bill it whole.
+    /// </summary>
+    [Fact]
+    public void AfterAReset_TheNextReportIsMeasuredAgainstTheRestartedCounter()
+    {
+        var first = ConsultationUsage.Next(Reported(20_000, 30), new ConsultationBilled(), mayRestart: true);
+        var second = ConsultationUsage.Next(Reported(5_000, 9), first.Counter, mayRestart: true);
+        var third = ConsultationUsage.Next(Reported(9_000, 15), second.Counter, mayRestart: true);
+
+        (second.Share.TokensIn, second.Share.TokensOut).Should().Be((5_000L, 9L), "the restart is billed whole");
+        (third.Share.TokensIn, third.Share.TokensOut).Should().Be((4_000L, 6L), "the restarted session's next total is billed its delta");
+        third.Counter.Should().Be(new ConsultationBilled(9_000, 15), "the counter is the vendor's own last report");
+        ConsultationUsage.Next(Usage.Unknown, third.Counter, mayRestart: true).Counter.Should().Be(third.Counter, "an uncaptured report moves no counter");
+    }
+
+    /// <summary>
+    /// E5.4 deviations 31 and 35: agy declares no restart, and its next report is measured against its LAST report, not the sum of what was billed —
+    /// the rule a question row's agy lookup and a consultation share (both call <see cref="ConsultationUsage.Next"/>). The output of turn 2 is below
+    /// turn 1's (agy's output is not measured cumulative): floored to 0, and turn 3's output is billed past turn 2's report (10), where the sum of the
+    /// shares (1 342) would have floored it to 0 again.
+    /// </summary>
+    [Fact]
+    public void AnAgyCounter_IsMeasuredAgainstItsLastReport_AcrossThreeTurns()
+    {
+        IConsultantRuntime agy = new AntigravityConsultant(new AntigravityRuntime());
+
+        var first = ConsultationUsage.Next(Reported(14_138, 1_342), new ConsultationBilled(), agy.UsageCounterMayRestart);
+        var second = ConsultationUsage.Next(Reported(30_843, 50), first.Counter, agy.UsageCounterMayRestart);
+        var third = ConsultationUsage.Next(Reported(31_000, 60), second.Counter, agy.UsageCounterMayRestart);
+
+        (second.Share.TokensIn, second.Share.TokensOut).Should().Be((16_705L, 0L), "no restart: the input is a delta, the output floored");
+        second.Counter.Should().Be(new ConsultationBilled(30_843, 50), "the counter is agy's own last report");
+        (third.Share.TokensIn, third.Share.TokensOut).Should().Be((157L, 10L), "measured against turn 2's report, never against the sum of the shares");
+    }
+
+    /// <summary>
+    /// A turn that reached no model reports <see cref="Usage.None"/> — captured, and all zeros: an empty launch list (the deadline struck in the
+    /// wait for the sign-in's gate), a refused or not-started launch, a timed-out one. That is "this turn consumed nothing", never "the vendor's
+    /// counter is now 0": it moves no counter and is no restart, so the NEXT real report is still measured against the last one (the E5.4 review
+    /// of 2026-10-27, R1 — moving it to 0/0 billed turn 1 again inside turn 3).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AReportOfNothing_MovesNoCounter_AndIsNoReset(bool mayRestart)
+    {
+        var first = ConsultationUsage.Next(Reported(20_000, 30), new ConsultationBilled(), mayRestart);
+        var nothing = ConsultationUsage.Next(Usage.None, first.Counter, mayRestart);
+        var third = ConsultationUsage.Next(Reported(20_004, 42), nothing.Counter, mayRestart);
+
+        (nothing.Share.TokensIn, nothing.Share.TokensOut).Should().Be((0L, 0L), "a turn that reached no model consumed nothing");
+        nothing.Counter.Should().Be(first.Counter, "a report of nothing is not the vendor's counter");
+        ConsultationUsage.IsAReset(Usage.None, first.Counter).Should().BeFalse("nothing reported is no restart");
+        (third.Share.TokensIn, third.Share.TokensOut).Should().Be((4L, 12L), "the next real report is billed its delta, not turn 1 again");
+    }
+
+    /// <summary>
+    /// S5.4.14 (decision 12 of E5.4, <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): for a vendor that declares its counters can restart, a CAPTURED
+    /// total below its counter's last report is a counter that RESTARTED — this turn is billed what the report said, whole, never a flat zero. Both
+    /// totals are judged together (one counter below means the pair restarted); an uncaptured report is zeros that are not a counter, never a reset.
+    /// </summary>
+    [Theory]
+    [InlineData(5_000, 9, false, 5_000, 9)]
+    [InlineData(25_000, 20, false, 25_000, 20)]
+    [InlineData(0, 0, true, 0, 0)]
+    public void ATotalBelowWhatWasBilled_IsAReset_AndTheTurnIsBilledWhatItSaid(long reportedIn, long reportedOut, bool notCaptured, long shareIn, long shareOut)
+    {
+        var reported = notCaptured ? Usage.Unknown : new Usage(reportedIn, reportedOut, null, TokensCached: 7);
+
+        var share = ConsultationUsage.Less(reported, new ConsultationBilled(20_000, 30, 0, 100), mayRestart: true);
+
+        share.TokensIn.Should().Be(shareIn, "Expected the second turn's billed TokensIn to be the reset report's own");
+        share.TokensOut.Should().Be(shareOut);
+        share.NotCaptured.Should().Be(notCaptured, "the flags travel as the report has them");
+        share.TokensCached.Should().Be(notCaptured ? 0 : 7, "a reset bills every field whole");
     }
 
     [Fact]

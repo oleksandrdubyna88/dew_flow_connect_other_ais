@@ -49,7 +49,7 @@ public sealed class SettingsAreLiveTests : IDisposable
             VaultKeys.None("no vault in this test"),
             default,
             new Runners.Processes.ProcessLauncher(),
-            Serilog.Log.Logger, Noticing.None);
+            Serilog.Log.Logger, Noticing.None, CancellationToken.None);
     }
 
     [Fact]

@@ -632,7 +632,7 @@ test('a hostile path cannot put markup on the page', () => {
 // That the page EMBEDS the builder and DRAWS the line is asserted where the page runs — `bundledPage.test.ts`, "opening a plan
 // round shows what it reviewed" — over the bundled, minified page, not by matching its source text here.
 
-// ---------- who wrote what a round reviewed (E5.S6 of todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md) ----------
+// ---------- who wrote what a round reviewed (E5.S6 of research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md) ----------
 
 const AUTHORS_ROW = {
   window: 'round', stage: 'CodeReview', number: 1, who: 'main', agent: { id: 'main' }, agentType: '', requested: 'opus',

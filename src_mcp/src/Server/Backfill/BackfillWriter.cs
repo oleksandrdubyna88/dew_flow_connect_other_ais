@@ -47,7 +47,7 @@ internal enum WriteHalves
 internal sealed record RoundWrite(StoredGate Gate, StoredRound Round, WriteHalves Halves, AuthorsSnapshot? Authors, RoundSize? Size, int? Gitlinks, string Expected);
 
 /// <summary>
-/// The narrow write (E7.S3 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md</c>): ONE round's authors and size into BOTH places —
+/// The narrow write (E7.S3 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md</c>): ONE round's authors and size into BOTH places —
 /// the session file's snapshot and the database projection — without touching another byte of either, and so that running it again changes nothing.
 /// </summary>
 /// <remarks>

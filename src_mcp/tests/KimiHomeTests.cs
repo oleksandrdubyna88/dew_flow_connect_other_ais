@@ -518,6 +518,33 @@ public sealed class KimiHomeTests : IDisposable
         DirectoryLink.Remove(Path.Combine(root, "home"));
     }
 
+    // ---------- E5.3 S5.3.11: no path budget for Kimi (J3) ----------
+
+    /// <summary>
+    /// Kimi wrote and read back a session path past 260 characters (RESULTS §11); coai's own walk of the home must do the same — the check
+    /// (<c>Inside</c> walks every admitted folder) and the disposal — with no <c>KimiPathBudget</c> to refuse it.
+    /// </summary>
+    [Fact]
+    public void AHomeWhoseDataPathPasses260_IsCheckedAndDisposed()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var before = _person.Hash();
+        var places = Made();
+        // Linux allows 255 bytes per path component, so the name is capped at 239 ('wd_' + name + '_0123456789ab'); the total still passes 300 because the rest of Kimi's session shape follows.
+        var cwdName = new string('w', Math.Min(239, Math.Max(4, 300 - places.Home.Length)));
+        var wire = Path.Combine(places.Home, "sessions", $"wd_{cwdName}_0123456789ab", "session_" + new string('s', 36), "agents", "main", "wire.jsonl");
+        wire.Length.Should().BeGreaterThan(300, "the shape of RESULTS §11, placed past 300 characters");
+        Write(wire, "{}");
+
+        var refusal = KimiHome.Refusal(places, Expected());
+        var disposal = KimiHome.Dispose(places.OwnedRoot, _ => { });
+
+        refusal.Should().BeEmpty("a long data path is Kimi's own, and coai's walk reads it (J3: no Kimi path budget)");
+        disposal.Should().Be(new Disposal.Clean(true));
+        Directory.Exists(places.OwnedRoot).Should().BeFalse();
+        ThePersonsFolderIsWhole(before);
+    }
+
     // ---------- S2.44 ----------
 
     [Fact]

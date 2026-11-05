@@ -115,7 +115,7 @@ public sealed class AntigravityReadOnlyTests : IDisposable
         // Security review of 0a32211c: on Linux /tmp is shared by every user, so another account could plant the
         // folder — and its hook script, which agy runs as this user — before coai wrote it.
         AntigravityReadOnly.DefaultBase.Should().Be(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "coai-agy"));
-        AntigravityReadOnly.DefaultBase.Should().NotStartWith(Path.GetTempPath());
+        AntigravityReadOnly.DefaultBase.Should().NotStartWith(RunTemp.Real);
         if (!OperatingSystem.IsWindows())
         {
             var folder = ((AntigravityReadOnly.Prepared.Ready)AntigravityReadOnly.Prepare(_base, Handler)).Folder;

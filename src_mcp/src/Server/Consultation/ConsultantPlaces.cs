@@ -112,8 +112,11 @@ public abstract class ConsultantPlace : IDisposable
 /// empty when none is configured, and a conversation on a runtime that needs one is then refused by name.
 /// </param>
 /// <param name="store">This server's store as an owner (<see cref="ConversationFolder.StoreOf"/>), stamped on every conversation folder it makes.</param>
-public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLauncher launcher, Action<string> note)
+/// <param name="clock">The clock the one-shot budget and the folder stamp read; the system clock by default, a manual one in a test.</param>
+public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLauncher launcher, Action<string> note, TimeProvider? clock = null)
 {
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+
     /// <summary>How long a turn waits for its folder's cross-process lock — only the home sweep holds it otherwise, and briefly.</summary>
     public static readonly TimeSpan LockWait = TimeSpan.FromSeconds(10);
 
@@ -262,7 +265,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
 
         try
         {
-            var stamping = new Stamping(turned.Folder, store, turned.Ceiling);
+            var stamping = new Stamping(turned.Folder, store, turned.Ceiling, _clock);
 
             return turned.CopyOf.Length == 0
                 ? HomeOnly(turned.Folder, stamping, [taken.Stream, turn, turned.Pin])
@@ -284,9 +287,9 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     }
 
     /// <summary>The stamp a conversation's folder carries for a turn: begun when the copy is ready, ended when it is given back.</summary>
-    private sealed class Stamping(string folder, string store, TimeSpan ceiling) : IDisposable
+    private sealed class Stamping(string folder, string store, TimeSpan ceiling, TimeProvider clock) : IDisposable
     {
-        public void Begin() => ConversationFolder.Begin(folder, store, DateTime.UtcNow, ceiling);
+        public void Begin() => ConversationFolder.Begin(folder, store, clock.GetUtcNow().UtcDateTime, ceiling);
 
         public void Dispose() => ConversationFolder.End(folder);
     }
@@ -330,8 +333,11 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     {
         var tree = Path.Combine(folder, ConversationSnapshots.TreeName);
         var tally = new OneShotTally(note);
-        using var copying = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        copying.CancelAfter(budget);
+
+        // The budget's timer is its own source on the clock (declared first), the link second: the link is disposed first, so a timer
+        // that fires between the two disposals meets a disposed link. A zero budget is out synchronously — before anything is asked of git.
+        using var budgetTimer = new CancellationTokenSource(budget, _clock);
+        using var copying = CancellationTokenSource.CreateLinkedTokenSource(ct, budgetTimer.Token);
         try
         {
             var refused = await CopiedAsync(sources, tree, tally, copying.Token);

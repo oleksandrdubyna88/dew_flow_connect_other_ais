@@ -221,8 +221,10 @@ public sealed record UsageEntry(
     /// (the store fires the token at the transition and is the only thing that knows why), never from the runner's own
     /// recomputation; the line's <paramref name="Outcome"/> stays the failure's name (<c>Cancelled</c>), so a reader
     /// that groups by outcome is unchanged and one that asks "how many withdrawals against how many backstops" has a
-    /// column to ask. Empty on a line older than the field, on every ending but a cancellation, and on a local line,
-    /// where nothing above the executor records which token fired. Trailing and defaulted like the rest.
+    /// column to ask. Empty on a line older than the field and on every ending but a cancellation. <b>A LOCAL review line carries one too</b>
+    /// (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md): on the cancelled turn's LAST line only, decided by the round engine from which
+    /// token FIRED FIRST, recorded when it fired (<c>RoundCancellation</c>) — <c>hostStopped</c>, <c>withdrawn</c>, <c>roundClock</c> or <c>unknown</c>, the last two
+    /// local-only words. Trailing and defaulted like the rest.
     /// </remarks>
     string EndCause = "",
 
@@ -284,7 +286,19 @@ public sealed record UsageEntry(
     string GaugePlan = "",
 
     /// <summary>Every window the reading reported, each with its limit — null (left off the line) when there is no reading.</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<GaugeWindowOnLine>? GaugeWindows = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<GaugeWindowOnLine>? GaugeWindows = null,
+
+    /// <summary>
+    /// The id of the CONSULTATION this consult line's turn belongs to — or empty.
+    /// </summary>
+    /// <remarks>
+    /// E3.S4 of todo/PLAN_the_round_counter_tail_E3.md: a consultation is one line per TURN, and the extension's Rounds block divides
+    /// consultation money by consultations, which it can only do when each line names its own. The id the consultation's record
+    /// carries (<c>ConsultationStore.NewId</c>). Empty on a consultant check (no consultation behind it), on a new consultation refused
+    /// before its launch (its record was never written — an invented id would merge unrelated turns), on every older line and on every
+    /// other kind. Trailing and defaulted like the rest.
+    /// </remarks>
+    string Consultation = "")
 {
     /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
@@ -353,7 +367,11 @@ public sealed class UsageLedger(string dataDir)
     /// written as that one line instead (<see cref="LaunchLines.Of"/>). A failure's words are its WHOLE reason
     /// (<see cref="ReviewerSummaryFactory.DescribeWhole"/>), never the summary's 160-character cut.</para>
     /// </remarks>
-    public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed)
+    /// <param name="endCause">
+    /// Why a CANCELLED last turn was cancelled (the first source to fire, <c>RoundCancellation.CauseAt</c>), written on that turn's last line like
+    /// <see cref="UsageEntry.ResetsUtc"/>; the caller passes empty for every other ending (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md).
+    /// </param>
+    public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed, string endCause = "")
     {
         // The model that RAN: an adapter that resolves a default for a row that names none (Kimi, Vibe) put it on the invocation, and the row's own model is
         // empty. Every other adapter copies the row's, so the two agree for them; a CLI on its own default names none and the line says nothing (decision 75).
@@ -375,7 +393,7 @@ public sealed class UsageLedger(string dataDir)
 
         AppendTurn(
             line, outcome.Launches, outcome.LastTurnUsage, last < TimeSpan.Zero ? TimeSpan.Zero : last, LaunchLines.OutcomeOf(outcome),
-            StatedResetOf(outcome, DateTimeOffset.UtcNow));
+            StatedResetOf(outcome, DateTimeOffset.UtcNow), endCause);
     }
 
     /// <summary>
@@ -383,26 +401,28 @@ public sealed class UsageLedger(string dataDir)
     /// the row's own options carry none (research/RESULTS_vibe_confinement.md §26: a Vibe line's <c>cliVersion</c> was empty).
     /// </summary>
     private static ReviewerInvocation VersionedBy(ReviewerInvocation invocation, ReviewerOutcome outcome) =>
-        outcome.CliVersion.Length > 0 && invocation.RanWith.CliVersion.Length == 0
-            ? invocation with { RanWith = invocation.RanWith with { CliVersion = outcome.CliVersion } }
-            : invocation;
+        invocation with { RanWith = invocation.RanWith.VersionedBy(outcome.CliVersion) };
 
     /// <summary>What every line of one reviewer shares: who ran, on which model, at which stage.</summary>
     private sealed record LineOf(ReviewerInvocation Invocation, string Model, string Stage);
 
     /// <summary>
     /// One turn, as its lines: one per launch when they add up to the turn, else the turn as one line — its LAST line
-    /// carrying <paramref name="resetsUtc"/>, the reset the turn's ending stated.
+    /// carrying <paramref name="resetsUtc"/>, the reset the turn's ending stated, and <paramref name="lastLineEndCause"/>, why a cancelled turn was.
     /// </summary>
+    /// <param name="lastLineEndCause">
+    /// Written on the turn's LAST line ONLY — every earlier launch of the turn (a repair, a retry) ended on its own terms and carries none.
+    /// </param>
     private void AppendTurn(
-        LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome, string resetsUtc = "")
+        LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome, string resetsUtc = "", string lastLineEndCause = "")
     {
         var turn = LaunchLines.NewTurn();
         var lines = LaunchLines.Of(launches, usage, elapsed, outcome);
         foreach (var (launch, at) in lines.Select((launch, at) => (launch, at)))
         {
             var entry = Entry(line.Invocation, line.Model, line.Stage, launch.Elapsed, launch.Usage, launch.Outcome);
-            Append(entry with { Turn = turn, Attempt = launch.Attempt, ResetsUtc = at == lines.Count - 1 ? resetsUtc : string.Empty });
+            var last = at == lines.Count - 1;
+            Append(entry with { Turn = turn, Attempt = launch.Attempt, ResetsUtc = last ? resetsUtc : string.Empty, EndCause = last ? lastLineEndCause : string.Empty });
         }
     }
 
@@ -412,7 +432,7 @@ public sealed class UsageLedger(string dataDir)
     /// </summary>
     /// <remarks>
     /// Public since epic 5's code round: every LOCAL path that records a refusal — a reviewer's turn here, a consultation,
-    /// a consultant check and a question row through <see cref="RecordJob(string, string, string, string, string, TimeSpan, Usage, string, string, string)"/>
+    /// a consultant check and a question row through <see cref="RecordJob(string, string, string, string, string, TimeSpan, Usage, string, string, LaunchOptions, string)"/>
     /// — reads its reset through this ONE helper. A launch that never ended on a terminal outcome passes null: no reset.
     /// </remarks>
     public static string StatedResetOf(ReviewerOutcome? outcome, DateTimeOffset nowUtc) =>
@@ -491,11 +511,14 @@ public sealed class UsageLedger(string dataDir)
     /// reported anything was filed as a free 0/0, and the cache and reasoning counts never reached the ledger.
     /// <para><paramref name="turn"/> and <paramref name="attempt"/> are the Team server's, one line per launch of a job
     /// (story 3.3); every other caller of this overload records a kind that has no attempts and leaves them empty.</para>
-    /// <para><paramref name="ranWith"/>, <paramref name="job"/> and <paramref name="slot"/> are the Team server's too
-    /// (story 3.4): what the job's launch ran with, the job, and the account slot by its name. A consultation and a question
-    /// row label nothing yet and leave them empty, which the line then says.</para>
+    /// <para><paramref name="ranWith"/> is what the launch ran with (story 3.4; E3.S1 of todo/PLAN_the_round_counter_tail_E3.md): a
+    /// consultation, a consultant check, a question row and a probe label their lines as a review does and pass it, REQUIRED — a caller
+    /// that has nothing to say passes <see cref="LaunchOptions.None"/> on purpose, as a check refused before its launch does.
+    /// <paramref name="job"/> and <paramref name="slot"/> are the Team server's alone (story 3.4), in the overload below.</para>
     /// <para><paramref name="endCause"/> is the Team server's as well (story 3.2): why the store killed a cancelled job —
     /// one of <see cref="EndCauses"/> — read off the store's own terminal record; empty for every other ending.</para>
+    /// <para><paramref name="consultation"/> is the consultation a consult line's turn belongs to (E3.S4): the id its record carries, or empty for a
+    /// check, a turn refused before any record existed, and every kind that is not a consultation.</para>
     /// <para>An overload rather than defaulted parameters for the Team server's fields, because C# cannot default a
     /// <see cref="LaunchOptions"/> to <see cref="LaunchOptions.None"/> and this repository's rule is that an absent value
     /// is an EMPTY value, never a null (the epic-3 code round).</para>
@@ -509,8 +532,8 @@ public sealed class UsageLedger(string dataDir)
     /// </param>
     public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        string resetsUtc = "") =>
-        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(LaunchOptions.None)) with { ResetsUtc = resetsUtc });
+        LaunchOptions ranWith, string consultation = "", string resetsUtc = "") =>
+        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(ranWith)) with { ResetsUtc = resetsUtc, Consultation = consultation });
 
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
     /// <remarks>

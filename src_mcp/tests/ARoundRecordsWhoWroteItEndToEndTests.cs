@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// End to end (E5.S5 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): ONE real round through <see cref="PanelService"/>
+/// End to end (E5.S5 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): ONE real round through <see cref="PanelService"/>
 /// and FakeCli over one of E1's fixtures proves the whole chain — the snapshot is in the session file and in the database, no sentinel leaves
 /// the reader, a deleted database comes back with the same authors, and a replay adds nothing.
 /// </summary>

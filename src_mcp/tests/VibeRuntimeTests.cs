@@ -404,7 +404,9 @@ public sealed class VibeLaunchRulesTests
     [Fact]
     public void TheSharedBannerVectors_Loaded_AndCoverEveryGeneration()
     {
-        WslBannerVectors.All.Select(vector => vector.Generation).Distinct().Should().BeEquivalentTo(Enum.GetValues<WslGeneration>(), "none, WSL1 and WSL2 each have a vector");
+        WslBannerVectors.All.Select(vector => vector.Generation).Distinct().Should().BeEquivalentTo(
+            Enum.GetValues<WslGeneration>().Where(generation => generation != WslGeneration.Unreadable),
+            "none, WSL1 and WSL2 each have a vector — Unreadable is the answer of a banner that was not read (E1.S2, DN6), which no banner text can give");
     }
     [Theory]
     [InlineData("wsl")]

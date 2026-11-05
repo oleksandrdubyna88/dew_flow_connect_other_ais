@@ -58,6 +58,7 @@ import {
   versionProbeCandidates,
   versionSourceFor,
 } from './cliVersions';
+import { rememberCliStatus } from './cliVersionMemory';
 import { askVersion, capture } from './versionProbe';
 import { CADENCE_CAP_MS, CadenceProbes } from './cadenceProbe';
 import { ConsultantHealthPanel } from './consultantHealthPanel';
@@ -1830,6 +1831,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
     const entries = await Promise.all(vendors.map(async (vendor) => [vendor.id, await this.oneCliStatus(vendor)] as const));
     this.cliStatus = Object.fromEntries(entries);
+    // What the chat ledger names as the version a turn ran under — this answer, remembered, so a turn never spawns one.
+    rememberCliStatus(this.cliStatus);
 
     return this.cliStatus;
   }

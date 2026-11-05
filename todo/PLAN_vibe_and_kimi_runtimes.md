@@ -832,6 +832,11 @@ D15, D19 (one home per conversation, kept across its turns; the junction's targe
 M-K2 (the session id), M-K5, M-K9, **M-K5b** (`/usage` is CUMULATIVE across `session/load`, §23) and **M-K12** (the OS-home
 redirect, §19) — all recorded by S4 on 2026-10-13; nothing of S5 waits on a cell. Depends on S4; not on S3. Complete on its own: a Kimi row answers `consult` and a question-consultant row, and a resumed turn keeps
 every refusal.
+
+*S5's stories: [PLAN_vibe_and_kimi_runtimes_E5.md](PLAN_vibe_and_kimi_runtimes_E5.md) (2026-10-16, the judge's split; plan only). It
+corrects three things below: a cell (M-K16) IS needed before the shim's load path; the conversation's Kimi root is
+`<folder>\kh-<10 hex>`, not the conversation folder; and a question row's home lives under `<root>\coai-vh` since #823. Its proposed
+cornerstone, E5.3, is past this plan's quota (the ledger line in S4 above stays `2 of 2` until the operator decides).*
 - `KimiConsultant` over the same shim, with a `--session <id>` load path: `session/load {sessionId, cwd, mcpServers: []}`
   then the model set again, then the prompt. **M-K5 decided the shape (RESULTS_kimi §8, 3 of 3):** a loaded session keeps
   the refusals and the client-fs routing, and resolves relative paths against the folder it was CREATED in — its `cwd` on

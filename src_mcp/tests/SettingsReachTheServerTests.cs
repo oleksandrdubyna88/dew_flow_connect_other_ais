@@ -29,7 +29,7 @@ public sealed class SettingsReachTheServerTests : IDisposable
     private string? Env(string name) => name == "COAI_DATA_DIR" ? _dataDir : null;
 
     private PanelServiceHost Host() =>
-        new(Env, VaultKeys.None("no vault here"), default, new ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
+        new(Env, VaultKeys.None("no vault here"), default, new ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None, CancellationToken.None);
 
     /// <summary>Writes what the extension's `serverSettingsJson` produces — env-shaped JSON.</summary>
     private void PanelWrites(params (string Key, string Value)[] settings)
@@ -122,7 +122,7 @@ public sealed class SettingsReachTheServerTests : IDisposable
                 "COAI_MAX_ROUNDS" => "2",
                 _ => null,
             },
-            VaultKeys.None("none"), default, new ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
+            VaultKeys.None("none"), default, new ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None, CancellationToken.None);
 
         PanelWrites(("COAI_MAX_ROUNDS", "9"));
 

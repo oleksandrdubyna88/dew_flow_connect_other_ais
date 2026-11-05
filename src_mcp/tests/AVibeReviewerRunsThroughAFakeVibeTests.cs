@@ -231,9 +231,11 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
     [InlineData(VibeFlowHost.Wsl2)]
     public async Task APlanRoundOnAnUnmeasuredVibe_RunsTheReviewer_AndItsStateCarriesTheWarning(string mode)
     {
+        // Not about the home budget: the run folder adds 29 characters to every temp path, and this home sat 6 under the limit on a short profile name.
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         using var flow = VibeFlowHost.Enter(mode, _dir.At("flow"));
         var (repo, data) = await RepositoryAsync();
-        Steer(Clean, version: "2.27.0");
+        Steer(Clean, version: "3.0.0");
         var service = Service(data);
         await service.OpenAsync(repo, "feature");
 
@@ -241,12 +243,12 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         var status = JsonDocument.Parse(await service.StatusAsync(repo, "feature")).RootElement;
 
         planned.GetProperty("verdict").GetString().Should().Be("proceed", $"the unmeasured Vibe answered: {planned}");
-        planned.GetProperty("reviewers").GetString().Should().Contain("warned — vibe/PlanCritique").And.Contain("2.27.0",
+        planned.GetProperty("reviewers").GetString().Should().Contain("warned — vibe/PlanCritique").And.Contain("3.0.0",
             "the round's reviewer line, what the calling AI reads, says it too");
         var reviewer = status.GetProperty("rounds")[0].GetProperty("reviewerStates")[0];
         reviewer.GetProperty("status").GetString().Should().Be("done");
         reviewer.TryGetProperty("warning", out var warning).Should().BeTrue($"the reviewer's state carries the warning: {reviewer}");
-        warning.GetString().Should().Contain("2.27.0").And.Contain("2.26.1");
+        warning.GetString().Should().Contain("3.0.0").And.Contain("2.26.1");
         flow.AssertLinked(mode);
     }
 

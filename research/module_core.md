@@ -55,7 +55,7 @@ flowchart LR
 | `SymbolLookup`, `SymbolMatch` | `Feature/SymbolLookup.cs` | a declaration by the name a reviewer WROTE — `Cart.Add`, `Point::fmt`, `App\Billing\Invoice::total`, a file-scoped namespace in front — against the outline's chains; overloads capped, a miss lists the file's names; pure |
 | `CredentialFiles` | `Feature/CredentialFiles.cs` | the fixed NAME shapes source on demand never serves (`.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `id_rsa*`…) — and deliberately not the credential words, which refused `Auth.cs` and `tokens.rs` in the trial |
 | `ServedSlice`, `SourceRefusal`, `SourceSpend`, `ServedTurn`, `SourceFence` | `Feature/SourceSlice.cs` | what a turn of source on demand came to: slices fenced with path, lines and commit, refusals with their sentence, and the reviewer's spend carried to the next turn |
-| `Redaction` Moonshot id | `Notices/Redaction.cs`, `src_vs_code/src/notifications.ts` | the `moonshot-id` pattern (story 2, 2026-10-20): `org-` or `ak-` plus 8–128 letters and digits with AT LEAST ONE digit, in both halves byte for byte (`run-parity.mjs`), so `org-settings-panel` stays; it is the fourth secret shape, in `Patterns`, `Secrets` and `Shapes`. **Where it applies (K6 of the code gate):** the vendor sentences the reviewers' summary, ledger and log write, the secret check that refuses a consultant context bound for an internet row (`SecretCheck`, class `moonshot-id`, pinned by `SecretCheckTests`) and the text a served file passes through — an account id is a personal identifier, so refusing to send it out is the conservative choice |
+| `Redaction` Moonshot id | `Notices/Redaction.cs`, `src_vs_code/src/notifications.ts` | the `moonshot-id` pattern (story 2, 2026-10-20): `org-` or `ak-` plus 8–4096 of letters, digits, `_` and `-` (the WHOLE run is masked: the real id shape is not measured; widened 2026-10-22 from letters and digits only, so an id with an underscore or a hyphen in it is masked whole, not left readable or half-masked, and a first bound of 128 left a readable suffix on a longer id — code gate G-C) with AT LEAST ONE digit in its first 128 characters, in both halves byte for byte (`run-parity.mjs`; the new shapes are in `noticeShapes.ts`), so `org-settings-panel` and `org-settings_panel` stay; it is the fourth secret shape, in `Patterns`, `Secrets` and `Shapes`. **Where it applies (K6 of the code gate):** the vendor sentences the reviewers' summary, ledger and log write, the secret check that refuses a consultant context bound for an internet row (`SecretCheck`, class `moonshot-id`, pinned by `SecretCheckTests`) and the text a served file passes through — an account id is a personal identifier, so refusing to send it out is the conservative choice |
 | `Redaction.SafeSource` | `Notices/Redaction.cs` | the notice redaction's passes over a FILE — layout kept, nothing cut, fail closed — the one road served content takes |
 | `PrivateKeyBlocks` | `Notices/PrivateKeyBlocks.cs` | the pass every `Redaction` call runs FIRST (2026-09-27, epic 3's code round): a PEM private-key block taken out header to footer — every variant (`RSA`, `EC`, `DSA`, `OPENSSH`, `ENCRYPTED`, `PGP … BLOCK`, plain), across real line breaks and JSON-escaped `\n`, each line inside it one `[redacted]` after its indentation so a served file's line count survives, a header with no footer losing the run of key-looking text after it. Procedural and linear — `IndexOf` from the furthest point known to hold no footer — because a body-between-markers PATTERN searches `headers × bound` against text made of footerless headers; the contract is `src_vs_code/src/privateKeyBlocks.ts`, byte for byte, held by `run-parity.mjs` over seven key shapes crossed with every wrap. The five one-line patterns had no name for a key body: a committed `service-account.json` was served with only its `-----BEGIN` taken out by the labelled pass, and the body followed the reviewer into every later turn's "served in earlier turns" (`APrivateKeyBlockIsNeverServedTests`, `privateKeyBlocks.test.ts`) |
 | `ReviewParser` | `Findings/ReviewParser.cs` | vendor JSON → review; unknown severity/category = per-entry rejection — and an answer whose EVERY finding was rejected is `Malformed` naming each (2026-09-26: the Alibaba route enforces no strict schema, and N invented severities parsed to a clean review, a `proceed` nobody gave); one survivor is still a review |
@@ -274,7 +274,7 @@ per window and rolled up) and `Contributors.Of / FixersOf`. Nothing is stored he
   WITHOUT E4 (no row, `-1` in every unmeasured member, `Reader`/`Attribution` `0` for the component that did not run). `Render()` and `IsWellFormed(string)` are the state as text and the one rule for a stored state
   (`shared/authors-state-vectors.json`, read by the extension too). `ActivityTotals.IsUnknown` is `[JsonIgnore]`, so a session file carries exactly the four members. The reflection fact fails when E4 adds a member the snapshot lacks.
 
-Design record: `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E4.md` (S2 is the cornerstone). Tests: `tests/Attribution*`, the `A…Tests` classes named in that plan, and the twenty recorded
+Design record: `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E4.md` (S2 is the cornerstone). Tests: `tests/Attribution*`, the `A…Tests` classes named in that plan, and the twenty recorded
 sessions of `tests/fixtures/caller-transcripts` through `AttributionHoldsOnTheRecordedSessionsTests`.
 
 ## Every stage answers by name — `Stages` (2026-09-25)
@@ -811,7 +811,7 @@ consultant or the confined reviewer ships was moved (A12: a tails-plan item of i
 
 ```mermaid
 flowchart LR
-  seed["shared/runtime-capabilities.json<br/>18 rows (6 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
+  seed["shared/runtime-capabilities.json<br/>21 rows (7 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
   RC --> CM["CapabilityMatrix.Admit(runtime, capability)<br/>confined → admit · unconfined / default-deny → admit FLAGGED · unsupported / unmeasured → refuse"]
   CM --> CP["ConfinementPlanner.Plan(runtime, grant)<br/>Leading · Flags · CwdKind · AddDirs · Flag"]
   CP -->|Planned| AD[adapters compose, add nothing]
@@ -856,6 +856,17 @@ flowchart LR
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
+- **Kimi's arm (E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`, 2026-10-27).** `kimi` is the seventh runtime of the table
+  (`RuntimeCapabilities.Runtimes`, hand-written, and the seed's `runtimes`) and of the planner: `disk` stands in a `Snapshot` of its
+  roots (`SnapshotSources` = the roots — a branch's `AGENTS.md`, skills, sub-agents and `.mcp.json` load from disk with no client call,
+  M-K9), `none` in an EMPTY `Scratch` folder, and **no flag on either, ever** — Kimi's confinement is coai's ACP shim (D15), not its argv,
+  so the sandbox vocabulary gains nothing (and `KimiConsultant` refuses a plan that carries one). The rows, on
+  research/RESULTS_kimi_confinement.md's `M-K…` cells dated 2026-10-13 (kimi 2.1.1): **`none` and `disk` both `unconfined`** — `Read` is
+  bounded by the shim, but `Grep` and `Glob` read an outside file by absolute path 3 of 3 (M-K6), and the cwd plays no part in that, so an
+  empty folder confines nothing (unlike Vibe's `none`); `disk` also cites M-K9 and M-K9 (e) (why the roots are COPIED), both cite M-K3/M-K4
+  (0 of 15 writes); each note names the version and says `WebSearch`/`FetchURL` are announced and unmeasured. `web` is `unmeasured`
+  (RESULTS §7, §14), so the matrix refuses it naming the Kimi record. Both admitted rows are FLAGGED `unconfined` (D13) — a person sees
+  **Can read this machine**.
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first

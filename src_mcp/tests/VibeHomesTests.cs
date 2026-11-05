@@ -304,7 +304,7 @@ public sealed class VibeHomesTests : IDisposable
         var folder = Directory.CreateDirectory(VibeHomes.OneShotIn(_root, "c0ffee00")).FullName;
         var warnings = new List<string>();
         var released = false;
-        var home = new OneShotHome(folder, new Pin(), warnings.Add) { Remove = _ => throw new IOException("in use") };
+        var home = new OneShotHome(folder, new Pin(), warnings.Add) { Io = HomeIo.Real with { Delete = _ => throw new IOException("in use") } };
 
         var ending = () =>
         {

@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// E3.S1 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>: a transcript its CLI is still appending to is
+/// E3.S1 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>: a transcript its CLI is still appending to is
 /// read shared, never throws, is parsed without a pre-read of any property, and — for the new reader — lines before the bound
 /// are skipped on their raw bytes and never decoded.
 /// </summary>

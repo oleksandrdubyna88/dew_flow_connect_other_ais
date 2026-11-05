@@ -25,7 +25,7 @@ public sealed class TheRunsThemselvesTests : IDisposable
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     /// <summary>A clock the test moves by hand — the heartbeat is the thing being tested.</summary>
-    private readonly MovableClock _clock = new(new DateTimeOffset(2026, 9, 16, 9, 0, 0, TimeSpan.Zero));
+    private readonly ManualClock _clock = new(new DateTimeOffset(2026, 9, 16, 9, 0, 0, TimeSpan.Zero));
 
     private RoundsDb Db() => RoundsDb.Open(_dir, _log, _clock)!;
 
@@ -198,19 +198,4 @@ public sealed class TheRunsThemselvesTests : IDisposable
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
     }
-}
-
-/// <summary>A clock a test moves by hand, for the one thing here that is about elapsed time.</summary>
-/// <remarks>
-/// The alternative is sleeping for thirty-one minutes, which is not a test anybody runs. Injected
-/// through <c>RoundsDb.Open</c>'s own <c>TimeProvider</c> parameter, per the family's UTC rule: a
-/// clock a test cannot control is a column a test cannot assert.
-/// </remarks>
-internal sealed class MovableClock(DateTimeOffset start) : TimeProvider
-{
-    private DateTimeOffset _now = start;
-
-    public override DateTimeOffset GetUtcNow() => _now;
-
-    public void Advance(TimeSpan by) => _now = _now.Add(by);
 }

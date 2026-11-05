@@ -283,6 +283,30 @@ public sealed class ProbeApiModeTests : IDisposable
         File.ReadAllText(ledger).Should().NotContain(Key, "the key never reaches the ledger").And.NotContain("sk-echoed");
     }
 
+    /// <summary>
+    /// A probe line says what it ran with (E3.S1, decision D3 of todo/PLAN_the_round_counter_tail_E3.md): the CLI is <c>api</c>, and
+    /// the effort the variant sent is labelled <c>row</c> — "sent, from what coai fills in" — while the plain variants sent none.
+    /// </summary>
+    [Fact]
+    public async Task AProbeLine_SaysWhatItRanWith()
+    {
+        var code = await RunAsync(["--probe-api", "--vendor", "grok", "--endpoint", _stub.Endpoint, "--model", "grok-4"]);
+
+        code.Should().Be(0, Stderr);
+        var lines = File.ReadAllLines(Path.Combine(_dir, "usage.jsonl"))
+            .Select(l => JsonSerializer.Deserialize(l, Runners.Reviewers.LedgerJsonContext.Default.UsageEntry)!).ToList();
+        lines.Should().OnlyContain(l => l.Cli == "api" && l.CliVersion.Length == 0 && l.Tier.Length == 0 && l.TierFrom.Length == 0,
+            "an api probe runs through no CLI, asks no version and sends no tier");
+        foreach (var effort in ProbeApiMode.Efforts)
+        {
+            var line = lines.Single(l => l.Role == $"reasoning_effort={effort}");
+            (line.Effort, line.EffortFrom).Should().Be((effort, "row"), "the variant sent this effort, from what coai fills in");
+        }
+
+        lines.Where(l => !l.Role.StartsWith("reasoning_effort=", StringComparison.Ordinal))
+            .Should().OnlyContain(l => l.Effort.Length == 0 && l.EffortFrom.Length == 0, "the plain variants sent no effort");
+    }
+
     [Fact]
     public async Task AProbeWithoutAModel_SpendsNothing_AndWritesNothing()
     {

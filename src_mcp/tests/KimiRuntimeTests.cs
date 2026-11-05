@@ -239,8 +239,8 @@ public sealed class KimiRuntimeTests : IDisposable
     {
         var runtime = (IReviewerRuntime)Runtime();
 
-        runtime.VersionWarning("kimi, version 2.2.0").Should().Be(KimiLaunch.VersionWarning("kimi 2.2.0"))
-            .And.Contain("2.2.0").And.Contain("2.1.1").And.StartWith("Kimi 2.2.0 is not a version coai has measured");
+        runtime.VersionWarning("kimi, version 3.0.0").Should().Be(KimiLaunch.VersionWarning("kimi 3.0.0"))
+            .And.Contain("3.0.0").And.Contain("2.1.1").And.StartWith("Kimi 3.0.0 is not a version coai has measured");
         runtime.VersionWarning("kimi, version 2.1.1").Should().BeEmpty();
         runtime.VersionWarning("nothing printed").Should().BeEmpty();
     }
@@ -275,6 +275,7 @@ public sealed class KimiRuntimeTests : IDisposable
     [Fact]
     public async Task ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn()
     {
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = KimiCredentialsLock.RootFor(_dir.At("locks"));
         Directory.CreateDirectory(Path.Combine(PersonsBin, ".."));
         var launcher = new ScriptedKimi();

@@ -67,8 +67,33 @@ export const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 export const fileHash = (path) => sha256(readFileSync(path));
 
 /** Every file under `dir` with its SHA-256 — what a before/after comparison of a home is made of. */
-export function manifest(dir) {
-  return Object.fromEntries(files(dir).map((f) => [f, fileHash(join(dir, f))]));
+export const isCredentialPath = (rel) => rel === 'credentials' || rel.startsWith('credentials/');
+
+/** A credential slot's name carries its hex (`kimi-code-env-<16 hex>.json`); the record keeps the shape and drops the slot (DN9: redacted). */
+export const redactSlot = (rel) => rel.replaceAll(/[0-9a-f]{8,}/giu, '<hex>');
+
+/** `lstat:<size>:<mode>:<mtime ms>` — a file recorded WITHOUT opening it; a rotated refresh token moves the size or the time. */
+function lstatShape(path) {
+  const s = lstatSync(path);
+  return `lstat:${s.size}:${s.mode & 0o7777}:${Math.round(s.mtimeMs)}`;
+}
+
+/** `name`, or `name#2`, `name#3`… when two redacted names would collide — the record never loses an entry. */
+const uniqueName = (taken, name) => (name in taken ? uniqueName(taken, `${name.replace(/#\d+$/u, '')}#${Number(/#(\d+)$/u.exec(name)?.[1] ?? 1) + 1}`) : name);
+
+/**
+ * Every file under `dir` with its SHA-256 — what a before/after comparison of a home is made of. Nothing under `credentials/` is EVER opened
+ * (DN5 item 2, gate finding 0: a hash reads the bytes, and those bytes are a refresh token): those paths — and any path `skip(rel)` names —
+ * are recorded by `lstat` alone, credential names with the slot's hex redacted. `hash` is injected so a test proves it is never called for them.
+ */
+export function manifest(dir, { skip = () => false, hash = fileHash } = {}) {
+  const record = {}; // built locally in one pass: a home can hold thousands of files, and a spread per file would be quadratic
+  for (const rel of files(dir)) {
+    const credential = isCredentialPath(rel);
+    if (!credential && !skip(rel)) record[rel] = hash(join(dir, rel));
+    else record[uniqueName(record, credential ? redactSlot(rel) : rel)] = lstatShape(join(dir, rel));
+  }
+  return record;
 }
 
 /** Whether each marker occurs in the session's main wire — the system prompt and tool results — whatever the answer did with it. */
@@ -264,17 +289,20 @@ export function syncCredentials(from, to) {
 export class CredentialGuard {
   #real;
   #last;
+  #read;
   rotates = null; // unknown until a refresh of the real home has been seen
   events = [];
 
-  constructor(real) {
+  /** `read` is injected so a test proves WHEN the person's credential files are opened (S-N2's twin: never for an owned-only run). */
+  constructor(real, { read = credentialFingerprint } = {}) {
     this.#real = real;
-    this.#last = credentialFingerprint(real);
+    this.#read = read;
+    this.#last = read(real);
   }
 
   /** After a launch on the real home: learn whether the refresh token rotated. */
   afterRealRun(tag) {
-    const now = credentialFingerprint(this.#real);
+    const now = this.#read(this.#real);
     const fileMoved = JSON.stringify(now) !== JSON.stringify(this.#last);
     if (fileMoved) {
       this.rotates = !sameRefresh(now, this.#last);
@@ -293,18 +321,84 @@ export class CredentialGuard {
   /** After a launch on a copied home: if it refreshed and rotation is possible, the live pair goes back to the real home. */
   afterCopiedRun(home, tag) {
     if (!existsSync(join(home, 'credentials'))) return false;
-    const copy = credentialFingerprint(home);
+    const copy = this.#read(home);
     if (sameRefresh(copy, this.#last)) return false;
     const refreshedInCopy = Object.keys(copy).length > 0;
     if (refreshedInCopy && (this.rotates ?? true)) {
       this.events.push({ tag, where: 'copy', rotatedInCopy: true, writtenBack: syncCredentials(home, this.#real) });
-      this.#last = credentialFingerprint(this.#real);
+      this.#last = this.#read(this.#real);
       return true;
     }
     this.events.push({ tag, where: 'copy', rotatedInCopy: refreshedInCopy, writtenBack: [] });
     return false;
   }
 }
+
+/**
+ * A home's credential files by `lstat` ALONE — name, inode, size, mtime; no file is opened (J1 of the Opus judge on E1: an owned launch must not read
+ * the person's refresh token to learn that a refresh happened — a refresh rewrites the file, so its size or time moves). `list`/`stat` are injected.
+ */
+export function credentialShape(home, { list = readdirSync, stat = lstatSync } = {}) {
+  const dir = join(home, 'credentials');
+  if (!existsSync(dir)) return {};
+  return Object.fromEntries(list(dir).filter((n) => n.endsWith('.json')).sort((a, b) => a.localeCompare(b)).map((n) => {
+    const s = stat(join(dir, n));
+    return [n, `${s.ino}:${s.size}:${Math.round(s.mtimeMs)}`];
+  }));
+}
+
+/**
+ * The sign-in watch of one probe run. Every launch is watched by SHAPE (`credentialShape` — nothing opened). The content-reading
+ * `CredentialGuard` — which parses every credential file and hashes its refresh token — is built LAZILY, by `content()`, only when a copied-credentials
+ * (legacy) cell actually runs; once built, real-home runs feed it too, so the rotation is still learned. `read` is injected for the S-N2 twin.
+ */
+export class CredentialWatch {
+  #real;
+  #read;
+  #shape;
+  #last;
+  #content = null;
+  #events = [];
+
+  constructor(real, { read = credentialFingerprint, shape = credentialShape } = {}) {
+    this.#real = real;
+    this.#read = read;
+    this.#shape = shape;
+    this.#last = JSON.stringify(shape(real));
+  }
+
+  /** The content-reading guard — built on the first call, never before. */
+  content() {
+    this.#content ??= new CredentialGuard(this.#real, { read: this.#read });
+    return this.#content;
+  }
+
+  get rotates() { return this.#content?.rotates ?? null; }
+  get events() { return [...this.#events, ...(this.#content?.events ?? [])]; }
+
+  /** After a launch on the real home or an owned home: did the sign-in's files move (by shape)? Whether the token rotated is unknown here. */
+  afterRealRun(tag) {
+    const now = JSON.stringify(this.#shape(this.#real));
+    const moved = now !== this.#last;
+    if (moved) this.#events.push({ tag, where: 'real', refreshed: true, rotated: null });
+    this.#last = now;
+    const contentMoved = this.#content?.afterRealRun(tag) ?? false;
+    return moved || contentMoved;
+  }
+
+  /**
+   * After a launch on a copied home: the content guard may write the live pair BACK into the real home, so the shape baseline is re-read afterwards -
+   * otherwise the next real-home run would be blamed for a write this launch made.
+   */
+  afterCopiedRun(home, tag) {
+    const refreshed = this.content().afterCopiedRun(home, tag);
+    this.#last = JSON.stringify(this.#shape(this.#real));
+    return refreshed;
+  }
+}
+
+/** The refusal of a cell that would COPY the person's sign-in (and so read it): not unless the person passed `--allow-copied-credentials`. */
+export const copiedCredentialsRefusal = (allowed) => (allowed ? '' : 'this cell copies the credentials of the person into a scratch home and reads them to keep the refresh token alive; it is refused unless --allow-copied-credentials is passed (a native-host series never passes it)');
 
 // ----------------------------------------------------------------------------------------------- configs and canaries
 
@@ -419,29 +513,82 @@ function boundaryAnswer(root, requested) {
 }
 
 /**
+ * Whether a child may still be killed by its pid: it has neither exited nor been killed. After either, the pid may already be another
+ * process's on POSIX (the E5.2 review, M3) — so a kill that comes late is skipped, never sent to whoever holds the number now.
+ */
+export const stillRunning = (child) => child.exitCode === null && child.signalCode === null;
+
+/** How much of a replayed text chunk a `loadUpdates` row keeps — enough to recognise an earlier answer, small enough to keep a row small. */
+export const LOAD_TEXT_CHARS = 120;
+
+/** One `session/update` that arrived while `session/load` was open: its kind, and for a text chunk the start of its text (E5.1 decision 1 (a)). */
+export function loadUpdate(update) {
+  const kind = String(update?.sessionUpdate ?? '');
+  return update?.content?.type === 'text' ? { kind, text: String(update.content.text ?? '').slice(0, LOAD_TEXT_CHARS) } : { kind };
+}
+
+/** How long a turn ended like the shim waits for the agent to go quiet after `session/cancel` — and the most it waits (E5.1 decision 1 (b)). */
+const QUIET_MS = 250;
+const QUIET_AT_MOST_MS = 1000;
+
+/** Resolves once the agent has written nothing for QUIET_MS, or QUIET_AT_MOST_MS after it was asked — whichever comes first. */
+function quiet(lastOutput) {
+  const started = Date.now();
+  return new Promise((done) => {
+    const look = () => (Date.now() - lastOutput() >= QUIET_MS || Date.now() - started >= QUIET_AT_MOST_MS ? done() : setTimeout(look, 25));
+    look();
+  });
+}
+
+/** Resolves when the child has exited, or after `ms` — a kill that did not land must not hold the probe. */
+const exitedWithin = (exited, ms) => Promise.race([exited, new Promise((done) => setTimeout(done, ms))]);
+
+/**
  * One ACP conversation against `kimi acp`, NOT through the shim — used only where the shim has no path yet: `session/load`
  * (M-K5; S5 adds it to the shim) and a `session/new` whose `configOptions` name the models (M-K7, no prompt, no spend).
  * It mirrors the shim's client decisions — the same `initialize` offer, `mcpServers: []`, every permission refused by kind,
  * reads served by the boundary rule, every other request an error — and records every line both ways.
  */
-export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', load = '', followUp = '' }) {
+export function acpTurn({ exe, args = ['acp'], cwd, env, deadlineMs, model = '', prompt = '', load = '', followUp = '', endLikeTheShim = false }) {
   return new Promise((done) => {
     // On POSIX the agent leads its own process group, so the end below reaches every descendant that stayed in it (plan §5).
-    const child = spawn(exe, ['acp'], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
+    const child = spawn(exe, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
     const state = { pid: child.pid, lines: [], answer: '', answer2: '', sessionId: load, refusals: [], reads: [], toolCalls: {}, usage: null,
-      sessionResult: null, stopReason: '', error: '', exit: null, stderrTail: '', prompting: false, second: false };
+      sessionResult: null, stopReason: '', error: '', exit: null, stderrTail: '', prompting: false, second: false, loading: false, loadUpdates: [] };
     const pending = new Map();
     let nextId = 1;
     let finished = false;
     let buffered = '';
     let stderr = '';
+    let lastOutput = Date.now();
+    const exited = new Promise((gone) => child.on('exit', gone));
+    child.stdin.on('error', () => { /* the agent is gone; its pipe with it */ });
+    // The probe's own ending (M-K5): stdin closed, 1.5 s for the agent to leave, then the tree kill.
+    const stdinFirst = () => new Promise((ended) => {
+      try { child.stdin.end(); } catch { /* already closed */ }
+      setTimeout(() => { if (stillRunning(child)) killTree(child.pid); setTimeout(ended, 300); }, 1500);
+    });
+    // The shim's ending (AcpClient + AcpTransport.EndAsync): session/cancel when a session exists, a short quiet, the tree kill while the agent
+    // is still alive, and only then stdin closed — so an agent that would leave on EOF never takes its children out of the kill's reach.
+    const likeTheShim = async () => {
+      if (state.sessionId) {
+        send({ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: state.sessionId } });
+        lastOutput = Date.now();
+        await quiet(() => lastOutput);
+      }
+      if (stillRunning(child)) killTree(child.pid);
+      try { child.stdin.end(); } catch { /* already closed */ }
+      await exitedWithin(exited, 5000);
+    };
     const finish = (why) => {
       if (finished) return;
       finished = true;
       state.error ||= why;
       clearTimeout(timer);
-      try { child.stdin.end(); } catch { /* already closed */ }
-      setTimeout(() => { if (child.pid) killTree(child.pid); state.stderrTail = stderr.slice(-1500); setTimeout(() => done(state), 300); }, 1500);
+      // Not awaited (finish runs from timers and stream events); an ending that throws still ends the turn, so done() is always called.
+      void (endLikeTheShim ? likeTheShim() : stdinFirst())
+        .catch((e) => { state.error ||= `the ending failed: ${e?.message ?? e}`; })
+        .then(() => { state.stderrTail = stderr.slice(-1500); done(state); });
     };
     const timer = setTimeout(() => finish(`deadline ${deadlineMs} ms`), deadlineMs);
     const send = (obj) => { const line = JSON.stringify(obj); state.lines.push(`> ${line}`); child.stdin.write(`${line}\n`); };
@@ -463,6 +610,7 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
     };
     const onNotification = (m) => {
       const u = m.params?.update ?? {};
+      if (state.loading) state.loadUpdates.push(loadUpdate(u));
       if (u.sessionUpdate === 'agent_message_chunk' && state.prompting && u.content?.type === 'text') state[state.second ? 'answer2' : 'answer'] += u.content.text ?? '';
       if (u.sessionUpdate === 'usage_update') state.usage = { used: u.used, size: u.size };
       if ((u.sessionUpdate === 'tool_call' || u.sessionUpdate === 'tool_call_update') && u.toolCallId) {
@@ -471,6 +619,7 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
       }
     };
     child.stdout.on('data', (chunk) => {
+      lastOutput = Date.now();
       buffered += chunk.toString('utf8');
       let at;
       while ((at = buffered.indexOf('\n')) >= 0) {
@@ -501,8 +650,9 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
     (async () => {
       try {
         await call('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: true, writeTextFile: false }, terminal: false } });
+        state.loading = Boolean(load);
         state.sessionResult = load
-          ? await call('session/load', { sessionId: load, cwd, mcpServers: [] })
+          ? await call('session/load', { sessionId: load, cwd, mcpServers: [] }).finally(() => { state.loading = false; })
           : await call('session/new', { cwd, mcpServers: [] });
         state.sessionId = state.sessionResult?.sessionId || load;
         if (model) await call('session/set_config_option', { sessionId: state.sessionId, configId: 'model', value: model });
@@ -523,3 +673,20 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
     })().catch((e) => finish(`client: ${String(e?.message ?? e)}`));
   });
 }
+
+/**
+ * The sentence that refuses an arm which asked for an owned root (`requireOwned`, set by lib/kimi-arms.mjs for the cells of the 2.2.0 window) and has none —
+ * no `<root>/home` beside `<root>/os`, or not marked `owned` — or '' (an arm that never asked is not judged). Checked before anything launches.
+ */
+export function ownedRefusal(spec) {
+  if (!spec.requireOwned) return '';
+  if (spec.owned === true && rootOfHome(spec.home ?? '') !== '') return '';
+  return 'this arm has no owned root (<root>/home beside <root>/os) - it is refused, not run on the real KIMI_CODE_HOME (E4.3)';
+}
+
+/**
+ * Whether a launch is on a home the probe FILLED with the person's credentials (`filled`: the homes `copiedHome` put credentials into). Only those use the
+ * content-reading guard: an owned home, a junctioned one, an empty one and a copy made `credentials: false` carry none, so none of them may build it
+ * (re-check of J1: M-K7's empty-home and no-credentials arms used to, and every later launch then re-read the sign-in).
+ */
+export const launchesOnCopiedCredentials = (spec, filled) => Boolean(spec.home) && filled.has(spec.home);

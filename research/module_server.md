@@ -96,7 +96,7 @@ boundary both survey. The extension reads `consultants.json` only and never sees
 |---|---|
 | The background start, its failure (`ServerStartFailed`) and stop semantics | `Server/StartingHost.cs`, `Program.StartedAsync` |
 | The sweeper waits for the start through the source (`Ready`), then asks for the current service per beat | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)` |
-| A settings reload publishes the new stamp only with a service that built | `PanelServiceHost.Current` |
+| A settings reload publishes the new stamp only with a service that built. **A reload that cannot be used keeps the last good service AND the old stamp** (E3 S2, C14), so the next call tries again, with one warning per stamp: the file is held open by its writer (`SettingsFile.TryLayer` answers `SettingsLayer.Busy` — ONLY a Windows sharing or lock violation, HResult `0x80070020`/`0x80070021`), or the rebuild threw. `Current` never throws: its stamp read keeps the OLD stamp for any failure to read it (`IOException`, `UnauthorizedAccessException`, and since the E3 code gate `ArgumentException`, `NotSupportedException`, `SecurityException` — a path the platform cannot stamp), because "cannot tell" is not "the file vanished" and the old stamp keeps the last good service serving; a skipped reload is logged with the exception itself, not as text in the message. A permission denial is NOT busy (empty settings, as before, so a file locked down by mistake never pins stale settings), and a malformed or empty file gives the defaults, as before. The values the read returned are the ones the rebuild uses (one read per reload); START (`Start()`) reads as it always did. `SettingsFile.Read` and `Layer`'s eight callers are unchanged. | `PanelServiceHost.Current`/`Reload`/`Kept`, `SettingsFile.TryRead`/`TryLayer`, `SettingsRead.cs` |
 | The held set, its cache and fail-closed answer | `Server/SessionHolds.cs`, `SessionStore.HeldQuestions` |
 | Judged first, held asked once per sweep | `Server/EscalationRetention.cs` |
 | The two settings | `Server/ServerPace.cs` (`PanelSettings.Pace`) |
@@ -1370,6 +1370,8 @@ admits but FLAGS — codex on every capability, agy's disk read — and the flag
 the card and the log. S3 had made it refuse such a row unless it carried `acknowledged: true`; the operator
 dropped the tick, because codex has no setting that limits what it reads, so a tick would confine nothing.
 
+**A heartbeat the disk refuses is said and skipped (E3 S4, C18's product side).** CI run 39325900821 (Windows) ended a question whose rows all answered with `UnauthorizedAccessException` from the beat's write: a faulted `HeartbeatAsync` was rethrown at `LaunchAllAsync`'s `finally` and the settled record was never written. `QuestionFanOut.BeatAsync` now catches `IOException or UnauthorizedAccessException` around ONE beat, logs `question {Id}: a heartbeat could not be written ({Reason}); the next beat tries again` at Warning — ONCE per run of misses (`HeartbeatAsync` announces only the first of consecutive failed beats and resets after a beat that lands) — and the loop goes on. Why it is safe: the sweep ends a question only on a stale heartbeat (two minutes, four beats) AND a dead pid (`QuestionConsultStore.Orphaned`), so a missed beat — or several — never ends a live server's question. A row's settle write and the final write are NOT guarded: a lost answer must reach the caller. `QuestionConsultStore.FileWriter` (`internal`, default `AtomicJson.Write`) is the seam the tests refuse a write through, on every OS.
+
 **The heartbeat, now proved to be WRITTEN.** S2 covered the sweep's reading of a stale beat; nothing ran a
 row past thirty seconds. `QuestionFanOut` takes the interval as a seam (`heartbeatEvery`, the store's thirty
 seconds by default), and `TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval` sees three distinct
@@ -1398,7 +1400,7 @@ read since S2 and are acted on now). An older extension against this server show
 person answers it or the retention takes it; a newer extension against an older server sees no status and
 draws every card, as before.
 
-**Sizes (D12).** `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness`, a static unit every
+**Sizes (D12).** `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness` — since E3 S4 `CoaiMcp.Runners.Processes.ProcessLiveness`, `runners/Processes/ProcessLiveness.cs` — a static unit every
 sweep asks; the gate's wiring and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497
 (the default's constant and its remark paid for by the surplus blank lines beside it).
 
@@ -1438,7 +1440,7 @@ against the code without its fix. What changed on this side, by item:
 | # | What was wrong | What it does now | Where |
 |---|---|---|---|
 | 1 | The QUESTION reached none, disk and api rows unchecked (only the context went through `SecretCheck`) | both are checked on every non-web row, the production-risk beside run included; a hit refuses THAT row, naming the class, never the value | `QuestionFanOut.CheckedInput`, `SecretCheck.Inspect(text, what)` |
-| 2 | A root ABOVE the profile, the data directory or a system directory passed, links were not followed, credential directories were readable | refused as written and at what every component resolves to (`DocumentReader.Canonical` over `ResolveLinkTarget(returnFinalTarget: true)`), credential directories as a root, inside one or holding one | `QuestionRoots` |
+| 2 | A root ABOVE the profile, the data directory or a system directory passed, links were not followed, credential directories were readable | refused as written and at what every component resolves to (`DocumentReader.Canonical` over `RealPath` — root-down, a link's RAW text, a 40-expansion budget; it was `ResolveLinkTarget(returnFinalTarget: true)` until 2026-11-01, see the past-defects section at the end of this file), credential directories as a root, inside one or holding one | `QuestionRoots` |
 | 3 | A row's advice and its reason (a CLI's stderr) were written down raw | `Redaction.SafeSource` on the advice (layout kept), `Redaction.SafeText` on the reason, before the record — the one road to the database, reply, card and sidebar | `QuestionRowLaunch` |
 | 4 | Any `scheme://` was set aside before the path checks; invisible and compatibility characters beat every pattern | only http/https/ftp is set aside and any other scheme is refused (`scheme`); every check reads `TextAsRead.Normalised` (Unicode `Cf` removed, the NFKC mappings that reach ASCII folded — `Normalize(FormKC)` folds nothing under `InvariantGlobalization`, measured and pinned), and a question carrying a format character is refused (`invisible`); `SecretCheck` reads the raw AND the folded text | `WebQuestionSanitiser`, `TextAsRead`, `SecretCheck` |
 | 5 | A disk root that is no git checkout was a log line | the row's `note` says "root <name> is not a git checkout: changes there are not watched" — record, reply (`answers[].note`), card (`consultantAnswers[].note`), projection | `QuestionFanOut.SaidUnwatched` |
@@ -1447,7 +1449,7 @@ against the code without its fix. What changed on this side, by item:
 | 9 | A live server whose fan-out never settled left `consulting` for ever | past twice the row budget the sweep ends it `interrupted`, naming the deadline | `QuestionConsultStore.Sweep(isAlive, now, deadline)` |
 | 11 | The ~6 s outline was built for every question with any `none` row, before ANY row launched | built only for an api `none` row (A9 names them), awaited by that row alone, cached per repository + HEAD for the last four, a failed build never kept | `QuestionOutlineCache`, `RowInput.AfterOutline` |
 | 13 | Four record directories each carried their own id guard, turn read, stamp, parse and delete-and-warn | one `RecordFiles`, used by `QuestionConsultStore`, `ConsultationStore`, `QuestionPhaseStore` and `EscalationRetention` | `RecordFiles` |
-| 14 | `AtomicJson.Write` takes the turn, so a caller holding it could not use it | `Write` (takes the turn) and `WriteUnderTurn` (temp + move); the phase store and the spend call the latter | `AtomicJson` |
+| 14 | `AtomicJson.Write` takes the turn, so a caller holding it could not use it | `Write` (takes the turn) and `WriteUnderTurn` (the write itself; the phase store and the spend call it). **E3 S4:** `WriteUnderTurn` writes through `AtomicFile.Write` with `AtomicFile.SharingRetry` — a pid-and-GUID temp name (`<id>.json.<pid>.<guid>.tmp`), the move retried for `UnauthorizedAccessException` too, no more fixed `path + ".tmp"` | `AtomicJson`, `AtomicFile` |
 | 15 | The question prompts kept a copy of the prompt-id expression without the Windows device names (`con` was a prompt) | `RoleComposition.IsPromptId`, the whole rule | `QuestionPromptSet` |
 
 Item 6 (the panel's 15-minute default), 10 and 12 (the extension's watchers) are the extension's; see
@@ -1774,7 +1776,7 @@ empty directory and take no switch. Measured on one commit, Fast found MORE from
 models at a fraction of the tokens —
 [RESULTS_findings_that_are_worth_something.md](RESULTS_findings_that_are_worth_something.md).
 
-**The size step — every code round measures itself (E2.S4, `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`).**
+**The size step — every code round measures itself (E2.S4, `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`).**
 In the code stage's `MakeWork` lambda (`PanelService.ReviewCodeAsync`), right after `CollectAsync` and `DiffShaper.Shape`,
 `RoundSizer.MeasureAsync(_context, repoPath, sha, collected, shaped, session.Rounds, _log, roundToken)` builds the round's
 `RoundSize` from the diff it actually built: the whole scope is `ChangePartition.Of` over `collected.Counted`, the unfiltered
@@ -2333,10 +2335,15 @@ existed, which is exactly how mirrored lists begin to drift.
 
 ## Settings apply to the next round, not the next restart
 
+
 `PanelServiceHost` stats the panel's settings file on every tool call and rebuilds `PanelService`
 when it has changed. Settings used to be read once at startup, which made every change in the
 sidebar silently ineffective until the MCP client was restarted — a gap invisible from both ends,
 because the panel saves instantly and says so. Environment variables still outrank the file.
+
+**The host's stopping token rides the rebuilds (E3.S2, 2026-10-20).** `PanelServiceHost` takes the server's own stopping token as a REQUIRED parameter (`Program.StartedAsync` passes its `stop`) and hands it to every `PanelService` it builds, the first and every rebuild; the service hands it to `RoundEngine`, which OBSERVES it (never links it, and records nothing itself: it does not cancel a round) beside the call's token and the round's clock, and writes the FIRST source to end the round as a cancelled local turn's `endCause` (the call's token files `hostStopped` instead of `withdrawn` when the host's token is already cancelled) (`RoundCancellation`, [module_runners.md](module_runners.md)). `PanelServiceHostTests.TheHost_HandsItsStopToEveryServiceItBuilds` pins the hand-over.
+
+**A client that closes stdin is the host ending (E3.S2 code round, 2026-10-21).** `Program.ServeAsync` wraps the stdio transport in `InputEndSignallingTransport`: it pumps the real reader's messages through unchanged and in order, and when the input ends — cleanly or with a failure — it cancels `startStop` (the host token `StartedAsync` hands down) and ONLY THEN completes the reader it gave the SDK, so nothing the SDK does as its input ends (cancelling in-flight request tokens) can precede the host's stop. Before it, `startStop` was cancelled only in the `finally` after `server.RunAsync` returned. The hand-off is a BOUNDED channel (`InputEndSignallingTransport.Capacity`, 64, `Wait`): a reader that falls behind makes the pump wait and the rest of the input stays in the pipe; a host callback that throws is logged (`Program` passes its `log`), never faults the pump, and the reader is completed in a `finally`; `DisposeAsync` cancels a pump parked on a full buffer before awaiting it, and a pump ended that way does NOT run the callback (a local disposal is not the client leaving, and signalling would re-enter the host's shutdown); the reader is still completed. **Measured limit, reported rather than fixed:** no review tool (`review_plan`, `review_code`, …) takes the SDK's request `CancellationToken` (only `ask_human` does), so a client's `notifications/cancelled` never reaches a local round — a live `review_plan` kept running and answered nothing for 15 s after the cancel — and the host's stop cancels no round (it is only observed). Today only `roundClock` and `unknown` can therefore be written by a live server (a client closing stdin fires the host's token alone and the round runs on to its clock); `withdrawn` and `hostStopped` are pinned by the C# tests, where the tokens are handed in, and wait for the review tools to pass the request's token (a behaviour change this task did not make).
 
 ## Server notices — what this binary writes down (S8, from 2026-09-21)
 
@@ -3100,6 +3107,19 @@ marker back). `ABeatThatFinishesAfterTheClear_DoesNotBringTheMarkerBack` and
 
 ## The spending ledger
 
+**Consult, check, question and probe lines say what they ran with, and a consult line names its consultation (E3, 2026-10-20,
+`todo/PLAN_the_round_counter_tail_E3.md` S1 and S4's `coai-mcp` half).** `ConsultantTurnBooks.Billed` — the one place all three consult
+writers end (`ConsultationService.Settle`, `ConsultationFailedTurns.Billed`, `ConsultantCheck.Billed`) — takes the turn's `LaunchOptions` and
+a `consultation` id. The consultation labels its launch right after `Build` (`RowLaunchOptions.Answering(…, ready.Launch.Settings)`, which
+carries the codex tier probe's release) onto `TurnConsultant.RanWith`, and adds the final launch's `CliVersion` when the turn returns; the
+check does the same on its private `Turn`; the question row labels its invocation (a ready continuation keeps its first launch's labels) and
+`Record` takes `RanWith.VersionedBy(last launch's CliVersion)`; `--probe-api` labels `api` + the variant's effort. Refused before any
+launch → `LaunchOptions.None`. **`consultation`** (`UsageEntry.Consultation`, trailing) is the record's id on an answered turn
+(`record.Id`) and a failed one (`failed.Next.Id`, so a NEW consultation refused before its launch — whose record was never written, id
+emptied — carries none); a consultant check carries none (decision D8) — no consultation is behind it, and an invented id would merge
+unrelated turns in the extension's division. A local review cancelled mid-round also carries its `endCause` — see *A local cancellation says
+which token fired* in [module_runners.md](module_runners.md). The Team server is unchanged.
+
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,
 stage, seconds, tokens, cost and outcome. It is separate from the session files on purpose —
 sessions are rewritten as rounds advance and hold one repo+branch, while "what has this cost me
@@ -3557,7 +3577,7 @@ Reached through both preview-fork shapes as step 20 is (`TheRoundKeyIsStepTwenty
 step-20 file reads and leaves it at twenty — no reader asks for the column.
 
 **Schema step 22 — the round's size and `reviewers.effort`** (`Schema.TheRoundsSize`, appended after step 21; story
-E2.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C2). `round_changes` holds one row
+E2.S3 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C2). `round_changes` holds one row
 per (scope `whole`/`delta`, coverage, kind) cell of the round's `RoundRecord.Size` — counts and lines only, no path — and
 `rounds` gains `size_state`, `delta_state`, `delta_from`, `size_origin` and `size_gitlinks`, because a delta that is
 `unavailable` and one that is an observed zero both have no rows and the state is what tells them apart.
@@ -3585,7 +3605,7 @@ twenty-two (`ThePlanSourceIsStepTwentyThreeTests`). `ThePairsThemselvesTests`' s
 rest.
 
 **Schema step 24 — who wrote the code a round reviewed** (`Schema.TheRoundsAuthors`, appended after step 23; story E5.S2 of
-`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `round_authors` holds one row per row of the round's
+`research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `round_authors` holds one row per row of the round's
 `AuthorsSnapshot` — `who` (`main` | `subagent`), `agent` (the opaque id, **empty for main**), `requested`, `model`, `effort`,
 `agent_type`, `association`, `window` (`before-open` | `round`), `launches`, `turns`, the four token terms and `write_calls`, keyed
 `(round_id, ordinal)`; the round's own stage and number are its `round_id`'s. Fourteen columns join `rounds`: `authors_state` (the
@@ -3637,7 +3657,7 @@ all read as an absent member; a malformed row never fails the page (`TheLogNames
 ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this
 (`module_extension.md`).
 
-**`--log` names the state of each round's authors** (story E5.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+**`--log` names the state of each round's authors** (story E5.S3 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
 `LoggedRound` gains a third init property, `AuthorsState` (`string?`, JSON `authorsState`), absent when null. `RoundsQuery.Rounds` chains
 `RoundAuthorsLog.Attach` (its own file, the `RoundPlanSources` shape) after `RoundPlanSources.Attach` — one call, no fourth rung on the SQL
 ladder. It runs ONE query per page, `SELECT id, authors_state FROM rounds WHERE authors_state <> '' AND id IN (SELECT value FROM
@@ -3648,7 +3668,7 @@ word:** an empty column and a value `AuthorsSnapshot.IsWellFormed` refuses read 
 (a catch around the query would swallow *no such column* and hide what the `HasColumn` guard prevents).
 
 **The authors step — who wrote what a round reviewed, on the answer path** (story E5.S4 of
-`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `RoundAuthorsStep.For(session, record)` (`src/Server/Rounds/`) runs in
+`research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `RoundAuthorsStep.For(session, record)` (`src/Server/Rounds/`) runs in
 `RoundEngine` as ONE statement after the record's `with` block — `record = record with { Authors = _authors.For(session, record) }` — before the
 save and before the projection opens the database. It answers null (not recorded) for any round that E4 does not call *settled* (a plan or
 code round, `done`, not `skipped`): a skipped, interrupted or running round and every feature or document round; `Assign` is never
@@ -3677,12 +3697,14 @@ declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` �
 logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
 default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too. Every method of `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`, `RoundAuthorsTable` and `RoundAuthorsLog` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for E4's core).
 
-### `--round-authors` — who wrote the code, against what the reviewers found (2026-10-19, E6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`)
+### `--round-authors` — who wrote the code, against what the reviewers found (2026-10-19, E6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`)
 
-The owner's question — *"is the code better or worse since the coders moved to Sonnet?"* — answered from data the rounds already
-record: the authors of a round (E3–E5) beside what the reviewers found. `coai-mcp --round-authors` reads `coai.db` read-only and
+The owner's question is *"is the code better or worse since the coders moved to Sonnet?"*. `--round-authors` can produce the report for it,
+from data the rounds already record: the authors of a round (E3–E5) beside what the reviewers found. **The owner's answer is not available yet.**
+It needs the live backfill, the hand-check and the `RESULTS_` file (see [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md)).
+`coai-mcp --round-authors` reads `coai.db` read-only and
 prints **sums**; the figures, the marks and the header are made from them at render time. **An association, never a cause** — the
-first line of every report says so. The stories are `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md`; its decisions
+first line of every report says so. The stories are `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md`; its decisions
 D1–D19 are the rules below by reference.
 
 **The contract.** `--round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stage code|plan] [--cohort first|corrective|all]
@@ -3741,7 +3763,7 @@ carries no absolute path; `NumeratorSums` carries `DeltaTotal` (the per-100-delt
 reviewers, findings and size are read for the in-window rounds only; `ExclusionCount` carries `Because` (the per-word split of `size unavailable`);
 CA1502 (cyclomatic complexity 4) is switched on in `.editorconfig` for the report's files.
 
-### `--backfill-authors` — the authors and the size of the rounds that ran before the live path knew (2026-10-19, `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md` S1–S4)
+### `--backfill-authors` — the authors and the size of the rounds that ran before the live path knew (2026-10-19, `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md` S1–S4)
 
 **What it is.** `coai-mcp --backfill-authors [--since <ISO-8601 UTC instant>] [--dry-run]` gives every settled plan or code round the authors and
 (for a code round with no size) the size the live path would have written, from what is on disk — one run per side, over that side's OWN store and
@@ -3827,6 +3849,8 @@ fields cannot name is refused loudly rather than printed as zeros — code gate 
 **A still-running peer round is invisible in production** (E5 §12 deviation 8): it has no row and no snapshot, so it carries no caller on disk and E4's `peer running`
 cannot name it until it is projected. `ANamedPeerRoundStillRuns` therefore holds for a round projected in the database (the tests' state) and the repair of such a row
 leans on the grown-peer-set rule instead; a `peer running` row without its transcript stays provisional for ever.
+
+**Where it stands (2026-10-21).** The mode is built, merged (#865) and tested offline only: every test store is a `testsToDelete-` temporary folder. It has **never run on a live store**, on Windows or in WSL. No `mcp-v*` tag contains it yet (the newest, `mcp-v0.62.0`, is older than E5). The pre-flight script `scripts/backfill-preflight-servers.*`, the judge's dump `scripts/round-authors-dump.mjs` and the `--round-authors` JSON oracle in the S4 scenario are not written. The live runs, the hand-check and the `RESULTS_` file are the open plan [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md). Until they run, rounds recorded before the live path knew show their authors as not recorded, and `--round-authors` reports their cells as empty or provisional.
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
@@ -5687,6 +5711,10 @@ at the move; blocking a round on a lock file would be a worse failure than the o
 The lock file is deliberately NOT named `session-*.json`, so the orphan sweep's own enumeration
 cannot pick it up.
 
+**The session save is atomic on every road (E3 S5, C25, 2026-10-20).** With the turn held, `SessionStore.Write` used to write IN PLACE (`File.WriteAllText`, no retry): `FileMode.Create` truncates the session the moment the open succeeds, so a failure after it lost the previous session, and a writer meeting the file busy was refused with a sharing violation. Measured on Windows 11 26300 (one in-place writer and one mover on one file, 4 s): the in-place writer refused 273 times (HResult 0x80070020), the mover 337 times (`UnauthorizedAccessException`, 0x80070005); `EightWritersOnOneSession_DoNotDenyEachOther` failed 15 of 20 runs beside a loaded suite. Now ONE road, turn or no turn: `using var turn = SessionTurn.Take(file); FileWriter(file, json)` where the default writer is `AtomicFile.Write(file, json, AtomicFile.SharingRetry)` — a pid-and-GUID temp file beside the session, then the move over it, retried for the shared 500 ms window on the monotonic clock, the temp removed on any failure, the previous session byte for byte until the move lands. The turn is held from before the temp file to after the move (the SERVER's readers take the same turn and read through `SharedRead`, which opens, reads to the end and disposes).
+
+**The limit of that turn (E3 judge J1).** The extension is a reader too, and it does NOT take the turn: it lists `sessions/*.json` and reads each file with `vscode.workspace.fs.readFile` (`extension.ts` `readSessions`, `panelProvider.ts` `readSessions`), and Node opens share-all. A move over a file another handle holds is refused whatever the holder's share mode (measured, E3 S4), so one extension read that is held past `AtomicFile.SharingRetry` (500 ms) can fail a round's final save, which then reports "completed but could not be recorded". That could not happen while the save was in place under the turn (an open by name with share-all readers does not collide); it is a cost of the atomic save, accepted because a read of a few kilobytes does not last half a second, and the retry covers a reader that does. A reader that must never collide would have to take the turn. `MoveOverExisting`'s own ten-attempt loop and `TryDelete` are GONE: after S4 they were a second copy of `AtomicFile.MoveOver`. `SessionStore.FileWriter` (`internal`, init) is the seam tests hold, fail or pause the write through. `SessionTurn.Take` (forty tries, then an unheld turn) is untouched — it belongs to `todo/PLAN_a_turn_waits_by_the_clock.md`. The orphan temp rule of `AtomicFile` (`module_runners.md`) now covers a session's killed write as well.
+
 **The order to split is given ONCE, and it is keyed by the CALLER (2026-09-04).** Raised by the
 operator before it could happen: a plan is split into epics, each epic comes back for its own plan
 review — which is the right thing to do — and a gate with no memory tells each one to split into
@@ -5825,8 +5853,8 @@ a code session, which is what every file written before this deserialises into.
 
 **`DocumentReader`** turns what a caller sent into a document or into one sentence saying why it is
 not one: both arguments and neither are two different refusals, a path is confined to the repository
-(symlinks resolved through an injected `followLink`, so the rule is a unit test rather than a
-privilege the CI runner may not have), the payload is decoded with a THROWING UTF-8 decoder rather
+(symlinks resolved root-down by `RealPath` through an injectable entry reader, so the rule is a unit test rather than a
+privilege the CI runner may not have; the first form of this resolver was replaced 2026-11-01 — see the past-defects section at the end of this file), the payload is decoded with a THROWING UTF-8 decoder rather
 than sniffed for a NUL byte, known binary extensions are refused before a byte is read, and the
 ceiling is 256 KB — roughly 64 000 tokens, which every shipped reviewer's context can hold together
 with its prompt and its answer.
@@ -6991,7 +7019,7 @@ rules — collected from the working tree at `RuleFiles.DefaultBudgetBytes`, and
 `RulesText.Section`: the rules block moved out of `PanelService` unchanged when the feature stage
 became its fourth caller, so the "criteria, not instructions" boundary sentence stays one sentence.
 
-**A defect found on the way (D12): `DocumentReader.FollowLink` threw for a path with nothing at it.**
+**A defect found on the way (D12): `DocumentReader.FollowLink` threw for a path with nothing at it.** (`FollowLink` is gone since 2026-11-01: `RealPath.Lstat` reads an entry without following it, and a missing entry is `Missing`, never an exception.)
 .NET answers `ResolveLinkTarget` on a missing entry with `FileNotFoundException`, not null, so
 `status`, `resolve` and `ask_human` with a `document` nobody reviewed — and `review_feature` with a
 missing plan — threw an SDK-level error instead of the no-session sentence. RED first:
@@ -7641,6 +7669,18 @@ The server's half of the Vibe reviewer row ([module_runners.md](module_runners.m
   `MakeWork`): the snapshot is disposed (its bytes given back to the budget) and the whole folder deleted — the homes in
   it too. A crash leaves it to the six-hour scratch sweep, which runs on the round's build path and on the consultation
   beat. `RoundWork.Scratch` rides every `with` copy of the work; the two `new RoundWork` in `BuildWork` set it.
+- **The two folders that are always empty** (D4 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, E3 S3, 2026-10-20): the round makes a `coai-repair-` folder (the repair
+  launch's working folder, `RosterBuilder.FrameFor`) and — in the `none` workspace mode, on a code round — a `coai-noworkspace-` folder (the review launch's, `RosterFrame.Directories`;
+  the security lane makes one of its own in `SecurityRoster.Build`). Each is REGISTERED with the round's scratch when it is made (`RoundScratch.Owns(folder)`; `RosterFrame.OwnTheWorkspace`
+  skips the worktree path, which is the person's checkout; the lane reaches the scratch through `ordinary.Scratch`, carried in its `Decided` record) and removed by `RoundScratch.Dispose`
+  — the round's one end, the `using` in `RoundEngine` — after the scratch's own folder and its homes: by the PATH recorded, never a name pattern, **NON-recursive** (`Directory.Delete(folder)`,
+  not `GitScratch.DeleteEvenIfReadOnly`), so only an EMPTY folder goes. A folder that is not empty, is in use or is refused (`IOException`, `UnauthorizedAccessException`) is noted ONCE
+  through the scratch's note ("the round's folder … was not removed (…); the six-hour scratch sweep takes it") and left to the sweep; one already gone is nothing; nothing is ever thrown — a
+  removal failure never fails the round. The registry is one `ConcurrentQueue` passed through the constructor, so `With(...)` carries the SAME one; **`RoundScratch.None` takes no
+  registration** (it is one static object shared by every scratch-less `BuildWork`, and a list on it would grow for ever). **The policy for a surviving descendant:** an EMPTY folder can
+  still be a descendant's working folder; the round that has ended removes it anyway — on Unix that succeeds and the descendant's next relative write fails, on Windows the removal is refused
+  while the folder is some process's working folder and it is left (and said). `coai-answers-*` is unchanged: it keeps the six-hour sweep (`PanelService.PruneOldScratchDirs`,
+  `shared/temp-sweep.json`) — which still collects every folder a round could not remove or a crash left, so its prefixes stay as they were.
 - **A Kimi home in the scratch** (E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`, S4.15): `RoundScratch.Delete` first calls `KimiHome.DisposeAllUnder(Directory, note)` — every `kh-*`
   home (a Kimi reviewer's, `KimiRuntime`) has its `credentials` junction to the person's own folder removed by its own name, the person's names verified, under no live tree — and only
   then `GitScratch.DeleteEvenIfReadOnly`, which meets no link. A `Stopped` home is noted ("the round's scratch … is kept: …") and the whole scratch is KEPT for the six-hour sweep (which asks the same per-home hold before it deletes a due folder, E4.4 review B1), not
@@ -7764,7 +7804,8 @@ folder's turn or any home's turn in it is held (`VibeHomeTurns.TryTake`, zero wa
 never by a stamp). Before the delete the process's snapshot of it is released (its bytes back to the budget); the delete is
 `GitScratch.DeleteEvenIfReadOnly`, which unlinks a junction by its own name and never walks through it — so a Kimi home's
 `credentials` junction goes and the person's folder keeps every file (Kimi's own junction-first-and-verify disposal is S4's,
-in its home's owner; this sweep is the backstop). The deleter also checks, around each unlink, that the folder the link pointed
+in its home's owner; this sweep is the backstop — and since E4.2 it runs `KimiHome.DisposeAllUnder` itself, under its locks, on the folder
+and every `kh-*` child; the conversation shape `coai-kimi\<id>\kh-<10 hex>` is E5.3's, below). The deleter also checks, around each unlink, that the folder the link pointed
 at lost nothing — a lost name throws `LinkTargetLostException`, the walk stops, the sweep warns with the name, and because a
 conversation folder's own files (its stamp, in particular) are deleted LAST the folder stays recognisably this store's and the
 next beat finishes it (E4.1 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`). A folder that cannot be listed, read or removed is logged and skipped —
@@ -7782,7 +7823,7 @@ flowchart TD
   held -->|no| makeat["MakeAtAsync(Live(repo), folder/tree) — replaces a tree a previous server left"]
   refresh --> launch["launch: Workdir = tree · OwnedScratch = folder · prompt names tree"]
   makeat --> launch
-  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; a parent folder expanded into its repositories; none found: refused"]
+  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; a parent folder expanded into its repositories; none found: refused; the whole bounded by the row budget, a timer on the places clock"]
   copies --> rowlaunch["launch in tree · prompt names the copies · finally: the row folder deleted"]
   rowlaunch -. "holds .coai-question.lock for the row's life" .-> qlock["row scratch lock"]
   beat --> qsweep["PruneOldAnswerDirs — coai-question-* older than six hours"]
@@ -7796,7 +7837,7 @@ flowchart TD
 
 | What | Where |
 |---|---|
-| The place, the one-shot copies | `Server/Consultation/ConsultantPlaces.cs` |
+| The place, the one-shot copies | `Server/Consultation/ConsultantPlaces.cs` (its budget and folder stamp read the injectable `_clock`, `:118`) |
 | The parent-folder expansion (D1–D9): the walk and its listing seam, git's facts, the worktree selection, the tally, the link rule, the one copy method | `Server/Consultation/ParentExpansion.cs`, `RepositoryWalk.cs`, `FolderListing.cs`, `RepositoryFacts.cs`, `LinkedWorktrees.cs`, `OneShotTally.cs`, `GrantedPaths.cs`, `RepositoryCopier.cs` |
 | The row's `note` carrying what the place skipped | `QuestionRowLaunch.PlaceNotes` |
 | The conversation's snapshot registry | `Server/Consultation/ConversationSnapshots.cs` |
@@ -7882,6 +7923,14 @@ parent folder was expanded and copied (~30 s including git's confirmations, 411 
   turn budget. Past it the place is refused — *"copying the granted folders took longer than the row's budget (N s): k of
   m copied"* — and every copy made, one finished past the budget included, is disposed. The row ends `refused`; Vibe never
   starts. Each root still has its own `snapshot-<id>` under `tree` (the finding that they share one path was rejected).
+- **The places read ONE injectable clock (E4 S3, 2026-10-21).** `ConsultantPlaces` takes `TimeProvider? clock = null` last (`ConsultantPlaces.cs:116`, `_clock` `:118`; the system clock by default, a `ManualClock` in a test).
+  The one-shot budget is its own timer source on that clock, `budgetTimer = new CancellationTokenSource(budget, _clock)`, declared BEFORE the linked source `copying` (`:339-340`) so the link is disposed first;
+  `catch (OperationCanceledException) when (!ct.IsCancellationRequested)` still reads the budget's cancellation as the budget's, and the caller's own cancellation still leaves as one. The conversation folder's
+  wall stamp — what the home sweep reads to age a folder — is `clock.GetUtcNow().UtcDateTime` (`Stamping`, `:290-292`), no longer `DateTime.UtcNow`. A zero budget is out synchronously, before anything is asked of git
+  (the constructor cancels; no product path hands a zero: the row budget comes through `PanelSettings.IntVar`, `> 0`). **Not on the clock, on purpose:** `ReviewSnapshots.BuildOnceAsync`'s 60 s `Stopwatch` (`MaxElapsed`,
+  `runners/Snapshots/ReviewSnapshots.cs:171,214`) is a host safety ceiling per copy — it protects a person's machine from a copy that never ends, a seam on it would have no RED (plan D3), and on a manual clock nobody
+  advances it would turn a runaway copy into a hang; and `TakingTheLock`'s `HeldFile.TakeWithin(…, LockWait)` (10 s, `:121-125`) is a `DateTime.UtcNow` loop already behind its own test seam (E5's C3). The tests cut the slow copy by a
+  handshake — the hook signals, the TEST advances (module_tests.md, *E4 S3*) — and `EveryBudgetInAClockedClassReadsItsClockTests` keeps the file clean of an unclocked `CancelAfter`/`DateTime.UtcNow`.
 
 ## Where the Vibe homes are made, owned and swept (2026-10-15, `research/PLAN_vibe_live_round_fixes.md`)
 
@@ -7910,3 +7959,164 @@ parent folder was expanded and copied (~30 s including git's confirmations, 411 
   disposes the round's scratch (and its reservation) when the snapshot is cancelled, since the engine disposes only a scratch it was handed.
 - `SweepOneShot` says a `coai-vh` that is a link to nothing (`Directory.Exists` is false for a dangling symlink; on Windows a dangling junction still
   reaches `PrivateFolder`, whose refusal now says "link").
+
+### The Kimi conversation's home and every one-shot Kimi home's disposal — E5.3 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-16)
+
+Built on Fable (the plan gate's command for an authentication story). The runners' half — the lock order, `VibeHomes.EmptiedUnderItsLock`, the
+re-resolved sign-in — is in [module_runners.md](module_runners.md), *The owned Kimi homes*. The server's half:
+
+```mermaid
+sequenceDiagram
+  participant S as ConsultationService (E5.4)
+  participant P as ConsultantPlaces
+  participant L as KimiLaunch (via KimiRuntime.TakeTurnAsync)
+  participant W as ConsultantHomeSweep / close_consult
+  S->>P: ForConversationAsync(kimi, id) — A the folder's turn, B coai-turn.lock, the stamp
+  P-->>S: place.Folder = coai-kimi/id (OwnedScratch)
+  S->>L: TakeTurnAsync(--home coai-kimi/id/kh-…) — C the kh turn, D the sign-in gate
+  L-->>S: Holding (the gate held until the launch is read)
+  W->>W: RemoveNow / Sweep: B then A and every kh turn with NO wait, KimiHome.DisposeAllUnder, then the rest, the lock file last
+```
+
+- **The conversation's folder** `<homes root>\coai-kimi\<id>` holds `tree\`, the stamp and `coai-turn.lock` — all coai's; the ONLY junction is in its `kh-<10 hex>` child
+  (`KimiRuntime.Build` roots there over `OwnedScratch = place.Folder`, `ConsultationService.cs`). `DisposeAllUnder`'s "the folder itself" branch is dead for this shape and
+  harmless; `AllTaken` takes `tree`'s turn too, which nobody holds. The folder is deleted only by `close_consult` (`RemoveNow`) and D20's sweep — both through
+  `Removed`, which runs `KimiHome.DisposeAllUnder` under the folder lock and every turn and KEEPS the folder on a `Stopped`. E5.3 adds no code there; it adds the
+  CONVERSATION-shaped tests (`kh-x` beside `tree\`, the stamp and the lock): `close_consult` removes it junction-first; the kh root's held in-process turn keeps it; a held
+  `kh-x\coai-tree.lock` (a tree alive after a crash, R10 (v)) keeps it with the junction intact and the next beat finishes it; `close_consult` during a live turn (the
+  folder's lock held in another process, R10 (i)) touches nothing and says nothing, and the beat removes it once free (`ConsultantHomeSweepTests`, four rows).
+- **The owner/sweep races** (R10): the sweep holds B for microseconds and a place waits for B at most 10 s; two servers' sweeps on one folder — B is cross-process, one wins;
+  a one-shot owner against `SweepOneShot` — the owner holds the lock for its life, the sweep takes with no wait and skips; after R5 the only window is between the owner's
+  release and its delete of the lock file and the folder, where the sweep may take the (now empty) folder first and the owner's last delete finds it gone and says nothing.
+- **The root-less fallbacks** (R6; settings built by hand, no homes root): `QuestionRowLaunch.RemoveScratch` runs `KimiHome.DisposeAllUnder(scratch)` before the bare deleter
+  and KEEPS the scratch on a stop (`a question row's scratch directory at {Path} is kept for the scratch sweep: {Reason}`, a Warning); `ConsultCheckScratch.Delete(root)` disposes
+  `<root>\own` — the check's home is one level DOWN (`ConsultantCheck.OwnName`, now on the public static class) — and the root, and keeps the scratch on a stop
+  (`consultant check: the scratch {root} is kept for the scratch sweep: {said}`). Both scratches live under TEMP, so the six-hour scratch sweep finishes a kept one with the same probe.
+- **`PrivateFolder`'s re-ACL never crosses a junction inside `coai-kimi`** (R9, Windows): the walk skips a reparse point and Windows' own propagation of the inheritable
+  entries does not follow one — pinned by `PrivateFolderWindowsTests.AReAclOfCoaiKimi_NeverCrossesTheJunction_IntoTheSignIn` (the person's folder's and its file's descriptors byte-equal).
+- **Not in E5.3:** `KimiConsultant` and the service arms (E5.4) — the record left open on a re-login refusal, two consultations through `ConsultationService`, the two-turn
+  canary; renames of `VibeHomes`/`OneShotHome`/`coai-vh`/`VibeHomeTurns` (decision i, the operator's).
+
+### A Kimi consultation through the service — E5.4 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-16)
+
+The runners' half — `KimiConsultant`, its registration, the seam — is in [module_runners.md](module_runners.md), *The Kimi consultant*. The server needed no new
+branch for Kimi: the place (`ConsultantPlaces.ForConversationAsync`) already makes `coai-kimi\<id>` with its snapshot for a runtime that declares
+`NeedsASanitisedSnapshot` and `HomesFolder`, and hands `OwnedScratch = place.Folder`; the adapter roots the home at `<folder>\kh-<10 hex>` (S5.4.20). What changed
+is shared by every vendor:
+
+```mermaid
+stateDiagram-v2
+  [*] --> asking: turn 1 (new record)
+  asking --> open: answered — billed Less(total, Billed)
+  open --> asking: follow-up, --session id
+  asking --> open: launch-refused (KimiLaunch said no; nothing launched) — failure recorded beside it
+  asking --> failed: session_lost → conversation-dropped, handle cleared
+  open --> closed: close_consult — RemoveNow, junction-first
+  failed --> [*]: the next sweep takes the home (D20)
+```
+
+- **A counter that restarted is billed whole — for Kimi only** (decision 12 as changed by E5.4 deviation 31; `ConsultationUsage.IsAReset` in the core, used by `Less`
+  only when the adapter declares `IConsultantRuntime.UsageCounterMayRestart`): a report that CARRIES a counter (`ConsultationUsage.CarriesACounter` — captured, and not
+  zero in both totals) whose input OR output total is below the vendor's counter as it last reported it (`ConsultationRecord.LastReported`) bills the report itself,
+  every field — never the flat zero the floor gave. Both totals are judged together. An uncaptured report (`Usage.Unknown`) is never a reset, so its turn is billed
+  unknown and the next captured share carries its spend (decision 4's stated limit); a report of nothing (`Usage.None`, a turn that reached no model) is billed nothing
+  and moves no counter. antigravity declares no restart — only its input is measured cumulative — so its output below the last report is floored. Every share is
+  measured against `LastReported` (`ConsultationUsage.Next`), not against the sum of the shares (`Billed`), through `ConsultationBilling.ThisTurnsBill`
+  and `TurnConsultant.BillOf` / `ReplyCost`.
+- **A launch coai's own control refused leaves a conversation as it was** (E5.3 decision c; S5.4.16). `ConsultationFailing.Terminal` returns a `launch-refused` failure on a
+  record that had already gone on (`TurnFailure.StatusBefore` `open` or `interrupted`, passed from the service's pre-`asking` record through
+  `ConsultationFailedTurns.Decided`) to that status, with the failure kind and cure recorded beside it and the handle kept — nothing was launched, so nothing about the
+  conversation went wrong (the rule `RefusedBeforeTheLaunch` already applied to an adapter's own refusal). A first turn refused so is ended as before. For Kimi this is the
+  re-login between turns (D19's "config.toml is not what coai writes … (a re-login)"): the record stays `open`, and `close_consult` then removes `coai-kimi\<id>`
+  junction-first. The call is given back and the ledger line is written as for any failure.
+- **A dropped session is refused with its cure, never restarted** (decision 11). `session_lost` → `ConsultFailure.ConversationDropped` → the record `failed`, its handle
+  cleared, not resumable. The cure now reads "start a new consultation — this one has ended, and whatever coai kept for it (a consultant's home) goes with the next sweep":
+  `close_consult` refuses a failed record (`ConsultationClosing.Refusal`), so the spec's "close_consult this one" would send the caller into a refusal; the D20 sweep takes a
+  failed record's folder on its next beat, junction-first.
+- **One sign-in, one shim** (decision k, S5.4.18–S5.4.19): two consultations in two checkouts on one sign-in, started together through the service, never overlap — the
+  gate file is the only thing that serialises them (with it keyed apart, the peak is 2) — and a gate another process holds delays the shim until its release.
+
+Not covered by a test: a live three-turn consult through the released binary (the parent's DoD, RESULTS §35).
+
+### A Kimi question row and a Kimi consultant check — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-27)
+
+Neither needed a server change: `QuestionRowLaunch` and `ConsultantCheck` were already generic over a runtime that declares `HomesFolder` and
+`NeedsASanitisedSnapshot` (decision 5 of E5.6, decision 1 of E5.5), and E5.3 decision g made every one-shot owner junction-first. What changed is the
+table, the planner arm and `KimiConsultant`'s flag guard ([module_core.md](module_core.md), [module_runners.md](module_runners.md)). The paths, proved
+through the real code with the shim played:
+
+```mermaid
+sequenceDiagram
+  participant F as QuestionFanOut / ConsultantCheck
+  participant V as VibeHomes.ReserveOneShot
+  participant P as ConsultantPlaces.OneShotAsync
+  participant K as KimiConsultant + KimiLaunch
+  participant D as the disposers
+  F->>V: coai-vh\8-hex folder (locked, private) — or none (no root)
+  F->>P: the copy: row → scratch\tree\copy · check → scratch\own\tree\copy
+  F->>K: Build · TakeTurn — the home kh-10-hex made, junction to the sign-in
+  K-->>F: answered · refused (after the home was made) · cancelled
+  F->>D: finally — OneShotHome.Dispose (junction-first, under its lock)
+  F->>D: RemoveScratch / ConsultCheckScratch.Delete (the root-less home junction-first, then the copy)
+```
+
+- **A question row on Kimi** (E5.6): `none` and `disk` are admitted and run FLAGGED `unconfined` — the reply's `flag` and the sidebar say *can read this
+  machine* — and `web` is refused at admission, naming research/RESULTS_kimi_confinement.md. A `disk` row stands among COPIES of its granted roots; the
+  fan-out's prompt names the copies and never the roots. ONE-SHOT: the row's `coai-vh\<8>` folder (home and junction), its scratch and its copies are gone
+  on an answer, on a launch the control refused after the home was made (the row is `failed`), and on a cancellation mid-turn — the deleter never meets the
+  junction (S5.6.7). A `none` row runs the same three endings: its scratch is only the empty `cwd` folder it stands in, and it goes the same way.
+- **`--check-consultant` on a Kimi row** (E5.5): the turn stands in `<scratch>\own\tree\<copy>` on `<root>\coai-vh\<8>\kh-<10 hex>`; the check passes on
+  the marker read in the copy, and the folder goes junction-first whatever ended the check (an answer, an agent failure with exit 70, a cancellation). With
+  settings built by hand (no homes root) the home sits at `<scratch>\own\kh-*` and `ConsultCheckScratch.Delete` disposes it by name before the scratch.
+
+Not covered by a test: a live question row per admitted capability and a live `--check-consultant` through the released binary (RESULTS §35).
+
+## Past defects 2026-11-01: a link's target path was never resolved (the document reader and everything that shared it)
+
+**What was wrong.** `DocumentReader.Canonical` walked a path root-down but took `ResolveLinkTarget(returnFinalTarget: true).FullName` for
+a link. That string is the target as TEXT, folded lexically: the directories INSIDE it were never resolved, and a `..` in the link text was
+applied to the string instead of to the real directory. With `root/l2` a link to a folder outside the root and `root/alias` a link to
+`root/l2/secret.txt`, the check said "inside" and the read followed `l2` outside. `review_document` sends the text it reads to three
+vendors; `WorkspaceLookup` (list and search of granted roots), `QuestionConsultSettings`, `FeaturePlan`, `IdentityOf` and
+`ConsultationService.RepoIdentity` decided containment or identity on the same result. The same hand-written walk stood twice in
+`runners/Worktrees`: `WorktreeManager.IsUnderOurRoot` — the DELETION guard for `coai-wt-*` trees, which OR-ed the lexical `GetFullPath` with the
+resolved path and gave up after 16 links with the place it had reached — and `WorktreePaths.Real`, whose `Target` swallowed a loop's
+`IOException` and answered the spelling.
+
+**Observed (RED on `origin/main`, Linux).** `DocumentReader.Read` returned the outside file's text for `alias` and for `alias3/secret2.md`;
+a `..` in link text read an inside decoy instead of the outside file the disk opens; `nonexistent/../evil` read an outside file that was never
+inspected; a loop and a 41-link chain threw `IOException` instead of being refused; a root reached through a symlinked ancestor refused its own
+inside links. `WorktreeManager.ReleaseAsync` deleted a folder OUTSIDE the storage root (a canary file was gone) for a name lexically under it.
+`WorktreePaths.Real(dd)` answered `root/x` where `realpath` answers `outside/x`.
+
+**The fix is one road, not four walks.** `runners/Files/RealPath.cs`: root-down with a stack of pending segments; a link read RAW and pushed in
+front of the rest; ONE cumulative budget of 40 link expansions (plain segments are free); `..` is the parent of the real path so far and never
+above its root; a name that is not there ends the walk and a `..` after it FAILS (the kernel says ENOENT); a loop, an over-budget chain, a NUL, a name
+below a file (`file/..`, `file/name`), a path over 32 KiB, an empty link text, a drive-relative `C:x` and any IO error are a failure value that each caller turns into refuse / not ours /
+cannot compare. `TheLinkResolverIsOneRoadTests` fails for a second `ResolveLinkTarget` and for an unlisted reader of `.LinkTarget`.
+
+**Per site.** Document reader and lookup: refused, naming the resolution as the reason; a dangling link or a file removed since is "no file", not an exception. Deletion guard: ours only when its REAL path is strictly under
+the REAL root, and the leaf is not a link; any failure is NOT ours; every erase command is aimed at the judged real path, never the spelling; `ReviewTreeRoot.EnsureGoneAsync` follows the same rule; on Linux the comparison is `Ordinal` (it was `OrdinalIgnoreCase`, which called a
+sibling `/x/Storage` ours). Path comparison: `WorktreePaths.Real` throws `IOException` for a path it cannot resolve; `Same` answers `false`.
+Question-consultant roots: a root that cannot be resolved is refused.
+
+**The existence check comes AFTER containment.** `DocumentReader.FromPath` resolves, decides containment, and only then asks what is at the RESOLVED path — `File.Exists` and `Directory.Exists` follow links, so asked of the spelling first they answered "is a directory" for a link to an outside folder. `RealPath` is held to the doctrine's cyclomatic bound of 4 by `CA1502` (`.editorconfig`; its first walk measured 23).
+
+**Gate findings, same day.** A read root the resolver cannot resolve has an EMPTY canonical path (`HandleRead.CanonicalDirectory`; it was `GetFullPath(root)`), and `HandleRead.Read` and the private-folder check refuse under it. The unresolvable-path refusal of the document reader says to check the path and the links on it FIRST and offers `documentText` only for a file that is the right one. `ConsultationService.RepoIdentity` keeps the spelling of an unresolvable checkout on purpose (an owner label, not an access decision). The check-to-use race of the two recursive deletes is a recorded follow-up: `todo/PLAN_a_delete_is_pinned_to_the_folder_it_judged.md`.
+
+**CI round on #938 (2026-11-01) — Windows and macOS.** Five failures were the TESTS' seams, one was a real defect, and the review found four more.
+(1) The seams that stand a link in for one path compare the path the resolver asks about with the test's own text; the resolver asks with
+the resolved spelling and native separators (macOS `/private/var/…` for `/var/…`; Windows `\` where `Path.Combine` kept a `/`), so those tests now
+name their paths that way — reproduced on Linux by pointing `TMPDIR` at a symlink. (2) The real defect: a request walked through the root's
+SPELLING paid the root's links out of the one budget (macOS temp is under `/var`), so a chain of exactly 40 links was refused;
+`DocumentReader.CanonicalUnder` walks a relative request from the already-resolved root (`FromPath`, `IdentityOf`, `FeaturePlan`). The kernel
+bound is 32 on macOS and 40 on Linux, but every guard acts on the RESOLVED path, so a budget above the kernel's only turns a later open of
+the original spelling into ELOOP — a failure, not a read — and the budget stays 40. (3) A Windows share that is not on the runner is not placed by the resolver, as it must be:
+the share test stands the entries in. Review: `file/.` is ENOTDIR (the on-a-file check now comes before the `.` skip); `ResolveParent("C:child")`
+refuses as `Resolve` does (`IsBareDriveName`); a root the resolver cannot place keeps its kind and stored value (`QuestionRoots.Unplaced`: absent or unanswerable
+as `Missing`, present but unplaceable as `unreadable-folder`) so the Settings page can mark it; `FeaturePlan` asks the RESOLVED path whether the plan exists
+(`alias/../plan.md` with `alias` a link was folded as text).
+
+**Limits, said.** Hard links and bind mounts are out of reach of any path check. Case is kept as spelled: on a case-insensitive disk a
+comparison differing only by case is a FALSE REFUSAL (fail closed), never a false accept; on macOS the document reader keeps `Ordinal` (open limit,
+not widened here). The check is at one moment; a swap between it and the use is not seen. See `SECURITY.md`.

@@ -47,6 +47,13 @@ public sealed class PanelService
     private readonly QuestionConsultService _questions;
     private readonly CadenceDesk _cadence;
 
+    /// <summary>
+    /// The host's stopping token — what a local round tells a stopping server's cancellation from a person's withdrawal by
+    /// (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, decision D4). <c>default</c> never fires: a service built directly, as every
+    /// test does, belongs to no host that stops.
+    /// </summary>
+    internal CancellationToken HostStopping { get; }
+
     public PanelService(
         PanelSettings settings,
         VaultKeys keys,
@@ -54,8 +61,10 @@ public sealed class PanelService
         IProcessLauncher launcher,
         Serilog.ILogger log,
         Noticing noticing,
-        Func<string, string?>? environment = null)
+        Func<string, string?>? environment = null,
+        CancellationToken hostStopping = default)
     {
+        HostStopping = hostStopping;
         _settings = settings;
         _keys = keys;
         _vaultReadUtc = vaultReadUtc;
@@ -134,7 +143,7 @@ public sealed class PanelService
         _commands = new RoundCommands(settings, prompts, log);
         _engine = new RoundEngine(
             settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, _escalations, ledger,
-            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal);
+            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
         // The fourth gate, in a file of its own (S2.2b): its inputs, its refs and its pack, over the same
         // engine. The outliner is the in-process tree-sitter one the pack is measured with.
         _feature = new FeatureStage(settings, launcher, _engine, _roster, new Normalizer.TreeSitterOutliner(), log, noticing);
@@ -538,7 +547,7 @@ public sealed class PanelService
     /// own session, which is what every caller before plan 4 meant and still means.
     /// </param>
     public Task<string> StatusAsync(string repoPath, string branch, string document = "") =>
-        StatusAsync(repoPath, branch, document, string.Empty);
+        StatusAsync(repoPath, branch, document, string.Empty, ct: HostStopping);
 
     /// <param name="plan">A plan to report the consultation cadence of — or empty for the one this session holds,
     /// if any (<c>research/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
@@ -583,7 +592,7 @@ public sealed class PanelService
     /// </remarks>
     private string DocumentKeyFor(string repoPath, string branch, string document)
     {
-        var identity = DocumentReader.IdentityOf(repoPath, document, DocumentReader.FollowLink);
+        var identity = DocumentReader.IdentityOf(repoPath, document);
 
         return identity.Length == 0
             ? string.Empty
@@ -607,7 +616,7 @@ public sealed class PanelService
     /// </summary>
     private SessionAddress AddressOf(string repoPath, string branch, string document, string feature) =>
         feature.Trim().Length > 0
-            ? new SessionAddress(SessionKey.FeatureBranch, string.Empty, DocumentReader.IdentityOf(repoPath, feature, DocumentReader.FollowLink))
+            ? new SessionAddress(SessionKey.FeatureBranch, string.Empty, DocumentReader.IdentityOf(repoPath, feature))
             : new SessionAddress(branch, DocumentKeyFor(repoPath, branch, document), string.Empty);
 
     /// <summary>A document review and a feature review are two different sessions — naming both is naming neither.</summary>
@@ -1045,7 +1054,7 @@ public sealed class PanelService
     private DocumentOutcome WhatToReview(string repoPath, string purposeText, int roles, DocumentRequest request) =>
         WhyNotADocumentRound(purposeText, roles) is { } no
             ? new DocumentOutcome.Refused(no)
-            : DocumentReader.Read(repoPath, request, DocumentReader.FollowLink);
+            : DocumentReader.Read(repoPath, request);
 
     private Task<string> ReviewTheDocumentAsync(
         string repoPath,

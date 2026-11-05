@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Worktrees;
@@ -207,9 +208,12 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
     /// half-made add is locked "initializing"), remove forced twice, delete with a short retry for a
     /// scanner, and as a last resort a rename out of the way so no retry ever meets it.
     /// </summary>
-    private async Task EraseAsync(string repoPath, string path)
+    private async Task EraseAsync(string repoPath, string spelled)
     {
-        if (!IsOurs(path))
+        // The path that was JUDGED is the path that is acted on: resolved once, here, and every command below is aimed at it. The spelling
+        // the caller handed in is never used again — a link component swapped between the check and the delete would otherwise send
+        // `git worktree remove -f -f` and the recursive delete somewhere the guard never looked.
+        if (OurTree(spelled) is not { } path)
         {
             return;
         }
@@ -355,7 +359,10 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
             : [];
 
     /// <summary>Our prefix AND our root — the two independent guards, both required.</summary>
-    private bool IsOurs(string path) => HasOurName(path) && IsUnderOurRoot(path);
+    private bool IsOurs(string path) => OurTree(path) is not null;
+
+    /// <summary>The real path of a tree that is ours — our name AND under our root — or null: the one answer the guard gives, and the one to act on.</summary>
+    private string? OurTree(string path) => HasOurName(path) && UnderOurRoot(path) is { Ok: true } real ? real.Path : null;
 
     private static bool HasOurName(string path)
     {
@@ -364,55 +371,28 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
     }
 
     /// <summary>
-    /// Under our root by ANY of its names — as configured, or with every link on the way resolved.
+    /// The REAL path of <paramref name="path"/> when it is strictly under the REAL storage root and is not a link itself — the deletion guard
+    /// of <see cref="EraseAsync"/>, answered as the path to act on (<see cref="RealPath.ResolveBelow"/>).
     /// </summary>
     /// <remarks>
-    /// Comparing the configured spelling alone was wrong on macOS, where the temp directory is
-    /// <c>/var/…</c>, a link to <c>/private/var/…</c>, and git lists a tree by its resolved path: the
-    /// sweep took a half-made tree of a dead server for somebody else's and left it registered (the
-    /// macOS job of PR 497). Both sides are compared both ways, so it does not matter which spelling
-    /// git prints or which one the root was configured with.
+    /// <para><b>One question, asked of the real paths.</b> Both sides go through <see cref="RealPath"/>, root-down, so it does not
+    /// matter which spelling git prints or the root was configured with (macOS: the temp directory is <c>/var/…</c>, a link to
+    /// <c>/private/var/…</c>, and git lists a tree by its resolved path — the macOS job of PR 497).</para>
+    /// <para><b>There is no lexical alternative.</b> The guard used to OR the <c>GetFullPath</c> spelling with the resolved
+    /// path, so a name lexically under the root whose parent is a link to an outside folder passed — and
+    /// <c>git worktree remove -f -f</c> and a recursive delete ran there. It also stopped resolving after 16 links and answered
+    /// where it had got to, which is a fail-open (2026-11-01). Now: a path that cannot be resolved is NOT ours; the leaf must not
+    /// be a link (a link is not a tree — unlinking one is not this guard's to approve either); and the tree is strictly under the
+    /// root, never the root itself.</para>
+    /// <para>Case: <c>OrdinalIgnoreCase</c> on Windows and macOS, as before; on Linux, where two names differing by case are two
+    /// folders, <c>Ordinal</c> — the old comparison called a sibling <c>/x/Storage</c> ours. An open limit on macOS: a
+    /// disk that is case-insensitive while the spelling differs only by case is still matched, because git and the
+    /// configuration spell it the same way.</para>
     /// </remarks>
-    private bool IsUnderOurRoot(string path)
-    {
-        string[] roots = [Directory(storageRoot), Directory(Resolved(storageRoot))];
-        string[] candidates = [Path.GetFullPath(path), Resolved(path)];
-        return candidates.Any(candidate => roots.Any(root => candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase)));
+    private RealPathResult UnderOurRoot(string path) => RealPath.ResolveBelow(storageRoot, path, RootComparison);
 
-        static string Directory(string root) => Path.GetFullPath(root).TrimEnd(Separators) + Path.DirectorySeparatorChar;
-    }
-
-    /// <summary>The path with every link on the way to it resolved — what <c>realpath</c> answers.</summary>
-    internal static string Resolved(string path) => Resolved(path, depth: 0);
-
-    /// <summary>How many links deep a resolution follows before it stops — a loop of links is not a path.</summary>
-    private const int LinkDepth = 16;
-
-    private static string Resolved(string path, int depth)
-    {
-        var full = Path.GetFullPath(path);
-        var root = Path.GetPathRoot(full) ?? string.Empty;
-        return full[root.Length..]
-            .Split(Separators, StringSplitOptions.RemoveEmptyEntries)
-            .Aggregate(root, (at, part) => Through(Path.Combine(at, part), depth));
-    }
-
-    /// <summary>
-    /// One step of <see cref="Resolved"/>: a directory link is followed, and its TARGET resolved again.
-    /// </summary>
-    /// <remarks>
-    /// A link's target is stored as it was written, and on Unix <c>ResolveLinkTarget</c> follows the
-    /// chain of targets without canonicalising their own components — so a root linked to
-    /// <c>/var/…/real</c> stopped at that spelling while git printed <c>/private/var/…/real</c>. The
-    /// macOS job of PR 499 caught the first version of this stopping one link short; Windows answers
-    /// the final path by handle and never showed it.
-    /// </remarks>
-    private static string Through(string at, int depth) =>
-        depth < LinkDepth
-        && System.IO.Directory.Exists(at)
-        && new DirectoryInfo(at).ResolveLinkTarget(returnFinalTarget: true) is { } target
-            ? Resolved(target.FullName, depth + 1)
-            : at;
+    private static StringComparison RootComparison =>
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     private static string OwnerFile(string path) => path.TrimEnd(Separators) + OwnerSuffix;
 

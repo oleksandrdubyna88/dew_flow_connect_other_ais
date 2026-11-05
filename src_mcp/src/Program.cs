@@ -154,6 +154,12 @@ internal static class Program
         KimiClearMarker,
 
         /// <summary>
+        /// The host's facts in one JSON line — host kind, kernel banner, each runtime's admission answer, the keyring-session facts as recorded facts — read-only, no home, no lock, no network, no data folder.
+        /// See <see cref="HostFactsMode"/> (E1.S2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux_E1.md</c>).
+        /// </summary>
+        HostFacts,
+
+        /// <summary>
         /// The measurement behind a vendor dialect: the vault read the product's way, <c>GET /models</c>,
         /// and the S0.5 request matrix, printed as an allowlist of fields.
         /// </summary>
@@ -304,7 +310,7 @@ internal static class Program
 
         /// <summary>
         /// Who wrote the code a round reviewed, and what the reviewers found, as additive sums over the rounds database
-        /// (E6 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>) — read-only, one document of JSON or a table.
+        /// (E6 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>) — read-only, one document of JSON or a table.
         /// </summary>
         /// <remarks>Its own <c>args[0]</c> for the reason <c>--round-counts</c> is. See <see cref="Server.RoundAuthorsMode"/>.</remarks>
         RoundAuthors,
@@ -355,6 +361,7 @@ internal static class Program
                 "--ask-api" => Startup.AskApi,
                 "--ask-acp" => Startup.AskAcp,
                 "--kimi-clear-marker" => Startup.KimiClearMarker,
+                "--host-facts" => Startup.HostFacts,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
@@ -460,6 +467,10 @@ internal static class Program
 
             case Startup.KimiClearMarker:
                 return await Acp.KimiClearMarkerMode.RunAsync(args, Note, Console.Out);
+
+            case Startup.HostFacts:
+                // One line on stdout, read-only (no home, lock, network or data folder), exit 0 — never 64.
+                return HostFactsMode.Run(Console.Out);
 
             case Startup.ProbeApi:
                 // The vault is read the way `--providers` reads it: `creds config`, the one child this
@@ -2186,7 +2197,12 @@ internal static class Program
                     options.PromptCollection.Add(prompt);
                 }
 
-                await using var transport = new StdioServerTransport(ServerName);
+                // The client closing stdin is the HOST ending: the host's stopping token (startStop) fires BEFORE the SDK sees its input
+                // end and cancels the in-flight requests' own tokens (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md;
+                // InputEndSignallingTransport). That token is only OBSERVED by a round (RoundCancellation): it ends no round by itself and
+                // is filed as a cause (hostStopped) only when a caller's token is wired and fires while the host is stopping. No review
+                // tool passes the request's token today, so a stopping host's rounds simply run to their clock or the process's end.
+                await using var transport = new InputEndSignallingTransport(new StdioServerTransport(ServerName), startStop.CancelAsync, log);
                 // The token alone does not end a blocked stdin read — measured on Linux, RunAsync was still running
                 // three seconds after the signal and the deadline had to end the process, notices undrained. So the
                 // stop also closes the transport, which ends the read. (Found by the signal test's own stderr check.)
@@ -2309,8 +2325,10 @@ internal static class Program
         // builds — the rebuild on a settings change included. A defaulted parameter anywhere on
         // that road is the trap the plan round named: production takes the quiet path while
         // every injected test passes. (gemini and codex, on story 2.3.2's plan round.)
+        // The host's stopping token rides the same road (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, D4): a local round that ends
+        // cancelled can then tell a host stop from a withdrawal.
         var host = new PanelServiceHost(
-            Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log, noticing);
+            Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log, noticing, stop);
         log.Debug("started: the first service is built and its startup sweeps are done");
 
         return host;
@@ -2481,9 +2499,10 @@ internal static class Program
         request matrix a dialect is written from; prints status codes, model ids, refused fields and
         token counts — vendor text redacted and capped, the key never. 65 bad arguments, 78 no vault.
         `--ask-acp --profile <kimi> --model <id> --cwd <folder> [--deadline-seconds n] [--executable <path>]
-        --home <owned root> --persons-bin <folder> --locks <folder>` (the last three for a profile that needs a home — Kimi)
+        [--session <id>] --home <owned root> --persons-bin <folder> --locks <folder>` (the last three for a profile that needs a home — Kimi)
         runs ONE turn of an ACP agent (`kimi acp`) as this process's child, the prompt read from stdin to
-        its end: every permission request refused, reads served only from inside --cwd and never for a
+        its end; with --session, the turn continues the session an earlier turn's report named (session/load
+        on the same --cwd; the replayed history is never the answer): every permission request refused, reads served only from inside --cwd and never for a
         vendor instruction file, the model checked against the session's own list and set before the
         prompt. The agent starts in an environment built from --home (never inherited) and under a hold
         on the sign-in (--locks) that makes a second Kimi on it wait. Prints one JSON object on stdout
@@ -2491,7 +2510,8 @@ internal static class Program
         tool calls, reads. Exits 0 answered, 65 refused before the agent starts (a bad argument, a Kimi
         without --home/--persons-bin/--locks, an environment that is not coai's, a model the session
         does not offer, a hold that cannot be taken), 69 ended before an answer (not started, another
-        Kimi still holds the sign-in, the deadline, cancelled), 70 the agent failed, 75 a known spent
+        Kimi still holds the sign-in, the deadline, cancelled), 70 the agent failed (end session_lost: the
+        agent no longer holds the --session), 75 a known spent
         sentence, 76 the stream broke, 77 a known sign-in or plan refusal. On Linux the shim is the child
         subreaper of its agent's tree and ends it by identity (pidfd); `survivors` lists what was still alive.
         `--kimi-clear-marker <path>` deletes ONE Kimi survivor marker (a *.survivors.json file under the Kimi
