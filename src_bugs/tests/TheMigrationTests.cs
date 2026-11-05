@@ -201,7 +201,7 @@ public sealed class TheMigrationTests : IDisposable
             "a connection left open keeps the write-ahead log; the last close removes it");
         File.Exists(DbPath + "-shm").Should().BeFalse("and the shared-memory index goes with it");
         int.Parse(TestSql.Scalar(DbPath, "PRAGMA user_version"), CultureInfo.InvariantCulture)
-            .Should().BeInRange(1, CorpusSchema.Steps.Length - 1, "earlier steps committed and the failing one did not");
+            .Should().Be(Array.IndexOf(CorpusSchema.Steps, CorpusSchema.TheContributorsWords), "earlier steps committed and the failing one did not");
     }
 
     /// <summary>
