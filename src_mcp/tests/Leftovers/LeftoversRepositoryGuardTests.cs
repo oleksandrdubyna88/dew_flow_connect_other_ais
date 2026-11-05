@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FluentAssertions.Execution;
 using Xunit;
 
 namespace CoaiMcp.Tests.Leftovers;
@@ -31,10 +32,25 @@ public sealed class LeftoversRepositoryGuardTests
             discovered.Should().Contain(file => file.StartsWith(scanned, StringComparison.Ordinal), $"scanned nothing under {scanned} — discovery broke; the repository is not clean");
         }
 
+        // One scope: every failure is reported, so a mount that is not initialised shows the token sentence (with its cure) beside the classifier's, not only the first of them.
+        using var scope = new AssertionScope();
         var left = LeftoversBaseline.Apply(report, root, root);
         left.Should().BeEmpty(Environment.NewLine + string.Join(Environment.NewLine, left.Select(f => f.ToString())));
         LeftoversGuard.RegisteredTokenFindings(root, OwnedToken.RepoToken, OwnedToken.RepoRow).Should().BeEmpty();
         LeftoversGuard.ConstantFindings(root, OwnedToken.RepoToken).Should().BeEmpty();
-        LeftoversInventory.Differences(root).Should().BeEmpty("shared/leftovers-exemptions.json is updated in the same change as a marker or its site");
+        InventoryDifferences(root).Should().BeEmpty("shared/leftovers-exemptions.json is updated in the same change as a marker or its site");
+    }
+
+    /// <summary>The inventory's differences; a <c>node</c> that cannot answer is one difference naming the cause, never an exception that hides the other findings.</summary>
+    private static IReadOnlyList<string> InventoryDifferences(string root)
+    {
+        try
+        {
+            return LeftoversInventory.Differences(root);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return [ex.Message];
+        }
     }
 }
