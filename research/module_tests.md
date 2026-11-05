@@ -6390,6 +6390,8 @@ The plan listed 13 lines in `old-coai-leftovers.test.mjs`; sharing a plain liter
 
 **Not inside the run folder:** none of the renamed sites. One site is rooted outside it by design: `VibePathBudgetTests.HomeOfLength` builds a string rooted at the drive's root, to reach an exact length (its remark: "Pure: nothing is made on disk"; read in full, no `Directory.`/`File.` call in the class). It creates nothing, so there is no leftover to collect; its name lost the prefix because it is a fixture string (`vh-budget`), not because it is contained. Nothing in `src_mcp/tests` was found under a WSL distro's `/tmp`, the user profile, `LocalAppData` or a fixed path; `AKimiShimScenarioTests` sets `USERPROFILE` only in a child's environment, its folders come from `TempDir.For`. `TheCallersTranscript…` reads the profile only to assert the test never uses it.
 
+**This rename found a fixture bug, on Windows only** (ci run 41901918587, `Windows · mcp`): `HomeOfLength`'s padding adds a separator AND at least one `x`, so with one character left it overshoots by one. `D:\vh-budget` is 12 characters and 300 − 12 = 41 × 7 + 1, which lands on it; the old, longer name did not, and Linux's `/vh-budget` does not at 300. New: `TheFixture_IsExactlyTheLengthAsked_ForEveryRemainderOfItsPadding` asks for every length from 20 to 139, so it is red on every OS. RED on Linux before the fix (asked 52, got 53; 1 of 9 failed), GREEN after (9 of 9).
+
 **Not S5's:** `scripts/lib/old-coai-leftovers.test.mjs:33` `mkdtempSync(os.tmpdir())` and the other 251 `raw-temp` findings (the S6 baseline / S7 drain); `shared/temp-sweep.json`'s sentence.
 
 ### Deferred sites of the plan — the invocation, the missing containment, and where each was handled (all before this commit)
