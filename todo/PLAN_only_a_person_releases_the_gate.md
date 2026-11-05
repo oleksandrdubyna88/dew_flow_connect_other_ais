@@ -336,6 +336,13 @@ touched.
    with the refusal sentence naming the card, so nothing breaks — but every AI that follows the shared rule is sent to a road
    that refuses it first.
 
+   **The owner's decision of 2026-11-05: this release ships on the old pin (`bd79584`), overriding the sentence above.** The
+   rule itself is fixed on the public conventions repository's `main` (#83, `6d67ca4d`), but rules are published by moving
+   `release`, which would also publish every other queued rule and turn CI red in all consumers until each bumps. So, until the
+   next rules release: the shared rule and the extension's copied snippets still carry the old sentence, and an AI that follows
+   it gets the refusal naming the card. The bump here, with its regenerated `gateRule.ts` and snippets, comes with that release.
+   The private conventions repository is set aside by the owner, so its copy is not changed either.
+
 **Mixed versions during the window between 1 and 2.** New server + old extension: the card offers three; a Proceed
 has no road until the extension updates — the `resolve` refusal and the release note say so; Keep going / Stop and
 act work. Old server + new extension: the old server writes no `decisions` list → the extension offers three → no
