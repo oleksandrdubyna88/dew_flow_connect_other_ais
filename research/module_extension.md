@@ -11795,11 +11795,14 @@ flowchart LR
   record parser; research/PLAN_local_effort_reaches_every_local_launch.md, S1.3).
 - **✓ Check is a CONSULTANT check, so it is offered only where a consultation can run (2026-10-20, D7 / S8 of
   `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`).** `modelCardWorld.offersCheck(runtime)` asks the generated
-  `CONSULTING` list (`shared/feature-availability.json` → `features.consultant`; today codex, claude, antigravity, local,
-  api, vibe). For any other row — today **kimi, gemini and remote** — `checkButton(id, runtime, check)` draws the button
+  `CONSULTING` list (`shared/feature-availability.json` → `features.consultant`; codex, claude, antigravity, local,
+  api, vibe, and kimi since S5). For any other row — today **gemini and remote** — `checkButton(id, runtime, check, serverVersion)` draws the button
   `disabled`, WITHOUT `data-command` / `data-id` (nothing is bound, nothing is posted, no paid-turn prompt), with the title
   `checkNotOffered(runtime)` = "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation".
-  The wording lives in that one function. The button stays on the card; a runtime added to `features.consultant` turns
+  The wording lives in that one function. **And on a KNOWN installed coai-mcp older than the runtime's `CONSULTANT_SINCE`**
+  (E5.4 deviation 37, 2026-10-27; kimi from 0.64.0) the button is drawn the same way with `consultantRuntimeNote` as its title — the
+  server version reaches the card as `ModelCardFacts.serverVersion`, empty unless `server.kind` is `known`, so an unknown server is never
+  called old. The button stays on the card; a runtime added to `features.consultant` turns
   its Check on with no code change. Why: the press used to ask the person to pay for a turn the server then refused by
   name (`ConsultantCheckMode.CheckRowAsync`), seen on the Kimi card 2026-10-19; that server refusal stays as the backstop
   for a stale page, and `ConsultantHealthPanel.checkModel` and its paid-turn prompt are unchanged. A reviewer-shaped
@@ -13165,3 +13168,66 @@ The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9,
   marker button against a real marker; whether the providers field is named as proposed (server half); `KimiTools.Refusal` must say the
   same generic sentence (lower-case first letter); the three texts E3 listed as still Windows-only (`architecture.md:39`,
   `research/README.md`, the `coai.vibeHomesDirectory` help) are untouched.
+
+## Kimi Code as a consultant — the extension's half (2026-10-16, E5.7 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+The server's half (`KimiConsultant`, the seed, the question row) is E5.4–E5.6 and is documented in `module_runners.md` /
+`module_server.md` / `module_core.md`. This section is what the extension adds beside it: a gate for an installed `coai-mcp` that cannot
+consult on a runtime, and the help. **No picker code**: `CONSULTING` is generated from `shared/feature-availability.json`'s
+`features.consultant` (E5.4 adds `kimi` there), and `modelCardFields.ts` enables the consultant and question-consultant ticks from it.
+
+```mermaid
+flowchart LR
+  P["a caller's consultant, or a question row, on runtime kimi"] --> W["COAI_CONSULTANTS / COAI_QCONSULT_ROWS: the entry crosses as it is"]
+  P --> G{"consultantOnServer('kimi', installed)"}
+  G -->|"installed >= 0.58.0, or unknown"| Q["nothing to say"]
+  G -->|"installed < 0.64.0"| N["consultantRuntimeNote: named in the Consultant section and beside the question row"]
+  W --> S["an older server refuses it BY NAME (ConsultantResolution.CannotConsult)"]
+```
+
+- **The consultant table** (`runtimeSince.ts`): `KIMI_CONSULTANT_SINCE = '0.64.0'` and `CONSULTANT_SINCE = { vibe: '0.54.0', kimi }`
+  beside `RUNTIME_SINCE`. Two tables because knowing a runtime and consulting on it ship in different releases: Vibe reviewed from 0.53.0
+  and consulted from 0.54.0 (#811, with no gate); Kimi reviews from 0.57.0. **Why 0.64.0:** it was 0.58.0 when E5.7 was written
+  (2026-10-16, the newest release then 0.57.0); main then released 0.58.0–0.63.0 without S5, so at the merge with main (2026-10-27) the
+  first release that can carry the consultant is the next minor, 0.64.0 — release-please bumps the minor for a `feat`, and whoever cuts
+  the release keeps it level with the tag. `consultantOnServer` reads it by `runtimeOnServer`'s one rule (main's `sinceMet`: a runtime
+  outside the table, or an UNKNOWN server, is never old).
+- **A note, never a withheld entry** (decision 2). Unlike the runtime gate, nothing is kept out of the settings file: an older server
+  refuses a consultant on a runtime it cannot consult with, by name, while a withheld `COAI_CONSULTANTS` entry would make it consult with
+  the shipped default pair, silently. `consultantRuntimeNote(installed, runtime)` says "The coai-mcp you have installed ({version}) cannot
+  consult on {runtime}; update it to {since} or later — the MCP server tab." — only for a KNOWN server strictly older.
+  `consultSettings.consultantRuntimeSkewNote` names each runtime of the RESOLVED caller map once; `panelView.consultantSkew` draws it in the
+  Consultant section beside the definition skew note, in the `stale` class. A question row on such a runtime carries it as
+  `QuestionRowView.serverNote`, drawn beside the row (`qconsultView.ts`, `data-server-note`); the row and its switch stay.
+- **The guard reads both tables** (`runtimeSinceIsAhead.test.ts`). One `refusal` with a per-table `Gate`: `KNOWS` (the runtime's name
+  anywhere in the release's `## Server <SINCE>` section, `api` exempt with its reason) and `CONSULTS` — stricter, because 0.57.0's
+  section names Kimi all through, as a REVIEWER: the section must name the runtime and a consultant in ONE sentence (split after a full
+  stop, also inside a bold run), and the table has no exemptions. `vibe: '0.54.0'` passes on "Added: Mistral Vibe as a consultant …";
+  a planted `kimi: '0.57.0'` is refused "… does not name kimi as a consultant …".
+- **The homes folder names both CLIs** (decision 6). The key `coai.vibeHomesDirectory` is unchanged (a rename is a migration); the label
+  is "Vibe and Kimi homes folder", and the box's hint, `HELP.vibeHomesDirectory`, the manifest's description, the path notice
+  (`pathFindings.ts` owner and consequence, `pathSettings.ts` noun) and *The consultant* article in five languages say that Kimi's
+  conversation homes (`coai-kimi`) and one-shot homes (`coai-vh`) live there too, each holding a LINK to the Kimi sign-in that coai removes
+  first when it deletes the home, and that the 156-character rule is Vibe's (Kimi writes long paths without trouble). The help-coverage
+  alias is `vibe and kimi homes folder`.
+- **Help, five languages** (decision 5). *The question consultant* says, after the Vibe sentence: a Kimi row gets an empty folder on
+  **none** and a copy of each folder on **disk**, but its search tools read any file the person can, so on both it can read this machine
+  and the **Can read this machine** tick is on and cannot be taken off; a **web** prompt is disabled (nothing measured Kimi on the web);
+  Windows only; a folder outside a Git repository is refused; its launches wait for one another and for a Kimi review on the same sign-in.
+  Nothing about "the home never receives code" (M-K12 (c) unrecorded) and nothing about the web for `none`/`disk` (M-K17 not run).
+  *The consultant* article's *What can go wrong* gains **A Kimi consultant waits its turn** (E5.3 decision e): the gate's wait counts inside
+  the turn's time limit, so a consult turn that waits behind a Kimi review round can time out, and is then *interrupted* — the sidebar
+  reads *resumable* — as any stopped turn is.
+- **Tests**: `runtimeSince.test.ts` (4; S5.7.1 and the rule), `consultant.test.ts` (S5.7.2 pure, S5.7.3 the entry crosses, S5.7.7, and
+  S5.7.5's two picker assertions), `panelView.test.ts` and `qconsultSection.test.ts` (S5.7.2 on the page), `runtimeSinceIsAhead.test.ts`
+  (10; S5.7.4 and the consultant rule's teeth), `helpCoverage.test.ts` (S5.7.6, two), `kimiRuntime.test.ts` (kimi is a consultant).
+- **Waits on E5.4's seed:** S5.7.5 (`kimiIsOfferedAsAConsultant`) and the lists that pin `CONSULTING` (`consultant.test.ts`,
+  `kimiRuntime.test.ts`, and E5.4's own `featureAvailability.test.ts`) are green only once `features.consultant` holds `kimi` and
+  `featureAvailability.generated.ts` is regenerated — which is E5.4's change (S5.4.12), not this story's.
+- **The question row's half (E5.6, 2026-10-27).** `shared/runtime-capabilities.json` gained the three `kimi` rows, and
+  `runtimeCapabilities.generated.ts` was regenerated (`node scripts/generate-runtime-capabilities.mjs`; 21 rows over 7 runtimes, `--check`
+  clean): `RUNTIMES` and `QuestionRuntime` name `kimi`, and `capabilityAdmission.admit` — no code change — admits `kimi × none` and
+  `kimi × disk` FLAGGED `unconfined` (the row's **Can read this machine** tick on and disabled, its reason `Kimi has no setting that limits
+  what it reads …` from `qconsultView.whyItStaysOn`) and refuses `kimi × web`, naming research/RESULTS_kimi_confinement.md; the picker
+  disables that pair with the table's reason. Tests: `capabilityAdmission.test.ts` (S5.6.8 and the three vectors), `qconsultSection.test.ts`
+  (`VENDOR_OF` gains `kimi`, so the A3 picker test walks the Kimi vectors).

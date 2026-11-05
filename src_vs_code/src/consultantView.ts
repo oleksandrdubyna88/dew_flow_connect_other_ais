@@ -58,15 +58,15 @@ ${promptField(state.consultPrompt ?? '')}
 }
 
 /**
- * Where Mistral Vibe's homes live — `COAI_CONSULTANT_HOMES` on the wire. A plain text setting: the server judges it (a full local
+ * Where the homes of Mistral Vibe and Kimi Code live — `COAI_CONSULTANT_HOMES` on the wire. A plain text setting: the server judges it (a full local
  * path that exists, which coai then makes private) and says so in the refusal a launch carries, so the box asks nothing itself.
  */
 function vibeHomesField(value: string, finding: PathFinding | undefined): string {
   return `<div class="field${markClass(finding)}">
-  <label for="vibeHomesDirectory">${help('vibeHomesDirectory')}Vibe homes folder</label>
+  <label for="vibeHomesDirectory">${help('vibeHomesDirectory')}Vibe and Kimi homes folder</label>
   <input type="text" id="vibeHomesDirectory" data-setting="vibeHomesDirectory" value="${escapeHtml(value)}" placeholder="default: your local application data" spellcheck="false"${markAttributes(finding)}>
   ${markNote(finding)}
-  <div class="hint">Short, local, and made by you: coai keeps Mistral Vibe's homes here — session transcripts of the code under review and its copy of your repository — in folders only you can open.</div>
+  <div class="hint">Short, local, and made by you: coai keeps the homes of Mistral Vibe and Kimi Code here — session transcripts of the code under review, its copy of your repository, and for Kimi a link to your sign-in that coai removes first — in folders only you can open.</div>
 </div>`;
 }
 

@@ -226,6 +226,23 @@ public sealed record ConsultationRecord(
         init;
     }
 
+    /// <summary>
+    /// A cumulative vendor's counter as it LAST REPORTED it (a captured report) — what its next report is measured against; the share
+    /// is the difference, and <see cref="Billed"/> stays the sum of the shares.
+    /// </summary>
+    /// <remarks>
+    /// <para>E5.4 deviation 31: measured against <see cref="Billed"/>, a restarted counter billed whole left the sum inflated, and every
+    /// later report of the restarted session read as a restart again and was billed whole again.</para>
+    /// <para><b>A record written before this field</b> reads <see cref="Billed"/> as its first baseline — exactly what the old rule
+    /// measured against, so that turn bills what it always would have, and the counter is the vendor's own from then on. Written on every
+    /// billing outcome of a cumulative vendor (<c>ConsultationBilling.Billing</c>); unused for one that reports per turn.</para>
+    /// </remarks>
+    public ConsultationBilled LastReported
+    {
+        get => field ?? Billed;
+        init;
+    }
+
     /// <summary>What the old rule had billed: the answered turns' own figures.</summary>
     private static ConsultationBilled BilledBy(IReadOnlyList<ConsultationTurn> turns) =>
         new(turns.Sum(t => t.TokensIn), turns.Sum(t => t.TokensOut), turns.Sum(t => t.CostUsd ?? 0));

@@ -222,7 +222,7 @@ public sealed class VibeLaunchControlTests : IDisposable
     /// re-check) exactly as on the measured one.
     /// </summary>
     [Theory]
-    [InlineData("2.27.0")]
+    [InlineData("3.0.0")]
     [InlineData("2.26.1")]
     public async Task AHooksFileTheVersionProbeLeaves_RefusesTheReview_OnEitherBranch(string version)
     {
@@ -248,7 +248,7 @@ public sealed class VibeLaunchControlTests : IDisposable
     [Fact]
     public async Task ACachedPluginPackageThatDeclaresAServer_IsRefused_OnAnUnmeasuredVibe_BeforeAnythingStarts()
     {
-        var vibe = new FakeVibe(version: "2.27.0");
+        var vibe = new FakeVibe(version: "3.0.0");
         var invocation = Invocation();
         var package = Directory.CreateDirectory(Path.Combine(HomeOf(invocation), "logs", "session", "plugins", "packages", "zz", "zz-digest"));
         await File.WriteAllTextAsync(Path.Combine(package.FullName, "mcp.json"),
@@ -271,21 +271,21 @@ public sealed class VibeLaunchControlTests : IDisposable
     {
         foreach (var resumed in new[] { false, true })
         {
-            var vibe = new FakeVibe(version: "2.27.0");
+            var vibe = new FakeVibe(version: "3.0.0");
             var invocation = Invocation();
             if (resumed)
             {
                 // A resumed home of the UNMEASURED version: its session, and plugin bytes no manifest names.
                 Directory.CreateDirectory(Path.Combine(HomeOf(invocation), "logs", "session", "unified", "s1"));
                 Directory.CreateDirectory(Path.Combine(HomeOf(invocation), "logs", "session", "plugins", "blobs", "zz"));
-                await File.WriteAllTextAsync(Path.Combine(HomeOf(invocation), "logs", "session", "plugins", "blobs", "zz", "new-blob"), "2.27.0's bytes", TestContext.Current.CancellationToken);
+                await File.WriteAllTextAsync(Path.Combine(HomeOf(invocation), "logs", "session", "plugins", "blobs", "zz", "new-blob"), "3.0.0's bytes", TestContext.Current.CancellationToken);
                 await File.WriteAllTextAsync(Path.Combine(HomeOf(invocation), "vibehistory"), "Hello Vibe!\r\n", TestContext.Current.CancellationToken);
             }
 
             var outcome = await new ReviewerExecutor(vibe).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
 
             outcome.Should().BeOfType<ReviewerOutcome.Ok>($"resumed={resumed}: an unmeasured version launches");
-            outcome.Warning.Should().Contain("2.27.0").And.Contain("2.26.1").And.Contain("vibe-home-manifest.mjs")
+            outcome.Warning.Should().Contain("3.0.0").And.Contain("2.26.1").And.Contain("vibe-home-manifest.mjs")
                 .And.Contain("probe-vibe-confinement.mjs", $"resumed={resumed}: it names the running version, the measured one and what to re-run");
             vibe.Reviews.Should().ContainSingle($"resumed={resumed}");
             Directory.Delete(HomeOf(invocation), recursive: true);
@@ -319,7 +319,7 @@ public sealed class VibeLaunchControlTests : IDisposable
     [Fact]
     public async Task AForbiddenFileInTheHome_IsStillRefused_OnAnUnmeasuredVibe()
     {
-        var vibe = new FakeVibe(version: "2.27.0");
+        var vibe = new FakeVibe(version: "3.0.0");
         var invocation = Invocation();
         Directory.CreateDirectory(HomeOf(invocation));
         await File.WriteAllTextAsync(Path.Combine(HomeOf(invocation), "hooks.toml"), "[[hooks]]\n", TestContext.Current.CancellationToken);

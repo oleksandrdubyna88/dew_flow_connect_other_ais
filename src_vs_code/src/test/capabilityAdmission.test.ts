@@ -140,7 +140,7 @@ for (const vector of VECTORS) {
 test('the words are the file’s words, and a word outside them is refused rather than defaulted', () => {
   assert.deepStrictEqual([...CAPABILITIES], ['none', 'disk', 'web']);
   assert.deepStrictEqual([...STANDINGS], ['confined', 'unconfined', 'default-deny', 'unsupported', 'unmeasured']);
-  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe']);
+  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
   assert.equal(isCapability('disk'), true);
   assert.equal(isCapability('Disk'), false, 'the panel writes the file’s spelling, lower case, and nothing else');
   assert.equal(isCapability('shell'), false);
@@ -173,4 +173,20 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
   assert.match(admit('antigravity', 'disk').caveat, /headless/u);
   assert.equal(admit('claude', 'web').caveat, '', 'a confined pair has nothing to acknowledge');
   assert.equal(admit('vibe', 'disk').caveat, '', 'vibe reads its working folder only — a snapshot of the roots (M-V6)');
+});
+
+// S5.6.8 (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md, decision 2): Kimi's none and disk rows run FLAGGED — Grep and Glob read the disk
+// directly (M-K6), so even an empty folder confines nothing — and its web is refused, naming the record a measurement would land in.
+test('kimi rows admit flagged, web refuses naming its record', () => {
+  for (const capability of ['none', 'disk'] as const) {
+    const admission = admit('kimi', capability);
+    assert.equal(admission.admitted, true, `kimi × ${capability}: ${admission.reason}`);
+    assert.equal(admission.standing, 'unconfined', `kimi × ${capability}: Grep and Glob read outside any folder (M-K6)`);
+    assert.equal(admission.flag, 'unconfined', 'D13: the flag is shown on the row and beside every answer');
+    assert.match(admission.caveat, /can read this machine/u);
+  }
+  const web = admit('kimi', 'web');
+  assert.equal(web.admitted, false);
+  assert.match(web.reason, /not been measured/u, 'no Kimi cell exercises WebSearch or FetchURL');
+  assert.ok(web.reason.includes('a measured cell in research/RESULTS_kimi_confinement.md is what admits it'), web.reason);
 });

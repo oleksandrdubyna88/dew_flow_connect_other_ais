@@ -727,7 +727,7 @@ public sealed class ConsultationService(
             var result = looked.Result;
             consultant = consultant with { RanWith = consultant.RanWith.VersionedBy(result.Final.CliVersion) };
             var changes = await ChangesOverTheTurnAsync(result, () => ChangesSinceAsync(before, repo, turn.Token));
-            decided = FailedTurns.Decided(asking, consultant, result, changes, ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline));
+            decided = FailedTurns.Decided(asking, consultant, result, changes, ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline), record.Status);
 
             return decided is null
                 ? Settle(asking, consultant, looked, problem, nonce, started.Elapsed)
@@ -746,7 +746,7 @@ public sealed class ConsultationService(
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             return FailedTurns.AfterTheLaunch(consultant, started.Elapsed, decided ?? ConsultationFailedTurns.Undecided(asking, consultant, launched, e,
-                ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline)), decided is null ? string.Empty : e.Message);
+                ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline), record.Status), decided is null ? string.Empty : e.Message);
         }
     }
 
@@ -844,9 +844,10 @@ public sealed class ConsultationService(
         // lookups decided the advice (a capped block's prose), that is the answer, with why they stopped.
         var advised = (looked.Advice.Length > 0 ? looked.Advice : consultant.Runtime.ReadAdvice(launched.Answer ?? string.Empty)).Trim()
             + (looked.Note.Length > 0 && looked.Advice != looked.Note ? $"\n\n({looked.Note})" : string.Empty);
-        var spent = consultant.ShareOf(record, turned.TurnUsage);
+        var bill = consultant.BillOf(record, turned.TurnUsage);
+        var spent = bill.Share;
         var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd, turned.FollowedUp, record.Confinement);
-        _store.Write(ConsultationAnswering.Answered(ConsultationBilling.Billing(record, spent), turn, handle));
+        _store.Write(ConsultationAnswering.Answered(ConsultationBilling.Billing(record, bill), turn, handle));
         ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, "ok", elapsed, spent, consultant.RanWith, consultation: record.Id);
         _health.Answered(ConsultHealth.AnswerOf(record, turn.Utc));
         log.Information("{Kind} consultation {Id}: answered turn {Turn} in {Seconds}s ({TokensIn}/{TokensOut} tokens)", record.Kind, record.Id, record.Budget.Turn, turn.Seconds, turn.TokensIn, turn.TokensOut);
@@ -856,7 +857,7 @@ public sealed class ConsultationService(
 
         return Json(
             new ConsultAnswer(record.Id, record.Budget.Turn, record.MaxTurns, note.Length > 0 ? advice + "\n(" + note + ")" : advice,
-                ConsultationBilling.ReplyCost(consultant.Runtime.UsageIsCumulative, record, turned)),
+                consultant.ReplyCost(record, turned)),
             ServerJsonContext.Default.ConsultAnswer);
     }
 
@@ -935,41 +936,36 @@ public sealed class ConsultationService(
 
     /// <summary>The same owner rule, for the question consultant (S2) — one line with no twin, as the remark above says.</summary>
     internal static string CallerOf(Func<string, string?> env, string repoPath) =>
-        CallerIdentity.From(env).Id is { Length: > 0 } id ? id : RepoIdentity(repoPath, DocumentReader.FollowLink);
+        CallerIdentity.From(env).Id is { Length: > 0 } id ? id : RepoIdentity(repoPath);
 
     /// <summary>The owner a checkout is, told the same way from either spelling of it.</summary>
-    internal static string RepoIdentity(string repoPath, Func<string, string> followLink)
+    internal static string RepoIdentity(string repoPath, EntryReader? read = null)
     {
-        try
-        {
-            return $"repo:{Path.TrimEndingDirectorySeparator(DocumentReader.CanonicalRoot(repoPath, followLink))}";
-        }
-        catch (Exception e) when (e is ArgumentException or PathTooLongException or NotSupportedException)
-        {
-            // A path this machine cannot resolve still has to name SOMETHING, and naming it after
-            // itself keeps the two sides agreeing — which is the whole job here.
-            return $"repo:{repoPath}";
-        }
+        var root = DocumentReader.CanonicalRoot(repoPath, read);
+
+        // A path this machine cannot resolve (a loop, a NUL) still has to name SOMETHING, and naming it after
+        // itself keeps the two sides agreeing — which is the whole job here. The ONE place the spelling stands in for a real
+        // path, on purpose: this is an owner label for filtering a caller's own consultations, not an access decision (SECURITY.md).
+        return root.Ok ? $"repo:{Path.TrimEndingDirectorySeparator(root.Path)}" : $"repo:{repoPath}";
     }
 
-    internal static bool SamePath(string one, string other, Func<string, string> followLink)
+    /// <summary>Whether two spellings name one checkout. A path that cannot be resolved is not the place being asked about: false, never "equal because spelled alike".</summary>
+    internal static bool SamePath(string one, string other, EntryReader? read = null)
     {
-        try
-        {
-            return one.Length > 0 && other.Length > 0
-                && string.Equals(
-                    Path.TrimEndingDirectorySeparator(DocumentReader.CanonicalRoot(one, followLink)),
-                    Path.TrimEndingDirectorySeparator(DocumentReader.CanonicalRoot(other, followLink)),
-                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-        }
-        catch (Exception e) when (e is ArgumentException or PathTooLongException or NotSupportedException)
+        if (one.Length == 0 || other.Length == 0)
         {
             return false;
         }
-    }
 
-    private static bool SamePath(string one, string other) =>
-        SamePath(one, other, DocumentReader.FollowLink);
+        var first = DocumentReader.CanonicalRoot(one, read);
+        var second = DocumentReader.CanonicalRoot(other, read);
+
+        return first.Ok && second.Ok
+            && string.Equals(
+                Path.TrimEndingDirectorySeparator(first.Path),
+                Path.TrimEndingDirectorySeparator(second.Path),
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
 
     private static IReadOnlyList<string>? SuspectedFiles(string json)
     {

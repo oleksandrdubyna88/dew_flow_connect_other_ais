@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { after, test } from 'node:test';
 
 import { compareVersions } from '../coaiInstall';
-import { ON_LINUX_SINCE, RUNTIME_SINCE } from '../runtimeSince';
+import { CONSULTANT_SINCE, ON_LINUX_SINCE, RUNTIME_SINCE } from '../runtimeSince';
 
 /**
  * A runtime's "first server that knows it" is a release that must NOT already exist without it (the release-guards family: `releaseAnchors`,
@@ -47,20 +47,57 @@ function sectionOf(version: string, changelog: string): string {
   return ran.stdout.trim();
 }
 
-/** Why a runtime's SINCE is not trustworthy, or the empty string. Pure: the three facts are arguments. */
-function refusal(runtime: string, since: string, released: string, section: string): string {
+/**
+ * What a table's SINCE claims, as the guard reads it: what the release's section must say to prove it, and who is exempt.
+ *
+ * <p>Two tables, one rule (E5.7 of todo/PLAN_vibe_and_kimi_runtimes_E5.md, decision 3). `RUNTIME_SINCE` says a release KNOWS a runtime, so
+ * a section naming the runtime anywhere proves it. `CONSULTANT_SINCE` says a release CONSULTS on it, and that is a stricter claim: the
+ * release that first reviews with Kimi (0.57.0) names Kimi all through its section — as a reviewer — so the runtime's name alone would let a
+ * consultant SINCE of 0.57.0 through. Its section must name the runtime and a consultant in ONE sentence.</p>
+ */
+interface Gate {
+  readonly table: Readonly<Record<string, string>>;
+  readonly exempt: Readonly<Record<string, string>>;
+  /** What the section must name, in the refusal's words — `kimi`, or `kimi as a consultant`. */
+  readonly what: (runtime: string) => string;
+  readonly names: (runtime: string, section: string) => boolean;
+}
+
+const word = (runtime: string): RegExp => new RegExp(String.raw`\b${runtime}\b`, 'iu');
+
+/** A section's sentences — split after a full stop, even one inside a bold run (`… a question consultant.** A Vibe row …`). */
+function sentencesOf(section: string): readonly string[] {
+  return section.split(/(?<=[.!?]\**)\s+/u);
+}
+
+const KNOWS: Gate = {
+  table: RUNTIME_SINCE,
+  exempt: DOCUMENTED_ELSEWHERE,
+  what: (runtime) => runtime,
+  names: (runtime, section) => word(runtime).test(section),
+};
+
+const CONSULTS: Gate = {
+  table: CONSULTANT_SINCE,
+  exempt: {},
+  what: (runtime) => `${runtime} as a consultant`,
+  names: (runtime, section) => sentencesOf(section).some((one) => word(runtime).test(one) && /consult/iu.test(one)),
+};
+
+/** Why a runtime's SINCE is not trustworthy, or the empty string. Pure: the three facts and the table's rule are arguments. */
+function refusal(runtime: string, since: string, released: string, section: string, gate: Gate = KNOWS): string {
   if (compareVersions(since, released) > 0) {
     return '';
   }
-  if (section !== NONE && new RegExp(String.raw`\b${runtime}\b`, 'iu').test(section)) {
+  if (section !== NONE && gate.names(runtime, section)) {
     return '';
   }
-  if ((DOCUMENTED_ELSEWHERE[runtime] ?? '').length > 0) {
+  if ((gate.exempt[runtime] ?? '').length > 0) {
     return '';
   }
 
   return `${runtime}: SINCE ${since} is not ahead of the newest released coai-mcp (${released}) and the changelog's "## Server ${since}" section `
-    + `${section === NONE ? 'does not exist' : `does not name ${runtime}`} — a server released without the runtime would be called new enough, `
+    + `${section === NONE ? 'does not exist' : `does not name ${gate.what(runtime)}`} — a server released without the runtime would be called new enough, `
     + 'and the version gate stays silent on exactly the server that refuses the row. Set it to the next minor AFTER the newest release main will cut.';
 }
 
@@ -68,14 +105,25 @@ function refusal(runtime: string, since: string, released: string, section: stri
 // manifest that stops holding it fails the assertion below loudly (nothing is derived from it).
 const releasedMcp = (JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, string>)['src_mcp']!;
 
+/** Every row of a table the guard refuses, against the real manifest and changelog. */
+function refusalsOf(gate: Gate): readonly string[] {
+  return Object.entries(gate.table)
+    .map(([runtime, since]) => refusal(runtime, since, releasedMcp, sectionOf(since, realChangelog), gate))
+    .filter((said) => said.length > 0);
+}
+
 test('every runtime in RUNTIME_SINCE is either ahead of the newest released coai-mcp or named in its release', () => {
   assert.match(releasedMcp, /^\d+\.\d+\.\d+$/u, 'the manifest holds no src_mcp version — the check below would compare with nothing');
-  const rows = Object.entries(RUNTIME_SINCE);
-  assert.ok(rows.length >= 3, 'the table shrank — the loop would check less than it says');
+  assert.ok(Object.keys(RUNTIME_SINCE).length >= 3, 'the table shrank — the loop would check less than it says');
 
-  const refusals = rows.map(([runtime, since]) => refusal(runtime, since, releasedMcp, sectionOf(since, realChangelog))).filter((said) => said.length > 0);
+  assert.deepEqual(refusalsOf(KNOWS), []);
+});
 
-  assert.deepEqual(refusals, []);
+test('every runtime in CONSULTANT_SINCE is either ahead of the newest released coai-mcp or named AS A CONSULTANT in its release', () => {
+  // vibe 0.54.0 has shipped, and its section says "Mistral Vibe as a consultant"; kimi 0.64.0 is still a prediction about the future.
+  assert.ok(Object.keys(CONSULTANT_SINCE).length >= 2, 'the table shrank — the loop would check less than it says');
+
+  assert.deepEqual(refusalsOf(CONSULTS), []);
 });
 
 test('every exemption states its reason, and only a runtime that has actually shipped may have one', () => {
@@ -132,4 +180,35 @@ test('the section is the release\'s own: a runtime named only in the NEXT releas
   const log = changelogWith('## Server 0.58.0 — 2026-10-21\n\n**Added: Kimi Code.**', '## Server 0.57.0 — 2026-10-20\n\n**Something else.**');
 
   assert.match(refusal('kimi', '0.57.0', '0.58.0', sectionOf('0.57.0', log)), /does not name kimi/u);
+});
+
+// ---------------------------------------------------------------- S5.7.4 the consultant table (E5.7 of PLAN_vibe_and_kimi_runtimes_E5.md)
+
+test('S5.7.4 theGuardReadsTheConsultantTable: a planted kimi at the release that only REVIEWS with it is refused', () => {
+  // 0.57.0 is the release that first reviews with Kimi, and its section names Kimi — as a reviewer. A consultant SINCE of 0.57.0 would
+  // call that server "new enough" to consult on kimi, and the note would stay silent on exactly the server that refuses the consultant.
+  const section = sectionOf('0.57.0', realChangelog);
+  assert.equal(refusal('kimi', '0.57.0', '0.57.0', section, KNOWS), '', 'the premise: the section names kimi, so the runtime rule lets it through');
+
+  const said = refusal('kimi', '0.57.0', '0.57.0', section, CONSULTS);
+
+  assert.equal(said, 'kimi: SINCE 0.57.0 is not ahead of the newest released coai-mcp (0.57.0) and the changelog\'s "## Server 0.57.0" section '
+    + 'does not name kimi as a consultant — a server released without the runtime would be called new enough, and the version gate stays '
+    + 'silent on exactly the server that refuses the row. Set it to the next minor AFTER the newest release main will cut.');
+});
+
+test('the consultant rule wants the runtime and a consultant in ONE sentence — a section naming both apart does not pass', () => {
+  const apart = changelogWith('## Server 0.58.0 — 2026-10-21\n\n**Added: Kimi Code as a reviewer.** It runs on your sign-in.\n\n'
+    + '**Fixed: consultant checks record their model.** Nothing else.');
+  assert.match(refusal('kimi', '0.58.0', '0.58.0', sectionOf('0.58.0', apart), CONSULTS), /does not name kimi as a consultant/u);
+
+  const together = changelogWith('## Server 0.58.0 — 2026-10-21\n\n**Added: Kimi Code as a consultant and a question consultant.** More.');
+  assert.equal(refusal('kimi', '0.58.0', '0.58.0', sectionOf('0.58.0', together), CONSULTS), '');
+  assert.equal(refusal('kimi', '0.58.0', '0.57.0', sectionOf('0.58.0', apart), CONSULTS), '', 'ahead of the release: still a prediction');
+});
+
+test('the consultant table has no exemptions: api has none there, so a released consultant SINCE must be named', () => {
+  assert.deepEqual(CONSULTS.exempt, {});
+  assert.match(refusal('api', '0.37.0', '0.57.0', sectionOf('0.37.0', changelogWith('## Server 0.37.0 — 2026-09-30\n\nx')), CONSULTS),
+    /does not name api as a consultant/u);
 });

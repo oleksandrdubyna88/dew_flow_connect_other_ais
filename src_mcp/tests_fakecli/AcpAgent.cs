@@ -23,6 +23,12 @@ namespace CoaiMcp.FakeCli;
 ///   "omitSessionId": false,       true: session/new answers with no sessionId at all
 ///   "ignoreCancel": false,        true: a session/cancel changes nothing
 ///   "models": ["m-1"],            the values of the "model" config option session/new announces; absent: ["m-1"]; []: no config option at all (E4.3)
+///   "initializeError": "…",       answer initialize with this JSON-RPC error
+///   "loadable": true,             session/load (E5.2): true or absent — answered with the load's config options; false — answered with loadError
+///   "loadError": {"code":-32602,"message":"session not found"},   the error a refused load is answered with (absent: this one)
+///   "loadModels": ["m-1"],        the values the LOAD's result announces for "model" (absent: what "models" says — Kimi announces them on a load
+///                                 as on session/new, RESULTS §33); []: no config option at all
+///   "replay": [ steps ],          run as session/update BEFORE a loadable load is answered — the history Kimi replays (RESULTS §33)
 ///   "usageReply": "…",            the text of the one chunk a session/prompt whose text is exactly "/usage" is answered with (RESULTS §5);
 ///                                 absent: that prompt is answered end_turn at once, with no chunk and none of the steps — as a real agent answers it itself
 ///   "promptErrorOnUsage": "…",    answer the "/usage" prompt with this JSON-RPC error
@@ -41,6 +47,7 @@ namespace CoaiMcp.FakeCli;
 ///     {"kind":"stray","text":"not json"}               a line that is not JSON-RPC
 ///     {"kind":"spew","chars":N}                        one line of N characters
 ///     {"kind":"stderr","chars":N}                      N characters on STDERR, no newline — what drives the client's stderr capture and its truncation flag
+///     {"kind":"stderrText","text":"…"}             the text on STDERR, as given (put its own line break in it) — what a vendor's own error line is
 ///     {"kind":"awaitCancel"}                           reads stdin until session/cancel arrives, then goes on (the prompt ends cancelled)
 ///     {"kind":"sleep","ms":100}
 ///     {"kind":"hang"}                                  never returns: the kill path
@@ -153,6 +160,9 @@ internal static class AcpAgent
         var hasId = message.TryGetProperty("id", out var id);
         switch (method)
         {
+            case "initialize" when Text(script, "initializeError") is { Length: > 0 } refused:
+                Error(id, -32000, refused);
+                break;
             case "initialize":
                 Reply(id, new JsonObject
                 {
@@ -167,6 +177,9 @@ internal static class AcpAgent
                 Reply(id, script.TryGetProperty("omitSessionId", out var noId) && noId.ValueKind == JsonValueKind.True
                     ? new JsonObject { ["configOptions"] = ConfigOptions(script) }
                     : new JsonObject { ["sessionId"] = _sessionId, ["configOptions"] = ConfigOptions(script) });
+                break;
+            case "session/load":
+                Load(script, id, message);
                 break;
             case "session/set_config_option":
                 SetConfigOption(script, id);
@@ -187,10 +200,36 @@ internal static class AcpAgent
         }
     }
 
-    /// <summary>The <c>model</c> option the session announces: the script's <c>models</c> (absent: <c>m-1</c>, what the stand-in has always been asked for); an empty list announces no option at all.</summary>
-    private static JsonArray ConfigOptions(JsonElement script)
+    /// <summary>
+    /// <c>session/load</c> (E5.2): the session named becomes this agent's; a loadable one replays its <c>replay</c> steps BEFORE the answer — the order
+    /// Kimi was measured to use (RESULTS §33) — and is answered with the load's own config options; a refused one is answered with <c>loadError</c>.
+    /// </summary>
+    private static void Load(JsonElement script, JsonElement id, JsonElement message)
     {
-        var models = script.TryGetProperty("models", out var listed) && listed.ValueKind == JsonValueKind.Array
+        _sessionId = message.TryGetProperty("params", out var parameters) ? Text(parameters, "sessionId") : string.Empty;
+        if (script.TryGetProperty("loadable", out var loadable) && loadable.ValueKind == JsonValueKind.False)
+        {
+            var refusal = script.TryGetProperty("loadError", out var error) ? error : default;
+            Error(id, refusal.ValueKind == JsonValueKind.Object ? (int)Number(refusal, "code") : -32602, Text(refusal, "message") is { Length: > 0 } said ? said : "session not found");
+
+            return;
+        }
+
+        foreach (var step in Steps(script, "replay"))
+        {
+            Step(step);
+        }
+
+        Reply(id, new JsonObject { ["configOptions"] = ConfigOptions(script, script.TryGetProperty("loadModels", out _) ? "loadModels" : "models") });
+    }
+
+    private static IEnumerable<JsonElement> Steps(JsonElement script, string field) =>
+        script.TryGetProperty(field, out var steps) && steps.ValueKind == JsonValueKind.Array ? steps.EnumerateArray() : [];
+
+    /// <summary>The <c>model</c> option the session announces: the script's <c>models</c> (absent: <c>m-1</c>, what the stand-in has always been asked for); an empty list announces no option at all.</summary>
+    private static JsonArray ConfigOptions(JsonElement script, string field = "models")
+    {
+        var models = script.TryGetProperty(field, out var listed) && listed.ValueKind == JsonValueKind.Array
             ? listed.EnumerateArray().Select(model => model.GetString() ?? string.Empty).ToArray()
             : ["m-1"];
 
@@ -284,91 +323,95 @@ internal static class AcpAgent
         Reply(id, new JsonObject { ["stopReason"] = stopReason });
     }
 
+    /// <summary>One handler per script step kind; a kind with no handler is a step that does nothing.</summary>
+    private static readonly Dictionary<string, Action<JsonElement>> StepHandlers = new()
+    {
+        ["chunk"] = StepChunk,
+        ["usage"] = StepUsage,
+        ["toolCall"] = StepToolCall,
+        ["toolCallUpdate"] = StepToolCallUpdate,
+        ["permission"] = StepPermission,
+        ["read"] = StepRead,
+        ["request"] = StepRequest,
+        ["stray"] = step => Write(Text(step, "text")),
+        // One line of N characters and no newline among them: the shape a line reader must bound.
+        ["spew"] = step => Write(new string('x', (int)Number(step, "chars"))),
+        // Stderr only: the protocol stream stays clean, so the turn still answers.
+        ["stderr"] = step => StdErr(new string('e', (int)Number(step, "chars"))),
+        // Stderr only, the vendor's own sentence as given: the protocol stream stays clean.
+        ["stderrText"] = step => StdErr(Text(step, "text")),
+        ["awaitCancel"] = _ => AwaitCancel(),
+        ["sleep"] = step => Thread.Sleep((int)Number(step, "ms")),
+        ["hang"] = _ => Thread.Sleep(Timeout.Infinite),
+        ["exit"] = StepExit,
+        ["grandchild"] = step => Grandchild(Text(step, "pidFile")),
+        ["grandchildSetsid"] = step => SpawnedInto(Text(step, "pidFile"), "sleep", "--own-session", "600000"),
+        // Not the pid file of the sleeper's own: the late child writes THAT file when it spawns.
+        ["grandchildLateSetsid"] = step => Spawned("late-spawn", Text(step, "trigger"), Text(step, "pidFile")),
+        ["grandchildExits"] = step => SpawnedInto(Text(step, "pidFile"), "exit-after", "0", "0"),
+    };
+
     private static void Step(JsonElement step)
     {
-        switch (Text(step, "kind"))
+        if (StepHandlers.TryGetValue(Text(step, "kind"), out var handler))
         {
-            case "chunk":
-                Update(new JsonObject
-                {
-                    ["sessionUpdate"] = "agent_message_chunk",
-                    ["content"] = new JsonObject { ["type"] = "text", ["text"] = Text(step, "text") },
-                });
-                break;
-            case "usage":
-                Update(new JsonObject { ["sessionUpdate"] = "usage_update", ["used"] = Number(step, "used"), ["size"] = Number(step, "size") });
-                break;
-            case "toolCall":
-                Update(new JsonObject
-                {
-                    ["sessionUpdate"] = "tool_call",
-                    ["toolCallId"] = Text(step, "id"),
-                    ["title"] = Text(step, "title"),
-                    ["kind"] = Text(step, "toolKind"),
-                    ["status"] = Text(step, "status"),
-                });
-                break;
-            case "toolCallUpdate":
-                Update(new JsonObject { ["sessionUpdate"] = "tool_call_update", ["toolCallId"] = Text(step, "id"), ["status"] = Text(step, "status") });
-                break;
-            case "permission":
-                Request("session/request_permission", new JsonObject
-                {
-                    ["sessionId"] = _sessionId,
-                    ["toolCall"] = new JsonObject { ["toolCallId"] = "call-" + _nextId, ["title"] = Text(step, "title"), ["kind"] = Text(step, "toolKind") },
-                    ["options"] = JsonNode.Parse(step.TryGetProperty("options", out var options) ? options.GetRawText() : "[]"),
-                });
-                break;
-            case "read":
-                var reply = Request("fs/read_text_file", ReadParams(step));
-                if (step.TryGetProperty("echo", out var echo) && echo.ValueKind == JsonValueKind.True)
-                {
-                    Update(new JsonObject { ["sessionUpdate"] = "agent_message_chunk", ["content"] = new JsonObject { ["type"] = "text", ["text"] = reply } });
-                }
-
-                break;
-            case "request":
-                Request(Text(step, "method"), (JsonObject)JsonNode.Parse(step.TryGetProperty("params", out var p) ? p.GetRawText() : "{}")!);
-                break;
-            case "stray":
-                Write(Text(step, "text"));
-                break;
-            case "spew":
-                // One line of N characters and no newline among them: the shape a line reader must bound.
-                Write(new string('x', (int)Number(step, "chars")));
-                break;
-            case "stderr":
-                // Stderr only: the protocol stream stays clean, so the turn still answers.
-                Console.Error.Write(new string('e', (int)Number(step, "chars")));
-                Console.Error.Flush();
-                break;
-            case "awaitCancel":
-                AwaitCancel();
-                break;
-            case "sleep":
-                Thread.Sleep((int)Number(step, "ms"));
-                break;
-            case "hang":
-                Thread.Sleep(Timeout.Infinite);
-                break;
-            case "exit":
-                Console.Out.Flush();
-                Environment.Exit((int)Number(step, "code"));
-                break;
-            case "grandchild":
-                Grandchild(Text(step, "pidFile"));
-                break;
-            case "grandchildSetsid":
-                SpawnedInto(Text(step, "pidFile"), "sleep", "--own-session", "600000");
-                break;
-            case "grandchildLateSetsid":
-                // Not the pid file of the sleeper's own: the late child writes THAT file when it spawns.
-                Spawned("late-spawn", Text(step, "trigger"), Text(step, "pidFile"));
-                break;
-            case "grandchildExits":
-                SpawnedInto(Text(step, "pidFile"), "exit-after", "0", "0");
-                break;
+            handler(step);
         }
+    }
+
+    private static void StepChunk(JsonElement step) =>
+        Update(new JsonObject
+        {
+            ["sessionUpdate"] = "agent_message_chunk",
+            ["content"] = new JsonObject { ["type"] = "text", ["text"] = Text(step, "text") },
+        });
+
+    private static void StepUsage(JsonElement step) =>
+        Update(new JsonObject { ["sessionUpdate"] = "usage_update", ["used"] = Number(step, "used"), ["size"] = Number(step, "size") });
+
+    private static void StepToolCall(JsonElement step) =>
+        Update(new JsonObject
+        {
+            ["sessionUpdate"] = "tool_call",
+            ["toolCallId"] = Text(step, "id"),
+            ["title"] = Text(step, "title"),
+            ["kind"] = Text(step, "toolKind"),
+            ["status"] = Text(step, "status"),
+        });
+
+    private static void StepToolCallUpdate(JsonElement step) =>
+        Update(new JsonObject { ["sessionUpdate"] = "tool_call_update", ["toolCallId"] = Text(step, "id"), ["status"] = Text(step, "status") });
+
+    private static void StepPermission(JsonElement step) =>
+        Request("session/request_permission", new JsonObject
+        {
+            ["sessionId"] = _sessionId,
+            ["toolCall"] = new JsonObject { ["toolCallId"] = "call-" + _nextId, ["title"] = Text(step, "title"), ["kind"] = Text(step, "toolKind") },
+            ["options"] = JsonNode.Parse(step.TryGetProperty("options", out var options) ? options.GetRawText() : "[]"),
+        });
+
+    private static void StepRead(JsonElement step)
+    {
+        var reply = Request("fs/read_text_file", ReadParams(step));
+        if (step.TryGetProperty("echo", out var echo) && echo.ValueKind == JsonValueKind.True)
+        {
+            Update(new JsonObject { ["sessionUpdate"] = "agent_message_chunk", ["content"] = new JsonObject { ["type"] = "text", ["text"] = reply } });
+        }
+    }
+
+    private static void StepRequest(JsonElement step) =>
+        Request(Text(step, "method"), (JsonObject)JsonNode.Parse(step.TryGetProperty("params", out var p) ? p.GetRawText() : "{}")!);
+
+    private static void StepExit(JsonElement step)
+    {
+        Console.Out.Flush();
+        Environment.Exit((int)Number(step, "code"));
+    }
+
+    private static void StdErr(string text)
+    {
+        Console.Error.Write(text);
+        Console.Error.Flush();
     }
 
     private static JsonObject ReadParams(JsonElement step)

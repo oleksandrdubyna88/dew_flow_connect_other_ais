@@ -80,6 +80,26 @@ public sealed class TheStderrLineIsQuotedSafelyTests : IDisposable
         RateLimit.Hopeless(((ReviewerOutcome.RateLimited)seen.Round.Outcome).Reason).Should().BeTrue("with no line to quote the table's phrases stand for the name");
     }
 
+    // ---------- T3 of the feature gate's round 2: an account id of a shape nobody measured ----------
+
+    [Theory]
+    [InlineData("org-", "0a1b_2c3d_4e5f")]
+    [InlineData("ak-", "9z8y-7x6w-5v4u")]
+    [InlineData("org-", "0a1b2c3d4e5f_6a7b8c9d")]
+    public async Task AnAccountIdWithAnUnderscoreOrAHyphenInIt_ReachesNoRecordedText_WhenItSitsOnTheQuotedLine(string prefix, string body)
+    {
+        // The capture step writes the vendor's first real line to the ledger and the log before anyone reads it; an id whose body is not plain letters and digits must not slip past the Moonshot rule.
+        var stderr = $"noise\nYour account {prefix}{body} is suspended. {KimiMonthlyQuotaTests.MonthlyLine}\n";
+
+        var seen = await ThroughTheProduct(stderr);
+
+        seen.Diagnosis.Name.Should().Be(KimiAcpProfile.QuotaSpent);
+        seen.Diagnosis.Line.Should().Contain(Phrase);
+        NothingOf(body, 4, seen);
+        NothingOf(body[^4..], 4, seen);
+        ReadsAsASpentQuota(seen.Round);
+    }
+
     // ---------- R2: the capture boundary — truncation is STATE carried from the capture, never parsed out of its rendered text ----------
 
     /// <summary>The stderr as <see cref="AcpTransport"/> keeps it: a <see cref="BoundedText"/> of the real cap fed in the transport's 8192-character reads — its kept text and its own truncated flag.</summary>
