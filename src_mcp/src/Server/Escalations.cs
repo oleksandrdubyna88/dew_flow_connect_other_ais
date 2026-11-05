@@ -65,7 +65,10 @@ public sealed record EscalationQuestion(
 public static class EscalationDecisions
 {
     /// <summary>The gate's own notice: the three that keep the findings alive, and the one that ships with them open.</summary>
-    public static IReadOnlyList<string> Notice { get; } = ["continue", "fix", "discuss", "proceed"];
+    public static IReadOnlyList<string> Notice { get; } = ["continue", "fix", "discuss", Proceed];
+
+    /// <summary>The decision that ships with the findings open — only the notice lists it, and only a notice that lists it can be answered with it.</summary>
+    public const string Proceed = "proceed";
 
     /// <summary>An <c>ask_human</c> card: never Proceed — the strongest button is kept off the card whose words the AI chose.</summary>
     public static IReadOnlyList<string> Question { get; } = ["continue", "fix", "discuss"];
@@ -315,7 +318,7 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
             "continue" => HumanDecision.Continue,
             "fix" => HumanDecision.Fix,
             "discuss" => HumanDecision.Discuss,
-            "proceed" => HumanDecision.Proceed,
+            EscalationDecisions.Proceed => HumanDecision.Proceed,
             _ => HumanDecision.None,
         };
 

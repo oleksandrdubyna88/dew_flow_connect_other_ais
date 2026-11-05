@@ -179,6 +179,26 @@ public sealed class OnlyAPersonReleasesTheGateTests : FakeCliRoundTests
     }
 
     [Fact]
+    public async Task AProceedOnANoticeThatDoesNotOfferIt_DoesNotReleaseTheHold()
+    {
+        // The server-written list decides what a card offers: a notice that lists no Proceed (here the list an ask_human card
+        // carries) is not the card that can override the findings, whatever an answer file beside it says. The list is not empty,
+        // so the upgrade refresh (OfferDecisions) leaves it alone — this is the card as the server wrote it, not an older one.
+        var service = await HeldAsync();
+        var id = NoticeId();
+        var card = JsonNode.Parse(File.ReadAllText(NoticeFile(id)))!.AsObject();
+        card["decisions"] = new JsonArray("continue", "fix", "discuss");
+        File.WriteAllText(NoticeFile(id), card.ToJsonString());
+        ThePersonAnswers(id, "proceed");
+
+        var reply = await ResolveAsync(service, "[]");
+
+        ErrorOf(reply).Should().NotBeEmpty($"a Proceed the card never offered must not release the hold, but the reply was {reply}");
+        Session().State.Stage.Should().Be(Stage.PlanReview);
+        Session().State.HumanGate.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task TheArgumentIsIgnored_WhenThePersonAlreadyProceeded()
     {
         var service = await HeldAsync();

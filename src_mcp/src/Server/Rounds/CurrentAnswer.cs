@@ -126,21 +126,26 @@ internal static class CurrentAnswer
             : null;
 
     /// <summary>
-    /// The answer's decision, with Proceed honoured only when the answered question is the gate's NOTICE: the card that lists the
-    /// findings being overridden is the card that can override them, and a question file that is gone or says anything else is not it.
+    /// The answer's decision, with Proceed honoured only when the answered question is the gate's NOTICE and its server-written
+    /// <c>decisions</c> list offers Proceed: the card that lists the findings being overridden is the card that can override them,
+    /// and a question file that is gone, says anything else, or does not offer the decision is not it.
     /// </summary>
     private static HumanDecision DecisionOnTheNotice(string questionId, EscalationAnswer answer, Escalations escalations, ILogger log)
     {
         var decision = Escalations.DecisionOf(answer);
-        if (decision != HumanDecision.Proceed || escalations.Read(questionId) is { Kind: EscalationKinds.Notice })
+        if (decision != HumanDecision.Proceed || OffersProceed(escalations.Read(questionId)))
         {
             return decision;
         }
 
-        log.Warning("a Proceed was written against {Id}, which is not a readable notice of this gate; it is read as prose", questionId);
+        log.Warning("a Proceed was written against {Id}, which is not a readable notice of this gate that offers it; it is read as prose", questionId);
 
         return HumanDecision.None;
     }
+
+    /// <summary>A notice whose list offers Proceed — a list-less one an older server wrote is refreshed (<see cref="Escalations.OfferHeldNotices"/>) before any reader acts.</summary>
+    private static bool OffersProceed(EscalationQuestion? question) =>
+        question is { Kind: EscalationKinds.Notice } && question.Decisions.Contains(EscalationDecisions.Proceed);
 
     private static bool IsNewerThanTheLastRound(EscalationAnswer answer, PersistedSession session)
     {

@@ -160,6 +160,9 @@ to stop reading the flag as a decision at all.
   list → the three, as today. A newer extension against an older server therefore never offers a button the server
   would read as prose — the *"card leaves and nothing changed"* dead end this repository has already paid for twice
   (`escalationAnswer.ts:1-12`, `PLAN_ask_human_is_for_the_gate.md` §1).
+  The server reads the list as the extension does: a `proceed` in an answer file counts only when the answered question is a
+  notice AND its server-written `decisions` list contains `proceed`; otherwise it is read as prose and logged. A notice an older
+  server wrote has no list, so it is refreshed in place (§11.3) before any reader acts on it.
 - **G6 — A Proceed given after the AI already resolved is reachable.** Today the override can be delivered only
   inside the one `resolve` call that records the round's decisions (`RoundMachine.Resolve` refuses when
   `!AwaitingResolve`, `:631-642`); a person who decides later has no call that carries it. `resolve` with no

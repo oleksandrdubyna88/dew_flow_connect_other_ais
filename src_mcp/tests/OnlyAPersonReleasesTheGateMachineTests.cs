@@ -204,11 +204,13 @@ public sealed class OnlyAPersonReleasesTheGateMachineTests : IDisposable
 
     private static readonly DateTime Held = new(2026, 10, 22, 10, 0, 0, DateTimeKind.Utc);
 
-    private void Asked(string id, string kind)
+    /// <summary>A card as the server writes it — a notice lists the decisions it offers (G5); pass <paramref name="offers"/> to write another list.</summary>
+    private void Asked(string id, string kind, IReadOnlyList<string>? offers = null)
     {
         new Escalations(_data).Notify(new EscalationQuestion(id, "s1", "/repo", "main", "The code review gate needs your decision", "", "en", "", [], Held.ToString("O"))
         {
             Kind = kind,
+            Decisions = offers ?? [],
         });
     }
 
@@ -234,10 +236,24 @@ public sealed class OnlyAPersonReleasesTheGateMachineTests : IDisposable
     [Fact]
     public void AProceedOnTheHoldsNotice_IsTheHoldsProceed()
     {
-        Asked("n1", EscalationKinds.Notice);
+        Asked("n1", EscalationKinds.Notice, EscalationDecisions.Notice);
         Answered("n1", "proceed");
 
         CurrentAnswer.DecisionFor(HeldOn("n1"), new Escalations(_data)).Should().Be(HumanDecision.Proceed);
+    }
+
+    [Fact]
+    public void AProceedOnANoticeThatDoesNotListIt_IsNotAProceed()
+    {
+        Asked("n1", EscalationKinds.Notice, EscalationDecisions.Question);
+        Asked("n2", EscalationKinds.Notice);
+        Answered("n1", "proceed");
+        Answered("n2", "proceed");
+
+        CurrentAnswer.DecisionFor(HeldOn("n1"), new Escalations(_data)).Should().Be(HumanDecision.None,
+            "the server-written list decides what a card offers (G5)");
+        CurrentAnswer.DecisionFor(HeldOn("n2"), new Escalations(_data)).Should().Be(HumanDecision.None,
+            "a list-less notice is refreshed (OfferDecisions) before any reader acts; read as it stands it offers nothing");
     }
 
     [Fact]
@@ -286,7 +302,7 @@ public sealed class OnlyAPersonReleasesTheGateMachineTests : IDisposable
     [Fact]
     public void TheStatusWordForAProceed_IsProceed_AndOnlyForTheNotice()
     {
-        Asked("n1", EscalationKinds.Notice);
+        Asked("n1", EscalationKinds.Notice, EscalationDecisions.Notice);
         Asked("q2", EscalationKinds.Question);
         Answered("n1", "Proceed");
 
