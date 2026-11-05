@@ -215,15 +215,6 @@ jobs:
           set -euo pipefail
           git fetch --depth 1 origin "$BASE_SHA"
           node .agents/conventions/tools/leftovers-check.mjs --repo . --baseline-shrinks --base "$BASE_SHA"
-      - name: The one creation of the raw-temp baseline (TEMPORARY, E5 S6)
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git fetch --unshallow origin
-          git fetch origin "$BASE_SHA"
-          node .agents/conventions/tools/leftovers-check.mjs --repo . --baseline-shrinks --base "$BASE_SHA" --allow-create
       - name: Plan lifecycle
         run: node .agents/conventions/tools/plan-lifecycle.mjs
       # The measurement scripts' own tests — today `scripts/lib/kimi.test.mjs`, the refusal of a Kimi probe scratch another
