@@ -1957,6 +1957,14 @@ legacy fixtures above. The parent's build order says the same ("the series' line
       flags pass and `--list-tests` is refused, both tested; the fallback check behind the gate tested; the diff check
       reads the committed manifest (upstream path, blob SHA, transformations) with no network; F24's acceptance check
       recorded before S6; the `RepositoryRoot` baseline test from both folders; D11's rollback procedure in the PR.
+- [ ] *[epoch 6, 2026-11-05]* S6 as its current statement: the expected-exemption inventory equals the guard's list, every
+      inline `raw-temp` exemption's reason PROVED on the PR (entries through `startOwnedRun`, libraries through every caller,
+      reads as read records); the Node detection test positive for the two detected classes, the one sentence of what is
+      not detected, the split-piece scan recorded as a search (F30 open); the two split fixtures plain literals; the
+      orphan-claim plant in both fixture orders and the audit-first order pinned (D8 (o)); `smoke-image.sh`'s trap before
+      `mktemp`, RED observed (D8 (p)); the final-content diff of the baseline zero at the PR's last head (D8 (q)); the pin at
+      `bd795847` (#947) and F24's second check before the baseline is created. The boxes above that say "only the authorised
+      `raw-temp` baseline left" and "every must-not-copy row RED-GREEN-RED" are read with D8 (b) as reworded and row 2's note.
 - [ ] S7: the baseline drained to zero and deleted.
 - [ ] `research/module_tests.md` describes the run folder in its owner form, the sweep in two languages, the one-off
       clean-up, the residual risk, the two guards and the baseline's drain.
