@@ -145,6 +145,7 @@ function seedLedger(dir) {
  * half way still takes the directory with it.
  */
 async function startServer() {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const data = mkdtempSync(join(tmpdir(), 'coai-contract-'));
   seedLedger(data);
   cleanUp = () => removeData(data);

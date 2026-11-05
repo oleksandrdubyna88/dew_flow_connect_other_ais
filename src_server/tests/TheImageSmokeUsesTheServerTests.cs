@@ -100,6 +100,7 @@ public sealed class TheImageSmokeUsesTheServerTests : IDisposable
             "the key goes in by NAME, from the environment");
 
         var key = File.ReadAllText(Path.Combine(_dir, "docker-saw-key")).Trim();
+        // testsToDelete-exempt: docker-run — the words are in an assertion message, no container is started here
         Encoding.UTF8.GetByteCount(key).Should().BeGreaterThanOrEqualTo(32, "docker run received the key through its environment");
         calls.Should().NotContain(line => line.Contains(key, StringComparison.Ordinal), "an argument list is readable by every process");
         output.Should().NotContain(key, "the key is never printed");

@@ -77,6 +77,7 @@ public sealed class RepositoryFactsTests : IDisposable
     {
         var main = await RepositoryAsync(_dir.At("main"));
         var worktree = _dir.At("wt");
+        // testsToDelete-exempt: raw-worktree — inside `_dir`, this test's own folder under the run folder
         await GitAsync(main, "worktree", "add", "-b", "wt", worktree);
 
         var mainFacts = await AskAsync(main);
@@ -113,6 +114,7 @@ public sealed class RepositoryFactsTests : IDisposable
         await GitAsync(main, "-c", "protocol.file.allow=always", "submodule", "add", lib, "vendor-lib");
         await GitAsync(main, "commit", "-m", "add the submodule");
         var worktree = _dir.At("wt");
+        // testsToDelete-exempt: raw-worktree — inside `_dir`, this test's own folder under the run folder
         await GitAsync(main, "worktree", "add", "-b", "wt", worktree);
         await GitAsync(worktree, "-c", "protocol.file.allow=always", "submodule", "update", "--init");
 

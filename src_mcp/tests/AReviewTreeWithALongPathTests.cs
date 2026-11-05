@@ -129,6 +129,7 @@ public sealed class AReviewTreeWithALongPathTests : IAsyncLifetime
     private async Task TheFixtureNeedsTheFlag(string sha)
     {
         var control = Path.Combine(_root, "wt-control-longpaths");
+        // testsToDelete-exempt: raw-worktree — inside `_root`, this test's own temp folder under the run folder
         var refused = await Run(_repo, "-c", "core.longpaths=false", "worktree", "add", "--detach", control, sha);
 
         refused.ExitCode.Should().NotBe(0, "the control is a commit this git cannot check out without the flag");

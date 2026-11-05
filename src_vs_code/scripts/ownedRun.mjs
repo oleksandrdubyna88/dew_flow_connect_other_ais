@@ -31,8 +31,10 @@ export async function startDefaultScratch({ what, prefix, importOwned, error = c
     make: (owned) => {
       let root;
       try {
+        // testsToDelete-exempt: raw-temp — reads the root and allocates nothing; the run folder is made through the wrap, not here
         root = realpathSync.native(tmpdir());
       } catch (cause) {
+        // testsToDelete-exempt: raw-temp — reads the root and allocates nothing; the run folder is made through the wrap, not here
         throw new owned.RunFolderRefused(`the temp folder '${tmpdir()}' cannot be read (${String(cause.message).split('\n')[0]})`, { cause });
       }
       return owned.ownedScratch(what, { root, ...rest });

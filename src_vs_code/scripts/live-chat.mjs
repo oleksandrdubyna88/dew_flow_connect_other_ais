@@ -58,6 +58,7 @@ function numberFrom(argv) {
 }
 
 async function conversation(name, vendor, adapter) {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const home = mkdtempSync(join(tmpdir(), 'coai-live-'));
   process.stdout.write(`${name.padEnd(12)} asking…
 `);

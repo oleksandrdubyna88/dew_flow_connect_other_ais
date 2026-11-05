@@ -281,6 +281,7 @@ async function probe(name, png, raw) {
 
     return [];
   }
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const home = mkdtempSync(join(tmpdir(), 'coai-image-'));
   const pngPath = join(home, `token-${TOKEN}.png`);
   writeFileSync(pngPath, png);

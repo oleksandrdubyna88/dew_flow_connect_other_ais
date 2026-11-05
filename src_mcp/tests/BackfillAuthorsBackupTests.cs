@@ -145,6 +145,7 @@ public sealed class BackfillAuthorsBackupTests
     /// claim the copy holds it, so it does not verify, so nothing is written. (Before the check the name was quoted and counted, and the backup verified.)
     /// </summary>
     [Theory]
+    // testsToDelete-exempt: shared-store — hostile input text for a refusal test, no SQL runs; lock: none, nothing is opened
     [InlineData("x\" ; DROP TABLE rounds; --")]
     [InlineData("two words")]
     [InlineData("1starts_with_a_digit")]

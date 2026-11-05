@@ -113,6 +113,7 @@ public sealed class AVibeDiskRowSaysWhatItSkippedTests : IDisposable
         await _rows.RepositoryAsync(main, ("Mailer.cs", "void Send() { }\n"));
         foreach (var n in (int[])[1, 2])
         {
+            // testsToDelete-exempt: raw-worktree — inside `parent`, this test's own folder under the run folder
             var worktree = await _launcher.RunAsync(new ProcessRequest("git", ["worktree", "add", "-b", $"wt{n}", Path.Combine(parent, $"app-wt{n}")], main), TestContext.Current.CancellationToken);
             worktree.ExitCode.Should().Be(0, worktree.StdErr);
         }

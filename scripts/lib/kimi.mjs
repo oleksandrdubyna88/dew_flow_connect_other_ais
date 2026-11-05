@@ -173,6 +173,7 @@ export function copyHome(real, home, { credentials = true, config = true } = {})
  * The product never needs this: D19 gives every Kimi launch an owned home whose `credentials/` is a JUNCTION to the
  * person's, so the sign-in is never copied anywhere. Only this probe's copied-home arms copy it.
  */
+// testsToDelete-exempt: raw-temp — reads the temp root to refuse a scratch under it; nothing is made
 export function scratchRefusal(scratch, { profile = homedir(), temp = tmpdir() } = {}) {
   const wanted = resolve(scratch);
   const real = realOf(wanted);

@@ -140,6 +140,7 @@ const ROW = {
   pricePerMillionOut: 0,
 };
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-'));
 const server = catalogServer();
 // The callback fires when the socket is LISTENING, which is why nothing here polls for readiness.
@@ -282,6 +283,7 @@ function resolvedFor(root, side) {
 }
 
 async function sideSeam() {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const root = mkdtempSync(join(tmpdir(), 'coai-seam-side-'));
   const side = 'wsl';
   const written = join(resolvedFor(root, side), 'settings.json');
@@ -308,6 +310,7 @@ PLAN_the_settings_file_ignores_the_side.md exists for, caught live rather than b
   // And the other direction, which is what makes the first half mean something: the ROOT file must
   // NOT be what the server read. A server still reading `<root>/settings.json` would pass the check
   // above on an installation that happened to have the row in both places.
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const other = mkdtempSync(join(tmpdir(), 'coai-seam-side-'));
   const decoy = { id: 'remsoftdev-seam-root', runtime: 'claude', label: 'the root decoy', accounts: 1 };
   writeFileSync(join(other, 'settings.json'), serverSettingsJson(DEFAULTS, vendorsFrom([decoy]), '9.9.9'), 'utf8');
@@ -367,6 +370,7 @@ await sideSeam();
 // they reached it — read back through the extension's own providers parser, which is what the card draws from.
 async function apiSettingsSeam() {
   const { parseProviders } = await import('../out/providers.js');
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-api-'));
   const qwen = {
     id: 'qwen', runtime: 'api', model: 'qwen3.8-max', enabled: true, plan: true, code: true,
@@ -406,6 +410,7 @@ async function apiStreamSeam() {
     pricePerMillionIn: 0, pricePerMillionOut: 0, dialect: 'dashscope', stream: true,
   };
   const streamedWith = async (features) => {
+    // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
     const dir = mkdtempSync(join(tmpdir(), 'coai-seam-stream-'));
     try {
       const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features };
@@ -436,6 +441,7 @@ async function fastModeSeam() {
   const { serverSettingsJsonWith } = await import('../out/serverSettingsFile.js');
   const row = { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0, fast: 'on' };
   const fastWith = async (features) => {
+    // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
     const dir = mkdtempSync(join(tmpdir(), 'coai-seam-fast-'));
     try {
       const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features };
@@ -484,6 +490,7 @@ async function fastTierSeam() {
     { id: 'antigravity', runtime: 'antigravity', model: 'gemini-3-pro' },
     { id: 'gemini', runtime: 'gemini', model: 'gemini-3-pro' },
   ].map((row) => ({ ...base, ...row }));
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-tier-'));
   try {
     const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: ['fastMode'] };
@@ -566,6 +573,7 @@ console.log('  ok  a side\'s settings are written and read at the same path, and
 
 /** A checkout with something uncommitted in it, which is what a consultation is about. */
 function scratchRepo() {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-repo-'));
   // git's OWN stderr is kept, because the guard around this reports what it says: 'ignore' threw
   // away the one sentence that explains which git call refused and why.

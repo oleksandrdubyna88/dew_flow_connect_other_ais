@@ -75,8 +75,11 @@ async function conversation(name, vendor, adapter) {
   // code round.)
   const resolved = await resolvedExecutable({ antigravity: 'agy', claude: 'claude', codex: 'codex' }[vendor.runtime]);
   if (!resolved) { console.log(`${name.padEnd(8)} NOT INSTALLED`); return false; }
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const home = mkdtempSync(join(tmpdir(), 'coai-agent-home-'));
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const workspace = mkdtempSync(join(tmpdir(), 'coai-agent-ws-'));
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const outside = mkdtempSync(join(tmpdir(), 'coai-agent-outside-'));
   writeFileSync(join(outside, 'note.txt'), `${TOKEN}\n`);
   const session = new CliChatSession(

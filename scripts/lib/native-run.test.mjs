@@ -39,8 +39,8 @@ test('a phase or a series that fails its pattern is refused by the renderer — 
   refusal(() => rendered({ series: '/tmp/native-vibe-20261021-a1b2c3/x' }), 'a separator in the leaf');
   refusal(() => rendered({ series: '/tmp/native-vibe-20261021-a1b2c3\n' }), 'a line break in the leaf');
   // The OLD name (the test-leftovers prefix first) is no series any more: a series started under it is finished with the checkout that made it.
-  const OLD_PREFIX = ['testsTo', 'Delete-'].join('');
-  refusal(() => rendered({ series: `/tmp/${OLD_PREFIX}native-vibe-20261021-a1b2c3` }), 'the old prefixed name');
+  // testsToDelete-exempt: legacy-name — the old prefixed series name is the fixture this refusal test is about
+  refusal(() => rendered({ series: '/tmp/testsToDelete-native-vibe-20261021-a1b2c3' }), 'the old prefixed name');
 });
 
 test('a probe name or a probe argument outside its pattern is refused — they are written into a script root runs', () => {

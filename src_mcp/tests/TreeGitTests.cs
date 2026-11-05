@@ -40,12 +40,14 @@ public sealed class TreeGitTests : IAsyncLifetime
     [Fact]
     public void TheFlagLeadsTheArgvOnWindows_AndNothingChangesElsewhere()
     {
+        // testsToDelete-exempt: raw-worktree — an expected argv in a pure test, no worktree is made here
         string[] args = ["worktree", "add", "--detach", "somewhere", "abc123"];
 
         var argv = TreeGit.Argv(args);
 
         if (OperatingSystem.IsWindows())
         {
+            // testsToDelete-exempt: raw-worktree — an expected argv in a pure test, no worktree is made here
             argv.Should().Equal("-c", LongPaths, "worktree", "add", "--detach", "somewhere", "abc123");
         }
         else

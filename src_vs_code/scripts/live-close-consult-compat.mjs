@@ -183,6 +183,7 @@ function unpack(archive, into) {
 
 // ---------------------------------------------------------------------------------------------
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(path.join(tmpdir(), 'coai-close-compat-'));
 const data = path.join(work, 'data');
 const repo = path.join(work, 'repo');

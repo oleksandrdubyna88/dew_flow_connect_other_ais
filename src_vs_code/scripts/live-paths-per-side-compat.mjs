@@ -111,6 +111,7 @@ if (built.length === 0 || cli.length === 0) {
   console.log('this checkout has no built server or fake CLI — run `dotnet build src_mcp/src/CoaiMcp.csproj` and `dotnet build src_mcp/tests_fakecli/FakeCli.csproj` first');
   process.exit(2);
 }
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(path.join(tmpdir(), 'coai-paths-per-side-compat-'));
 mkdirSync(path.join(work, 'server'));
 mkdirSync(path.join(work, 'extension'));

@@ -47,6 +47,7 @@ const isolated = (dataDir) => ({
  * @param {{providersIn: Function, fail: Function}} runner the runner's own `--providers` call and failure road
  */
 export async function securitySeam({ providersIn, fail }) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-security-'));
   const complaintsAbout = async (stored) => {
     const securityLane = securityLaneFrom(stored);

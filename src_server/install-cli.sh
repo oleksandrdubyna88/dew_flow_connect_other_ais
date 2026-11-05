@@ -19,6 +19,7 @@ set -eu
 url=${1:?usage: install-cli.sh <url> <shell>}
 shell=${2:?usage: install-cli.sh <url> <shell>}
 pause=${INSTALL_CLI_PAUSE:-5}
+# testsToDelete-exempt: raw-temp — an image installer; a test under the gate reaches this with TMPDIR in the run folder, and the image build is not a test run
 file=$(mktemp)
 trap 'rm -f "$file"' EXIT
 

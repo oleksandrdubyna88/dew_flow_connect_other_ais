@@ -428,6 +428,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
 
     private async Task<string> WorktreeAsync(string main, string at, string branch)
     {
+        // testsToDelete-exempt: raw-worktree — `at` is under the caller's `parent`, a test's own folder under the run folder
         await GitAsync(main, ["worktree", "add", "-b", branch, at]);
 
         return at;

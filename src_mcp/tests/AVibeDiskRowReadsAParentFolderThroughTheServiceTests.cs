@@ -56,6 +56,7 @@ public sealed class AVibeDiskRowReadsAParentFolderThroughTheServiceTests : IDisp
         var beta = Path.Combine(parent, "beta");
         await _rows.RepositoryAsync(alpha, ("src/Mailer.cs", "void Send() { }\n"), (".vibe/hooks.toml", "[[hooks]]\n"));
         await _rows.RepositoryAsync(beta, ("Retry.cs", "int Attempts = 3;\n"));
+        // testsToDelete-exempt: raw-worktree — inside `parent`, this test's own folder under the run folder
         var worktree = await _launcher.RunAsync(new ProcessRequest("git", ["worktree", "add", "-b", "wt", Path.Combine(parent, "alpha-wt")], alpha), TestContext.Current.CancellationToken);
         worktree.ExitCode.Should().Be(0, worktree.StdErr);
         await _rows.RepositoryAsync(_dir.At("asking"), ("readme.txt", "where the question is asked from"));

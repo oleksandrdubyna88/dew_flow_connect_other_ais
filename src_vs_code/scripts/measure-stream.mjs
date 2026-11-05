@@ -482,6 +482,7 @@ async function measure(name, useShell, raw) {
 
     return undefined;
   }
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const home = mkdtempSync(join(tmpdir(), 'coai-measure-'));
   const spec = launchSpecFor(row(vendor.runtime), home, '', resolved);
   if (spec.refusal.length > 0) {

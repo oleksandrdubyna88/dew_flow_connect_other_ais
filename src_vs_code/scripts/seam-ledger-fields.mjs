@@ -70,6 +70,7 @@ function removeQuietly(path) {
  * server gets a home that is this folder and a configuration that names an effort — the leg now depends on nothing outside it.</p>
  */
 function isolatedHome() {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const home = mkdtempSync(join(tmpdir(), 'coai-seam-ledger-home-'));
   mkdirSync(join(home, '.codex'));
   writeFileSync(join(home, '.codex', 'config.toml'), `model_reasoning_effort = "${SEAM_EFFORT}"
@@ -88,6 +89,7 @@ export function homeEnvironment(home) {
 
 /** A checkout with a `feature` branch ahead of `main`, which is what a round reviews. */
 function scratchRepo() {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-ledger-repo-'));
   const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'] });
   git('init', '--initial-branch=main');
@@ -219,6 +221,7 @@ export async function ledgerFieldsSeam({ binary, fakeCli, fail, timeoutMs }) {
   if (fakeCli === '') {
     fail('no FakeCli build found. Run: dotnet build src_mcp/tests_fakecli/FakeCli.csproj');
   }
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-ledger-'));
   let outcome;
   try {

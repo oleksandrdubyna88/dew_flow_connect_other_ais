@@ -36,6 +36,7 @@ const { notificationLine, parseNotificationLine } = await import('../out/notific
  * @param {{serverSession: Function, resolvedFor: Function, answerOf: Function, fail: Function, timeoutMs: number}} runner
  */
 export async function refusalSeam({ serverSession, resolvedFor, answerOf, fail, timeoutMs }) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const root = mkdtempSync(join(tmpdir(), 'coai-seam-refusal-'));
   const side = 'seam';
   mkdirSync(join(root, side), { recursive: true });

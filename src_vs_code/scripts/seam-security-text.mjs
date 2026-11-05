@@ -75,6 +75,7 @@ const FILES = {
  * @returns {Promise<{compared: number, older: boolean}>} `older` when a declared-older binary refused the mode
  */
 export async function securityTextSeam({ binary, olderExpected, fail, timeoutMs }) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-security-text-'));
   try {
     writeFiles(dataDir);

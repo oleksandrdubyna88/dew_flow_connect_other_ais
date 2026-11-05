@@ -41,7 +41,9 @@ const KEPT = (path) => `root ${path} is not a git checkout`;
 export async function qconsultRootsSeam({ providersIn, sessionsFor, answerOf, binary, fakeCli, repoPath, fail, timeoutMs }) {
   const windows = process.platform === 'win32';
   const systemDrive = systemDriveOf(process.env['SystemDrive']);
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-qroots-'));
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const here = mkdtempSync(join(tmpdir(), 'coai-seam-qroot-here-'));
   const leave = async (why, session) => {
     await session?.killAndWait();

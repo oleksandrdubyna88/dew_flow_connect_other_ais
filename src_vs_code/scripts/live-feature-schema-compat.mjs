@@ -119,6 +119,7 @@ const sessionsIn = (data) => existsSync(path.join(data, 'sessions'))
 
 // ---------------------------------------------------------------------------------------------
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(path.join(tmpdir(), 'coai-feature-compat-'));
 const repo = path.join(work, 'repo');
 mkdirSync(repo, { recursive: true });

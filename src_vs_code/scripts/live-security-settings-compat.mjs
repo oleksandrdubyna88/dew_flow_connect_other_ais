@@ -18,6 +18,7 @@ const require = createRequire(import.meta.url);
 const { DEFAULTS, envBlock } = require('../out/settingsShape.js');
 const { DEFAULT_SECURITY } = require('../out/securityLane.js');
 const { DEFAULT_VENDORS } = require('../out/vendors.js');
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(join(tmpdir(), 'coai-security-compat-'));
 const old = releasedServer(work, flag('tag', ''));
 const current = flag('new', newServer());

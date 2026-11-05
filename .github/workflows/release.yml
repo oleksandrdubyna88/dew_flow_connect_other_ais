@@ -314,6 +314,7 @@ jobs:
           # a binary shipped without its native library passed both and failed at the one thing the
           # database exists for. An empty file is a valid empty database, so this loads the library
           # and reads through it — the exact path that was broken.
+          # testsToDelete-exempt: raw-temp — job-scoped under RUNNER_TEMP, which rule 7 says is no finding, and the C# pattern fires anyway; no test run reaches this line, pinned by E10
           DB=$(mktemp -d "$RUNNER_TEMP/coai-smoke-db.XXXXXX")   # job-scoped: the runner discards RUNNER_TEMP with the job (E5 S4)
           : > "$DB/coai.db"
           if ! COAI_DATA_DIR="$DB" "$EXE" --log > /dev/null 2>"$DB/err"; then
@@ -1316,6 +1317,7 @@ jobs:
           export COAI_BUGS_SECRET=a-smoke-secret-not-a-real-one
           # Assigned first, exported second: `export X="$(cmd)"` makes the EXPORT the command whose
           # status `set -e` sees, so a failing mktemp would leave the variable empty and carry on.
+          # testsToDelete-exempt: raw-temp — job-scoped under RUNNER_TEMP, which rule 7 says is no finding, and the C# pattern fires anyway; no test run reaches this line, pinned by E10
           COAI_BUGS_DATA="$(mktemp -d "$RUNNER_TEMP/coai-bugs-data.XXXXXX")"   # job-scoped (E5 S4)
           export COAI_BUGS_DATA
 

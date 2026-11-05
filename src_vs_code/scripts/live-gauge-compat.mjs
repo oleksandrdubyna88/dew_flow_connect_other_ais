@@ -78,6 +78,7 @@ function localToken(key, email) {
   return `${head}.${body}.${createHmac('sha256', key).update(`${head}.${body}`).digest('base64url')}`;
 }
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const scratch = mkdtempSync(path.join(tmpdir(), 'coai-gauge-compat-'));
 const released = releasedExtension(scratch, flag('extension-tag', ''));
 if (released === undefined) {
@@ -90,6 +91,7 @@ const load = async (name) => await import(pathToFileURL(path.join(released.root,
 const oldApi = await load('teamServerApi');
 const oldUsage = await load('usage');
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const dataDir = mkdtempSync(path.join(tmpdir(), 'coai-gauge-compat-data-'));
 writeFileSync(path.join(dataDir, 'vendors.json'), JSON.stringify([{ id: 'codex', runtime: 'codex', models: ['gpt-6-luna'], slots: ['a'] }]));
 mkdirSync(path.join(dataDir, 'accounts', 'codex', 'a'), { recursive: true });

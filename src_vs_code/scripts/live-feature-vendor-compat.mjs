@@ -110,6 +110,7 @@ const LESSONS = JSON.stringify({
  * then RUN against a stub DOM — `bundledPage.test.ts`'s method, pointed at the older build.
  */
 function releasedPage(extensionRoot, sessions, log) {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const dir = mkdtempSync(path.join(tmpdir(), 'coai-old-page-'));
   const entry = path.join(dir, 'entry.mjs');
   const out = path.join(dir, 'bundle.cjs');
@@ -161,6 +162,7 @@ if (built.length === 0) {
   console.log('this checkout has no built server — run `dotnet build dew_flow_connect_other_ais.slnx -c Debug` first');
   process.exit(2);
 }
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(path.join(tmpdir(), 'coai-feature-vendor-compat-'));
 mkdirSync(path.join(work, 'server'));
 mkdirSync(path.join(work, 'extension'));

@@ -58,6 +58,7 @@ const { DEFAULTS } = await load('settingsShape');
 const { DEFAULT_VENDORS } = await load('vendors');
 const { VIBE_RUNTIME_SINCE, runtimeOnServer } = await load('runtimeSince');
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(path.join(tmpdir(), 'coai-vibe-runtime-compat-'));
 mkdirSync(path.join(work, 'server'));
 const old = releasedServer(path.join(work, 'server'), flag('server-tag', ''));

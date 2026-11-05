@@ -171,6 +171,7 @@ const mentions = (turn, value) => turn.ok && bare(turn.answer).includes(value);
 
 /** A session in a directory of its own, built the way the extension builds one. */
 function opened(vendor, adapter, resolved) {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const home = mkdtempSync(join(tmpdir(), 'coai-fresh-'));
   const session = new CliChatSession(
     (resume) => {

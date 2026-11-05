@@ -17,6 +17,7 @@ const run = await startOwnedRun({ what: 'compat-cmd-models' });
 const require = createRequire(import.meta.url);
 const { CODER_SLOT_SINCE, commandModelsEnv, commandModelsFrom } = require('../out/commandModels.js');
 const { compareVersions } = require('../out/coaiInstall.js');
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(join(tmpdir(), 'coai-command-models-compat-'));
 const old = releasedServer(work, flag('tag', ''));
 const current = flag('new', newServer());

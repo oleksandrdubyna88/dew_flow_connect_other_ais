@@ -503,7 +503,8 @@ linuxTest('remove-series.sh removes the folder AND its own file, still prints st
 // ---------------------------------------------------------------- the series name leaves the prefix family (E5 S4, the rollout's epoch 5 item 4)
 // The series is the ONE bounded exception of the test-leftovers family: `native-(vibe|kimi)-<yyyymmdd>-<6 hex>`, no prefix, no owner, no claim, made by the lead and
 // make-series.sh, removed ONLY by remove-series.sh. These cases are its evidence: the remover's grammar and ownership (2, 4), survival between phases (1), a gone series (5).
-const OLD_PREFIXED = ['testsTo', 'Delete-'].join('') + 'native-vibe-20261021-a1b2c3'; // the old-prefix fixture: S6 lists this line in its expected-exemption inventory
+// testsToDelete-exempt: legacy-name — the old prefixed series name is the fixture the remover must refuse
+const OLD_PREFIXED = 'testsToDelete-native-vibe-20261021-a1b2c3';
 const MY_UID = () => process.getuid?.() ?? 0;
 
 /** A series folder whose name is `name` (anywhere under `root`), laid out as `provisioned()` does, with the remover copied in and SERIES_PATH naming itself. */

@@ -157,6 +157,7 @@ const each = Number(counts[1] ?? 500);
  */
 const dotnet = Number(args.find((a) => a.startsWith('--dotnet='))?.slice('--dotnet='.length) ?? 0);
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const home = join(chosen ?? tmpdir(), `coai-append-${process.pid}`);
 mkdirSync(home, { recursive: true });
 

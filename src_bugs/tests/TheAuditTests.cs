@@ -187,6 +187,7 @@ public sealed class TheAuditTests : IDisposable
     public void AnIssuanceThatCannotBeAuditedIsNotAnIssuance()
     {
         using var corpus = Open();
+        // testsToDelete-exempt: shared-store — a private SQLite file in this test's own folder; lock: none, one connection
         TestSql.Run(DbPath, "DROP TABLE admin_audit");
         var id = AnId();
         var issuing = () => corpus.Issue(id, Corpus.HashOf("k", "s"), string.Empty, Cli());

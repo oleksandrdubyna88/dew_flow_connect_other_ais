@@ -100,6 +100,7 @@ function run(files) {
  * The machine's real temp root, captured when this module loads — BEFORE `beginOwnedRun` moves TEMP/TMP/TMPDIR into the run's folder, which makes `os.tmpdir()` answer
  * the run folder from then on (S2-A gate 0). The count and the run folder are both made in this one root, as the C# runner uses `RunTemp.Real`.
  */
+// testsToDelete-exempt: raw-temp — reads the root and allocates nothing; the run folder is made through the wrap, not here
 export const REAL_TEMP_ROOT = tmpdir();
 
 /** This repository's root, from this file's own place: the shared switch file and the mounted conventions are read from here, whatever the working directory. */

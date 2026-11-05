@@ -97,6 +97,7 @@ async function serveRefuses({ sessionsFor, binary, env, root, timeoutMs }) {
  * @returns {Promise<{ refusedBoth: string, lazy: string[] }>} what the two halves said, for the summary line
  */
 export async function missingNamedRootSeam({ binary, sessionsFor, timeoutMs, fail }) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const parent = mkdtempSync(join(tmpdir(), 'coai-seam-named-root-'));
   // The temporary folder is removed in the `finally` below on EVERY way out — a disagreement, a timeout or a spawn
   // error included (CodeRabbit on #777).

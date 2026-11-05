@@ -58,6 +58,7 @@ else
 fi
 say "platform $platform"
 
+# testsToDelete-exempt: raw-temp — an image installer; a test under the gate reaches this with TMPDIR in the run folder, and the image build is not a test run
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 

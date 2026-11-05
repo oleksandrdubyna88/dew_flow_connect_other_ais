@@ -45,6 +45,7 @@ export async function consultantRowSeam({ binary, fail, timeoutMs }) {
 }
 
 async function writtenAndAsked(binary, features, timeoutMs) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-consultant-row-'));
   try {
     const stored = { vendors: ROWS, consultants: { codex: { vendor: 'consult-codex' } } };

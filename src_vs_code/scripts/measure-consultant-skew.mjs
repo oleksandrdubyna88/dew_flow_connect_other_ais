@@ -72,6 +72,7 @@ const remoteRow = {
 
 // A CLI path that does not exist: launched, it fails loudly, so a run that answers proves the ROW's
 // path was used instead.
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const definitionOnlyCli = join(resolve(tmpdir()), 'coai-measure-definition-only', 'codex.exe');
 
 const CELLS = [
@@ -118,6 +119,7 @@ const CELLS = [
 ];
 
 function scratchRepo() {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const dir = mkdtempSync(join(tmpdir(), 'coai-measure-repo-'));
   const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'] });
   git('init', '--initial-branch=main');
@@ -178,7 +180,9 @@ function tidy(dir) {
 const repoPath = scratchRepo();
 const results = [];
 for (const cell of CELLS) {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const dataDir = mkdtempSync(join(tmpdir(), `coai-measure-${cell.id}-`));
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const recordDir = mkdtempSync(join(tmpdir(), `coai-measure-argv-${cell.id}-`));
   // THE PRODUCT'S BYTES: the rows through `vendorsFrom`, the map through the reader, both through `envBlock`.
   const block = envBlock({ ...DEFAULTS, consult: consultFrom(cell.consultants) }, vendorsFrom(cell.vendors));
