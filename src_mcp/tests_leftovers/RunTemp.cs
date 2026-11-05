@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// TEMP, TMP and TMPDIR at it does not start. The information flags (<c>--help</c>, <c>--version</c>, <c>--info</c>), when they are the WHOLE command line, run no test and no discovery and pass; beside any other argument
 /// (<c>@@</c>, <c>-automated</c>, a filter) they are gated, and <c>--list-tests</c> runs every <c>MemberData</c> and is gated.</para>
 /// <para><b>The end.</b> <see cref="EndOfRun"/> runs from the sweep fixture's disposal, right AFTER the end-of-run audit (E5 S6, D9: the audit reads the run folder while it exists), AND from the process-exit handler registered here, so a run that never builds a fixture
-/// (an information flag, a filter that matches nothing) leaves nothing either. A KILLED run leaves exactly one folder plus its claim, which the owner-aware sweep collects.</para>
+/// (an information flag, a filter that matches nothing) leaves nothing either. A KILLED run leaves exactly one folder plus its claim, which the owner-aware sweep collects. On an ELEVATED Windows process the folder and its claim are owned by <c>BUILTIN\Administrators</c>, so the sweep and the end-of-run audit read them as a stranger's: the sweep keeps the folder as <c>foreign-uid</c> and it waits for a person (E5 epoch 7, F31; pinned by <c>AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun</c>).</para>
 /// </remarks>
 public static class RunTemp
 {
