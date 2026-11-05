@@ -41,8 +41,8 @@ internal sealed class AcpTransport : IDisposable
     /// </summary>
     public const int MaxLineChars = 16 * 1024 * 1024;
 
-    /// <summary>How much of the agent's stderr is kept — its diagnosis lives in the last lines.</summary>
-    private const int StdErrChars = 64 * 1024;
+    /// <summary>How much of the agent's stderr is kept: the HEAD (BoundedText keeps the first characters and drops the rest), so a capture that was cut ends in a line the boundary broke — AcpDiagnosis never quotes it.</summary>
+    internal const int StdErrChars = 64 * 1024;
 
     private const int ChunkChars = 8192;
 
@@ -79,8 +79,11 @@ internal sealed class AcpTransport : IDisposable
     /// <summary>The exit code once <see cref="Exited"/> has completed; 0 before.</summary>
     public int ExitCode => _process.HasExited ? _process.ExitCode : 0;
 
-    /// <summary>What the agent wrote on stderr, bounded.</summary>
-    public string StdErr => _stderr.ToString();
+    /// <summary>What the agent wrote on stderr, bounded: the HEAD that was kept, with no sentence of ours appended. Whether it was cut is <see cref="StdErrTruncated"/>.</summary>
+    public string StdErr => _stderr.Kept;
+
+    /// <summary>True when the capture dropped output or the pipe was still open at the drain grace: the last line of <see cref="StdErr"/> may be incomplete.</summary>
+    public bool StdErrTruncated => _stderr.Truncated;
 
     /// <summary>Starts the agent exactly as <paramref name="request"/> says — the profile's request (<see cref="IAcpProfile.AgentRequest"/>), whose environment this class never touches. Throws what <see cref="Process.Start()"/> throws when it cannot — the caller names that.</summary>
     /// <remarks>Started by <see cref="ProcessLauncher.Started"/>, the one place a child is built — its resolver, its

@@ -592,7 +592,7 @@ public sealed class PanelService
     /// </remarks>
     private string DocumentKeyFor(string repoPath, string branch, string document)
     {
-        var identity = DocumentReader.IdentityOf(repoPath, document, DocumentReader.FollowLink);
+        var identity = DocumentReader.IdentityOf(repoPath, document);
 
         return identity.Length == 0
             ? string.Empty
@@ -616,7 +616,7 @@ public sealed class PanelService
     /// </summary>
     private SessionAddress AddressOf(string repoPath, string branch, string document, string feature) =>
         feature.Trim().Length > 0
-            ? new SessionAddress(SessionKey.FeatureBranch, string.Empty, DocumentReader.IdentityOf(repoPath, feature, DocumentReader.FollowLink))
+            ? new SessionAddress(SessionKey.FeatureBranch, string.Empty, DocumentReader.IdentityOf(repoPath, feature))
             : new SessionAddress(branch, DocumentKeyFor(repoPath, branch, document), string.Empty);
 
     /// <summary>A document review and a feature review are two different sessions — naming both is naming neither.</summary>
@@ -1054,7 +1054,7 @@ public sealed class PanelService
     private DocumentOutcome WhatToReview(string repoPath, string purposeText, int roles, DocumentRequest request) =>
         WhyNotADocumentRound(purposeText, roles) is { } no
             ? new DocumentOutcome.Refused(no)
-            : DocumentReader.Read(repoPath, request, DocumentReader.FollowLink);
+            : DocumentReader.Read(repoPath, request);
 
     private Task<string> ReviewTheDocumentAsync(
         string repoPath,

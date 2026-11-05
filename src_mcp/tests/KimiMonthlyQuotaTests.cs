@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CoaiMcp.Acp;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Notices;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Kimi;
@@ -207,6 +208,120 @@ public sealed class KimiMonthlyQuotaTests
         var missing = KimiAcpProfile.Failures.Where(failure => failure.Kind == AcpFailureKind.Spent).Select(failure => failure.Phrase).Where(phrase => !RateLimit.Hopeless(phrase)).ToList();
 
         missing.Should().BeEmpty("each Spent phrase of KimiAcpProfile.Failures must be in RateLimit.Spent: " + string.Join(", ", missing));
+    }
+
+    // ---------- feature gate round 1, F1: the WHOLE line is redacted, then the window is cut from the redacted text ----------
+
+    private const string Label = " Authorization: Bearer ";
+
+    /// <summary>A bare Bearer label: no "Authorization:" word in front, so redaction cannot GROW the window and let its own cap trim the fragment away.</summary>
+    private const string EndLabel = " Bearer ";
+
+    /// <summary>The measured sentence from its phrase on, so the phrase is the first thing after a test line's own prefix.</summary>
+    private static readonly string FromThePhrase = MonthlyLine[MonthlyLine.IndexOf(Phrase, StringComparison.Ordinal)..];
+
+    /// <summary>An opaque token of the given length: letters and digits only, no vendor prefix, nothing but the Bearer label makes Redaction recognise it.</summary>
+    private static string Opaque(int length) => string.Concat(Enumerable.Range(0, length).Select(i => "Zq8Lm3XvK7pRt2WbN5HcY9dFg4Js6AeU1oIx0Q"[(i * 7 + 3) % 38]));
+
+    [Fact]
+    public void ACredentialWhoseLabelTheOldWindowWouldCut_IsRedactedBeforeTheWindow_AndTheTokenNeverSurvives()
+    {
+        // The OLD order cut the window first: it starts WindowLeadIn characters before the phrase. A token of WindowLeadIn - 1 characters, one space, then the phrase
+        // puts the window's first character exactly ON the token's first character, so the label (Authorization: Bearer ) is cut away and the bare token reached SafeText.
+        var token = Opaque(AcpDiagnosis.WindowLeadIn - 1);
+        var head = new string('p', 500) + Label;
+        var line = head + token + " " + FromThePhrase;
+        var oldWindowStart = line.IndexOf(Phrase, StringComparison.OrdinalIgnoreCase) - AcpDiagnosis.WindowLeadIn;
+
+        oldWindowStart.Should().Be(head.Length, "the arithmetic that gives this test its teeth: the old window starts at the token's first character, so a window-then-redact order leaks it");
+        line.Length.Should().BeGreaterThan(AcpDiagnosis.LineCap, "a line that fits is not windowed at all");
+
+        var kept = AcpDiagnosis.Of(NamesNoRow, line, KimiAcpProfile.Failures).Line;
+
+        kept.Should().NotContain(token).And.NotContain(token[..8], "the token's first characters are the leak the old order let through");
+        kept.Should().Contain(Phrase).And.Contain("Your quota will be refreshed in the next cycle");
+        kept.Length.Should().BeLessThanOrEqualTo(AcpDiagnosis.LineCap);
+    }
+
+    [Fact]
+    public void ACredentialCrossingTheWindowsEnd_IsRedactedBeforeTheWindow_AndNoFragmentOfItSurvives()
+    {
+        // The window ends LineCap characters after it starts. Put the token's first 5 characters INSIDE the old window with the the Bearer label whole before them: Bearer wants
+        // 8 characters, so the old order quoted the 5-character fragment unredacted.
+        const int inside = 5;
+        var token = Opaque(59);
+        var head = new string('p', 100);
+        var windowEnd = head.Length - AcpDiagnosis.WindowLeadIn + AcpDiagnosis.LineCap;
+        var beforeLabel = windowEnd - inside - EndLabel.Length - (head.Length + Phrase.Length);
+        var line = head + Phrase + new string('f', beforeLabel) + EndLabel + token;
+        var oldWindow = line[(head.Length - AcpDiagnosis.WindowLeadIn)..windowEnd];
+
+        oldWindow.Should().EndWith(token[..inside], "the arithmetic that gives this test its teeth: the old window ends after the token's first characters, label intact, too short for Bearer");
+
+        var kept = AcpDiagnosis.Of(NamesNoRow, line, KimiAcpProfile.Failures).Line;
+
+        kept.Should().NotContain(token[..inside]).And.Contain(Phrase);
+        kept.Should().EndWith("Bearer [reda", "the window now cuts the REDACTED text: it ends inside the marker that replaced the token, never inside the token");
+        kept.Length.Should().BeLessThanOrEqualTo(AcpDiagnosis.LineCap, kept);
+    }
+
+    [Fact]
+    public void RedactionNeverTouchesAnyPhraseOfTheTable()
+    {
+        // The window is found again in the REDACTED text: that is only sound while the redactor leaves every phrase the profile matches alone.
+        var touched = KimiAcpProfile.Failures.Select(failure => failure.Phrase).Where(phrase => !Redaction.SafeText(phrase, int.MaxValue).Equals(phrase, StringComparison.Ordinal)).ToList();
+
+        touched.Should().BeEmpty("a phrase the redactor rewrites could never be found in the redacted line: " + string.Join(", ", touched));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(500)]
+    public void AnInteriorTab_NeverReachesTheQuotedLine_ItIsOneLineOfPrintableText(int padding)
+    {
+        // SafeSource keeps tab, LF and CR (the layout of a SOURCE, so the whole-text pass sees a block whole); the quoted line is ONE line of a notice, and it must end the way
+        // SafeText makes a notice: no control character at all. LF and CR are taken by the isolation; a tab inside the line is not (CodeRabbit on PR #917). 0 = the line whole, 500 = windowed.
+        var line = new string('p', padding) + " worker\tfailed:\t" + MonthlyLine;
+
+        var kept = AcpDiagnosis.Of(NamesNoRow, line, KimiAcpProfile.Failures).Line;
+
+        kept.Should().Contain(Phrase);
+        kept.Where(char.IsControl).Should().BeEmpty("the quoted line is one line of printable text: " + kept);
+        kept.Length.Should().BeLessThanOrEqualTo(AcpDiagnosis.LineCap);
+    }
+
+    [Fact]
+    public void WhenRedactionFailsClosed_NothingIsQuoted_NeverTheRawLine()
+    {
+        // A redaction that timed out answers Redaction.Redacted (Redaction.WhenRedactionTimesOut) for the WHOLE text: the marker holds no phrase, so nothing is quoted — and never the raw text.
+        var line = AcpDiagnosis.LineWith("noise Authorization: Bearer abcdefghijkl " + MonthlyLine, Phrase, _ => Redaction.WhenRedactionTimesOut(() => throw new System.Text.RegularExpressions.RegexMatchTimeoutException()));
+
+        line.Should().BeEmpty("the phrase is not in the marker: nothing of the raw text may be quoted in its place");
+    }
+
+    // ---------- feature gate round 1, F2: the matched line is quoted BEFORE the hopeless check ----------
+
+    [Fact]
+    public void AnUnrelatedHopelessWordInTheReason_DoesNotDiscardTheMatchedLine()
+    {
+        // "daily" is one of RateLimit.Spent: the reason alone is "hopeless", so the old order returned it bare and the monthly sentence the shim matched was dropped.
+        const string reason = "Internal error: daily worker failed";
+        RateLimit.Hopeless(reason).Should().BeTrue("the premise of the case: the word daily is in RateLimit.Spent");
+        var ended = KimiShimScripts.Ended(AcpWords.SpentExit, AcpEnd.AgentFailed, reason, failure: KimiAcpProfile.QuotaSpent, failureLine: MonthlyLine);
+
+        var verdict = Kimi().RateLimited(Built(), ended);
+
+        verdict.Limited.Should().BeTrue();
+        verdict.Reason.Should().Contain(MonthlyLine[..80]).And.Contain("Your quota will be refreshed in the next cycle");
+        RateLimit.Hopeless(verdict.Reason).Should().BeTrue(verdict.Reason);
+    }
+
+    [Fact]
+    public void AReasonThatIsHopelessOnItsOwnAndHasNoMatchedLine_IsReturnedAsItIs()
+    {
+        var ended = KimiShimScripts.Ended(AcpWords.SpentExit, AcpEnd.AgentFailed, "Internal error: daily worker failed", failure: KimiAcpProfile.QuotaSpent);
+
+        Kimi().RateLimited(Built(), ended).Reason.Should().Be("kimi_quota_spent: Internal error: daily worker failed", "no line to quote and the reason already stops the ladder: no phrases appended");
     }
 
     // ---------- F2: K4 precedence, pinned ----------

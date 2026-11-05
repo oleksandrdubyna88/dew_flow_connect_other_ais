@@ -22,7 +22,7 @@
   ],
   "runtimes": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api", "vibe", "kimi"],
   "features": {
-    "consultant": ["codex", "claude", "antigravity", "local", "api", "vibe"],
+    "consultant": ["codex", "claude", "antigravity", "local", "api", "vibe", "kimi"],
     "chat": ["antigravity", "claude", "codex"]
   },
   "effort": [

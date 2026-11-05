@@ -194,7 +194,7 @@ public sealed class AskGateDesk(
 
     private static bool Ours(QuestionConsultRecord record, string caller, string repoPath) =>
         string.Equals(record.Caller, caller, StringComparison.Ordinal)
-        && ConsultationService.SamePath(record.RepoPath, repoPath, DocumentReader.FollowLink);
+        && ConsultationService.SamePath(record.RepoPath, repoPath);
 
     /// <summary>Why a record of ours does not count, or empty: still consulting, too old, or already spent.</summary>
     private static string Standing(QuestionConsultRecord record)

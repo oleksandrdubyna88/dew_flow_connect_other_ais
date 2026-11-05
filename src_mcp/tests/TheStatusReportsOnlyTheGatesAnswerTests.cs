@@ -110,7 +110,7 @@ public sealed class TheStatusReportsOnlyTheGatesAnswerTests : IAsyncLifetime
             new SessionState("s-status", _repo.Path, SessionKey.FeatureBranch, PanelConfig.Uniform(2, 0))
             {
                 Stage = Stage.FeatureReview,
-                Feature = DocumentReader.IdentityOf(_repo.Path, plan, DocumentReader.FollowLink),
+                Feature = DocumentReader.IdentityOf(_repo.Path, plan),
                 RoundsRunThisStage = 1,
                 RequestQuestions = ["request0001"],
             },

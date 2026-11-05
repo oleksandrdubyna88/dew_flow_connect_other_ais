@@ -115,6 +115,232 @@ public sealed class TheArchiveCheckTests
         code.Should().Be(2, "a check that cannot look must not answer 'everything is there'");
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // THE ZIP. The Windows `coai-mcp` package is a `.zip` made AFTER signing, by the shared signing
+    // workflow, so the product check runs on that final file and must read it the way it reads a
+    // `.tar.gz`: same basename match, exact by default. Each case is an archive built to be wrong.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>What the Windows package must carry: the binary and the SQLite library beside it.</summary>
+    private static readonly string[] WhatTheWindowsPackageWants = ["coai-mcp.exe", "*e_sqlite3*"];
+
+    [Fact]
+    public void AZipWithEverythingInItPasses()
+    {
+        var archive = Zip("coai-mcp.exe", "e_sqlite3.dll", "tree-sitter.dll");
+
+        var (code, error) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(0, "this zip carries the binary and the library, and said: {0}", error);
+    }
+
+    [Fact]
+    public void AZipWithoutTheBinaryIsRefused()
+    {
+        var archive = Zip("e_sqlite3.dll", "tree-sitter.dll");
+
+        var (code, error) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(1, "a zip that signed everything but the binary is not a package");
+        error.Should().Contain("does not carry coai-mcp.exe");
+    }
+
+    /// <summary>The #328 hole, now for a zip: a name that CONTAINS the wanted one is not the wanted one.</summary>
+    [Fact]
+    public void DebugSymbolsDoNotStandInForTheBinaryInAZip()
+    {
+        var archive = Zip("coai-mcp.exe.dbg", "e_sqlite3.dll");
+
+        var (code, error) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(1, "there is no coai-mcp.exe here, only a file whose name contains it");
+        error.Should().Contain("does not carry coai-mcp.exe");
+    }
+
+    [Fact]
+    public void AZipWithoutTheSqliteLibraryIsRefused()
+    {
+        var archive = Zip("coai-mcp.exe", "tree-sitter.dll");
+
+        var (code, error) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(1);
+        error.Should().Contain("does not carry *e_sqlite3*");
+    }
+
+    /// <summary>A file that is named `.zip` and is not one cannot be looked into, and that is not a pass.</summary>
+    [Fact]
+    public void AFileThatIsNotAZipIsNotAPass()
+    {
+        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
+        var archive = Path.Combine(work.FullName, "coai-mcp-0.1.0-win-x64.zip");
+        File.WriteAllText(archive, "this is not a zip");
+
+        var (code, _) = Check(archive, WhatTheWindowsPackageWants);
+
+        code.Should().Be(2, "a check that cannot list the archive must not answer 'everything is there'");
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // THE LAYOUT. `archive-carries.sh` matches BASENAMES, and its contract stays that (coai-bugs and
+    // the tar check use it), so a Windows zip with the binary and the library one directory too deep,
+    // or at the root with no package folder, passes it. The loader looks beside the binary, so the
+    // package is whole only if both sit directly in `coai-mcp-<v>-<rid>/`. `final-zip-layout.sh`
+    // asks that, and derives the folder from the zip's own name. (CodeRabbit, #944.)
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AZipWithBothFilesAtThePackageTopLevelHasTheRightLayout()
+    {
+        var archive = ZipOf("coai-mcp-0.1.0-win-x64", "coai-mcp.exe", "e_sqlite3.dll", "tree-sitter.dll");
+
+        var (code, error) = Layout(archive);
+
+        code.Should().Be(0, "the binary and the library sit directly in the package folder, and it said: {0}", error);
+    }
+
+    /// <summary>The basename check passes this zip, and that is the point of having a second check.</summary>
+    [Fact]
+    public void FilesOneLevelTooDeepPassTheBasenameCheckAndFailTheLayout()
+    {
+        var archive = ZipOf("coai-mcp-0.1.0-win-x64", "bin/coai-mcp.exe", "bin/e_sqlite3.dll");
+
+        Check(archive, WhatTheWindowsPackageWants).Code.Should().Be(0, "a basename match cannot see depth");
+        var (code, error) = Layout(archive);
+
+        code.Should().Be(1, "a library one directory away from the binary is not where the loader looks");
+        error.Should().Contain("coai-mcp-0.1.0-win-x64/coai-mcp.exe");
+    }
+
+    [Fact]
+    public void FilesAtTheRootWithoutThePackageFolderFailTheLayout()
+    {
+        var flat = FlatZip("coai-mcp-0.1.0-win-x64", "coai-mcp.exe", "e_sqlite3.dll");
+
+        Check(flat, WhatTheWindowsPackageWants).Code.Should().Be(0, "a basename match cannot see a missing folder");
+        var (code, _) = Layout(flat);
+
+        code.Should().Be(1, "the shared workflow packs ONE top-level folder named for the package");
+    }
+
+    [Fact]
+    public void ATopLevelLibraryWithoutTheBinaryFailsTheLayout()
+    {
+        var archive = ZipOf("coai-mcp-0.1.0-win-x64", "e_sqlite3.dll", "bin/coai-mcp.exe");
+
+        var (code, error) = Layout(archive);
+
+        code.Should().Be(1);
+        error.Should().Contain("coai-mcp.exe");
+    }
+
+    [Fact]
+    public void ATopLevelBinaryWithoutTheLibraryFailsTheLayout()
+    {
+        var archive = ZipOf("coai-mcp-0.1.0-win-x64", "coai-mcp.exe", "bin/e_sqlite3.dll");
+
+        var (code, error) = Layout(archive);
+
+        code.Should().Be(1);
+        error.Should().Contain("e_sqlite3");
+    }
+
+    /// <summary>The folder is read from the NAME, so a zip whose folder is another package's is wrong.</summary>
+    [Fact]
+    public void AFolderThatIsNotNamedForTheZipFailsTheLayout()
+    {
+        var archive = ZipOf("coai-mcp-0.1.0-win-x64", "coai-mcp.exe", "e_sqlite3.dll");
+        var renamed = Path.Combine(Path.GetDirectoryName(archive)!, "coai-mcp-0.2.0-win-x64.zip");
+        File.Move(archive, renamed);
+
+        var (code, _) = Layout(renamed);
+
+        code.Should().Be(1, "coai-mcp-0.2.0-win-x64/ is what this zip's name promises, and it is not there");
+    }
+
+    /// <summary>A name that is not `coai-mcp-&lt;v&gt;-&lt;rid&gt;.zip` gives no folder to look in: called wrongly, never a pass.</summary>
+    [Fact]
+    public void AZipWhoseNameGivesNoPackageFolderIsNotAPass()
+    {
+        var archive = ZipOf("coai-mcp-0.1.0-win-x64", "coai-mcp.exe", "e_sqlite3.dll");
+        var renamed = Path.Combine(Path.GetDirectoryName(archive)!, "something-else.zip");
+        File.Move(archive, renamed);
+
+        var (code, _) = Layout(renamed);
+
+        code.Should().Be(2);
+    }
+
+    [Fact]
+    public void AZipThatIsNotThereOrNotAZipIsNotAPass()
+    {
+        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
+        var junk = Path.Combine(work.FullName, "coai-mcp-0.1.0-win-x64.zip");
+        File.WriteAllText(junk, "this is not a zip");
+
+        Layout(junk).Code.Should().Be(2, "a check that cannot list the archive must not answer 'the layout is right'");
+        Layout(Path.Combine(work.FullName, "coai-mcp-9.9.9-win-x64.zip")).Code.Should().Be(2);
+    }
+
+    /// <summary>A `.zip` of one named folder holding empty files; a name with a slash is a file in a subfolder.</summary>
+    private static string ZipOf(string directory, params string[] names)
+    {
+        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
+        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.FullName, "tree"));
+        var staged = System.IO.Directory.CreateDirectory(Path.Combine(tree.FullName, directory));
+        foreach (var name in names)
+        {
+            var path = Path.Combine(staged.FullName, name.Replace('/', Path.DirectorySeparatorChar));
+            System.IO.Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, string.Empty);
+        }
+
+        var archive = Path.Combine(work.FullName, $"{directory}.zip");
+        ZipFile.CreateFromDirectory(tree.FullName, archive, CompressionLevel.Fastest, includeBaseDirectory: false);
+
+        return archive;
+    }
+
+    /// <summary>A `.zip` named like the package's, with the files at its ROOT: the package folder is missing.</summary>
+    private static string FlatZip(string name, params string[] files)
+    {
+        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
+        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.FullName, "tree"));
+        foreach (var file in files)
+        {
+            File.WriteAllText(Path.Combine(tree.FullName, file), string.Empty);
+        }
+
+        var archive = Path.Combine(work.FullName, $"{name}.zip");
+        ZipFile.CreateFromDirectory(tree.FullName, archive, CompressionLevel.Fastest, includeBaseDirectory: false);
+
+        return archive;
+    }
+
+    /// <summary>`final-zip-layout.sh` the way `release.yml` runs it: relative zip name, from the zip's folder.</summary>
+    private static (int Code, string Error) Layout(string archive) =>
+        ShellScript.Run("final-zip-layout.sh", Path.GetDirectoryName(archive)!, Path.GetFileName(archive));
+
+    /// <summary>A `.zip` holding one directory of empty files, the way the signing workflow packs one.</summary>
+    private static string Zip(params string[] names)
+    {
+        const string Directory = "coai-mcp-0.1.0-win-x64";
+        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
+
+        // Staging tree and archive are separate, for the same reason as in <see cref="Archive"/>.
+        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.FullName, "tree"));
+        var staged = System.IO.Directory.CreateDirectory(Path.Combine(tree.FullName, Directory));
+        foreach (var name in names)
+        {
+            File.WriteAllText(Path.Combine(staged.FullName, name), string.Empty);
+        }
+
+        var archive = Path.Combine(work.FullName, $"{Directory}.zip");
+        ZipFile.CreateFromDirectory(tree.FullName, archive, CompressionLevel.Fastest, includeBaseDirectory: false);
+
+        return archive;
+    }
+
     /// <summary>A `.tar.gz` holding one directory of empty files, the way the release packages one.</summary>
     private static string Archive(params string[] names)
     {

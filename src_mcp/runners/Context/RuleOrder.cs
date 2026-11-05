@@ -65,9 +65,9 @@ public sealed record RuleOrder
     /// budget (77 562 when this was first measured, 2026-09-16), leaving 56 bytes against a smallest
     /// non-tier rule of 2 197 — so the tail took NO rule on any branch, and the new
     /// <c>common/test-leftovers.md</c> (4 706 bytes) could not reach a reviewer at all. The operator
-    /// raised the budget to 90 000 that day: the same base and tier now leave 9 976 bytes (10 056 until 2026-10-18, 10 033 until 2026-10-19 and 10 014 until 2026-10-20 and 9 992 until 2026-10-21, as `.agents/PROJECT.md` gained 23, 19, 22 and then 16 characters), and the tail
-    /// takes one rule on 30 % of branches, two on 62 % and three on 8 % (mean 1.78, over 3 000 branch
-    /// names). <c>common/test-leftovers.md</c> is drawn on about 10 % of them — a real but partial
+    /// raised the budget to 90 000 that day: the same base and tier now leave 10 002 bytes (9 976 until 2026-11-01, when the conventions pin moved to release `105d53c` and the tier became 62 035; 10 056 until 2026-10-18, 10 033 until 2026-10-19 and 10 014 until 2026-10-20 and 9 992 until 2026-10-21, as `.agents/PROJECT.md` gained 23, 19, 22 and then 16 characters), and the tail
+    /// takes one rule on 35 % of branches, two on 58 % and three on 7 % (mean 1.72, over 3 000 branch
+    /// names; 30 / 62 / 8 % and 1.78 at 9 976). <c>common/test-leftovers.md</c> (an 8 403-character core since 2026-11-01) is drawn on about 5 % of them (147 of 3 000; 7 of the 100 fixed names) — a real but partial
     /// reach, which is what a rotation over 29 candidates and about 10 KB can give. The number is the
     /// same on every platform since 2026-09-18, when <c>RuleFiles.Read</c> stopped spending the budget on
     /// carriage returns. The tail is still a lottery by design: what would make a rule reach EVERY

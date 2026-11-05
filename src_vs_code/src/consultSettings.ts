@@ -15,6 +15,7 @@ import { CONSULTING } from './featureAvailability.generated';
 import { Runtime, RUNTIMES } from './models';
 import { hostFamily } from './hostSide';
 import { storedForThisSide } from './pathFamily';
+import { consultantRuntimeNote } from './runtimeSince';
 import { Vendor, vendorsFrom } from './vendors';
 
 /**
@@ -479,6 +480,19 @@ export function consultantSkewNote(
     + 'vendor id instead — that row’s runtime, endpoint and CLI path, with the model chosen here — and one whose '
     + `id names no reviewer row is refused as not configured, whatever this section shows. Update it to `
     + `${CONSULTANT_DEFINITION_SINCE} or later — the MCP server tab.`;
+}
+
+/**
+ * The sentence the Consultant section shows while some caller's consultant runs on a runtime the installed server cannot consult
+ * on — one sentence per such runtime, each named once — or nothing (E5.7 of todo/PLAN_vibe_and_kimi_runtimes_E5.md, decision 2).
+ *
+ * <p>Read off the RESOLVED map, because that is what crosses and what the server is asked to run; the entry still crosses
+ * (`consultantsEnv` withholds nothing) and the server refuses it by name, which this sentence explains before it happens.</p>
+ */
+export function consultantRuntimeSkewNote(installedServerVersion: string, consult: ConsultSettings): string {
+  const runtimes = new Set(CALLER_KINDS.map(({ id }) => consult.byCaller[id]).flatMap((one) => (one?.kind === 'definition' ? [one.runtime] : [])));
+
+  return [...runtimes].map((runtime) => consultantRuntimeNote(installedServerVersion, runtime)).filter((note) => note.length > 0).join(' ');
 }
 
 /**

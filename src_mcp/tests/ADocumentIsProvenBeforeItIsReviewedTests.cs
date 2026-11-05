@@ -1,5 +1,6 @@
 using System.Text;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -20,7 +21,12 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
 {
-    private readonly string _repo = Directory.CreateTempSubdirectory("coai-doc-repo-").FullName;
+    /// <summary>
+    /// The repository as the RESOLVER spells it: no link in the temp path (macOS: <c>/var</c> is <c>/private/var</c>). A test that stands a
+    /// link in with the entry seam compares the path the resolver asks about with the path it wrote, as text, so the two have to be the
+    /// spelling the resolver emits — resolved, native separators.
+    /// </summary>
+    private readonly string _repo = Resolved(Directory.CreateTempSubdirectory("coai-doc-repo-").FullName);
 
     /// <summary>
     /// Somewhere that is not the repository, and is this test's own: the documents the refusals point at live here, never at a fixed name in the machine's
@@ -42,17 +48,20 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         }
     }
 
+    private static string Resolved(string folder) => RealPath.Resolve(folder) is { Ok: true } real ? real.Path : folder;
+
+    /// <summary>Writes a file and answers its path as the resolver spells it: native separators (Windows: <c>Path.Combine</c> keeps a <c>/</c>).</summary>
     private string Write(string relative, string text)
     {
-        var path = Path.Combine(_repo, relative);
+        var path = Path.GetFullPath(Path.Combine(_repo, relative));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, text);
         return path;
     }
 
-    /// <summary>No link resolution at all — the identity function, for the ordinary case.</summary>
-    private DocumentOutcome Read(DocumentRequest request, Func<string, string>? followLink = null) =>
-        DocumentReader.Read(_repo, request, followLink ?? (p => p));
+    /// <summary>The real disk, unless a test stands a link in with <paramref name="read"/>.</summary>
+    private DocumentOutcome Read(DocumentRequest request, EntryReader? read = null) =>
+        DocumentReader.Read(_repo, request, read);
 
     private static string Refusal(DocumentOutcome outcome) =>
         outcome.Should().BeOfType<DocumentOutcome.Refused>().Subject.Sentence;
@@ -138,13 +147,31 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
     /// the one an attacker would reach for. The resolver is injected so the rule is a unit test
     /// rather than a privilege the CI runner may not have.
     /// </summary>
+    /// <summary>
+    /// A path the resolver cannot follow is refused with the CHECK first: the caller is told to look at the path and at the links on it, and only
+    /// if the file is the right one is it offered the documentText way round. Offering the copy first teaches the caller to paste around a
+    /// refusal that may have been about a link nobody meant.
+    /// </summary>
+    [Fact]
+    public void APathTheResolverCannotFollow_SaysToCheckThePathAndItsLinksBeforeItOffersDocumentText()
+    {
+        var file = Write("docs/unfollowable.md", Body);
+
+        var sentence = Refusal(Read(new DocumentRequest(Path: file), read: p => p == file ? throw new IOException("the disk would not say") : RealPath.Lstat(p)));
+
+        sentence.Should().Contain("cannot be resolved safely").And.Contain("check");
+        sentence.IndexOf("check", StringComparison.Ordinal).Should().BeLessThan(
+            sentence.IndexOf("documentText", StringComparison.Ordinal), "the check comes first");
+        sentence.Should().Contain("links").And.Contain("right one");
+    }
+
     [Fact]
     public void ASymlinkEscapingTheRepository_IsRefused()
     {
         var link = Write("docs/innocent.md", Body);
         var elsewhere = Path.Combine(_elsewhere, "secrets.env");
 
-        Refusal(Read(new DocumentRequest(Path: link), followLink: _ => elsewhere))
+        Refusal(Read(new DocumentRequest(Path: link), read: p => p == link ? Entry.Link(elsewhere) : RealPath.Lstat(p)))
             .Should().Contain("inside");
     }
 
@@ -282,10 +309,10 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
 
         // The seam stands in for the link: `docs` resolves outside, `docs/spec.md` does not resolve
         // at all. That is exactly the shape the old code could not see.
-        string Link(string p) =>
-            p.Replace("\\", "/").EndsWith("/docs", StringComparison.Ordinal) ? elsewhere : p;
+        Entry Link(string p) =>
+            p.Replace("\\", "/").EndsWith("/docs", StringComparison.Ordinal) ? Entry.Link(elsewhere) : RealPath.Lstat(p);
 
-        Refusal(Read(new DocumentRequest(Path: Path.Combine(_repo, "docs", "spec.md")), followLink: Link))
+        Refusal(Read(new DocumentRequest(Path: Path.Combine(_repo, "docs", "spec.md")), read: Link))
             .Should().Contain("inside");
     }
 
@@ -316,13 +343,13 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         var real = Directory.CreateTempSubdirectory("coai-checkout-resolved-").FullName;
         var said = Directory.CreateTempSubdirectory("coai-checkout-said-").FullName;
 
-        string Link(string p) =>
+        Entry Link(string p) =>
             string.Equals(
                 Path.TrimEndingDirectorySeparator(p),
                 Path.TrimEndingDirectorySeparator(said),
                 DocumentId.Comparison)
-                ? real
-                : p;
+                ? Entry.Link(real)
+                : RealPath.Lstat(p);
 
         try
         {
@@ -380,12 +407,12 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         var written = Write("docs/spec.md", Body);
         var stored = Ready(Read(new DocumentRequest(Path: written))).Id;
 
-        DocumentReader.IdentityOf(_repo, said, p => p).Should().Be(stored);
-        DocumentReader.IdentityOf(_repo, written, p => p).Should().Be(stored);
+        DocumentReader.IdentityOf(_repo, said).Should().Be(stored);
+        DocumentReader.IdentityOf(_repo, written).Should().Be(stored);
     }
 
     /// <summary>A name given to raw text reaches itself, because it is not a path at all.</summary>
     [Fact]
     public void ANameForRawText_IsItsOwnIdentity() =>
-        DocumentReader.IdentityOf(_repo, "Spec", p => p).Should().Be("Spec");
+        DocumentReader.IdentityOf(_repo, "Spec").Should().Be("Spec");
 }
