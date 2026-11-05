@@ -127,7 +127,10 @@ public sealed class SiblingChild
         {
             if (role == "b")
             {
-                File.WriteAllText(Environment.GetEnvironmentVariable("COAI_S6_READY")!, dir.Path);
+                // Written under another name and moved, so the parent never sees the file before it holds the path (a slow, instrumented run did).
+                var ready = Environment.GetEnvironmentVariable("COAI_S6_READY")!;
+                File.WriteAllText(ready + ".part", dir.Path);
+                File.Move(ready + ".part", ready);
                 var go = Environment.GetEnvironmentVariable("COAI_S6_GO")!;
                 var until = DateTime.UtcNow.AddSeconds(45);
                 while (!File.Exists(go) && DateTime.UtcNow < until)
