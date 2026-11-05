@@ -1,6 +1,6 @@
 # Build brief — coai E5 story S6: the two guards, the audit, the `raw-temp` baseline, the CI legs (the last commits of the producer PR)
 
-> Status: **plan only, nothing implemented yet; revised 2026-11-05 by Opus after the owner approved epoch 6. The decisions are taken (below). A Sonnet coder builds from this brief alone. § 4 step 0 lists the preconditions.**
+> Status: **built to `3fcba8a0`, stopped 2026-11-05 at entry 6.2; what is left is the parent's § *Epoch 7* item 5.** Was: plan only; revised 2026-11-05 by Opus after the owner approved epoch 6. The decisions are taken (below). A Sonnet coder builds from this brief alone. § 4 step 0 lists the preconditions.**
 
 First written 2026-11-05 by Opus at head `524df50e`. Revised at head `2c339086` of branch `feat/test-leftovers-e5-producer` in `<the producer worktree>`: `main` is merged and the pin is `bd795847` (F3, F24 and #130). Every count below was measured again at `e8355d2b` with the guard at the pin. `git diff --name-only 524df50e 2c339086` holds only `.agents/conventions` and files under `todo/`, so no code line moved and the numbers of the first version stand. § 3 corrects one number that was wrong before (`raw-temp` 649).
 
@@ -948,7 +948,7 @@ Also change the `<para><b>The end.</b>` of the class comment: `EndOfRun` runs fr
 | The run has a real orphan claim on an elevated Windows process | **Not seen.** A new file there is owned by `BUILTIN\Administrators`, so `Discover` reads it as a stranger's. A registered folder stays red through the registry. Parent's § *Epoch 7*; F31. |
 | A child under an inherited `TESTSTODELETE_RUN` | `Owner.RunRecord(env, …) != Owner.This`: `Discover` returns nothing. The registry covers this process's own. Row 1's fix, from the template. |
 | The sweep fixture's constructor threw, a host aborted before disposal, or `RunTempFixture` refused | The process-exit handler ends the folder. No audit runs. That run has already failed or been killed. |
-| The run was killed | One folder plus its claim. The next run's sweep collects it. |
+| The run was killed | One folder plus its claim. The next run's sweep collects it; on an elevated Windows process it is kept as `foreign-uid` and waits for a person (the parent's § *Epoch 7*). |
 | The run folder cannot be removed at the end | It stays with its claim and one warning (S3's contract), and it is not a red run. The next sweep judges it. |
 
 ### 11.4 The self-test per suite: the orphan-claim plant (R16)
@@ -1012,7 +1012,7 @@ public void AnOrphanClaim_IsReportedByTheAudit_BeforeTheRunFolderEnds()
 }
 ```
 
-**The pin of the limit, `CoaiMcp.Tests` only.** `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun`, in `src_mcp/tests/RunTempTests.cs`. It uses the parent's lines with `COAI_S6_ORPHAN_CLAIM_UNTOUCHED=1` as well. It skips unless the process is on Windows and a new file reads `Scope.IsMine` false, and it says why. It asserts `result.ExitCode` is 0 and the output has no `this run left`. It goes red when F31 changes the helper, and that is its purpose.
+**The pin of the limit, `CoaiMcp.Tests` only.** `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun`, in `src_mcp/tests/RunTempTests.cs`. It uses the parent's lines with `COAI_S6_ORPHAN_CLAIM_UNTOUCHED=1` as well. It skips, saying why, unless the process is on Windows AND elevated (Administrators) AND a new file made in another `_owned.Dir`, never in `root` (the empty-root line reads `root`), reads `Scope.IsMine` false. It asserts `result.ExitCode` is 0 and the output has no `this run left`. It goes red when F31 changes the helper, and that is its purpose.
 
 **What the plant does not prove.** A real claim of an elevated run (the pin says so). And who removed the claim: the final empty-root assertion cannot tell the audit from the end of the run; the template's test proves the removal.
 
@@ -1392,8 +1392,8 @@ A fixture that passed on Linux has failed only on hosted Windows before. So each
 | The ONE ordered call, on Windows, where a held handle can keep the run folder | the `windows` job's `Test` and the plant in `CoaiMcp.Tests` and `CoaiServer.Tests`, with the claim re-owned; S3's contract (a folder that stays keeps its claim and one warning) |
 | A real orphan claim or a killed run's folder on an elevated Windows process | NOT seen and NOT collected: the goal's exception (parent's § *Epoch 7*), pinned by `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun`; F31 |
 | The plant on the other suites | each suite only on the OSes D8's table names: bugs on Linux only, bench not on Windows. Accepted (D8) |
-| The smoke stub under Git Bash | NOT proved on Windows: the `windows` job runs only `*RunFolderTests` of `CoaiServer.Tests`. Linux and macOS prove it |
-| The kind 5 pins under Git Bash | the pins in `CoaiMcp.Tests`, in `windows` `Test`, where bash is present; a test that skips for no bash says so. The pins in `CoaiServer.Tests` are not run on Windows, for the same reason |
+| The smoke stub under Git Bash | No PR gate on Windows: the `windows` job runs only `*RunFolderTests` of `CoaiServer.Tests`. Linux and macOS prove it in a PR; one throwaway probe did on Windows (5 of 5), and a release does (`release.yml:860`) |
+| The kind 5 pins under Git Bash | No PR gate on Windows: they are in `CoaiServer.Tests` (three) and `src_bugs/tests/ShellScript.cs:85`. A release runs the server's on both Windows runners (`release.yml:860`) |
 | `A_path_with_quotes_…`: no quote in a Windows name (the template's branch) | `windows` `Test` |
 | `An_unreadable_candidate_…` skips on Windows (`chmod`) | not proved on Windows; the same message path on Linux and macOS |
 | The symlink test of R8 and B8: POSIX only | not proved on Windows; `locateBaseline` is shipped code, tested in `dew_flow_conventions` |
