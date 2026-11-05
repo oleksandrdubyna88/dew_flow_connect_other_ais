@@ -333,7 +333,9 @@ linuxTest('a hostile path.txt is DATA: the rendered text holds none of it, nothi
 function fakeServer(home, pathValue) {
   const dir = join(home, '.vscode-server', 'bin');
   mkdirSync(dir, { recursive: true });
-  const exe = join(dir, 'server-node');
+  // Named `sleep` because Ubuntu 26.04's /bin/sleep is the Rust coreutils multi-call binary, which picks its program from
+  // the file's own name: a copy called anything else exits 1 with "coreutils: unknown program", and no server is found.
+  const exe = join(dir, 'sleep');
   copyFileSync('/bin/sleep', exe);
   chmodSync(exe, 0o755);
   const child = spawn(exe, ['600'], { env: { PATH: pathValue, SECRET_OTHER: 'must-not-be-kept' }, stdio: 'ignore' });
