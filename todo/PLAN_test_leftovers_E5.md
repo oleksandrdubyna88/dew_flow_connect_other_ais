@@ -552,8 +552,8 @@ discovery and patterns of its own" was withdrawn, and stays withdrawn): the Node
 zero of WHOLE literals until F30 ships, and the PR says so (row 2's note). "The copied C# guard (`LeftoversGuard`, byte-identical)"
 above reads as D2's ADAPTED copy (the manifest's ops, the diff check) since the parent's entry 3.1. The `raw-temp` class has
 TWO authorised forms here: the one baseline file with its scopes for sites inside a proven run folder, and the rule's inline
-exemption for the lines no scope can carry (`src_vs_code/scripts/`, 54 lines by the C# guard's count, and
-`src_server/smoke-image.sh:73`), each listed in the expected-exemption inventory with a reason proved as § *S6* says.
+exemption for the lines no scope can carry (`src_vs_code/scripts/`, 54 lines by the C# guard's count;
+`src_server/smoke-image.sh:73`; and up to 22 lines of product, deployment or helper code that no test run makes, `deploy/**`, the installers, `release.yml`, `scripts/probe-*`, `kimi.mjs`, `Serving.cs`, `TempDir.cs`, `Owned.cs`, less any file on the frozen exclusion list), each listed in the expected-exemption inventory with a reason proved as § *S6* says.
 
 **D7 — Stage A is the retirement of the age-only sweep, nothing else.** The barrier (rule § *The barrier*) names "a
 sweeper that matches the prefix without an owner segment, OR removes on age"; coai's two sweeps remove on age. R6
@@ -642,8 +642,7 @@ claim-only leftover is seen only audit-first; S6 plants an orphan claim absent f
 pins the order with a test; **(p)** `src_server/smoke-image.sh` sets `finish` and its `trap` before `mktemp -d` (today `:73` and
 `:102`), RED first with a failing `chmod` or `openssl` stub on PATH in `TheImageSmokeUsesTheServerTests`; the exemption's
 reason names what stays open (a `kill -9` at any moment of the run, which no trap sees); **(q)** at the PR's LAST head before the squash merge,
-`leftovers-check.mjs --print-baseline` equals the committed `raw-temp-baseline.json` for the Node scopes (a `diff` of zero,
-recorded on the PR) and the C# wrapper's equivalent for the `csharp` scopes, because the standing shrink step is skipped on this
+`leftovers-check.mjs --baseline-shrinks --base <the creation commit>` exits 0, recorded on the PR, with both wrappers green, because the standing shrink step is skipped on this
 PR by number (the brief § 12.4). Also: (g) and (i) are met by coai #947 (the pin at `bd795847`), still OPEN when this was
 written — S6 creates no baseline and runs no second F24 check before it merges and `main` is merged into the branch; (l)'s
 C# proof-check test (`TheProofCheck_ClosesForEachScope`) is NEW code of S6. The commit order is S3 → S2-B → S4 → S5 → S6, and
@@ -1632,12 +1631,12 @@ starts (the parent's § *Epoch 6*, item 4.7).
   one-character class, a regex over the word, the bare word, half of the word) and that the zero is a zero of WHOLE literals
   until F30 ships. The split-piece scan (`'testsTo'`, `"tests", "To"`, `.join('')`, `string.Concat` beside `Delete`) runs on
   the whole repository, its output recorded as a search, never as a proof. No coai-own folding reader (D6).
+- **The inventory's reasons have four kinds** (the parent's item 4.2, the coordinator's decisions of 2026-11-05): an entry script proved by its wrap; a library proved by every importer, kept true by a standing test beside `runnerScripts.test.mjs` E1 that fails when an importer of an exempted library is neither an entry with the wrap nor a test under the runner; a read that allocates nothing; and a read record for product, deployment or helper code that no test run makes. A line a test run can reach is not the fourth kind. Each row holds the sha256 of its trimmed line, as the baseline does, so a line cannot change under its marker.
 - **The audit (D9), audit-first (D8 (o)).** The template's wiring is replaced by the manifest op of the brief § 11:
   `RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder())`, bounded to this run's folder and this process's record
   (row 1). `LeftoversAudit.Discover` returns `[]` once the run folder is gone (`LeftoversAudit.cs:41`), so a claim-only
   leftover (an orphan claim of a folder a test removed itself, absent from the registry) is seen only when the audit runs
-  BEFORE `RunTempFixture` ends the run folder. S6 plants exactly that orphan claim, runs both fixture orders, and fixes the
-  order audit-first with a test that pins it (if both orders report it, the test still pins the order and says why).
+  BEFORE the run folder ends. xUnit 4.0.1 disposes assembly fixtures in creation order and all four `RunTempStart.cs` list `RunTempFixture` first, so today's order misses it. Swapping the attributes is not the fix (it runs the real-root sweep before `RunTempFixture`'s constructor, the fail-closed fallback). **The audit and the end of the run folder become ONE ordered call in the sweep fixture's disposal (the audit, then `RunTemp.EndOfRun` in `finally`), and `RunTempFixture.Dispose` no longer ends the run; the process-exit handler stays.** S6 plants that orphan claim in a child run with no inherited `TESTSTODELETE_RUN`, in EACH of the four suites, and the audit reports it; RED before the ordered call, shown once.
   `LeftoversSelfTest` leaks on purpose under `COAI_LEFTOVERS_SELFTEST`; CI asserts the run FAILS with the audit's first line
   (the brief § 12, both values, on the three legs). **A leak the audit exposes is fixed in the test that made it before the
   PR merges; the audit is never weakened and no entry skips it; each one found is recorded in `module_tests.md`.**
@@ -1646,7 +1645,7 @@ starts (the parent's § *Epoch 6*, item 4.7).
   `TheImageSmokeUsesTheServerTests` gains a case with a failing `chmod` (or `openssl`) stub on PATH — today the folder
   stays (the script exits under `set -e` before the trap line), after the move it is gone. The line's inline `raw-temp`
   exemption names what stays unsolved: a `kill -9`, or the hard kill that ends a CI cancel, at any moment from `mktemp` to
-  the end of the script leaves the folder with no claim and no prefix, unseen by the janitor. No trap sees it; after the
+  the end of the script leaves the folder with no claim. So the folder takes an owner-form name (`mktemp -d "${TMPDIR:-/tmp}/testsToDelete-u$(id -u)-coai-smoke-XXXXXX"`): the janitor lists a killed run's folder as `unmarked` for a person to read, and never removes it. This is the parent's second bounded exception to the goal. No trap sees it; after the
   move the trap stands before `mktemp`, so the window is the whole run, not one line.
 - **The baseline.** Generated once from the real tree after S5 (every `raw-temp` finding inside the six scopes that S3/S4
   did not move; `GetTempPath`/`tmpdir` imports used only to READ the root are migrated, not baselined — the brief § 9.3);
@@ -1658,8 +1657,7 @@ starts (the parent's § *Epoch 6*, item 4.7).
   `workflowsStartTestsThroughARunner.test.mjs` pins that no workflow holds the creation flag. The standing step
   (`--baseline-shrinks --base <base sha>`) skips this PR by number and runs on every later PR; S7's first PR removes the
   clause. **The final content (D8 (q)):** at this PR's LAST head before the squash merge, `leftovers-check.mjs
-  --print-baseline` is diffed against the committed `raw-temp-baseline.json` for the Node scopes (zero lines, recorded on
-  the PR), and the C# wrapper prints its `csharp` scopes the same way if `--print-baseline` does not cover them (checked at `bd795847`: it does not, it reads no `.cs`; and it prints `scopes: []`, so this check as worded cannot go green: the parent's judge note proposes the wording).
+  --baseline-shrinks --base <the creation commit>` exits 0, recorded on the PR, with both wrappers green. `--print-baseline` cannot do this (it reads no `.cs` and prints `scopes: []`); `--baseline` already reconciles entries and sites, and what is open is growth after the creation, which the shrink check refuses with `new key`.
 - **Seeded violations and break-its.** One planted site per actual test root — `src_mcp/tests`, `src_mcp/tests_leftovers`,
   `src_mcp/tests_fakecli`, `src_server/tests`, `src_bugs/tests`, `src_bench/CoaiBench.Tests`, `src_vs_code/src/test`,
   `scripts/`, `src_vs_code/scripts/`, `.github/workflows`, `.github/scripts/`, `http/` — each red naming file and line, then
@@ -1687,10 +1685,10 @@ starts (the parent's § *Epoch 6*, item 4.7).
 - **DoD (S6, epoch 6).** Every class red once and green with a valid exemption; the checks above green on the whole tree,
   both guards, three legs; the inventory equal to the guard's list, every `raw-temp` exemption's reason proved on the PR as
   above; the positive Node detection test green and the one sentence of what is not detected in the PR; the two split
-  fixtures plain; the orphan-claim plant observed in both orders and the audit-first order pinned; the smoke script's
+  fixtures plain; the orphan-claim plant green in each of the four suites through the ONE ordered call, its RED shown once; the smoke script's
   trap moved with its RED observed; the audit self-test red-for-the-right-reason on three legs; F24's second check
-  recorded; the baseline created once, its creation step removed, no workflow holding the creation flag, the final-content
-  diff zero at the last head; every S5 deferral listed with where it was handled; the producer PR's squash merge carries
+  recorded; the baseline created once, its creation step removed, no workflow holding the creation flag, the shrink check
+  against the creation commit green at the last head; every S5 deferral listed with where it was handled; the producer PR's squash merge carries
   S3, S2-B, S4, S5 and S6 together with `TheProducerAndTheSweep_LandTogether` green; the pin at `bd795847`;
   `module_tests.md` says all of it.
 
@@ -1964,8 +1962,8 @@ legacy fixtures above. The parent's build order says the same ("the series' line
       inline `raw-temp` exemption's reason PROVED on the PR (entries through `startOwnedRun`, libraries through every caller,
       reads as read records); the Node detection test positive for the two detected classes, the one sentence of what is
       not detected, the split-piece scan recorded as a search (F30 open); the two split fixtures plain literals; the
-      orphan-claim plant in both fixture orders and the audit-first order pinned (D8 (o)); `smoke-image.sh`'s trap before
-      `mktemp`, RED observed (D8 (p)); the final-content diff of the baseline zero at the PR's last head (D8 (q)); the pin at
+      orphan-claim plant in each of the four suites and the ONE ordered call (D8 (o)); `smoke-image.sh`'s trap before
+      `mktemp`, RED observed (D8 (p)); the shrink check against the creation commit green at the PR's last head (D8 (q)); the pin at
       `bd795847` (#947) and F24's second check before the baseline is created. The boxes above that say "only the authorised
       `raw-temp` baseline left" and "every must-not-copy row RED-GREEN-RED" are read with D8 (b) as reworded and row 2's note.
 - [ ] S7: the baseline drained to zero and deleted.
