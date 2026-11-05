@@ -94,9 +94,81 @@ public static partial class RegularFiles
         return Capped(stream, maxBytes);
     }
 
-    /// <summary>The descriptor's type, owner and mode judged from one <c>statx</c>; empty when the file may be read.</summary>
+    /// <summary>
+    /// A stream over the regular file at <paramref name="path"/> for a reader that must not block, nor be blocked by, the file's owner replacing it
+    /// (Linux and macOS; Windows opens through the caller's own share flags). Unlike <see cref="ReadOwned"/> it FOLLOWS a final link, as
+    /// <see cref="File.Exists(string)"/> does, and asks nothing about owner or mode: the caller decides what it trusts, this decides only that
+    /// the open cannot wait and that what is read is a file.
+    /// </summary>
+    /// <remarks>
+    /// Opened <c>O_NONBLOCK | O_CLOEXEC | O_NOCTTY</c> with no lock of any kind, so a FIFO with no writer is not waited on and a replace by
+    /// rename is never refused. On Linux the type is asked of the open descriptor (<c>statx</c>, as <see cref="ReadOwned"/> does); on macOS, which
+    /// has no <c>statx</c>, a descriptor that cannot seek (a FIFO, a socket, a terminal) is refused. Throws <see cref="NotRegularFileException"/>
+    /// for a file of another kind, <see cref="FileNotFoundException"/>, <see cref="UnauthorizedAccessException"/> or <see cref="IOException"/> for
+    /// a failed open; none of their messages names the path. Pair it with <see cref="Capped"/>: a length a stream claims is never the limit.
+    /// </remarks>
+    public static FileStream OpenRegular(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("a regular file is judged through a descriptor on Linux and macOS");
+        }
+
+        var fd = Native.Open(path, Native.FollowingReadFlags, 0);
+        if (fd < 0)
+        {
+            throw OpenFailure(Marshal.GetLastPInvokeError());
+        }
+
+        return Streamed(new SafeFileHandle(fd, ownsHandle: true));
+    }
+
+    private static FileStream Streamed(SafeFileHandle handle)
+    {
+        try
+        {
+            if (KindProblem(handle) is { Length: > 0 } problem)
+            {
+                throw new NotRegularFileException(problem);
+            }
+
+            return Seekable(new FileStream(handle, FileAccess.Read, bufferSize: 0));
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>What <c>statx</c> says of the open descriptor where there is one (Linux); empty elsewhere, where <see cref="Seekable"/> is the judgement.</summary>
+    private static string KindProblem(SafeFileHandle handle) =>
+        OperatingSystem.IsLinux() ? Judged((int)handle.DangerousGetHandle(), owner: null) : string.Empty;
+
+    /// <summary>A FIFO, a socket or a terminal cannot seek, and a regular file can: the one question macOS can ask without <c>statx</c>.</summary>
+    private static FileStream Seekable(FileStream stream)
+    {
+        if (stream.CanSeek)
+        {
+            return stream;
+        }
+
+        stream.Dispose();
+
+        throw new NotRegularFileException($"{NotRegular} (it cannot seek)");
+    }
+
+    /// <summary>What a failed <c>open</c> throws: the errno NUMBER in a sentence of ours, never <c>strerror</c> text and never the path.</summary>
+    private static Exception OpenFailure(int errno) => errno switch
+    {
+        Native.NoEntry or Native.NotADirectory => new FileNotFoundException($"the file is not there (errno {errno})"),
+        Native.AccessDenied or Native.NotPermitted => new UnauthorizedAccessException($"no read permission (errno {errno})"),
+        _ => new IOException($"could not be opened (errno {errno})"),
+    };
+
+    /// <summary>The descriptor's type, and its owner and mode when an <paramref name="owner"/> is asked for, judged from one <c>statx</c>; empty when the file may be read.</summary>
     [SupportedOSPlatform("linux")]
-    private static string Judged(int fd, uint owner)
+    private static string Judged(int fd, uint? owner)
     {
         var buffer = new byte[FileStatus.StatxSize];
         if (Native.Statx(fd, string.Empty, Native.AtEmptyPath, Native.StatxType | Native.StatxMode | Native.StatxUid, buffer) != 0)
@@ -106,7 +178,12 @@ public static partial class RegularFiles
 
         var status = FileStatus.FromStatx(buffer);
 
-        return status.IsRegular ? OwnershipProblem(status.OwnerUid, status.Permissions, owner) : $"{NotRegular} ({Describe(status.Type)})";
+        if (!status.IsRegular)
+        {
+            return $"{NotRegular} ({Describe(status.Type)})";
+        }
+
+        return owner is { } uid ? OwnershipProblem(status.OwnerUid, status.Permissions, uid) : string.Empty;
     }
 
     /// <summary>
@@ -124,7 +201,7 @@ public static partial class RegularFiles
     };
 
     /// <summary>The bytes of an open stream, at most <paramref name="maxBytes"/> — or the refusal when there is more. Counts bytes READ, never the length a stream claims.</summary>
-    internal static FileReadResult Capped(Stream stream, int maxBytes)
+    public static FileReadResult Capped(Stream stream, int maxBytes)
     {
         var buffer = new byte[maxBytes + 1];
         try
@@ -165,6 +242,10 @@ public static partial class RegularFiles
     {
         public const int OpenReadOnlyNonBlocking = 0x800 | 0x80000 | 0x100;
         public const int AtEmptyPath = 0x1000;
+
+        /// <summary>The same three flags where macOS spells them: <c>O_NONBLOCK</c> 0x4, <c>O_NOCTTY</c> 0x20000, <c>O_CLOEXEC</c> 0x1000000.</summary>
+        public static int FollowingReadFlags => OperatingSystem.IsMacOS() ? 0x4 | 0x20000 | 0x1000000 : OpenReadOnlyNonBlocking;
+
         public const uint StatxType = 1;
         public const uint StatxMode = 2;
         public const uint StatxUid = 8;

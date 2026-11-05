@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using CoaiMcp.Core.Rounds;
@@ -337,6 +338,66 @@ public sealed class RoundCountsSnapshotTests : IDisposable
         refusal.Reason.Should().Be(RoundCountsSnapshot.Unreadable);
         refusal.Detail.Should().Be(sentence);
         refusal.Detail.Should().NotContain("alice").And.NotContain(Message);
+    }
+
+    /// <summary>
+    /// <c>--round-counts-merged</c> takes any fully qualified path and <see cref="File.Exists(string)"/> is true for a FIFO, so a plain open of
+    /// one waits for a writer for ever. The read runs on a task with a deadline, so a hang fails this test rather than stalling the suite.
+    /// </summary>
+    [Fact]
+    public async Task APathThatIsNotARegularFile_IsRefusedAsUnreadable_AndTheReadDoesNotWaitOnIt()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a FIFO is a Linux and macOS file");
+        var fifo = Path.Combine(_store.Path, "a-pipe.json");
+        using (var made = Process.Start(new ProcessStartInfo("mkfifo", [fifo]) { UseShellExecute = false })!)
+        {
+            await made.WaitForExitAsync(TestContext.Current.CancellationToken);
+            made.ExitCode.Should().Be(0, "the fixture's FIFO must exist, or this proves nothing");
+        }
+
+        var read = Task.Run(() => RoundCountsSnapshot.Read(fifo), TestContext.Current.CancellationToken);
+        var finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken)) == read;
+        if (!finished)
+        {
+            await using var writer = new FileStream(fifo, FileMode.Open, FileAccess.Write); // releases the blocked reader
+        }
+
+        finished.Should().BeTrue("the read waited on a FIFO: an open that could block is never made");
+        var refusal = (await read).Should().BeOfType<SnapshotReading.Refused>().Which.Refusal;
+        refusal.Reason.Should().Be(RoundCountsSnapshot.Unreadable);
+        refusal.Detail.Should().Contain("not a regular file").And.NotContain(fifo, "an I/O sentence never names the path");
+    }
+
+    /// <summary>
+    /// The limit is judged on the bytes the read returns, never on a length asked of the file beforehand: an atomic replacement between a
+    /// size check and the read would otherwise judge one file and parse another. The race itself cannot be forced here, so this proves what
+    /// it implies: the stream the open returns claims a few bytes and serves more than the limit, and the answer is a refusal after the
+    /// bytes are counted, with nothing past the limit read.
+    /// </summary>
+    [Fact]
+    public void TheLimit_IsAppliedToTheBytesRead_NotToTheLengthTheFileClaimed()
+    {
+        const int Limit = 16 * 1024 * 1024;
+        var path = Write(_store.Path, Document(Wsl("Ubuntu"), Now), "claims-small.json");
+        using var lying = new RegularFilesTests.LyingStream(claimedLength: 10, actualBytes: 2 * Limit);
+
+        var read = RoundCountsSnapshot.Read(path, _ => lying);
+
+        ShouldBeRefusedAsNotASnapshot(read);
+        lying.Served.Should().BeLessThanOrEqualTo(Limit + 1, "nothing past the limit is read");
+    }
+
+    /// <summary>Green before and after: a real file one byte over the limit stays refused, so the move to counting bytes read lost no refusal.</summary>
+    [Fact]
+    public void AFileOneByteOverTheLimit_StaysRefusedAsNotASnapshot()
+    {
+        var path = Path.Combine(_store.Path, "too-big.json");
+        using (var file = File.Create(path))
+        {
+            file.SetLength((16L * 1024 * 1024) + 1);
+        }
+
+        ShouldBeRefusedAsNotASnapshot(RoundCountsSnapshot.Read(path));
     }
 
     [Fact]

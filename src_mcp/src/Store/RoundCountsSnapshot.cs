@@ -116,7 +116,7 @@ public static class RoundCountsSnapshot
     private const string NotASnapshot = "not a round-counts snapshot";
 
     /// <summary>Far past the ~100 KB a week holds and the ~1.5 MB the cap allows: a file larger than this is not one of ours.</summary>
-    private const long MaxBytes = 16L * 1024 * 1024;
+    private const int MaxBytes = 16 * 1024 * 1024;
 
     private static readonly TimeSpan Week = RoundCounts.Windows[^1].Length;
 
@@ -193,33 +193,46 @@ public static class RoundCountsSnapshot
     /// A snapshot read from <paramref name="path"/>: the document (with every stamp spelt the column's way), or the reason it is not a store —
     /// <see cref="Missing"/>, <see cref="Unreadable"/> or <see cref="NewerSchema"/>. Never throws for a file problem.
     /// </summary>
-    public static SnapshotReading Read(string path) => Read(path, ReadShared);
+    public static SnapshotReading Read(string path) => Read(path, OpenRegular);
 
     /// <summary>
-    /// The file opened the way every read of it is: for reading, sharing read, write and delete, so a reader never forbids a writer to open it.
+    /// The file opened the way every read of it on Windows is: for reading, sharing read, write and delete, so a reader never forbids a writer to open it.
     /// <see cref="File.ReadAllText(string)"/> opens with <see cref="FileShare.Read"/>, which does forbid that for as long as the reader holds
     /// the file. (A move-over, the owner's <see cref="AtomicFile"/> replace, is refused by Windows whatever the holder shared; that one is
     /// covered by <see cref="AtomicFile.SharingRetry"/> and by a read being milliseconds.) Internal so a test can hold the file exactly as a reader does.
     /// </summary>
     internal static FileStream OpenForRead(string path) => SharedRead.Open(path);
 
-    private static string ReadShared(string path)
-    {
-        using var stream = OpenForRead(path);
-        using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
+    /// <summary>
+    /// What a read opens in production: <see cref="OpenForRead"/> on Windows, which has no FIFO to wait on; elsewhere
+    /// <see cref="RegularFiles.OpenRegular"/>, which takes no lock, opens without blocking and refuses a file of another kind before reading a byte.
+    /// </summary>
+    private static Stream OpenRegular(string path) => OperatingSystem.IsWindows() ? OpenForRead(path) : RegularFiles.OpenRegular(path);
 
-        return reader.ReadToEnd();
-    }
+    /// <param name="open">
+    /// The open itself — <see cref="OpenRegular"/> in production; a seam so a test can fail it or serve more than the file claims. The limit is
+    /// applied to the bytes read from the stream it returns, never to a length asked of the file: a size taken from one open and a parse of
+    /// another let a replacement between them be judged as the old file.
+    /// </param>
+    internal static SnapshotReading Read(string path, Func<string, Stream> open) =>
+        File.Exists(path) ? ReadText(path, open) : SnapshotReading.Refuse(Missing, path);
 
-    /// <param name="readText">The read itself — <see cref="ReadShared"/> in production; a seam so a test can fail it.</param>
-    internal static SnapshotReading Read(string path, Func<string, string> readText) =>
-        File.Exists(path) ? ReadText(path, readText) : SnapshotReading.Refuse(Missing, path);
-
-    private static SnapshotReading ReadText(string path, Func<string, string> readText)
+    private static SnapshotReading ReadText(string path, Func<string, Stream> open)
     {
         try
         {
-            return new FileInfo(path).Length > MaxBytes ? SnapshotReading.Refuse(Unreadable, NotASnapshot) : Parsed(readText(path));
+            using var stream = open(path);
+
+            return RegularFiles.Capped(stream, MaxBytes) switch
+            {
+                FileReadResult.Content content => Parsed(Decoded(content.Bytes)),
+                _ => SnapshotReading.Refuse(Unreadable, NotASnapshot),
+            };
+        }
+        catch (NotRegularFileException e)
+        {
+            // Our own sentence, never the path: `a FIFO`, `a device`, `a socket`, `a directory`.
+            return SnapshotReading.Refuse(Unreadable, $"the file could not be read: {e.Message}");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -227,6 +240,14 @@ public static class RoundCountsSnapshot
             // The `missing` refusal says the path the CALLER passed, which is theirs already.
             return SnapshotReading.Refuse(Unreadable, $"the file could not be read ({e.GetType().Name})");
         }
+    }
+
+    /// <summary>The text a <see cref="StreamReader"/> would give: a byte order mark, which a Windows editor writes, is read as one and not as text.</summary>
+    private static string Decoded(byte[] bytes)
+    {
+        using var reader = new StreamReader(new MemoryStream(bytes), System.Text.Encoding.UTF8);
+
+        return reader.ReadToEnd();
     }
 
     /// <summary>The schema is read FIRST and leniently, so that a document a newer program wrote is named as newer, not as unreadable.</summary>
