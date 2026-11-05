@@ -672,8 +672,11 @@ public static class RoundMachine
     /// a claim refused for the wrong reason is a refusal with no door.</para>
     /// </remarks>
     public static string ClaimRefusal(SessionState s, HumanDecision personsDecision, bool callerClaimsProceed) =>
-        !callerClaimsProceed || ProceedsOnAHeldGate(s, personsDecision) ? string.Empty
-        : s.HumanGate ? ClaimOnAHeldGate
+        callerClaimsProceed && !ProceedsOnAHeldGate(s, personsDecision) ? RefusalOfAClaimWithNoProceedOnFile(s) : string.Empty;
+
+    /// <summary>Why a claim, with no person's Proceed on file, is refused — or empty when the stage advances anyway and it is ignored.</summary>
+    private static string RefusalOfAClaimWithNoProceedOnFile(SessionState s) =>
+        s.HumanGate ? ClaimOnAHeldGate
         : s.AdvanceOnResolve ? string.Empty
         : "a human override applies only after the verdict was call_human — until then the gate decides, " +
           "so revise and review again";
@@ -697,8 +700,12 @@ public static class RoundMachine
     /// <summary>The sentence a resolve is refused with before any decision is read, or empty.</summary>
     private static string RefusalBeforeDecisions(SessionState s, HumanDecision personsDecision, bool callerClaimsProceed) =>
         !s.AwaitingResolve && !ProceedsOnAHeldGate(s, personsDecision)
-            ? (callerClaimsProceed && s.HumanGate ? ClaimOnAHeldGate : NoRoundAwaitingDecisions)
+            ? RefusalOfAResolveWithNothingToResolve(s, callerClaimsProceed)
             : ClaimRefusal(s, personsDecision, callerClaimsProceed);
+
+    /// <summary>A resolve on a session with no round awaiting decisions: the held gate's sentence when a claim came with it, else the idle one.</summary>
+    private static string RefusalOfAResolveWithNothingToResolve(SessionState s, bool callerClaimsProceed) =>
+        callerClaimsProceed && s.HumanGate ? ClaimOnAHeldGate : NoRoundAwaitingDecisions;
 
     /// <param name="personsDecision">
     /// What the PERSON chose on the hold's own notice, read by the server from the answer file — never from a tool argument.
