@@ -1068,7 +1068,7 @@ helper's; coai adds):
 5. `OldAndNewClaims_AreReadByBothReaders` (#15): the vectors.
 6. `ALostLinkTarget_StillFailsTheTest` — the existing junction case keeps re-throwing (the E4.1 guarantee of the
    Vibe-and-Kimi plan survives the move; `TempDir.cs:49-53`).
-7. **A killed run is collected** — a child suite executable (as E4's harness; with a filter and an env flag) makes its
+7. **A killed run is collected** (*[epoch 7]* on an elevated Windows process a real folder and claim read as a stranger's and wait for a person, so on Windows this scenario re-owns them first and proves collection of a prepared fixture: the parent's § *Epoch 7*) — a child suite executable (as E4's harness; with a filter and an env flag) makes its
    run folder and `Environment.FailFast`s; the folder and its claim remain and name the child's pid; S2-B's sweep with an
    injected probe `gone` and `now + 11 min` removes both through the quarantine; with `live`, keeps both.
 
@@ -1686,7 +1686,7 @@ starts (the parent's § *Epoch 6*, item 4.7).
 - **DoD (S6, epoch 6).** Every class red once and green with a valid exemption; the checks above green on the whole tree,
   both guards, three legs; the inventory equal to the guard's list, every `raw-temp` exemption's reason proved on the PR as
   above; the positive Node detection test green and the one sentence of what is not detected in the PR; the two split
-  fixtures plain; the orphan-claim plant green in each of the four suites through the ONE ordered call, its RED shown once; the smoke script's
+  fixtures plain; the orphan-claim plant green in each of the four suites through the ONE ordered call, its RED shown once (*[epoch 7]* on Windows the plant re-owns its claim, which proves the ORDER only, its RED is shown there too, and `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun` pins that a real claim is not seen); the smoke script's
   trap moved with its RED observed; the audit self-test red-for-the-right-reason on three legs; F24's second check
   recorded; the baseline created once, its creation step removed, no workflow holding the creation flag, the shrink check
   against the creation commit green at the last head; every S5 deferral listed with where it was handled; the producer PR's squash merge carries
