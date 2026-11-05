@@ -189,7 +189,7 @@ public sealed class AVibeRowReviewsInTheRoundsSnapshotTests : IAsyncLifetime
         codeScratch.Tree.Should().BeOfType<RoundTree.NotMade>("the 'none' workspace mounts no checkout, so there is nothing to copy");
         Directory.Exists(codeScratch.Directory).Should().BeFalse("a round with nothing to put in its scratch makes no folder");
         var vibe = Of(Code(code, codeScratch), "vibe").Invocation;
-        vibe.Request.WorkingDirectory.Should().StartWith(Path.GetTempPath()).And.Contain("coai-noworkspace-");
+        vibe.Request.WorkingDirectory.Should().StartWith(TempDir.Root).And.Contain("coai-noworkspace-");
     }
 
     [Fact]

@@ -27,7 +27,7 @@ public sealed class QuestionAdmissionTests
     [InlineData("question-opinion")]
     public void AnUnconfinedPair_IsAdmitted_WithNothingToTick_AndStaysFlagged(string prompt)
     {
-        var admitted = Admit(Row("codex", "codex", prompt), Settings(Path.GetTempPath()))
+        var admitted = Admit(Row("codex", "codex", prompt), Settings(TempDir.Root))
             .Should().BeOfType<RowAdmission.Admitted>("the flag is enough — nothing the operator ticks would confine codex").Subject;
 
         admitted.Plan.Flag.Should().Be(AdmissionFlag.Unconfined, "admitted is not confined: the flag travels with every answer");
@@ -36,7 +36,7 @@ public sealed class QuestionAdmissionTests
     [Fact]
     public void ADefaultDenyPair_IsAdmitted_AndFlaggedAsSuch()
     {
-        Admit(Row("antigravity", "antigravity", "question-disk"), Settings(Path.GetTempPath()))
+        Admit(Row("antigravity", "antigravity", "question-disk"), Settings(TempDir.Root))
             .Should().BeOfType<RowAdmission.Admitted>().Which.Plan.Flag.Should().Be(AdmissionFlag.DefaultDeny);
     }
 

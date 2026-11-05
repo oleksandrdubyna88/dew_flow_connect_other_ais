@@ -92,7 +92,7 @@ public sealed class KimiMonthlyQuotaTests
         root => new KimiPlaces(root, "persons", "persons-bin", [], string.Empty, "kimi.exe"), () => ("coai-mcp.exe", [])));
 
     private static ReviewerInvocation Built() =>
-        new("kimi", RoleCatalog.ArchitectureRole, new ProcessRequest("coai-mcp.exe", ["--ask-acp"], Path.GetTempPath()) { Timeout = TimeSpan.FromSeconds(30) }, string.Empty, Kimi(), Model: "kimi-code/k3");
+        new("kimi", RoleCatalog.ArchitectureRole, new ProcessRequest("coai-mcp.exe", ["--ask-acp"], TempDir.Root) { Timeout = TimeSpan.FromSeconds(30) }, string.Empty, Kimi(), Model: "kimi-code/k3");
 
     private const string NamesNoRow = "the agent answered with an error (-32603): Internal error";
 

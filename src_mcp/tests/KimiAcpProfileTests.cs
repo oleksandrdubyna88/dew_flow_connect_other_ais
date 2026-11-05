@@ -96,7 +96,7 @@ public sealed class KimiAcpProfileTests
         AcpProfiles.Names(AcpProfiles.All).Should().Equal(["kimi"]);
     }
 
-    private static AcpAsk AskOn(string root, string bin) => new("kimi.exe", Path.GetTempPath(), "kimi-code/k3-256k", "x", TimeSpan.FromSeconds(2), root, bin);
+    private static AcpAsk AskOn(string root, string bin) => new("kimi.exe", TempDir.Root, "kimi-code/k3-256k", "x", TimeSpan.FromSeconds(2), root, bin);
 
     [Fact]
     public void TheAgentIsStartedInTheBuiltEnvironment_AndTheLaunchControlsOwnCheckAdmitsIt()

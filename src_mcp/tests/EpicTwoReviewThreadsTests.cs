@@ -30,7 +30,7 @@ public sealed class EpicTwoReviewThreadsTests
         var file = Path.Combine(Directory.CreateTempSubdirectory("coai-consult-file-").FullName, "turn.prompt");
         File.WriteAllText(file, "the consultation's prompt");
         var invocation = new AntigravityConsultant(new AntigravityRuntime()).Build(new ConsultantLaunch(
-            Path.GetTempPath(), "where is the sweep invoked?", string.Empty, Path.GetTempPath(),
+            TempDir.Root, "where is the sweep invoked?", string.Empty, TempDir.Root,
             new ReviewerSettings("antigravity") { Timeout = TimeSpan.FromMinutes(1) }));
 
         return (invocation with { TempFiles = [file] }, file);

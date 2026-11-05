@@ -119,7 +119,7 @@ public sealed class JsonlLedgerTests : IDisposable
     /// </remarks>
     public static TheoryData<string, string> UnusableRootedDirectories()
     {
-        var root = Path.GetPathRoot(Path.GetTempPath())!;
+        var root = Path.GetPathRoot(TempDir.Root)!;
         var data = new TheoryData<string, string>
         {
             { Path.Combine(root, "data" + (char)0 + "x", "ledger.jsonl"), "a NUL inside a segment" },
@@ -148,7 +148,7 @@ public sealed class JsonlLedgerTests : IDisposable
         // The companion, so the theory above cannot pass for the wrong reason: if this path threw
         // an IOException, the test would be exercising the catch UsageLedger always had and saying
         // nothing about the three types the round added.
-        var nul = Path.Combine(Path.GetPathRoot(Path.GetTempPath())!, "data" + (char)0 + "x", "ledger.jsonl");
+        var nul = Path.Combine(Path.GetPathRoot(TempDir.Root)!, "data" + (char)0 + "x", "ledger.jsonl");
 
         var opening = () => new FileStream(nul, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
 

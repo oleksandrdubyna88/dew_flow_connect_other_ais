@@ -4,18 +4,18 @@
     "<owner>:<host>@<os>:<pid>[:<start>[:<ns>]] with <os> one of linux, macos, windows. COAI-OWNED; E5 S3 (plan row 15). The C# reader",
     "(Owner.Parse) and the Node reader (parseOwner, parseLegacyOwner of .agents/conventions/tools/lib/owned.mjs) are asked about every row,",
     "and the live claim of the running test folder is one more row. OldAndNewClaims_AreReadByBothReaders is the test.",
-    "csharp / node: 'owner' = the reader returns an owner, 'unreadable' = it returns none. nodeLegacy: 'legacy' = parseLegacyOwner reads it",
+    "csharp / node: 'owner' = the reader returns an owner, 'unreadable' = it returns none. nodeOldForm: 'legacy' = parseLegacyOwner reads it",
     "(only the old <host>@linux:<pid>:<start> shape, the one old-grammar spelling the Node sweeper still judges), else 'unreadable'.",
     "The old spellings (win32, darwin, no owner segment) are unreadable to BOTH new readers: a run that wrote one would be kept for ever."
   ],
   "rows": [
-    { "text": "u1000:devbox@linux:42:1700000000:4026531836", "csharp": "owner", "node": "owner", "nodeLegacy": "unreadable" },
-    { "text": "u1000:devbox~Ubuntu@linux:42:1700000000:4026531836", "csharp": "owner", "node": "owner", "nodeLegacy": "unreadable" },
-    { "text": "u1000:devbox@macos:42", "csharp": "owner", "node": "owner", "nodeLegacy": "unreadable" },
-    { "text": "w1234:BUILD-01@windows:42", "csharp": "owner", "node": "owner", "nodeLegacy": "unreadable" },
-    { "text": "devbox@win32:42", "csharp": "unreadable", "node": "unreadable", "nodeLegacy": "unreadable" },
-    { "text": "devbox@darwin:42:17", "csharp": "unreadable", "node": "unreadable", "nodeLegacy": "unreadable" },
-    { "text": "devbox@linux:42:17", "csharp": "unreadable", "node": "unreadable", "nodeLegacy": "legacy" },
-    { "text": "u1000:devbox@win32:42", "csharp": "unreadable", "node": "unreadable", "nodeLegacy": "unreadable" }
+    { "text": "u1000:devbox@linux:42:1700000000:4026531836", "csharp": "owner", "node": "owner", "nodeOldForm": "unreadable" },
+    { "text": "u1000:devbox~Ubuntu@linux:42:1700000000:4026531836", "csharp": "owner", "node": "owner", "nodeOldForm": "unreadable" },
+    { "text": "u1000:devbox@macos:42", "csharp": "owner", "node": "owner", "nodeOldForm": "unreadable" },
+    { "text": "w1234:BUILD-01@windows:42", "csharp": "owner", "node": "owner", "nodeOldForm": "unreadable" },
+    { "text": "devbox@win32:42", "csharp": "unreadable", "node": "unreadable", "nodeOldForm": "unreadable" },
+    { "text": "devbox@darwin:42:17", "csharp": "unreadable", "node": "unreadable", "nodeOldForm": "unreadable" },
+    { "text": "devbox@linux:42:17", "csharp": "unreadable", "node": "unreadable", "nodeOldForm": "legacy" },
+    { "text": "u1000:devbox@win32:42", "csharp": "unreadable", "node": "unreadable", "nodeOldForm": "unreadable" }
   ]
 }

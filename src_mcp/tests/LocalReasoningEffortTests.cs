@@ -71,7 +71,7 @@ public class LocalReasoningEffortTests
     {
         var settings = new ReviewerSettings("local") { Model = "gemma4", ReasoningEffort = "none" };
         var invocation = new LocalRuntime("local", string.Empty)
-            .Build(RoleCatalog.PlanRole, "prompt", Path.GetTempPath(), "schema.json", Path.GetTempPath(), settings);
+            .Build(RoleCatalog.PlanRole, "prompt", TempDir.Root, "schema.json", TempDir.Root, settings);
 
         var args = invocation.Request.Arguments;
         var at = args.ToList().IndexOf("--reasoning-effort");
@@ -84,7 +84,7 @@ public class LocalReasoningEffortTests
     {
         var settings = new ReviewerSettings("local") { Model = "gemma4" };
         var invocation = new LocalRuntime("local", string.Empty)
-            .Build(RoleCatalog.PlanRole, "prompt", Path.GetTempPath(), "schema.json", Path.GetTempPath(), settings);
+            .Build(RoleCatalog.PlanRole, "prompt", TempDir.Root, "schema.json", TempDir.Root, settings);
 
         invocation.Request.Arguments.Should().NotContain("--reasoning-effort");
     }

@@ -24,7 +24,7 @@ public sealed class OwnerClaimVectorsTests
         process.stdout.write(JSON.stringify(rows.map((text) => ({
           text,
           node: verdict(parseOwner, text),
-          nodeLegacy: parseLegacyOwner(text).unreadable ? "unreadable" : "legacy",
+          nodeOldForm: parseLegacyOwner(text).unreadable ? "unreadable" : "legacy",
           state: ownerState(parseOwner(text)),
         }))));
         """;
@@ -38,7 +38,7 @@ public sealed class OwnerClaimVectorsTests
         return
         [
             .. vectors.GetProperty("rows").EnumerateArray().Select(row => new Row(
-                row.GetProperty("text").GetString()!, row.GetProperty("csharp").GetString()!, row.GetProperty("node").GetString()!, row.GetProperty("nodeLegacy").GetString()!)),
+                row.GetProperty("text").GetString()!, row.GetProperty("csharp").GetString()!, row.GetProperty("node").GetString()!, row.GetProperty("nodeOldForm").GetString()!)),
         ];
     }
 
@@ -55,7 +55,7 @@ public sealed class OwnerClaimVectorsTests
         node.ExitCode.Should().Be(0, node.StdErr);
 
         return JsonDocument.Parse(node.StdOut).RootElement.EnumerateArray().ToDictionary(
-            e => e.GetProperty("text").GetString()!, e => (e.GetProperty("node").GetString()!, e.GetProperty("nodeLegacy").GetString()!, e.GetProperty("state").GetString()!));
+            e => e.GetProperty("text").GetString()!, e => (e.GetProperty("node").GetString()!, e.GetProperty("nodeOldForm").GetString()!, e.GetProperty("state").GetString()!));
     }
 
     [Fact]

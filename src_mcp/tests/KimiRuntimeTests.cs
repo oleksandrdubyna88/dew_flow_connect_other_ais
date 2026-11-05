@@ -226,7 +226,7 @@ public sealed class KimiRuntimeTests : IDisposable
         home.Should().NotStartWith(persons, "not the person's home");
         var osHome = OperatingSystem.IsWindows() ? "USERPROFILE" : "HOME";
         request.Environment[osHome].Should().NotBe(Environment.GetEnvironmentVariable(osHome), "the OS home is redirected too");
-        Path.GetFullPath(home).Should().StartWith(Path.GetFullPath(Path.GetTempPath()), "a fresh folder under temp");
+        Path.GetFullPath(home).Should().StartWith(Path.GetFullPath(TempDir.Root), "a fresh folder under temp");
         Directory.Exists(home).Should().BeFalse("deleted when the probe has been read");
         Directory.EnumerateFileSystemEntries(persons).Should().BeEmpty("nothing was written to the person's folder");
         request.WorkingDirectory.Should().NotBe(Environment.CurrentDirectory);

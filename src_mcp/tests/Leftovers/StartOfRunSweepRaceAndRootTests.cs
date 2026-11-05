@@ -327,7 +327,7 @@ public sealed class StartOfRunSweepRaceAndRootTests : IDisposable
     private static (System.Diagnostics.Process Process, Task<string> StdOut, Task<string> StdErr) StartChild(string root, string go, string ready, string output)
     {
         var env = new Dictionary<string, string?> { [ChildRoot] = root, [ChildGo] = go, [ChildReady] = ready, [ChildOut] = output };
-        var start = SuiteChild.StartInfoFor(Environment.ProcessPath!, ["--filter-method", "*SweepChild_SweepsTheGivenRootOnce_WhenTheProcessTestStartsIt"], env);
+        var start = SuiteChild.StartInfoFor(Environment.ProcessPath!, ["--filter-method", "*" + nameof(SweepChild_SweepsTheGivenRootOnce_WhenTheProcessTestStartsIt)], env);
         var process = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("the sweep child did not start");
 
         return (process, process.StandardOutput.ReadToEndAsync(), process.StandardError.ReadToEndAsync());

@@ -247,7 +247,7 @@ public sealed class TheStderrLineIsQuotedSafelyTests : IDisposable
     {
         var kimi = new KimiRuntime("kimi", HostKind.Windows, new KimiSeams(
             root => new KimiPlaces(root, "persons", "persons-bin", [], string.Empty, "kimi.exe"), () => ("coai-mcp.exe", [])));
-        var invocation = new ReviewerInvocation("kimi", RoleCatalog.ArchitectureRole, new ProcessRequest("coai-mcp.exe", ["--ask-acp"], Path.GetTempPath()) { Timeout = TimeSpan.FromSeconds(30) }, string.Empty, kimi, Model: "kimi-code/k3");
+        var invocation = new ReviewerInvocation("kimi", RoleCatalog.ArchitectureRole, new ProcessRequest("coai-mcp.exe", ["--ask-acp"], TempDir.Root) { Timeout = TimeSpan.FromSeconds(30) }, string.Empty, kimi, Model: "kimi-code/k3");
         var said = KimiShimScripts.Ended(AcpWords.SpentExit, AcpEnd.AgentFailed, "Internal error", failure: KimiAcpProfile.QuotaSpent, failureLine: line);
 
         var reason = kimi.RateLimited(invocation, said).Reason;
