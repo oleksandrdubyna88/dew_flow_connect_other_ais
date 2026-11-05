@@ -637,16 +637,15 @@ own files, the expected-exemption inventory equals the guard's exemption list ex
 baseline AND the inline `raw-temp` exemptions of that inventory are left — each exemption with a containment reason proved
 line by line (a test or a read record on the PR, through every allocating library's callers). The folder `src_vs_code/scripts/`
 stays in the guard. Three conditions are ADDED, none narrows: **(o)** the end-of-run audit reads the run folder BEFORE
-`RunTempFixture` removes it — `LeftoversAudit.Discover` returns `[]` once the folder is gone (`LeftoversAudit.cs:41`), so a
-claim-only leftover is seen only audit-first; S6 plants an orphan claim absent from the registry, runs both fixture orders and
-pins the order with a test; **(p)** `src_server/smoke-image.sh` sets `finish` and its `trap` before `mktemp -d` (today `:73` and
+the run ends — `LeftoversAudit.Discover` returns `[]` once the folder is gone (`LeftoversAudit.cs:41`), so a
+claim-only leftover is seen only audit-first. Fixture order is not the mechanism (§ *S6*): the audit and `RunTemp.EndOfRun` are ONE ordered call in the sweep fixture's disposal, and S6 plants an orphan claim absent from the registry in each of the four suites, RED before the call; **(p)** `src_server/smoke-image.sh` sets `finish` and its `trap` before `mktemp -d` (today `:73` and
 `:102`), RED first with a failing `chmod` or `openssl` stub on PATH in `TheImageSmokeUsesTheServerTests`; the exemption's
 reason names what stays open (a `kill -9` at any moment of the run, which no trap sees); **(q)** at the PR's LAST head before the squash merge,
 `leftovers-check.mjs --baseline-shrinks --base <the creation commit>` exits 0, recorded on the PR, with both wrappers green, because the standing shrink step is skipped on this
 PR by number (the brief § 12.4). Also: (g) and (i) are met by coai #947 (the pin at `bd795847`), still OPEN when this was
 written — S6 creates no baseline and runs no second F24 check before it merges and `main` is merged into the branch; (l)'s
 C# proof-check test (`TheProofCheck_ClosesForEachScope`) is NEW code of S6. The commit order is S3 → S2-B → S4 → S5 → S6, and
-S6 is the FIFTH commit, not the fourth as the S6 heading still says.
+S6 is the FIFTH commit (its heading was corrected on 2026-11-05).
 
 **D9 — The end-of-run audit is copied, and bounded to the run folder.** `LeftoversAudit` (never-disposed,
 disposed-not-removed, claimed-in-temp-root) runs at the end of every C# suite as in the template — but coai's four
@@ -731,7 +730,7 @@ record of 2026-11-01.
 Why S5 is commit 4: its renames are safe only once S3 and S4 have given every site an owner-form run folder that fails
 closed, under every invocation, with a refusal for a direct start; and S6's guard asserts the repository-wide zero, so
 it must read the tree after the renames. The squash merge makes the five commits one commit on `main`; the order is for
-the review and a bisect on the branch. The section headings below keep their old commit numbers (S6 says "commit 4").
+the review and a bisect on the branch. The section headings below keep their old commit numbers, except S6's, corrected on 2026-11-05.
 
 *[epoch 4, 2026-11-03]* Two rows read anew: **S3** is the ADAPTED copy of D2 (a manifest, permitted transformations, a diff check) with
 the gated custom `Main` (exit 78); **S6** also depends on F24 of the conventions (the baseline proof rule) released and
@@ -751,7 +750,7 @@ before S3 and S4 give the outside sites an owned folder — the parent's entry 2
 | B — the producer PR | S3 — the C# library (a copy), the run folder on the owner form in all four C# suites, the contract's claim grammar | Opus · Sonnet · Opus | S2-A, S5 on `main`; the baseline rule released and pinned; the barrier record (D8) | commit 1 of the PR — **never merged without S2-B** (D8's invariant, finding 4) |
 | B | **S2-B — the owner-aware sweep at the start of every C# suite and of the extension runner (cornerstone, second half)** | **Fable** (spec) · Sonnet · Opus | S3 | commit 2 |
 | B | S4 — the Node producers wrap the reference: `run-tests.mjs`, `run-host.mjs`, the 31 runner scripts, `http/run-contracts.mjs`, `scripts/lib` tests, `release.yml` | Opus · Sonnet · Opus | S3 (the claim grammar both runners write) | commit 3 |
-| B | S6 — the two guards, the audit, the `raw-temp` baseline, the CI legs | Opus · Sonnet · Opus | S3, S4; the baseline rule released and pinned | commit 4; the PR squash-merges once |
+| B | S6 — the two guards, the audit, the `raw-temp` baseline, the CI legs | Opus · Sonnet · Opus | S3, S4; the baseline rule released and pinned | commit 5 since S5 became commit 4 (epoch 3); the PR squash-merges once |
 | C — the drain | S7 — the `raw-temp` baseline drains to zero, suite by suite | Opus · Sonnet (one coder per suite) · Opus | S6 merged | after B; one PR per suite; not a producer |
 
 S2's spec decides; where this document and S2's spec differ, the spec wins and the difference is a defect of this
@@ -1571,7 +1570,7 @@ only at the stop).
   its missing containment and its owning S3 or S4 change; no producer and no sweep in the diff; the suites green with
   the same counts; `research/module_tests.md` updated where it quotes a renamed name.
 
-## S6 — The two guards, the audit, the `raw-temp` baseline, the CI legs (commit 4 of the producer PR)
+## S6 — The two guards, the audit, the `raw-temp` baseline, the CI legs (commit 5 of the producer PR)
 
 **Current statement (2026-11-05, the parent's epoch-6 re-review).** This is S6's ONE operative text. S6 is the FIFTH commit
 of the producer PR (S3 → S2-B → S4 → S5 → S6; the heading's "commit 4" is from before S5 moved into the PR). The text it
@@ -1636,7 +1635,7 @@ starts (the parent's § *Epoch 6*, item 4.7).
   `RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder())`, bounded to this run's folder and this process's record
   (row 1). `LeftoversAudit.Discover` returns `[]` once the run folder is gone (`LeftoversAudit.cs:41`), so a claim-only
   leftover (an orphan claim of a folder a test removed itself, absent from the registry) is seen only when the audit runs
-  BEFORE the run folder ends. xUnit 4.0.1 disposes assembly fixtures in creation order and all four `RunTempStart.cs` list `RunTempFixture` first, so today's order misses it. Swapping the attributes is not the fix (it runs the real-root sweep before `RunTempFixture`'s constructor, the fail-closed fallback). **The audit and the end of the run folder become ONE ordered call in the sweep fixture's disposal (the audit, then `RunTemp.EndOfRun` in `finally`), and `RunTempFixture.Dispose` no longer ends the run; the process-exit handler stays.** S6 plants that orphan claim in a child run with no inherited `TESTSTODELETE_RUN`, in EACH of the four suites, and the audit reports it; RED before the ordered call, shown once.
+  BEFORE the run folder ends. xUnit 4.0.1 disposes assembly fixtures in creation order and all four `RunTempStart.cs` list `RunTempFixture` first, so today's order misses it. Swapping the attributes is not the fix (it runs the real-root sweep before `RunTempFixture`'s constructor, the fail-closed fallback). **The audit and the end of the run folder become ONE ordered call in the sweep fixture's disposal (the audit, then `RunTemp.EndOfRun` in `finally`), and `RunTempFixture.Dispose` no longer ends the run; the process-exit handler stays.** `RunTemp.Start` registers the process-exit handler from the module initializer, before any fixture, so a run whose sweep fixture threw in its constructor, or that was aborted before disposal, still ends its folder there; `Restore` is safe to run twice, and that is pinned. A run like that has no audit, and it has already failed or been killed. S6 plants that orphan claim in a child run with no inherited `TESTSTODELETE_RUN`, in EACH of the four suites, and the audit reports it; RED before the ordered call, shown once.
   `LeftoversSelfTest` leaks on purpose under `COAI_LEFTOVERS_SELFTEST`; CI asserts the run FAILS with the audit's first line
   (the brief § 12, both values, on the three legs). **A leak the audit exposes is fixed in the test that made it before the
   PR merges; the audit is never weakened and no entry skips it; each one found is recorded in `module_tests.md`.**
@@ -1657,7 +1656,7 @@ starts (the parent's § *Epoch 6*, item 4.7).
   `workflowsStartTestsThroughARunner.test.mjs` pins that no workflow holds the creation flag. The standing step
   (`--baseline-shrinks --base <base sha>`) skips this PR by number and runs on every later PR; S7's first PR removes the
   clause. **The final content (D8 (q)):** at this PR's LAST head before the squash merge, `leftovers-check.mjs
-  --baseline-shrinks --base <the creation commit>` exits 0, recorded on the PR, with both wrappers green. `--print-baseline` cannot do this (it reads no `.cs` and prints `scopes: []`); `--baseline` already reconciles entries and sites, and what is open is growth after the creation, which the shrink check refuses with `new key`.
+  --baseline-shrinks --base <the creation commit>` exits 0, recorded on the PR, with both wrappers green. The creation commit is the commit on this PR that first adds the file: `git log -1 --format=%H --diff-filter=A -- raw-temp-baseline.json`. `--print-baseline` cannot do this (it reads no `.cs` and prints `scopes: []`); `--baseline` already reconciles entries and sites, and what is open is growth after the creation, which the shrink check refuses with `new key`.
 - **Seeded violations and break-its.** One planted site per actual test root — `src_mcp/tests`, `src_mcp/tests_leftovers`,
   `src_mcp/tests_fakecli`, `src_server/tests`, `src_bugs/tests`, `src_bench/CoaiBench.Tests`, `src_vs_code/src/test`,
   `scripts/`, `src_vs_code/scripts/`, `.github/workflows`, `.github/scripts/`, `http/` — each red naming file and line, then
