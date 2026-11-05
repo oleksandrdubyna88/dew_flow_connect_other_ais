@@ -166,8 +166,8 @@ public sealed class SqliteMigratorTests : IDisposable
     /// at the same moment, every 150 ms, until the budget is spent. A wait inside SQLite does not
     /// have that shape: the waiter holds PENDING, no new reader can enter, the readers already in
     /// leave, and the waiter goes through.</para>
-    /// <para>Made deterministic: a reader holds a SHARED lock on a rollback-journal file for about a
-    /// second while the runner opens it. The file ends up migrated either way — the provider's loop
+    /// <para>Made deterministic: a reader's statement holds a SHARED lock on a rollback-journal file for
+    /// about a second while the runner opens it. The file ends up migrated either way — the provider's loop
     /// does get through once the reader has left — so the thing counted is how many times the
     /// statement was STARTED, from SQLite's own trace. One start is a wait inside SQLite. More is the
     /// provider's retry loop, which is what a race can keep alive for the whole budget.</para>
@@ -182,11 +182,21 @@ public sealed class SqliteMigratorTests : IDisposable
             Run(seed, Three[0]);
         }
 
+        // A reader whose statement is RUNNING: it holds the SHARED lock until the test lets it go.
+        using var entered = new ManualResetEventSlim();
+        using var leave = new ManualResetEventSlim();
         using var reader = new SqliteConnection($"Data Source={path};Pooling=False");
         reader.Open();
         Column(reader, "PRAGMA journal_mode").Should().Equal(["delete"], "the file must still be a rollback-journal file");
-        using var readTransaction = reader.BeginTransaction();
-        Column(reader, "SELECT count(*) FROM sqlite_master"); // takes the SHARED lock and keeps it
+        reader.CreateFunction("hold", () =>
+        {
+            entered.Set();
+            leave.Wait();
+
+            return 1;
+        });
+        var reading = Task.Run(() => Column(reader, "SELECT hold() FROM sqlite_master LIMIT 1"));
+        entered.Wait(TimeSpan.FromSeconds(30)).Should().BeTrue("the reader must be inside its statement");
 
         var starts = 0;
         using var opener = new SqliteConnection(
@@ -207,8 +217,9 @@ public sealed class SqliteMigratorTests : IDisposable
         SpinWait.SpinUntil(() => Volatile.Read(ref starts) >= 1, TimeSpan.FromSeconds(30))
             .Should().BeTrue("the opener must reach the switch");
         await Task.Delay(TimeSpan.FromMilliseconds(900)); // the reader stays: six of the provider's sleeps
-        readTransaction.Commit();
+        leave.Set();
 
+        await reading;
         await migrating.WaitAsync(TimeSpan.FromSeconds(30)); // goes through once the reader has left
         SqliteMigrator.Version(opener).Should().Be(3);
         Volatile.Read(ref starts).Should().Be(
