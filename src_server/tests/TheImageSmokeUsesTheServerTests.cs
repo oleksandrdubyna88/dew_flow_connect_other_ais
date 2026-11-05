@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using CoaiMcp.Tests.Leftovers;
 using FluentAssertions;
 using Xunit;
 
@@ -102,6 +103,45 @@ public sealed class TheImageSmokeUsesTheServerTests : IDisposable
         Encoding.UTF8.GetByteCount(key).Should().BeGreaterThanOrEqualTo(32, "docker run received the key through its environment");
         calls.Should().NotContain(line => line.Contains(key, StringComparison.Ordinal), "an argument list is readable by every process");
         output.Should().NotContain(key, "the key is never printed");
+
+        // The throwaway folder has the owner form, so the sweep and the janitor can tell whose it is if a kill ever leaves it.
+        // On Windows `id -u` under Git Bash is no Windows owner token, so the name is judged on POSIX only.
+        if (!OperatingSystem.IsWindows())
+        {
+            var run = calls.Single(line => line.StartsWith("run ", StringComparison.Ordinal));
+            var mount = System.Text.RegularExpressions.Regex.Match(run, @"(?:^| )-v (?<folder>\S+)/data:/data(?: |$)");
+            mount.Success.Should().BeTrue("the data folder is mounted by -v: " + run);
+            Path.GetFileName(mount.Groups["folder"].Value).Should().StartWith(Owned.NameBase + "smoke-",
+                "a throwaway folder of this script has the owner form, never the bare mktemp name");
+        }
+    }
+
+    [Fact]
+    public void AFailureBeforeTheContainer_LeavesNoFolder()
+    {
+        var tmp = Directory.CreateDirectory(Path.Combine(_dir, "tmp")).FullName;
+        var bin = Directory.CreateDirectory(Path.Combine(_dir, "bin-chmod")).FullName;
+        var saw = Path.Combine(_dir, "chmod-saw");
+        // `chmod 0777 "$work/data"` is the first command after the folder exists; a stub that fails stands for any early failure under `set -e`.
+        Stub(Path.Combine(bin, "chmod"),
+            "#!/bin/sh\n"
+            + $"echo \"$2\" >> '{ShellScripts.Posix(saw)}'\n"
+            + "exit 1\n");
+
+        var (code, output) = Bash(
+            $"export PATH='{ShellScripts.PathEntry(bin)}':\"$PATH\"; exec bash '{Script}' 'coai-server:smoke'",
+            new Dictionary<string, string>
+            {
+                ["TMPDIR"] = ShellScripts.Posix(tmp),
+                ["SMOKE_PORT"] = "1",
+                ["SMOKE_WAIT_SECONDS"] = "2",
+                ["GITHUB_ACTIONS"] = "false",
+            });
+
+        code.Should().NotBe(0, output);
+        File.Exists(saw).Should().BeTrue("the script must have reached chmod, or this test is green over nothing: " + output);
+        File.ReadAllText(saw).Should().NotBeEmpty("chmod was asked for the data folder under the temp root");
+        Directory.GetFileSystemEntries(tmp).Should().BeEmpty("the trap is set before the folder is made, so a failure on the way removes it: " + output);
     }
 
     private (int Code, string Output) CheckUsage(string body)
