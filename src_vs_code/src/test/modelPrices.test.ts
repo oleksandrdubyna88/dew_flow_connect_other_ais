@@ -172,3 +172,18 @@ test('a routed model the provider does not list falls back rather than inventing
   assert.equal(price?.inPerMillion, 1.4);
   assert.equal(price?.cachedPerMillion, 0.26);
 });
+
+test('the default Antigravity model has no typed price: a list that carries it prices it, one that does not leaves the dash', () => {
+  // research/PLAN_the_agy_default_is_a_model_agy_offers.md: no list price for gemini-3.8-flash is used anywhere in this
+  // repo (prices are looked up, never typed), so the new default `gemini-3.8-flash-low` prices like any unknown model —
+  // a floor of "no list price" — until OpenRouter or LiteLLM carries the model. Nothing is invented for it.
+  assert.equal(priceKey('gemini-3.8-flash-low'), 'gemini-3.8-flash', 'the effort is stripped, as for 3.7');
+
+  const or = openRouterTable(OPENROUTER);
+  const lite = liteLlmTable(LITELLM);
+  assert.equal(priceFor('gemini-3.8-flash-low', or, lite), undefined, 'neither fixture list carries 3.8 Flash');
+
+  const listed = openRouterTable({ data: [{ id: 'google/gemini-3.8-flash', pricing: { prompt: '0.000001', completion: '0.000004' } }] });
+  assert.equal(priceFor('gemini-3.8-flash-low', listed, lite)?.inPerMillion, 1, 'and the day a list does, every effort is priced by it');
+  assert.equal(priceFor('gemini-3.8-flash-high', listed, lite)?.outPerMillion, 4);
+});

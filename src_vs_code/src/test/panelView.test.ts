@@ -173,7 +173,7 @@ test("codex offers the CLI's own cached models; antigravity offers what agy list
   const html = everyPageHtml(state(), 'n0nce');
   assert.ok(html.includes('value="gpt-5.6-sol"'), 'discovered from ~/.codex/models_cache.json');
   assert.ok(html.includes('models the Codex CLI has cached'));
-  assert.ok(html.includes('value="gemini-3.7-flash-high"'));
+  assert.ok(html.includes('value="gemini-3.8-flash-high"'));
   // This used to assert the sentence "what `agy models` lists for this subscription" while the list
   // was a hand-written constant — and the assertion's own comment claimed the provenance was
   // admitted. The two disagreed, and the constant went a model generation stale behind that.

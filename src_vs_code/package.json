@@ -436,7 +436,7 @@
             {
               "id": "antigravity",
               "runtime": "antigravity",
-              "model": "gemini-3.7-flash-high",
+              "model": "gemini-3.8-flash-low",
               "enabled": true,
               "plan": true,
               "code": true,
