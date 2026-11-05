@@ -172,6 +172,39 @@ public sealed class TheMigrationTests : IDisposable
     }
 
     /// <summary>
+    /// A migration that fails leaves no connection open on the file.
+    /// </summary>
+    /// <remarks>
+    /// <para>The oracle is the file's own write-ahead log. SQLite deletes <c>-wal</c> and <c>-shm</c>
+    /// when the LAST connection to a WAL database closes, so a connection the failed open leaked
+    /// leaves both behind. No other connection is open when the files are checked, and the test forces
+    /// no collection, because a finalizer closing the leaked connection would fake a pass. A collection
+    /// nobody asked for can still do that, so this can occasionally miss a regression; it cannot fail
+    /// a correct fix.</para>
+    /// <para>The failure is real, not mocked: a column added by hand makes a later step answer
+    /// <c>duplicate column name</c> after earlier steps have committed. The version shows the earlier
+    /// steps stayed and the failing one did not; it is read last because reading it opens a connection,
+    /// and closing that one would remove the files being checked.</para>
+    /// </remarks>
+    [Fact]
+    public void AMigrationThatFails_LeavesNoConnectionOpenOnTheFile()
+    {
+        WriteAFileFromStepOneOnly(DbPath);
+        TestSql.Run(DbPath, "ALTER TABLE quarantine ADD COLUMN comment TEXT NOT NULL DEFAULT ''");
+
+        var opening = () => Corpus.Open(DbPath);
+
+        opening.Should().Throw<SqliteException>().Where(
+            failure => failure.Message.Contains("duplicate column name", StringComparison.Ordinal),
+            "the fixture must reach the failure it names");
+        File.Exists(DbPath + "-wal").Should().BeFalse(
+            "a connection left open keeps the write-ahead log; the last close removes it");
+        File.Exists(DbPath + "-shm").Should().BeFalse("and the shared-memory index goes with it");
+        int.Parse(TestSql.Scalar(DbPath, "PRAGMA user_version"), CultureInfo.InvariantCulture)
+            .Should().BeInRange(1, CorpusSchema.Steps.Length - 1, "earlier steps committed and the failing one did not");
+    }
+
+    /// <summary>
     /// Two openers racing on the field's file both succeed, and the file is whole.
     /// </summary>
     /// <remarks>
