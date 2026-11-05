@@ -984,7 +984,7 @@ one (A2 as a contract). A `none` or `disk` row is given the context through `Sec
 (never redacts) and never quotes what it found — and, since S4b, the QUESTION through it too; an api `none`
 row also gets the OUTLINE of the repository at HEAD — on this checkout at `2d6dea41` 1,997 files against the
 empty tree, 78 outlined under the file cap, 170 KB of section, **6.2 s** (the `QuestionOutlineTimingTests`
-measurement), which is why since S4b it is built only for an api `none` row, awaited by that row alone, and
+measurement; on 2026-10-22 the same build over 3,568 files read 400 of them, 11.9 M characters, kept 73 under the budget, and took 12.7 s alone — about 1 s of it in four git processes, the rest in-process; E5 S11 dropped its wall bound and pins the caps by count, see `module_tests.md`), which is why since S4b it is built only for an api `none` row, awaited by that row alone, and
 kept per repository + HEAD for the last four (`QuestionOutlineCache`); a CLI row is given none — and an `api`
 row its source turns on top (A9, S1's
 `IAnsweringFollowUps`, the fan-out driving the loop under the row's deadline). A `disk` row is given its

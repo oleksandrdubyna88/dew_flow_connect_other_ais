@@ -190,8 +190,11 @@ function failedHandle(reason: string): ProcessHandle {
  * and gemini raised it independently. What is held is handed to the FIRST subscriber and then
  * dropped: a second subscriber joining later is joining a conversation in progress, and pretending
  * otherwise would deliver one line twice.</p>
+ *
+ * <p>Exported for the test that bounds its CPU cost directly (`processLauncher.test.ts`, "a fan
+ * nobody listens to…"), not for callers: the only thing outside this file that may use it is a test.</p>
  */
-function replayingFan<T>(): { emit(value: T): void; on(listener: (value: T) => void): Unsubscribe } {
+export function replayingFan<T>(): { emit(value: T): void; on(listener: (value: T) => void): Unsubscribe } {
   let listeners: readonly ((value: T) => void)[] = [];
   /**
    * What was emitted before anybody subscribed — APPENDED, never rebuilt.

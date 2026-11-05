@@ -228,7 +228,7 @@ public sealed class TheAskingLinesSayWhatTheyRanWithTests : ConsultScenarioBase
         var settings = ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), new PanelSettings { DataDir = _data }, VaultKeys.None("t"));
 
         var built = ConsultantResolution.For(row.Identity())!
-            .Build(new ConsultantLaunch("D:/rsd/some-checkout", "help me", string.Empty, "D:/answers", settings, "D:/answers/schema.json"));
+            .Build(new CoaiMcp.Runners.Consultation.ConsultantLaunch("D:/rsd/some-checkout", "help me", string.Empty, "D:/answers", settings, "D:/answers/schema.json"));
 
         string.Join(' ', built.Request.Arguments).Should().Contain("service_tier=default", "the argv carried the standard tier");
         built.Sent.Tier.Should().Be("default", "a launch that put a tier on its argv says so, or its line reads 'not sent'");
@@ -243,7 +243,7 @@ public sealed class TheAskingLinesSayWhatTheyRanWithTests : ConsultScenarioBase
         { ClaudeCli = ClaudeCapability.WithRestricted };
 
         var built = ConsultantResolution.For(row.Identity())!
-            .Build(new ConsultantLaunch("D:/rsd/some-checkout", "help me", string.Empty, "D:/answers", settings, "D:/answers/schema.json"));
+            .Build(new CoaiMcp.Runners.Consultation.ConsultantLaunch("D:/rsd/some-checkout", "help me", string.Empty, "D:/answers", settings, "D:/answers/schema.json"));
 
         built.Request.Arguments.Should().ContainInConsecutiveOrder("--effort", "high").And.Contain("--settings");
         built.Sent.Should().Be(new SentOptions("high", "fast"), "the claude consultant sends an effort and a fast-mode file, and its line must say so");

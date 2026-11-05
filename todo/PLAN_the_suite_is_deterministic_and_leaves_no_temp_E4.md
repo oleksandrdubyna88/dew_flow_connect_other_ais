@@ -1,6 +1,6 @@
 # PLAN — E4 stories: deadlines on an injectable clock (cornerstone area: the clock contract)
 
-> Status: **S1–S5 built, the one docs pass done, the code gate pending (2026-10-22 update of the 2026-10-21 build); S6 (C4) gated on a kept failure (D5); not promoted. E4.S1 (the cornerstone: `ManualClock`, `ClockHandshake`, the structural scan) and S2–S5 are built on this branch, see the "status" sections of §8; the `research/` docs (`module_tests.md`, `module_runners.md`, `module_server.md`) were written in the §9 pass. Stories and the cornerstone spec by Fable.** Epic E4 of
+> Status: **MERGED in #916 (`d5694bab7`, 2026-10-22) — S1–S5 built, the docs pass, the Opus judge and the code gate (4/5) done; S6 (C4) gated on a kept failure (D5); the 20-run CI watch is open; promoted together with the parent plan when E5 lands. E4.S1 (the cornerstone: `ManualClock`, `ClockHandshake`, the structural scan) and S2–S5 are built on this branch, see the "status" sections of §8; the `research/` docs (`module_tests.md`, `module_runners.md`, `module_server.md`) were written in the §9 pass. Stories and the cornerstone spec by Fable.** Epic E4 of
 > [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md)
 > (its `### E4`). Branch `feat/suite-e4-clock`, from E3's head `aab069ca5` (which carries E2); every line number below
 > was read at that commit. Scope: `src_mcp` only — four product classes get an optional `TimeProvider` each

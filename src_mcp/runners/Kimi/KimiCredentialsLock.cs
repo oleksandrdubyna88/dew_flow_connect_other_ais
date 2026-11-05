@@ -82,6 +82,8 @@ public static class KimiCredentialsLock
 
     private static readonly AsyncLocal<Action<string>?> _beforeTheHomeHold = new();
 
+    private static readonly AsyncLocal<Action<string>?> _whenTheHomeFileIsBusy = new();
+
     // DoNotVerify: off Windows .NET answers "" for a folder that does not exist yet (a fresh account has no ~/.local/share), and the path would have been a
     // RELATIVE one. The folder is made by MadeRoot before anything is taken in it.
     private static readonly string DefaultRoot = Path.Combine(
@@ -115,6 +117,13 @@ public static class KimiCredentialsLock
     {
         get => _beforeTheHomeHold.Value;
         set => _beforeTheHomeHold.Value = value;
+    }
+
+    /// <summary>TEST ONLY — null in the product: told the per-home file's path the first time the no-wait look at it answers busy, just before the waiting take. Per async flow.</summary>
+    internal static Action<string>? WhenTheHomeFileIsBusy
+    {
+        get => _whenTheHomeFileIsBusy.Value;
+        set => _whenTheHomeFileIsBusy.Value = value;
     }
 
     /// <summary>The key of a sign-in folder, or EMPTY when its identity cannot be named (it does not exist, is not a folder, cannot be opened, or the host has no identity rule).</summary>
@@ -205,8 +214,9 @@ public static class KimiCredentialsLock
     /// <summary>The per-home file taken after the sign-in's; the first is released when the second cannot be had. Only a disposal's probe ever opens it besides, for a moment, which <see cref="HomeWait"/> waits out; a file still busy after that is answered as unusable.</summary>
     private static TreeHolding WithHome(FileStream signIn, string root, Func<string, TimeSpan, Hold> take)
     {
-        BeforeTheHomeHold?.Invoke(Path.Combine(root, HomeHoldName));
-        var home = take(Path.Combine(root, HomeHoldName), HomeWait);
+        var homeFile = Path.Combine(root, HomeHoldName);
+        BeforeTheHomeHold?.Invoke(homeFile);
+        var home = TakenOrWaitedFor(homeFile, take);
         if (home is Hold.Taken taken)
         {
             return new TreeHolding.Taken(new TreeHold(signIn, taken.Stream));
@@ -214,7 +224,24 @@ public static class KimiCredentialsLock
 
         signIn.Dispose();
 
-        return new TreeHolding.Unusable(home is Hold.Unusable bad ? bad.Cause : new IOException($"{Path.Combine(root, HomeHoldName)} is held by another process, and nothing but a disposal's probe ever takes it"));
+        return new TreeHolding.Unusable(home is Hold.Unusable bad ? bad.Cause : new IOException($"{homeFile} is held by another process, and nothing but a disposal's probe ever takes it"));
+    }
+
+    /// <summary>
+    /// The per-home file: one look that does not wait, and — only when that look finds it BUSY — the test seam, then the same take that waits <see cref="HomeWait"/> as before.
+    /// The look is what lets a test release its stand-in probe from the event "the shim met a busy file" instead of from a timer; in the product it is one more open attempt before the same wait.
+    /// </summary>
+    private static Hold TakenOrWaitedFor(string homeFile, Func<string, TimeSpan, Hold> take)
+    {
+        var first = take(homeFile, TimeSpan.Zero);
+        if (first is not Hold.Busy)
+        {
+            return first;
+        }
+
+        WhenTheHomeFileIsBusy?.Invoke(homeFile);
+
+        return take(homeFile, HomeWait);
     }
 
     /// <summary>

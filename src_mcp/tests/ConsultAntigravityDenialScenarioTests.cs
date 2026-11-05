@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Text.Json;
 using CoaiMcp.Runners.Consultation;
+using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -50,8 +50,8 @@ public sealed class ConsultAntigravityDenialScenarioTests : ConsultScenarioBase
         [CallerIdentity.Claude] = new("antigravity", "gemini-3.1-pro-high", Runtime: "antigravity", ExecutablePath: FakeCliExe),
     };
 
-    private PanelService Agy(TimeSpan? reviewerTimeout = null, int callsPerSession = 10) =>
-        Service(providers: [], consultants: OnAntigravity, reviewerTimeout: reviewerTimeout, callsPerSession: callsPerSession);
+    private PanelService Agy(TimeSpan? reviewerTimeout = null, int callsPerSession = 10, IProcessLauncher? launcher = null) =>
+        Service(providers: [], consultants: OnAntigravity, reviewerTimeout: reviewerTimeout, callsPerSession: callsPerSession, launcher: launcher);
 
     /// <summary>The consultation record exactly as it sits on disk — read raw, so a field the type lacks is still visible.</summary>
     private JsonElement RecordFile() =>
@@ -365,30 +365,71 @@ public sealed class ConsultAntigravityDenialScenarioTests : ConsultScenarioBase
     }
 
     [Fact]
-    public async Task AHungFollowUp_IsKilledByTheLauncher_InsideTheRemainingBudget_AndTheConversationIsKept()
+    public async Task TheFollowUpLaunch_IsGivenOnlyWhatTheFirstLaunchLeftOfTheBudget()
     {
+        // The claim is about a launch's TIMEOUT — the number the product computes (`ConsultantTurn.RunAsync`, the lesser of what
+        // is left and the follow-up's own) — so it is read where the product hands it over, not inferred from how long the
+        // whole consult took (git, two snapshots, the prompt's diff and the record writes are in that, and a Windows runner
+        // spent 12.9 s on 8 s of launches and 3 s of slack). The first launch is the real fake CLI, held for two seconds so
+        // there IS something to subtract; the follow-up is a stand-in that reports the timeout it was handed as hit — the
+        // launcher's actual kill is the smoke test below and `ProcessLauncherTests`. Observed RED with the cap deleted
+        // (`RetryLadder.Lesser(left, next)` → `next`): the recorded timeout is the whole 8 s.
         using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
         using var steering = Steer(Fixture("consult-advice.ndjson"));
-        // The first launch spends most of the budget, so what the follow-up may have is SMALL — and only the
-        // cap can make the turn end near the budget. Without it the follow-up would get the whole 8 s again,
-        // run past the turn's own deadline (8 s + its 5 s grace) and be stopped by that instead.
+        var budget = TimeSpan.FromSeconds(8);
+        var ordinal = 0;
+        var launcher = new TurnLauncher(_launcher)
+        {
+            Consultant = async (request, ct) =>
+            {
+                if (Interlocked.Increment(ref ordinal) > 1)
+                {
+                    return new ProcessResult(ExitCode: -1, StdOut: string.Empty, StdErr: string.Empty, TimedOut: true);
+                }
+
+                var first = await _launcher.RunAsync(request, ct);
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+
+                return first;
+            },
+        };
+
+        var reply = await Consult(Agy(reviewerTimeout: budget, launcher: launcher), "where is the sweep invoked?");
+
+        Refusal(reply).Should().Contain("did not arrive", "the follow-up ended TimedOut — the turn is interrupted, not answered");
+        var launches = launcher.Launched;
+        launches.Should().HaveCount(2, "one denied launch, one follow-up");
+        launches[0].Timeout.Should().Be(budget, "the first launch is given the whole budget");
+        launches[0].TimedOut.Should().BeFalse();
+        launches[1].Timeout.Should().BeLessThanOrEqualTo(budget - launches[0].Elapsed,
+            $"the follow-up gets only what the first launch left of {budget.TotalSeconds} s");
+        launches[1].TimedOut.Should().BeTrue("the follow-up launch ended by its timeout");
+    }
+
+    [Fact]
+    public async Task AHungFollowUp_IsKilledByTheLauncher_InsideTheRemainingBudget_AndTheConversationIsKept()
+    {
+        // A REAL-PROCESS SMOKE TEST: the whole consult path kills a hung follow-up through the launcher. It asserts no
+        // elapsed time — the number of the cap is `TheFollowUpLaunch_IsGivenOnlyWhatTheFirstLaunchLeftOfTheBudget`'s.
+        // Its remaining exposure, stated: the first launch is the real fake CLI, and a cold start of it past 2 s under load is
+        // itself killed at the 8 s budget (6 s sleep + start), `Offered` then returns null for a terminal launch
+        // (`ConsultantTurn.cs`) and `Launches().HaveCount(2)` fails — a failure that names the machine's load, not the cap.
+        // A kept failure of it is read against the cold start and never answered with a longer budget.
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        using var steering = Steer(Fixture("consult-advice.ndjson"));
+        // The first launch spends most of the budget, so the follow-up's remainder is SMALL, and the hung follow-up (120 s)
+        // can end only by the launcher's kill at that remainder.
         Environment.SetEnvironmentVariable("FAKECLI_SLEEP_MS", "6000");
         Environment.SetEnvironmentVariable("FAKECLI_TURN1_REPAIR_SLEEP_MS", "120000");
-        var budget = TimeSpan.FromSeconds(8);
-        var clock = Stopwatch.StartNew();
+        var launcher = new TurnLauncher(_launcher);
 
-        var reply = await Consult(Agy(budget), "where is the sweep invoked?");
+        var reply = await Consult(Agy(reviewerTimeout: TimeSpan.FromSeconds(8), launcher: launcher), "where is the sweep invoked?");
 
-        // The budget plus a margin for what the turn does around its launches (two snapshots, the prompt's
-        // diff, two process starts, the kill) — well inside both the budget plus the launcher's 5 s drain
-        // grace and the turn's deadline, which with this budget are the same 13 s and so cannot tell a capped
-        // follow-up from an uncapped one.
-        clock.Elapsed.Should().BeLessThan(budget + TimeSpan.FromSeconds(3), "the follow-up was capped to what the first launch left");
-        clock.Elapsed.Should().BeLessThan(ConsultationDeadline.For(budget), "the launcher's own kill ends it, not the turn's backstop");
         var refused = Refusal(reply);
         refused.Should().Contain("did not arrive").And.Contain("NOT counted");
         refused.Should().NotContain("deadline", "a hung follow-up is a timed-out LAUNCH, resumable — not the turn's deadline");
         steering.Launches().Should().HaveCount(2);
+        launcher.Launched[^1].TimedOut.Should().BeTrue("the launcher's own kill ended the hung follow-up, not the turn's backstop");
         var record = new ConsultationStore(_data).All().Single();
         record.Status.Should().Be(ConsultationStatuses.Interrupted);
         record.Handle.Should().Be(Conversation, "the killed follow-up named no id; the first launch's survives");

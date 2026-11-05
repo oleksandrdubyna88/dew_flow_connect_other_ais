@@ -20,8 +20,9 @@ namespace CoaiMcp.Tests;
 /// <b>The set grows per story</b>, and that is each seam story's structural RED: S1 lands the scan with <c>BoundedScheduler</c> only;
 /// S2 adds <c>AcpClient.cs</c> (red on its <c>CancelAfter</c> and its bare <c>WaitAsync</c> before the seam, green after, the drain grace
 /// allowed); S3 adds <c>ConsultantPlaces.cs</c>; S4 adds <c>TurnLoop.cs</c> and <c>SourceResolver.cs</c>. It is NOT over
-/// <c>ReviewSnapshots.cs</c>, <c>ProcessLauncher.cs</c> or <c>ReviewerExecutor.cs</c>: the plan names their sites as callees that do not
-/// move, and a later story that seams one adds it to the set with its own red.</para>
+/// <c>ReviewSnapshots.cs</c> or <c>ProcessLauncher.cs</c>: the plan names their sites as callees that do not
+/// move, and a later story that seams one adds it to the set with its own red. E5 S8 added <c>ReviewerExecutor.cs</c> (C35) the same way:
+/// red on its <c>Stopwatch</c>, its <c>DateTime.UtcNow</c> and its cleanup <c>CancellationTokenSource</c>, green after the seam with the cleanup allowed.</para>
 /// </remarks>
 public sealed class EveryBudgetInAClockedClassReadsItsClockTests
 {
@@ -30,9 +31,10 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     private const string ConsultantPlaces = "src_mcp/src/Server/Consultation/ConsultantPlaces.cs";
     private const string TurnLoop = "src_mcp/runners/Reviewers/TurnLoop.cs";
     private const string SourceResolver = "src_mcp/runners/Feature/SourceResolver.cs";
+    private const string ReviewerExecutorFile = "src_mcp/runners/Reviewers/ReviewerExecutor.cs";
 
     /// <summary>The product files judged. Each seam story adds its class here, red first, then green once the seam is in.</summary>
-    private static readonly string[] Clocked = [BoundedScheduler, AcpClientFile, ConsultantPlaces, TurnLoop, SourceResolver];
+    private static readonly string[] Clocked = [BoundedScheduler, AcpClientFile, ConsultantPlaces, TurnLoop, SourceResolver, ReviewerExecutorFile];
 
     /// <summary>A product file whose constructor takes a <see cref="TimeProvider"/> and is NOT in <see cref="Clocked"/>, with the one-line reason (judge round G2).</summary>
     private sealed record NotScanned(string File, string Reason);
@@ -66,6 +68,7 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
         new(BoundedScheduler, "Stopwatch.GetTimestamp(); } public sealed class BoundedScheduler(", "a report's LandedAt is a MOMENT, compared only with RoundCancellation's own Stopwatch stamps to name a local end cause (E3.S2); a manual clock would make the two incomparable, and it bounds no wait"),
         new(BoundedScheduler, "await Task.Delay(wait, ct);", "DEFERRED (Q4): the 429 ladder's wait — named, not moved, until a 429-ladder failure is kept (D5)"),
         new(AcpClientFile, "reading.WaitAsync(AcpTransport.DrainGrace)", "TEARDOWN (E4 plan §5.1, the lead's Q1): the drain grace after the agent's tree was killed bounds a real pipe a survivor may hold; on a manual clock nobody advances it would hang, and it decides nothing the test races"),
+        new(ReviewerExecutorFile, "new CancellationTokenSource(AbandonBudget)", "TEARDOWN — real cleanup I/O (the adapter's courtesy cancel after a kill, for the remote runtime an HTTP cancel); a manual clock nobody advances would park it for ever, and it runs after the outcome is decided and decides nothing the test races"),
     ];
 
     /// <summary>One shape of unclocked budget: what it is called, how it is found, and whether it has an argument list to inspect.</summary>

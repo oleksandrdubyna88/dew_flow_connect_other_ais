@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { capture } from '../versionProbe';
 import { test } from 'node:test';
 import { tmpdir } from 'node:os';
-import { ProcessHandle, launch, workingDirectory } from '../processLauncher';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { setImmediate as yieldToTheEventLoop } from 'node:timers/promises';
+import { ProcessHandle, launch, replayingFan, workingDirectory } from '../processLauncher';
 
 /**
  * The launcher, against REAL children.
@@ -233,7 +236,22 @@ test('a shell is never pointed at the opened workspace by omission', () => {
 });
 
 /**
- * A child that writes a great deal, with nobody listening to its lines.
+ * What a piece of work costs in CPU — user plus system time of THIS process, in milliseconds.
+ *
+ * <p>CPU time, not wall time: a slow machine, a busy one and eight test files running at once all
+ * stretch the wall clock and leave the CPU a piece of work needed alone. `node --test` gives each
+ * test file its own process, so the delta is this file's.</p>
+ */
+function cpuMillisecondsOf(work: () => void): number {
+  const before = process.cpuUsage();
+  work();
+  const spent = process.cpuUsage(before);
+
+  return (spent.user + spent.system) / 1000;
+}
+
+/**
+ * The fan that holds what nobody has read yet must hold it in linear time.
  *
  * <p>Reported 2026-09-09 as three separate complaints about the Review rounds page — no findings, no
  * accepted/rejected counts, and window buttons that would not switch. One cause: `coai-mcp --log`
@@ -241,13 +259,67 @@ test('a shell is never pointed at the opened workspace by omission', () => {
  * the 8-second cap in `capture`, which then answered `(-1, '')` and threw the whole payload away.</p>
  *
  * <p>The cost was `replayingFan` holding an unread value by rebuilding its array: `held = [...held,
- * value]`, once per line. Measured on the shape alone — 130 000 emits cost **64.09 s** that way and
- * **0.01 s** with an append. Nobody subscribes to `onLine` on this path, so every line paid it.</p>
+ * value]`, once per value. Measured on the shape alone — 130 000 emits cost **64.09 s** that way and
+ * **0.01 s** with an append. Nobody subscribes to `onLine` on the `capture` path, so every line paid
+ * it.</p>
  *
- * <p>The assertion is wall-clock on purpose. There is no unit smaller than "it finished" that would
- * have caught this: every line was delivered, in order, with the right content — only late.</p>
+ * <p>The bound is the fan's own CPU, asked of the fan directly — no child, no pipe, no clock. At
+ * 40 000 values the quadratic shape costs (40 / 130)² × 64.09 s ≈ **6.1 s** of CPU and the append
+ * (40 / 130) × 0.01 s ≈ **3 ms**; the threshold, 1 000 ms, is six times under the first and three
+ * hundred times over the second, so neither a slow machine nor a fast one can cross it by itself.
+ * A thousand values go in first and the event loop is yielded, so what the setup allocated and any
+ * collection it provoked are outside the measured window.</p>
  */
-test('a child that writes many lines nobody reads still finishes promptly', async () => {
+test('a fan nobody listens to holds 40 000 values in far less than a second of CPU', async () => {
+  const VALUES = 40_000;
+  const BUDGET_MS = 1_000;
+  const fan = replayingFan<string>();
+  for (let i = 0; i < 1_000; i++) {
+    fan.emit('warm-up ' + i);
+  }
+  await yieldToTheEventLoop();
+
+  const spent = cpuMillisecondsOf(() => {
+    for (let i = 0; i < VALUES; i++) {
+      fan.emit('line ' + i + ' of something a probe never reads');
+    }
+  });
+
+  assert.ok(spent < BUDGET_MS, `the fan spent ${Math.round(spent)} ms of CPU on ${VALUES} values; an append costs under ${BUDGET_MS} ms`);
+});
+
+test('the CPU measure does not move when the thread merely waits', () => {
+  // The measure itself, pinned. Were it wall time, a machine that stalls this thread for a second
+  // and a half would fail the bound above for work it never did; CPU time does not see a sleep.
+  const slept = 1_500;
+  const wallBefore = Date.now();
+  const spent = cpuMillisecondsOf(() => {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, slept);
+  });
+  const wall = Date.now() - wallBefore;
+
+  assert.ok(wall >= slept - 50, `the wait did not happen: ${wall} ms of wall time`);
+  assert.ok(spent < 1_000, `a wait of ${slept} ms registered as ${Math.round(spent)} ms of CPU`);
+});
+
+/** Wait for a handle to end, however it ends — and nothing else: no timer, so no clock to lose to. */
+function finished(child: ProcessHandle): Promise<{ code?: number; error?: string }> {
+  return new Promise((resolve) => {
+    child.onExit((code) => resolve({ code }));
+    child.onError((error) => resolve({ error }));
+  });
+}
+
+/**
+ * The pipes, end to end, for a child that writes a great deal while nobody reads its lines.
+ *
+ * <p>A smoke test of the pipes and nothing more: exit 0 and every character arrived. It carries NO
+ * clock — not an assertion on elapsed time, not the `ended` helper's timer. How fast a fresh `node`
+ * writes 40 000 lines is the machine's business and varies with its load; a hang is the runner's
+ * per-file timeout's to report, and that names the file. What the old wall-clock assertion MEANT is
+ * the test above.</p>
+ */
+test('a child that writes many lines nobody reads still arrives in full and exits cleanly', async () => {
   const LINES = 40_000;
   const child = launch(NODE, [
     '-e',
@@ -259,13 +331,24 @@ test('a child that writes many lines nobody reads still finishes promptly', asyn
   let chars = 0;
   child.onStdout((chunk) => { chars += chunk.length; });
 
-  const started = Date.now();
-  const finished = await ended(child, 'a child writing many lines');
-  const took = Date.now() - started;
+  const done = await finished(child);
 
-  assert.equal(finished.code, 0, 'the child itself is fine; it is the launcher that was slow');
+  assert.equal(done.code, 0, 'the child itself is fine; it is the pipes that are under test');
   assert.ok(chars > LINES * 10, `all of it arrived: ${chars} characters`);
-  assert.ok(took < 4_000, `it took ${took} ms — the fan is rebuilding its buffer per line again`);
+});
+
+test('the pipe smoke test above reads no clock and starts no timer', () => {
+  // Pins the absence rather than the behaviour: a clock put back into the smoke test would pass
+  // every run on an idle machine and fail only under the load this suite is run in.
+  const source = readFileSync(join(__dirname, '..', '..', 'src', 'test', 'processLauncher.test.ts'), 'utf8');
+  const title = "test('a child that writes many lines nobody reads still arrives in full and exits cleanly'";
+  const from = source.indexOf(title);
+  const body = source.slice(from, source.indexOf('\ntest(', from + title.length));
+
+  assert.ok(from >= 0 && body.length > title.length, 'the smoke test was not found in the source');
+  for (const forbidden of ['setTimeout(', 'ended(', 'Date.now(', 'performance.now(', 'hrtime']) {
+    assert.ok(!body.includes(forbidden), `the smoke test uses ${forbidden} — it must carry no clock`);
+  }
 });
 
 test('a value emitted before anybody subscribes is still delivered, in order', async () => {

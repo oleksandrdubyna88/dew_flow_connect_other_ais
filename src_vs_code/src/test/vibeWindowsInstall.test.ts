@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { test } from 'node:test';
 
 import { fromOfficialSources, OFFICIAL_SOURCES, vendorInstall, vendorUpdate } from '../vendorTerminal';
+import { powerShellEnv } from './powerShellEnv';
 import type { Vendor } from '../vendors';
 
 /**
@@ -38,7 +40,7 @@ const PARSE = '$t = $null; $e = $null; '
 
 function powerShell(): string {
   for (const exe of ['pwsh', 'powershell']) {
-    if (spawnSync(exe, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { timeout: 30_000 }).status === 0) {
+    if (spawnSync(exe, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { env: powerShellEnv(), cwd: tmpdir(), timeout: 30_000 }).status === 0) {
       return exe;
     }
   }
@@ -49,8 +51,8 @@ function powerShell(): string {
 const SHELL = powerShell();
 
 function parsed(text: string): Parsed {
-  const env = { PATH: process.env['PATH'] ?? '', SystemRoot: process.env['SystemRoot'] ?? '', COAI_PS_TEXT: text };
-  const run = spawnSync(SHELL, ['-NoProfile', '-NonInteractive', '-Command', PARSE], { env, encoding: 'utf8', timeout: 60_000 });
+  const run = spawnSync(SHELL, ['-NoProfile', '-NonInteractive', '-Command', PARSE],
+    { env: powerShellEnv({ COAI_PS_TEXT: text }), cwd: tmpdir(), encoding: 'utf8', timeout: 60_000 });
   assert.equal(run.status, 0, `PowerShell could not parse the command: ${run.stderr}`);
 
   return JSON.parse(run.stdout) as Parsed;

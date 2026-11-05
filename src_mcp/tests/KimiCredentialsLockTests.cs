@@ -310,7 +310,10 @@ public sealed class KimiCredentialsLockTests : IDisposable
         Directory.Exists(Locks).Should().BeFalse("no lock file was made on a spelling");
     }
 
-    /// <summary>M1: a disposal's probe opens the per-home file exclusively for a moment; a shim that meets it waits it out and still takes the hold.</summary>
+    /// <summary>
+    /// M1: a disposal's probe opens the per-home file exclusively for a moment; a shim that meets it waits it out and still takes the hold. The child's probe is let go
+    /// from the shim's own first BUSY answer (<see cref="KimiCredentialsLock.WhenTheHomeFileIsBusy"/>, C3 of E5), never from a timer — so the outcome is the event's, not the scheduler's.
+    /// </summary>
     [Fact]
     public async Task AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold()
     {
@@ -327,6 +330,20 @@ public sealed class KimiCredentialsLockTests : IDisposable
             await ShimChild.EndAsync(grandchild);
             await ShimChild.EndAsync(shim);
         }
+    }
+
+    /// <summary>The other side of M1 (C3 of E5): a probe that never lets go — the shim waits the per-home file's wait out and gives up (exit 69), saying so. The product's 500 ms is the subject; no timer is in this test.</summary>
+    [Fact]
+    public async Task AShimWhoseHomeFileAProbeNeverLetsGoOf_GivesUp_AndSaysWhoseFileItWas()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(), "the child names the sign-in folder with the product's own key, and macOS has no folder-identity rule (a Kimi launch is refused there, D18) — a test's stand-in cannot reach into the child");
+        var home = _dir.At("owned", "kh-q");
+        Directory.CreateDirectory(home);
+
+        var shim = await ShimChild.FailsAsync("tree-probed-forever", Locks, Persons, home);
+
+        shim.Exit.Should().Be(69, "the probe never let go, so the shim gave up after its wait");
+        shim.Error.Should().Contain("Unusable").And.Contain(Path.Combine(home, KimiCredentialsLock.HomeHoldName)).And.Contain("held by another process").And.Contain("nothing but a disposal's probe ever takes it");
     }
 
     [Fact]
@@ -440,5 +457,86 @@ public sealed class KimiCredentialsLockTests : IDisposable
         firstFile.Should().BeOfType<TreeHolding.Unusable>().Which.Cause.Should().BeSameAs(broken);
         secondFile.Should().BeOfType<TreeHolding.Unusable>().Which.Cause.Should().BeSameAs(broken);
         HeldFile.Probe(KimiCredentialsLock.TreePathFor(Persons)).Should().Be(LockProbe.Free, "the sign-in's file taken first was given back");
+    }
+
+    /// <summary>
+    /// C3 (S4 of <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md</c>): the first busy answer for the per-home file is the instant a disposal's probe is MET — the seam
+    /// tells the test, once, with the file's path, BEFORE the waiting take runs, so a stand-in probe is released by the event and not by a timer (the shim's
+    /// <c>tree-probed</c> mode, <see cref="AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold"/>).
+    /// </summary>
+    [Fact]
+    public void ATreeHold_TellsTheBusySeamOnce_WhenTheHomeFileAnswersBusyAtTheFirstLook_AndThenWaits()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var home = HomeRoot();
+        var homeFile = Path.Combine(home, KimiCredentialsLock.HomeHoldName);
+        var busyCalls = new List<string>();
+        var order = new List<string>();
+        var homeAsks = new List<TimeSpan>();
+
+        var holding = WithTheBusySeam(path => { busyCalls.Add(path); order.Add("seam"); }, () => KimiCredentialsLock.TakeTreeThrough(Persons, home, Brief, (path, within) =>
+        {
+            if (path != homeFile)
+            {
+                return Take(path, within);
+            }
+
+            homeAsks.Add(within);
+            order.Add(within == TimeSpan.Zero ? "look" : "wait");
+
+            return homeAsks.Count == 1 ? new Hold.Busy() : Take(path, within);
+        }));
+        using var held = (holding as TreeHolding.Taken)?.Hold;
+
+        busyCalls.Count.Should().Be(1, "the seam fires on the first busy answer");
+        busyCalls.Should().Equal([homeFile], "it is told the per-home file's path");
+        homeAsks.Should().HaveCount(2, "one look that does not wait, then the waiting take");
+        homeAsks[0].Should().Be(TimeSpan.Zero, "the first look must not wait: its busy answer is what the seam reports");
+        homeAsks[1].Should().BeGreaterThan(TimeSpan.Zero, "and the take after it waits the probe out");
+        order.Should().Equal(["look", "seam", "wait"], "the seam fires between the no-wait look and the waiting take, never before the look");
+        holding.Should().BeOfType<TreeHolding.Taken>("the file was free by the waiting take");
+    }
+
+    /// <summary>C3's guard arm: a per-home file that is free at the first look is taken by that look — the seam is never told, and nothing waits.</summary>
+    [Fact]
+    public void ATreeHold_NeverTellsTheBusySeam_WhenTheHomeFileIsTakenAtOnce()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var home = HomeRoot();
+        var homeFile = Path.Combine(home, KimiCredentialsLock.HomeHoldName);
+        var told = new List<string>();
+        var homeAsks = new List<TimeSpan>();
+
+        var holding = WithTheBusySeam(told.Add, () => KimiCredentialsLock.TakeTreeThrough(Persons, home, Brief, (path, within) =>
+        {
+            if (path == homeFile)
+            {
+                homeAsks.Add(within);
+            }
+
+            return Take(path, within);
+        }));
+        using var held = (holding as TreeHolding.Taken)?.Hold;
+
+        holding.Should().BeOfType<TreeHolding.Taken>();
+        told.Should().BeEmpty("a file that is free at the first look was never busy");
+        homeAsks.Should().Equal([TimeSpan.Zero], "the no-wait look took it, so nothing waited");
+    }
+
+    /// <summary><paramref name="run"/> with <see cref="KimiCredentialsLock.WhenTheHomeFileIsBusy"/> set to <paramref name="seam"/> on this async flow, and put back after.</summary>
+    private static T WithTheBusySeam<T>(Action<string> seam, Func<T> run)
+    {
+        var before = KimiCredentialsLock.WhenTheHomeFileIsBusy;
+        KimiCredentialsLock.WhenTheHomeFileIsBusy = seam;
+        try
+        {
+            return run();
+        }
+        finally
+        {
+            KimiCredentialsLock.WhenTheHomeFileIsBusy = before;
+        }
     }
 }

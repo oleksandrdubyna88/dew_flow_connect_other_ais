@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 
 import { vendorInstall, vendorUpdate } from '../vendorTerminal';
+import { powerShellEnv } from './powerShellEnv';
 import type { Vendor } from '../vendors';
 
 /**
@@ -66,20 +67,12 @@ after(() => {
   }
 });
 
-function minimalEnv(): Record<string, string> {
-  return {
-    SystemRoot: SYSTEM_ROOT,
-    PATH: join(SYSTEM_ROOT, 'System32'),
-    // Every real terminal has it, and without it neither Get-Command nor & finds a program by its extension.
-    PATHEXT: process.env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD',
-    LOCALAPPDATA: process.env['LOCALAPPDATA'] ?? '',
-    ProgramFiles: process.env['ProgramFiles'] ?? '',
-    ProgramData: process.env['ProgramData'] ?? '',
-    ALLUSERSPROFILE: process.env['ALLUSERSPROFILE'] ?? '',
-    TEMP: root,
-    TMP: root,
-  };
-}
+/**
+ * What the line's PowerShell starts with beyond `powerShellEnv()`'s defaults: a PATH of `System32` alone, and the system folder named the
+ * way this file names it. The module cache and `TEMP` are the run's folder (`powerShellEnv`, C28) — `root` — so nothing a PowerShell
+ * writes outlives the file's `after`.
+ */
+const CLEARED = { SystemRoot: SYSTEM_ROOT, PATH: join(SYSTEM_ROOT, 'System32') };
 
 /** Every PowerShell this machine can start with a cleared environment — the line must work in each. */
 function shells(): readonly string[] {
@@ -91,7 +84,7 @@ function shells(): readonly string[] {
 
   // Asked by STARTING it, never by `existsSync`: pwsh from the Store is an app execution alias, which a stat does not see.
   return candidates.filter((exe) =>
-    spawnSync(exe, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { env: minimalEnv(), timeout: 60_000 }).status === 0);
+    spawnSync(exe, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { env: powerShellEnv(CLEARED, root), cwd: tmpdir(), timeout: 60_000 }).status === 0);
 }
 
 const SHELLS = WINDOWS ? shells() : [];
@@ -127,8 +120,8 @@ function run(shell: string, line: string, present: readonly string[], wingetExit
     writeFileSync(join(bin, `${tool}.exe`), '');
   }
   const logs = { winget: join(place, 'winget log.txt'), moonshot: join(place, 'moonshot log.txt') };
-  const env = {
-    ...minimalEnv(),
+  const vars = {
+    ...CLEARED,
     PATH: `${bin};${join(SYSTEM_ROOT, 'System32')}`,
     FAKE_WINGET_LOG: logs.winget,
     FAKE_WINGET_EXIT: String(wingetExit),
@@ -136,7 +129,7 @@ function run(shell: string, line: string, present: readonly string[], wingetExit
     FAKE_MOONSHOT_LOG: logs.moonshot,
     COAI_LINE: line,
   };
-  const ran = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', HARNESS], { env, encoding: 'utf8', timeout: 120_000 });
+  const ran = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', HARNESS], { env: powerShellEnv(vars, root), cwd: tmpdir(), encoding: 'utf8', timeout: 120_000 });
   assert.match(ran.stdout, /STARTED/u, `${shell} did not run the harness: ${ran.stdout}${ran.stderr}`);
   assert.doesNotMatch(ran.stdout, /GUARD:/u, `a step would have reached the real program: ${ran.stdout}`);
 

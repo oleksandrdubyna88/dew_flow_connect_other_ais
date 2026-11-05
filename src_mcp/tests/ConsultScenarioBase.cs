@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Consultation;
@@ -40,6 +41,9 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
     /// </remarks>
     protected sealed class TurnLauncher(IProcessLauncher inner) : IProcessLauncher
     {
+        private readonly Lock _gate = new();
+        private readonly List<ConsultantLaunch> _launched = [];
+
         /// <summary>Runs INSTEAD of the consultant's launch; null runs the fake CLI as usual.</summary>
         public Func<ProcessRequest, CancellationToken, Task<ProcessResult>>? Consultant { get; init; }
 
@@ -50,6 +54,18 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
         public bool GitRefused { get; set; }
 
         public bool ConsultantRan { get; private set; }
+
+        /// <summary>Every CONSULTANT launch, in order — what it was allowed, how long it took, how it ended.</summary>
+        public IReadOnlyList<ConsultantLaunch> Launched
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _launched];
+                }
+            }
+        }
 
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
@@ -70,9 +86,29 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
             BeforeConsultant?.Invoke();
             ConsultantRan = true;
 
-            return Consultant is { } consultant ? await consultant(request, ct) : await inner.RunAsync(request, ct);
+            var started = Stopwatch.StartNew();
+            var result = Consultant is { } consultant ? await consultant(request, ct) : await inner.RunAsync(request, ct);
+            lock (_gate)
+            {
+                _launched.Add(new ConsultantLaunch(request.Timeout, started.Elapsed, result.TimedOut));
+            }
+
+            return result;
         }
     }
+
+    /// <summary>
+    /// One consultant launch as the launcher saw it: the timeout the PRODUCT handed it, how long it ran, whether the
+    /// launcher ended it by that timeout.
+    /// </summary>
+    /// <remarks>
+    /// The record a test reads instead of a stopwatch around the whole consult (<c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md</c>
+    /// §3.9): the claim "the follow-up gets only what the first launch left" is about a launch's TIMEOUT, a number the product
+    /// computes, and the whole turn's wall time also holds git, snapshots and record writes. <c>Elapsed</c> is timed INSIDE the
+    /// turn's own stopwatch (<c>ConsultantTurn.RunAsync</c> starts it before the launch and reads it after), so
+    /// <c>budget - Elapsed</c> is never less than what the turn computed as left — an upper bound a capped follow-up always meets.
+    /// </remarks>
+    protected sealed record ConsultantLaunch(TimeSpan Timeout, TimeSpan Elapsed, bool TimedOut);
 
     public async ValueTask InitializeAsync()
     {
