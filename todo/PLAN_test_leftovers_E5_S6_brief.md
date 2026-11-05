@@ -32,7 +32,7 @@ The parent's § *Epoch 6*, item 8 makes this table the opening of every brief. I
 | (l) F24's second acceptance check | § 16; `LeftoversBaselineTests.TheProofCheck_ClosesForEachScope` (new code of S6) | the four C# scopes through the test; the two Node scopes through the released guard | the record on #945; `M --filter-method "*TheProofCheck_ClosesForEachScope*"`: 4 `proof missing`, then 0 | Node half and forced runs recorded on #945; C# half to build |
 | (m) D11's rollback text | the PR description | a reviewer | a reviewer reads it | **open, the main session** |
 | (n) the native series' evidence | S4 on #945; S6 adds item (3): no finding, no row | the Linux leg | the S4 tests green; the PR record names the seven items | built; the record is the main session's |
-| (o) the audit reads the run folder before the run ends | `template-manifest.json`, the fourth op of `LeftoversSweepFixture.cs`; `src_mcp/tests_leftovers/RunTemp.cs`, `RunTempFixture.cs`; the plant in each of four suites (§ 11) | the four C# executables | `M`, `S`, `B`, `H`, each `--filter-method "*AnOrphanClaim_IsReportedByTheAudit*"`; R16 | to build, RED first |
+| (o) the audit reads the run folder before the run ends (on Windows with a re-owned claim; parent's § *Epoch 7*) | `template-manifest.json`, the fourth op of `LeftoversSweepFixture.cs`; `src_mcp/tests_leftovers/RunTemp.cs`, `RunTempFixture.cs`; the plant in each of four suites, and the pin of the limit (§ 11) | the four C# executables | `M`, `S`, `B`, `H`, each `--filter-method "*AnOrphanClaim_IsReportedByTheAudit*"`; R16 | to build, RED first |
 | (p) the smoke script's trap and name | `src_server/smoke-image.sh`, `src_server/tests/TheImageSmokeUsesTheServerTests.cs` (§ 9.4) | the test with a stub on PATH; `server-image.yml:88`; a person | `S --filter-class "*TheImageSmokeUsesTheServerTests"`; R19 | to build, RED first |
 | (q) the baseline's final content | by hand, § 12.4 | the creation PR's last head, in a full clone | the commands of § 12.4, exit 0, recorded on the PR; both wrappers green in that head's CI run | to do last |
 | Must-not-copy #1, the audit's sibling | the template's test; `LeftoversCoaiLayoutTests.TwoChildSuitesUnderOneRun_TheFirstToFinish_LeavesTheSecondsFolder` | the `Leftovers` filter | R4 | to build |
@@ -944,7 +944,8 @@ Also change the `<para><b>The end.</b>` of the class comment: `EndOfRun` runs fr
 | A normal end | The audit reads the run folder while it exists: a test's own owned folder and a claim, depth 1. Never the run folder itself, which sits in the parent, and never in the registry list. Then `EndOfRun`. |
 | The audit throws | `finally` ends the run. The run fails with the audit's message. |
 | The run has a leaked `OwnedDir` | Red through the registry, as before. |
-| The run has an orphan claim | **Red through `Discover`, because the audit runs first.** This is condition (o). |
+| The run has an orphan claim the caller's SID owns | **Red through `Discover`, because the audit runs first.** This is condition (o). |
+| The run has a real orphan claim on an elevated Windows process | **Not seen.** A new file there is owned by `BUILTIN\Administrators`, so `Discover` reads it as a stranger's. A registered folder stays red through the registry. Parent's § *Epoch 7*; F31. |
 | A child under an inherited `TESTSTODELETE_RUN` | `Owner.RunRecord(env, …) != Owner.This`: `Discover` returns nothing. The registry covers this process's own. Row 1's fix, from the template. |
 | The sweep fixture's constructor threw, a host aborted before disposal, or `RunTempFixture` refused | The process-exit handler ends the folder. No audit runs. That run has already failed or been killed. |
 | The run was killed | One folder plus its claim. The next run's sweep collects it. |
@@ -974,7 +975,19 @@ public sealed class OrphanClaimChild
             Assert.Skip("child-only: AnOrphanClaim_IsReportedByTheAudit_BeforeTheRunFolderEnds starts the suite on this class with COAI_S6_ORPHAN_CLAIM=1");
         }
 
-        File.WriteAllText(Path.Combine(RunTemp.Folder, Owned.NameFor("orphan") + ".owner"), Owner.This.Format() + "\n");
+        var claim = Path.Combine(RunTemp.Folder, Owned.NameFor("orphan") + ".owner");
+        File.WriteAllText(claim, Owner.This.Format() + "\n");
+
+        // An elevated Windows process makes files Administrators own, and the audit reads those as a stranger's (F31). Re-own this one, so the plant tests the ORDER.
+        if (OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("COAI_S6_ORPHAN_CLAIM_UNTOUCHED") != "1")
+        {
+            using var windows = new WindowsOwnership();
+            windows.OwnedByCaller(claim);
+            if (!Scope.IsMine(claim))
+            {
+                throw new InvalidOperationException("the plant is not the caller's after re-owning: the profile key does not hold for " + claim);
+            }
+        }
     }
 }
 ```
@@ -999,9 +1012,13 @@ public void AnOrphanClaim_IsReportedByTheAudit_BeforeTheRunFolderEnds()
 }
 ```
 
+**The pin of the limit, `CoaiMcp.Tests` only.** `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun`, in `src_mcp/tests/RunTempTests.cs`. It uses the parent's lines with `COAI_S6_ORPHAN_CLAIM_UNTOUCHED=1` as well. It skips unless the process is on Windows and a new file reads `Scope.IsMine` false, and it says why. It asserts `result.ExitCode` is 0 and the output has no `this run left`. It goes red when F31 changes the helper, and that is its purpose.
+
+**What the plant does not prove.** A real claim of an elevated run (the pin says so). And who removed the claim: the final empty-root assertion cannot tell the audit from the end of the run; the template's test proves the removal.
+
 The plant's spelling comes from the template's `A_run_that_left_a_folder_throws_one_exception_and_leaves_the_temp_root_clean`. These new lines use no temp API, so they add no baseline entry.
 
-**RED before the call, shown once, in `CoaiMcp.Tests`.** In step 2, first set the fourth op and the copy to `() => RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder())` and leave `RunTempFixture.Dispose` as it is. Run `M --filter-method "*AnOrphanClaim_IsReportedByTheAudit*"`. It is red: the child exits 0, because `RunTempFixture` disposes first and `Discover` answers `[]`. Quote the failure in `module_tests.md`. Then apply § 11.1 and § 11.2 and run all four. Each must be green.
+**RED before the call, shown once, in `CoaiMcp.Tests`.** In step 2, first set the fourth op and the copy to `() => RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder())` and leave `RunTempFixture.Dispose` as it is. Run `M --filter-method "*AnOrphanClaim_IsReportedByTheAudit*"`. It is red: the child exits 0, because `RunTempFixture` disposes first and `Discover` answers `[]`. Quote the failure in `module_tests.md`. Show the same RED once on hosted Windows, with the re-owning line in, on a throwaway branch that you delete after; quote its run id. Then apply § 11.1 and § 11.2 and run all four. Each must be green.
 
 **Expect it to find leaks.** This turns on a check that was off through S3, S2-B, S4 and S5, on four suites, and `Discover` now reads inside the run folder. A red `coai tests: this run left <n> folder(s) it claimed` names a real leak: an `OwnedDir` nobody disposed, or a claim. **Fix each one in the test that made it, before the PR merges. Never weaken the audit. Never add an entry to skip it.** Record each one found in `module_tests.md`.
 
@@ -1207,7 +1224,7 @@ The tests are written first and seen red for the right reason. Quote the first f
 | R13 | N6, N7 | Each planted growth is red in the test by construction; first run before the wiring: red on the missing helper. | Green. |
 | R14 | `The_baseline_file_exists`: `File.Exists`, and a regular file (`!FileAttributes.ReparsePoint`) | Before step 8: red. | Green at step 8. |
 | R15 | **Must-not-copy #2, Node half, as narrowed: N8. Its RED is by hand, once, against a patched copy of the guard**, because there is no reader to switch off, and the mount must stay clean | In a scratch folder: copy `.agents/conventions/tools` and `common`, and link its `node_modules`. In the copy's `leftovers-check.mjs` change `legacyNameHits(line)` at `:367` to `[]`, then `verdicts[index] === "broad"` at `:376` to `false`. For the length of the run point `testLeftovers.test.mjs`'s `guard` at the copy. Red: N8's first row, then its second. Quote both in the PR. | Restore the test's line, delete the copy, green. Never commit it. |
-| R16 | The orphan-claim plant, four suites (§ 11.4) | Once, in `CoaiMcp.Tests`, with the audit wired and `RunTempFixture.Dispose` still ending the run: red, the child exits 0. | The ONE ordered call. All four green. |
+| R16 | The orphan-claim plant, four suites (§ 11.4) | Once, in `CoaiMcp.Tests`, with the audit wired and `RunTempFixture.Dispose` still ending the run: red, the child exits 0. Again on hosted Windows, with the claim re-owned: a throwaway run. | The ONE ordered call. All four green. |
 | R17 | The seam: `LeftoversCoaiLayoutTests.DisposingAFixtureBuiltThroughTheSeam_DoesNotEndTheRun`: `new LeftoversSweepFixture(() => SweepResult.Empty, _ => { }, () => { })`, `await DisposeAsync()`, then `Directory.Exists(RunTemp.Folder)` and `RunTemp.Refusal()` is null | Plant: `RunTemp.EndOfRun()` in `DisposeAsync`. Red here, and the rest of that run fails as well. Run this one filter only. | Revert, green. |
 | R18 | `RunTempFixture` ends nothing: `typeof(RunTempFixture).GetInterfaces()` holds no `IDisposable`, in `LeftoversCoaiLayoutTests` | Written before § 11.2: red. | Green. |
 | R19 | `AFailureBeforeTheContainer_LeavesNoFolder` (§ 9.4) | Before the move: red, the folder stays in `tmp`, and the premise holds. | The move, green. |
@@ -1372,9 +1389,11 @@ A fixture that passed on Linux has failed only on hosted Windows before. So each
 | `git rev-parse --show-toplevel` against a `RUNNER~1` path (§ 7.2) | `LeftoversBaselineTests` in `windows` `Test`; fixtures ask git |
 | A disposal that gives up: a held handle on Windows, a read-only folder on POSIX | the PowerShell audit step, value `failed-dispose` |
 | `Get-ChildItem $env:TMP` is the real temp root after the run | the PowerShell audit step |
-| The ONE ordered call, on Windows, where a held handle can keep the run folder | the `windows` job's `Test` and the plant in `CoaiMcp.Tests`; S3's contract (a folder that stays keeps its claim and one warning) |
+| The ONE ordered call, on Windows, where a held handle can keep the run folder | the `windows` job's `Test` and the plant in `CoaiMcp.Tests` and `CoaiServer.Tests`, with the claim re-owned; S3's contract (a folder that stays keeps its claim and one warning) |
+| A real orphan claim or a killed run's folder on an elevated Windows process | NOT seen and NOT collected: the goal's exception (parent's § *Epoch 7*), pinned by `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun`; F31 |
 | The plant on the other suites | each suite only on the OSes D8's table names: bugs on Linux only, bench not on Windows. Accepted (D8) |
-| The smoke stub and the kind 5 pins under Git Bash | `CoaiServer.Tests` in `windows` where bash is present; a test that skips for no bash says so |
+| The smoke stub under Git Bash | NOT proved on Windows: the `windows` job runs only `*RunFolderTests` of `CoaiServer.Tests`. Linux and macOS prove it |
+| The kind 5 pins under Git Bash | the pins in `CoaiMcp.Tests`, in `windows` `Test`, where bash is present; a test that skips for no bash says so. The pins in `CoaiServer.Tests` are not run on Windows, for the same reason |
 | `A_path_with_quotes_…`: no quote in a Windows name (the template's branch) | `windows` `Test` |
 | `An_unreadable_candidate_…` skips on Windows (`chmod`) | not proved on Windows; the same message path on Linux and macOS |
 | The symlink test of R8 and B8: POSIX only | not proved on Windows; `locateBaseline` is shipped code, tested in `dew_flow_conventions` |

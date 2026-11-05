@@ -1,6 +1,8 @@
 # PLAN — Test leftovers, E5: coai's run folder takes the owner form, both test sweeps judge by owner, and the product's `coai-*` directories stay untouched
 
-> Status: **revised 2026-11-05 at the parent's epoch-6 re-review (entries 5.2 and 5.3 of the parent's ledger, both found
+> Status: **stopped with the parent, 2026-11-05 (entry 6.2): epoch 7's re-review is open, and S6's remaining code waits for it (the parent's § *Epoch 7* item 5).** S6 is built to `3fcba8a0`, but for those items.
+>
+> Was: **revised 2026-11-05 at the parent's epoch-6 re-review (entries 5.2 and 5.3 of the parent's ledger, both found
 > writing the S6 build brief; entry 5.1, the Windows sweep mutex, is built on #945 and unchanged); epoch 6 was approved by
 > the owner on 2026-11-05 (the record says `Narrowed: yes`).** Epoch 5 was approved
 > by the owner (2026-11-04). The producer PR #945 (draft) holds S3, S2-B, S4, entry 5.1 and S5 at `524df50e`, every job
@@ -638,7 +640,7 @@ baseline AND the inline `raw-temp` exemptions of that inventory are left — eac
 line by line (a test or a read record on the PR, through every allocating library's callers). The folder `src_vs_code/scripts/`
 stays in the guard. Three conditions are ADDED, none narrows: **(o)** the end-of-run audit reads the run folder BEFORE
 the run ends — `LeftoversAudit.Discover` returns `[]` once the folder is gone (`LeftoversAudit.cs:41`), so a
-claim-only leftover is seen only audit-first. Fixture order is not the mechanism (§ *S6*): the audit and `RunTemp.EndOfRun` are ONE ordered call in the sweep fixture's disposal, and S6 plants an orphan claim absent from the registry in each of the four suites, RED before the call; **(p)** `src_server/smoke-image.sh` sets `finish` and its `trap` before `mktemp -d` (today `:73` and
+claim-only leftover is seen only audit-first. Fixture order is not the mechanism (§ *S6*): the audit and `RunTemp.EndOfRun` are ONE ordered call in the sweep fixture's disposal, and S6 plants an orphan claim absent from the registry in each of the four suites, RED before the call. *[epoch 7, 2026-11-05]* On an elevated Windows process a real claim is owned by `Administrators` and the audit does not read it, so there the plant re-owns its claim to prove the ORDER, and `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun` pins the limit (the parent's § *Epoch 7*, F31); **(p)** `src_server/smoke-image.sh` sets `finish` and its `trap` before `mktemp -d` (today `:73` and
 `:102`), RED first with a failing `chmod` or `openssl` stub on PATH in `TheImageSmokeUsesTheServerTests`; the exemption's
 reason names what stays open (a `kill -9` at any moment of the run, which no trap sees); **(q)** at the PR's LAST head before the squash merge,
 `leftovers-check.mjs --baseline-shrinks --base <the creation commit>` exits 0, recorded on the PR, with both wrappers green, because the standing shrink step is skipped on this
@@ -1961,7 +1963,7 @@ legacy fixtures above. The parent's build order says the same ("the series' line
       inline `raw-temp` exemption's reason PROVED on the PR (entries through `startOwnedRun`, libraries through every caller,
       reads as read records); the Node detection test positive for the two detected classes, the one sentence of what is
       not detected, the split-piece scan recorded as a search (F30 open); the two split fixtures plain literals; the
-      orphan-claim plant in each of the four suites and the ONE ordered call (D8 (o)); `smoke-image.sh`'s trap before
+      orphan-claim plant in each of the four suites, re-owned on Windows, the pin of its limit and the ONE ordered call (D8 (o), epoch 7); `smoke-image.sh`'s trap before
       `mktemp`, RED observed (D8 (p)); the shrink check against the creation commit green at the PR's last head (D8 (q)); the pin at
       `bd795847` (#947) and F24's second check before the baseline is created. The boxes above that say "only the authorised
       `raw-temp` baseline left" and "every must-not-copy row RED-GREEN-RED" are read with D8 (b) as reworded and row 2's note.
