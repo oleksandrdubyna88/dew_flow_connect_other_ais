@@ -178,8 +178,9 @@ const CANONICAL_DECISIONS: readonly Exclude<DecisionChoice['decision'], ''>[] = 
  */
 function offeredByTheNotice(escalation: { readonly branch: string; readonly decisions?: unknown }): readonly DecisionChoice[] {
   const always = decisionChoices(escalation.branch);
-  const known = new Map([...always, proceedChoice(escalation.branch)].map((choice) => [choice.decision, choice] as const));
-  const named = CANONICAL_DECISIONS.filter((decision) => offers(escalation.decisions, decision)).flatMap((decision) => known.get(decision) ?? []);
+  const known = [...always, proceedChoice(escalation.branch)];
+  const named = CANONICAL_DECISIONS.filter((decision) => offers(escalation.decisions, decision))
+    .flatMap((decision) => known.filter((choice) => choice.decision === decision));
 
   return named.length === 0 ? always : named;
 }
