@@ -185,6 +185,8 @@ test('E8 every caller of a server\'s stop() awaits it before it removes the data
 
 const inventory = () => JSON.parse(fs.readFileSync(path.join(repoRoot, 'shared', 'leftovers-exemptions.json'), 'utf8'));
 const tracked = () => spawnSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout.split('\0').filter(Boolean);
+/** The first import statement of a file: the wrap must run before any other import's top level does. */
+const firstImport = (text) => /^import\s[^;]*;/mu.exec(text)?.[0] ?? '';
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 const readIfThere = (file) => {
   try {
@@ -202,13 +204,16 @@ test('E9 an importer of an exempted library is an entry with the wrap or a test 
   const entries = new Set(ENTRIES.map((entry) => entry.file));
   const sources = TRACKED.filter((file) => /\.(?:mjs|cjs|js|ts|mts|cts)$/u.test(file) && !file.startsWith('.agents/'));
   const problems = [];
+  for (const row of new Set(INVENTORY.rows.filter((entry) => entry.proof === 'entry' && entry.file.endsWith('.mjs')).map((entry) => entry.file))) {
+    if (!entries.has(row)) problems.push(`${row}: its row says it is an entry with the wrap, and it is not in ENTRIES, so nothing checks the wrap`);
+  }
   for (const library of libraries) {
     const base = path.posix.basename(library);
     const importing = new RegExp(`(?:\\bfrom\\s+|\\bimport\\s*\\(\\s*|\\bimport\\s+|\\brequire\\s*\\(\\s*)['"\`][^'"\`]*/${escapeRegExp(base)}['"\`]`, 'u');
     const importers = sources.filter((file) => file !== library && importing.test(readIfThere(file) ?? ''));
     if (importers.length === 0) problems.push(`${library}: no file imports it, so its row has nothing left to prove`);
     for (const importer of importers) {
-      const underRunner = /\.test\.[a-z]+$/u.test(importer) && /^import\s[^;]*inRunFolder\.cjs/mu.test(readIfThere(importer) ?? '');
+      const underRunner = /\.test\.[a-z]+$/u.test(importer) && /inRunFolder\.cjs/u.test(firstImport(readIfThere(importer) ?? ''));
       if (!entries.has(importer) && !underRunner) problems.push(`${importer} imports ${library}: one caller outside a run folder makes the line a finding, not an exemption`);
     }
   }
@@ -233,7 +238,7 @@ test('E10 no test file names a fourth-kind file, but the pinned pairs', () => {
     }
   }
   const named = INVENTORY.namedBy.map((pair) => `${pair.file}\t${pair.testFile}`);
-  const readable = (pair) => pair.replace('\t', ' <- ');
+  const readable = (pair) => pair.replaceAll('\t', ' <- ');
   assert.deepEqual([...found].filter((pair) => !named.includes(pair)).map(readable), [], 'a test file names a fourth-kind file and is not on the list: a person must read that test, and add the pair only if the line is not reached');
   assert.deepEqual(named.filter((pair) => !found.has(pair)).map(readable), [], 'a pinned pair no longer exists: remove it from namedBy');
   for (const pair of INVENTORY.namedBy) assert.ok(pair.why.trim().length > 0, `${pair.file} <- ${pair.testFile}: a pair carries its why`);

@@ -32,7 +32,7 @@ public sealed class TempDir : IDisposable
 
     /// <summary>A fresh directory under the system temp root, named for the test that wanted it.</summary>
     public static TempDir For(string prefix) =>
-        // testsToDelete-exempt: raw-temp — a helper of the gated test assemblies; the gated Main moved TEMP into the run folder before this runs, and the forced runs prove the gate
+        // testsToDelete-exempt: raw-temp — a helper of the gated test assemblies; the module initializer moved TEMP into the run folder before this runs, the gated Main refuses a run where it did not, and the forced runs prove the gate
         new(Directory.CreateTempSubdirectory(prefix).FullName);
 
     /// <summary>So it can be passed anywhere a path is taken, without <c>.Path</c> at every call.</summary>

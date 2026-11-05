@@ -73,7 +73,7 @@ public sealed class LeftoversCoaiLayoutTests : IDisposable
 
     /// <summary>
     /// R4, must-not-copy #1 (the audit's sibling). Two children of ONE run share a live <c>TESTSTODELETE_RUN</c> record and one private root. The child that finishes first runs its audit while the other still works: the other's
-    /// folder and claim are untouched, byte for byte. The template's in-process twin is <c>A_sibling_childs_folder_survives_the_audit_of_a_run_whose_record_it_shares</c>.
+    /// folder and claim are untouched, byte for byte. What this proves is the sweep and the audit's bound: child a's audit reads a's own run folder, so it cannot reach b's folder with or without the run-record clause, and the RED recorded for R4 needed two plants together. The clause itself is proved by the template's in-process twin, <c>A_sibling_childs_folder_survives_the_audit_of_a_run_whose_record_it_shares</c>.
     /// </summary>
     [Fact]
     public async Task TwoChildSuitesUnderOneRun_TheFirstToFinish_LeavesTheSecondsFolder()
@@ -123,7 +123,7 @@ public sealed class LeftoversCoaiLayoutTests : IDisposable
         }
     }
 
-    /// <summary>R12 (the re-review's finding e2). The repository root is found by walking up from the binary, whatever the working folder of the process is, so the baseline file at the root is found from the project folder and from the output folder alike.</summary>
+    /// <summary>R12 (the re-review's finding e2). The repository root is found by walking up from the binary, whatever the working folder of the process is, so the baseline file at the root is found from the project folder and from the output folder alike. Measured 2026-11-05: the xUnit host moves the working folder to the binary's folder before test code runs, so all the children see one working folder, and a walk up from it also passes. This test goes red when the file is absent; it does not prove the walk's starting point.</summary>
     [Fact]
     public async Task TheBaselineIsFound_FromBothPlaces()
     {

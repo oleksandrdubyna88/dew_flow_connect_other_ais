@@ -150,7 +150,7 @@ test('N5 the token is a registered row and written once', async (t) => {
   assert.equal(capital.length, 1, capital.join('\n'));
 });
 
-const PROOF = 'testsTo' + 'Delete-baseline-proof:';
+const PROOF = `${LEGACY_WORD}baseline-proof:`;
 const baselineOf = (entries, scopes = [{ root: 'scripts/', proof: 'scripts/runFolder.test.mjs', guard: 'node' }]) =>
   `${JSON.stringify({ about: 'raw-temp sites inside the owned run folder; only shrinks', class: 'raw-temp', scopes, entries }, null, 2)}\n`;
 const proofFile = `// ${PROOF} scripts/\n`;

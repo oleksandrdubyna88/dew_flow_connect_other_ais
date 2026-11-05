@@ -132,7 +132,7 @@ public sealed class SiblingChild
                 File.WriteAllText(ready + ".part", dir.Path);
                 File.Move(ready + ".part", ready);
                 var go = Environment.GetEnvironmentVariable("COAI_S6_GO")!;
-                var until = DateTime.UtcNow.AddSeconds(45);
+                var until = DateTime.UtcNow.AddSeconds(120); // longer than child a's limit, and the parent's finally always writes the go file
                 while (!File.Exists(go) && DateTime.UtcNow < until)
                 {
                     Thread.Sleep(50);

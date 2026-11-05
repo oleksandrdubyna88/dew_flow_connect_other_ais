@@ -446,6 +446,7 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
         (result.StdOut + result.StdErr).Should().NotContain("this run left");
         var natural = _owned.Dir("s6-natural");
         Scope.IsMine(natural).Should().BeFalse("the helper's own folder, inside the profile, is Administrators' on an elevated run");
+        File.Exists(natural + ".owner").Should().BeTrue("IsMine answers false on a missing file too, so the claim must be there for the line below to mean anything");
         Scope.IsMine(natural + ".owner").Should().BeFalse("and so is its claim");
     }
 
