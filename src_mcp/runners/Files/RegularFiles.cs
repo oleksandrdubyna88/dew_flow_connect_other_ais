@@ -1,5 +1,5 @@
 // Ported from wsl_care (MIT, same copyright holder): src_daemon/src/WslCare.Core/Files/RegularFiles.cs @ 0a5c72d3 — the Linux leg
-// only (`ReadOwned` → `ReadLinuxOwned` → `ReadOpened` → `Judged` → `Capped`, `OwnershipProblem`, `OwnedErrno`, `Describe`, the
+// only (`ReadOwned` → `ReadLinuxOwned` → `ReadOpened` → `Judged` (since PR #918 through `LinuxStatx.OfHandle`) → `Capped`, `OwnershipProblem`, `OwnedErrno`, `Describe`, the
 // native block), measured there and re-homed here with its tests (src_mcp/tests/RegularFilesTests.cs). DL2 of
 // research/PLAN_kimi_and_vibe_on_linux.md; research/module_runners.md says what was left.
 //
@@ -84,7 +84,7 @@ public static partial class RegularFiles
     private static FileReadResult ReadOpened(int fd, int maxBytes, uint owner)
     {
         using var handle = new SafeFileHandle(fd, ownsHandle: true);
-        if (Judged(fd, owner) is { Length: > 0 } problem)
+        if (Judged(handle, owner) is { Length: > 0 } problem)
         {
             return new FileReadResult.Unreadable(problem);
         }
@@ -143,7 +143,7 @@ public static partial class RegularFiles
 
     /// <summary>What <c>statx</c> says of the open descriptor where there is one (Linux); empty elsewhere, where <see cref="Seekable"/> is the judgement.</summary>
     private static string KindProblem(SafeFileHandle handle) =>
-        OperatingSystem.IsLinux() ? Judged((int)handle.DangerousGetHandle(), owner: null) : string.Empty;
+        OperatingSystem.IsLinux() ? Judged(handle, owner: null) : string.Empty;
 
     /// <summary>A FIFO, a socket or a terminal cannot seek, and a regular file can: the one question macOS can ask without <c>statx</c>.</summary>
     private static FileStream Seekable(FileStream stream)
@@ -166,25 +166,23 @@ public static partial class RegularFiles
         _ => new IOException($"could not be opened (errno {errno})"),
     };
 
-    /// <summary>The descriptor's type, and its owner and mode when an <paramref name="owner"/> is asked for, judged from one <c>statx</c>; empty when the file may be read.</summary>
+    /// <summary>
+    /// The descriptor's type, and its owner and mode when an <paramref name="owner"/> is asked for, judged from one <c>statx</c> through
+    /// <see cref="LinuxStatx.OfHandle"/>, which holds a reference to the handle across the call; empty when the file may be read.
+    /// </summary>
     [SupportedOSPlatform("linux")]
-    private static string Judged(int fd, uint? owner)
-    {
-        var buffer = new byte[FileStatus.StatxSize];
-        if (Native.Statx(fd, string.Empty, Native.AtEmptyPath, Native.StatxType | Native.StatxMode | Native.StatxUid, buffer) != 0)
+    private static string Judged(SafeFileHandle handle, uint? owner) =>
+        LinuxStatx.OfHandle(handle, LinuxStatx.StatxType | LinuxStatx.StatxMode | LinuxStatx.StatxUid) switch
         {
-            return $"its type and owner could not be read (errno {Marshal.GetLastPInvokeError()})";
-        }
+            StatxRead.Read { Status: var status } => Problem(status, owner),
+            StatxRead.Failed failed => $"its type and owner could not be read (errno {failed.Errno})",
+            _ => "its type and owner could not be read",
+        };
 
-        var status = FileStatus.FromStatx(buffer);
-
-        if (!status.IsRegular)
-        {
-            return $"{NotRegular} ({Describe(status.Type)})";
-        }
-
-        return owner is { } uid ? OwnershipProblem(status.OwnerUid, status.Permissions, uid) : string.Empty;
-    }
+    private static string Problem(FileStatus status, uint? owner) =>
+        !status.IsRegular ? $"{NotRegular} ({Describe(status.Type)})"
+        : owner is { } uid ? OwnershipProblem(status.OwnerUid, status.Permissions, uid)
+        : string.Empty;
 
     /// <summary>
     /// What a failed <c>open</c> means. <c>ELOOP</c> is a final symbolic link, never followed; <c>ENOENT</c> and <c>ENOTDIR</c> are a file
@@ -235,20 +233,15 @@ public static partial class RegularFiles
     /// <summary>
     /// glibc, by coai's one spelling (<c>"libc"</c>, as <c>AppendOnlyFile</c>'s). The constants are the same on x86-64 and arm64 except
     /// <c>O_NOFOLLOW</c>: <c>O_NONBLOCK</c> 0x800, <c>O_CLOEXEC</c> 0x80000, <c>O_NOCTTY</c> 0x100 (<c>O_RDONLY</c> is 0),
-    /// <c>AT_EMPTY_PATH</c> 0x1000, <c>STATX_TYPE</c> 1, <c>STATX_MODE</c> 2, <c>STATX_UID</c> 8, <c>EPERM</c> 1, <c>ENOENT</c> 2, <c>ENXIO</c> 6, <c>EACCES</c> 13,
+    /// <c>EPERM</c> 1, <c>ENOENT</c> 2, <c>ENXIO</c> 6, <c>EACCES</c> 13,
     /// <c>ENOTDIR</c> 20, <c>ENAMETOOLONG</c> 36, <c>ELOOP</c> 40.
     /// </summary>
     private static partial class Native
     {
         public const int OpenReadOnlyNonBlocking = 0x800 | 0x80000 | 0x100;
-        public const int AtEmptyPath = 0x1000;
 
         /// <summary>The same three flags where macOS spells them: <c>O_NONBLOCK</c> 0x4, <c>O_NOCTTY</c> 0x20000, <c>O_CLOEXEC</c> 0x1000000.</summary>
         public static int FollowingReadFlags => OperatingSystem.IsMacOS() ? 0x4 | 0x20000 | 0x1000000 : OpenReadOnlyNonBlocking;
-
-        public const uint StatxType = 1;
-        public const uint StatxMode = 2;
-        public const uint StatxUid = 8;
 
         /// <summary><c>S_IWGRP | S_IWOTH</c>.</summary>
         public const int GroupOrOtherWrite = 0x12;
@@ -271,8 +264,5 @@ public static partial class RegularFiles
 
         [LibraryImport(Libc, EntryPoint = "open", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
         internal static partial int Open(string path, int flags, int mode);
-
-        [LibraryImport(Libc, EntryPoint = "statx", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
-        internal static partial int Statx(int dirfd, string path, int flags, uint mask, byte[] buffer);
     }
 }
