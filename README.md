@@ -63,11 +63,11 @@ vendors, two cases: the overlap between vendors is **5–9 %**. Three reviewers 
 almost never name the same defect
 ([RESULTS_vendor_overlap_2026-09-06.md](research/RESULTS_vendor_overlap_2026-09-06.md)).
 
-| provider | findings written | found by it alone | of those, worth having |
-|---|---|---|---|
-| codex | 75 | 55 (92 %) | 22 |
-| gemini | 52 | 39 (91 %) | 19 |
-| local | 118 | 56 (95 %) | 5 |
+| provider | findings written | distinct | found by it alone (% of distinct) | of those, worth having |
+|---|---|---|---|---|
+| codex | 75 | 60 | 55 (92 %) | 22 |
+| gemini | 52 | 43 | 39 (91 %) | 19 |
+| local | 118 | 59 | 56 (95 %) | 5 |
 
 **The diff alone beats the whole checkout.** Useful findings, and input tokens, on one commit with
 three hosted models ([RESULTS_findings_that_are_worth_something.md](research/RESULTS_findings_that_are_worth_something.md)):

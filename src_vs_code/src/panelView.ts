@@ -37,7 +37,7 @@ import type { CommandsEmbedState } from './commandsEmbed';
 import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
-import { CALLER_KINDS, consultantSkewNote, vaultKeyNote } from './consultSettings';
+import { CALLER_KINDS, consultantRuntimeSkewNote, consultantSkewNote, vaultKeyNote } from './consultSettings';
 import {
   COMMAND_MODEL_RUNTIMES,
   ModelSlot,
@@ -2316,9 +2316,13 @@ function consultantSkew(state: PanelState): string {
   // The rows go in because the note's question is what an OLDER server would answer, and an older
   // server answers through them: a definition a row still backs reaches the same place on both
   // halves, and only one nothing backs is mishandled. (gemini, B4's plan round.)
-  const note = consultantSkewNote(state.server.version, state.settings.consult, state.vendors);
+  // And a consultant on a runtime that server cannot consult on at all (E5.7 of PLAN_vibe_and_kimi_runtimes_E5.md): named, never withheld.
+  const notes = [
+    consultantSkewNote(state.server.version, state.settings.consult, state.vendors),
+    consultantRuntimeSkewNote(state.server.version, state.settings.consult),
+  ];
 
-  return note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`;
+  return notes.filter((note) => note.length > 0).map((note) => `  <div class="stale">${escapeHtml(note)}</div>\n`).join('');
 }
 
 /**

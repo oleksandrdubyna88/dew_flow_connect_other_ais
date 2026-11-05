@@ -103,12 +103,17 @@ public static class ConsultCheckScratch
         return new ScratchOutcome.Made(scratch);
     }
 
-    /// <summary>Removes the scratch, best effort — a leftover is the sweep's to take, never the check's failure.</summary>
+    /// <summary>
+    /// Removes the scratch, best effort — a leftover is the sweep's to take, never the check's failure. Its Kimi homes go FIRST, junction-first:
+    /// the root-less check keeps the consultant's home one level DOWN, at <c>&lt;root&gt;\own\kh-*</c> (<see cref="ConsultantCheck.OwnName"/>), so
+    /// that folder is disposed by name and the root after it (E5.3 decision g, judgement R6 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>); a stop
+    /// — a live tree, a target that lost a name — keeps the whole scratch for the six-hour scratch sweep, which asks the same probe.
+    /// </summary>
     public static void Delete(string root, Action<string> warn)
     {
         try
         {
-            if (Directory.Exists(root))
+            if (Directory.Exists(root) && KimiHomesDisposed(root, warn))
             {
                 GitScratch.DeleteEvenIfReadOnly(root);
             }
@@ -117,6 +122,22 @@ public static class ConsultCheckScratch
         {
             warn($"consultant check: the scratch {root} could not be removed, and a later sweep will take it: {e.Message}");
         }
+    }
+
+    /// <summary>D19's order for <c>&lt;root&gt;\own</c> and the root itself (the second costs nothing); false, said, on any stop.</summary>
+    private static bool KimiHomesDisposed(string root, Action<string> warn)
+    {
+        var stopped = false;
+        foreach (var folder in new[] { Path.Combine(root, ConsultantCheck.OwnName), root })
+        {
+            Runners.Kimi.KimiHome.DisposeAllUnder(folder, said =>
+            {
+                stopped = true;
+                warn($"consultant check: the scratch {root} is kept for the scratch sweep: {said}");
+            });
+        }
+
+        return !stopped;
     }
 
     /// <summary>

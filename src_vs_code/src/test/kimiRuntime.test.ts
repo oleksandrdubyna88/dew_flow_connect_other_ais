@@ -60,10 +60,10 @@ test('aKimiRowSurvivesParsing: a saved kimi row comes back as kimi, never as a c
   assert.equal(vendor!.model, 'kimi-code/k3');
 });
 
-test('kimi is a CLI on this machine, and neither a consultant (E4.4 seed) nor a chat partner', () => {
+test('kimi is a CLI on this machine and a consultant (S5), never a chat partner', () => {
   assert.ok(CLI_RUNTIMES.includes('kimi'), 'CLI_RUNTIMES has no kimi — no ▶ ⤓ ⟳ and no CLI badge');
   assert.ok(!(CHAT_RUNTIMES as readonly string[]).includes('kimi'));
-  assert.ok(!(CONSULTING_RUNTIMES as readonly string[]).includes('kimi'), 'the seed names kimi as no consultant (E4.4) — S5 adds it');
+  assert.ok((CONSULTING_RUNTIMES as readonly string[]).includes('kimi'), 'S5: coai-mcp consults on Kimi (E5.4 seeds it), so the consultant box is offered');
 });
 
 // ---------------------------------------------------------------- S5.2 / S5.3 the models (D10)

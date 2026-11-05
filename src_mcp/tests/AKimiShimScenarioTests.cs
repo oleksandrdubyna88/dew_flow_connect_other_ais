@@ -40,12 +40,13 @@ public sealed class AKimiShimScenarioTests : IDisposable
         return (KimiCredentialsLock.TreePathFor(_person.Credentials), Path.Combine(places.OwnedRoot, KimiCredentialsLock.HomeHoldName));
     }
 
-    private ProcessRequest ShimRequest(KimiPlaces places, FakeAcpAgent agent, IReadOnlyDictionary<string, string?> environment, string deadlineSeconds = "60") =>
+    private ProcessRequest ShimRequest(
+        KimiPlaces places, FakeAcpAgent agent, IReadOnlyDictionary<string, string?> environment, string deadlineSeconds = "60", params string[] more) =>
         new(
             ServerBinary.Path,
             [
                 "--ask-acp", "--profile", "kimi", "--executable", FakeAcpAgent.FakeCliExe, "--model", "kimi-code/k3", "--cwd", agent.Cwd,
-                "--deadline-seconds", deadlineSeconds, "--home", places.OwnedRoot, "--persons-bin", places.PersonsBin, "--locks", Locks,
+                "--deadline-seconds", deadlineSeconds, "--home", places.OwnedRoot, "--persons-bin", places.PersonsBin, "--locks", Locks, .. more,
             ],
             agent.Cwd)
         {
@@ -132,6 +133,28 @@ public sealed class AKimiShimScenarioTests : IDisposable
         probes[home].Should().Be("Held", "and inside the home’s");
         (await Polls.Until(() => HeldFile.Probe(tree) == LockProbe.Free && HeldFile.Probe(home) == LockProbe.Free, Patience))
             .Should().BeTrue("a normal turn ends with the agent gone and the shim exited, so both files are free");
+    }
+
+    // ---------- S5.2.10 (E5.2 of todo/PLAN_vibe_and_kimi_runtimes_E5.md) ----------
+
+    [Fact]
+    public async Task TheTreeHold_IsTakenForALoadTurnToo()
+    {
+        OnWindows();
+        var places = _person.MadeHome("kh-load");
+        var (tree, home) = HoldFiles(places);
+        using var agent = AgentFor();
+        agent.WithFields(agent.EnvField(tree, home));
+
+        var result = await RunAsync(ShimRequest(places, agent, new Dictionary<string, string?>(), "60", "--session", "s-1"));
+
+        result.ExitCode.Should().Be(0, result.StdErr);
+        agent.ReceivedMethods().Should().Contain("session/load", "the turn continued its session");
+        var (_, probes) = ReadEnvFile(agent);
+        probes[tree].Should().Be("Held", "a load turn starts its agent inside the sign-in’s tree hold, as a new one does");
+        probes[home].Should().Be("Held", "and inside the home’s");
+        (await Polls.Until(() => HeldFile.Probe(tree) == LockProbe.Free && HeldFile.Probe(home) == LockProbe.Free, Patience))
+            .Should().BeTrue("the load turn ended with the agent gone, so both files are free");
     }
 
     // ---------- carry (b): the shim reads no environment ----------
