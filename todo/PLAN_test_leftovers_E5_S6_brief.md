@@ -70,7 +70,6 @@ The first version of this brief held five questions. They are closed. **Who deci
    and `read` every selected rule (`common/test-leftovers.md`, `common/test-leftovers-detail.md`, `common/test-leftovers-baseline.md`,
    `common/local-cpu-budget.md`, the coai review-gate rule, `csharp/dotnet-build.md`, and the others it names).
 2. The plan: § *S6*, "Current statement", in full; D2, D6, D8 with its note "D8 read for epoch 6" and conditions (o), (p), (q), D9, D10, D11; § *Must not copy back in*, rows 1 and 2 with row 2's note; the epoch-6 box of § *Definition of Done*. Read them from the file.
-
 3. This branch's work: the manifest `src_mcp/tests_leftovers/template-manifest.json` and its check
    `src_mcp/tests/Leftovers/TheAdaptedCopyTests.cs`; the fixture `src_mcp/tests_leftovers/LeftoversSweepFixture.cs`; the audit
    `src_mcp/tests_leftovers/LeftoversAudit.cs`; `src_mcp/tests_leftovers/RunTemp.cs`, `RunTempFolder.cs`, `RunTempFixture.cs`,
@@ -396,7 +395,7 @@ console.log(JSON.stringify(answer)); // no process.exit: on Windows a pipe is wr
 - A non-zero exit, no `node`, or an answer that is not this JSON is ONE finding `baseline` naming the cause. Fail closed, never an exception, never a pass. Exit code 1 with an unhandled throw (a usage error of `loadBaselineAt`: a folder at the path, a run not at the git root) lands here.
 
 - The request goes on stdin, never in the arguments: `discovered` has more than 1000 paths, and a Windows command line holds 32 KB. Set `RedirectStandardInput`, write the JSON, close the stream, and drain stdout and stderr at the same time as `GuardScripts.Execute` does, with its two-minute bound.
-- No baseline file yet (before step 6): the `absent` branch answers "no baseline", so every hit is left. After step 6 that branch is never taken; `The_baseline_file_exists` in § 14 pins it. `loadBaselineAt` alone would throw `ENOENT`.
+- No baseline file yet (before step 8): the `absent` branch answers "no baseline", so every hit is left. After step 8 that branch is never taken; `The_baseline_file_exists` in § 14 pins it. `loadBaselineAt` alone would throw `ENOENT`.
 
 **Windows.** `locateBaseline` compares `git rev-parse --show-toplevel` with the given folder by real path. A private fixture repository under `C:\Users\RUNNER~1\…` may spell the two differently. So a fixture never passes its own folder: it asks git and passes the answer (`git -C <folder> rev-parse --show-toplevel`, slashes as git prints them). The real repository's root has no short name on the hosted runner; the `windows` job's `Test` step proves it.
 
@@ -658,7 +657,7 @@ public void AFailureBeforeTheContainer_LeavesNoFolder()
 5. The premise: `chmod-saw` exists and is not empty, so the script did reach `chmod` with a folder under `tmp`. Without this the test is green over nothing.
 6. `Directory.GetFileSystemEntries(tmp).Should().BeEmpty(...)`.
 
-Today step 6 is red: the folder stays. After the move it is green.
+Today the last check is red: the folder stays. After the move it is green.
 
 **The name (R20).** In `TheImageSmokeUsesTheServerTests`, the existing run with the `docker` stub records the `-v` argument. A new assertion, on POSIX only (`if (!OperatingSystem.IsWindows())`): the `-v` value's folder leaf starts with `Owned.NameBase + "smoke-"`. On Windows `id -u` under Git Bash is no Windows owner token, so the name is not judged there. Use `Owned.NameBase`; never spell the prefix in this file.
 
@@ -831,7 +830,7 @@ Not in the inventory, because no guard flags them (so they take no marker; the P
 
 ### 10.6 The pinned pairs: the `namedBy` list of kind 4
 
-Each pair exists today (measured with E10's search). `why` is one line that says why the LINE is not reached. E10 fails when the set found differs from this list.
+These are the pairs that exist at creation. The first 16 exist today (measured with E10's search). The last 8 come with S6's own copy, because the frozen list of § 6.5 names those files and `LeftoversGuardTests` pins that list. `why` is one line that says why the LINE is not reached. E10 fails when the set found differs from this list. If your tree finds another pair at creation, read that test: list it only if the line is not reached, and tell the reviewer.
 
 | `file` | `testFile` | `why` |
 |---|---|---|
@@ -851,6 +850,14 @@ Each pair exists today (measured with E10's search). `why` is one line that says
 | `.github/workflows/release.yml` | `src_vs_code/src/test/install.test.ts` | the text is read |
 | `.github/workflows/release.yml` | `src_vs_code/src/test/windowsPackageIsSigned.test.ts` | the text is read |
 | `.github/workflows/release.yml` | `src_vs_code/src/test/workflowsStartTestsThroughARunner.test.mjs` | the text is read |
+| `deploy/bugs/deploy-cmd.sh` | `src_mcp/tests_leftovers/LeftoversGuard.cs` | the frozen list names it; the guard never runs it |
+| `deploy/bugs/deploy-cmd.sh` | `src_mcp/tests/Leftovers/LeftoversGuardTests.cs` | the test pins the frozen list; it never runs the file |
+| `deploy/bugs/release.sh` | `src_mcp/tests_leftovers/LeftoversGuard.cs` | the frozen list names it; the guard never runs it |
+| `deploy/bugs/release.sh` | `src_mcp/tests/Leftovers/LeftoversGuardTests.cs` | the test pins the frozen list; it never runs the file |
+| `deploy/coai-deploy-cmd.sh` | `src_mcp/tests_leftovers/LeftoversGuard.cs` | the frozen list names it; the guard never runs it |
+| `deploy/coai-deploy-cmd.sh` | `src_mcp/tests/Leftovers/LeftoversGuardTests.cs` | the test pins the frozen list; it never runs the file |
+| `deploy/systemd-release.sh` | `src_mcp/tests_leftovers/LeftoversGuard.cs` | the frozen list names it; the guard never runs it |
+| `deploy/systemd-release.sh` | `src_mcp/tests/Leftovers/LeftoversGuardTests.cs` | the test pins the frozen list; it never runs the file |
 
 Before you write a `why`, open that test and confirm it. A pair where a test does reach the line is a row that is not kind 4: stop and report it.
 
@@ -1195,7 +1202,7 @@ The tests are written first and seen red for the right reason. Quote the first f
 | R8 | The second pass, C#, in `LeftoversBaselineTests`, on private git repositories: a second identical line ⇒ `raw-temp` (round-2 finding 1); an entry swapped under the same total ⇒ one `raw-temp` and one `baseline`; a stale entry; an entry outside every scope; a proof absent; a proof with no marker; a proof with the marker of another root; `class` not `raw-temp`; a malformed file; a moved line keeps its entry; another guard's scope is not judged (a `node` scope with a stale entry: nothing from this guard) | Written before `LeftoversBaseline.Apply` has a body: every case red on `Apply` returning the report unchanged. | Green. |
 | R9 | `LeftoversBaseline`: no answer, a bad answer | `node` set to a missing name ⇒ ONE `baseline` finding, not an exception. Plant: catch nothing. Red with `Win32Exception`. | Revert, green. |
 | R10 | The inventory, both wrappers | Add a valid marker to a real file: red, "in the tree, not in the inventory". Remove a row: the reverse. Insert a blank line above a marker: red, both messages. **Change the text of a site under its marker: red, "the site changed under its marker", in the C# comparer and in N3.** | Revert, green. |
-| R11 | The coai roots: `The_scan_sees_the_coai_roots` in `LeftoversCoaiLayoutTests`, in-process with the template's `Tree` shape: one violation at `src_mcp/tests_leftovers/X.cs`, `src_mcp/tests_fakecli/X.cs`, `src_server/tests/X.cs`, `src_bugs/tests/X.cs`, `src_bench/CoaiBench.Tests/X.cs`, `src_vs_code/scripts/x.mjs` ⇒ one finding each; at `.agents/conventions/x.sh`, `.claude/hooks/x.sh` ⇒ none; a frozen-list path ⇒ none; a product `src_mcp/core/X.cs` ⇒ none | Written before the ops of § 6.3: red on `FilesScanned`. | Green with the ops. |
+| R11 | The coai roots: `The_scan_sees_the_coai_roots` in `LeftoversCoaiLayoutTests`, in-process with the template's `Tree` shape: one violation at `src_mcp/tests_leftovers/X.cs`, `src_mcp/tests_fakecli/X.cs`, `src_server/tests/X.cs`, `src_bugs/tests/X.cs`, `src_bench/CoaiBench.Tests/X.cs`, `src_vs_code/scripts/x.mjs` ⇒ one finding each; at `.agents/conventions/x.sh`, `.claude/hooks/x.sh` ⇒ none; a frozen-list path (`src_server/install-cli.sh`, so that this test adds no pair to § 10.6) ⇒ none; a product `src_mcp/core/X.cs` ⇒ none | Written before the ops of § 6.3: red on `FilesScanned`. | Green with the ops. |
 | R12 | `TheBaselineIsFound_FromBothPlaces` (the re-review's finding e2), in `LeftoversCoaiLayoutTests`: a `SuiteChild.StartInfoFor` start with `WorkingDirectory` set to the project folder, then to `AppContext.BaseDirectory`; a child-only test writes `File.Exists(Path.Combine(RepositoryRoot.Path, "raw-temp-baseline.json"))` to an out file | Before step 8: both say `False`, so the test is red. | Green at step 8. It pins that `RepositoryRoot` walks up from the binary, whatever the working folder is. |
 | R13 | N6, N7 | Each planted growth is red in the test by construction; first run before the wiring: red on the missing helper. | Green. |
 | R14 | `The_baseline_file_exists`: `File.Exists`, and a regular file (`!FileAttributes.ReparsePoint`) | Before step 8: red. | Green at step 8. |
