@@ -138,8 +138,8 @@ and one inventory row. **This brief is written so.** The other option is a shell
    `src_mcp/tests/Leftovers/TheAdaptedCopyTests.cs`; the fixture `src_mcp/tests_leftovers/LeftoversSweepFixture.cs`; the audit
    `src_mcp/tests_leftovers/LeftoversAudit.cs`; `src_mcp/tests_leftovers/RunTemp.cs`, `RunTempFolder.cs`, `RunTempFixture.cs`,
    `TempDir.cs`; the proof files of § 8.2; `research/module_tests.md` § *E5 S5* (`:6318`).
-4. The template at `197cc76`, read with `git -C <dew_flow_mcp checkout> show 197cc76:tests/Mcp.Tests/Leftovers/<name>.cs`, the 13
-   files of § 6.1, and its CI `git -C <dew_flow_mcp checkout> show 197cc76:.github/workflows/ci.yml`, lines 48-71, 103-133, 186-210.
+4. The template at `197cc76`, read with `git -C <dew_flow_mcp checkout> show 197cc76:tests/Mcp.Tests/Leftovers/<name>.cs`, the 12
+   files of § 6.1, the template's `LeftoversRepositoryGuardTests.cs` for its shape,, and its CI `git -C <dew_flow_mcp checkout> show 197cc76:.github/workflows/ci.yml`, lines 48-71, 103-133, 186-210.
 5. The guard at the pin: `.agents/conventions/tools/leftovers-check.mjs`, `tools/lib/raw-temp-baseline.mjs`.
 
 ## 1. Goal
@@ -190,7 +190,7 @@ scans are on head `524df50e`.
 | `docker-run` | 0 | 1 (§ 10.3) |
 | `token`, `exemption`, `docker-name`, `ryuk-off` | 0 | 0 |
 
-The 13 template files of § 6.1, with their folders repaired, scanned in a scratch tree: 12 files read, 0 findings.
+The 12 template files of § 6.1, with their folders repaired, scanned in a scratch tree: 12 files read, 0 findings. None of them holds a whole marker; their fixtures build it in pieces.
 
 **How a run finds `yaml`.** The shipped guard needs `yaml@2` only when the tree has a workflow; coai has. It looks in two places
 (`YAML_RESOLVERS`, `leftovers-check.mjs:179-182`): first `createRequire(<the guard's own file>)("yaml")`, which walks
@@ -417,18 +417,18 @@ const { BASELINE_FILE, createApplier, loadBaselineAt, locateBaseline, siteSha256
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 const request = JSON.parse(input);
-if (locateBaseline(repo, { gitRoot: true }).absent) {
-  console.log(JSON.stringify({ left: request.hits, findings: [] }));
-  process.exit(0);
+let answer = { left: request.hits, findings: [] };
+if (!locateBaseline(repo, { gitRoot: true }).absent) {
+  const applier = createApplier(loadBaselineAt(repo), repo, BASELINE_FILE, new Set(request.discovered), "csharp");
+  const lines = new Map();
+  const lineOf = (file, number) => {
+    if (!lines.has(file)) lines.set(file, readFileSync(join(repo, file), "utf8").split(/\r?\n/));
+    return lines.get(file)[number - 1];
+  };
+  const left = request.hits.filter((hit) => !applier.take(hit.file, siteSha256(lineOf(hit.file, hit.line))));
+  answer = { left, findings: applier.finalFindings() };
 }
-const applier = createApplier(loadBaselineAt(repo), repo, BASELINE_FILE, new Set(request.discovered), "csharp");
-const lines = new Map();
-const lineOf = (file, number) => {
-  if (!lines.has(file)) lines.set(file, readFileSync(join(repo, file), "utf8").split(/\r?\n/));
-  return lines.get(file)[number - 1];
-};
-const left = request.hits.filter((hit) => !applier.take(hit.file, siteSha256(lineOf(hit.file, hit.line))));
-console.log(JSON.stringify({ left, findings: applier.finalFindings() }));
+console.log(JSON.stringify(answer)); // no process.exit: on Windows a pipe is written asynchronously, and an early exit can cut the answer
 ```
 
 - `module` is the file URL of `<mount>/.agents/conventions/tools/lib/raw-temp-baseline.mjs`, as `GuardScripts.StartInfo` makes its URL.
@@ -460,6 +460,7 @@ The contract of `PLAN:1521-1527`: the markers on disk equal the inventory, exact
 - C#: for each file of `GuardFiles.Discover(root)`, `GuardExemptions.Read(file, GuardText.SplitLines(text), out var bad)`, giving (file, line, class) for each valid marker. Compare with the rows whose `guards` holds `csharp`. Report each difference as one line: `in the tree, not in the inventory: …` or `in the inventory, not in the tree: …`.
 - Node (§ 7.4): the same with `discover(repo, 'node')` and `readExemptions(file, lines)`, both exported by the guard.
 - A row whose file is absent is a difference in both. A row of a file its named guard does not discover is a difference.
+- Read a file as its guard does: the Node side skips a path that is gone and a file with a NUL byte in its first 8 KiB (`scanTexts`, `isBinary`).
 
 The markers in `.sh` and `.cs` files are read by the same grammar in both guards: `common/test-leftovers-detail.md` § 7.
 
@@ -486,7 +487,7 @@ const IDENTITY = 'the multi-model review extension and server'
 | N7 `the baseline's second pass` | A private repository with a `node` scope: a second identical line ⇒ `raw-temp`; an entry swapped under the same total ⇒ a `raw-temp` and a `baseline`; a stale entry ⇒ `baseline`; a proof with no marker ⇒ `baseline` naming "proof missing"; a moved line ⇒ clean. |
 | N8 `the twelve spellings` (Decision 1, option A) | The rows of the table below, each one finding from `foldedPrefix.mjs`; `foldedHits` over every file of `discover(repo,'node')` is empty. |
 
-All private repositories come from `owned.ownedDir(t, 'guard')`, inside the run folder, with `git init`. Never spell the marker or the prefix as a whole literal in this file: build them from `owned` or in pieces, or they count as a marker and the guard reads them. `test` names and comments are free.
+All private repositories come from `owned.ownedDir(t, 'guard')`, inside the run folder, with `git init`. Pass `--repo` the answer of `git rev-parse --show-toplevel`, never the folder as you built it: the guard compares the two by real path, and on the hosted Windows runner the temp path holds a short name (`RUNNER~1`). Never spell the marker or the prefix as a whole literal in this file: build them from `owned` or in pieces, or they count as a marker and the guard reads them. `test` names and comments are free.
 
 **`foldedPrefix.mjs` (Decision 1, A).** `export function foldedHits(file, text)` → `[{ line, text }]`. It skips comment lines as the guard's `isComment` does. For each other line: (1) decode `\uXXXX`, `\xXX` in the literals; (2) join `'a' + 'b'`, `'a'.concat('b')`, `['a', 'b'].join('')` and a `${'a'}` hole; (3) replace a one-character class `[X]` by `X`; (4) a line whose folded text holds the word, case-insensitive, with no owner segment after it (`[-_][uw][0-9]{1,10}[-_]`, and not `-exempt`, not `-quarantine`, not `-baseline-proof:`, not the upper-case env form) is a hit; (5) a literal that holds a piece of at least five letters holding `sto` or `tod`, and not the whole word, is a hit. The word itself is spelled in two pieces in this file. It is a Node reader only; it knows nothing of baselines, and no marker clears it (the class is `owner-blind` in spirit).
 
@@ -932,7 +933,7 @@ The tests are written first and seen red for the right reason. Quote the first f
 | R2 | **Must-not-copy #2, C#.** The template's `BreakIt` rows `:150-166` (split over `+`, `string.Concat`, holes, `\u`, `\x`, a character, a one-character class, a half, a middle piece) each ONE finding | Plant: in `IsFolded` return `false`. Red: those rows (0 findings). This is on the copy, so the diff check is red too, as expected. | Revert, green. |
 | R3 | **Must-not-copy #2, `.mjs`** (Decision 1, A): N8 | Written before `foldedPrefix.mjs` exists: red on the import. Then plant: `foldedHits` skips the fold. Red: rows 4, 5, 7-12. | Revert, green. |
 | R4 | **Must-not-copy #1, the audit's sibling.** The template's `A_sibling_childs_folder_survives_the_audit_of_a_run_whose_record_it_shares` (`:95`), and coai's process test in `LeftoversCoaiLayoutTests`: `TwoChildSuitesUnderOneRun_TheFirstToFinish_LeavesTheSecondsFolder`. Two `SuiteChild` runs of a child-only class, both with `TESTSTODELETE_RUN` set to one live record of this user, both making an `OwnedDir` in ONE private root. Child B makes its folder and waits on a go-file; child A makes, disposes and ends, so its audit runs. Assert A exit 0, B's folder and claim byte-identical; then go; B exit 0. | Plant in `LeftoversAudit.Discover`: drop the `Owner.RunRecord(env, _ => { }) != Owner.This` clause and compare with the run's record; and make the fixture scan the private root. Red: B's folder is gone. | Revert, green. |
-| R5 | The audit wiring: `AGreenRun_ReportsNoLeak_AndLeavesTheRunFolderToItsOwnEnd` (a child run on a class of one passing test: exit 0, no `this run left` line; during the audit the folder exists, after the run it does not) | Plant: the template's `RealAudit(Owned.TempRoot(), OwnedDir.Unreclaimed())`. Red: exit not 0, `never disposed: …-coai-run-…`. | Revert, green. |
+| R5 | The audit wiring: `AGreenRun_ReportsNoLeak_AndLeavesTheRunFolderToItsOwnEnd` (a child run on a class of one passing test: exit 0, no `this run left` line; after the run the run folder and its claim are gone) | Plant: the template's `RealAudit(Owned.TempRoot(), OwnedDir.Unreclaimed())`. Red: exit not 0, `never disposed: …-coai-run-…`. | Revert, green. |
 | R6 | The self-test's teeth | Run § 12.1's loop by hand with the audit set back to `audit: null`: "the end-of-run audit did not fail the run". | Wire it, loop green, on Linux. |
 | R7 | The audit reads only the run: `LeftoversCoaiLayoutTests.TheRegistry_LeavesOutTheRunFolder_AndKeepsALeak` | Plant: `RegistryWithoutTheRunFolder` returns all. Red. | Revert, green. |
 | R8 | The second pass, C#, in `LeftoversBaselineTests`, on private git repositories: a second identical line ⇒ `raw-temp` (round-2 finding 1); an entry swapped under the same total ⇒ one `raw-temp` and one `baseline`; a stale entry; an entry outside every scope; a proof absent; a proof with no marker; a proof with the marker of another root; `class` not `raw-temp`; a malformed file; a moved line keeps its entry; another guard's scope is not judged (a `node` scope with a stale entry: nothing from this guard) | Written before `LeftoversBaseline.Apply` has a body: every case red on `Apply` returning the report unchanged. | Green. |
