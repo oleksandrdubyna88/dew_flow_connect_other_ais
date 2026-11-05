@@ -44,7 +44,7 @@ function jobText(text, job) {
   return next < 0 ? rest : rest.slice(0, next);
 }
 
-const NODE_STEP = 'run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs';
+const NODE_STEP = 'run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs src/test/testLeftovers.test.mjs';
 const LIB_STEP = 'run: node scripts/run-lib-tests.mjs scripts/runFolder.test.mjs';
 
 test('F2 the Windows step runs the Node proofs through the runner (and the macOS job runs them too)', () => {
@@ -63,4 +63,18 @@ test('F3 release.yml makes its temp folders in RUNNER_TEMP', () => {
     .filter(({ line }) => /\bmktemp\b/.test(line) && !line.includes('"$RUNNER_TEMP/'))
     .map(({ line, number }) => `release.yml:${number}: ${line.trim()}`);
   assert.deepEqual(bad, []);
+});
+
+// The baseline's creation flag (E5 S6, the brief's § 12.4): the ONE creation of `raw-temp-baseline.json` ran in the creation PR with a temporary step, and that step is gone. No workflow keeps the flag,
+// or a later run could pass a re-creation. The flag is written in two pieces here: this file is read by the same tools that read the workflows.
+test('F4 no workflow holds the creation flag', () => {
+  const flag = `--allow-${'create'}`;
+  const found = [];
+  for (const name of fs.readdirSync(workflows).filter((file) => /\.ya?ml$/u.test(file))) {
+    for (const { line, number } of codeLines(read('.github', 'workflows', name))) {
+      if (line.includes(flag)) found.push(`.github/workflows/${name}:${number}: ${line.trim()}`);
+    }
+  }
+  assert.deepEqual(found, [], 'the creation step of the baseline is removed once it has run; a standing flag lets a re-creation pass');
+  assert.ok(fs.readdirSync(workflows).length > 3, 'the scan above read the workflows');
 });

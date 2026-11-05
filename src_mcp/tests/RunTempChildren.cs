@@ -93,3 +93,53 @@ public sealed class OrphanClaimChild
         File.WriteAllText(Path.Combine(RunTemp.Folder, Owned.NameFor("orphan") + ".owner"), Owner.This.Format() + "\n");
     }
 }
+
+/// <summary>
+/// Two children of ONE run (E5 S6, must-not-copy #1): both are given the same live <c>TESTSTODELETE_RUN</c> record and one private root. Role <c>b</c> makes its owned folder and WAITS for a go file; role <c>a</c> makes one,
+/// disposes it and ends, so ITS end-of-run audit runs while b's folder is still there. Skips unless <c>LeftoversCoaiLayoutTests</c> starts it with the variables set.
+/// </summary>
+public sealed class SiblingChild
+{
+    [Fact]
+    public void MakesItsFolder_AndEnds()
+    {
+        var role = Environment.GetEnvironmentVariable("COAI_S6_SIBLING");
+        if (string.IsNullOrEmpty(role))
+        {
+            Assert.Skip("child-only: TwoChildSuitesUnderOneRun_TheFirstToFinish_LeavesTheSecondsFolder starts the suite on this class with COAI_S6_SIBLING set");
+        }
+
+        var shared = Environment.GetEnvironmentVariable("COAI_S6_SHARED_ROOT")!;
+        var dir = OwnedDir.Create("sibling-" + role, shared);
+        try
+        {
+            if (role == "b")
+            {
+                File.WriteAllText(Environment.GetEnvironmentVariable("COAI_S6_READY")!, dir.Path);
+                var go = Environment.GetEnvironmentVariable("COAI_S6_GO")!;
+                var until = DateTime.UtcNow.AddSeconds(45);
+                while (!File.Exists(go) && DateTime.UtcNow < until)
+                {
+                    Thread.Sleep(50);
+                }
+            }
+        }
+        finally
+        {
+            dir.Dispose();
+        }
+    }
+}
+
+/// <summary>Writes whether the repository's baseline file is found from the repository root as this child sees it (E5 S6, R12): the working folder of the child is the test's choice.</summary>
+public sealed class BaselineLocationChild
+{
+    [Fact]
+    public void WritesWhetherTheBaselineIsFound()
+    {
+        var outFile = Environment.GetEnvironmentVariable("COAI_S6_BASELINE_OUT");
+        Assert.SkipWhen(string.IsNullOrEmpty(outFile), "child-only: TheBaselineIsFound_FromBothPlaces starts the suite on this class with COAI_S6_BASELINE_OUT set");
+
+        File.WriteAllText(outFile!, File.Exists(Path.Combine(RepositoryRoot.Path, "raw-temp-baseline.json")).ToString());
+    }
+}

@@ -145,6 +145,61 @@
     { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversSelfTest.cs", "target": "src_mcp/tests/Leftovers/LeftoversSelfTest.cs", "blob": "b1ebd5592ad3da828f1dae58d444b73ff2580c79", "replace": [
         {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
         {"old": "MCP_LEFTOVERS_SELFTEST", "new": "COAI_LEFTOVERS_SELFTEST", "count": 2}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuard.cs", "target": "src_mcp/tests_leftovers/LeftoversGuard.cs", "blob": "8a92a79b032c5d1849d30048c49115f5bcfc0612", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
+        {"old": "    /// <summary>The files the scan never reads: none. The guard's own tests spell their fixtures in pieces, as every other file does, and\n    /// the guard scans them clean. A test pins that the list stays empty.</summary>\n    public static IReadOnlyList<string> ExcludedFiles { get; } = [];", "new": "    /// <summary>The files the scan never reads: the eleven product scripts of the frozen list (E5 S6, plan D2). The guard's own tests spell their fixtures in pieces, as every other file does, and\n    /// the guard scans them clean. A test pins that the list stays these eleven.</summary>\n    public static IReadOnlyList<string> ExcludedFiles { get; } =\n    [\n        // product deploy scripts, run on a server by a person; no test or run folder reaches them\n        \"deploy/backup.sh\", \"deploy/bugs/deploy-cmd.sh\", \"deploy/bugs/first-key.sh\", \"deploy/bugs/helper-protocol.sh\", \"deploy/bugs/install-env.sh\",\n        \"deploy/bugs/release.sh\", \"deploy/coai-deploy-cmd.sh\", \"deploy/systemd-release.sh\", \"deploy/update.sh\",\n        // product installers, run while the image is built\n        \"src_server/install-agy.sh\", \"src_server/install-cli.sh\",\n    ];", "count": 1},
+        {"old": "    private const string HelperFile = \"tests/Mcp.Tests/Leftovers/Owned.cs\";", "new": "    private const string HelperFile = \"src_mcp/tests_leftovers/Owned.cs\";", "count": 1},
+        {"old": "    private const string HelperFolder = \"tests/Mcp.Tests/Leftovers/\";", "new": "    private static readonly string[] HelperFolders = [\"src_mcp/tests_leftovers/\", \"src_mcp/tests/Leftovers/\"];", "count": 1},
+        {"old": "        \"tests/Mcp.Tests/Leftovers/LeftoversGuard.cs\",\n        \"tests/Mcp.Tests/Leftovers/LeftoversGuardTests.cs\",\n        \"tests/Mcp.Tests/Leftovers/LeftoversGuardScriptsTests.cs\",", "new": "        \"src_mcp/tests_leftovers/LeftoversGuard.cs\",\n        \"src_mcp/tests/Leftovers/LeftoversGuardTests.cs\",\n        \"src_mcp/tests/Leftovers/LeftoversGuardScriptsTests.cs\",", "count": 1},
+        {"old": "source.Relative.StartsWith(HelperFolder, StringComparison.Ordinal)", "new": "HelperFolders.Any(folder => source.Relative.StartsWith(folder, StringComparison.Ordinal))", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardDocker.cs", "target": "src_mcp/tests_leftovers/LeftoversGuardDocker.cs", "blob": "4c686d18a1a1f0f6410a8083549a4d82f3ce6483", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardExemptions.cs", "target": "src_mcp/tests_leftovers/LeftoversGuardExemptions.cs", "blob": "156fe549cf1012b626e7e8a78149671b18df0f5b", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardFiles.cs", "target": "src_mcp/tests_leftovers/LeftoversGuardFiles.cs", "blob": "bd5549c5420b934f9b015d291b656a824a8c3566", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
+        {"old": "    private static readonly string[] NeverEntered = [\"bin\", \"obj\", \"node_modules\", \".git\", \".claude\", \".http-artifacts\", \"logs\"];", "new": "    private static readonly string[] TestRoots =\n        [\"tests/\", \"src_mcp/tests/\", \"src_mcp/tests_leftovers/\", \"src_mcp/tests_fakecli/\", \"src_server/tests/\", \"src_bugs/tests/\", \"src_bench/CoaiBench.Tests/\"];\n    private static readonly string[] NeverEntered = [\"bin\", \"obj\", \"node_modules\", \".git\", \".claude\", \".agents\", \".http-artifacts\", \"logs\"];", "count": 1},
+        {"old": "    private static readonly string[] ScriptFolders = [\".github/scripts/\", \"http/\"];", "new": "    private static readonly string[] ScriptFolders = [\".github/scripts/\", \"http/\", \"src_vs_code/scripts/\"];", "count": 1},
+        {"old": "relative.StartsWith(\"tests/\", StringComparison.Ordinal) ? SourceKind.Tests : relative.StartsWith(\"src/\", StringComparison.Ordinal) ? SourceKind.Source : null;", "new": "TestRoots.Any(root => relative.StartsWith(root, StringComparison.Ordinal)) ? SourceKind.Tests : relative.StartsWith(\"src/\", StringComparison.Ordinal) ? SourceKind.Source : null;", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardLiterals.cs", "target": "src_mcp/tests_leftovers/LeftoversGuardLiterals.cs", "blob": "f1df96b7d192b676cb945f2a1e77c558176a7069", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardScripts.cs", "target": "src_mcp/tests_leftovers/LeftoversGuardScripts.cs", "blob": "c8b3340af5d9f99fb351e2a0ccfee0467d1700e8", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
+        {"old": ".claude/rules/shared/tools/lib/sweeper-scan.mjs", "new": ".agents/conventions/tools/lib/sweeper-scan.mjs", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardText.cs", "target": "src_mcp/tests_leftovers/LeftoversGuardText.cs", "blob": "85de20435e978094c49a009b266f4f509d4dd86d", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardTokens.cs", "target": "src_mcp/tests_leftovers/LeftoversGuardTokens.cs", "blob": "0691387bc91feb81228623e4fbefeb2147708a38", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
+        {"old": "TokenFile = \"tests/Mcp.Tests/Leftovers/OwnedToken.cs\"", "new": "TokenFile = \"src_mcp/tests_leftovers/OwnedToken.cs\"", "count": 1},
+        {"old": "Path.Combine(repoRoot, \".claude\", \"rules\", \"shared\")", "new": "Path.Combine(repoRoot, \".agents\", \"conventions\")", "count": 1},
+        {"old": "git submodule update --init .claude/rules/shared", "new": "git submodule update --init .agents/conventions", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardTests.cs", "target": "src_mcp/tests/Leftovers/LeftoversGuardTests.cs", "blob": "943e36d598ff4e3c1defead061baa9d9a63293f3", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1},
+        {"old": "\"tests/Mcp.Tests/Leftovers/Owned.cs\"", "new": "\"src_mcp/tests_leftovers/Owned.cs\"", "count": 2},
+        {"old": "\"tests/Mcp.Tests/Leftovers/X.cs\"", "new": "\"src_mcp/tests_leftovers/X.cs\"", "count": 2},
+        {"old": "\"tests/Mcp.Tests/Leftovers/LeftoversGuardTests.cs\"", "new": "\"src_mcp/tests/Leftovers/LeftoversGuardTests.cs\"", "count": 2},
+        {"old": "\"tests/Mcp.Tests/Leftovers/LeftoversSweep.cs\"", "new": "\"src_mcp/tests_leftovers/LeftoversSweep.cs\"", "count": 1},
+        {"old": "\".claude/rules/shared/tools/x.sh\"", "new": "\".agents/conventions/tools/x.sh\"", "count": 1},
+        {"old": "\"tests/Mcp.Tests/Leftovers/LeftoversGuard.cs\"", "new": "\"src_mcp/tests_leftovers/LeftoversGuard.cs\"", "count": 1},
+        {"old": "\".claude\", \"rules\", \"shared\"", "new": "\".agents\", \"conventions\"", "count": 5},
+        {"old": "RepositoryIdentity.Row", "new": "OwnedToken.RepoRow", "count": 1},
+        {"old": ".claude/rules/shared/tools/leftovers-check.mjs", "new": ".agents/conventions/tools/leftovers-check.mjs", "count": 1},
+        {"old": "TokenFile = \"tests/Mcp.Tests/Leftovers/OwnedToken.cs\"", "new": "TokenFile = \"src_mcp/tests_leftovers/OwnedToken.cs\"", "count": 1},
+        {"old": "        const string folder = \"tests/Mcp.Tests/Leftovers/\";", "new": "        const string lib = \"src_mcp/tests_leftovers/\";\n        const string own = \"src_mcp/tests/Leftovers/\";", "count": 1},
+        {"old": "LeftoversGuard.FoldingAllowances.Should().Equal(folder + \"Owned.cs\", folder + \"LeftoversGuard.cs\", folder + \"LeftoversGuardTests.cs\", folder + \"LeftoversGuardScriptsTests.cs\");", "new": "LeftoversGuard.FoldingAllowances.Should().Equal(lib + \"Owned.cs\", lib + \"LeftoversGuard.cs\", own + \"LeftoversGuardTests.cs\", own + \"LeftoversGuardScriptsTests.cs\");", "count": 1},
+        {"old": "        LeftoversGuard.ExcludedFiles.Should().BeEmpty();", "new": "        LeftoversGuard.ExcludedFiles.Should().Equal(\n            \"deploy/backup.sh\", \"deploy/bugs/deploy-cmd.sh\", \"deploy/bugs/first-key.sh\", \"deploy/bugs/helper-protocol.sh\", \"deploy/bugs/install-env.sh\",\n            \"deploy/bugs/release.sh\", \"deploy/coai-deploy-cmd.sh\", \"deploy/systemd-release.sh\", \"deploy/update.sh\",\n            \"src_server/install-agy.sh\", \"src_server/install-cli.sh\");", "count": 1}
+    ] },
+    { "upstream": "tests/Mcp.Tests/Leftovers/LeftoversGuardScriptsTests.cs", "target": "src_mcp/tests/Leftovers/LeftoversGuardScriptsTests.cs", "blob": "9726f4fe8eef95bc865fa220a69024b70ac26f77", "replace": [
+        {"old": "namespace Mcp.Tests.Leftovers;", "new": "namespace CoaiMcp.Tests.Leftovers;", "count": 1}
     ] }
   ]
 }

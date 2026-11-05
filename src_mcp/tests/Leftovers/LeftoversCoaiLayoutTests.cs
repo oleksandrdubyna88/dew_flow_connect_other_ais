@@ -1,4 +1,4 @@
-using CoaiMcp.Tests.Leftovers;
+using System.Diagnostics;
 using FluentAssertions;
 using Xunit;
 
@@ -67,6 +67,107 @@ public sealed class LeftoversCoaiLayoutTests : IDisposable
 
         Directory.Exists(RunTemp.Folder).Should().BeTrue("the run folder is still there: a test built a fixture and disposed it");
         RunTemp.Refusal().Should().BeNull("the three variables still name the run folder");
+    }
+
+    // ---- the folders and the baseline (the layout the template does not have) ----------------------------------------------------------------------
+
+    /// <summary>
+    /// R4, must-not-copy #1 (the audit's sibling). Two children of ONE run share a live <c>TESTSTODELETE_RUN</c> record and one private root. The child that finishes first runs its audit while the other still works: the other's
+    /// folder and claim are untouched, byte for byte. The template's in-process twin is <c>A_sibling_childs_folder_survives_the_audit_of_a_run_whose_record_it_shares</c>.
+    /// </summary>
+    [Fact]
+    public async Task TwoChildSuitesUnderOneRun_TheFirstToFinish_LeavesTheSecondsFolder()
+    {
+        var root = _owned.Dir("s6-siblings");
+        var work = _owned.Dir("s6-siblings-work");
+        var ready = Path.Combine(work, "ready");
+        var go = Path.Combine(work, "go");
+        Dictionary<string, string?> EnvFor(string role) => new(AllThreeAt(root))
+        {
+            ["TESTSTODELETE_RUN"] = Owner.This.Format(),
+            ["COAI_S6_SIBLING"] = role,
+            ["COAI_S6_SHARED_ROOT"] = root,
+            ["COAI_S6_READY"] = ready,
+            ["COAI_S6_GO"] = go,
+        };
+
+        using var b = Process.Start(SuiteChild.StartInfoFor(Environment.ProcessPath!, ["--filter-class", "*SiblingChild"], EnvFor("b")))!;
+        var bOut = b.StandardOutput.ReadToEndAsync();
+        var bErr = b.StandardError.ReadToEndAsync();
+        try
+        {
+            SpinWait.SpinUntil(() => File.Exists(ready) || b.HasExited, TimeSpan.FromSeconds(45));
+            File.Exists(ready).Should().BeTrue($"child b made its folder: {(b.HasExited ? await bOut + await bErr : string.Empty)}");
+            var folder = File.ReadAllText(ready);
+            var claim = folder + ".owner";
+            var before = File.ReadAllBytes(claim);
+
+            var a = SuiteChild.Run(["--filter-class", "*SiblingChild"], EnvFor("a"), ChildTimeout);
+
+            a.TimedOut.Should().BeFalse(a.StdErr);
+            a.ExitCode.Should().Be(0, $"a's audit found nothing of its own: {a.StdOut} / {a.StdErr}");
+            Directory.Exists(folder).Should().BeTrue("b's folder is still there after a's audit");
+            File.ReadAllBytes(claim).Should().Equal(before, "b's claim is byte for byte what b wrote");
+
+            File.WriteAllText(go, "go");
+            b.WaitForExit(TimeSpan.FromSeconds(60)).Should().BeTrue("b ends once it is let go");
+            b.ExitCode.Should().Be(0, await bOut + await bErr);
+        }
+        finally
+        {
+            File.WriteAllText(go, "go");
+            if (!b.HasExited)
+            {
+                b.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
+    /// <summary>R12 (the re-review's finding e2). The repository root is found by walking up from the binary, whatever the working folder of the process is, so the baseline file at the root is found from the project folder and from the output folder alike.</summary>
+    [Fact]
+    public async Task TheBaselineIsFound_FromBothPlaces()
+    {
+        var work = _owned.Dir("s6-baseline-found");
+        var places = new[] { Path.GetFullPath(Path.Combine(RepositoryRoot.Path, "src_mcp", "tests")), AppContext.BaseDirectory };
+        for (var index = 0; index < places.Length; index++)
+        {
+            var outFile = Path.Combine(work, $"found-{index}");
+            var start = SuiteChild.StartInfoFor(Environment.ProcessPath!, ["--filter-class", "*BaselineLocationChild"], new Dictionary<string, string?> { ["COAI_S6_BASELINE_OUT"] = outFile });
+            start.WorkingDirectory = places[index];
+            using var process = Process.Start(start)!;
+            var text = process.StandardOutput.ReadToEndAsync();
+            var error = process.StandardError.ReadToEndAsync();
+            process.WaitForExit(ChildTimeout).Should().BeTrue("the child ends by itself");
+            process.ExitCode.Should().Be(0, await text + await error);
+
+            File.ReadAllText(outFile).Should().Be("True", $"the baseline is found when the working folder is {places[index]}");
+        }
+    }
+
+    /// <summary>R11. The scan sees every root of this repository's layout, and only them.</summary>
+    [Fact]
+    public void The_scan_sees_the_coai_roots()
+    {
+        string[] seen =
+        [
+            "src_mcp/tests_leftovers/X.cs", "src_mcp/tests_fakecli/X.cs", "src_server/tests/X.cs", "src_bugs/tests/X.cs", "src_bench/CoaiBench.Tests/X.cs", "src_mcp/tests/X.cs",
+        ];
+        string[] unseen = [".agents/conventions/x.sh", ".claude/hooks/x.sh", "src_server/install-cli.sh", "src_mcp/core/X.cs"];
+        var root = _owned.Dir("s6-roots");
+        var violation = PlantedLines.CSharp("x");
+        foreach (var file in seen.Concat(unseen).Append("src_vs_code/scripts/x.mjs"))
+        {
+            var text = (file.EndsWith(".sh", StringComparison.Ordinal) ? PlantedLines.Shell() : file.EndsWith(".mjs", StringComparison.Ordinal) ? PlantedLines.Mjs() : violation) + "\n";
+            var target = Path.Combine(root, file.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.WriteAllText(target, text);
+        }
+
+        var report = LeftoversGuard.Scan(root, RepositoryRoot.Path);
+
+        report.FilesScanned.Should().Be(seen.Length + 1, "six C# roots and the script folder are read; the mount, a hidden adapter folder, the frozen list and product code are not");
+        report.Findings.Select(f => f.File).Should().BeEquivalentTo([.. seen, "src_vs_code/scripts/x.mjs"]);
+        report.Findings.Should().OnlyContain(f => f.Class == "raw-temp");
     }
 
     /// <summary>R18. <c>RunTempFixture</c> ends nothing: ending the run is the sweep fixture's disposal, after the audit.</summary>

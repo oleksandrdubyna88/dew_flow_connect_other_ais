@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using CoaiMcp.Tests.Leftovers;
 
@@ -192,6 +193,21 @@ public static class RunTemp
     {
         stderr.Write(new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(line + Environment.NewLine));
         stderr.Flush();
+    }
+
+    /// <summary>The pin of the inventory's kind 5: the child this start makes has TEMP, TMP and TMPDIR inside this run's folder (E5 S6, entry 6.1).</summary>
+    public static void RequireChildTempInRunFolder(ProcessStartInfo start)
+    {
+        foreach (var name in RunTempFolder.Variables)
+        {
+            var value = start.Environment.TryGetValue(name, out var set) ? set : null;
+            var inside = value is not null
+                && (string.Equals(value, Folder, StringComparison.Ordinal) || value.StartsWith(Folder + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+            if (!inside)
+            {
+                throw new InvalidOperationException($"{name}='{value}' is outside this run's folder '{Folder}': a script of the inventory's kind 5 must be given a temp inside it.");
+            }
+        }
     }
 
     /// <summary>What the end-of-run audit reads: every folder the helper still holds, without this run's own folder, which <see cref="EndOfRun"/> ends right after the audit (D9).</summary>

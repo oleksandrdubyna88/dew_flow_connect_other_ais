@@ -179,3 +179,63 @@ test('E8 every caller of a server\'s stop() awaits it before it removes the data
     for (const before of calls) assert.match(before, /await\s*$/u, `${file}: a stop() that is not awaited`);
   }
 });
+
+// ---- E9 and E10 (E5 S6, `todo/PLAN_test_leftovers_E5_S6_brief.md` § 7.5): the two standing tests behind the inventory's kinds 2 and 4 ----------------------------------------
+// Both read `shared/leftovers-exemptions.json`. Neither holds a file name of a row as a literal, so this file names no fourth-kind file.
+
+const inventory = () => JSON.parse(fs.readFileSync(path.join(repoRoot, 'shared', 'leftovers-exemptions.json'), 'utf8'));
+const tracked = () => spawnSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout.split('\0').filter(Boolean);
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+const readIfThere = (file) => {
+  try {
+    return fs.readFileSync(path.join(repoRoot, file), 'utf8');
+  } catch {
+    return undefined; // a tracked file deleted from the tree
+  }
+};
+
+test('E9 an importer of an exempted library is an entry with the wrap or a test under the runner', () => {
+  const INVENTORY = inventory();
+  const TRACKED = tracked();
+  const libraries = [...new Set(INVENTORY.rows.filter((row) => row.proof === 'library').map((row) => row.file))];
+  assert.ok(libraries.length > 0, 'the inventory has library rows: the scan below is not over nothing');
+  const entries = new Set(ENTRIES.map((entry) => entry.file));
+  const sources = TRACKED.filter((file) => /\.(?:mjs|cjs|js|ts|mts|cts)$/u.test(file) && !file.startsWith('.agents/'));
+  const problems = [];
+  for (const library of libraries) {
+    const base = path.posix.basename(library);
+    const importing = new RegExp(`(?:\\bfrom\\s+|\\bimport\\s*\\(\\s*|\\bimport\\s+|\\brequire\\s*\\(\\s*)['"\`][^'"\`]*/${escapeRegExp(base)}['"\`]`, 'u');
+    const importers = sources.filter((file) => file !== library && importing.test(readIfThere(file) ?? ''));
+    if (importers.length === 0) problems.push(`${library}: no file imports it, so its row has nothing left to prove`);
+    for (const importer of importers) {
+      const underRunner = /\.test\.[a-z]+$/u.test(importer) && /^import\s[^;]*inRunFolder\.cjs/mu.test(readIfThere(importer) ?? '');
+      if (!entries.has(importer) && !underRunner) problems.push(`${importer} imports ${library}: one caller outside a run folder makes the line a finding, not an exemption`);
+    }
+  }
+  assert.deepEqual(problems, []);
+});
+
+test('E10 no test file names a fourth-kind file, but the pinned pairs', () => {
+  const INVENTORY = inventory();
+  const TRACKED = tracked();
+  const unreached = [...new Set(INVENTORY.rows.filter((row) => row.proof === 'unreached').map((row) => row.file))];
+  assert.ok(unreached.length > 0, 'the inventory has fourth-kind rows: the scan below is not over nothing');
+  const testRoots = ['src_mcp/tests/', 'src_mcp/tests_leftovers/', 'src_mcp/tests_fakecli/', 'src_server/tests/', 'src_bugs/tests/', 'src_bench/CoaiBench.Tests/', 'src_vs_code/src/test/'];
+  const testFiles = TRACKED.filter((file) => /\.(?:test|spec)\.[a-z]+$/u.test(file) || testRoots.some((root) => file.startsWith(root)));
+  assert.ok(testFiles.length > 500, `the test files are found (${testFiles.length})`);
+  const found = new Set();
+  for (const testFile of testFiles) {
+    const text = readIfThere(testFile);
+    if (text === undefined) continue;
+    for (const file of unreached) {
+      const base = path.posix.basename(file);
+      if (text.includes(base) && new RegExp(`(?<![\\w.-])${escapeRegExp(base)}`, 'u').test(text)) found.add(`${file}\t${testFile}`);
+    }
+  }
+  const named = INVENTORY.namedBy.map((pair) => `${pair.file}\t${pair.testFile}`);
+  const readable = (pair) => pair.replace('\t', ' <- ');
+  assert.deepEqual([...found].filter((pair) => !named.includes(pair)).map(readable), [], 'a test file names a fourth-kind file and is not on the list: a person must read that test, and add the pair only if the line is not reached');
+  assert.deepEqual(named.filter((pair) => !found.has(pair)).map(readable), [], 'a pinned pair no longer exists: remove it from namedBy');
+  for (const pair of INVENTORY.namedBy) assert.ok(pair.why.trim().length > 0, `${pair.file} <- ${pair.testFile}: a pair carries its why`);
+  for (const file of new Set(INVENTORY.namedBy.map((pair) => pair.file))) assert.ok(unreached.includes(file), `${file} is named by a pair and has no unreached row`);
+});

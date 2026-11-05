@@ -76,3 +76,13 @@ src_mcp/tests_leftovers/WindowsOwnership.cs -text
 src_mcp/tests_leftovers/template-manifest.json -text
 src_mcp/tests/Leftovers/LeftoversAuditTests.cs -text
 src_mcp/tests/Leftovers/LeftoversSelfTest.cs -text
+src_mcp/tests_leftovers/LeftoversGuard.cs -text
+src_mcp/tests_leftovers/LeftoversGuardDocker.cs -text
+src_mcp/tests_leftovers/LeftoversGuardExemptions.cs -text
+src_mcp/tests_leftovers/LeftoversGuardFiles.cs -text
+src_mcp/tests_leftovers/LeftoversGuardLiterals.cs -text
+src_mcp/tests_leftovers/LeftoversGuardScripts.cs -text
+src_mcp/tests_leftovers/LeftoversGuardText.cs -text
+src_mcp/tests_leftovers/LeftoversGuardTokens.cs -text
+src_mcp/tests/Leftovers/LeftoversGuardTests.cs -text
+src_mcp/tests/Leftovers/LeftoversGuardScriptsTests.cs -text
