@@ -459,6 +459,18 @@ jobs:
       - name: Test
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe
 
+      # The pin of the elevated-Windows limit must RUN here and PASS (E5 epoch 7, F31): the test skips off Windows or without elevation, and a skip is not a pass.
+      # The hosted runner is elevated, so it must show `succeeded: 1` on its own line in this log.
+      - name: The pin of the elevated-Windows limit ran and passed
+        shell: pwsh
+        run: |
+          $log = (& ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe --filter-method '*AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun*' 2>&1 | Out-String)
+          $code = $LASTEXITCODE
+          Write-Host $log
+          if ($code -ne 0) { throw "the pin failed (exit $code)" }
+          if ($log -notmatch 'succeeded: 1\b') { throw 'the pin did not pass: a skip is not a pass (the runner must be elevated)' }
+          exit 0
+
       # The same teeth in PowerShell (the template's step). Both values; a listing error is red, never ignored.
       - name: The audit fails a run that leaves a claimed folder
         shell: pwsh
