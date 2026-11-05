@@ -1,6 +1,22 @@
 # PLAN — Test leftovers, E5: coai's run folder takes the owner form, both test sweeps judge by owner, and the product's `coai-*` directories stay untouched
 
-> Status: **revised 2026-11-04 at the parent's epoch-5 re-review (entries 4.1 and 4.2 of the parent's ledger: 4.1 found
+> Status: **revised 2026-11-05 at the parent's epoch-6 re-review (entries 5.2 and 5.3 of the parent's ledger, both found
+> writing the S6 build brief; entry 5.1, the Windows sweep mutex, is built on #945 and unchanged); epoch 6 waits for the
+> owner's approval (the record says `Narrowed: yes`), and no E5 story takes new code until then.** Epoch 5 was approved
+> by the owner (2026-11-04). The producer PR #945 (draft) holds S3, S2-B, S4, entry 5.1 and S5 at `524df50e`, every job
+> green but the pin check (the release `bd795847` is promoted; coai's pin bump #947 is open) and the `continue-on-error`
+> real-editor job (transient); S6 is a brief only (`todo/PLAN_test_leftovers_E5_S6_brief.md`, to be revised by an Opus
+> author after approval — the parent's § *Epoch 6*, item 4.7); S7 is not started. Two changes: (5.2) must-not-copy row 2's
+> NODE half is narrowed to what the shipped Node guard detects (2 of 15 planted spellings in a `.mjs`; no folding reader);
+> the rest is F30 of the conventions' follow-ups, with an owner and a proposed date, not a condition of this PR; (5.3) D8 (b)
+> reads "only the authorised `raw-temp` baseline AND the inline `raw-temp` exemptions of the expected-exemption inventory are
+> left", each exemption with a containment reason proved line by line. Three checks are added and narrow nothing: the
+> end-of-run audit reads the run folder BEFORE it is removed (a claim-only leftover is invisible after); `src_server/smoke-image.sh`
+> sets its trap before `mktemp`; the baseline's FINAL content is validated at the PR's last head. § *S6* is rewritten as ONE
+> current statement, its replaced text moved to a dated superseded note in the same section; D6, D8 and row 2 carry dated
+> notes *[epoch 6, 2026-11-05]*. This document keeps no ledger: its changes are entries of the parent.
+>
+> Was: **revised 2026-11-04 at the parent's epoch-5 re-review (entries 4.1 and 4.2 of the parent's ledger: 4.1 found
 > writing the S2-B spec, 4.2 found writing S4's brief); epoch 5 waits for the owner's approval (the record says
 > `Narrowed: yes`), and no E5 story takes new code until then.** Epoch 4 was approved by the owner (2026-11-03), and this
 > document was merged for it as #943 (`8dc0765c`). The producer PR #945 (draft) holds S3 and S2-B at `6ec356a1`, CI green
@@ -531,6 +547,13 @@ dependency above is met. The released form differs from this paragraph in one po
 `csharp` or `node`). The two files named above become two scopes of that one file. A scope's proof must hold for
 EVERY invocation that runs its tree (D10): for `src_vs_code/src/test/`, S4 must first route `sonarcloud.yml:302`
 through the runner (or give that job a run folder), because that job runs the compiled tests with no run folder.
+*[epoch 6, 2026-11-05]* Node detection stays with the shipped tool, as this decision says ("one Node guard … with
+discovery and patterns of its own" was withdrawn, and stays withdrawn): the Node trees' `legacy-name` and `owner-blind` zero is a
+zero of WHOLE literals until F30 ships, and the PR says so (row 2's note). "The copied C# guard (`LeftoversGuard`, byte-identical)"
+above reads as D2's ADAPTED copy (the manifest's ops, the diff check) since the parent's entry 3.1. The `raw-temp` class has
+TWO authorised forms here: the one baseline file with its scopes for sites inside a proven run folder, and the rule's inline
+exemption for the lines no scope can carry (`src_vs_code/scripts/`, 54 lines by the C# guard's count, and
+`src_server/smoke-image.sh:73`), each listed in the expected-exemption inventory with a reason proved as § *S6* says.
 
 **D7 — Stage A is the retirement of the age-only sweep, nothing else.** The barrier (rule § *The barrier*) names "a
 sweeper that matches the prefix without an owner segment, OR removes on age"; coai's two sweeps remove on age. R6
@@ -608,6 +631,23 @@ measurement series' evidence (§ S4, *[epoch 5]*, items (1)–(7) of the S4 DoD 
 the Linux leg and named in the PR record — the ownership refusals in the CALLER (the lead's argv builder) and in the
 copy, through the owner-uid seam. Also (g) is read with the exception: the series is a resource the PR renames and
 nothing collects. With this note, D8 "carries the same" as the parent's item 3; without it, it did not.
+*[epoch 6, 2026-11-05]* **D8 read for epoch 6** (the parent's § *Epoch 6*, items 3 and 4). **(b) is reworded (entry 5.3):**
+S6's repository-wide checks are green when `owner-blind` and `legacy-name` have zero UNEXEMPTED findings outside the helpers'
+own files, the expected-exemption inventory equals the guard's exemption list exactly, and ONLY the authorised `raw-temp`
+baseline AND the inline `raw-temp` exemptions of that inventory are left — each exemption with a containment reason proved
+line by line (a test or a read record on the PR, through every allocating library's callers). The folder `src_vs_code/scripts/`
+stays in the guard. Three conditions are ADDED, none narrows: **(o)** the end-of-run audit reads the run folder BEFORE
+`RunTempFixture` removes it — `LeftoversAudit.Discover` returns `[]` once the folder is gone (`LeftoversAudit.cs:41`), so a
+claim-only leftover is seen only audit-first; S6 plants an orphan claim absent from the registry, runs both fixture orders and
+pins the order with a test; **(p)** `src_server/smoke-image.sh` sets `finish` and its `trap` before `mktemp -d` (today `:73` and
+`:102`), RED first with a failing `chmod` or `openssl` stub on PATH in `TheImageSmokeUsesTheServerTests`; the exemption's
+reason names the one window left (a kill between `mktemp` and the trap); **(q)** at the PR's LAST head before the squash merge,
+`leftovers-check.mjs --print-baseline` equals the committed `raw-temp-baseline.json` for the Node scopes (a `diff` of zero,
+recorded on the PR) and the C# wrapper's equivalent for the `csharp` scopes, because the standing shrink step is skipped on this
+PR by number (the brief § 12.4). Also: (g) and (i) are met by coai #947 (the pin at `bd795847`), still OPEN when this was
+written — S6 creates no baseline and runs no second F24 check before it merges and `main` is merged into the branch; (l)'s
+C# proof-check test (`TheProofCheck_ClosesForEachScope`) is NEW code of S6. The commit order is S3 → S2-B → S4 → S5 → S6, and
+S6 is the FIFTH commit, not the fourth as the S6 heading still says.
 
 **D9 — The end-of-run audit is copied, and bounded to the run folder.** `LeftoversAudit` (never-disposed,
 disposed-not-removed, claimed-in-temp-root) runs at the end of every C# suite as in the template — but coai's four
@@ -767,6 +807,20 @@ recorded in the PR; a planted violation never stays in CI). Story: where the tes
 *[epoch 4, 2026-11-03]* Row 15's "the vectors file of the template, `OwnerVectors.cs`, extended by coai's cross-reader rows" cannot be done
 in the copy: `OwnerVectors.cs` reads the MOUNT's file (`OwnerVectors.cs:11`, another repository's). coai's cross-reader
 rows go in a coai-owned file, `shared/owner-record-cross-vectors.json` (the name of S3's brief), read by coai's own test.
+
+*[epoch 6, 2026-11-05]* **Row 2's Node half is NARROWED** (the parent's entry 5.2, option C). The shipped Node guard at
+`bd795847` has no folding reader: of fifteen spellings planted in a `scripts/zz.mjs` line it finds two — a whole legacy
+literal (`legacy-name`) and a bare-word glob passed to a removal (`owner-blind`); a split over `+`, `.concat`, `.join('')`, a
+template hole, a `\u` or `\x` escape, a one-character class, a regex over the word, the bare word and half of the word each
+answer `[]` (the S6 brief, Decision 1; consult `5d804d0c`; re-measured at the re-review). So "the same twelve in a `.mjs` …
+RED when the folding reader is switched off" cannot be met: there is no reader to switch off. S6's Node test is the POSITIVE
+test of the two detected classes, plus one sentence in the PR naming what the guard does not see; the two split fixtures
+(`scripts/lib/native-run.test.mjs:42`, `scripts/native/native.test.mjs:506`) become plain literals with the inline
+`legacy-name` exemption; the by-hand split-piece scan is recorded as a SEARCH for the spellings a person thought of, never as a
+proof that no other spelling exists. The folding reader for the `node` profile is **F30** of the conventions' follow-ups plan
+(an owner, a proposed deadline 2026-11-19, coai and creds covered). Rejected: a coai-own folding check (`foldedPrefix.mjs`,
+the brief's option A) — a second detector with different semantics whose findings could not carry the rule's exemption, and
+creds left behind. The C# half of row 2 (the template's `LeftoversGuardTests` fixtures through the copied folding reader) stands.
 
 ## S1 — The pin bump to `105d53c` — DONE
 
@@ -1518,6 +1572,137 @@ only at the stop).
 
 ## S6 — The two guards, the audit, the `raw-temp` baseline, the CI legs (commit 4 of the producer PR)
 
+**Current statement (2026-11-05, the parent's epoch-6 re-review).** This is S6's ONE operative text. S6 is the FIFTH commit
+of the producer PR (S3 → S2-B → S4 → S5 → S6; the heading's "commit 4" is from before S5 moved into the PR). The text it
+replaces is kept under *S6 — superseded text* below, dated, and is not edited; where the two differ, this statement decides.
+Its build brief (`todo/PLAN_test_leftovers_E5_S6_brief.md`) is revised by an Opus author to this statement before the code
+starts (the parent's § *Epoch 6*, item 4.7).
+
+- **Models.** Brief by Opus (revised); code by a Sonnet coder; review by Opus against rule §7, D6, D8 as read for epoch 6,
+  D9, must-not-copy #1 and #2 (its C# half; its Node half as narrowed).
+- **Goal.** One guard per language keeps every tree of the repository so: red on every class of rule §7 outside the helpers'
+  own files, red on an unregistered or disagreeing token, red on a scan of nothing; `raw-temp` held by the ONE baseline
+  file the released rule authorises (membership plus content hash, a multiset, only shrinking) for sites inside a proven
+  run folder, and by the rule's inline exemption, each with a PROVED containment reason, for the lines no scope can carry;
+  the end-of-run audit bounded to the run and run BEFORE the run folder goes; the three CI legs carry the self-tests.
+- **Depends on.** S3, S2-B, S4 and S5 on the branch (done, `524df50e`); coai #947 merged (the pin at `bd795847`: F3 and
+  F24) and `main` merged into the branch; then F24's SECOND acceptance check (the brief § 16) against the released guard
+  and this repository's real hosts, recorded on the PR and in `research/module_tests.md` — S6 creates no baseline before it.
+- **Files.** The copied `LeftoversGuard*.cs` through D2's manifest ops (an ADAPTED copy, never byte-identical: `GuardFiles`
+  for coai's layout — C# under `src_mcp/tests/`, `src_mcp/tests_leftovers/`, `src_mcp/tests_fakecli/`, `src_server/tests/`,
+  `src_bugs/tests/`, `src_bench/CoaiBench.Tests/`; workflows; `**/*.sh`, `**/*.ps1`; the `.mjs` under `.github/scripts/`,
+  `http/` and `src_vs_code/scripts/` (P13)); coai's own `LeftoversRepositoryGuardTests.cs` (calls the copied `Scan`, applies
+  the baseline's `csharp` scopes through the released library's applier, subtracts the exemptions of the inventory, asserts
+  the rest empty); `LeftoversInventory.cs` (the expected-exemption inventory, file + line + class + reason, read by both
+  wrappers); the copied `LeftoversAudit.cs` wired as D9 says, with the fixture order fixed audit-first; `LeftoversBaselineTests`
+  with `TheProofCheck_ClosesForEachScope` (new); `src_vs_code/src/test/testLeftovers.test.mjs` (the `node` profile wrapper
+  with `--baseline`, failing on exit 1 and on exit 2 with the tool's own sentence; the Node half of the inventory; the
+  positive detection test); ONE `raw-temp-baseline.json` at the repository root, never a symlink, with one scope per tree
+  (`root`, `proof`, `guard`: `csharp` or `node`), each proof a marked test file under its root (F24: a marker, no order);
+  `src_server/smoke-image.sh` (the trap move); the two split fixtures (`scripts/lib/native-run.test.mjs:42`,
+  `scripts/native/native.test.mjs:506`) as plain literals with the inline `legacy-name` exemption; `.github/workflows/ci.yml`
+  (`npm ci --ignore-scripts --prefix .agents/conventions` on the `macos` and `windows` jobs; the audit self-test steps on the
+  three legs; the standing shrink step; the Node wrapper on the two jobs' file lists); `research/module_tests.md`.
+- **The checks (merge condition (b), as D8 reads for epoch 6).** On the whole repository, both guards: `owner-blind`,
+  `legacy-name`, `exemption`, `token` at zero UNEXEMPTED; `raw-worktree` at zero unexempted (the 29 `worktree add` lines each
+  carry an exemption naming the owned folder they live in); the expected-exemption inventory EQUALS the guard's exemption list
+  exactly, so a new exemption is a visible diff; only the authorised baseline and the inline `raw-temp` exemptions of the
+  inventory are left; a scan of nothing is red; the token is a registered row written once. `owner-blind` takes no inline
+  exemption (rule §7): such a line is rewritten or lives in a helper's own file (the brief § 9.1 names seven).
+- **The inventory and the proof per exemption (entry 5.3).** Classes: `legacy-name` fixtures (the legacy run-folder fixtures
+  of `startOfRun.test.mjs`, `old-coai-leftovers.test.mjs` and `src_mcp/tests`; the old-prefix series fixture; the two split
+  fixtures made plain; the helper-own lines of `old-coai-leftovers.mjs:35-37`, `:139`, `startOfRun.mjs:19`, `:28`, and any
+  `run-tests.mjs` line that still names the legacy form — each listed with its reason; the 8 `.teststodelete-quarantine-`
+  fixture lines named so a later guard change cannot make them silent findings); `raw-worktree` (29); the series' line if
+  the guard classes `make-series.sh`'s `mkdir`; `raw-temp` INLINE for the lines no scope can carry — the `src_vs_code/scripts/`
+  lines the C# guard reports (54 at the brief's count; the PR re-counts on its base) and `src_server/smoke-image.sh:73`.
+  **Every `raw-temp` exemption's reason is proved on the PR**, not asserted: an ENTRY script's "runs inside its own run
+  folder" is proved once by the list of entries whose first effect is `startOwnedRun` (it moves `TEMP`/`TMP`/`TMPDIR` into
+  the run folder — `live-agent.mjs:24` before its three `mkdtempSync` at `:78-80`), with a test that `tmpdir()` answers the
+  run folder after it; a LIBRARY's (`browserLayout.mjs:51`, `:79`, `seam-catalog.mjs:69`, the `seam-*.mjs` lines) is proved
+  through EVERY caller: the PR lists each importer (`git grep -l`) and shows it is an entry with the wrap or a test under
+  the runner — one caller outside a run folder makes the line a finding, not an exemption; a READ of the root
+  (`run-tests.mjs:103`, `ownedRun.mjs:34`, `:36`) is a read record: the line allocates nothing, and the reason says so.
+  Taking `src_vs_code/scripts/` out of the guard is rejected: it would hide every future allocation there.
+- **The Node detection (row 2's Node half, narrowed; entry 5.2).** `testLeftovers.test.mjs` asserts what the shipped guard
+  DOES detect in a `.mjs`: a whole legacy literal ⇒ `legacy-name`; a bare-word glob passed to a removal ⇒ `owner-blind`. The
+  PR says in one sentence what it does not detect (a split, `.concat`, `.join('')`, a template hole, `\u`/`\x` escapes, a
+  one-character class, a regex over the word, the bare word, half of the word) and that the zero is a zero of WHOLE literals
+  until F30 ships. The split-piece scan (`'testsTo'`, `"tests", "To"`, `.join('')`, `string.Concat` beside `Delete`) runs on
+  the whole repository, its output recorded as a search, never as a proof. No coai-own folding reader (D6).
+- **The audit (D9), audit-first (D8 (o)).** The template's wiring is replaced by the manifest op of the brief § 11:
+  `RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder())`, bounded to this run's folder and this process's record
+  (row 1). `LeftoversAudit.Discover` returns `[]` once the run folder is gone (`LeftoversAudit.cs:41`), so a claim-only
+  leftover (an orphan claim of a folder a test removed itself, absent from the registry) is seen only when the audit runs
+  BEFORE `RunTempFixture` ends the run folder. S6 plants exactly that orphan claim, runs both fixture orders, and fixes the
+  order audit-first with a test that pins it (if both orders report it, the test still pins the order and says why).
+  `LeftoversSelfTest` leaks on purpose under `COAI_LEFTOVERS_SELFTEST`; CI asserts the run FAILS with the audit's first line
+  (the brief § 12, both values, on the three legs). **A leak the audit exposes is fixed in the test that made it before the
+  PR merges; the audit is never weakened and no entry skips it; each one found is recorded in `module_tests.md`.**
+- **`src_server/smoke-image.sh` (D8 (p)).** `finish()` and `trap finish EXIT` move to right after the globals line
+  (`work='' id='' logs_pid='' ok=false`), before `work=$(mktemp -d)`; `finish` already tolerates empty globals. RED first:
+  `TheImageSmokeUsesTheServerTests` gains a case with a failing `chmod` (or `openssl`) stub on PATH — today the folder
+  stays (the script exits under `set -e` before the trap line), after the move it is gone. The line's inline `raw-temp`
+  exemption names what stays unsolved: a `kill -9`, or a CI cancel's process-group kill, between `mktemp` and the trap
+  line leaves the folder with no claim and no prefix, unseen by the janitor; that window is one shell line wide.
+- **The baseline.** Generated once from the real tree after S5 (every `raw-temp` finding inside the six scopes that S3/S4
+  did not move; `GetTempPath`/`tmpdir` imports used only to READ the root are migrated, not baselined — the brief § 9.3);
+  `{ file, sha256, line, count }` per key, `line` a hint, `count` the occurrences; a multiset, exact membership per
+  occurrence, never a total; a test asserts it only shrinks against the committed one, that every entry's hash matches a
+  line of its file (a stale entry is red), that a moved line keeps its entry, and that a second identical line beside a
+  baselined one is red. The creation: ONE temporary commit on this PR adds a step with `git fetch --unshallow` and
+  `--allow-create`; its run id and log line go in the PR and in `module_tests.md`; the next commit removes it;
+  `workflowsStartTestsThroughARunner.test.mjs` pins that no workflow holds the creation flag. The standing step
+  (`--baseline-shrinks --base <base sha>`) skips this PR by number and runs on every later PR; S7's first PR removes the
+  clause. **The final content (D8 (q)):** at this PR's LAST head before the squash merge, `leftovers-check.mjs
+  --print-baseline` is diffed against the committed `raw-temp-baseline.json` for the Node scopes (zero lines, recorded on
+  the PR), and the C# wrapper prints its `csharp` scopes the same way if `--print-baseline` does not cover them (to check).
+- **Seeded violations and break-its.** One planted site per actual test root — `src_mcp/tests`, `src_mcp/tests_leftovers`,
+  `src_mcp/tests_fakecli`, `src_server/tests`, `src_bugs/tests`, `src_bench/CoaiBench.Tests`, `src_vs_code/src/test`,
+  `scripts/`, `src_vs_code/scripts/`, `.github/workflows`, `.github/scripts/`, `http/` — each red naming file and line, then
+  reverted; a scope whose proof file is missing ⇒ a `baseline` finding; a stale entry ⇒ a `baseline` finding; one
+  `Directory.CreateTempSubdirectory("x")` in a `src_server` test ⇒ red; one `mkdtempSync(join(tmpdir(), 'x-'))` in an
+  extension test ⇒ red; one `testsToDelete-x-` literal ⇒ red `legacy-name`; the submodule de-initialised ⇒ red with the
+  submodule sentence; an exemption added without its inventory row ⇒ red (the inventory check); the frozen exclusion list
+  pinned (`deploy/**`, `src_server/install-agy.sh`, `src_server/install-cli.sh` — product installers, each with its reason).
+  The repository-wide guard test lands here, never in S3.
+- **F24's second acceptance check (D8 (l)).** After #947, before the baseline is created, the brief § 16 as written: the
+  proof check closes both ways for each scope through the guard the scope names (the two `node` scopes through the released
+  `leftovers-check.mjs --baseline --profile node`; the four `csharp` scopes through `TheProofCheck_ClosesForEachScope`, new);
+  the five forced runs (`DiscoverySentinel`; `COAI_RUNTEMP_SELFTEST` = `fail-claim`, `mismatch-temp`, `mismatch-tmp`,
+  `mismatch-tmpdir`) each exit 78 with one line and the sentinel untouched, on the real C# host, then inside the suites and
+  both Node runners; a run under the gate passes. On red: stop, no baseline; the fault goes to the coordinator.
+- **The CI legs.** `build-test`: the audit self-test step after `Test`; the standing shrink step after `Lint suppressions
+  only shrink`. `macos` and `windows`: `npm ci --ignore-scripts --prefix .agents/conventions` after `setup-node`;
+  `testLeftovers.test.mjs` on the runner's file list; the audit step (bash on macOS, PowerShell on Windows, the template's
+  portable subset) after `Test`; the `DarwinLayoutTests` step stays first on `macos`. `release.yml` gets two comment lines;
+  `sonarcloud.yml` nothing; `actionlint` clean.
+- **Commands.** The four executables (`*LeftoversGuard*`, `*LeftoversAudit*`, `*LeftoversBaseline*` first); `cd src_vs_code &&
+  npm test`; `node .agents/conventions/tools/leftovers-check.mjs --repo . --baseline --profile node --token coai --identity
+  "the multi-model review extension and server"`; `node .agents/conventions/tools/leftovers-check.mjs --repo . --print-baseline`;
+  `actionlint`.
+- **DoD (S6, epoch 6).** Every class red once and green with a valid exemption; the checks above green on the whole tree,
+  both guards, three legs; the inventory equal to the guard's list, every `raw-temp` exemption's reason proved on the PR as
+  above; the positive Node detection test green and the one sentence of what is not detected in the PR; the two split
+  fixtures plain; the orphan-claim plant observed in both orders and the audit-first order pinned; the smoke script's
+  trap moved with its RED observed; the audit self-test red-for-the-right-reason on three legs; F24's second check
+  recorded; the baseline created once, its creation step removed, no workflow holding the creation flag, the final-content
+  diff zero at the last head; every S5 deferral listed with where it was handled; the producer PR's squash merge carries
+  S3, S2-B, S4, S5 and S6 together with `TheProducerAndTheSweep_LandTogether` green; the pin at `bd795847`;
+  `module_tests.md` says all of it.
+
+### S6 — superseded text, kept for the record (moved here 2026-11-05)
+
+*[epoch 6, 2026-11-05]* The text below was S6's operative text from 2026-11-01 to 2026-11-05, with its dated notes of the
+epoch-3, epoch-4 and epoch-5 re-reviews. It is replaced whole by the statement above and is not edited. What the statement
+replaced: TWO baseline files (`src_mcp/tests/Leftovers/raw-temp-baseline.json`, `src_vs_code/src/test/raw-temp-baseline.json`) —
+the released rule has ONE file at the root with scopes; "the byte-identical `Scan`" — D2's adapted copy since entry 3.1; "the
+twelve planted spellings in C# and in `.mjs` (#2)" — the Node half is narrowed (row 2's note, F30); the exemption contract's
+"only the authorised `raw-temp` baseline" — the inline `raw-temp` exemptions with proved reasons are added (D8 (b)); the
+audit "bounded per D9" without an order — the order is audit-first (D8 (o)). Nothing else of it was wrong; the statement
+carries it forward in one place.
+
+
 *The exemption contract (2026-11-03, re-review gate, finding 3).* The pinned rule core at `cc24f9e`
 (`common/test-leftovers.md`, the § 7 paragraph, lines 96-98) has ONE exemption form, a comment on the line or the line
 above, `testsToDelete-exempt: <class> — <reason>`; `owner-blind` and `ryuk-off` take none, so `legacy-name` takes it.
@@ -1659,6 +1844,12 @@ legacy fixtures above. The parent's build order says the same ("the series' line
   classes inside a private machine temp.
 - **DoD.** The two baseline files empty and deleted with their only-shrinks tests, the guard then red on ANY raw temp
   call outside the helpers; `module_tests.md` says so.
+  *[epoch 6, 2026-11-05]* "The two baseline files" is the ONE `raw-temp-baseline.json` at the root with its scopes (the
+  released rule, D6's note of 2026-11-03): S7 ends when every scope's entries are gone and the file is deleted with its
+  only-shrinks test, and its first PR removes the `number != 945` clause from the standing shrink step (S6's statement). The
+  inline `raw-temp` exemptions of S6's inventory (the `src_vs_code/scripts/` lines, `smoke-image.sh:73`) are NOT S7's debt:
+  they are contained lines with a proved reason and stay as exemptions; S7 drains only the baseline. S7 does not discover
+  whether containment works — S6 proved that before the merge.
 
 ## Test plan
 
