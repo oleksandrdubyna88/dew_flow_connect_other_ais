@@ -1,6 +1,6 @@
 # Build brief — coai E5 story S6: the two guards, the audit, the `raw-temp` baseline, the CI legs (the last commits of the producer PR)
 
-> Status: **built to `3fcba8a0`, stopped 2026-11-05 at entry 6.2; what is left is the parent's § *Epoch 7* item 5.** Was: plan only; revised 2026-11-05 by Opus after the owner approved epoch 6. The decisions are taken (below). A Sonnet coder builds from this brief alone. § 4 step 0 lists the preconditions.**
+> Status: **built to `3fcba8a0`; epoch 7 approved by the owner 2026-11-05; what is left is the parent's § *Epoch 7* item 5.** Was: plan only; revised 2026-11-05 by Opus after the owner approved epoch 6. The decisions are taken (below). A Sonnet coder builds from this brief alone. § 4 step 0 lists the preconditions.**
 
 First written 2026-11-05 by Opus at head `524df50e`. Revised at head `2c339086` of branch `feat/test-leftovers-e5-producer` in `<the producer worktree>`: `main` is merged and the pin is `bd795847` (F3, F24 and #130). Every count below was measured again at `e8355d2b` with the guard at the pin. `git diff --name-only 524df50e 2c339086` holds only `.agents/conventions` and files under `todo/`, so no code line moved and the numbers of the first version stand. § 3 corrects one number that was wrong before (`raw-temp` 649).
 
