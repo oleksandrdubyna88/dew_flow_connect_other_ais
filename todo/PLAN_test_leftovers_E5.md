@@ -1593,7 +1593,7 @@ starts (the parent's § *Epoch 6*, item 4.7).
   `src_bugs/tests/`, `src_bench/CoaiBench.Tests/`; workflows; `**/*.sh`, `**/*.ps1`; the `.mjs` under `.github/scripts/`,
   `http/` and `src_vs_code/scripts/` (P13)); coai's own `LeftoversRepositoryGuardTests.cs` (calls the copied `Scan`, applies
   the baseline's `csharp` scopes through the released library's applier, subtracts the exemptions of the inventory, asserts
-  the rest empty); `shared/leftovers-exemptions.json` (the expected-exemption inventory: file, the marker's line, class, guards; the reason
+  the rest empty); `shared/leftovers-exemptions.json` (the expected-exemption inventory: file, the site's line and its sha256, class, guards; the reason
   is the marker's own text; a `.cs` cannot be read by the Node wrapper) with `LeftoversInventory.cs`, its C# comparer (the brief § 7.3); the copied `LeftoversAudit.cs` wired as D9 says, through the ONE ordered call below; `LeftoversBaselineTests`
   with `TheProofCheck_ClosesForEachScope` (new); `src_vs_code/src/test/testLeftovers.test.mjs` (the `node` profile wrapper
   with `--baseline`, failing on exit 1 and on exit 2 with the tool's own sentence; the Node half of the inventory; the
