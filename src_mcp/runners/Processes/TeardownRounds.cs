@@ -2,7 +2,7 @@ namespace CoaiMcp.Runners.Processes;
 
 /// <summary>What a confirmation round reads and does, as seams: the product's (the process table, the pidfd kill) or a test's.</summary>
 /// <param name="Descendants">The shim's live descendants now — only those whose start time could be read.</param>
-/// <param name="Reap">Takes the status of each listed zombie this process did not start.</param>
+/// <param name="Reap">Takes the status of each listed zombie this process did not start — called with every candidate of the round, AFTER the liveness verdicts (see <see cref="TeardownRounds.ConfirmedAsync"/>).</param>
 /// <param name="Liveness">The THREE-state question for one member.</param>
 /// <param name="Kill">Ends the members by identity.</param>
 /// <param name="Step">Waits between two rounds.</param>
@@ -29,15 +29,20 @@ internal static class TeardownRounds
     private static List<ProcessIdentity> Merged(IEnumerable<ProcessIdentity> members) =>
         members.Aggregate(new List<ProcessIdentity>(), (merged, member) => merged.Exists(known => known.Pid == member.Pid && OrphanSweep.Same(known.StartedUtc, member.StartedUtc)) ? merged : [.. merged, member]);
 
-    /// <summary>Rounds until every known member is gone or the bound passes; answers with the members still there (alive or not checkable) — empty only when each is provably gone.</summary>
+    /// <summary>
+    /// Rounds until every known member is gone or the bound passes; answers with the members still there (alive or not checkable) — empty only when each is provably gone.
+    /// <b>The reaping pass comes AFTER the liveness verdict.</b> A member just killed dies on its own schedule: a pass that came first could read it alive and take nothing, and the verdict a moment later would call
+    /// its fresh zombie Gone and end the confirmation with the zombie still in the table. A zombie stays a zombie until its status is taken, so a pass over every candidate after the verdict takes each one the verdict
+    /// called Gone for being a zombie; one that exits after the verdict is still in <c>kept</c> and is met by the next round.
+    /// </summary>
     internal static async Task<IReadOnlyList<ProcessIdentity>> ConfirmedAsync(IReadOnlyList<ProcessIdentity> known, RoundSeams seams)
     {
         var kept = known;
         while (true)
         {
-            var seen = seams.Descendants();
-            seams.Reap(seen);
-            kept = Kept([.. kept, .. seen], seams.Liveness);
+            IReadOnlyList<ProcessIdentity> candidates = [.. kept, .. seams.Descendants()];
+            kept = Kept(candidates, seams.Liveness);
+            seams.Reap(candidates);
             if (kept.Count == 0 || seams.Expired())
             {
                 return kept;

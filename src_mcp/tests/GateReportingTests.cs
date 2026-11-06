@@ -347,7 +347,7 @@ public sealed class GateReportingTests
     // ---------- D6: the human can always answer a call_human ----------
 
     [Fact]
-    public void WhenNobodyAnswered_TheHumansProceed_CanStillBeDelivered()
+    public void WhenNobodyAnswered_ThePersonsProceed_CanStillBeDelivered()
     {
         // The gate correctly refuses to pass a round nobody reviewed. It must not also refuse the
         // person it just called: that is a dead end, not a gate.
@@ -356,7 +356,7 @@ public sealed class GateReportingTests
             new SessionState("s", "D:/r", "main", new PanelConfig()), Core.Gate.GateResult.Empty, nobody);
 
         ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>();
-        RoundMachine.Resolve(ok.State, [], humanSaysProceed: true)
+        RoundMachine.Resolve(ok.State, [], HumanDecision.Proceed)
             .Should().BeOfType<Transition.Moved>().Which.State.Stage.Should().Be(Stage.CodeReview);
     }
 

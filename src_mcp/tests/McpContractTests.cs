@@ -412,6 +412,40 @@ public sealed class McpContractTests : IDisposable
     }
 
     /// <summary>
+    /// <c>todo/PLAN_only_a_person_releases_the_gate.md</c> over the real wire: the schema still takes <c>humanDecision</c> (every
+    /// existing client keeps calling), and on a held gate with no card answered the value is a refusal SENTENCE that names the
+    /// card — not an SDK error, and not a release.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_WithHumanDecisionProceed_AndNoCard_IsARefusalSentence_NotAnSdkError()
+    {
+        HeldGateAtNowhere();
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"contract-test","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var answer = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"resolve","arguments":{"repoPath":"D:/nowhere","branch":"main","decisions":"[]","humanDecision":"proceed"}}}
+                """);
+
+            var text = answer.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+            JsonDocument.Parse(text!).RootElement.GetProperty("error").GetString()
+                .Should().Contain("Proceed despite the findings").And.Contain("ask_human").And.Contain("never from this argument");
+            new CoaiMcp.Server.SessionStore(_data).Load("D:/nowhere", "main")!.State.HumanGate.Should().BeTrue("the argument released nothing");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
     /// The handshake's client and version, and the model the caller declared, reach the session.
     /// </summary>
     /// <remarks>
