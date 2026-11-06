@@ -106,9 +106,9 @@ export function classifyLaunch(result, stderr, conversation) {
   const deniedBySentence = /auto-denied/.test(stderr);
   const denied = deniedActions.length > 0 || deniedBySentence;
   const hasConversationId = /^[A-Za-z0-9_-]{1,128}$/.test(conversation);
-  const response = result?.response ?? '';
-  const malformedResponse = typeof response !== 'string';
-  const emptyAnswer = !malformedResponse && response.trim() === '';
+  const response = result?.response;
+  const malformedResponse = response !== undefined && typeof response !== 'string';
+  const emptyAnswer = !malformedResponse && (response ?? '').trim() === '';
   return { deniedActions, deniedBySentence, denied, hasConversationId, emptyAnswer, malformedResponse, allThree: denied && hasConversationId && emptyAnswer };
 }
 

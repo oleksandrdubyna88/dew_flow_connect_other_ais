@@ -122,7 +122,7 @@ test('a result that is not an object is no result: counted as an ignored line, a
 });
 
 test('a response that is not a string does not throw: it is marked malformed, and is neither an answer nor an empty one', () => {
-  for (const response of [7, { a: 1 }, ['x'], true]) {
+  for (const response of [null, 7, { a: 1 }, ['x'], true]) {
     const got = classifyLaunch({ response }, '', 'conv');
     assert.equal(got.malformedResponse, true);
     assert.equal(got.emptyAnswer, false);
