@@ -54,10 +54,67 @@ test('a program that cannot be started is a result with the error code, not a th
   assert.match(r.error, /ENOENT/);
 });
 
-test('output past the buffer ends the tree and says so', async () => {
-  const script = "setInterval(()=>process.stdout.write('x'.repeat(4096)),10);";
+test('output past the buffer ends the tree, the grandchild too, and says so', async () => {
+  const script = "const {spawn}=require('node:child_process');"
+    + "const g=spawn(process.execPath,['-e','setTimeout(()=>{},120000)'],{stdio:'ignore',windowsHide:true,detached:process.platform==='win32'});"
+    + "process.stdout.write('GRANDCHILD '+g.pid+'\\n');setInterval(()=>process.stdout.write('x'.repeat(4096)),10);";
   const r = await runTree(NODE, ['-e', script], { input: '', timeoutMs: 20_000, maxBuffer: 64 * 1024 });
-  assert.equal(r.error, 'maxBuffer');
-  assert.equal(r.timedOut, false);
-  assert.ok(r.stdout.length >= 64 * 1024);
+  const pid = Number(/GRANDCHILD (\d+)/.exec(r.stdout)?.[1]);
+  try {
+    assert.equal(r.error, 'maxBuffer');
+    assert.equal(r.timedOut, false);
+    assert.ok(r.stdout.length >= 64 * 1024);
+    assert.ok(Number.isInteger(pid) && pid > 0, 'the child reported a grandchild pid');
+    assert.equal(await until(() => !alive(pid), 10_000), true, `grandchild ${pid} is still running after the overflow`);
+  } finally {
+    if (alive(pid)) process.kill(pid);
+  }
+});
+
+test('what is kept stops at the buffer: a helper that outlives the kill and keeps writing cannot grow it', async () => {
+  // The grandchild leads its own group, so the group kill misses it, and it holds the child's stdout.
+  const script = "const {spawn}=require('node:child_process');"
+    + "const g=spawn(process.execPath,['-e',\"setInterval(()=>process.stdout.write('y'.repeat(65536)),1)\"],{stdio:['ignore','inherit','inherit'],windowsHide:true,detached:true});"
+    + "process.stdout.write('GRANDCHILD '+g.pid+'\\n');setInterval(()=>{},1000);";
+  const maxBuffer = 64 * 1024;
+  const r = await runTree(NODE, ['-e', script], { input: '', timeoutMs: 20_000, maxBuffer });
+  const pid = Number(/GRANDCHILD (\d+)/.exec(r.stdout)?.[1]);
+  try {
+    assert.equal(r.error, 'maxBuffer');
+    assert.ok(r.stdout.length + r.stderr.length <= maxBuffer + 4 * 65536, `kept ${r.stdout.length + r.stderr.length} chars`);
+  } finally {
+    if (alive(pid)) process.kill(pid);
+  }
+});
+
+test('a helper still holding the pipes after the program ended is named, ended where it can be, and the result comes back', async () => {
+  const script = "const {spawn}=require('node:child_process');"
+    + "const g=spawn(process.execPath,['-e','setTimeout(()=>{},120000)'],{stdio:['ignore','inherit','inherit'],windowsHide:true});"
+    + "process.stdout.write('GRANDCHILD '+g.pid+'\\n');process.exit(0);";
+  const r = await runTree(NODE, ['-e', script], { input: '', timeoutMs: 20_000, maxBuffer: 1024 * 1024 });
+  const pid = Number(/GRANDCHILD (\d+)/.exec(r.stdout)?.[1]);
+  try {
+    assert.equal(r.status, 0);
+    assert.equal(r.error, 'heldPipes');
+    assert.equal(r.timedOut, false);
+    // POSIX: its group outlives the leader. Windows: a tree kill by an exited parent cannot reach it, which is why the probe stops.
+    if (process.platform !== 'win32') assert.equal(await until(() => !alive(pid), 10_000), true, `helper ${pid} is still running`);
+  } finally {
+    if (alive(pid)) process.kill(pid);
+  }
+});
+
+test('nothing is appended once the result has been given', async () => {
+  const script = "const {spawn}=require('node:child_process');"
+    + "const g=spawn(process.execPath,['-e',\"setInterval(()=>process.stdout.write('z'),20)\"],{stdio:['ignore','inherit','inherit'],windowsHide:true,detached:true});"
+    + "process.stdout.write('GRANDCHILD '+g.pid+'\\n');process.exit(0);";
+  const r = await runTree(NODE, ['-e', script], { input: '', timeoutMs: 20_000, maxBuffer: 1024 * 1024 });
+  const pid = Number(/GRANDCHILD (\d+)/.exec(r.stdout)?.[1]);
+  try {
+    const kept = r.stdout;
+    await new Promise((done) => setTimeout(done, 300));
+    assert.equal(r.stdout, kept);
+  } finally {
+    if (alive(pid)) process.kill(pid);
+  }
 });

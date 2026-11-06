@@ -54,14 +54,16 @@ subtracted from one another.
 - On agy 1.4.4 with the current `view_file`-only agent the model never reaches for a shell. It says `run_command` is unavailable
   and answers in prose. So there is **no denial, no empty answer and no follow-up**: the three conditions that
   `ConcludedAsync` (local) and the server's `FollowUpOf` require before any follow-up never held in either launch.
-- The follow-up path that E2.S1 would correct is therefore **not reached in today's product**. The 2026-10-02 denials
+- The follow-up path that E2.S1 would correct was therefore **not reached in these two launches**, which is not a finding that it
+  cannot be reached today: `AntigravityStream.WasDenied` matches the literal `auto-denied` anywhere in the transcript, so an empty answer whose stdout merely contains those words, with no denial, also selects a follow-up. The 2026-10-02 denials
   ([RESULTS_agy_consult_follow_up.md](RESULTS_agy_consult_follow_up.md)) came from agy **1.2.15** with another agent
   configuration; they are evidence about that setup, not about this one.
 - Step 2a (an elicited denial, three launches in one conversation) never started: no launch gave a denial plus a conversation id
   plus an empty answer. Step 2b (cumulative reporting through an explicit same-conversation continuation, apart from denial
   recovery) was **not run, by decision of the owner on 2026-10-21** (option A: record the result and defer E2).
 - **Cost note.** One reviewer launch costs 90 k to 360 k input tokens here (launch 1: 95 k, launch 2: 357 k), not the plan's
-  "~60 k per launch". The plan's 12-launch cap and its 400 k input-token cap do not fit together: 400 k holds two launches.
+  "~60 k per launch". The plan's 12-launch cap and its 400 k input-token cap do not fit together: the two launches above took
+  451 922 together, 51 922 past the cap, and 400 k holds one launch as large as launch 2 and not a second.
 
 ### Consequences
 
@@ -76,8 +78,9 @@ subtracted from one another.
 > measurements are 2.2.0's). One window with no other `kimi` process, coordinated with the session that owns the Kimi probes;
 > `KIMI_CODE_NO_AUTO_UPDATE=1`, an empty working folder under `%TEMP%`. No sign-in was touched; no credential file was opened.
 >
-> **Verdict: only the interactive TUI states the plan's windows.** No headless source carries them: not the shim's `/usage`
-> (fact C), not `/usage` as a prompt, not Kimi's own files. So E5 is **cut**, and item 1 is recorded as *checked: the shim's
+> **Verdict: of the sources measured, only the interactive TUI states the plan's windows.** No headless source measured carries them:
+> not the shim's `/usage` (fact C, measured on 2.2.0; over ACP on 2.3.0 it stays unmeasured), not `/usage` as a prompt, not Kimi's own
+> files. So E5 is **cut, provisionally** (see the Consequences), and item 1 is recorded as *checked: the shim's
 > reply, a usage-only prompt, the session log; the TUI only*.
 
 **Starting point — fact C** (M-K5b re-run, M-K7b, 2.2.0): over ACP, `/usage` carries session totals only, and the highspeed 403 is
@@ -107,7 +110,8 @@ The monthly row's reset was cut by the terminal's width. The line under it split
 
 ### What this shows
 
-- The plan's 5-hour and monthly windows, with their resets, are stated **only** by the interactive TUI. The TUI reads them before
+- Of what was measured, the plan's 5-hour and monthly windows, with their resets, are stated **only** by the interactive TUI; 2.3.0's
+  answer over ACP is the one cell not measured (Consequences, below). The TUI reads them before
   any session exists, so they come from a service call of the TUI's own. That call is not a launch coai may make: the plan forbids a
   read of its own and any use of the person's sign-in outside a turn.
 - A **spent monthly window refuses every launch with HTTP 429** and its own wording (*monthly usage limit for this billing cycle …

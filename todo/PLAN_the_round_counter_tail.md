@@ -33,7 +33,7 @@ it. This plan is seven epics and the recorded non-items; the table *Every open-t
 |---|---|---|
 | 1 | *"A second gauge exists, unread"* — Kimi Code's `/usage` shows a 5-hour window and a monthly limit with time to reset; the server reads only codex | E4 measures where the numbers can be read; E5 reads them |
 | 2 | *"A follow-up's usage may be cumulative"* — a reviewer asked again in the same agy conversation may report a running total, counting the first launch twice | E1 measures (the other plan's build order step 1); E2 fixes the parts WITH the total, locally AND on the Team server |
-| 3 | *"Live checks never recorded"* — story 5.4's "+1 exactly" through the Team server, and 4.1's probe against the production URL | E7, with the owner's session token, after E2's server deploy |
+| 3 | *"Live checks never recorded"* — story 5.4's "+1 exactly" through the Team server, and 4.1's probe against the production URL | E7, with the owner's session token, after the first server deploy that carries E3 and E6 (E2 is deferred, so E7 no longer waits for it) |
 | 4 | *"launches per round"* of story 2.1 was never built; local lines carry their round only since coai-mcp 0.60.2 (#877) | E6 (merged with item 5: one covered population) |
 | 5 | *"The counter reads one store"* — the other OS's rounds are named and not included | E6 |
 | 6 | *"Local ledger gaps"* — `endCause` empty locally; effort/tier/`cliVersion` empty on consult, question, probe and chat lines; per-consultation money is per TURN | E3 |
@@ -185,7 +185,7 @@ Each one, and its home:
 
 Order: E1 first; E2 after E1's result (conclusive OR inconclusive — see E1); E3 any time after E1 starts (it does not wait for
 M1); E4 after the Kimi trigger above; E5 after E4; E6 any time after E3 (it reads `endCause`/`cliVersion` only as columns); E7 last,
-after E2's server deploy. **Owed to the other side:** the row that says E2 builds step 2 of the follow-up plan is written INTO that
+after the first server deploy that carries E3 and E6, repeated after E2's server deploy if E2 reopens. **Owed to the other side:** the row that says E2 builds step 2 of the follow-up plan is written INTO that
 plan's boundary table by E1's first commit.
 
 ## Item 7 — the codex rounds-per-1 % figure: a decided non-item
@@ -216,7 +216,7 @@ raw blocks redacted (no email, no token).
 | 4 | **E4** — M2, in a Kimi window of its own, after the spent-quota trigger is answered | nothing (a record and a fixture) |
 | 5 | **E5** — the Kimi gauge: S1 the parser (days included); S2 (cornerstone) the read inside the turn's hold; S3 stored, answered by `--round-counts`, shown, the ratio hidden with the consumer named | coai-mcp (S1, S2, S3's store and answer) · **extension** (S3's card and block) |
 | 6 | **E6** — both stores and launches per round: S1 (cornerstone) the snapshot after `RecordRound` and a NEW one-shot merge mode keyed by `round_key`; S2 the other side's ledger tail; S3 launches per round; S4 the block and the card; S5 the live contract leg | coai-mcp (S1) + one line in `.agents/PROJECT.md` · **extension** (S2–S5) |
-| 7 | **E7** — M3 after E2's server deploy (and after any later server change this plan causes) | nothing (a record and a `POST_DEPLOY.md` stamp) |
+| 7 | **E7** — M3 after the first server deploy that carries E3 and E6, with the owner present and with their approval because it spends the company's accounts; repeated after E2's server deploy if E2 reopens, and after any later server change this plan causes | nothing (a record and a `POST_DEPLOY.md` stamp) |
 
 A story that changes what the extension shows or reads ships an extension release; the mcp/server releases alone never close it.
 
@@ -271,9 +271,11 @@ Each RED message and its plant go into `research/module_tests.md` with the story
 
 ## Definition of Done
 
-- [x] M1 recorded in `PLAN_the_reviewer_follow_up_is_billed_once.md`: the step-1 capture (or why none could be elicited), every
+- [ ] M1 recorded in `PLAN_the_reviewer_follow_up_is_billed_once.md`: the step-1 capture (or why none could be elicited), every
       `usage` block per run, the verdict — *cumulative*, *per launch* or *inconclusive*; its boundary table names E2. *(2026-10-21:
-      inconclusive, no capture could be elicited, the two undenied launches' `usage` blocks are in `RESULTS_the_round_counter_tail.md`.)*
+      inconclusive, no capture could be elicited, and the two undenied launches' usage FIELDS are in
+      `RESULTS_the_round_counter_tail.md`. Open in one part: the raw `usage` blocks and the 51 per-step inputs behind launch 2's total
+      were not kept and could not be found on 2026-11-06. M1's re-run closes this if E2 reopens; its `results.json` keeps every block.)*
 - [ ] *(E2 DEFERRED 2026-10-21 until the path fires again)* A cumulative reviewer follow-up is billed once — locally in every branch and on the Team server — its two lines add up to
       the turn, the follow-up line carries `usageBasis` and no `usageNote`, repairs and non-cumulative runtimes unchanged; the
       reviewer's denial is read parsed from the two streams; today's extension reads the new line's money whole.
@@ -328,10 +330,13 @@ starts. **Cornerstones: 0 of 3 — E2.S1, E5.S2, E6.S1** (the quota ⌈2·7/5⌉
 
 ### E2 — the accounting is right on both follow-up paths
 
-- **DEFERRED (owner's decision, 2026-10-21).** E1 found that the reviewer follow-up path is not reached on agy 1.4.4 with the
-  current read-only agent, so what S1 and S3 would correct does not happen today and there is nothing to measure it against.
+- **DEFERRED (owner's decision, 2026-10-21).** E1 did not reach the reviewer follow-up path on agy 1.4.4 with the
+  current read-only agent, so there is nothing to measure what S1 and S3 would correct against.
+  That was seen in two launches, so the result is inconclusive rather than a proof that a follow-up cannot happen today:
+  `AntigravityStream.WasDenied` matches the literal `auto-denied` anywhere in the transcript, so an empty answer whose stdout merely contains those words, with no denial, also selects a follow-up.
   **What re-opens E2:** an agy version or a reviewer configuration under which a denial with an empty answer happens again (the
-  three preconditions of `ConcludedAsync` and the server's `FollowUpOf`: a denial, a conversation id, an empty answer). Then
+  three preconditions of `ConcludedAsync` and the server's `FollowUpOf`: a denial, a conversation id, an empty answer), or a follow-up
+  seen in the ledger from that false-positive road. Then
   re-run M1 (with a launch cap sized to 90 k–360 k input per launch) and build S1–S4 as written below. Until then S1–S4 are not
   started; S2 (the parsed denial) and S4 were written to proceed whatever M1 says, but ship with the rest of E2 unless the owner
   asks for them separately.

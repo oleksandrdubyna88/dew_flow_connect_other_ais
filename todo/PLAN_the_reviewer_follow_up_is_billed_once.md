@@ -54,8 +54,9 @@ there so the reviewer stayed byte-identical.
    `gemini-3.8-flash-low`, the current `coai-reader` agent with the `view_file`-only hook, two launches were SUCCESS, not
    denied, with a non-empty answer (input 94 883 and 357 039, output 4 399 and 16 522); the model says `run_command` is
    unavailable and answers in prose. There is no denial, no empty answer and no follow-up, so the follow-up path this plan
-   suspects is **not reached in today's product**, and whether a follow-up reports cumulatively stays **unmeasured** (step 2a
-   never started; step 2b was not run, by the owner's decision of 2026-10-21). The 2026-10-02 denials came from agy 1.2.15 with
+   suspects was **not reached in these two launches**, and whether a follow-up reports cumulatively stays **unmeasured** (step 2a
+   never started; step 2b was not run, by the owner's decision of 2026-10-21). Two launches do not show that it cannot be reached:
+   `AntigravityStream.WasDenied` matches the literal `auto-denied` anywhere in the transcript, so an empty answer whose stdout merely contains those words, with no denial, also selects a follow-up. The 2026-10-02 denials came from agy 1.2.15 with
    another agent configuration. The first attempt (7 launches) was refused before any model call because
    `AntigravityRuntime.DefaultModel` `gemini-3.7-flash-high` is not a model agy 1.4.4 offers; that default is corrected in its
    own pull request.

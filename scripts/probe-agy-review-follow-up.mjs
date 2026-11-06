@@ -30,7 +30,9 @@
 // HARD CAPS, counted per ATTEMPT (a launch that fails or times out counts): <= 12 launches in all; stop as soon as 3 runs
 // are complete; stop once the reports' own input-token sum passes 400 000 (checked BEFORE a launch and again after it;
 // lib/spendCap.mjs); stop at the FIRST auth/quota error and say so; stop on a launch whose report carries no usable
-// input-token count (the spend is unknown, so the probe does not go on). Every external process has a timeout, and a launch
+// input-token count (the spend is unknown, so the probe does not go on), on a response that is not a string, and on a process
+// tree that may not have ended (a paid launch never starts beside one). A failed turn is no completed measurement, and its
+// usage still counts in the spend. Every external process has a timeout, and a launch
 // that times out ends its whole process tree (lib/launch-tree.mjs). Compared: OUTPUT and reasoning tokens, never input. Every
 // `usage` block is kept in <scratch>/results.json, raw streams beside it. Nothing here prints or stores a credential: the
 // environment is passed on as it is and never logged, and a Stop message never carries launch output.
@@ -40,7 +42,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { authQuotaStop, classifyLaunch, launchDoneLine, launchStartLine, parseArgs, readStream, redactPaths } from './lib/agy-probe.mjs';
+import { absoluteInvocation, authQuotaStop, classifyLaunch, constStringOf, failedLaunch, failureText, fixtureLeak, launchDoneLine, launchStartLine, parseArgs, readStream, redactPaths, treeStop, usableTurn } from './lib/agy-probe.mjs';
 import { runTree } from './lib/launch-tree.mjs';
 import { capPassed, capRefusal, inputTokensOf } from './lib/spendCap.mjs';
 
@@ -63,8 +65,9 @@ if (args.error) {
   process.stderr.write(`${args.error}\n`);
   process.exit(2);
 }
-const { exe, model, maxLaunches: MAX_LAUNCHES } = args;
-const scratch = args.scratch || mkdtempSync(join(os.tmpdir(), 'testsToDelete-agy-m1-'));
+const { model, maxLaunches: MAX_LAUNCHES } = args;
+const { exe, scratch: scratchArg } = absoluteInvocation(args);
+const scratch = scratchArg || mkdtempSync(join(os.tmpdir(), 'testsToDelete-agy-m1-'));
 mkdirSync(scratch, { recursive: true });
 
 // ---- read the build's own texts out of the C# sources ---------------------------------------------------------------
@@ -78,10 +81,9 @@ function findingSchemaJson() {
 }
 
 function noCommandsText() {
-  const text = source('src_mcp/runners/Reviewers/AntigravityRuntime.cs');
-  const declared = /internal const string NoCommands =([\s\S]*?);/.exec(text)?.[1];
-  if (!declared) throw new Error('NoCommands not found in source');
-  return [...declared.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]).join('');
+  const text = constStringOf(source('src_mcp/runners/Reviewers/AntigravityRuntime.cs'), 'NoCommands');
+  if (!text) throw new Error('NoCommands not found in source, or not a plain sequence of string literals');
+  return text;
 }
 
 const NO_COMMANDS = noCommandsText();
@@ -168,13 +170,16 @@ const argv = (conversation) => ['--print=', '--input-format', 'stream-json', '--
   '--agent', 'coai-reader', '--json-schema', schemaFile, '--model', model, '--add-dir', checkout,
   ...(conversation ? ['--conversation', conversation] : [])];
 
-/** The Stop a finished launch calls for, or '' — in the order: a refused model, an auth/quota failure, unknown spend, the cap. */
+/** The Stop a finished launch calls for, or '' — in the order: a refused model, an auth/quota failure, a tree that may not have ended, a malformed answer, unknown spend, the cap. */
 function stopAfter(record, result, stderr, stdout) {
   if (/invalid model selection/.test(result?.error ?? '')) {
     return `the model '${model}' is refused by this agy (no tokens spent; see "agy models")`;
   }
-  const authStop = record.hasResult || record.exit === 0 ? '' : authQuotaStop(record.n, stderr + stdout.slice(-2000));
+  const authStop = failedLaunch(record) ? authQuotaStop(record.n, failureText(result, stderr, stdout)) : '';
   if (authStop) return authStop;
+  const treeRefusal = treeStop(record.n, record.launchError);
+  if (treeRefusal) return treeRefusal;
+  if (record.malformedResponse) return `launch ${record.n}: the result's response is not a string; the launch is saved and the probe stops`;
   if (record.inputTokens === null) return `launch ${record.n}: ${inputTokensOf(record.usage).refusal}${record.timedOut ? ' (it timed out)' : ''}; the spend is unknown, so the probe stops`;
   return capPassed(inputSum, MAX_INPUT_TOKENS) ? `input-token cap passed: ${inputSum} > ${MAX_INPUT_TOKENS}` : '';
 }
@@ -214,17 +219,17 @@ async function launch(label, text, conversation, { prompt = '' } = {}) {
 function save() {
   const slim = log.map(({ stdout, stderr, ...rest }) => rest);
   writeFileSync(join(scratch, 'results.json'), JSON.stringify({ at: new Date().toISOString(), agyVersion, model, platform: os.platform(),
-    launches, inputSum, runs, slim, stoppedBecause }, null, 2));
+    launches, inputSum, runs, slim, stoppedBecause, fixtureRefusal }, null, 2));
 }
 
 // ---- the plan -------------------------------------------------------------------------------------------------------
 const runs = [];
 let stoppedBecause = '';
+let fixtureRefusal = '';
 let step = '';
 let captureIndex = -1;
 
-const usable = (turn) => turn.hasResult && turn.usage !== null;
-const complete = () => runs.filter((run) => run.turns.length === 3 && run.turns.every(usable)).length;
+const complete = () => runs.filter((run) => run.turns.length === 3 && run.turns.every(usableTurn)).length;
 
 async function turnsTwoAndThree(run, firstTurn) {
   const id = firstTurn.conversation;
@@ -294,7 +299,12 @@ function writeFixture(capture) {
     stdout: sub(capture.stdout), stderr: sub(capture.stderr),
   };
   const text = JSON.stringify(fixture, null, 2);
-  if (text.toLowerCase().includes(user.toLowerCase()) || /@/.test(text.replace(/<email>/g, ''))) throw new Error('redaction left a user name or an @ in the fixture; not saved');
+  // Never thrown: the launches are paid for, and the record and the table below must still be written.
+  const leak = fixtureLeak([fixture.prompt, ...fixture.arguments, fixture.stdout, fixture.stderr], user);
+  if (leak) {
+    fixtureRefusal = `redaction left ${leak} in the fixture; not saved`;
+    return null;
+  }
   mkdirSync(dirname(FIXTURE), { recursive: true });
   writeFileSync(FIXTURE, text + '\n');
   return FIXTURE;
@@ -320,7 +330,7 @@ save();
 // ---- the table ------------------------------------------------------------------------------------------------------
 const cell = (v) => String(v ?? '-').padStart(7);
 console.log(`agy ${agyVersion}  model ${model}  step ${step || '1 (stopped)'}  launches ${launches}/${MAX_LAUNCHES}  input sum ${inputSum}`);
-console.log(`stopped because: ${stoppedBecause || 'plan finished'}   fixture: ${fixtureSaved ?? 'not saved'}`);
+console.log(`stopped because: ${stoppedBecause || 'plan finished'}   fixture: ${fixtureSaved ?? (fixtureRefusal || 'not saved')}`);
 console.log(['launch', 'run', 'turn', 'input', 'output', 'think', 'cached', 'total', 'denied', 'empty', 'convId', 'secs'].map((h) => h.padStart(7)).join(' '));
 for (const run of runs) {
   run.turns.forEach((t, i) => {
