@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.64.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.63.0...mcp-v0.64.0) (2026-11-06)
+
+
+### Features
+
+* **commands:** a plan of more than 3 epics builds a core, then a proof, and keeps the rest as candidates ([#952](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/952)) ([da21361](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/da213614ce6356cd80b5ef9674829d5782dd9697))
+* **kimi:** Kimi Code as a consultant and a question-consultant row (S5) ([#839](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/839)) ([e1ed0ed](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e1ed0ed6c98674b29212135fedd995b1dddf52e9))
+* **ledger:** the round-counter tail's plan, and E3 — every ledger line says what it ran with, why it was cancelled, and money per consultation ([#904](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/904)) ([eb85d5f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/eb85d5f69f07a5a1f80a663d9993196f762bd564))
+* **native-linux:** E1 — trusted measurement instruments, and the admission's shared plumbing (no runtime admitted yet) ([#914](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/914)) ([3fc30be](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3fc30be3b3abdc1f89713d9a0aa85e61d525e564))
+* **rounds:** both stores counted, and launches per round (round-counter tail E6) ([#918](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/918)) ([770abbc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/770abbc679e6aafc6ef6a26921e6bbd32c766613))
+* **tests:** E5 stage A — the age-only coai- test sweep is retired; a one-off clean-up removes only what a person picks ([#940](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/940)) ([d02ed40](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d02ed40e643ec61cd48142ca1427a175d7054a39))
+
+
+### Bug Fixes
+
+* **agy:** the Antigravity default is a model agy offers ([#911](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/911)) ([7d691fe](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7d691feec1fbaaca7623e5e8cc1045ac19c4b30c))
+* **gate:** only an answer on the notice card releases a held gate (security) ([#920](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/920)) ([4f13772](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4f13772d87780ff1dc646eb37343f20a0a4a06d4))
+* **mcp:** a spent MONTHLY Kimi quota reads as a spent quota (story 5) ([#915](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/915)) ([25db741](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/25db741c50a8b507622b5fa1da4a1f7e641adfdb))
+* **mcp:** the quoted stderr line is redacted whole before it is windowed, and a spent quota stays hopeless ([#917](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/917)) ([151cc65](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/151cc652602a996098dc1083bba3c4efaf61576d))
+* **mcp:** the spent-quota plan's last tails — stderr evidence in every note, no parenthesis of ours, Moonshot ids masked whole ([#921](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/921)) ([5d226b3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/5d226b387d055b0fa20613c411831838a3ab14a3))
+* **security:** a link's target path is resolved root-down — the document reader, the worktree guard and the read root no longer pass a chained link out of the root ([#938](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/938)) ([83f4052](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/83f40529b4430f6d4959b69b89a609a8c3b6b1ba))
+* **server:** E3 — atomic record and session writes, a busy settings reload keeps the last good, rounds remove their empty folders ([#913](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/913)) ([0426984](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0426984a1b7004d7ab11e614ba8a85c7fa082ba4))
+* **storage:** busy_timeout before journal_mode=WAL — the switch waits inside SQLite instead of being retried by the provider ([#948](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/948)) ([ae52bd5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ae52bd55f7406d60c1905063d123946fc2cca59f))
+
 ## [0.63.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.62.0...mcp-v0.63.0) (2026-10-21)
 
 
