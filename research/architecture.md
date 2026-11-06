@@ -52,7 +52,7 @@ C4Container
   Rel(ext, codex, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, gem, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, mcp, "writes the Team server token file the shim reads")
-  Rel(ext, mcp, "one-shot spawns: --providers, --log, --round-counts, --backfill-authors (an operator's verified, one-time writer, never the extension), --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove, --close-consult, --cadence, --consultants and --check-consultant (served since epic 4, spawned by the Consultant tab from epic 5)")
+  Rel(ext, mcp, "one-shot spawns: --providers, --log, --round-counts, --round-counts-merged (the other store's snapshot file, never its database), --backfill-authors (an operator's verified, one-time writer, never the extension), --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove, --close-consult, --cadence, --consultants and --check-consultant (served since epic 4, spawned by the Consultant tab from epic 5)")
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
   Rel(mcp, srv, "and first: which review roles do you run?")
   Rel(ext, srv, "the same question, for the panel's own picture")
@@ -362,7 +362,7 @@ answers `initialize` at once*.
 | Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the *Team servers* settings (a tab of the Settings editor tab since 2026-09-28), add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *MCP server* tab shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view — the admin-only **Team server** tab, `GET /api/people`, `models[]` and `daily` — is being built by [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) (epics 1–2 done, 2026-10-10) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
-| One migration runner for both databases (`CoaiMcp.Storage`) | [module_server.md](module_server.md) · [PLAN_who_holds_a_key.md](PLAN_who_holds_a_key.md) | **story 1 shipped 2026-09-17.** `SqliteMigrator` — ordered steps, `user_version`, one transaction per step, WAL and a busy timeout — moved out of `RoundsDb` into a project BOTH binaries reference, because `coai-bugs.db` reached a host at `user_version = 0` and the gate ruled against a second copy. Deliberately not in `CoaiMcp.Core`, which is declared pure and holds no filesystem. `coai-bugs` gained `CorpusSchema.Steps` with step 1 frozen against the released SQL, `last_seen_month` and `admin_audit`, a per-KEY rate limit that is a setting, and one-server-per-directory enforced by a lock file; the promise it makes about contributors is now scoped and rewritten in `module_server.md` and `deploy/bugs/README.md` |
+| One migration runner for both databases (`CoaiMcp.Storage`) | [module_server.md](module_server.md) · [PLAN_who_holds_a_key.md](PLAN_who_holds_a_key.md) | **story 1 shipped 2026-09-17.** `SqliteMigrator` — ordered steps, `user_version`, one transaction per step, WAL and a busy timeout — moved out of `RoundsDb` into a project BOTH binaries reference, because `coai-bugs.db` reached a host at `user_version = 0` and the gate ruled against a second copy. **2026-11-05:** `busy_timeout` is now set BEFORE `journal_mode=WAL`, not after — the switch to WAL needs the EXCLUSIVE lock, and with no busy handler any other connection's SHARED lock made it fail at once, after which Microsoft.Data.Sqlite released every lock, slept a fixed 150 ms and ran it again; openers that began together met again every 150 ms until the 5 s budget was gone and both failed with `database is locked` (CI runs 39661513211 and 41895449249; reproduced with hot readers on the file: 28 of 30 rounds before, 0 of 30 after). The budget, the step order and the transactions are unchanged. Deliberately not in `CoaiMcp.Core`, which is declared pure and holds no filesystem. `coai-bugs` gained `CorpusSchema.Steps` with step 1 frozen against the released SQL, `last_seen_month` and `admin_audit`, a per-KEY rate limit that is a setting, and one-server-per-directory enforced by a lock file; the promise it makes about contributors is now scoped and rewritten in `module_server.md` and `deploy/bugs/README.md` |
 | The rounds log leaves as a file | [module_extension.md](module_extension.md) · [module_server.md](module_server.md) · [PLAN_a_round_leaves_as_a_file.md](PLAN_a_round_leaves_as_a_file.md) | **all six stories shipped, 2026-09-14.** An **Export** button on every round and tick boxes for a bulk one, writing a CSV with the table's own columns plus every finding and its accept/decline mark; the **Took** column showing how long the DECIDING took beside how long the reviewers ran; and a bulk export that is ONE process rather than one per round, through a new one-shot server mode `--findings-many`. Phase 0 fixed a latent defect it found while tracing: `RecordDecisions` bound the ordinal to the loop index, so an out-of-order or partial `resolve` wrote its marks onto the wrong findings — exactly the data the export publishes |
 | The consultant (`consult`, the ninth tool) | [module_server.md](module_server.md) · [module_extension.md](module_extension.md) · [module_core.md](module_core.md) · [PLAN_consultant.md](PLAN_consultant.md) | **all six stories shipped, 2026-09-12 to 2026-09-13.** Story 1: the tool, the consultation record and its sweep, the filesystem invariant, the per-repository lock, the caps, the ledger kind. Story 2: all four routes — codex, claude, antigravity and a local engine — each resolved from a configured vendor row, each measured live for two turns. Story 3: the *Consultant* section — a row per caller kind, the caps, the switch and the prompt override. Story 4: the third live region, the `consultations` table and the log page's fourth tab. Story 5: the five triggers in the pasted snippet (v6, from a rule this repository owns rather than the shared store) and a `consult` MCP prompt. Story 6: `consult_missed` — how often the gate hands back a finding the caller had already ACCEPTED, measured on every round and calling nothing, which is what phase 2's decision waits on. The one open tail is the operator's own measurement, [../todo/PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md) |
 | The sanitised snapshot (`runners/Snapshots/`) | [module_runners.md](module_runners.md) · [../todo/PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) | **built 2026-10-12 (S1, D6); wired at the round's launch directory 2026-10-13 (S2), at the consultant's launch, the question row and the consultant check the same day (S3).** A coai-owned copy of a round's pinned worktree or of the live tree with no project configuration in it (`.git`, `.vibe`, `.agents/skills`, `.kimi-code`, `AGENTS.md`), refusing links, escapes, collisions and over-ceiling trees, transactional refresh in place, an aggregate cap, reads contained by the opened handle (`runners/Files/HandleRead`). A runtime asks for it through `NeedsASanitisedSnapshot` on `IReviewerRuntime` / `IConsultantRuntime`; Vibe sets it on both (`VibeRuntime`, `VibeConsultant`), and it is made at the round's launch directory (S2), the consultant's launch — one stable copy per conversation, refreshed in place — the question row (a copy per granted root — and, for a granted PARENT folder, a copy per repository found beneath it: `ParentExpansion` walks two levels down, asks git once per candidate through `RepositoryFacts`, leaves out linked worktrees whose main is copied, bounds the row at 50 repositories, and copies each through the one `RepositoryCopier`; the row's scratch holds a lock so the sweep never takes a live row) and the consultant check (S3). The consultation beat now also runs the scratch sweep that removes a crashed launch's snapshot |
@@ -906,6 +906,54 @@ built on it reads empty: the leg `scripts/seam-ledger-fields.mjs` (`npm run test
 through the extension's own parser, and fails both when a key does not come back equal and when no line wrote it at all. `withdrawn` and
 `hostStopped` cannot be driven live (no review tool takes the request's token) and are pinned by the C# tests only. No diagram labels these fields.
 
+### Two data directories, one count: a snapshot file and a ledger tail cross, never a database (2026-10-22, E6 of [../todo/PLAN_the_round_counter_tail_E6.md](../todo/PLAN_the_round_counter_tail_E6.md))
+
+A person who runs rounds on Windows and inside WSL has two stores (a `coai.db` and a `usage.jsonl` each), and the Rounds block must count both. Two things cross
+the `\\wsl.localhost` / drvfs boundary, and they are the only two. **The other side's `coai.db` is never opened across it**: it is WAL, and SQLite's locks are not
+coordinated over that boundary.
+
+1. **`round-counts-snapshot.json`** — written by the OWNING `coai-mcp` after each round it RECORDS (schema 1, seven days, at most 5 000 rounds, through
+   `AtomicFile` so a reader sees the old file or the new one). Not written when the projection failed: a snapshot read from a database that lacks the round
+   would be stamped now and read as current, so the previous one stays, visibly stale through its own `writtenUtc`.
+2. **`usage.jsonl`** — the other side's append-only ledger, read from its END by the extension, each line tagged with the STORE ID it came from. A plain
+   append-only file is what makes that safe.
+
+The extension asks its own `coai-mcp` for the count: `--round-counts-merged [--now …] [<absolute snapshot path>…]`, one path per other data directory the window
+was told about (`coai.alsoWatchDataDirectories`). The binary reads THIS side's database live and each path as a file, and answers one population keyed by
+`round_key`: a key in several stores is one round, owned by this side first and then by the lowest store id — never by argument order — so the same set of
+stores gives the same answer however the paths came. A path it cannot use is a `storesNotIncluded[]` row with a reason (`missing`, `unreadable`, `newer-schema`),
+never a zero and never an exit code. The extension maps each directory to its store through the answer's `stores[].paths[]` (two spellings of one store are
+read once) and sums that store's ledger tail into the row's tokens and money. A server too old for the mode exits 64 and the extension falls back to
+`--round-counts` and this side alone.
+
+```mermaid
+flowchart LR
+    subgraph winSide["This side (Windows or WSL)"]
+        ext["Extension · roundsLoader"]
+        mcpHere["coai-mcp --round-counts-merged"]
+        dbHere[("coai.db · read live")]
+        ledgerHere[("usage.jsonl")]
+    end
+    subgraph otherSide["The other side (across the boundary)"]
+        mcpThere["coai-mcp · after each recorded round"]
+        dbThere[("coai.db · never opened here")]
+        snapThere[("round-counts-snapshot.json")]
+        ledgerThere[("usage.jsonl")]
+    end
+    ext -->|"spawn · snapshot paths of the other stores"| mcpHere
+    mcpHere --> dbHere
+    mcpHere -->|"reads the file"| snapThere
+    mcpHere -->|"stores[] · storesNotIncluded[]"| ext
+    ext -->|"reads the tail by store id"| ledgerThere
+    ext --> ledgerHere
+    mcpThere --> dbThere
+    mcpThere -->|"atomic write"| snapThere
+```
+
+The contract is held by two suites that each compare their side against their own idea of the names, so `scripts/seam-round-counts-merged.mjs`
+(`npm run test:seam`) runs the built binary over a real round and a hand-written snapshot and reads both stdouts through the extension's `parseRoundCounts`.
+Detail: [module_server.md](module_server.md) (*`--round-counts-merged` and the round-counts snapshot*) and [module_extension.md](module_extension.md).
+
 ### A setting whose ABSENCE must mean something (2026-09-08)
 
 `COAI_ENABLED_<ROLE>` crosses the same seam and is shaped by the same lesson, pushed one step
@@ -1274,6 +1322,20 @@ row's answer to the card as it settles (`consultantAnswers`), beside `consultId`
 `riskReason`. The extension's watcher reads one predicate (`isOpenEscalation`: absent and empty are open,
 which is every file written before S3) and draws nothing more yet; the card that folds the answers is S4's.
 
+### Only an answer on the notice card releases a held gate (2026-10-22)
+
+The same two files carry the person's decision, and the contract between the halves gained one field each way
+([module_server.md](module_server.md), *Only an answer on the notice card releases the gate*; [module_extension.md](module_extension.md),
+*Active questions*). **`coai-mcp` → extension:** every card lists the decisions it offers, `decisions` — the `call_human` notice
+`["continue","fix","discuss","proceed"]`, an `ask_human` card the first three — and the extension offers a decision only when the
+card names it, so a card written by an older server (no list) offers the three it always did. **Extension → `coai-mcp`:**
+`answer.json` may now carry `decision: "proceed"` ("Proceed despite the findings"), which the server honours ONLY when the answered
+question is the hold's own notice (`kind: notice`) and applies in `resolve` — the one place the stage advances. The calling AI's
+`humanDecision` argument no longer decides anything: it is a claim the server refuses, with a sentence naming the card, when it
+would have changed the outcome. The claim this makes is the PROTOCOL road: the answer file is writable by any process running as
+the user and nothing verifies who wrote it (follow-up: `todo/PLAN_a_signed_answer_releases_the_gate.md`). `npm run test:seam`
+holds the two halves to each other with a real binary (`scripts/seam-held-gate.mjs`).
+
 Both directions of the clock are stated rather than hoped: an older extension draws an expired card until it
 is answered or swept; a newer extension against an older server sees no status and draws every card, as
 before. And the sixth file neither half owns gained one row rather than a sixth file: `qphase/`, the phase
@@ -1494,6 +1556,65 @@ a later edit cannot confine half a launch. **This is not filesystem isolation**:
 `antigravity` are bound to read-only rather than to a directory, and the process is still root — a
 cross-slot READ is what the unprivileged plan above is for.
 
+## The Windows `coai-mcp` package is wired for signing, and ships unsigned until a provider is active (2026-11-03, 2026-11-04)
+
+An `mcp-v*` release carries six packages. The four Linux and macOS ones are made and attached by their
+build legs, as before. The two Windows ones are not: Smart App Control (SAC) blocks an unsigned `coai-mcp.exe`
+AND the unsigned native libraries a process loads (`e_sqlite3.dll`, the tree-sitter grammars), so the
+Windows package passes through a signing step before it becomes a zip. The signing is not written here: it is the
+reusable workflow `dew_flow_release_signing/.github/workflows/sign-windows.yml`, called at a pinned commit (v1.1.0).
+
+**State today: no signing provider is configured, so the Windows zips are still UNSIGNED.** The wiring is in the
+workflow and tested; nothing signs until the owner activates a provider (the shared plan's E5 cutover). Until then the
+Windows package behaves as it did before this change, and a person with SAC on can still be blocked by it. Do not read
+this section as a statement that a released package carries a signature.
+
+```
+mcp-binaries (win legs)  builds + tests + packs the FOLDER, runs both carry checks on it,
+                         uploads it as unsigned-mcp-<rid>      (7 days; no zip, no checksum, no attach)
+mcp-sign                 the shared workflow: signs coai-mcp.exe (own-files) and the declared libraries
+                         (extra-files) once a provider is active, keeps a vendor signature, verifies,
+                         makes <pkg>.zip + .sha256, uploads them as mcp-<rid>; with no provider it
+                         leaves the files unsigned and still makes the zip
+mcp-sign-attach          archive-carries.sh and final-zip-layout.sh on each FINAL zip, then (tag only)
+                         gh release upload --clobber
+mcp-release-complete     needs [mcp-binaries, mcp-sign-attach]; verify-and-publish-release.sh is still the
+                         last word on completeness
+```
+
+Facts a reader will need:
+
+- **The switch-on period is explicit.** `mcp-sign` passes `required: ${{ startsWith(github.ref, 'refs/tags/') ||
+  inputs.required }}` (a tag, or a dispatch that ticks `required`, takes the release path) and
+  `allow-unsigned-release: ${{ vars.ALLOW_UNSIGNED_RELEASES == 'true' }}`. While the REPOSITORY variable
+  `ALLOW_UNSIGNED_RELEASES` is `true` and none of the six signing variables is set, a tag packs the Windows zips
+  unsigned, with a warning and a job-summary banner. Unset, or any other value, means enforcement, and a half
+  configuration or a failing provider is red either way. At activation the variable is deleted and the input is
+  removed from `mcp-sign` in code; the shared plan calls that step A6.
+- **`id-token: write` is held by `mcp-sign` alone**, and the federated trust names this repository's
+  `release-signing` environment, which the shared workflow selects by default; no caller passes `environment`.
+  `windowsPackageIsSigned.test.ts` fails for a second holder and for a caller that passes `environment`.
+- **`mcp-sign`'s `if:` is `!cancelled() && needs.mcp-binaries.result == 'success'`** (and `mcp-sign-attach`'s the same
+  over `mcp-sign`), not a copy of `mcp-binaries`' own. That one reads `needs.mcp-draft.result`, which the sign job does not
+  need, so the copy would be `null == 'success'` on every tag. The status function is not optional either: an `if:` with
+  none gets an implicit `success()` that looks at every upstream job — including `mcp-draft`, which a dispatch skips
+  (actions/runner#491) — so the bare comparison skips the dispatch trial. `!cancelled()` replaces it; a failed or cancelled
+  build still stops the job. `mcp-release-complete` is tag-only and keeps its implicit `success()`.
+- **The shared workflow signs only what is declared** and turns an unsigned PE that nothing declares red:
+  `own-files` is `["coai-mcp.exe"]`, `extra-files` is `["e_sqlite3.dll","tree-sitter*.dll"]` — the names the Windows
+  publish produces, checked by the test against `shared/kept-grammars.txt`. A library a dependency bump renames fails the
+  release that carries it.
+- **`archive-carries.sh` lists a `.zip` with `unzip -Z1`** as well as a `.tar.gz` with `tar tzf`; the match is the same
+  (basename glob, exact by default), and `TheArchiveCheckTests` runs it on zips built to be wrong. A basename match
+  cannot see depth, so `final-zip-layout.sh` also requires `coai-mcp.exe` and the SQLite library directly in the package
+  folder, whose name it reads from the zip's (`coai-mcp-<v>-<rid>/`); the same test class drives it.
+- **Releases cut before activation say the package is unsigned.** The first signed release is the first one cut after
+  the cutover; its notes announce the signature. This change touches only `.github/**`, tests and docs, so
+  release-please proposes no mcp release for it.
+
+Plan and verification (V1 trial package, V2 on a SAC machine, V3 after the first signed release):
+[../todo/PLAN_windows_code_signing.md](../todo/PLAN_windows_code_signing.md).
+
 ## Cross-cutting decisions already in force
 
 - **Solution layout follows `dew_flow_creds_for_devs`**: `src_mcp/{src,tests}`, later
@@ -1506,6 +1627,28 @@ cross-slot READ is what the unprivileged plan above is for.
   only AGENTS. Local rules live in `.agents/rules`. The extension generates its distributable
   gate body from this pinned source before building, and reviewers sample its canonical rule
   directories. The shared resolver owns applicability; the reviewer sample is not a second selector.
+- **The one-off clean-up of old `coai-*` test leftovers imports its move and identity helpers from the pinned conventions reference, not a copy** — `moveToQuarantine` from
+  `.agents/conventions/tools/lib/leftovers-sweep.mjs` (which owns the exclusive move and the placeholder checks), and the owner and identity helpers it needs (`readClaimText`,
+  `parseLegacyOwner`, `legacyOwnerState`, `processProbe`, `isAskablePid`, `hidepidActive`) from `.agents/conventions/tools/lib/owned.mjs` (decision 11: the pinned mount is the Node
+  consumers' interface). `scripts/lib/old-coai-leftovers.mjs` carries no copy of any of them and no seam in front of them (E5 S2-A).
+
+## One path resolver for every decision that follows a link (2026-11-01)
+
+`src_mcp/runners/Files/RealPath.cs` is the ONE place this product resolves a path through links — `realpath(3)`-like, root-down, a link's raw
+text pushed in front of the rest, one budget of 40 link expansions, `..` after a missing name or a file fails, a NUL or a path over 32 KiB
+fails. It replaced four hand-written walks that took `ResolveLinkTarget(...).FullName` for a link (the target's own folders were never
+resolved and a `..` in link text was folded as a string; the document reader read an outside file through it).
+
+**The rule across modules: a resolution failure REFUSES** — refused (a document, a lookup, a consultant's root), "not ours" (a tree to delete),
+or "cannot compare" (a path comparison). It is never the spelling; the one named exception is `ConsultationService.RepoIdentity`, an owner label that
+is not an access decision. Containment is the caller's decision on the resolved path and the equally resolved root.
+A relative request is walked from the already-resolved root (`DocumentReader.CanonicalUnder`), so the links in the root's own spelling — macOS `/var` — do not spend the request's budget of 40.
+
+Consumers: `DocumentReader` (and through it `PanelService`, `FeaturePlan`, `AskGateDesk`), `WorkspaceLookup`, `ConsultationService`
+(`RepoIdentity`, `SamePath`), `QuestionConsultSettings`, `WorktreeManager` (the `coai-wt-*` deletion guard), `ReviewTreeRoot` (the review-tree
+delete), `WorktreePaths` (`Real`, `Same`), `JunctionsUnix` and `HandleRead` (the read root's canonical path; empty when nothing resolves).
+`TheLinkResolverIsOneRoadTests` fails for a second `ResolveLinkTarget`, an unlisted `.LinkTarget` reader, or a new lexical containment shape.
+Guarantees, limits and the lexical sites that remain: [../SECURITY.md](../SECURITY.md); the record: `module_server.md`, "Past defects 2026-11-01".
 
 ## Additions after the first real runs (2026-08-31 → 09-01)
 

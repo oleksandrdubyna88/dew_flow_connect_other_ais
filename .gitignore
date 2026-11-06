@@ -105,3 +105,6 @@ coverage/
 # The editor @vscode/test-electron downloads to run the extension-host scenarios: a gigabyte
 # per version, re-downloaded by CI on a cache miss and kept between local runs.
 src_vs_code/.vscode-test/
+
+# The default listing of scripts/old-coai-leftovers.mjs: a working file, written where the command ran
+old-coai-leftovers-listing.json

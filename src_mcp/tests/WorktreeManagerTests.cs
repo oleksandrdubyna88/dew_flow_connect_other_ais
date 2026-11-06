@@ -543,7 +543,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
         Assert.SkipWhen(OperatingSystem.IsWindows(), "on Windows a backslash IS a separator");
         var named = Directory.CreateDirectory(Path.Combine(_storage, "a\\b")).FullName;
 
-        var resolved = WorktreeManager.Resolved(named);
+        var resolved = WorktreePaths.Real(named);
 
         // The name itself, not the whole string: a temp directory reached through a link (macOS's
         // /var → /private/var) resolves to another spelling, which is right — the macOS job said so.

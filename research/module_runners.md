@@ -43,6 +43,7 @@ sequenceDiagram
 | `ProcessEnvironment` | `Processes/ProcessEnvironment.cs` | the allowlist a confined launch starts from — an allowlist because what is being kept out is not a known name; compared the platform's way (`Path` is `PATH` on Windows and is not on Linux); `HOME` is on it for a measured reason, below |
 | `ExecutableResolver` | `Processes/ExecutableResolver.cs` | npm Windows shims: the PATHEXT resolution `Process.Start` does not do |
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage (`%LOCALAPPDATA%\coai-mcp\round-worktrees`, or `COAI_ROUND_WORKTREES` — a LOCAL path; a shorter root is also the way to more path ceiling on a git that ignores `core.longpaths`; review trees move with `COAI_REVIEW_ROOT` instead, never with this one); prune-on-open; disposal = finally; never touches a human's worktree |
+| `RealPath` (`Entry`, `EntryReader`, `RealPathResult`) | `Files/RealPath.cs` | the ONE place a path is resolved through links: `realpath(3)`-like, root-down, a link's RAW text, one budget of 40 expansions, `..` after a missing name fails, a failure is a value. `DocumentReader`, `WorkspaceLookup`, `WorktreeManager.IsUnderOurRoot` (the `coai-wt-*` deletion guard: REAL path strictly under the REAL root, leaf not a link, any failure = not ours) and `WorktreePaths` all use it; `TheLinkResolverIsOneRoadTests` keeps it one (2026-11-01, `SECURITY.md`) |
 | `SubmodulePopulator` | `Worktrees/SubmodulePopulator.cs` | fills the round tree's submodules from the PARENT checkout, not the remote — git populates none in a linked worktree, and in this family the project's rules ARE one; offline, pinned, never fatal, and refused when the source is reached through a reparse point |
 | `TreeGit` | `Worktrees/TreeGit.cs` | how git is started in a tree coai MADE: on Windows every launch point that works in a round tree or a review tree (`WorktreeManager.Git`, `ReviewTreeRoot.GitAsync`, `SubmodulePopulator.OneAsync`) leads its argv with `-c core.longpaths=true`, so a tracked path past Windows' 259 UTF-16 units checks out, reads clean, populates in a submodule and is removed; per command, never a config write; on Linux and macOS the argv is unchanged |
 | `WorktreeFailure` | `Worktrees/WorktreeFailure.cs` | what a failed round-tree `worktree add` says: reads git's own `error: unable to create file <rel>: <reason>` / `fatal: cannot create directory at '<rel>': <reason>` line and names the path, its length in UTF-16 units and git's reason, instead of only the closing `fatal: Could not reset index file` (which names the index); for `Filename too long` it adds the Windows limit of the KIND of path git could not make (`WindowsPathLimits.FileUnits` = 259 for a file, `WindowsPathLimits.FolderUnits` = 247 for a folder, read from the one shared type, Windows only) and `COAI_ROUND_WORKTREES`; a failure with no such line reads exactly as `FatalLine` always did. Round trees only — a review tree keeps its wire word `git_failed` |
@@ -116,11 +117,11 @@ sequenceDiagram
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
-  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **80 008** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20), which
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **80 023** bytes (base 17 988 + tier 62 035; 79 998 until 2026-11-05, when the E6.S1 branch merged with `main` and PROJECT.md named `--round-counts-merged` (+25; on that branch before the merge the pair was 80 049 = base 17 988 + tier 62 061, leaving 9 951); 79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20, 80 008 until 2026-10-21, 80 024 until 2026-11-01, when the conventions pin moved to `105d53c`), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **9 976** now (10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
-  names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
-  `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
+  reviewer) and leave **9 977** now (10 002 until 2026-11-05, 9 976 until 2026-11-01, 10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
+  names the tail takes one rule on 31 %, two on 61 %, three on 8 % (mean 1.77 at 9 977, measured 2026-11-05 on the merged tree; 35 / 58 / 7 % and 1.72 at 10 002; 30 / 62 / 8 % and 1.78 at 9 976), and
+  `common/test-leftovers.md` (an 8 403-character core since 2026-11-01; 8 794 since 2026-11-02, pin 5863c60) is drawn on 5.1 % (153 of 3 000 at 9 977 free and 8 794 characters; 4.9 % at 10 002 with the 8 403-character core, 4.7 % at 8 794 with 10 002 free) (it was 9.8 % at 4 706 bytes) — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
 
   **That number is the same on every platform only since 2026-09-18.** Until then `RuleFiles.Read`
@@ -137,7 +138,7 @@ sequenceDiagram
   The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
   and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
   `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (the measuring test and drift
-  guard: 17 925 + 62 061 since 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
+  guard: 17 963 + 62 035 since 2026-11-01 (the conventions pin at 105d53c), re-measured and unchanged on 2026-11-02 (the pin at 5863c60: free tail still 10 002, `common/test-leftovers.md` an 8 794-character core, 8 403 before; the new `common/test-leftovers-baseline.md` is 9 123 characters and a tail rule outside the tier; the same 7 of 100 fixed names draw the core, 142 of 3 000 (4.7 %) against 147); 17 963 + 62 061 before that; 17 947 + 62 061 before E1.S2's --host-facts; 17 925 + 62 061 from 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
   `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
   the measured maximum elsewhere),
   `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
@@ -261,6 +262,16 @@ sequenceDiagram
   It exists because Google retired Gemini Code Assist for individuals mid-2026-08-31: the Gemini
   CLI now fails in `_doSetupUser` with "migrate to the Antigravity suite", before any model is
   reached, which was mistaken in turn for a quota, a timeout and an untrusted folder.
+- **The default model is one agy offers.** A row with `runtime: antigravity` and no model of its own launches
+  `--model gemini-3.8-flash-low` (`AntigravityRuntime.DefaultModel`, since 2026-10-21; the extension's
+  `ANTIGRAVITY_DEFAULT_MODEL` and the `coai.vendors` manifest default are the same id, and
+  `antigravityDefaultModel.test.ts` reads the C# to prove it). It was `gemini-3.7-flash-high`, which agy 1.4.4 refuses
+  before any model call (`invalid model selection ... not recognized`). **The default assumes agy 1.4.4 or later**, where
+  `agy models` lists the 3.8 Flash ids; on an older agy a row must name its model. A saved row that names a 3.7 id is
+  not rewritten — agy refuses it with its own sentence. The new default has no typed price (prices are looked up in
+  OpenRouter / LiteLLM, never typed): until a list carries `gemini-3.8-flash` it prices as "no list price", like any
+  unknown model (`modelPrices.test.ts`). Live check 2026-10-21 on agy 1.4.4: `--model gemini-3.8-flash-low` was accepted,
+  exit 0, one output token. Design record: `research/PLAN_the_agy_default_is_a_model_agy_offers.md`.
 
 - **Codex reads from `-o`, Gemini from stdout, Claude from its JSON envelope's `result`** — each
   through its OWN adapter, because where an answer lands is vendor knowledge; exit-0-with-no-output
@@ -859,7 +870,7 @@ had been made. What changed on 2026-09-01:
 | `PanelSettings.Providers` | codex, gemini, deepseek(off) | codex, **antigravity**, deepseek(off) |
 | `COAI_PROVIDERS` fallback | `codex, gemini` | `codex, antigravity` |
 | `PanelSettings.Translator` | `gemini` / `gemini-flash-latest` | `antigravity`, model unset |
-| extension `DEFAULT_VENDORS` | codex, gemini | codex, **antigravity** (`gemini-3.7-flash-high`) |
+| extension `DEFAULT_VENDORS` | codex, gemini | codex, **antigravity** (`gemini-3.8-flash-low`; was `gemini-3.7-flash-high` until 2026-10-21) |
 | extension presets | no Antigravity entry at all | Antigravity first-class; Gemini kept, marked retired |
 | a SAVED `runtime: "gemini"` | run as-is | migrated to `antigravity` (id kept — it names the row, the usage history and the vault key) |
 | `providers` health | `--version` exits 0 ⇒ "own auth" | `VendorDiagnosis.ForRuntime` answers **before** the probe |
@@ -1438,6 +1449,10 @@ give-back are the server's half ([module_server.md](module_server.md)).
   record it was replacing stays whole. A reused pid on the same machine keeps the file: a leak, never a deletion.
   `AtomicJson.WriteUnderTurn` (`Escalations.cs`) writes through it, so `AtomicFile`'s list of open-coded copies is three now
   (`ConsultSchemaFile`, `RemoteRuntime`, `ArtifactStore`); `SessionStore.Write` writes through it too since E3 S5 (its ten-attempt `MoveOverExisting` loop was removed, not extracted), and the seam gained `WriteText` (fail the temp write half way).
+  **A new caller since E6.S1:** `RoundCountsSnapshot.TryWrite` (`src_mcp/src/Store/RoundCountsSnapshot.cs`) writes `round-counts-snapshot.json` through it with `SharingRetry`, after every
+  round — the file the OTHER side's counter reads across the WSL boundary, which is why a reader must never see half of it (`todo/PLAN_the_round_counter_tail_E6.md` §4.1–4.3). The caller
+  reaches the seams through an `Action<string,string>` of its own (as `SessionStore` does), because `AtomicSeams` is internal to this assembly; `RoundCountsSnapshotTests.TheDefaultWriter_IsTheAtomicOne`
+  pins that the default writer IS this class (only it removes a dead writer's orphan temp).
   `MoveOver` catches `IOException` and `UnauthorizedAccessException` explicitly. Tests: `AMoveOverAHeldFileIsRetriedTests`, `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests`.
 - **`FilesystemInvariant.SnapshotAsync`** throws `OperationCanceledException` for a cancelled token. The
   launcher never throws on cancellation (it reports `TimedOut: true, Cancelled: true`), so a `git status` killed

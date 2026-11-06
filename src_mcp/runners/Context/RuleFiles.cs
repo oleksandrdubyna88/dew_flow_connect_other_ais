@@ -172,8 +172,9 @@ public static class RuleFiles
     /// Why: the instruction files, this repository's own rules and the eight tier rules had grown to
     /// 79 944 of the 80 000 bytes, leaving 56 — no rule outside the tier could fit, so the new
     /// `common/test-leftovers.md` (4 706 bytes) could not reach any reviewer on any branch. At 90 000
-    /// the same base and tier leave 9 976 bytes (10 056 until 2026-10-18, when E5's `--kimi-clear-marker` entry in `.agents/PROJECT.md` added 23 characters to the base; 10 033 until 2026-10-19, when E6's `--round-authors` entry added 19; 10 014 until 2026-10-20, when the merge with E6 brought E7's `--backfill-authors` entry (22) onto that base; 9 992 until 2026-10-21, when E1.S2's `--host-facts` entry added 16) for the rotated tail, which takes one to three rules a
-    /// round (mean 1.78 over 3 000 branch names). Measured in
+    /// the same base and tier leave 10 002 bytes since 2026-11-01 (the conventions pin moved to release `105d53c`: the tier is 62 035, 26 fewer; 9 976 until then; 10 056 until 2026-10-18, when E5's `--kimi-clear-marker` entry in `.agents/PROJECT.md` added 23 characters to the base; 10 033 until 2026-10-19, when E6's `--round-authors` entry added 19; 10 014 until 2026-10-20, when the merge with E6 brought E7's `--backfill-authors` entry (22) onto that base; 9 992 until 2026-10-21, when E1.S2's `--host-facts` entry added 16) for the rotated tail, which takes one to three rules a
+    /// round (mean 1.72 over 3 000 branch names at 10 002; 1.78 at 9 976). At 10 002 `common/test-leftovers.md` is an 8 403-character core that fits only as the first
+    /// rule a branch draws (7 of 100 fixed branch names, 147 of 3 000); its detail `common/test-leftovers-detail.md` and `common/plan-change-control.md` (12 204, for agents only by owner decision) never fit. Measured in
     /// `research/RESULTS_rules_selection_budget.md`; the canary that pins it is
     /// `StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules`.</para>
     /// </remarks>

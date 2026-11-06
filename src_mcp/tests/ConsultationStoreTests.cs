@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -451,13 +452,21 @@ public sealed class ConsultCallCounterTests : IDisposable
 /// </remarks>
 public sealed class SameCheckoutTests
 {
+    /// <summary>
+    /// The temp folder as the resolver spells it. The seams below stand a link in for ONE path by comparing the path the resolver asks
+    /// about with the path the test named, as text; on macOS the temp folder is <c>/var/folders/…</c> and the resolver asks about
+    /// <c>/private/var/folders/…</c>, so a seam keyed on the unresolved spelling never matches.
+    /// </summary>
+    private static string ResolvedTemp { get; } = Path.TrimEndingDirectorySeparator(
+        RealPath.Resolve(Path.GetTempPath()) is { Ok: true } real ? real.Path : Path.GetTempPath());
+
     /// <summary>The ordinary case: one spelling, no links, still the same checkout.</summary>
     [Fact]
     public void TheSamePathSpelledTheSameWay_IsTheSameCheckout()
     {
         var path = Path.Combine(Path.GetTempPath(), "coai-one-checkout");
 
-        ConsultationService.SamePath(path, path + Path.DirectorySeparatorChar, p => p)
+        ConsultationService.SamePath(path, path + Path.DirectorySeparatorChar, RealPath.Lstat)
             .Should().BeTrue("a trailing separator is not a different directory");
     }
 
@@ -479,16 +488,16 @@ public sealed class SameCheckoutTests
     [Fact]
     public void ACheckoutReachedThroughALink_IsTheSameCheckout()
     {
-        var said = Path.Combine(Path.GetTempPath(), "coai-checkout-as-said");
-        var real = Path.Combine(Path.GetTempPath(), "coai-checkout-as-resolved");
+        var said = Path.Combine(ResolvedTemp, "coai-checkout-as-said");
+        var real = Path.Combine(ResolvedTemp, "coai-checkout-as-resolved");
 
-        string Link(string p) =>
+        Entry Link(string p) =>
             string.Equals(
                 Path.TrimEndingDirectorySeparator(p),
                 Path.TrimEndingDirectorySeparator(said),
                 StringComparison.OrdinalIgnoreCase)
-                ? real
-                : p;
+                ? Entry.Link(real)
+                : RealPath.Lstat(p);
 
         ConsultationService.SamePath(real, said, Link)
             .Should().BeTrue("git answers with the resolved path and the session was opened with the other one");
@@ -508,16 +517,16 @@ public sealed class SameCheckoutTests
     [Fact]
     public void OneCheckoutIsOneOwner_WhicheverSpellingNamesIt()
     {
-        var said = Path.Combine(Path.GetTempPath(), "coai-checkout-as-said");
-        var real = Path.Combine(Path.GetTempPath(), "coai-checkout-as-resolved");
+        var said = Path.Combine(ResolvedTemp, "coai-checkout-as-said");
+        var real = Path.Combine(ResolvedTemp, "coai-checkout-as-resolved");
 
-        string Link(string p) =>
+        Entry Link(string p) =>
             string.Equals(
                 Path.TrimEndingDirectorySeparator(p),
                 Path.TrimEndingDirectorySeparator(said),
                 StringComparison.OrdinalIgnoreCase)
-                ? real
-                : p;
+                ? Entry.Link(real)
+                : RealPath.Lstat(p);
 
         ConsultationService.RepoIdentity(said, Link).Should().Be(
             ConsultationService.RepoIdentity(real, Link),
@@ -531,8 +540,8 @@ public sealed class SameCheckoutTests
         var one = Path.Combine(Path.GetTempPath(), "coai-checkout-one");
         var other = Path.Combine(Path.GetTempPath(), "coai-checkout-two");
 
-        ConsultationService.SamePath(one, other, p => p).Should().BeFalse();
-        ConsultationService.RepoIdentity(one, p => p).Should().NotBe(ConsultationService.RepoIdentity(other, p => p));
+        ConsultationService.SamePath(one, other, RealPath.Lstat).Should().BeFalse();
+        ConsultationService.RepoIdentity(one, RealPath.Lstat).Should().NotBe(ConsultationService.RepoIdentity(other, RealPath.Lstat));
     }
 
     /// <summary>
@@ -547,8 +556,8 @@ public sealed class SameCheckoutTests
     {
         var here = Path.Combine(Path.GetTempPath(), "coai-checkout-here");
 
-        ConsultationService.SamePath(here, "\0not-a-path", p => p).Should().BeFalse();
-        ConsultationService.SamePath(here, string.Empty, p => p).Should().BeFalse();
+        ConsultationService.SamePath(here, "\0not-a-path", RealPath.Lstat).Should().BeFalse();
+        ConsultationService.SamePath(here, string.Empty, RealPath.Lstat).Should().BeFalse();
     }
 
     /// <summary>
@@ -565,11 +574,11 @@ public sealed class SameCheckoutTests
     {
         const string unresolvable = "\0not-a-path";
 
-        ConsultationService.RepoIdentity(unresolvable, p => p).Should().Be(
-            ConsultationService.RepoIdentity(unresolvable, p => p),
+        ConsultationService.RepoIdentity(unresolvable, RealPath.Lstat).Should().Be(
+            ConsultationService.RepoIdentity(unresolvable, RealPath.Lstat),
             "the write and the read must agree even where neither can resolve");
 
-        ConsultationService.RepoIdentity(unresolvable, p => p).Should().Contain(
+        ConsultationService.RepoIdentity(unresolvable, RealPath.Lstat).Should().Contain(
             "repo:", "an owner that cannot be resolved is still an owner");
     }
 }

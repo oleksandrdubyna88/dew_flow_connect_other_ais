@@ -1,5 +1,7 @@
 import { untilWords } from './resetWords';
 import type { RoundsSnapshot } from './roundCountsCache';
+import { ledgerView, storesOfRead } from './storeLedger';
+import { storeNameOf } from './storeWords';
 import type { UsageEntry } from './usage';
 
 /**
@@ -41,9 +43,29 @@ function statedBy(line: ResetLine | undefined): number {
   return Date.parse(line?.resetsUtc ?? '');
 }
 
-/** The card's reset line, from the same cached snapshot as its round count — '' before the first read. */
+/**
+ * The card's reset line, from the same cached snapshot as its round count — '' before the first read.
+ *
+ * <p><b>Per (provider, store).</b> Stores are not accounts (E6): coai cannot tell whether two stores sign in to one vendor
+ * account, so one store's newest line never decides another's. With lines from one store this is {@link resetLine} as it
+ * was; with several, each store that still has a stated reset says it, named — one store's success never hides another's
+ * refusal.</p>
+ */
 export function cardResetLine(snapshot: RoundsSnapshot | undefined, provider: string): string {
-  return snapshot === undefined ? '' : resetLine(snapshot.ledger, provider, snapshot.atMs);
+  if (snapshot === undefined) {
+    return '';
+  }
+  const lines = ledgerView(snapshot).filter((line) => line.provider === provider);
+  const stores = [...new Set(lines.map((line) => line.store))];
+
+  return stores.length <= 1 ? resetLine(lines, provider, snapshot.atMs) : stores.map((store) => storeReset(snapshot, provider, lines.filter((line) => line.store === store), store)).filter((said) => said.length > 0).join(' · ');
+}
+
+/** One store's stated reset, with the store named. */
+function storeReset(snapshot: RoundsSnapshot, provider: string, lines: readonly ResetLine[], store: string | undefined): string {
+  const said = resetLine(lines, provider, snapshot.atMs);
+
+  return said.length > 0 ? `${store === undefined ? 'this machine' : storeNameOf(storesOfRead(snapshot.read), store)}: ${said}` : '';
 }
 
 /**

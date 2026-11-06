@@ -44,6 +44,7 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--tree-at", "--id", "1" },
         new[] { "--trees" },
         new[] { "--round-counts" },
+        new[] { "--round-counts-merged" },
         new[] { "--round-authors" },
         new[] { "--features" },
         new[] { "--version" },

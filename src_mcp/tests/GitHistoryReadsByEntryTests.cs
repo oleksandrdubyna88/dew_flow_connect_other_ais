@@ -81,7 +81,7 @@ public sealed class GitHistoryReadsByEntryTests : IAsyncLifetime
         // GetFullPath, which follows no links — so the expectation is the repo's path with its links resolved, the way the
         // worktree manager already compares what git lists against what it holds.
         Path.TrimEndingDirectorySeparator(Path.GetFullPath(answer.Lines[0]))
-            .Should().BeEquivalentTo(Path.TrimEndingDirectorySeparator(CoaiMcp.Runners.Worktrees.WorktreeManager.Resolved(_repo.Path)));
+            .Should().BeEquivalentTo(Path.TrimEndingDirectorySeparator(CoaiMcp.Runners.Worktrees.WorktreePaths.Real(_repo.Path)));
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class GitHistoryReadsByEntryTests : IAsyncLifetime
             var answer = await new GitHistory(_launcher).RootAndHeadAsync(link, TestContext.Current.CancellationToken);
 
             var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(answer.Lines[0]));
-            root.Should().BeEquivalentTo(Path.TrimEndingDirectorySeparator(CoaiMcp.Runners.Worktrees.WorktreeManager.Resolved(link)));
+            root.Should().BeEquivalentTo(Path.TrimEndingDirectorySeparator(CoaiMcp.Runners.Worktrees.WorktreePaths.Real(link)));
             root.Should().NotBeEquivalentTo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(link)), "git does not answer the spelling it was given");
         }
         finally
