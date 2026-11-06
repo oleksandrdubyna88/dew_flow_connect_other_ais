@@ -40,7 +40,7 @@
 
 ## Team server 0.15.0 — 2026-11-06
 
-**No route or server source changed.** It is rebuilt on this release's shared library (`CoaiMcp.Runners`), whose atomic file writes and process-liveness reads changed. See Server 0.64.0 above.
+**No route or server source changed.** It is rebuilt on this release's shared library (`CoaiMcp.Runners`), whose reviewer runtimes, atomic file writes and process-liveness reads changed. See Server 0.64.0 above.
 
 ## Team server 0.14.1 — 2026-10-21
 
