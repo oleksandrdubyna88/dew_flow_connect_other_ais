@@ -25,7 +25,8 @@ namespace CoaiMcp.Runners.Files;
 /// THIS record that are older than one hour AND whose writer is not alive (<see cref="OrphanAge"/>): a writer killed between its temp file and the move
 /// leaves one orphan, and the record's next write is its owner. Age is scope, not proof — a writer suspended after its temp file keeps it.</para>
 /// <para><b>Three older copies are still open-coded</b> — <c>ConsultSchemaFile</c>, <c>RemoteRuntime</c>, <c>ArtifactStore</c>.
-/// (<c>Escalations</c>' <c>AtomicJson</c> and <c>SessionStore</c> write through this since E3 S4 and S5.) Each has its own error handling around the dance and moving them is a
+/// (<c>Escalations</c>' <c>AtomicJson</c> and <c>SessionStore</c> write through this since E3 S4 and S5, and <c>RoundCountsSnapshot</c> since E6 S1 — the file the OTHER
+/// side's counter reads, which is why a reader must never see half of it.) Each has its own error handling around the dance and moving them is a
 /// change that deserves its own diff and its own round.</para>
 /// </remarks>
 public static class AtomicFile
