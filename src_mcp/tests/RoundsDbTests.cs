@@ -108,6 +108,27 @@ public sealed class RoundsDbTests : IDisposable
         rows[2]["resolution"].Should().Be("accept");
     }
 
+    [Fact]
+    public void AFindingAPersonProceededOver_IsStoredAsItsOwnDisposition_AndCountsAsNeitherAcceptedNorRejected()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var findings = new[] { Found("taken"), Found("argued"), Found("left open") };
+        db.RecordRound(Session, Round(), findings);
+
+        db.RecordDecisions("s1", "CodeReview", 1,
+            [Decisions.Accept(findings, 0), Decisions.Reject(findings, 1, "the caller owns it"), Decisions.ProceedOver(findings, 2)]);
+
+        var rows = Query("SELECT title, resolution, reason FROM findings ORDER BY ordinal");
+        rows[2]["resolution"].Should().Be("proceeded", "its own audited disposition — not accept, not reject");
+        rows[2]["reason"].Should().Be("proceeded over by a person");
+        var round = RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Subject;
+        round.Accepted.Should().Be(1);
+        round.Rejected.Should().Be(1, "a proceeded-over finding was not argued with");
+        db.DecidedEarlier("s1", "CodeReview", 2).Select(one => one.Finding.Title).Should().Equal("taken", "argued");
+        RoundsQuery.Read(_dir).BlindSpots.Where(spot => spot.Kind == "category").Sum(spot => spot.Total)
+            .Should().Be(2, "'how often was this kind accepted' counts judgements only; a Proceed is not one");
+    }
+
     /// <summary>
     /// The same guarantee as the test above, for a caller that does not resolve top to bottom.
     /// </summary>
