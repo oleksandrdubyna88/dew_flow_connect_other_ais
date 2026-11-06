@@ -1,5 +1,47 @@
 # Changelog
 
+## Server 0.64.0 — 2026-11-06
+
+**Security: only a person's answer releases a held gate.** `resolve(humanDecision: "proceed")` used to be honoured from the argument alone, so the gated agent could clear its own `call_human` or held review. The server now reads the decision from the hold's notice card, and only a Proceed answered there releases it. The argument is refused, and the refusal names the card. `review_document` with `newReview: true` is refused while that review is held. **Not closed:** the answer is a file any process running as the same user can write; that is a separate plan. **Lag:** this release is on the earlier shared rules, so agents' rule text and the extension's copied snippets still mention the old argument until the next rules release. The server's refusal says what to do instead.
+
+**Security: a link's target path is resolved from the root down.** The document reader, the worktree guard and the read root no longer fold `..` in link text lexically. An outside file could be read through a chain of links, and releasing a worktree could delete a folder outside the storage root. A loop or an over-long chain is now refused instead of throwing.
+
+**Added: Kimi Code can be a consultant and a question-consultant row.** A conversation keeps its own Kimi home across turns, with the sign-in resolved again before each turn. A lost session ends with its own exit code.
+
+**Added: every ledger line says what it ran with.** Consult, question and probe lines name their CLI and version, a consult line names its consultation, and a local cancellation names what ended it.
+
+**Added: `--round-counts-merged` counts both stores as one population**, keyed by round, and launches are counted per round. A snapshot is written after each recorded round for this.
+
+**Changed: a plan of more than 3 epics builds a core, then a proof.** The large, huge and massive split orders now say: only two epics are written, the first is the smallest core that runs end to end on real input, the second runs it and tests the theory against measurable criteria, and everything later is a list of candidates, each naming the result that would justify it.
+
+**Fixed:**
+
+- The Antigravity default is a model agy offers. agy 1.4.4 refuses `gemini-3.7-flash-high` before any model call, so a reviewer row with no model never ran. The default is now `gemini-3.8-flash-low`; a saved row is not rewritten.
+- A spent monthly Kimi quota reads as a spent quota, not a lost sign-in, and quotes its reset. The stderr line a quota note quotes is redacted whole before it is cut.
+- Two servers opening one database no longer fail together with `database is locked`: the switch to WAL now waits inside SQLite.
+- Record and session writes are atomic, and a settings reload that meets a busy file keeps the last good settings.
+- A group member that became a zombie after the reaping pass no longer fails the teardown's confirmation.
+
+**Known:** `CadenceStore` can still refuse an update under heavy load because a file's turn is counted in tries rather than waited for (`todo/PLAN_a_turn_waits_by_the_clock.md`). The message says to try again. Windows packages stay unsigned until code signing is activated.
+
+## Extension 0.84.0 — 2026-11-06
+
+**Security: a held gate is released from its notice card only.** The help and the log say so in every language, and a round released by a person reads as that.
+
+**Added: the Rounds block counts both stores.** A row can read this side's and the other side's store as one population, says when a store could not be reached or its copies conflict, and shows launches per round.
+
+**Added: Kimi and Vibe as consultants.** A Kimi row is offered as a consultant and a question consultant. An older coai-mcp is named beside the row, never hidden.
+
+**Added: the chat line names its CLI and version, and consultation money is shown per consultation.**
+
+**Fixed: the Antigravity default is `gemini-3.8-flash-low`,** with the 3.8 Flash models in the curated list. They show "no list price" until one is published.
+
+**Changed:** `@vscode/vsce` 4 packages the extension; the package's file list is unchanged. npm lockfiles were updated to close security alerts.
+
+## Team server 0.15.0 — 2026-11-06
+
+**The Team server runs the shared reviewer code of this release.** No route changes. It carries: the Antigravity default model, the monthly Kimi quota reading, and the root-down link resolution in the worktree guard. See Server 0.64.0 above for each.
+
 ## Team server 0.14.1 — 2026-10-21
 
 **Fixed: a reviewer that exits before its start time is read is not "not started".** The Team server launches reviewers through the same launcher as coai-mcp. A launched process that exited so fast (seen on macOS) that its start time could not be read was reported as "not started"; it is now recorded as the launch it was.
