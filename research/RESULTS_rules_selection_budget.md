@@ -209,7 +209,7 @@ budget (4 706 bytes of the 10 056 left).
 `--filter-class "*.RuleFilesTests"` for the number itself).
 - `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` — the constant is 90 000.
 - `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (named ...79944Bytes until 2026-10-18 and ...79967Bytes until 2026-10-19) — **the measuring test and the
-  drift guard**: base 17 947 + tier 62 061 = 80 008 (17 883 + 62 061 = 79 944 until 2026-10-18, 17 906 + 62 061 = 79 967 until 2026-10-19, 17 925 + 62 061 = 79 986 until 2026-10-20, see the last three measurements). Its failure message prints the three numbers it found,
+  drift guard**: base 17 988 + tier 62 061 = 80 049 (17 963 + 62 061 = 80 024 until 2026-10-22, when `--round-counts-merged` was named (+25); 17 947 + 62 061 = 80 008 until 2026-10-21, when `--host-facts` was named (+16); 17 883 + 62 061 = 79 944 until 2026-10-18, 17 906 + 62 061 = 79 967 until 2026-10-19, 17 925 + 62 061 = 79 986 until 2026-10-20, see the last three measurements). Its failure message prints the three numbers it found,
   so a conventions bump or an edit to this repository's own instruction files that moves them turns it red and
   the figures in this file are re-measured from that message. The unit is the collector's own: characters of
   the line-ending-normalised text.
@@ -283,6 +283,8 @@ The measuring test is renamed `…SpendExactlyTheirPinnedBytes` so the next re-b
 
 **Re-measured once more, 2026-10-20, on the merge of E7 (`feat/round-authors-e7`) with `main` (which holds E6):** `.agents/PROJECT.md` names both `--round-authors` (+19) and `--backfill-authors` (+22), and the measuring test printed `base 17947 + tier 62061 = 80008` — 9 992 left of 90 000, still above the three smallest tail rules (8 683) and below the fourth added (12 143); the three canaries are green unchanged, and this supersedes both branch pins (E6 79 986, E7 79 989). Re-pinned: base 17 947 + tier 62 061 = 80 008.
 
+**Re-measured again, 2026-10-21 (E6.S1, `--round-counts-merged`):** `.agents/PROJECT.md` names the one-shot mode `--round-counts-merged` (+25, which that file must do — `ARequestFaultIsNotAnOldBinaryTests`), and the measuring test printed `base 17972 + tier 62061 = 80033` — 9 967 left of 90 000, still above the three smallest tail rules (8 683) and below the fourth added (12 143); the three canaries were re-run and are green unchanged. Re-pinned: base 17 972 + tier 62 061 = 80 033 (on the E6 branch alone; once E1.S2's `--host-facts` (+16, base 17 963, total 80 024) is merged under it the pair is base 17 988 + tier 62 061 = 80 049, 9 951 left of 90 000 — the figures `StageRulesTests` pins now).
+
 ## What this does not settle
 
 - Whether a real team's branch names cover the real tail. The rotation is measured on a synthetic
@@ -344,3 +346,24 @@ and `feat/a` were never in it. They are replaced by the two lowest-index names o
 
 **Re-pinned:** `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (base 17 963 + tier 62 035 = 79 998). Unchanged and green: `…TheRotatedTail_FitsAtMostThreeRules` (the same
 three identities, maximum 3), `…EveryBranchReachesAtLeastOneTailRule` (minimum 1).
+
+## RE-MEASURED, 2026-11-05 — the E6.S1 branch merged with `main` (PROJECT.md names `--round-counts-merged`, +25)
+
+> **Subject:** the merge of `origin/main` (`09500f5f`, conventions pin `bd79584`) into `feat/tail-e6-both-stores`, before its merge commit. **Harness:** the 2026-11-01 harness above
+> (`RuleBudgetMeasurementTests`, explicit, Release build), run once with `--explicit only --filter-class CoaiMcp.Tests.RuleBudgetMeasurementTests`.
+
+**Predicted:** only `.agents/PROJECT.md` differs from main, by the 25 characters of `--round-counts-merged`, so the base is 17 963 + 25 = 17 988, the tier stays 62 035, and the free tail is 10 002 - 25 = 9 977. **Observed:** base 17 988, tier 62 035, pair 80 023, free 9 977.
+
+| | main (2026-11-01 table above) | merged tree |
+|---|---|---|
+| base | 17 963 | **17 988** (+25) |
+| the eight tier rules | 62 035 | 62 035 |
+| base + tier | 79 998 | **80 023** |
+| free tail, of 90 000 | 10 002 | **9 977** |
+| canary branch | 16 files, 88 721 characters | 16 files, 88 746 characters; the same three tail rules (`common/gpu-lease.md`, `csharp/nuget-packages.md`, `common/durable-status.md`) |
+| documented population drawing `common/test-leftovers.md` | 7 of 100 (indexes 0, 9, 21, 34, 36, 42, 95) | 7 of 100, the same indexes |
+| 3 000 names, `common/test-leftovers.md` drawn | 147 (4.9 %) | 153 (5.1 %) |
+| 3 000 names, tails of size 1 / 2 / 3 | 1 055 / 1 729 / 216 (35 / 58 / 7 %, mean 1.72) | 930 / 1 833 / 237 (31 / 61 / 8 %, mean 1.77) |
+| widest / narrowest tail among the hundred | 3 / 1 | 3 / 1 |
+
+**Re-pinned:** `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (base 17 988 + tier 62 035 = 80 023). All 22 `StageRulesTests` pass unchanged otherwise: the at-most-three and at-least-one canaries and the test-leftovers rows (`feat/branch-0`, `fix/issue-9-thing` drawn; `fix/issue-1-thing`, `feat/branch-2` not). The 3 000-name figures are one run of a deterministic harness, not a sample.

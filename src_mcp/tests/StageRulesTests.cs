@@ -140,7 +140,7 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// The base and the eight tier rules spend exactly 79 998 characters of the budget — the number every
+    /// The base and the eight tier rules spend exactly 80 023 characters of the budget — the number every
     /// other pin in this file stands on.
     /// </summary>
     /// <remarks>
@@ -165,12 +165,15 @@ public sealed class StageRulesTests : IDisposable
     /// `--host-facts` (+16, which it must — `ARequestFaultIsNotAnOldBinaryTests`). The base is 17 963, the total 80 024, leaving 9 976 of 90 000; the tail
     /// canaries below ran unchanged and green (the fourth smallest tail rule, 3 460, still does not fit). Measured on the merged tree: the pinned numbers above
     /// are the ones this test reads back.</para>
+    /// <para><b>Re-baselined 2026-10-22 (E6.S1 merged after E1.S2, `todo/PLAN_the_round_counter_tail_E6.md`).</b> `.agents/PROJECT.md` also names
+    /// `--round-counts-merged` (+25): the base is 17 988, the total 80 049, leaving 9 951 of 90 000; the tail canaries were re-run unchanged.</para>
     /// <para><b>Re-baselined 2026-11-01 (the conventions pin moved to release <c>105d53c</c>).</b> The tier is 62 035, 26 fewer than
     /// 62 061: the shared rules the tier names changed by 26 characters between <c>115bbf8</c> and <c>105d53c</c>. The base is unchanged at 17 963.
     /// The pair is 79 998, leaving 10 002 of 90 000 (9 976 until then). <c>common/test-leftovers.md</c> is now an 8 403-character core
     /// (8 483 bytes) and its detail, <c>common/test-leftovers-detail.md</c> (30 893 characters), does not fit any tail; <c>common/plan-change-control.md</c>
     /// (12 204 characters) is larger than the free tail, so no branch shows it — by owner decision it is for agents only, not for reviewers. The tail
     /// canaries below were re-measured in the same change.</para>
+    /// <para><b>Re-baselined 2026-11-05 (E6.S1 merged with `main`, which holds the pin at release <c>5863c60</c> and the 2026-11-01 re-baseline above).</b> `.agents/PROJECT.md` names `--round-counts-merged` (+25) on top of main's base 17 963: the base is 17 988, the tier stays at main's 62 035, the pair is 80 023, leaving 9 977 of 90 000 (10 002 on main). Measured on the merged tree from this test's own failure message; the tail canaries below were re-run unchanged and green (all 22 <c>StageRulesTests</c>). The figures quoted below were measured at 10 002 free. Re-measured at 9 977 with <c>RuleBudgetMeasurementTests</c> (explicit): the same 7 of 100 names draw <c>common/test-leftovers.md</c> (indexes 0, 9, 21, 34, 36, 42, 95), the widest tail is 3 and the narrowest 1, the canary tail is <c>common/gpu-lease.md</c>, <c>csharp/nuget-packages.md</c> and <c>common/durable-status.md</c>; over 3 000 names it is drawn on 153 (5.1 %) and the tail takes one rule on 930, two on 1 833, three on 237.</para>
     /// <para>The unit is the one the collector spends: characters of the line-ending-normalised text
     /// (<c>RuleFile.Text.Length</c>), which is what <c>RuleFiles.DefaultBudgetBytes</c> calls bytes. They
     /// differ for the non-ASCII characters in these files, and are equal on every platform.</para>
@@ -188,13 +191,13 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
             .Sum(file => file.Text.Length);
 
-        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 963 + 62 035 = 79 998 of 90 000, since the conventions pin moved to 105d53c on 2026-11-01; 17 963 + 62 061 = 80 024 until then; 17 947 + 62 061 = 80 008 before E1.S2's --host-facts; 17 925 + 62 061 = 79 986 before E7). "
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 988 + 62 035 = 80 023 of 90 000, since E6.S1's --round-counts-merged met the conventions pin 105d53c on 2026-11-05; 17 988 + 62 061 = 80 049 on the E6.S1 branch before the merge; 17 963 + 62 035 = 79 998 since the conventions pin moved to 105d53c on 2026-11-01; 17 963 + 62 061 = 80 024 until then; 17 947 + 62 061 = 80 008 before E1.S2's --host-facts; 17 925 + 62 061 = 79 986 before E7). "
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
         tierBytes.Should().Be(62_035, message);
-        baseBytes.Should().Be(17_963, message);
-        (baseBytes + tierBytes).Should().Be(79_998, message);
+        baseBytes.Should().Be(17_988, message);
+        (baseBytes + tierBytes).Should().Be(80_023, message);
     }
 
     /// <summary>

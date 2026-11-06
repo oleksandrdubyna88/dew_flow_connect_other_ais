@@ -7,11 +7,12 @@ namespace CoaiMcp.Server;
 /// road only a person writes, and applied to the session before its round begins (S3.4).
 /// </summary>
 /// <remarks>
-/// <para><b>The road.</b> The escalation answer file the panel and the phone write beside a question
-/// (<c>escalations/&lt;id&gt;.answer.json</c>), the same file <c>humanDecision</c> already travels by.
-/// No MCP tool writes one: <c>ask_human</c> writes the QUESTION and waits, <c>resolve</c>'s
-/// <c>humanDecision: proceed</c> is read by <c>RoundMachine.Resolve</c> and touches no ground. So a caller
-/// passing every argument it has cannot open round 2 on this ground — which is the whole point of it being
+/// <para><b>The road.</b> The escalation answer file the panel writes beside a question
+/// (<c>escalations/&lt;id&gt;.answer.json</c>), the same file a held gate's decisions travel by — Proceed
+/// included, since <c>todo/PLAN_only_a_person_releases_the_gate.md</c>.
+/// No MCP tool writes one: <c>ask_human</c> writes the QUESTION and waits, and <c>resolve</c>'s
+/// <c>humanDecision</c> argument is only a claim that <see cref="RoundMachine.Resolve"/> judges and
+/// touches no ground. So a caller passing every argument it has cannot open round 2 on this ground — which is the whole point of it being
 /// a field with a provenance rather than a flag.</para>
 /// <para><b>Which answer</b> is <see cref="CurrentAnswer.ForRequest"/>'s: an answer to a question asked
 /// ON this feature session AFTER round 1 (<see cref="SessionState.RequestQuestions"/>, recorded by
