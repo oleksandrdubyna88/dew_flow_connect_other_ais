@@ -420,6 +420,82 @@ public sealed class GateCommandsTests
         order.Should().Contain("Fewer is fine when the work is smaller; never more");
     }
 
+    private const string CoreThenProofMarker = "If the plan needs more than 3 epics";
+
+    [Theory]
+    [InlineData(700, 11, true)]
+    [InlineData(1000, 14, true)]
+    [InlineData(400, 8, false)]
+    [InlineData(200, 4, false)]
+    public void TheLargeAndHugeSplitOrders_CarryTheCoreThenProofClause_AndTheSmallerOnesDoNot(int lines, int steps, bool carries)
+    {
+        var order = GateCommands.For(new CommandContext(
+            SplitPlan: true, PlanText: PlanOf(lines, steps, files: 3, areas: 2), PlanStage: true))[0];
+
+        if (carries)
+        {
+            order.Should().Contain(CoreThenProofMarker);
+        }
+        else
+        {
+            order.Should().NotContain(CoreThenProofMarker);
+        }
+    }
+
+    [Fact]
+    public void TheMassiveSplitOrder_CarriesTheCoreThenProofClause()
+    {
+        var order = GateCommands.For(new CommandContext(SplitPlan: true, PlanText: PlanWithEpicHeadings(9), PlanStage: true))[0];
+
+        order.Should().Contain(CoreThenProofMarker);
+    }
+
+    [Fact]
+    public void TheThreeShippedSplitTexts_EndWithTheSameCoreThenProofClause_SoTheCopiesCannotDrift()
+    {
+        var large = CommandTexts.Shipped.Text(CommandTexts.SplitLarge);
+        var start = large.IndexOf(CoreThenProofMarker, StringComparison.Ordinal);
+        start.Should().BeGreaterThan(0, "the Large text carries the clause after its own first sentences");
+        var clause = large[start..];
+
+        CommandTexts.Shipped.Text(CommandTexts.SplitHuge).Should().EndWith(clause);
+        CommandTexts.Shipped.Text(CommandTexts.SplitMassive).Should().EndWith(clause);
+    }
+
+    private const string CoreAndProofPlan =
+        "# PLAN — a theory\n\n## Epic 1 — core\n\n- the smallest run end to end\n\n## Epic 2 — proof\n\n- run it on real input\n\n### Candidates\n\n"
+        + "- caching, if Epic 2 shows retrieval dominates latency\n"
+        + "- a second backend, if Epic 2 shows the first one is the limit\n";
+
+    [Fact]
+    public void ACoreAndAProofEpic_WithCandidatesAsPlainLines_CountAsTwoEpics()
+    {
+        PlanOutlineReader.Of(CoreAndProofPlan).Epics.Select(epic => epic.Number).Should().Equal(1, 2);
+        PlanShapeReader.Of(CoreAndProofPlan).Epics.Should().Be(2);
+    }
+
+    [Fact]
+    public void ACandidateLine_ThatMentionsAnEpicInProse_IsNotCountedAsAnEpic()
+    {
+        var plan = CoreAndProofPlan
+            + "- Epic 3 — looks like a heading but is a list item\n"
+            + "Epic 4 — a line that starts with the word and no hashes\n";
+
+        PlanOutlineReader.Of(plan).Epics.Select(epic => epic.Number).Should().Equal(1, 2);
+        PlanShapeReader.Of(plan).Epics.Should().Be(2);
+    }
+
+    [Fact]
+    public void ThePlanAfterPromotion_CountsEveryChosenCandidateAsAnEpic()
+    {
+        const string promoted = "# PLAN — a theory\n\n## Epic 1 — core\n\n- the smallest run end to end\n\n## Epic 2 — proof\n\n- run it on real input\n\n"
+            + "## Epic 3 — caching\n\n- because Epic 2 showed retrieval dominates latency\n\n"
+            + "## Epic 4 — a second backend\n\n- because Epic 2 showed the first one is the limit\n";
+
+        PlanOutlineReader.Of(promoted).Epics.Select(epic => epic.Number).Should().Equal(1, 2, 3, 4);
+        PlanShapeReader.Of(promoted).Epics.Should().Be(4);
+    }
+
     [Theory]
     [InlineData(GateScope.Epic)]
     [InlineData(GateScope.Task)]

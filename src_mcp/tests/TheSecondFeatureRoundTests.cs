@@ -237,7 +237,7 @@ public sealed class TheSecondFeatureRoundTests
         var awaiting = Completed(Feature(), SixMajors(), Both);
 
         // `humanDecision: proceed` is the caller's own argument: it never opens a second round.
-        var done = RoundMachine.Resolve(awaiting, [], humanSaysProceed: true).Should().BeOfType<Transition.Moved>().Subject.State;
+        var done = RoundMachine.Resolve(awaiting, [], callerClaimsProceed: true).Should().BeOfType<Transition.Moved>().Subject.State;
 
         done.Stage.Should().Be(Stage.Done);
         done.SecondRound.Should().Be(SecondRoundGround.None, "no argument of the caller's writes the person's field");
@@ -302,7 +302,7 @@ public sealed class TheSecondFeatureRoundTests
     {
         var awaiting = Completed(Feature(), OneBlocking(), Both);
 
-        RoundMachine.Resolve(awaiting, [], humanSaysProceed: true).Should().BeOfType<Transition.Refused>()
+        RoundMachine.Resolve(awaiting, [], callerClaimsProceed: true).Should().BeOfType<Transition.Refused>()
             .Which.Sentence.Should().Contain("call_human", "the override is honoured only after a person was called");
     }
 

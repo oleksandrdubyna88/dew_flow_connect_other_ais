@@ -52,7 +52,7 @@ export const EFFORT: readonly EffortRow[] = [
     source: 'none',
     levels: [],
     measuredWith: '',
-    note: "The operator's ruling, 2026-10-04: no effort for Antigravity; the model id carries its level (gemini-3.7-flash-high).",
+    note: "The operator's ruling, 2026-10-04: no effort for Antigravity; the model id carries its level (gemini-3.8-flash-high).",
   },
   {
     runtime: 'local',
@@ -121,7 +121,7 @@ export const THINKING: readonly ThinkingRow[] = [
   {
     runtime: 'antigravity',
     source: 'none',
-    note: 'The model id carries its level (gemini-3.7-flash-high); there is no switch.',
+    note: 'The model id carries its level (gemini-3.8-flash-high); there is no switch.',
   },
   {
     runtime: 'local',
