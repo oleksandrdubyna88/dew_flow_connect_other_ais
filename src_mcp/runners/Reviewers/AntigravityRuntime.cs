@@ -20,7 +20,7 @@ namespace CoaiMcp.Runners.Reviewers;
 /// <para><b>Why it fits.</b> It is the only vendor here that takes our finding schema as a flag
 /// AND reports its own token usage AND has a reasoning-effort setting: <c>--json-schema</c> puts
 /// the schema JSON straight into <c>result.response</c>, <c>usage</c> comes back on the same
-/// envelope, and the model ids carry their own effort (<c>gemini-3.7-flash-high</c>). One
+/// envelope, and the model ids carry their own effort (<c>gemini-3.8-flash-high</c>). One
 /// subscription also reaches Claude and GPT-OSS models, so a "vendor" here is a fleet.</para>
 /// <para><b>Why the prompt rides stream-json.</b> <c>--print</c> takes its prompt as a flag VALUE,
 /// and a review prompt is ~33 KB — past the ~32 KB Windows command line, where it would be
@@ -33,8 +33,12 @@ public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRun
 {
     public string Provider => id;
 
-    /// <summary>Flash at high effort: the operator's own choice, and the CLI's active model.</summary>
-    public const string DefaultModel = "gemini-3.7-flash-high";
+    /// <summary>
+    /// Flash at low effort: the operator's choice (2026-10-21), a model <c>agy models</c> lists. Assumes agy 1.4.4 or later,
+    /// where the 3.8 Flash ids exist; on an older agy a row must name its model. The earlier default,
+    /// <c>gemini-3.7-flash-high</c>, is refused by 1.4.4 before any model call.
+    /// </summary>
+    public const string DefaultModel = "gemini-3.8-flash-low";
 
     public ReviewerInvocation Build(
         string role,

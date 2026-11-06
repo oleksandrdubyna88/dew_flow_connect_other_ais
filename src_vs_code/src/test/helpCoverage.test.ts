@@ -209,9 +209,33 @@ test('every language says the Rounds block comes first on the spending tab, and 
   assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
   for (const language of HELP_LANGUAGES) {
     const said = Object.values(bodyFor(article, language).body).join(' ');
-    for (const named of ['**Rounds**', '*count unavailable*', '**5 h**', '**7 d**', '--round-counts']) {
+    for (const named of ['**Rounds**', '*count unavailable*', '**5 h**', '**7 d**', '--round-counts-merged', '--round-counts']) {
       assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
     }
+    // `--round-counts` is a prefix of `--round-counts-merged`, so the loop above cannot tell the fallback from the merged call: ask again with the merged one removed.
+    assert.ok(said.replaceAll('--round-counts-merged', '').includes('--round-counts'), `the ${language} spending article names --round-counts-merged but never the single-store fallback --round-counts`);
+  }
+});
+
+test('every language says the stores are counted together, names launches per round, and no longer says the other side is never counted', () => {
+  // E6.S4 of todo/PLAN_the_round_counter_tail_E6.md: the Rounds block counts this side and the other side (Windows / WSL)
+  // TOGETHER, from a snapshot the other side's coai-mcp writes after every round; a side that could not be counted is *not
+  // included* with the reason; and a new column, launches per round. The block's words are English in every language, as every
+  // control name here is. The stale sentence is a different sentence in each language, so each is named.
+  const stale: Readonly<Record<string, string>> = {
+    en: 'it is never opened across the boundary', de: 'er wird nie über die Grenze hinweg geöffnet',
+    es: 'nunca se abre a través de la frontera', ru: 'через границу оно никогда не открывается',
+    uk: 'через межу воно ніколи не відкривається',
+  };
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['counted together', 'launches per round', 'round-counts-snapshot.json', '*not included*', '*as of*']) {
+      assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
+    }
+    assert.ok(stale[language] !== undefined, `${language} has no stale phrase on record — add the one its article used`);
+    assert.ok(!said.includes(stale[language]!), `the ${language} spending article still says “${stale[language]}”: the other side is counted now`);
   }
 });
 

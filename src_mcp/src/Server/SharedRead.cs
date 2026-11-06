@@ -31,10 +31,13 @@ internal static class SharedRead
     /// </remarks>
     public static string Text(string path)
     {
-        using var stream = new FileStream(
-            path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var stream = Open(path);
         using var reader = new StreamReader(stream);
 
         return reader.ReadToEnd();
     }
+
+    /// <summary>The file opened for reading, sharing read, write and delete: the ONE open mode of a reader that must not block a writer.</summary>
+    public static FileStream Open(string path) =>
+        new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 }
