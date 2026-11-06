@@ -26,11 +26,11 @@
 
 ## Extension 0.84.0 — 2026-11-06
 
-**Security: a held gate is released from its notice card only.** The help and the log say so in every language, and a round released by a person reads as that.
+**Security: a held gate is released from its notice card only.** The help says so in every language, and a finding a person's Proceed carried the stage over reads *proceeded over* in the log.
 
 **Added: the Rounds block counts both stores.** A row can read this side's and the other side's store as one population, says when a store could not be reached or its copies conflict, and shows launches per round.
 
-**Added: Kimi and Vibe as consultants.** A Kimi row is offered as a consultant and a question consultant. An older coai-mcp is named beside the row, never hidden.
+**Added: Kimi as a consultant.** A Kimi row is offered as a consultant and a question consultant. An older coai-mcp is named beside a Kimi or Vibe consultant, never hidden.
 
 **Added: the chat line names its CLI and version, and consultation money is shown per consultation.**
 
@@ -40,7 +40,7 @@
 
 ## Team server 0.15.0 — 2026-11-06
 
-**The Team server runs the shared reviewer code of this release.** No route changes. It carries: the Antigravity default model, the monthly Kimi quota reading, and the root-down link resolution in the worktree guard. See Server 0.64.0 above for each.
+**No route or server source changed.** It is rebuilt on this release's shared library (`CoaiMcp.Runners`), whose atomic file writes and process-liveness reads changed. See Server 0.64.0 above.
 
 ## Team server 0.14.1 — 2026-10-21
 
