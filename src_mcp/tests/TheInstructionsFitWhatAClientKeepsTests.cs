@@ -51,7 +51,7 @@ public sealed class TheInstructionsFitWhatAClientKeepsTests
         Program.Instructions.Should().Contain("COMMANDS")
             .And.Contain("Reject in round ONE")
             .And.Contain("ENFORCED stop")
-            .And.Contain("ONLY after that verdict",
+            .And.Contain("answer on the notice card",
                 "these are the reason the shared rule can be reduced; losing them to a budget would "
                 + "take them off every surface at once");
 }

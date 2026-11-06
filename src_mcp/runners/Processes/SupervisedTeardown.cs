@@ -12,7 +12,7 @@ namespace CoaiMcp.Runners.Processes;
 /// has exited and its children were reparented, and it signals by number. Here every member is pinned by a descriptor, checked on the pin and signalled through it (<see cref="TreeSignals"/>).</para>
 /// <para><b>Order is the contract:</b> (1) the members are listed while the agent lives — <c>Descendants(shimPid)</c> with the exited entries dropped, plus the agent; (2) <c>onListed</c> — the marker is
 /// written BEFORE any signal; (3) <c>SIGKILL</c> through a pidfd per member; (4) every step re-lists <c>Descendants(shimPid)</c> (an orphan born after the first listing is found by its new parent, the shim),
-/// reaps the zombies it listed that this process did not start, and ends what is alive again, until nothing is alive or <see cref="ProcessTree.ConfirmationBound"/> passes; (5) stdin closed and the agent's exit
+/// judges each member, THEN reaps the zombies it listed that this process did not start (a member killed a moment ago can turn zombie between a pass and the verdict, and the verdict calls a zombie Gone), and ends what is alive again, until nothing is alive or <see cref="ProcessTree.ConfirmationBound"/> passes; (5) stdin closed and the agent's exit
 /// awaited with no token — a <c>SIGKILL</c>ed process exits, and .NET must reap it itself; (6) the members alive at the bound are the survivors.</para>
 /// <para><b>Reaping is per pid and sparing</b> (<see cref="ProcessReaping"/>): never a pid in <c>startedByUs</c> — the children .NET started and reaps through its own SIGCHLD handling — and never a pid it did
 /// not list. A zombie is never a survivor: <see cref="ProcessTree.IsAlive"/> drops an exited entry (the one rule, reused).</para>

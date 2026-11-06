@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { DbLog, EMPTY_LOG, EMPTY_TOTALS, findingsByRound, parseFindings, parseLog, roundKeyOf } from '../roundsDb';
 import { blindSpotsHtml, LogRow, roundsLogHtml, rowsFrom } from '../roundsLog';
 import { RoundRecord, SessionFile } from '../rounds';
+import { clickInRow, firstRenderedKey, LOG as PAGE_LOG, runningPage, SESSION as PAGE_SESSION } from './roundsLogPageHarness';
 
 /**
  * The log page reads the rounds database — the findings themselves, not only how many.
@@ -156,6 +157,33 @@ test('the page can render a finding under its round', () => {
   assert.match(script, /function foundHtml/, 'the detail region builds them');
   assert.match(script, /session file opened without FileShare/, 'and the rows carry what they say');
   assert.match(script, /raised again/, 'including that one was raised over a standing rejection');
+});
+
+test('the opened row draws a finding a person proceeded over as that, with no reason, and one still open as open', () => {
+  const proceeded = {
+    ordinal: 0, severity: 'Major', category: 'Reliability', file: 'src/Panel.cs', line: 40,
+    title: 'the proceeded finding', why: 'because', fix: '', role: 'Architecture',
+    isGating: true, providers: 'codex', resolution: 'proceeded', reason: 'proceeded over by a person', reRaised: false,
+  };
+  const open = { ...proceeded, ordinal: 1, title: 'the open finding', resolution: '', reason: '' };
+  const page = runningPage([PAGE_SESSION], { ...PAGE_LOG, rounds: [{ ...PAGE_LOG.rounds[0], findings: [proceeded, open], foundCount: 2 }] });
+  const key = firstRenderedKey(page.seen['rows']?.innerHTML ?? '');
+
+  page.click(clickInRow('tr[data-key]', 'data-key', key));
+
+  const rows = page.seen['rows']?.innerHTML ?? '';
+  assert.match(rows, /class="detail"/, 'the row did not open');
+  const blocks = new Map(rows.split('<div class="finding ').slice(1)
+    .map((block): [string, string] => [/<b>([^<]*)<\/b>/.exec(block)?.[1] ?? '', block]));
+  const drawn = blocks.get('the proceeded finding');
+  const undecided = blocks.get('the open finding');
+  assert.ok(drawn !== undefined && undecided !== undefined, `the page did not draw both findings: ${[...blocks.keys()].join(', ')}`);
+
+  assert.match(drawn, /^proceeded"/, 'a proceeded-over finding does not wear its own class');
+  assert.match(drawn, /<b>proceeded over<\/b><\/div>/, 'it does not say "proceeded over", or it carries a ": reason" after it');
+  assert.ok(!drawn.includes('proceeded over by a person'), 'the stored reason was drawn as if someone had argued it');
+  assert.match(undecided, /^open"/, 'a finding nobody decided is not drawn as open');
+  assert.ok(!undecided.includes('proceeded over'), 'an open finding is drawn as proceeded over');
 });
 
 // ---------- the two questions the data exists for ----------
