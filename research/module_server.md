@@ -5714,6 +5714,15 @@ The orders ride on `--findings` (one round's detail), not on the `--log` list: t
 as literal SQL in one text per schema shape, and a third optional column would have meant a third
 copy of it for data only the opened row shows.
 
+**Added 2026-11-05.** The Large, Huge and Massive split orders now end with the owner's core-then-proof
+clause: for a plan that needs more than three epics, Epic 1 is the smallest core that runs end to end,
+Epic 2 tests the theory behind the plan against pass criteria written in the split, and everything later stays a
+plain list of candidates until Epic 2 has been measured. Text only — the three `command-split-*.md` files
+and the regenerated extension copy; no change under `src_mcp/src` or `src_mcp/core`, no command id, setting
+or panel row. Candidates are not counted, because only `Epic N` headings are (`PlanOutlineReader`), and
+such a plan is sized by those headings (`PlanShape.ByEpics`, described in the next section) as its two epics
+until the chosen candidates are promoted.
+
 ### The consultant on a cadence — epic 1: the arithmetic, the orders, a sixth size (2026-09-25)
 
 [PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md), epic 1. Measured first: ~1 260

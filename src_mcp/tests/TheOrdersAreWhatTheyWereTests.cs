@@ -23,6 +23,10 @@ namespace CoaiMcp.Tests;
 /// run that writes its own expectation checks nothing — and the diff of that re-recording touched the two
 /// autonomy texts (with and without the split's scope) and nothing else, which is what the escape is for: a
 /// wanted change to one order is visible as exactly that, never as a wholesale re-blessing.</para>
+/// <para><b>Re-recorded 2026-11-05</b>: the owner added the core-then-proof clause to the end of the Large, Huge
+/// and Massive split orders (<c>shared/commands/command-split-{large,huge,massive}.md</c>), and the diff of that
+/// re-recording touched those orders and nothing else — only the Large and Huge texts, each recorded twice, as
+/// pure insertions of the clause, because no combination this fixture records sizes a plan Massive.</para>
 /// </remarks>
 public sealed class TheOrdersAreWhatTheyWereTests
 {
