@@ -1200,8 +1200,9 @@ asked without `document` / `feature` — and `RoundMachine.GateHeld` says the sa
 
 Every card now says which producer wrote it: `EscalationQuestion.Kind` is `notice` (`RoundEngine.HoldNotice`) or
 `question` (`AskHumanService.Card`); a card an older server wrote has none, and the extension falls back to its old
-guess. `status`'s `humanDecision` / `humanAnswer` come from `CurrentAnswer.TheGatesAnswer` — the hold's answer, else
-the feature request's — the third reader of the answer file moved onto the identity rule the other two already used;
+guess. `status`'s `humanDecision` / `humanAnswer` come from `CurrentAnswer.TheGatesAnswer` / `TheGatesDecision` — the hold's answer, else
+the feature request's — the third reader of the answer file moved onto the identity rule the other two already used (and `humanNote`
+says what to do about a Proceed on file — see *Only an answer on the notice card releases the gate*);
 the session-wide `Escalations.DecisionFor` / `AnswerTextFor` / `LatestAnswerFor` went with it.
 
 ```mermaid
@@ -2286,19 +2287,128 @@ Three changes, all small, none of them new vocabulary:
 
 - `BeginPlanRound` / `BeginCodeRound` refuse while `HumanGate` is set, with a sentence naming every
   way out — a refusal with no door is a stall.
-- `Resolve` clears `HumanGate` only for `humanSaysProceed`.
+- `Resolve` clears `HumanGate` only for a person's Proceed, read from the hold's notice (since 2026-10-22 —
+  it was a boolean the calling AI set, which made the gated party the one that could release the gate; see
+  *Only an answer on the notice card releases the gate* below).
 - `RoundMachine.ApplyHumanDecision` is what a person's answer does to the state, and
-  `PanelService.ApplyAnyHumanDecision` reads it from the escalation file immediately before a round
+  `RoundEngine.ApplyAnyHumanDecision` reads it from the escalation file immediately before a round
   would begin. Reading it at the last moment means the person can answer during the wait and the
   next attempt simply works — no restart, no polling.
 
 `HumanDecision` moved from `Server` to `Core.Rounds` for this: the state machine acts on it now, so
-it is part of the machine rather than a label the server puts on an answer file. The three answers
+it is part of the machine rather than a label the server puts on an answer file. The first three answers
 are unchanged and were always described this way to the person — `continue` and `fix` grant a FRESH
-set of rounds, `discuss` advances nothing.
+set of rounds, `discuss` advances nothing. The fourth, `proceed`, arrived 2026-10-22 and is the only one that
+ships with the findings open.
 
 Only the `human` policy raises the gate. `continue_anyway` and `good_enough` advance on resolve, and
 a gate over them would break a configuration whose whole point is not to stop; a test pins that.
+
+## Only an answer on the notice card releases the gate (2026-10-22)
+
+> Plan: [PLAN_only_a_person_releases_the_gate.md](../todo/PLAN_only_a_person_releases_the_gate.md) (the server half; the
+> extension half is in [module_extension.md](module_extension.md), *Active questions*).
+
+**What was wrong.** `resolve(humanDecision: "proceed")` released a held gate from the tool argument alone. The tools told
+the AI to pass it "once the person says so", and nothing verified the report: the **gated party was the only party that
+could speak the word that releases the gate**. Found by the security lane's judge, pre-existing in every earlier `coai-mcp`.
+
+**What is true now.** The argument is a **claim** the service judges, never a decision. The decision is read from the
+answer file of the hold's own notice (`CurrentAnswer`, bound to the hold by identity), and `Proceed` is the fourth member of
+`HumanDecision`.
+
+```mermaid
+sequenceDiagram
+    participant AI as calling AI
+    participant S as PanelService / RoundEngine
+    participant M as RoundMachine
+    participant F as escalations/{id}.json + .answer.json
+    participant P as the panel (escalationWatcher)
+    S->>F: call_human: write the NOTICE (kind notice, decisions continue/fix/discuss/proceed), saved as the hold's question
+    AI->>S: resolve(decisions, humanDecision: "proceed")
+    S->>F: read the answer of the hold's notice (CurrentAnswer) - none
+    S->>M: Resolve(state, decisions, personsDecision None, callerClaimsProceed true)
+    M-->>AI: refused: read from their card, never from this argument (names "Proceed despite the findings" and ask_human)
+    P->>F: the person presses "Proceed despite the findings": answer.json {decision: proceed}
+    AI->>S: review_plan / review_code / review_document / review_feature
+    S-->>AI: a person pressed Proceed on the held gate - call resolve to advance (status says it too)
+    AI->>S: resolve(decisions or none)
+    S->>F: read: Proceed, and the question is a NOTICE of this hold
+    S->>M: Resolve(state, decisions + undecided as Decision.ProceededOver, Proceed)
+    M-->>AI: Moved: HumanGate false, HoldQuestions empty, stage advanced, PlanProceeded
+```
+
+- **One judge for the claim** — `RoundMachine.ClaimRefusal(state, personsDecision, callerClaimsProceed)`, called by
+  `Resolve` and by the service before it counts the findings that await a decision. *Refused* (with
+  `RoundMachine.ClaimOnAHeldGate`, naming the card and `ask_human`) when honouring it would have changed the outcome: the gate
+  is held and no person's Proceed is on file — including a hold whose round the AI already resolved, and a withdrawal-shaped
+  hold (`HumanGate`, `AwaitingResolve`, last round not `call_human`); or (as always) the gate is not held and the stage would
+  not advance anyway. *Ignored* when redundant: the person's Proceed is on file, or the gate already decided to advance
+  (`AdvanceOnResolve`). A refusal records nothing. `Resolve(state, decisions, HumanDecision personsDecision, bool
+  callerClaimsProceed)` replaced the boolean; a Proceed on a gate that is not held is `None`.
+- **Proceed is honoured only from the hold's own NOTICE** (`CurrentAnswer.DecisionOnTheNotice`): the answered question's file
+  must say `kind: notice`. A Proceed written against an `ask_human` question card, against a card an older server wrote (no
+  kind), or against a question file that is gone is **prose** — logged, never a release — and it does not hide a Continue the
+  person pressed on the notice (the ordering of "carries a decision" is judged after the rule). `status` reports the same
+  effective decision (`CurrentAnswer.TheGatesDecision`).
+- **Every card lists its decisions** (`EscalationQuestion.Decisions`, `EscalationDecisions`): the notice
+  `["continue","fix","discuss","proceed"]` (`RoundEngine.HoldNotice`, also the re-issued one), an `ask_human` card
+  `["continue","fix","discuss"]` (`AskHumanService.Card`). Absent in a file an older server wrote — read as `[]`. The extension offers
+  Proceed only when the file lists it.
+- **A Proceed after the AI already resolved is reachable (G6).** `resolve` with no decisions on a held, already-resolved gate
+  applies the person's Proceed; without one the no-round refusal stands. The stage still advances in ONE place, `Resolve`;
+  `ApplyHumanDecision` leaves a Proceed alone and `status` applies nothing.
+- **Findings nobody decided are recorded, not dropped** (`ProceededOver.Recorded`): under a consumed Proceed every still-pending
+  finding becomes a `Decision.ProceededOver` — its OWN disposition, never a rejection (plan §13.1, consultation 1da4d9f4). A Proceed
+  authorises THIS stage transition only: the record is not added to the session's standing rejections and `GateRule`'s discount never
+  reads it, so the same defect raised in a later round — `again: true` included — gates in full (`RoundMachine.Resolve` also refuses
+  a `ProceededOver` record when no Proceed is being consumed). It is persisted as `findings.resolution = 'proceeded'` with the
+  reason `proceeded over by a person` (`DecisionAt.Resolution` / `Reason`), reported by the `resolve` reply
+  (`ProceededOver.Instruction`), counted in neither the round's `accepted` nor `rejected`, and ignored by `DecidedEarlier` (so a later
+  round does not flag a re-raise of it) and by *What it keeps missing*. The log page draws it as *proceeded over*, the CSV writes
+  `proceeded over`, `CarriedDecision` spells it `proceeded`; `status` lists no decisions; the gate history lists only real rejections.
+  The AI's own decisions are kept as given.
+- **The agent is told** while a Proceed is on file and not yet consumed: `status` carries `humanDecision: "proceed"` and
+  `humanNote: "a person pressed Proceed on the held gate — call resolve to advance"`, every refused review entry answers the same
+  sentence (`RoundMachine.ReviewAfterProceed`), and the `resolve` reply names the decision as the person's
+  (`ProceededOver.Instruction`). **One refusal for all four review entries**: `review_plan`, `review_code`, `review_document` and
+  `review_feature` all come through `RoundEngine.RunStageAsync`, where `ProceedOnFile` runs after the pre-round read; they answer
+  `GateHeld` while no person has answered and the Proceed sentence once one is on file.
+- **A hold that outlived an upgrade is refreshed in place** (`Escalations.OfferDecisions`, `OfferHeldNotices`, called when a
+  held session is read by a review entry, `resolve` or `status`): a standing notice with no `decisions` list gets the list —
+  same id, same question, an idempotent atomic write; the answer file is untouched and no second card appears. A card with no
+  `kind` is not refreshed (it cannot be told from an `ask_human` card), so a Proceed on it needs a notice from this server.
+- **What the surfaces say.** The instructions, the `resolve` and `review_feature` descriptions, `GateHeld`, the
+  `HoldNotice` text and the help all say the same thing: the gate is released only by an answer on the notice card, not by any
+  argument of the AI's. None claims the answer is verified.
+
+**Residuals, named so nobody reads this as "an agent cannot proceed".**
+
+- **R1 — the file road's trust boundary is the data directory (open).** An agent with a shell or a file tool on the same machine,
+  running as the same user, can write `escalations/<notice>.answer.json` itself. This closes the road the tools PROMISED closed
+  (the argument); it does not make the answer unforgeable against a local process. The follow-up is
+  [PLAN_a_signed_answer_releases_the_gate.md](../todo/PLAN_a_signed_answer_releases_the_gate.md).
+- **D5 — Continue/Fix pressed on an `ask_human` question card asked during a hold still releases the hold.** That is G1/G4 of
+  the ask-human plan, shipped 2026-10-03: the card is the gate's, shows the hold's findings, and each decision's detail says
+  it acts on the review. What this change takes from the objection: Proceed is never on that card, and a question card's Continue
+  and Fix now say *for the held gate* in so many words. **The card shows the hold's findings even after the AI resolved them**
+  (plan §13.2): `AskHumanService.OpenFindingsOf` copies the pending gating findings when there are any and otherwise — while
+  `HumanGate` holds — the `OpenFindings` of the hold's own notice (the first of `HoldQuestions` that is not a question card). Before
+  that a plain `resolve` cleared `Pending` and the card listed none for a gate it could still release, which was the premise D5 rested
+  on; a hold whose notice is gone lists none rather than guessing.
+- **The withdrawal hold of the cancel plan** (on `feat/cancel-stops-the-round`) raises the same `HumanGate` and is covered by
+  construction (`AWithdrawalHold_IsNotReleasedByTheArgument`); that plan's spec sentence *"take a person's `humanDecision: proceed`"*
+  should read *"take a person's Proceed from the notice"* on whichever branch lands second.
+- **The shared gate rule still says to pass `humanDecision`.** `.agents/conventions/common/coai-review-gate.md` (the conventions
+  submodule, generated into the extension's `gateRule.ts` snippet) tells the AI the person "says so and you pass `humanDecision:
+  "proceed"`". The server now answers that with the refusal sentence that names the card, so nothing breaks, but the text is
+  stale until the conventions repository is changed and the pin moved. This is a **delivery step before the release**
+  (plan §7 step 3): a follow-up pull request in BOTH conventions repositories replaces that sentence with *a person answers on the
+  notice card*, and the pin is bumped here, regenerating `gateRule.ts` and the snippets. Opened as drafts on 2026-10-23:
+  dew_flow_conventions #83 (with a paid `held-gate` behaviour fixture — on the old text the model chose to pass
+  `humanDecision`, quoting the rule) and its twin in the second conventions repository.
+- **Mixed versions.** New server + old extension: the card offers three (a Proceed has no button until the extension updates; Keep
+  going / Stop and act work). Old server + new extension: the old server writes no list, the extension offers three.
 
 ## Prompts are a catalog, resolved per round
 
@@ -3697,6 +3807,91 @@ declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` �
 logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
 default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too. Every method of `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`, `RoundAuthorsTable` and `RoundAuthorsLog` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for E4's core).
 
+### `--round-counts-merged` and the round-counts snapshot — two stores, one count (E6.S1 of `todo/PLAN_the_round_counter_tail_E6.md`)
+
+`--round-counts` reads ONE store, and a person who runs rounds on Windows and inside WSL has two. The other side's `coai.db` is never opened
+across the `\\wsl.localhost` / drvfs boundary (it is WAL; its locks are not coordinated across it). What crosses is a plain JSON file the OWNING side
+writes after every round — **`round-counts-snapshot.json`**, beside `coai.db` — and this mode counts this side's database and every snapshot it is
+handed as ONE population keyed by `round_key`.
+
+```mermaid
+flowchart LR
+    round["RoundEngine · a round recorded"] --> proj["Projection.Write · RecordRound · RecordConsultMissed"]
+    proj --> snap["RoundCountsSnapshot.TryWrite<br/>(only if RecordRound completed · its own catch + log line)"]
+    snap -->|"RoundCounts.LaunchesIn · AtomicFile"| file[("round-counts-snapshot.json<br/>7 d · ≤ 5 000 rounds")]
+    ext["extension · spawns<br/>coai-mcp --round-counts-merged [--now] [abs paths…]"] --> mode["RoundCountsMergedMode.Run"]
+    mode -->|bad request| e65["sentence on stderr · exit 65"]
+    mode --> merge["RoundCountsMerged.Read"]
+    merge --> live[("this side · coai.db read-only")]
+    merge -->|"RoundCountsSnapshot.Read per path"| file
+    file -.->|missing · unreadable · newer-schema| ni["storesNotIncluded[] — never a 0, never an exit code"]
+    merge --> json["one RoundCounts.Cut at one now · exit 0"]
+    live -->|will not read| e74["sentence on stderr · exit 74"]
+```
+
+**The snapshot** (`Store/RoundCountsSnapshot.cs`, schema 1). One UTF-8 document without a byte-order mark, written through `AtomicFile`
+(`SharingRetry`), so a reader sees the old file or the new one, never a torn one: `schema`, `writtenUtc` (the reader's *as of*, never clamped),
+`coaiMcpVersion`, `store` (`id`, `platform`, `host`, `wslDistro`, `side`, `directory`), `fromUtc` (`writtenUtc − 7 d`), `truncated`, and `rounds[]`
+newest first — `id`, `key` (`round_key`, empty before step 21), `startedUtc`, `stage`, `reviewers[]` (`provider`, `model`). Nothing else: no plan text, no
+finding, no caller, no session id — it crosses the boundary in the clear. A round with no reviewer row is not in it (the counter counts a round for a provider
+through its reviewer rows, so such a round is in no count). Bounded by time (seven days, the counter's longest window) and by count
+(`RoundCountsSnapshot.MaxRounds` = 5 000, newest kept, `truncated: true` said). It is the SAME scan the counters make (`RoundCounts.LaunchesIn`), so the
+snapshot and `--round-counts` cannot disagree about which rounds are "the last seven days".
+
+**What a read answers.** `RoundCountsSnapshot.Read(path)` returns a `SnapshotReading` — a closed record hierarchy (C# doctrine §5, a failure with several meaningful
+cases; the shape of `SnapshotRead` beside the review snapshot): `SnapshotReading.Loaded(Document)` or `SnapshotReading.Refused(Refusal)` (`Reason` `missing` /
+`unreadable` / `newer-schema`, and `Detail`). A refusal carries no placeholder document and a document no refusal; `RoundCountsMerged.Fold` matches the two cases.
+
+- **The write point** is `RoundEngine`, AFTER `_projection.Write(...)` returns and outside its lambda (D2). `TryWrite` has its own `catch` and its own log sentence —
+  *the round-counts snapshot could not be written: {ExceptionType}* — and logs the exception's TYPE only, never its message (a filesystem message carries the
+  destination path, and with it the user's name). Best effort is the contract: a snapshot older than the latest round is a STALE store, visible through
+  `writtenUtc`, and the next round's write cures it. A store whose `coai.db` is not there writes nothing. `--round-counts` and `--round-counts-merged` write
+  nothing, ever. **And only for a round the database holds** (code review, 2026-10-22): `Projection.Write` swallows a storage failure, and a snapshot read then would lack
+  the round yet be stamped now, which the other side reads as current. The engine sets a local `recorded` flag right after `RecordRound` returns and writes the snapshot
+  only when it is set — a failure of the later stuck-findings count does not suppress it (the round IS in the database), a failure of `RecordRound` does, and the
+  previous snapshot keeps its own `writtenUtc` and is visibly stale. `Projection`'s contract (never takes a round down) is unchanged.
+- **Residual, accepted (E6 §4.2):** five servers on one data directory each write the snapshot after their own round; a writer that read and then paused can
+  replace a snapshot written later, so every round committed in between is missing until the next write. The bound is the rounds of that interval, not one
+  round; `AtomicFile`'s GUID temps make it a stale file, never a torn one. Not held by a lock — a lock would be a second write transaction for a courtesy file.
+- **Store identity is LOCATION identity** (D1). `store.id` is `RoundAuthorsMerge.SourceIdOf(platform, wslDistro, dataDir)` — the SHA-256 of
+  `<platform>|<wslDistro>|<canonical dataDir>` — computed by the OWNER from its own spelling, because two WSL distributions share the default
+  `/home/<user>/.local/share/coai-mcp` and the directory alone would make two stores one. The hash changes when a distribution is renamed or the data directory
+  moves: a moved store is a new store, and its rounds inside the seven-day window can be counted under both ids until the old snapshot goes quiet. Accepted;
+  a durable id (a persisted UUID plus copy semantics) is not built. Two UNC spellings of one store (`\\wsl$\…`, `\\wsl.localhost\…`) read byte-equal ids.
+
+**The mode.** `coai-mcp --round-counts-merged [--now <ISO-8601 UTC instant>] [<absolute snapshot path>…]` (`Server/RoundCountsMergedMode.cs`, its own `args[0]`
+for the reason `--round-counts` is: a server too old for it exits **64** and the extension falls back). Exit **0** the answer (no path is a valid request: this
+side alone, `stores[]` of one); **65** a request fault (`--now` missing its value, repeated or unparseable; an unknown flag; a relative path; more than 32
+path arguments — counted as GIVEN, before duplicates are folded, so a request of ten thousand paths is refused at its length and never copied; a path given twice
+within the cap is read once); **74** this side's database will not read; **never 64**, and **a snapshot problem never changes the code**.
+The answer is the plain answer (`nowUtc`, `windows[]`, `modelsKnownSince` — THIS side's instant, D11 — `gauge`) plus:
+
+- `rows[].roundKeys` (the distinct non-empty keys counted), `rows[].keyStore` (key → the id of the ONE store the round is counted in), `rows[].roundsWithoutKey`,
+  and `rows[].parts[]` (`store`, `rounds`, `reviewers` per store, in `stores[]` order; they sum to the row). `--round-counts` rows gain `roundKeys` and
+  `roundsWithoutKey` too, trailing (D6); a file without `round_key` (before step 21) is asked no such column and reads `roundKeys: []`, every round keyless.
+- `stores[]` — this side first (`live: true`, `asOf` now), then each snapshot store in the order its first path was given: `id`, `platform`, `host`, `wslDistro`,
+  `side`, `directory`, `paths[]` (every spelling that reached it), `asOf` (`writtenUtc`), `quiet` (written no later than `now − 7 d`: counted as 0 *as of* its last
+  write, never *not included*), `truncated`, `coaiMcpVersion`, and `conflicts`.
+- `storesNotIncluded[]` — one per path that yielded no store, in argument order: `{ path, reason, detail }` with `reason` `missing` (the path), `unreadable` (*the file
+  could not be read (<ExceptionType>)* — the exception's TYPE and a sentence of ours, never its message, which names the resolved path and with it a person — or *not a round-counts snapshot*: not JSON, no integer `schema`, `schema < 1`, a missing required field, a `null` round, a `null` reviewers array or a `null` reviewer (the nullable annotations reject a null property but not a null list element, so `NullFault` — first in `ShapeChecks` — refuses them before a check dereferences one), an id that is not 32 lower-case hex digits,
+  a key that is neither empty nor a key, a stamp that is not an ISO-8601 instant, more than 5 000 rounds, or a file over 16 MB) or `newer-schema` (*schema N — this
+  coai-mcp reads schema 1; update coai-mcp on this side*). `schema` is read FIRST and leniently so a newer document is named as newer; an unknown property is
+  ignored, which is how an added field keeps schema 1.
+
+**One identity rule** (`RoundCounts.Launch.Of`, D4): a round is its `round_key`; a round with no key is `<storeId>#<id>` — never the bare integer id, which every
+store counts from 1 (the pre-E6 `Distinct` counted `RoundId`, the collapse the parent plan names). A key in more than one store is ONE round, counted in the first
+store that holds it — this side, then the snapshot stores ordered by store id (ordinal), NEVER by argument order — and only that store's `parts[]` and `keyStore` carry it. When the copies differ (stage,
+reviewers or models) the result is still the owner's copy, and the OWNING store's `conflicts` counts the rounds concerned, so the block can say *N rounds appear in
+two stores with different contents — counted from <store>*; the answer does not depend on argument order at all (the same set of stores gives the same `keyStore`, parts and
+conflicts), only the `stores[]` listing follows the order the first paths were given. A snapshot whose id is this side's
+is this side reached through another spelling (its path joins `stores[0].paths[]`, its rounds are not read); two snapshots with one id are one store and the NEWER
+`writtenUtc` is the one counted (a tie goes to the document at the ordinally smallest path, so argument order never decides). Every store's rounds are concatenated and cut by the ONE `RoundCounts.Cut` at the one `now` — a snapshot
+round 4 h 59 m before `--now` is in `5h`, one exactly 5 h before is in `24h` and not `5h` — never at a snapshot's own write.
+
+Tests: `RoundCountsSnapshotTests`, `ARoundLeavesASnapshotBesideTheStoreTests`, `RoundCountsMergedTests`, `RoundCountsMergedCliScenarioTests`, `RoundCountsTests` (+3), and
+`AReaderModeNeverMakesTheDataDirectoryTests` (+1) — RED messages and plants in `module_tests.md` (*E6.S1*). `shared/data-inventory.json` lists the file as *move: false,
+mention: false* (written again by itself), and `.agents/PROJECT.md` lists the mode among the one-shot modes.
+
 ### `--round-authors` — who wrote the code, against what the reviewers found (2026-10-19, E6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`)
 
 The owner's question is *"is the code better or worse since the coders moved to Sonnet?"*. `--round-authors` can produce the report for it,
@@ -5066,8 +5261,8 @@ filled from `ReviewerInvocation.Effort`, which `LocalRuntime` sets to the `--rea
 on the argv. No hosted adapter passes a reasoning flag, so none records an effort: the rule is *an
 adapter records the effort it APPLIED*, not *local has one and hosted does not* — stated that way it
 stays true the day a hosted adapter gains the flag, because whoever adds it to an argv adds it to the
-same `Build`. Antigravity's effort is inside its model id (`gemini-3.7-flash-high`), which is why no
-line reads `gemini-3.7-flash-high (effort: high)`. `RoundAudit`'s opening descriptor carries both,
+same `Build`. Antigravity's effort is inside its model id (`gemini-3.8-flash-high`), which is why no
+line reads `gemini-3.8-flash-high (effort: high)`. `RoundAudit`'s opening descriptor carries both,
 each conditionally — `provider/Role[model, effort high, promptId, 900 bytes]` — because that line is
 what a person reads when the panel is closed, and an interpolated empty leaves `[, promptId, …]`.
 
@@ -5190,7 +5385,7 @@ after), and every `ask_human` question asked while the hold stands (`PanelServic
 which re-reads and saves the session under its claim, retrying a busy claim for up to a second and then
 asking unrecorded with a warning — the hold's own notice still answers it). `CurrentAnswer.For` takes
 the newest answer to one of THOSE questions (`Escalations.ReadAnswer` by id) when any is recorded; the
-list is released with the hold (`RoundMachine.ApplyHumanDecision`, and `Resolve` on `humanSaysProceed`)
+list is released with the hold (`RoundMachine.ApplyHumanDecision`, and `Resolve` on a person's Proceed)
 and a round that ends any other way clears it. **The clock decides nothing any more (2026-09-27, the
 gate's findings #24/#30 on epic 3's code round).** It stayed as the residual for a session that recorded
 no question — a hold an older build raised before the field existed — and that residual was the bypass
@@ -7211,7 +7406,7 @@ where the person's request comes FROM, which reviewers a retry asks, and what a 
 
 ```mermaid
 flowchart TD
-  answer["escalations/&lt;id&gt;.answer.json<br/>written by the panel (escalationWatcher) or the phone — never by a tool"] --> latest["CurrentAnswer.ForRequest(session)<br/>the newest answer to one of SessionState.RequestQuestions — the ask_human questions asked on this session after round 1"]
+  answer["escalations/&lt;id&gt;.answer.json<br/>written by the panel (escalationWatcher) - anything that writes the file is a writer, no tool does"] --> latest["CurrentAnswer.ForRequest(session)<br/>the newest answer to one of SessionState.RequestQuestions — the ask_human questions asked on this session after round 1"]
   latest --> req["PersonsRequest.Apply(session)<br/>feature · gate not held · an answer to a question asked FOR round 2, newer than the last round that ran"]
   req --> machine["RoundMachine.ApplyPersonsRequest → SecondRound = PersonAsked"]
   machine --> begin["stage.Begin — admitted on the ground"]
@@ -7227,9 +7422,9 @@ flowchart TD
 
 - **The provenance road exists, and no tool argument reaches it.** The person's request is D23's third
   ground, and it arrives ONLY as an escalation answer with `decision: continue` or `fix` — the file the
-  panel's quick pick (`escalationWatcher.answerCommand` → `answerJson`) and the phone write beside a
-  question, the same road `humanDecision` has always travelled. `ask_human` writes the QUESTION and waits;
-  `resolve`'s `humanDecision: "proceed"` is read by `RoundMachine.Resolve` and touches no ground;
+  panel's quick pick (`escalationWatcher.answerCommand` → `answerJson`) writes beside a
+  question, the road a held gate's decisions travel (Proceed included since 2026-10-22). `ask_human` writes the QUESTION and waits;
+  `resolve`'s `humanDecision: "proceed"` is only a claim `RoundMachine.Resolve` judges, and touches no ground;
   `review_feature`'s `again` is a begin's choice and nothing more. `PersonsRequest.Apply` reads the answer
   through `CurrentAnswer.ForRequest` before the begin: the newest answer to one of the session's
   `RequestQuestions` — the `ask_human` questions asked on the feature session AFTER round 1, recorded by
@@ -7268,7 +7463,7 @@ flowchart TD
   under a feature session (`branch === ':feature'`, the server's `SessionKey.FeatureBranch`) is the person's
   request; `decisionChoices(branch)` gives that choice a detail that says what it grants THERE — the second
   and last round, or a fresh set after a `call_human` — and nothing else about the modal or the file moved
-  (`humanDecision.test.ts`). No fourth decision, no new file shape.
+  (`humanDecision.test.ts`). No new file shape; the one later decision, Proceed, is on the `call_human` notice only and never on a question card.
 - **A retry asks only the reviewers that failed.** `FeatureSecondRound.OnlyTheFailed` keeps the
   `(provider, role)` pairs the last feature round's `ReviewerStates` recorded as `failed` and names the rest
   as not asked, with the reason; when none of the failed is still configured it asks everyone, because a

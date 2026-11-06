@@ -78,14 +78,25 @@ public static class RoundAuthorsMerge
         [.. facts.Select(round => round.SessionId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)]);
 
     /// <summary>Lower-case hex of the first 16 bytes of the SHA-256 of the canonical path: <c>GetFullPath</c>, no trailing separator, upper-cased where the file system folds case.</summary>
-    public static string SourceIdOf(string dataDir)
+    public static string SourceIdOf(string dataDir) => HashOf(Canonical(dataDir));
+
+    /// <summary>
+    /// The id of a store named by its HOST as well as its directory (<c>todo/PLAN_the_round_counter_tail_E6.md</c> D1): the hash of
+    /// <c>&lt;platform&gt;|&lt;wslDistro&gt;|&lt;canonical dataDir&gt;</c>. Two WSL distributions share the default <c>/home/&lt;user&gt;/.local/share/coai-mcp</c>,
+    /// so the directory alone would make two stores one. Computed by the store's OWNER from its own spelling; a reader never recomputes it.
+    /// </summary>
+    public static string SourceIdOf(string platform, string wslDistro, string dataDir) => HashOf($"{platform}|{wslDistro}|{Canonical(dataDir)}");
+
+    private static string Canonical(string dataDir)
     {
         var full = Path.GetFullPath(dataDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(OperatingSystem.IsWindows() ? full.ToUpperInvariant() : full)))[..32].ToLowerInvariant();
+        return OperatingSystem.IsWindows() ? full.ToUpperInvariant() : full;
     }
 
-    private static string PlatformFamily() =>
+    private static string HashOf(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..32].ToLowerInvariant();
+
+    internal static string PlatformFamily() =>
         OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsLinux() ? "linux" : OperatingSystem.IsMacOS() ? "macos" : "other";
 
     /// <summary>The answer as the one JSON document.</summary>

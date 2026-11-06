@@ -66,11 +66,14 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
                 + "the second one is what the round machine does");
 
     [Fact]
-    public void OnlyAPersonClearsTheGate() =>
-        Instructions.Should().Contain("humanDecision: \"proceed\"")
-            .And.Contain("ONLY after that verdict",
-                "an AI that could grant itself the override is an AI the stop does not stop — and the "
-                + "rule is what the override would CHANGE, not how many rounds are left");
+    public void OnlyAnAnswerOnTheNoticeCardClearsTheGate() =>
+        Instructions.Should().Contain("answer on the notice card")
+            .And.Contain("not any argument of yours",
+                "an AI that could grant itself the override is an AI the stop does not stop — the instruction says "
+                + "where the release comes from and that the AI's own argument is not it")
+            .And.NotContain("pass humanDecision", "the surface used to tell the AI to relay the person's decision (plan §1)")
+            .And.NotContain("humanDecision: \"proceed\"", "no surface offers the argument as a way to proceed")
+            .And.NotContain("you cannot grant yourself", "the claim is the protocol road, not a verified person (plan §11.1)");
 
     /// <summary>
     /// The `resolve` tool description is the OTHER surface that states the override rule, and it is
@@ -90,12 +93,21 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
     {
         var source = File.ReadAllText(ToolsSourcePath());
 
-        source.Should().Contain("applies only after that verdict",
-            "the tool description is where a caller meets the rule before any round runs");
+        source.Should().Contain("is not a decision",
+            "the tool description is where a caller meets the rule before any round runs: the argument decides nothing");
+        source.Should().Contain("refused while a gate is held");
+        source.Should().Contain("answer on the notice card");
+        source.Should().NotContain("Never pass it on your own judgement", "the description used to tell the AI to relay the person's decision");
+        source.Should().NotContain("pass humanDecision");
         source.Should().NotContain("refused while rounds remain",
             "that is the rule the round machine had and corrected: the override is judged by what it "
             + "would CHANGE, not by how many rounds are left");
     }
+
+    /// <summary>The `review_feature` description named a phone as a second surface; this repository has none (plan §2, "The phone").</summary>
+    [Fact]
+    public void NoToolDescriptionNamesAPhone() =>
+        File.ReadAllText(ToolsSourcePath()).Should().NotContain("or phone");
 
     private static string ToolsSourcePath()
     {

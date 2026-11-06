@@ -27,11 +27,14 @@ namespace CoaiMcp.Storage;
 /// file in the field already contains; rewriting it changes nothing on disk while changing what a
 /// NEW file gets — two shapes under one version number, which is the failure the number exists to
 /// prevent. Each owner freezes its first step against the release that shipped it.</para>
-/// <para><b>Two pragmas, outside the transaction.</b> WAL, so a reader — a one-shot mode, a second
-/// process opening the same file — sees a consistent snapshot while a writer is mid-transaction; and
-/// <c>busy_timeout</c>, so a concurrent opener WAITS for a writer instead of failing at once with
-/// <c>SQLITE_BUSY</c>. A journal mode cannot be set inside a transaction, which is why both sit
-/// before the loop. The provider has a wait of its own, taken from the connection string's
+/// <para><b>Two pragmas, outside the transaction, in this order.</b> <c>busy_timeout</c>, so a
+/// concurrent opener WAITS for a writer instead of failing at once with <c>SQLITE_BUSY</c>; then WAL,
+/// so a reader — a one-shot mode, a second process opening the same file — sees a consistent
+/// snapshot while a writer is mid-transaction. The timeout comes FIRST because the switch to WAL is
+/// itself a write that needs the EXCLUSIVE lock: without a busy handler it fails at once on any
+/// other connection's SHARED lock, and the provider's fixed 150 ms retry, which drops every lock
+/// each time, can keep two openers colliding until the whole budget is spent. A journal mode cannot
+/// be set inside a transaction, which is why both sit before the loop. The provider has a wait of its own, taken from the connection string's
 /// <c>Default Timeout</c>; <see cref="DefaultTimeoutFragment"/> is how an owner makes the two numbers
 /// one number rather than two that happen to agree.</para>
 /// </remarks>
@@ -65,8 +68,17 @@ public static class SqliteMigrator
     /// </param>
     public static void Migrate(SqliteConnection db, IReadOnlyList<string> steps)
     {
-        Run(db, "PRAGMA journal_mode=WAL"); // outside: a journal mode cannot be set in a transaction
+        // busy_timeout FIRST. The switch to WAL commits a change to the file header, and that commit
+        // needs the EXCLUSIVE lock. With no busy handler yet, one SHARED lock held by anyone else — a
+        // reader, or the other opener a few microseconds into its own switch — made it an instant
+        // SQLITE_BUSY; the provider then dropped every lock, slept a fixed 150 ms and ran the statement
+        // again from the start, so two openers that began together met again every 150 ms until the
+        // five seconds were gone and BOTH failed with `database is locked` (CI runs 39661513211 and
+        // 41895449249; measured: 28 of 30 rounds with eight readers on the file, none once this order
+        // was swapped). With the handler in place the waiter holds PENDING, no new reader gets in, the
+        // readers already in leave, and the waiter goes through.
         Run(db, $"PRAGMA busy_timeout={BusyTimeoutMilliseconds}");
+        Run(db, "PRAGMA journal_mode=WAL"); // outside: a journal mode cannot be set in a transaction
         while (true)
         {
             // IMMEDIATE, and the version is read INSIDE it. Read outside, two openers — the service
