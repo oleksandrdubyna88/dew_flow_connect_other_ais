@@ -60,6 +60,8 @@ const { catalogSeam } = await import('./seam-catalog.mjs');
 const { usageCountsSeam } = await import('./seam-usage-counts.mjs');
 // E3's ledger fields: the lines the REAL writer leaves, read through the extension's own parseUsageLine.
 const { ledgerFieldsSeam } = await import('./seam-ledger-fields.mjs');
+// E6's round counts: the REAL binary's `--round-counts` and `--round-counts-merged` over a real round and a hand-written snapshot, read by parseRoundCounts.
+const { roundCountsMergedSeam } = await import('./seam-round-counts-merged.mjs');
 // The vendor gauge (story 6.2): the slot's reading and the derived figures, read and drawn by the extension's own code.
 const { gaugeSeam } = await import('./seam-gauge.mjs');
 const { consultantRowSeam } = await import('./seam-consultant-row.mjs');
@@ -524,6 +526,11 @@ console.log(`  ok  a consultant's catalog row (effort ${consultantRow.effort}) c
 // consultation / label / local-cause keys must come back from the extension's own parser — and must each have been written at all.
 const ledgerFields = await ledgerFieldsSeam({ binary, fakeCli: fakeCli(), fail, timeoutMs: TIMEOUT_MS });
 console.log(`  ok  ${ledgerFields.lines} ledger lines the real writer left carry ${ledgerFields.keys.join(', ')}, each read back by parseUsageLine`);
+
+// The round-counts leg (E6.S5): a real round leaves a snapshot beside coai.db; the merged mode over a hand-written snapshot of another store
+// (the same integer round id, another key) and a missing path, and the plain mode, are read BY VALUE through the extension's own parser.
+const roundCounts = await roundCountsMergedSeam({ binary, fakeCli: fakeCli(), fail, timeoutMs: TIMEOUT_MS });
+console.log(`  ok  ${roundCounts.stores} stores and ${roundCounts.rounds} rounds (one integer id, two keys) cross from --round-counts-merged to parseRoundCounts, the missing snapshot not included`);
 
 // The ELEVENTH leg: the binary lists every capability the extension knows (PLAN_one_model_catalog.md E2) — a field
 // is sent only when `--features` lists it, so the two lists must agree on the real binary.

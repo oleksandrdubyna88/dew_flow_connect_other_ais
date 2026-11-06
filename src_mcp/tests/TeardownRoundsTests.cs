@@ -90,6 +90,38 @@ public sealed class TeardownRoundsTests
         (await TeardownRounds.ConfirmedAsync([Member(500)], rounds.Seams)).Should().Equal(stranger);
     }
 
+    /// <summary>A killed member that exits while the confirmation runs: its reaping pass sees it alive and takes nothing, the very next liveness read finds a zombie — which the one rule calls Gone — and only a reap AFTER that read takes its status.</summary>
+    private sealed class DyingAfterTheReapingPass
+    {
+        private bool _zombie;
+
+        public bool Reaped { get; private set; }
+
+        public RoundSeams Seams => new(
+            () => [Member(900)],
+            _ => Reaped |= _zombie,
+            _ =>
+            {
+                _zombie = true;
+
+                return Reaped ? new Liveness.Gone("no such process") : new Liveness.Gone("exited (zombie)");
+            },
+            _ => { },
+            () => Task.CompletedTask,
+            () => false);
+    }
+
+    [Fact]
+    public async Task AMemberThatBecomesAZombieAfterTheReapingPass_IsReapedBeforeTheConfirmationEnds()
+    {
+        var dying = new DyingAfterTheReapingPass();
+
+        var survivors = await TeardownRounds.ConfirmedAsync([Member(900)], dying.Seams);
+
+        survivors.Should().BeEmpty("a zombie is Gone, not a survivor");
+        dying.Reaped.Should().BeTrue("the confirmation ended on a Gone zombie its reaping pass had read as alive: the zombie stayed in /proc");
+    }
+
     [Fact]
     public void TheSameProcessRead_TwiceWithASlightlyDifferentStartTime_IsOneMember() =>
         TeardownRounds.Kept([Member(500), Member(500, Started.AddMilliseconds(200)), Member(501)], _ => new Liveness.Alive()).Select(member => member.Pid).Should().Equal(500, 501);
