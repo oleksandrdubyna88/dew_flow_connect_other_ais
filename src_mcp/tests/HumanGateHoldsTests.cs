@@ -81,9 +81,9 @@ public class HumanGateHoldsTests
     }
 
     [Fact]
-    public void AHumanProceedStillClearsIt_AndAdvancesTheStage()
+    public void APersonsProceedStillClearsIt_AndAdvancesTheStage()
     {
-        var next = RoundMachine.Resolve(Exhausted() with { AwaitingResolve = true }, [], humanSaysProceed: true)
+        var next = RoundMachine.Resolve(Exhausted() with { AwaitingResolve = true }, [], HumanDecision.Proceed)
             .Should().BeOfType<Transition.Moved>().Subject.State;
 
         next.HumanGate.Should().BeFalse();

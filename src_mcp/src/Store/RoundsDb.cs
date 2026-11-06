@@ -782,8 +782,8 @@ public sealed class RoundsDb : IDisposable
                 WHERE ordinal = $ordinal AND round_id = (
                     SELECT id FROM rounds WHERE session_id = $session AND stage = $stage AND number = $number)
                 """;
-            Bind(write, "$resolution", decided.Decision is Decision.Accepted ? "accept" : "reject");
-            Bind(write, "$reason", decided.Decision is Decision.Rejected rejected ? rejected.Reason : string.Empty);
+            Bind(write, "$resolution", decided.Resolution);
+            Bind(write, "$reason", decided.Reason);
             Bind(write, "$when", when);
             Bind(write, "$ordinal", decided.Ordinal);
             BindRound(write, sessionId, stage, number);
