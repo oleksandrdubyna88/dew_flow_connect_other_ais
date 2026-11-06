@@ -2,7 +2,7 @@
 
 ## Server 0.64.0 — 2026-11-06
 
-**Security: only a person's answer releases a held gate.** `resolve(humanDecision: "proceed")` used to be honoured from the argument alone, so the gated agent could clear its own `call_human` or held review. The server now reads the decision from the hold's notice card, and only a Proceed answered there releases it. The argument is refused, and the refusal names the card. `review_document` with `newReview: true` is refused while that review is held. **Not closed:** the answer is a file any process running as the same user can write; that is a separate plan. **Lag:** this release is on the earlier shared rules, so agents' rule text and the extension's copied snippets still mention the old argument until the next rules release. The server's refusal says what to do instead.
+**Security: only a person's answer releases a held gate.** `resolve(humanDecision: "proceed")` used to be honoured from the argument alone, so the gated agent could clear its own `call_human` or held review. The server now reads the decision from the hold's notice card, and only a Proceed answered there releases it. The argument is refused, and the refusal names the card. `review_document` with `newReview: true` is refused while that review is held. **Not closed:** the answer is a file any process running as the same user can write; that is a separate plan. **Lag:** this release is on the earlier shared rules, so agents' rule text and the extension's copied snippets still mention the old argument until the next rules release. That only affects what an agent is told to try: the server's refusal names the card, and a person answers there.
 
 **Security: a link's target path is resolved from the root down.** The document reader, the worktree guard and the read root no longer fold `..` in link text lexically. An outside file could be read through a chain of links, and releasing a worktree could delete a folder outside the storage root. A loop or an over-long chain is now refused instead of throwing.
 
@@ -26,7 +26,7 @@
 
 ## Extension 0.84.0 — 2026-11-06
 
-**Security: a held gate is released from its notice card only.** The help says so in every language, and a finding a person's Proceed carried the stage over reads *proceeded over* in the log.
+**Security: a held gate is released from its notice card only.** The help says so in every language, and a finding a person's Proceed carried the stage over reads *proceeded over* in the log. The card offers Proceed only when the server's notice lists it, so this extension against an older server offers the three it always did. Update the extension together with coai-mcp: an older card has no Proceed button.
 
 **Added: the Rounds block counts both stores.** A row can read this side's and the other side's store as one population, says when a store could not be reached or its copies conflict, and shows launches per round.
 
