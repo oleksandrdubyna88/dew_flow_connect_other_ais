@@ -2,7 +2,7 @@
 
 ## Server 0.65.1 — 2026-11-07
 
-**The release of 0.65.0, published.** 0.65.0 was tagged but never published: its Windows builds failed one test of this repository's own suite, so the release stayed a draft without Windows packages, and a tag is never moved. 0.65.1 is the same server, with everything listed under 0.65.0 below. Use 0.65.1; the 0.65.0 draft is marked not published.
+**0.65.1 is published; 0.65.0 was not.** 0.65.1 releases the changes listed under 0.65.0 below. 0.65.0 was tagged but never published: its Windows builds failed one test of this repository's own suite, so the release stayed a draft without Windows packages, and a tag is never moved. 0.65.1 is the same server, with everything listed under 0.65.0 below. Use 0.65.1; the 0.65.0 draft is marked not published.
 
 **Fixed (tests only):** the test that pins the elevated-Windows limit of the test-leftovers audit decided "elevated" meant "a new file is owned by Administrators". That does not hold for a process started from Git Bash, which the release workflow uses. It now reads who owns a new folder and skips, saying why, where the limit does not hold. CI runs it from both shells (#962). No server code changed.
 
