@@ -477,7 +477,13 @@ jobs:
       # test skips, saying why (it reads who owns a new file); the pwsh step above is the one that must show `succeeded: 1`.
       - name: The pin, run the way the release runs it (Git Bash)
         shell: bash
-        run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe --filter-method '*AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun*'
+        run: |
+          code=0  # `shell: bash` runs with -e: capture the exit code instead of letting it end the step before the log is shown
+          log=$(./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe --filter-method '*AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun*' 2>&1) || code=$?
+          echo "$log"
+          [ "$code" -eq 0 ] || { echo "::error::the pin failed under Git Bash (exit $code)"; exit 1; }
+          # A filter that matched nothing also exits 0: the one test must have been found and run or skipped.
+          grep -Eq 'total: 1\b' <<<"$log" || { echo "::error::the filter did not select the pin"; exit 1; }
 
       # The same teeth in PowerShell (the template's step). Both values; a listing error is red, never ignored.
       - name: The audit fails a run that leaves a claimed folder
