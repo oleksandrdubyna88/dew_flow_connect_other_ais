@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { parseUsageLine } from '../../out/usage.js';
-import { disagreements, homeEnvironment, keysWritten, SEAM_EFFORT, strayEfforts, TRACKED, verdictOn } from '../../scripts/seam-ledger-fields.mjs';
+import { disagreements, keysWritten, SEAM_EFFORT, strayEfforts, TRACKED, verdictOn } from '../../scripts/seam-ledger-fields.mjs';
 import { owned } from '../../scripts/owned.mjs';
-import { sessionsFor } from '../../scripts/seam-session.mjs';
+import { homeEnvironment, sessionsFor } from '../../scripts/seam-session.mjs';
 
 /**
  * The ledger-fields leg of the seam, held to what it claims (E3 of todo/PLAN_the_round_counter_tail_E3.md).

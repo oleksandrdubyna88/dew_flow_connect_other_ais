@@ -1,10 +1,12 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { notificationLine } from '../../out/notifications.js';
+import { owned } from '../../scripts/owned.mjs';
+import { heldGateSeam } from '../../scripts/seam-held-gate.mjs';
 import { theRecordCrosses } from '../../scripts/seam-refusal.mjs';
 import { sessionsFor } from '../../scripts/seam-session.mjs';
 
@@ -85,4 +87,31 @@ test('only a server the run DECLARES older may skip the text leg; a refusal alon
   assert.equal(textLegVerdict({ olderExpected: false, code: 64, stderr: refused }), 'fail', 'an unannounced refusal skipped');
   assert.equal(textLegVerdict({ olderExpected: true, code: 1, stderr: 'boom' }), 'fail');
   assert.equal(textLegVerdict({ olderExpected: true, code: 0, stderr: '' }), 'ok');
+});
+
+/** The folders the held-gate leg makes in this run's temp folder, claims aside. */
+const heldFolders = () => readdirSync(owned.tempRoot()).filter((name) => /-held(?:-home|-repo)?-[A-Za-z0-9]+$/u.test(name));
+
+test('the held-gate leg removes its folders when something throws after they exist', async () => {
+  assert.deepEqual(heldFolders(), [], 'the run folder starts without the leg\'s folders');
+  const serverSession = () => { throw new Error('the session could not start'); };
+
+  await assert.rejects(heldGateSeam({ serverSession, answerOf: () => ({}), fakeCli: 'fake-cli', fail: (why) => { throw new Error(`fail: ${why}`); } }), /the session could not start/u);
+
+  assert.deepEqual(heldFolders(), [], 'a throw left the leg\'s folders (and their claims) behind');
+});
+
+test('the held-gate leg kills its session and removes its folders when a claim fails', async () => {
+  const killed = [];
+  const serverSession = () => ({
+    ready: Promise.resolve(),
+    call: async () => ({}),
+    killAndWait: async () => { killed.push(true); },
+    close: async () => { killed.push('closed'); },
+  });
+
+  await assert.rejects(heldGateSeam({ serverSession, answerOf: () => ({ verdict: 'proceed' }), fakeCli: 'fake-cli', fail: (why) => { throw new Error(`fail: ${why}`); } }), /did not end in call_human/u);
+
+  assert.deepEqual(killed, [true], 'the session was killed once');
+  assert.deepEqual(heldFolders(), [], 'a failed claim left the leg\'s folders behind');
 });

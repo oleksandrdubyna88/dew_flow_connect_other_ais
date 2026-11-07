@@ -79,8 +79,6 @@ function isolatedHome() {
   return home;
 }
 
-export { homeEnvironment }; // lives in seam-session.mjs, shared with the round-counts leg
-
 /** A checkout with a `feature` branch ahead of `main`, which is what a round reviews. */
 function scratchRepo() {
   // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9

@@ -6637,6 +6637,8 @@ a first attempt at an inventory row for the probe's `os.tmpdir()` read made it 7
 Twelve test files from main lacked the guard import (G5 `every test file imports the guard first`): added. GREEN: N1 and the Node leftovers step; `CoaiMcp.Tests.Leftovers` 530 tests, 0 failed, 23 skipped; the seven changed C# classes; `npm run test:seam`; `npm test` in
 `src_vs_code` 6916 tests, 0 failed, 21 skipped; `scripts/run-lib-tests.mjs` 476, 0 failed, 4 skipped. N1 was red again with the probe, `roundCountsRead.test.ts` and the exemptions file put back as they were.
 
+Code-gate fixes (same day): `seam-held-gate.mjs` closes its scope and kills its session in one `finally` (`seamLegs.test.mjs`: a throw after the folders exist left three `-held` folders, RED, then none; a failed claim kills the session once); `roundCountsRead.test.ts` names the wrap's shape as an interface noting why the cast remains and drops its `cleanup` calls (owned folders go with the test); the `homeEnvironment` re-export is gone, callers import it from `seam-session.mjs`. `npm test` 6918 tests.
+
 ## Two stores, one count — E6.S1 (extension), S2 and S3: both stores' counts and ledgers, and launches per round (2026-10-21, `todo/PLAN_the_round_counter_tail_E6.md`)
 
 The C# half (the snapshot, `--round-counts-merged`) is recorded above; the parser and the loader here are driven by a fixture that follows the
