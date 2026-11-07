@@ -6618,6 +6618,25 @@ The first run of this story (42026897727, `b29c00c7`) is the one with the creati
 
 **Not changed, and said here.** `TheRawTempRows_AreNotMoreThanAtCreation` keeps the brief's `<=` (§ 7.3), so lowering the constant when a row goes stays a reviewer's task. A marker's words are not compared with its row's `proof`. F4 reads `.github/workflows/` only, as the brief asks. A CI step that is not in the brief's § 12.3 table, `The pin of the elevated-Windows limit ran and passed`, meets § 11.4's "PASSED, not skipped" and moves no condition. `SupervisedTeardownLinuxTests.AnAgentThatExitsFirst_LeavesNoSameGroupAndNoSetsidChild` failed once on Linux, on attempt 1 of run 42053357113 (state `Z`, a zombie not yet reaped), and passed on re-run. It touches no temp folder and was not investigated: a possible flake of that test, outside S6.
 
+### E5 S6 — after the merge of main 59d04d90: the sites main added (2026-11-07)
+
+Main (E6 #918, the held gate #920, the agy follow-up probe) added test and script sites after S6 had counted, so both guards were red on the merged tree. RED: `testLeftovers.test.mjs` N1 listed four findings
+(`scripts/probe-agy-review-follow-up.mjs:70` `legacy-name` and `raw-temp`, `:290` `raw-temp`, `src_vs_code/src/test/roundCountsRead.test.ts:113` `raw-temp`); the C# guard (`LeftoversRepositoryGuardTests.This_repository_passes_the_guard`) listed 25
+(five `src_mcp/tests/RoundCounts*` and `ARoundLeavesASnapshot…` files with the `testsToDelete-` literal, which is `legacy-name` and `owner-blind`; `GetTempPath` and `CreateTempSubdirectory` in two more; seven `raw-temp` lines in the new
+`seam-held-gate.mjs` and `seam-round-counts-merged.mjs`) and the inventory read `run-seam.mjs` eight rows moved by main. Nothing was exempted: `LeftoversInventoryTests.TheRawTempRows_AreNotMoreThanAtCreation` holds the ceiling at 77, and
+a first attempt at an inventory row for the probe's `os.tmpdir()` read made it 78 and red, so the site went through the wrap instead.
+
+| Site | Became | Why |
+|---|---|---|
+| `roundCountsRead.test.ts` `dirWithLedger` | `owned.ownedDir(t, 'store')` (the wrap read with `require`, the test context as the scope) | the baseline only shrinks, so a new raw site cannot be added to it; the file also gained the guard import (G5) |
+| `probe-agy-review-follow-up.mjs` scratch | `startDefaultScratch` (owned, removed at exit, the same as the Kimi and Vibe probes); the temp root for the fixture's redaction from `loadOwned(...).owned.tempRoot()` | a paid probe: an explicit scratch argument still keeps the run; checked with `/bin/echo` as the executable, the folder is removed and the exit line printed |
+| `seam-held-gate.mjs`, `seam-round-counts-merged.mjs` | `owned.ownedDir(scope, what)` with a `cleanupScope()` closed in the leg's `finally` | libraries of `run-seam.mjs` run inside its run folder; no new inventory row. `homeEnvironment` moved to `seam-session.mjs` (re-exported by `seam-ledger-fields.mjs`) because E9 refused a library importing another exempted library |
+| the five C# test classes and two with raw temp calls | `TempDir.For("<what>-")` without the literal, `TempDir.Root` for a path that is only named | the helper the other classes use |
+| `leftovers-exemptions.json` | the `run-seam.mjs` rows (+4, +9) and the `seam-ledger-fields.mjs` rows (-6) re-lined, same hashes | their sites moved, not changed |
+
+Twelve test files from main lacked the guard import (G5 `every test file imports the guard first`): added. GREEN: N1 and the Node leftovers step; `CoaiMcp.Tests.Leftovers` 530 tests, 0 failed, 23 skipped; the seven changed C# classes; `npm run test:seam`; `npm test` in
+`src_vs_code` 6916 tests, 0 failed, 21 skipped; `scripts/run-lib-tests.mjs` 476, 0 failed, 4 skipped. N1 was red again with the probe, `roundCountsRead.test.ts` and the exemptions file put back as they were.
+
 ## Two stores, one count — E6.S1 (extension), S2 and S3: both stores' counts and ledgers, and launches per round (2026-10-21, `todo/PLAN_the_round_counter_tail_E6.md`)
 
 The C# half (the snapshot, `--round-counts-merged`) is recorded above; the parser and the loader here are driven by a fixture that follows the
