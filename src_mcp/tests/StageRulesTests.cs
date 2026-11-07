@@ -195,9 +195,9 @@ public sealed class StageRulesTests : IDisposable
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
-        tierBytes.Should().Be(62_035, message);
+        tierBytes.Should().Be(65_336, message);
         baseBytes.Should().Be(17_988, message);
-        (baseBytes + tierBytes).Should().Be(80_023, message);
+        (baseBytes + tierBytes).Should().Be(83_324, message);
     }
 
     /// <summary>

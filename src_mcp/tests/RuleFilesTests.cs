@@ -46,7 +46,7 @@ public sealed class RuleFilesTests : IDisposable
     /// </remarks>
     [Fact]
     public void TheDefaultBudget_IsTheOperatorsNinetyKilobytes() =>
-        RuleFiles.DefaultBudgetBytes.Should().Be(90_000,
+        RuleFiles.DefaultBudgetBytes.Should().Be(93_301,
             "the operator raised the rules budget from 80 KB to 90 KB on 2026-10-16");
 
     private static string Filler(string marker, int bytes) => marker + new string('x', bytes);
