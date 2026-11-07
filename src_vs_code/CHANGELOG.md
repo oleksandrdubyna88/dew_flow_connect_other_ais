@@ -1,6 +1,14 @@
 # Changelog
 
+## Server 0.65.1 — 2026-11-07
+
+**The release of 0.65.0, published.** 0.65.0 was tagged but never published: its Windows builds failed one test of this repository's own suite, so the release stayed a draft without Windows packages, and a tag is never moved. 0.65.1 is the same server, with everything listed under 0.65.0 below. Use 0.65.1; the 0.65.0 draft is marked not published.
+
+**Fixed (tests only):** the test that pins the elevated-Windows limit of the test-leftovers audit decided "elevated" meant "a new file is owned by Administrators". That does not hold for a process started from Git Bash, which the release workflow uses. It now reads who owns a new folder and skips, saying why, where the limit does not hold. CI runs it from both shells (#962). No server code changed.
+
 ## Server 0.65.0 — 2026-11-07
+
+**Not published** — see 0.65.1 above.
 
 **Changed: the shared rules are at release `37b9aa5`. This closes the lag named in 0.64.0.** The review-gate rule now says a held gate is released only by the person's Proceed on the notice card, and that `humanDecision` is never passed. Agents reading the rules are no longer told to try what the server refuses. The release also adds a testing rule: a test runner bounds what a test file may start, and a shim never resolves to itself. The test-leftovers detail rule gains two lines.
 
@@ -12,7 +20,7 @@
 
 **Changed: the CLAUDE.md snippet no longer tells the agent to pass `humanDecision` (snippet v18).** The snippet's gate half now says a held gate is released by the person's Proceed on the notice card. A paste that still carries the old sentence is reported as older, even when its version marker is current: copy the snippet again. Only the half that held the sentence is judged on it.
 
-**The MCP server to pair it with is `coai-mcp` 0.65.0**, which *Install the MCP server…* fetches as the latest release. It carries the shared rules at `37b9aa5`. See Server 0.65.0 above.
+**The MCP server to pair it with is `coai-mcp` 0.65.1**, which *Install the MCP server…* fetches as the latest release. It carries the shared rules at `37b9aa5`. See Server 0.65.0 above. (Corrected 2026-11-07: this entry named 0.65.0 when 0.85.0 shipped. 0.65.0 was never published, so the installer kept offering 0.64.0 until 0.65.1 was released.)
 
 ## Server 0.64.0 — 2026-11-06
 
