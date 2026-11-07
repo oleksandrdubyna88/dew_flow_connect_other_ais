@@ -15,6 +15,11 @@ The two earlier measurements disagree by an order of magnitude: the bench said a
 and both were campaigns. This one asks the production log: in real rounds where two or more vendor
 families reviewed the same input, how often does a finding have a twin from another vendor?
 
+The two older figures do not share one denominator (note added 2026-11-07 on review). The bench's
+5–9 % is per DISTINCT defect cluster a vendor raised (codex: 5 of 60 distinct, from 75 findings
+written), while the "findings with a twin" figures below are per finding written. The comparable
+measure here is "distinct defects raised by 2+ vendors" in §3.
+
 ## Data
 
 | | count |
@@ -83,7 +88,8 @@ Caller acceptance (`resolve`) of a finding:
 ## What this says
 
 1. **The claim holds in its strong form for DEFECTS, in a weaker form for findings.** Of the
-   distinct defects in a multi-vendor round, **86–90 % were raised by one vendor only.** Of the
+   distinct defects in a multi-vendor round, **86–90 % were raised by one vendor only** (in the 30
+   rounds judged in §3; the cluster-level rate is not computed for the whole month). Of the
    findings a vendor writes, about **one in five** has a twin elsewhere. Not 5 %, not 60 %.
 2. **The two older numbers bracket this one for a reason.** The bench clustered two planted cases
    across seven arms and gave 5–9 %; the five-plans reading clustered across five
