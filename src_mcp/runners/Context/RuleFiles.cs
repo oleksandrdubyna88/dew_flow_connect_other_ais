@@ -183,7 +183,9 @@ public static class RuleFiles
     /// `common/test-leftovers.md`, an 8 403-character core, would fit on no branch — it would reach no reviewer, the 80 000-byte state again.
     /// 90 000 + 3 301 = 93 301 restores the free tail to 9 977 (93 301 - 83 324), which is what it was before this pin (90 000 - 80 023).
     /// The unit is unchanged: the collector spends characters of the normalised text (`RuleFile.Text.Length`) and this constant calls them
-    /// bytes. The figure 90 000 above stays as the record of the earlier decisions.</para>
+    /// bytes. The figure 90 000 above stays as the record of the earlier decisions. Measured at 93 301 (`RuleBudgetMeasurementTests`, explicit): free 9 977;
+    /// the tail takes one rule on 1 102 of 3 000 branch names, two on 1 655 and three on 243 (mean 1.71); `common/test-leftovers.md`, an 8 794-character core
+    /// (8 403 until 2026-11-02), is drawn on 153 of 3 000 (7 of the 100 fixed names). The canary tail and the four test-leftovers rows did not move.</para>
     /// </remarks>
     public const int DefaultBudgetBytes = 93_301;
 
@@ -416,7 +418,7 @@ public static class RuleFiles
     /// worse half of this fix, because the budget would then be honest about bytes nobody wanted.</para>
     /// <para><b>Why it went unseen for a day.</b> Every job in <c>ci.yml</c> is
     /// <c>ubuntu-latest</c>; the only Windows legs are the release matrix. So
-    /// <c>AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules</c> — the one check that can see this — ran on a
+    /// <c>AtTheDefaultBudget_TheRotatedTail_FitsAtMostThreeRules</c> — the one check that can see this — ran on a
     /// tag and nowhere else, and the release of <c>mcp-v0.29.0</c> is where it surfaced.</para>
     /// </remarks>
     private static string? Read(string path)

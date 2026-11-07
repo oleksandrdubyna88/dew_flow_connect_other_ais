@@ -1221,13 +1221,20 @@ started after that edit. The paragraph became one clause (+247 bytes) and the ca
 the headroom itself is worth knowing about.
 
 *Update 2026-10-16:* the operator raised the budget to 90 000 bytes. The canary is now
-`StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (9 976 left since 2026-10-21, 9 992 before; on the canary branch exactly
+`StageRulesTests.AtTheDefaultBudget_TheRotatedTail_FitsAtMostThreeRules` (9 976 left since 2026-10-21, 9 992 before; on the canary branch exactly
 `gpu-lease`, `nuget-packages`, `durable-status`; no branch of the first hundred reaches more than three), backed by
-`AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (base 17 925 + tier 62 061, the drift guard; 17 906 before PROJECT.md named `--round-authors`, 2026-10-19), joined by `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one — the 80 000
-state was 56 bytes and zero) and `AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` (a four-row theory:
+`AtTheDefaultBudget_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (base 17 925 + tier 62 061, the drift guard; 17 906 before PROJECT.md named `--round-authors`, 2026-10-19), joined by `AtTheDefaultBudget_EveryBranchReachesAtLeastOneTailRule` (at least one — the 80 000
+state was 56 bytes and zero) and `AtTheDefaultBudget_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` (a four-row theory:
 `fix/x` and `feat/e5` draw `common/test-leftovers.md`, `main` and `feat/a` do not), and by
-`RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes`, which pins the number. The figures in the
+`RuleFilesTests.TheDefaultBudget_IsTheOperatorsNumber`, which pins the number. The figures in the
 paragraph above are the 80 000-byte history. Numbers: `RESULTS_rules_selection_budget.md`.
+
+*Update 2026-11-06:* the owner raised the budget again, to 93 301 (after consultants, consult 53578f8a), because pin `37b9aa5` grew the tier by 3 301
+to 65 336 (base 17 988, pair 83 324) and at 90 000 `common/test-leftovers.md` would have fitted on no branch. The free tail is 9 977 again, the figure
+before the pin; the canary list (`gpu-lease`, `nuget-packages`, `durable-status`), the bound of three and the four test-leftovers rows are unchanged and
+were re-measured, not assumed. The tests now carry the names `AtTheDefaultBudget_*` and `TheDefaultBudget_IsTheOperatorsNumber` (they were
+`AtNinetyKilobytes_*` and `TheDefaultBudget_IsTheOperatorsNinetyKilobytes`; the old names stay in the dated sections above and in
+`RESULTS_rules_selection_budget.md`). The base-and-tier drift guard now pins tier 65 336 and the pair 83 324.
 
 **What these still do not prove.** The no-client-IP promise is a deployment fact — a reverse proxy
 writes `remote_addr` before the request reaches any route — and no test in this process can reach

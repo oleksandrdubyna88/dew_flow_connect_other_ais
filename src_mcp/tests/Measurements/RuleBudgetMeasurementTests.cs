@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Prints what the 90 000-character rules budget holds, through the PRODUCTION collector — explicit, never part of the normal
+/// Prints what the default rules budget (90 000 characters until 2026-11-06, 93 301 since) holds, through the PRODUCTION collector — explicit, never part of the normal
 /// suite (results in <c>research/RESULTS_rules_selection_budget.md</c>, section 2026-11-01).
 /// </summary>
 /// <remarks>
