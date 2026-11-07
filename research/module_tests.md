@@ -6662,6 +6662,12 @@ F31's limit itself is unchanged: an elevated run that is not started from Git Ba
 owns the files it makes …`) with `total: 1`, `failed: 0`, `skipped: 1`, and it passed. The step now also fails unless the filter
 selected the one test. The RED without the fix is the run on `7064dfb4` above.
 
+**Then, on CodeRabbit's review.** The skip no longer asks `Scope.IsMine`. That helper is what F31 may change: once it accepts an
+Administrators-owned folder, a skip decided by it would hide the change everywhere except ci.yml's pwsh step. The test reads the
+folder's owner SID directly (`OwnedByTheCaller`: the security descriptor's owner equals `WindowsIdentity.GetCurrent().User`). The
+assertions after it still use `Scope.IsMine`, so they go red when F31 changes the helper. The PR's last `ci` run on its head is the
+GREEN for this form.
+
 ## Two stores, one count — E6.S1 (extension), S2 and S3: both stores' counts and ledgers, and launches per round (2026-10-21, `todo/PLAN_the_round_counter_tail_E6.md`)
 
 The C# half (the snapshot, `--round-counts-merged`) is recorded above; the parser and the loader here are driven by a fixture that follows the

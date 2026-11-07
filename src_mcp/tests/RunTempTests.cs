@@ -431,14 +431,15 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     /// <para><b>Elevation is not the condition; who owns a new file is.</b> mcp-v0.65.0's release ran this suite from Git Bash and the pin failed on both
     /// Windows legs (run 42388147284): an elevated process started from Git Bash owns the files it makes, so the audit DID see the claim. ci.yml's pwsh
     /// step passed it on the same commit. So the test first makes the helper's own folder and asks whose it is, and skips when it is the caller's: there
-    /// the limit this pins does not hold. The Git Bash step in ci.yml keeps that path run.</para>
+    /// the limit this pins does not hold. The Git Bash step in ci.yml keeps that path run. The question is asked of the folder's owner SID directly
+    /// (<see cref="OwnedByTheCaller"/>), never through <c>Scope.IsMine</c>: the helper is what F31 may change, and a skip decided by it would hide that change.</para>
     /// </summary>
     [Fact]
     public void AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun()
     {
         Assert.SkipWhen(!OperatingSystem.IsWindows() || !IsElevatedOnWindows(), "pins the limit of an elevated Windows process only: elsewhere the process owns the files it makes");
         var natural = _owned.Dir("s6-natural");
-        Assert.SkipWhen(Scope.IsMine(natural), "this elevated process owns the files it makes (as one started from Git Bash does), so the limit this pins does not hold here");
+        Assert.SkipWhen(OperatingSystem.IsWindows() && OwnedByTheCaller(natural), "this elevated process owns the files it makes (as one started from Git Bash does), so the limit this pins does not hold here");
         var root = _owned.Dir("s6-untouched");
         var env = AllThreeAt(root);
         env["COAI_S6_ORPHAN_CLAIM"] = "1";
@@ -457,6 +458,13 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
 
     [SupportedOSPlatform("windows")]
     private static bool IsElevatedOnWindows() => new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+
+    /// <summary>The folder's owner SID is this process's user SID: read from the folder's security descriptor, independently of the helper under test.</summary>
+    [SupportedOSPlatform("windows")]
+    private static bool OwnedByTheCaller(string folder) =>
+        new DirectoryInfo(folder).GetAccessControl().GetOwner(typeof(SecurityIdentifier)) is SecurityIdentifier owner
+        && WindowsIdentity.GetCurrent().User is SecurityIdentifier me
+        && owner.Equals(me);
 
     private static string TestsExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "CoaiMcp.Tests.exe" : "CoaiMcp.Tests");
 
