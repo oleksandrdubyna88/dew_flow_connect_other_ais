@@ -4207,6 +4207,13 @@ claim about today) — and `snippetStatus` compares a pasted
 copy half by half. A paste missing one of them is `older` by its ABSENCE rather than by a number,
 which is what lets a copy made before a half existed be recognised at all.
 
+A marker cannot tell an old paste of the FROZEN gate half from a current one, because that marker never
+moves — so a rule change there (the 2026-11 pin made the gate say "Never pass `humanDecision` yourself"
+where it had said to pass `humanDecision: "proceed"` to `resolve`) left a v17 paste reading `current`.
+`RETIRED_TEXT` in `claudeSnippet.ts` is the answer: a table of sentences an old paste carried, per half,
+and a half whose text contains one of its own is `older` exactly as if its marker were lower. A test holds
+that the current artefact quotes none of them.
+
 > **An earlier version of this section described a design that never shipped.** It said
 > `SNIPPET_VERSION` was 6, that the composed text carried ONE version marker, that `snippetStatus`
 > answered a sixth state `mounted`, and that the consultant marker was `<!-- coai-consultant v6 -->`.

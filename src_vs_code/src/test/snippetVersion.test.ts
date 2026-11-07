@@ -12,6 +12,7 @@ import {
   HALF_IDS,
   halvesIn,
   KNOWN_HALVES,
+  RETIRED_TEXT,
   SNIPPET_BODY_SHA,
   SNIPPET_LOCATIONS,
   SNIPPET_VERSION,
@@ -595,5 +596,35 @@ test('every row of the table carries the rule its own marker names', () => {
       `${half.id}'s text must carry its own marker and no other`,
     );
     assert.equal(found[0].version, half.version, `${half.id}'s marker and its version disagree`);
+  }
+});
+
+/**
+ * The frozen gate half cannot be told apart by its marker, so a retired sentence does it.
+ *
+ * <p>Found by review (CodeRabbit, PR #956): the gate rule's old text told the agent to pass
+ * `humanDecision: "proceed"` to `resolve`, the new text says never to, and the marker stayed at 5.
+ * A paste made from extension v17 therefore read `current`, and the panel said there was nothing to
+ * replace while the pasted text told the agent to do what the server refuses.</p>
+ */
+test('a v17-shaped paste, whose gate half carries a retired sentence, is older on that half', () => {
+  const retired = RETIRED_TEXT.find((row) => row.half === 'coai-snippet');
+  assert.ok(retired !== undefined, 'the table has no row for the frozen gate half');
+  const gate = KNOWN_HALVES[0].text;
+  const stale = claudeSnippet().replace(gate, `${gate}\nPass ${retired.text}.\n`);
+
+  assert.notEqual(stale, claudeSnippet(), 'the fixture did not change the paste, so it proves nothing');
+  assert.deepEqual(snippetStatus(stale), { kind: 'older', behind: ['coai-snippet'], current: ARTEFACT_VERSION });
+});
+
+test('the current paste stays current, so no retired sentence marks a fresh one stale', () => {
+  assert.deepEqual(snippetStatus(claudeSnippet()), { kind: 'current', current: ARTEFACT_VERSION });
+});
+
+test('the current artefact carries no retired sentence', () => {
+  const snippet = claudeSnippet();
+  for (const row of RETIRED_TEXT) {
+    assert.ok(HALF_IDS.includes(row.half), `a retired row names the unknown half ${row.half}`);
+    assert.ok(!snippet.includes(row.text), `the current artefact quotes a sentence retired for ${row.half}: ${row.text}`);
   }
 });

@@ -217,6 +217,29 @@ export const KNOWN_HALVES = [
   { id: 'coai-question', name: 'the question consultant', version: QUESTION_VERSION, text: QUESTION_RULE, frozen: false, file: 'coai-question-consultant.md' },
 ] as const;
 
+/**
+ * Sentences an OLD paste of a half carried that the current rule no longer says, per half.
+ *
+ * <p><b>Why a table of text when every half has a marker.</b> The gate half's marker is `frozen` at 5
+ * by the conventions baseline and may never be raised, so a change to the gate rule cannot be told
+ * apart from the old one by number: a paste made from an earlier build still reads `current` while
+ * telling the agent to do what the server now refuses. A retired sentence is the only way to tell
+ * an old paste of the frozen half. {@link isBehind} treats a half whose text contains a retired
+ * sentence of its own exactly as it treats a lower marker.</p>
+ *
+ * <p>Append a row when a rule change makes an earlier instruction harmful, with the artefact version
+ * that stopped carrying it. `retiredAt` is a record, not an input to the comparison: a paste that
+ * contains the sentence is old whatever it is numbered. The current artefact must never contain a
+ * retired sentence — a test holds that, because a rule quoting the old phrase would mark every fresh
+ * paste stale.</p>
+ *
+ * <p>The first row: bd79584's gate rule told the agent to pass `humanDecision: "proceed"` to
+ * `resolve`; the server now refuses that, and the rule says "Never pass `humanDecision` yourself."</p>
+ */
+export const RETIRED_TEXT: readonly { readonly half: string; readonly text: string; readonly retiredAt: number }[] = [
+  { half: 'coai-snippet', text: '`humanDecision: "proceed"` to `resolve`', retiredAt: 18 },
+];
+
 /** The ids this build reads, in the order the artefact carries them. */
 export const HALF_IDS: readonly string[] = KNOWN_HALVES.map((half) => half.id);
 
@@ -247,6 +270,8 @@ function versionsOf(text: string, id: string): readonly number[] {
 /**
  * Whether a half is ABSENT from a text, or older than ours in any copy the text holds.
  *
+ * <p>A half carrying one of its {@link RETIRED_TEXT} sentences is behind too, whatever its marker says.</p>
+ *
  * <p>Absent counts as behind, and that is the half of this the arithmetic gets wrong if it is
  * written inline: a missing half has no versions at all, so a plain `Math.min` over an empty list
  * answers `Infinity` and a paste carrying only the gate rule reads as CURRENT. That is exactly what
@@ -259,7 +284,15 @@ function isBehind(text: string, half: { readonly id: string; readonly version: n
   // limit, and spreading an unbounded list into a call exceeds the argument limit and throws
   // RangeError — which would take out the panel refresh rather than answer a question about a
   // silly file. Same predicate, no expansion. (CodeRabbit, on the pull request.)
-  return versions.length === 0 || versions.some((version) => version < half.version);
+  if (versions.length === 0 || versions.some((version) => version < half.version)) {
+    return true;
+  }
+
+  // A retired sentence of this half's own is as good as a lower marker: the frozen gate half's marker
+  // cannot move, so this is the only way an old paste of it is told from a current one. The text is
+  // searched whole, since a paste does not delimit its halves; the rows are per half so that one
+  // half's retired phrase never marks another half stale.
+  return RETIRED_TEXT.some((row) => row.half === half.id && text.includes(row.text));
 }
 
 /** One half's version, or nothing when that half is not in the text. */
