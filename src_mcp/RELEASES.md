@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.64.0...mcp-v0.65.0) (2026-11-07)
+
+
+### Features
+
+* **tests:** E5 producer — owner-form run folders, the sweep, the Node wrap, and the guards and audit that keep them (S3, S2-B, S4, S5, S6) ([#945](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/945)) ([825504e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/825504ebda8f1fa9ddf497d2fa2df35271a4d702))
+
 ## [0.64.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.63.0...mcp-v0.64.0) (2026-11-06)
 
 
