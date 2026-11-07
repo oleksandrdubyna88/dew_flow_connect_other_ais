@@ -249,6 +249,9 @@ function label(id: string): string {
   return KNOWN_HALVES.find((half) => half.id === id)?.name ?? id;
 }
 
+/** Every half's marker, whatever its id: what `halvesIn` reads and where `segmentsOf` ends a segment. */
+const ANY_HALF_MARKER = /<!-- (coai-[a-z-]+) v(\d+) -->/g;
+
 /** Any half's marker, from its id — never a second literal to keep in step. */
 function markerOf(id: string): RegExp {
   return new RegExp(String.raw`<!-- ${id} v(\d+) -->`);
@@ -277,13 +280,14 @@ function versionsOf(text: string, id: string): readonly number[] {
  * ALL copies, so a stale block above a fresh paste is still seen.</p>
  */
 function segmentsOf(text: string, id: string): readonly string[] {
-  const starts = [...text.matchAll(new RegExp(markerOf(id), 'g'))].map((match) => match.index);
+  // One pass over every half marker, then each segment is cut between known offsets: no copy of the
+  // remaining text per segment, and the delimiter is the same pattern `halvesIn` reads.
+  const boundaries = [...text.matchAll(ANY_HALF_MARKER)].map((match) => match.index);
 
-  return starts.map((start) => {
-    const rest = text.slice(start + 1);
-    const next = rest.search(/<!-- coai-[a-z-]+ v\d+ -->/);
+  return [...text.matchAll(new RegExp(markerOf(id), 'g'))].map((match) => {
+    const next = boundaries.find((offset) => offset > match.index);
 
-    return next < 0 ? text.slice(start) : text.slice(start, start + 1 + next);
+    return text.slice(match.index, next ?? text.length);
   });
 }
 
@@ -338,7 +342,7 @@ function versionOf(text: string, id: string): number | undefined {
  * somebody to paste over it.</p>
  */
 export function halvesIn(text: string): readonly { readonly id: string; readonly version: number }[] {
-  return [...text.matchAll(/<!-- (coai-[a-z-]+) v(\d+) -->/g)]
+  return [...text.matchAll(ANY_HALF_MARKER)]
     .map((match) => ({ id: match[1], version: Number.parseInt(match[2], 10) }));
 }
 

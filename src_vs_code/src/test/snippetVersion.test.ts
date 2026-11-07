@@ -631,6 +631,15 @@ test('a retired sentence OUTSIDE the gate half does not make it older', () => {
   assert.deepEqual(snippetStatus(after), { kind: 'current', current: ARTEFACT_VERSION });
 });
 
+test('a half marker right after the gate marker ends the gate half there', () => {
+  // Raised on the code round: two markers with nothing between them must still be two segments.
+  const retired = RETIRED_TEXT[0];
+  const [gateHalf, documentHalf] = KNOWN_HALVES;
+  const adjacent = `${claudeSnippet()}\n<!-- ${gateHalf.id} v${gateHalf.version} --><!-- ${documentHalf.id} v${documentHalf.version} -->It used to say ${retired.text}.\n`;
+
+  assert.deepEqual(snippetStatus(adjacent), { kind: 'current', current: ARTEFACT_VERSION });
+});
+
 test('a stale gate block above a fresh paste is still older, by its retired sentence', () => {
   const retired = RETIRED_TEXT[0];
   const gate = KNOWN_HALVES[0].text;
