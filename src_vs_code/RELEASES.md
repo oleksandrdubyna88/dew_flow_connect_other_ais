@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.84.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.83.0...extension-v0.84.0) (2026-11-06)
+
+
+### Features
+
+* **commands:** a plan of more than 3 epics builds a core, then a proof, and keeps the rest as candidates ([#952](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/952)) ([da21361](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/da213614ce6356cd80b5ef9674829d5782dd9697))
+* **kimi:** Kimi Code as a consultant and a question-consultant row (S5) ([#839](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/839)) ([e1ed0ed](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e1ed0ed6c98674b29212135fedd995b1dddf52e9))
+* **ledger:** the round-counter tail's plan, and E3 — every ledger line says what it ran with, why it was cancelled, and money per consultation ([#904](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/904)) ([eb85d5f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/eb85d5f69f07a5a1f80a663d9993196f762bd564))
+* **rounds:** both stores counted, and launches per round (round-counter tail E6) ([#918](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/918)) ([770abbc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/770abbc679e6aafc6ef6a26921e6bbd32c766613))
+* **tests:** E5 stage A — the age-only coai- test sweep is retired; a one-off clean-up removes only what a person picks ([#940](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/940)) ([d02ed40](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d02ed40e643ec61cd48142ca1427a175d7054a39))
+
+
+### Bug Fixes
+
+* **agy:** the Antigravity default is a model agy offers ([#911](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/911)) ([7d691fe](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7d691feec1fbaaca7623e5e8cc1045ac19c4b30c))
+* **deps:** update npm lockfiles to close Dependabot security alerts ([#934](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/934)) ([b8de780](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b8de780f399ab812697a038120b42036f6d989f8))
+* **gate:** only an answer on the notice card releases a held gate (security) ([#920](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/920)) ([4f13772](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4f13772d87780ff1dc646eb37343f20a0a4a06d4))
+* **mcp:** the spent-quota plan's last tails — stderr evidence in every note, no parenthesis of ours, Moonshot ids masked whole ([#921](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/921)) ([5d226b3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/5d226b387d055b0fa20613c411831838a3ab14a3))
+
 ## [0.83.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.82.0...extension-v0.83.0) (2026-10-21)
 
 

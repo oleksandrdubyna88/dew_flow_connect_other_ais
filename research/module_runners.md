@@ -117,12 +117,15 @@ sequenceDiagram
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
-  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 998** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20, 80 008 until 2026-10-21, 80 024 until 2026-11-01, when the conventions pin moved to `105d53c`), which
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **80 023** bytes (base 17 988 + tier 62 035; 79 998 until 2026-11-05, when the E6.S1 branch merged with `main` and PROJECT.md named `--round-counts-merged` (+25; on that branch before the merge the pair was 80 049 = base 17 988 + tier 62 061, leaving 9 951); 79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20, 80 008 until 2026-10-21, 80 024 until 2026-11-01, when the conventions pin moved to `105d53c`), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **10 002** now (9 976 until 2026-11-01, 10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
-  names the tail takes one rule on 35 %, two on 58 %, three on 7 % (mean 1.72; 30 / 62 / 8 % and 1.78 at 9 976), and
-  `common/test-leftovers.md` (an 8 403-character core since 2026-11-01; 8 794 since 2026-11-02, pin 5863c60) is drawn on 4.9 % (4.7 % at 8 794) (it was 9.8 % at 4 706 bytes) — drawn, not owed: a rule that must reach every reviewer
-  belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
+  reviewer) and leave **9 977** now (10 002 until 2026-11-05, 9 976 until 2026-11-01, 10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
+  names the tail takes one rule on 31 %, two on 61 %, three on 8 % (mean 1.77 at 9 977, measured 2026-11-05 on the merged tree; 35 / 58 / 7 % and 1.72 at 10 002; 30 / 62 / 8 % and 1.78 at 9 976), and
+  `common/test-leftovers.md` (an 8 403-character core since 2026-11-01; 8 794 since 2026-11-02, pin 5863c60) is drawn on 5.1 % (153 of 3 000 at 9 977 free and 8 794 characters; 4.9 % at 10 002 with the 8 403-character core, 4.7 % at 8 794 with 10 002 free) (it was 9.8 % at 4 706 bytes) — drawn, not owed: a rule that must reach every reviewer
+  belongs in the tier. **Since 2026-11-06 the budget is 93 301 characters** (the owner's decision, after consultants, consult 53578f8a: pin `37b9aa5` grew the tier by 3 301 to
+  65 336, so the base and the tier spend **83 324**, which would have left 6 676 at 90 000 and put `common/test-leftovers.md` on no branch). That leaves **9 977** again, the
+  figure before the pin; the tail takes one rule on 36.7 % of 3 000 branch names (1 102), two on 55.2 % (1 655), three on 8.1 % (243), mean 1.71; `common/test-leftovers.md`
+  (8 794 characters) is drawn on 5.1 % (153 of 3 000; 7 of the 100 fixed names, the same seven). The figures above are the 90 000-byte history. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
 
   **That number is the same on every platform only since 2026-09-18.** Until then `RuleFiles.Read`
   handed the collector whatever the disk held, so a CRLF checkout measured **78 855** — one character
@@ -137,13 +140,13 @@ sequenceDiagram
 
   The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
   and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
-  `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (the measuring test and drift
-  guard: 17 963 + 62 035 since 2026-11-01 (the conventions pin at 105d53c), re-measured and unchanged on 2026-11-02 (the pin at 5863c60: free tail still 10 002, `common/test-leftovers.md` an 8 794-character core, 8 403 before; the new `common/test-leftovers-baseline.md` is 9 123 characters and a tail rule outside the tier; the same 7 of 100 fixed names draw the core, 142 of 3 000 (4.7 %) against 147); 17 963 + 62 061 before that; 17 947 + 62 061 before E1.S2's --host-facts; 17 925 + 62 061 from 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
-  `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
+  `StageRulesTests.AtTheDefaultBudget_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (the measuring test and drift
+  guard: 17 988 + 65 336 = 83 324 of 93 301 since 2026-11-06 (the conventions pin at 37b9aa5, `common/testing.md` +3 301, and the owner's raise of the budget; 17 988 + 62 035 = 80 023 of 90 000 before); 17 963 + 62 035 since 2026-11-01 (the conventions pin at 105d53c), re-measured and unchanged on 2026-11-02 (the pin at 5863c60: free tail still 10 002, `common/test-leftovers.md` an 8 794-character core, 8 403 before; the new `common/test-leftovers-baseline.md` is 9 123 characters and a tail rule outside the tier; the same 7 of 100 fixed names draw the core, 142 of 3 000 (4.7 %) against 147); 17 963 + 62 061 before that; 17 947 + 62 061 before E1.S2's --host-facts; 17 925 + 62 061 from 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
+  `AtTheDefaultBudget_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
   the measured maximum elsewhere),
-  `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
-  `AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` pin the facts and fail the day they change;
-  `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` pins the number itself.
+  `AtTheDefaultBudget_EveryBranchReachesAtLeastOneTailRule` (at least one) and
+  `AtTheDefaultBudget_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` pin the facts and fail the day they change;
+  `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNumber` pins the number itself.
   `string.GetHashCode` is unusable here: .NET randomises it per process,
   so it would differ between two rounds on one machine. Measured basis:
   [RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md).
@@ -1449,6 +1452,10 @@ give-back are the server's half ([module_server.md](module_server.md)).
   record it was replacing stays whole. A reused pid on the same machine keeps the file: a leak, never a deletion.
   `AtomicJson.WriteUnderTurn` (`Escalations.cs`) writes through it, so `AtomicFile`'s list of open-coded copies is three now
   (`ConsultSchemaFile`, `RemoteRuntime`, `ArtifactStore`); `SessionStore.Write` writes through it too since E3 S5 (its ten-attempt `MoveOverExisting` loop was removed, not extracted), and the seam gained `WriteText` (fail the temp write half way).
+  **A new caller since E6.S1:** `RoundCountsSnapshot.TryWrite` (`src_mcp/src/Store/RoundCountsSnapshot.cs`) writes `round-counts-snapshot.json` through it with `SharingRetry`, after every
+  round — the file the OTHER side's counter reads across the WSL boundary, which is why a reader must never see half of it (`todo/PLAN_the_round_counter_tail_E6.md` §4.1–4.3). The caller
+  reaches the seams through an `Action<string,string>` of its own (as `SessionStore` does), because `AtomicSeams` is internal to this assembly; `RoundCountsSnapshotTests.TheDefaultWriter_IsTheAtomicOne`
+  pins that the default writer IS this class (only it removes a dead writer's orphan temp).
   `MoveOver` catches `IOException` and `UnauthorizedAccessException` explicitly. Tests: `AMoveOverAHeldFileIsRetriedTests`, `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests`.
 - **`FilesystemInvariant.SnapshotAsync`** throws `OperationCanceledException` for a cancelled token. The
   launcher never throws on cancellation (it reports `TimedOut: true, Cancelled: true`), so a `git status` killed
@@ -2389,7 +2396,7 @@ two protections (S3.1) are applied there as well — the pack goes to the same t
   withholds every hunk line rather than serving any.
   (`APrivateKeyBlockIsNeverServedTests.AHunkInsideAKeyBody_WithNoMarkerInView_IsWithheldFromThePack`.)
 - **`StageRules.Feature`** (`runners/Context/StageRules.cs`) — the feature stage's rules tier, collected
-  at the full `RuleFiles.DefaultBudgetBytes` (D18; 90 000 bytes since 2026-10-16): the code review's order (the language doctrines,
+  at the full `RuleFiles.DefaultBudgetBytes` (D18; 90 000 bytes since 2026-10-16, 93 301 since 2026-11-06): the code review's order (the language doctrines,
   security, testing, reuse, style, the knowledge base) and then the rules a feature breaks ACROSS
   epics — reliability, scenario tests, planning docs, HTTP contracts, platform limits.
   `StageRulesTests.EveryTierEntry_ResolvesInThePinnedConventionsMount` covers the new tier.

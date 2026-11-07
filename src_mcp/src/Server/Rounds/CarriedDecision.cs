@@ -22,6 +22,7 @@ public sealed record CarriedDecision(Finding Finding, string Action, string Reas
     {
         Decision.Accepted accepted => new(accepted.Finding, "accept"),
         Decision.Rejected rejected => new(rejected.Finding, "reject", rejected.Reason),
+        Decision.ProceededOver over => new(over.Finding, "proceeded", RoundMachine.ProceededOver),
         _ => throw new InvalidOperationException("the union is closed"),
     };
 }

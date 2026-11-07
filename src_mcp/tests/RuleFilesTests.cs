@@ -36,18 +36,20 @@ public sealed class RuleFilesTests : IDisposable
     }
 
     /// <summary>
-    /// The budget a round's rules are collected under is the operator's 90 KB, not the 80 KB before it.
+    /// The budget a round's rules are collected under is the operator's number — 93 301 since 2026-11-06, 90 000 before it, 80 000 before that.
     /// </summary>
     /// <remarks>
     /// Pinned as a number on purpose: the budget is a decision, and a decision that can drift by a
     /// refactor is not one. The operator raised it from 80 000 to 90 000 bytes on 2026-10-16 because the
     /// base and the tier had left ~56 characters of headroom, so a new non-tier rule
-    /// (<c>common/test-leftovers.md</c>) could not reach any reviewer.
+    /// (<c>common/test-leftovers.md</c>) could not reach any reviewer. <b>Re-baselined 2026-11-06:</b> the owner raised it again, to 93 301
+    /// (after consultants; consult 53578f8a), because pin <c>37b9aa5</c> grew the tier by 3 301 to 65 336 and at 90 000 the rule would have reached no
+    /// reviewer. The test was renamed from <c>TheDefaultBudget_IsTheOperatorsNinetyKilobytes</c> because the number is no longer ninety.
     /// </remarks>
     [Fact]
-    public void TheDefaultBudget_IsTheOperatorsNinetyKilobytes() =>
-        RuleFiles.DefaultBudgetBytes.Should().Be(90_000,
-            "the operator raised the rules budget from 80 KB to 90 KB on 2026-10-16");
+    public void TheDefaultBudget_IsTheOperatorsNumber() =>
+        RuleFiles.DefaultBudgetBytes.Should().Be(93_301,
+            "the operator raised the rules budget from 80 000 to 90 000 on 2026-10-16 and, for pin 37b9aa5 (the tier grew by 3 301), to 93 301 on 2026-11-06");
 
     private static string Filler(string marker, int bytes) => marker + new string('x', bytes);
 
