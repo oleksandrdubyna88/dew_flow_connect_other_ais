@@ -130,7 +130,7 @@ public sealed class RuleOrderTests : IDisposable
     /// 41 000-byte budget, so its tail has room. The real corpus has less: measured 2026-10-16 at the
     /// 90 000-byte budget, the base and the tier leave 9 976 bytes (re-baselined 2026-10-21; 9 992 before) against a smallest non-tier rule of
     /// 2 197, so the rotation reaches one to three rules (it reached none at 80 000, with 56 bytes
-    /// left). This test asserts the mechanism; <c>StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules</c> asserts
+    /// left). This test asserts the mechanism; <c>StageRulesTests.AtTheDefaultBudget_TheRotatedTail_FitsAtMostThreeRules</c> asserts
     /// the fact.</para>
     /// </remarks>
     [Fact]
