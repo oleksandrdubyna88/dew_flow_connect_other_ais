@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class RoundCountsMergedRequestTests
 {
-    private static string Absolute(int n) => Path.Combine(Path.GetTempPath(), "testsToDelete-request", $"{n}.json");
+    private static string Absolute(int n) => Path.Combine(TempDir.Root, "merged-request", $"{n}.json");
 
     private static string[] Args(IEnumerable<string> paths) => ["--round-counts-merged", .. paths];
 

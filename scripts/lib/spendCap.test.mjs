@@ -1,3 +1,4 @@
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { capPassed, capRefusal, inputTokensOf } from './spendCap.mjs';

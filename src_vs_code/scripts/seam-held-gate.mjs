@@ -29,9 +29,10 @@
  * <p><b>Its own module</b>, as every leg after the sixth is: `run-seam.mjs` is past the repository's 800-line ceiling. What it needs
  * from the runner — the session factory, the reply reader, the binary and the stand-in CLI — is handed in.</p>
  */
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { owned } from './owned.mjs';
 
 import { runCli } from './cliHarness.mjs';
 
@@ -65,20 +66,21 @@ const ROW = {
  * @param {{serverSession: Function, answerOf: Function, fakeCli: string, fail: Function}} runner
  */
 export async function heldGateSeam({ serverSession, answerOf, fakeCli, fail }) {
-  const root = mkdtempSync(join(tmpdir(), 'coai-seam-held-'));
-  const home = mkdtempSync(join(tmpdir(), 'coai-seam-held-home-'));
-  const repo = mkdtempSync(join(tmpdir(), 'coai-seam-held-repo-'));
-  const forget = forgetting([root, home, repo]);
+  const scope = owned.cleanupScope();
+  const root = owned.ownedDir(scope, 'held');
+  const home = owned.ownedDir(scope, 'held-home');
+  const repo = owned.ownedDir(scope, 'held-repo');
+  const forget = () => scope.close();
   const stop = async (session, why) => {
     await session.killAndWait();
-    forget();
+    await forget();
     fail(why);
   };
 
   try {
     await scratchRepo(repo);
   } catch (e) {
-    forget();
+    await forget();
     fail(`the scratch repository for the held-gate leg could not be made: ${e.message}`);
   }
   // The panel's own writer: one plan round, a threshold of zero, the stand-in CLI as the only vendor. Nothing is typed as JSON here.
@@ -118,7 +120,7 @@ export async function heldGateSeam({ serverSession, answerOf, fakeCli, fail }) {
   }
 
   await session.close();
-  forget();
+  await forget();
 
   return { decisions: offered.decisions, stage: released.stage };
 }
@@ -234,17 +236,4 @@ async function scratchRepo(dir) {
   writeFileSync(join(dir, 'src', 'Poll.cs'), 'class Poll { }\n', 'utf8');
   await git('add', '-A');
   await git('commit', '-m', 'the committed state');
-}
-
-/** Remove the leg's directories, and never let that removal be what the run reports (the sixth leg's rule). */
-function forgetting(dirs) {
-  return () => {
-    for (const dir of dirs) {
-      try {
-        rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-      } catch (e) {
-        console.error(`seam: could not remove ${dir} (${e.code ?? e.message}); it is left behind`);
-      }
-    }
-  };
 }

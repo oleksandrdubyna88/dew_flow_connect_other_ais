@@ -11,7 +11,7 @@
 // and the PreToolUse hook that allows only view_file (AntigravityReadOnly). The product's hook handler is the coai
 // binary; here it is a node script with the SAME decision (`Decide`: allow view_file, deny every other tool). The finding
 // schema and the follow-up text (`AntigravityRuntime.NoCommands`) are read out of the C# sources, never copied, so the
-// probe cannot drift from the build it measures. The folder lives in the scratch directory; the person's own agy
+// probe cannot drift from the build it measures. The folder lives in the scratch directory (given, or by default an owned folder removed at exit — the exit line says `--scratch <dir>`; here the folder is the second argument); the person's own agy
 // configuration and `%LOCALAPPDATA%\coai-agy` are not touched.
 //
 // STEP 1 (<= 4 first launches): a reviewer prompt that cannot be answered without a shell command (the method of
@@ -37,13 +37,15 @@
 // `usage` block is kept in <scratch>/results.json, raw streams beside it. Nothing here prints or stores a credential: the
 // environment is passed on as it is and never logged, and a Stop message never carries launch output.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import { absoluteInvocation, authQuotaStop, classifyLaunch, constStringOf, failedLaunch, failureText, fixtureLeak, launchDoneLine, launchStartLine, parseArgs, readStream, redactPaths, treeStop, usableTurn } from './lib/agy-probe.mjs';
 import { runTree } from './lib/launch-tree.mjs';
+import { startDefaultScratch } from '../src_vs_code/scripts/ownedRun.mjs';
+import { loadOwned } from '../src_vs_code/scripts/run-tests.mjs';
 import { capPassed, capRefusal, inputTokensOf } from './lib/spendCap.mjs';
 
 const GIT = resolved('git');
@@ -67,8 +69,11 @@ if (args.error) {
 }
 const { model, maxLaunches: MAX_LAUNCHES } = args;
 const { exe, scratch: scratchArg } = absoluteInvocation(args);
-const scratch = scratchArg || mkdtempSync(join(os.tmpdir(), 'testsToDelete-agy-m1-'));
+// Without a scratch folder argument the scratch is an owned folder of the wrap, removed at exit (one line says so): pass a folder to keep a run.
+const scratch = scratchArg || (await startDefaultScratch({ what: 'agy-m1', prefix: 'probe-agy-review-follow-up' })).path;
 mkdirSync(scratch, { recursive: true });
+// The temp root is read through the wrap (the one door), only to redact it from the fixture; nothing is made there.
+const tempRoot = (await loadOwned({ prefix: 'probe-agy-review-follow-up' })).owned.tempRoot();
 
 // ---- read the build's own texts out of the C# sources ---------------------------------------------------------------
 const source = (relative) => readFileSync(join(REPO_ROOT, relative), 'utf8');
@@ -287,7 +292,7 @@ function writeFixture(capture) {
   const user = os.userInfo().username;
   // Most specific first. Windows paths differ in drive-letter and folder casing between the places they were read from, so
   // there the match ignores case (lib/agy-probe.mjs `redactPaths`).
-  const pairs = [[checkout, '<checkout>'], [home, '<agy-home>'], [scratch, '<scratch>'], [os.tmpdir(), '<tmp>'],
+  const pairs = [[checkout, '<checkout>'], [home, '<agy-home>'], [scratch, '<scratch>'], [tempRoot, '<tmp>'],
     [os.homedir(), '<home>'], [user, '<user>']];
   const sub = (text) => redactPaths(text, pairs, os.platform() === 'win32')
     .replaceAll(capture.conversation, '00000000-0000-4000-8000-000000000001')

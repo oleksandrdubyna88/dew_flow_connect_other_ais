@@ -23,20 +23,20 @@
  * checked presence would pass a TS rename (the parser drops the key and nothing compares).</p>
  *
  * <p><b>A seam must never read the developer's own configuration</b> (#904): the server gets `HOME`, `USERPROFILE` and
- * `CODEX_HOME` pointing into a scratch folder — `homeEnvironment` of the ledger-fields leg, imported, not copied.</p>
+ * `CODEX_HOME` pointing into a scratch folder — `homeEnvironment` of the session module (the ledger-fields leg uses the same one), imported, not copied.</p>
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { owned } from './owned.mjs';
 
 const { serverSettingsJsonWith } = await import('../out/serverSettingsFile.js');
 const { DEFAULTS } = await import('../out/settingsShape.js');
 const { vendorsFrom } = await import('../out/vendors.js');
 const { FEATURES } = await import('../out/binaryFeatures.js');
 const { parseRoundCounts, totalRounds } = await import('../out/roundCounts.js');
-const { answerOf, sessionsFor } = await import('./seam-session.mjs');
-const { homeEnvironment } = await import('./seam-ledger-fields.mjs');
+const { answerOf, homeEnvironment, sessionsFor } = await import('./seam-session.mjs');
 
 /** The file the owning side writes, and the store id of the hand-written snapshot (not the real round's, which the binary computes). */
 export const SNAPSHOT_FILE = 'round-counts-snapshot.json';
@@ -51,25 +51,17 @@ export const TRACKED_ROW = ['roundKeys', 'keyStore', 'roundsWithoutKey', 'parts'
 /** The clean answer of an answering reviewer: no findings. */
 const NO_FINDINGS = '{"findings": []}';
 
-function removeQuietly(path) {
-  try {
-    rmSync(path, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
-  } catch {
-    // Deliberately swallowed: the verdict (or the error that produced it) is what the caller reports.
-  }
-}
-
 /** A home of its own for the server: the only one it may read. */
-function isolatedHome() {
-  const home = mkdtempSync(join(tmpdir(), 'coai-seam-rounds-home-'));
+function isolatedHome(scope) {
+  const home = owned.ownedDir(scope, 'rounds-home');
   mkdirSync(join(home, '.codex'));
 
   return home;
 }
 
 /** A checkout with a `feature` branch ahead of `main`, which is what a round reviews. */
-function scratchRepo() {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-seam-rounds-repo-'));
+function scratchRepo(scope) {
+  const dir = owned.ownedDir(scope, 'rounds-repo');
   const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'] });
   git('init', '--initial-branch=main');
   git('config', 'user.email', 'seam@example.invalid');
@@ -231,34 +223,28 @@ export function valueVerdict(merged, plain, live, missingPath, foreignPath) {
   return problems.filter((one) => one.length > 0).join('\n  ');
 }
 
-async function run({ binary, fakeCli, dataDir, timeoutMs }) {
-  const repoPath = scratchRepo();
-  const home = isolatedHome();
-  const otherDir = mkdtempSync(join(tmpdir(), 'coai-seam-rounds-other-'));
-  try {
-    writeSettings(dataDir, fakeCli);
-    await realRound(sessionsFor({ command: 'dotnet', args: [binary], dataDir, timeoutMs }), repoPath, home);
-    const live = liveSnapshot(dataDir);
-    const nowMs = Date.now() + 60_000;
-    const now = new Date(nowMs).toISOString();
-    const foreignPath = join(otherDir, SNAPSHOT_FILE);
-    const missingPath = join(otherDir, 'nowhere', SNAPSHOT_FILE);
-    writeFileSync(foreignPath, foreignSnapshot(live, nowMs), 'utf8');
-    const merged = answerPair(ask(binary, ['--round-counts-merged', '--now', now, foreignPath, missingPath], dataDir, home));
-    const plain = answerPair(ask(binary, ['--round-counts', '--now', now], dataDir, home));
-    const verdict = [contractVerdict(merged, plain), valueVerdict(merged, plain, live, missingPath, foreignPath)].filter((one) => one.length > 0).join('\n');
-    if (verdict.length > 0) {
-      throw new Error(verdict);
-    }
-
-    const row = rowsOf(merged.parsed).find((one) => one.provider === live.provider);
-
-    return { stores: merged.parsed.stores.length, rounds: totalRounds(row) };
-  } finally {
-    removeQuietly(repoPath);
-    removeQuietly(home);
-    removeQuietly(otherDir);
+async function run({ binary, fakeCli, dataDir, timeoutMs, scope }) {
+  const repoPath = scratchRepo(scope);
+  const home = isolatedHome(scope);
+  const otherDir = owned.ownedDir(scope, 'rounds-other');
+  writeSettings(dataDir, fakeCli);
+  await realRound(sessionsFor({ command: 'dotnet', args: [binary], dataDir, timeoutMs }), repoPath, home);
+  const live = liveSnapshot(dataDir);
+  const nowMs = Date.now() + 60_000;
+  const now = new Date(nowMs).toISOString();
+  const foreignPath = join(otherDir, SNAPSHOT_FILE);
+  const missingPath = join(otherDir, 'nowhere', SNAPSHOT_FILE);
+  writeFileSync(foreignPath, foreignSnapshot(live, nowMs), 'utf8');
+  const merged = answerPair(ask(binary, ['--round-counts-merged', '--now', now, foreignPath, missingPath], dataDir, home));
+  const plain = answerPair(ask(binary, ['--round-counts', '--now', now], dataDir, home));
+  const verdict = [contractVerdict(merged, plain), valueVerdict(merged, plain, live, missingPath, foreignPath)].filter((one) => one.length > 0).join('\n');
+  if (verdict.length > 0) {
+    throw new Error(verdict);
   }
+
+  const row = rowsOf(merged.parsed).find((one) => one.provider === live.provider);
+
+  return { stores: merged.parsed.stores.length, rounds: totalRounds(row) };
 }
 
 /** @returns {Promise<{ stores: number, rounds: number }>} what the leg saw, for its line */
@@ -266,14 +252,15 @@ export async function roundCountsMergedSeam({ binary, fakeCli, fail, timeoutMs }
   if (fakeCli === '') {
     fail('no FakeCli build found. Run: dotnet build src_mcp/tests_fakecli/FakeCli.csproj');
   }
-  const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-rounds-'));
+  const scope = owned.cleanupScope();
+  const dataDir = owned.ownedDir(scope, 'rounds');
   let outcome;
   try {
-    outcome = await run({ binary, fakeCli, dataDir, timeoutMs });
+    outcome = await run({ binary, fakeCli, dataDir, timeoutMs, scope });
   } catch (error) {
     outcome = error instanceof Error ? error.message : String(error);
   } finally {
-    removeQuietly(dataDir);
+    await scope.close(); // never what the run reports: the scope warns on a folder it cannot remove
   }
   if (typeof outcome === 'string') {
     fail(`the round counts did not cross from coai-mcp to the extension: ${outcome}`);

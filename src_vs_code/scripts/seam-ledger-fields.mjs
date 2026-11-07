@@ -32,7 +32,7 @@ const { DEFAULTS } = await import('../out/settingsShape.js');
 const { vendorsFrom } = await import('../out/vendors.js');
 const { FEATURES } = await import('../out/binaryFeatures.js');
 const { parseUsageLine } = await import('../out/usage.js');
-const { answerOf, sessionsFor } = await import('./seam-session.mjs');
+const { answerOf, homeEnvironment, sessionsFor } = await import('./seam-session.mjs');
 
 /** The keys this leg exists for: the S1 labels, the consultation of S4 and the local cause of S2. */
 export const TRACKED = ['consultation', 'cli', 'cliVersion', 'effort', 'effortFrom', 'tier', 'endCause'];
@@ -79,13 +79,7 @@ function isolatedHome() {
   return home;
 }
 
-/**
- * The environment entries that make `home` the only home the server sees: `HOME` (read first by the server) and `USERPROFILE`
- * (Windows), and `CODEX_HOME` pointing into it so an inherited `CODEX_HOME` cannot win over them.
- */
-export function homeEnvironment(home) {
-  return { HOME: home, USERPROFILE: home, CODEX_HOME: join(home, '.codex') };
-}
+export { homeEnvironment }; // lives in seam-session.mjs, shared with the round-counts leg
 
 /** A checkout with a `feature` branch ahead of `main`, which is what a round reviews. */
 function scratchRepo() {
