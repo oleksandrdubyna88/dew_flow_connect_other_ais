@@ -12,8 +12,9 @@ The rule is [`.agents/conventions/common/http-contracts.md`](../.agents/conventi
 node http/run-contracts.mjs
 ```
 
-Exit code is the verdict: **0** pass · **1** a contract regression · **3** environment (the build or
-the server would not start) · **4** configuration. httpyac's own status is mapped in
+Exit code is the verdict: **0** pass · **1** a contract regression · **2** the shared conventions are not mounted
+(`git submodule update --init .agents/conventions`; nothing ran) · **3** environment (the build or
+the server would not start) · **4** configuration · **78** the run's own temp folder could not be made (nothing ran). httpyac's own status is mapped in
 [verdict.mjs](verdict.mjs): the pinned 6.16.7 exits **20** for a failed assertion, which is a contract regression —
 until 2026-10-11 the runner knew only 1, so every real regression read as exit 4 (`httpContractVerdict.test.mjs` in
 the extension's suite holds the mapping).

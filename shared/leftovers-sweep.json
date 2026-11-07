@@ -1,0 +1,4 @@
+{
+  "why": "E5 S2-B, D11: the ONE switch of the owner-aware start-of-run sweep in every C# suite and in both Node runners. 'collect' — the sweep removes a killed run's folders on the two keys of the rule (scope and gone), by identity, through the quarantine. 'list-only' — it removes nothing and lists every name it would have judged; the run folder's creation and teardown are untouched. A rollback of the producer PR changes this ONE value in ONE reviewed line before anything is reverted (todo/PLAN_test_leftovers_E5.md D11). Any other value, a missing key or an unreadable file reads as list-only, with one line.",
+  "startOfRunSweep": "collect"
+}

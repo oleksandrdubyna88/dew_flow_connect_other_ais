@@ -3,6 +3,7 @@
 // Vibe 2.26.1's own Python). The grammar reads NAMES only — the value after `=` is never parsed — so these tests assert the
 // IMPLICATION the plan's soundness argument rests on: whatever the reference ADMITS binds no name but MISTRAL_API_KEY in
 // python-dotenv. Runs nothing; reads one committed JSON file.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

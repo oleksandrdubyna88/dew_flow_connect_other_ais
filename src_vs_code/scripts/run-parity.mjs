@@ -23,6 +23,10 @@ import { fileURLToPath } from 'node:url';
 // executable for a different question. The search order, the COAI_NOTICE_TOOL override and the
 // reason the build is not optional are decisions, and a second copy of them is where they drift.
 import { TIMEOUT_MS, noticeTool } from './noticeTool.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'parity' });
+
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');

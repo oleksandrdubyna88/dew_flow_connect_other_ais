@@ -21,6 +21,7 @@
  * at least 32 bytes. Minting one here is fifteen lines and no dependency, which is what makes this
  * test cheap enough to run on every pull request.</p>
  */
+import '../../scripts/inRunFolder.cjs';
 import * as assert from 'node:assert';
 import { createHmac } from 'node:crypto';
 import { test } from 'node:test';

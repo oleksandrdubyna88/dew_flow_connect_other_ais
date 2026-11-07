@@ -1,6 +1,7 @@
 // node --test scripts/lib/agy-probe.test.mjs — the pure parts of scripts/probe-agy-review-follow-up.mjs (a PAID probe: the probe
 // itself is never run by a test). Argument validation, the stream reader, the launch classification, the auth/quota stop
 // sentence, the console progress lines and the fixture's path redaction.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';

@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class RoundAuthorsMergeTests : IDisposable
 {
-    private readonly TempDir _root = TempDir.For("testsToDelete-coai-authors-merge-");
+    private readonly TempDir _root = TempDir.For("authors-merge-");
 
     public void Dispose()
     {

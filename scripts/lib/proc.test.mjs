@@ -2,18 +2,22 @@
 // (pid, parent, comm, and the NAME the product's listing reads) and the lock probe that asks flock(1) whether an EXCLUSIVE taker would
 // get in. The parser and the Kimi rule run everywhere over a fake /proc; the flock case needs util-linux and runs on the Linux CI job and in WSL.
 // Makes folders only under this user's own temp folder, and removes them; ends only the pid it started. Runs no real kimi.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { after, before as beforeAll, test } from 'node:test';
 import { FLOCK, isKimi, linuxProcesses, listProcesses, lockState, parseProcStat, parseStartTime, waitForNoOtherKimi } from './proc.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 
 const WINDOWS = process.platform === 'win32';
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-proc-test-'));
-after(() => rmSync(base, { recursive: true, force: true }));
+// The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
+let base;
+const scope = wrap.cleanupScope();
+beforeAll(() => { base = wrap.ownedDir(scope, 'proc', { parent: realpathSync.native(wrap.tempRoot()) }); });
+after(() => scope.close());
 
 test('a /proc/<pid>/stat line gives pid, parent and comm — comm is cut at the LAST ")" because a name may hold one', () => {
   assert.deepEqual(parseProcStat('4242 (kimi) S 17 4242 4242 0 -1 4194560 7 0'), { pid: 4242, ppid: 17, comm: 'kimi' });

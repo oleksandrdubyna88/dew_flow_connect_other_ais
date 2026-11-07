@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 /// <remarks>
 /// <para>The service builds its Kimi adapter BY NAME, so the fake person and the measured host are stood in per async flow
 /// (<see cref="KimiSeams.Using"/>, the <c>VibePathBudget.Using</c> precedent), with the lock root (<c>KimiCredentialsLock.RootFor</c>) beside them.
-/// Every folder a test makes is the scenario's data directory, the fixture's <c>testsToDelete-kimi-</c> folder, or a <c>testsToDelete-</c> folder of
+/// Every folder a test makes is the scenario's data directory, the fixture's <c>kimi-</c> folder, or a temp folder of
 /// its own; the person's folder lives outside the homes root the sweeps delete.</para>
 /// <para>These are E5.3's service-level arms too (its deviation 16): the re-login refusal with the record left open (S5.4.16), the two-turn canary
 /// (S5.4.17), one sign-in's peak (S5.4.18), the gate another process holds (S5.4.19), and the owned root the service hands (S5.4.20).</para>
@@ -375,7 +375,7 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
     {
         using var person = new KimiFixture();
         using var stood = StandIn(person);
-        using var other = TempDir.For("testsToDelete-kimi-repo-");
+        using var other = TempDir.For("kimi-repo-");
         var repo2 = await SecondRepositoryAsync(other);
         var gate = KimiCredentialsLock.PathFor(person.Credentials);
         var gateHeld = new System.Collections.Concurrent.ConcurrentBag<bool>();

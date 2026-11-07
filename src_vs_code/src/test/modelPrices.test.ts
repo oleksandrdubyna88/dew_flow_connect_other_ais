@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { liteLlmTable, openRouterTable, priceFor, priceKey, routeOf } from '../modelPrices';

@@ -1,10 +1,11 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { parseUsageLine } from '../../out/usage.js';
-import { disagreements, homeEnvironment, keysWritten, SEAM_EFFORT, strayEfforts, TRACKED, verdictOn } from '../../scripts/seam-ledger-fields.mjs';
-import { sessionsFor } from '../../scripts/seam-session.mjs';
+import { disagreements, keysWritten, SEAM_EFFORT, strayEfforts, TRACKED, verdictOn } from '../../scripts/seam-ledger-fields.mjs';
+import { owned } from '../../scripts/owned.mjs';
+import { homeEnvironment, sessionsFor } from '../../scripts/seam-session.mjs';
 
 /**
  * The ledger-fields leg of the seam, held to what it claims (E3 of todo/PLAN_the_round_counter_tail_E3.md).
@@ -66,7 +67,7 @@ test('an effort that did not come from the isolated codex home fails the leg —
 });
 
 test('the environment the leg gives the server points HOME, USERPROFILE and CODEX_HOME into the scratch home', () => {
-  const home = join(tmpdir(), 'a-scratch-home');
+  const home = join(owned.tempRoot(), 'a-scratch-home');
 
   assert.deepEqual(homeEnvironment(home), { HOME: home, USERPROFILE: home, CODEX_HOME: join(home, '.codex') });
 });
@@ -74,11 +75,11 @@ test('the environment the leg gives the server points HOME, USERPROFILE and CODE
 test('a child started with the leg environment sees the scratch home and not the developer own', async () => {
   // The REAL spawn path (sessionsFor), against a stand-in that answers every request with its own environment: what is asserted
   // is what the child received, even when the parent runs with a HOME and a CODEX_HOME of its own that would otherwise be inherited.
-  const home = join(tmpdir(), 'coai-seam-env-probe-home');
+  const home = join(owned.tempRoot(), 'coai-seam-env-probe-home');
   const echo = 'process.stdin.on("data", (b) => { for (const l of String(b).split("\\n")) { if (!l.trim()) continue; const m = JSON.parse(l); '
     + 'if (m.id !== undefined) console.log(JSON.stringify({ id: m.id, result: { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, CODEX_HOME: process.env.CODEX_HOME } })); } });';
   const before = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, CODEX_HOME: process.env.CODEX_HOME };
-  process.env.HOME = join(tmpdir(), 'the-developers-home');
+  process.env.HOME = join(owned.tempRoot(), 'the-developers-home');
   process.env.USERPROFILE = process.env.HOME;
   process.env.CODEX_HOME = join(process.env.HOME, '.codex');
   const session = sessionsFor({ command: process.execPath, args: ['-e', echo], dataDir: '', timeoutMs: 20_000 })(homeEnvironment(home));

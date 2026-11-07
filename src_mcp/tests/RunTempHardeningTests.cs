@@ -1,15 +1,20 @@
+using CoaiMcp.Tests.Leftovers;
 using FluentAssertions;
 using Xunit;
 
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// What the E2 code gate and the Opus judge (2026-10-20) found about <see cref="RunTemp"/> and <see cref="RunTempFolder"/>, each pinned by a test that was red first
-/// (<c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>, "Code gate and judge" record: G2/J4, G3, G8, G14, G15, G18, J3, J6).
+/// What the E2 code gate and the Opus judge (2026-10-20) found about <see cref="RunTemp"/> and <see cref="RunTempFolder"/>, and what E5 S3 changed: a taken name is
+/// never adopted (the claim is made exclusively, first), and a folder that cannot be removed keeps its claim (<c>todo/PLAN_test_leftovers_E5.md</c>, S3 scenario 3).
 /// </summary>
-/// <remarks>Every test uses a private root and the seams; none writes a process-wide variable.</remarks>
-public sealed class RunTempHardeningTests
+/// <remarks>Every test uses a private root inside an owned scope and the seams; none writes a process-wide variable.</remarks>
+public sealed class RunTempHardeningTests : IDisposable
 {
+    private readonly OwnedScope _owned = DarwinLayout.FreshOwnedScope();
+
+    public void Dispose() => _owned.Dispose();
+
     private static RunTempSeams Quiet(Dictionary<string, string?> values, List<string> warnings) =>
         new(
             (name, value) => { if (value is null) { values.Remove(name); } else { values[name] = value; } },
@@ -18,63 +23,84 @@ public sealed class RunTempHardeningTests
             Warn = warnings.Add,
         };
 
-    private static Func<string> Draws(params string[] suffixes)
+    /// <summary>The leaf names the seam hands out: the owner-form run name with each id in turn; the last one repeats.</summary>
+    private static Func<string> Draws(params string[] ids)
     {
-        var queue = new Queue<string>(suffixes);
+        var queue = new Queue<string>(ids);
 
-        return () => queue.Count > 0 ? queue.Dequeue() : suffixes[^1];
+        return () => Owned.NameBase + "run-" + (queue.Count > 1 ? queue.Dequeue() : queue.Peek());
     }
 
+    private static string Leaf(string id) => Owned.NameBase + "run-" + id;
+
     [Fact]
-    public void ANameThatAlreadyExists_IsNeverShared_ANewSuffixIsDrawn()
+    public void ATakenName_IsNeverAdopted_AClaimAlreadyThere()
     {
-        using var root = TempDir.For("testsToDelete-e2-root-");
-        var taken = Directory.CreateDirectory(root.At(RunTempFolder.Prefix + "aaaaaa")).FullName;
-        File.WriteAllText(Path.Combine(taken, "belongs-to-someone-else.txt"), "x");
+        var root = _owned.Dir("s3-taken-claim");
+        var theirs = Path.Combine(root, Leaf("aaaaaa") + ".owner");
+        File.WriteAllText(theirs, "somebody else's bytes");
 
-        var run = RunTempFolder.Create(root.Path, Quiet([], []) with { Suffix = Draws("aaaaaa", "aaaaaa", "bbbbbb") });
+        var run = RunTempFolder.Create(root, Quiet([], []) with { NextName = Draws("aaaaaa", "bbbbbb") });
 
-        Path.GetFileName(run.Folder).Should().Be(RunTempFolder.Prefix + "bbbbbb", "the two colliding draws were skipped");
-        File.Exists(Path.Combine(taken, "belongs-to-someone-else.txt")).Should().BeTrue("the folder that was already there is untouched");
+        Path.GetFileName(run.Folder).Should().Be(Leaf("bbbbbb"), "the name with somebody's claim on it was skipped");
+        File.ReadAllText(theirs).Should().Be("somebody else's bytes", "a claim that was there is never replaced");
+        Directory.Exists(Path.Combine(root, Leaf("aaaaaa"))).Should().BeFalse("no folder was made under a name this run did not claim");
         run.Restore();
-        Directory.Exists(taken).Should().BeTrue("restoring this run never removes a folder it did not make");
+        File.Exists(theirs).Should().BeTrue("restoring this run never removes a claim it did not make");
     }
 
     [Fact]
-    public void WhenEveryDrawCollides_CreateGivesUp_AndSharesNothing()
+    public void ATakenName_IsNeverAdopted_AFolderAlreadyThere()
     {
-        using var root = TempDir.For("testsToDelete-e2-root-");
-        Directory.CreateDirectory(root.At(RunTempFolder.Prefix + "aaaaaa"));
+        var root = _owned.Dir("s3-taken-folder");
+        var squatter = Directory.CreateDirectory(Path.Combine(root, Leaf("aaaaaa"))).FullName;
+        File.WriteAllText(Path.Combine(squatter, "belongs-to-someone-else.txt"), "x");
+        var warnings = new List<string>();
 
-        var act = () => RunTempFolder.Create(root.Path, Quiet([], []) with { Suffix = () => "aaaaaa" });
+        var run = RunTempFolder.Create(root, Quiet([], warnings) with { NextName = Draws("aaaaaa", "bbbbbb") });
 
-        act.Should().Throw<IOException>("a bounded number of draws, then an error the initializer turns into one warning and a run without a folder of its own");
-        Directory.GetFiles(root.Path, "*.owner").Should().BeEmpty("no claim for a folder this run did not make");
+        Path.GetFileName(run.Folder).Should().Be(Leaf("bbbbbb"));
+        warnings.Should().ContainSingle(w => w.Contains(Leaf("aaaaaa"), StringComparison.Ordinal), "ONE warning, naming the folder that was there");
+        File.Exists(Path.Combine(root, Leaf("aaaaaa") + ".owner")).Should().BeFalse("this run's own claim for that name was removed again");
+        File.Exists(Path.Combine(squatter, "belongs-to-someone-else.txt")).Should().BeTrue("the folder that was already there is untouched");
+        run.Restore();
+        Directory.Exists(squatter).Should().BeTrue("restoring this run never removes a folder it did not make");
+    }
+
+    [Fact]
+    public void WhenEveryDrawCollides_CreateGivesUp_AfterThreeDraws_AndLeavesNothingOfItsOwn()
+    {
+        var root = _owned.Dir("s3-all-taken");
+        Directory.CreateDirectory(Path.Combine(root, Leaf("aaaaaa")));
+        var draws = 0;
+        var seams = Quiet([], []) with { NextName = () => { draws++; return Leaf("aaaaaa"); } };
+
+        var act = () => RunTempFolder.Create(root, seams);
+
+        act.Should().Throw<InvalidOperationException>("a bounded number of draws, then an error that fails the run closed");
+        draws.Should().Be(Owned.MaxDraws);
+        Directory.GetFileSystemEntries(root).Select(Path.GetFileName).Should().ContainSingle().Which.Should().Be(Leaf("aaaaaa"), "only the folder that was there: no claim of ours");
     }
 
     [Fact]
     public void AFolderThatCannotBeDeleted_KeepsItsClaim()
     {
-        using var root = TempDir.For("testsToDelete-e2-root-");
-        var run = RunTempFolder.Create(root.Path, Quiet([], []) with { WriteClaim = folder => File.WriteAllText(folder + ".owner", "claim"), Delete = _ => throw new IOException("held by a scanner") });
-
-        run.Restore();
-
-        File.Exists(run.ClaimFile).Should().BeTrue("a folder that is still there keeps the claim that says whose it was; a claimless folder could only ever be collected by age");
-    }
-
-    [Fact]
-    public void AClaimThatCannotBeDeleted_IsWarnedAbout_ByItsPath_AndRestoreNeverThrows()
-    {
-        using var root = TempDir.For("testsToDelete-e2-root-");
+        var root = _owned.Dir("s3-unremovable");
         var warnings = new List<string>();
-        var run = RunTempFolder.Create(root.Path, Quiet([], warnings) with { WriteClaim = folder => File.WriteAllText(folder + ".owner", "claim"), DeleteClaim = _ => throw new UnauthorizedAccessException("denied") });
+        var run = RunTempFolder.Create(root, Quiet([], warnings));
 
-        var act = () => run.Restore();
+        using (Unremovable.Make(root, run.Folder))
+        {
+            run.Restore();
 
-        act.Should().NotThrow();
-        warnings.Should().ContainSingle(w => w.Contains(run.ClaimFile, StringComparison.Ordinal), "the claim goes through its own delete seam, like the folder, and a failure names the file");
-        Directory.Exists(run.Folder).Should().BeFalse("the folder was removed before the claim was tried");
+            File.Exists(run.ClaimFile).Should().BeTrue("a folder that is still there keeps the claim that says whose it was; a claimless folder could not be judged by its owner");
+            Directory.Exists(run.Folder).Should().BeTrue("the premise: the folder could not be removed");
+            warnings.Should().ContainSingle(w => w.Contains(run.Folder, StringComparison.Ordinal), "ONE warning, naming the folder");
+        }
+
+        run.Dir!.Dispose();
+        Directory.Exists(run.Folder).Should().BeFalse("once it can be removed, the next attempt removes folder and claim");
+        File.Exists(run.ClaimFile).Should().BeFalse();
     }
 
     public static TheoryData<string, string> Trims() => OperatingSystem.IsWindows()
@@ -88,25 +114,6 @@ public sealed class RunTempHardeningTests
         var trimmed = RunTemp.Trimmed(temp);
 
         trimmed.Should().Be(expected);
-        Path.IsPathRooted(Path.Combine(trimmed, RunTempFolder.Prefix + "abcdef")).Should().BeTrue("a root trimmed to empty would make the run folder a relative path");
-    }
-
-    [Fact]
-    public void TheFolderCreationWarning_NamesThePath_SaysThereIsNoIsolation_AndWhatToDo()
-    {
-        var said = RunTemp.CreationWarning(@"/the/temp", new UnauthorizedAccessException("denied"));
-
-        said.Should().Contain(@"/the/temp", "the path it tried").And.Contain("UnauthorizedAccessException")
-            .And.Contain("WITHOUT isolation").And.Contain("machine's temp")
-            .And.Contain("TEMP").And.Contain("TMP").And.Contain("TMPDIR", "what to do: make TEMP writable or point TMP/TMPDIR elsewhere");
-    }
-
-    [Fact]
-    public void TheClaimWarning_SaysTheConsequencePlainly()
-    {
-        var said = RunTemp.ClaimWarning(@"/the/temp/testsToDelete-coai-run-abcdef", new IOException("disk full"));
-
-        said.Should().Contain(@"/the/temp/testsToDelete-coai-run-abcdef").And.Contain("IOException")
-            .And.Contain("one hour").And.Contain("age rule").And.Contain("test-leftovers.md", "collected only by the family janitor's age rule, after one hour");
+        Path.IsPathRooted(Path.Combine(trimmed, Leaf("abcdef"))).Should().BeTrue("a root trimmed to empty would make the run folder a relative path");
     }
 }

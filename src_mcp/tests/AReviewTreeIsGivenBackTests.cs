@@ -267,6 +267,7 @@ public sealed class AReviewTreeIsGivenBackTests : IAsyncLifetime
         var lease = await gate.AddAsync(_repo, _sha, "s1", round: 1);
         var theirs = Temp("coai-someones-");
         TryDelete(theirs);
+        // testsToDelete-exempt: raw-worktree — inside this test's own Temp folder `theirs`, under the run folder
         (await Run(_repo, "worktree", "add", "--detach", theirs, _sha)).ExitCode.Should().Be(0);
 
         var listed = await Keeper().ListAsync(TestContext.Current.CancellationToken);
@@ -312,6 +313,7 @@ public sealed class AReviewTreeIsGivenBackTests : IAsyncLifetime
         // prune` would have taken with ours. (Plan round, codex, Blocking.)
         var theirs = Temp("coai-someones-");
         TryDelete(theirs);
+        // testsToDelete-exempt: raw-worktree — inside this test's own Temp folder `theirs`, under the run folder
         (await Run(_repo, "worktree", "add", "--detach", theirs, _sha)).ExitCode.Should().Be(0);
         Unlock(_root);
         await Run(_repo, "worktree", "unlock", tree.Path);

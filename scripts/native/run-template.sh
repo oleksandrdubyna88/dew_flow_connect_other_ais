@@ -11,6 +11,7 @@
 # make-series.sh wrote, into quoted variables, and are only ever passed on as an environment value / a program path.
 set -eu
 export PATH=/usr/bin:/bin                                                     # this script's OWN helpers; the host PATH below is the probe's only
+if [ ! -f '@SERIES@/SERIES_PATH' ]; then echo "the series '@SERIES@' is gone; start a new one with make-series.sh" >&2; exit 66; fi   # a reboot or a tmp cleaner ended it: before anything is written
 SERIES="$(cat '@SERIES@/SERIES_PATH')"                                        # the one literal, read once
 PHASE='@PHASE@'
 exec > "$SERIES/logs/$PHASE.log" 2>&1 < /dev/null

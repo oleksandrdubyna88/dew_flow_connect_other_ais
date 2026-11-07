@@ -187,6 +187,7 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
         // at — and this feature is being built in exactly such a worktree. Watching only the
         // worktree's own directory left a shared hook invisible to both snapshots.
         var linked = Path.Combine(Path.GetTempPath(), "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
+        // testsToDelete-exempt: raw-worktree — `linked` is directly in the run folder, the temp root of this process
         await Git("worktree", "add", "--detach", linked);
         try
         {
@@ -217,6 +218,7 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
     private async Task<IReadOnlyList<TreeChange>> AcrossLinkedAsync(Func<Task> whatASiblingDid)
     {
         var linked = Path.Combine(Path.GetTempPath(), "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
+        // testsToDelete-exempt: raw-worktree — `linked` is directly in the run folder, the temp root of this process
         await Git("worktree", "add", "--detach", linked);
         try
         {
@@ -413,6 +415,7 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
         // A linked worktree's OWN config is not read by git status, so a malformed one does not stop the
         // snapshot — and `git config --list` refuses it, which is where the byte fallback is the answer.
         var linked = Path.Combine(Path.GetTempPath(), "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
+        // testsToDelete-exempt: raw-worktree — `linked` is directly in the run folder, the temp root of this process
         await Git("worktree", "add", "--detach", linked);
         try
         {

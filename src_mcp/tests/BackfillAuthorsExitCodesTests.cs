@@ -53,7 +53,7 @@ public sealed class BackfillAuthorsExitCodesTests
     [Fact]
     public void ADataDirectoryWithoutADatabase_IsExit0_AndNothingIsCreated()
     {
-        using var temp = TempDir.For("testsToDelete-coai-backfill-empty-");
+        using var temp = TempDir.For("backfill-empty-");
 
         var run = Run(temp);
 
@@ -76,7 +76,7 @@ public sealed class BackfillAuthorsExitCodesTests
     [Fact]
     public async Task ADryRunOnAMissingStore_IsExit0WithoutMakingTheDirectory()
     {
-        var path = Path.Combine(Path.GetTempPath(), "testsToDelete-coai-backfill-missing-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(Path.GetTempPath(), "backfill-missing-" + Guid.NewGuid().ToString("N"));
         var output = new StringWriter();
 
         var code = await BackfillAuthorsMode.RunAsync(["--backfill-authors", "--dry-run"], name => name == "COAI_DATA_DIR" ? path : null, output, _ => { }, TimeProvider.System);
@@ -114,7 +114,7 @@ public sealed class BackfillAuthorsExitCodesTests
     [Fact]
     public void ACoaiDbThatIsADirectory_Is74()
     {
-        using var temp = TempDir.For("testsToDelete-coai-backfill-dbdir-");
+        using var temp = TempDir.For("backfill-dbdir-");
         Directory.CreateDirectory(Path.Combine(temp, RoundsDb.FileName));
 
         var run = Run(temp);
@@ -126,7 +126,7 @@ public sealed class BackfillAuthorsExitCodesTests
     [Fact]
     public void ANamedDataFolderThatIsMissing_Is74_ByTheWriterModesRefusal()
     {
-        var missing = Path.Combine(Path.GetTempPath(), "testsToDelete-coai-backfill-gone-" + Guid.NewGuid().ToString("N"));
+        var missing = Path.Combine(Path.GetTempPath(), "backfill-gone-" + Guid.NewGuid().ToString("N"));
 
         var run = Run(missing);
 
@@ -199,7 +199,7 @@ public sealed class BackfillAuthorsExitCodesTests
     public void NoPathThroughTheModeAnswers64()
     {
         using var world = Stripped();
-        using var empty = TempDir.For("testsToDelete-coai-backfill-sweep-");
+        using var empty = TempDir.For("backfill-sweep-");
         var codes = new List<int>
         {
             Run(empty).Code,

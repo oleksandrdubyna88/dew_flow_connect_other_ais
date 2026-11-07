@@ -18,7 +18,7 @@ public sealed class AFeaturePlanIsFoundWhereTheDiskFindsItTests : IDisposable
 {
     private const string Plan = "# The plan\n\nBuild it.\n";
 
-    private readonly TempDir _work = TempDir.For("testsToDelete-featureplan-link-");
+    private readonly TempDir _work = TempDir.For("featureplan-link-");
     private readonly string _repo;
 
     public AFeaturePlanIsFoundWhereTheDiskFindsItTests()

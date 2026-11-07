@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CatalogLayer, LayerWrite, migrateLayer, MIGRATED, restoreLayer, RESTORED } from '../catalogMigration';

@@ -1,6 +1,45 @@
 # PLAN — Test leftovers, E5: coai's run folder takes the owner form, both test sweeps judge by owner, and the product's `coai-*` directories stay untouched
 
-> Status: **revised 2026-11-03 at the parent's epoch-4 re-review (entries 3.1 and 3.2 of the parent's ledger, found
+> Status: **epoch 7 approved by the owner, 2026-11-05 (`Narrowed: yes`, entry 6.2). What is left of S6 is the parent's § *Epoch 7* item 5.** S6 is built to `3fcba8a0`, but for those items.
+>
+> Was: **revised 2026-11-05 at the parent's epoch-6 re-review (entries 5.2 and 5.3 of the parent's ledger, both found
+> writing the S6 build brief; entry 5.1, the Windows sweep mutex, is built on #945 and unchanged); epoch 6 was approved by
+> the owner on 2026-11-05 (the record says `Narrowed: yes`).** Epoch 5 was approved
+> by the owner (2026-11-04). The producer PR #945 (draft) holds S3, S2-B, S4, entry 5.1 and S5 at `524df50e`, every job
+> green but the pin check (the release `bd795847` is promoted; coai's pin bump #947 merged 2026-11-05, and this branch has not taken it yet) and the `continue-on-error`
+> real-editor job (transient); S6 is a brief only (`todo/PLAN_test_leftovers_E5_S6_brief.md`, to be revised by an Opus
+> author after approval — the parent's § *Epoch 6*, item 4.7); S7 is not started. Two changes: (5.2) must-not-copy row 2's
+> NODE half is narrowed to what the shipped Node guard detects (2 of 15 planted spellings in a `.mjs`; no folding reader);
+> the rest is F30 of the conventions' follow-ups, with an owner and a proposed date, not a condition of this PR; (5.3) D8 (b)
+> reads "only the authorised `raw-temp` baseline AND the inline `raw-temp` exemptions of the expected-exemption inventory are
+> left", each exemption with a containment reason proved line by line. Three checks are added and narrow nothing: the
+> end-of-run audit reads the run folder BEFORE it is removed (a claim-only leftover is invisible after); `src_server/smoke-image.sh`
+> sets its trap before `mktemp`; the baseline's FINAL content is validated at the PR's last head. § *S6* is rewritten as ONE
+> current statement, its replaced text moved to a dated superseded note in the same section; D6, D8 and row 2 carry dated
+> notes *[epoch 6, 2026-11-05]*. This document keeps no ledger: its changes are entries of the parent.
+>
+> Was: **revised 2026-11-04 at the parent's epoch-5 re-review (entries 4.1 and 4.2 of the parent's ledger: 4.1 found
+> writing the S2-B spec, 4.2 found writing S4's brief); epoch 5 waits for the owner's approval (the record says
+> `Narrowed: yes`), and no E5 story takes new code until then.** Epoch 4 was approved by the owner (2026-11-03), and this
+> document was merged for it as #943 (`8dc0765c`). The producer PR #945 (draft) holds S3 and S2-B at `6ec356a1`, CI green
+> on Linux, macOS and Windows; S4 is a brief only; S5, S6 and S7 are not started. Two changes: (4.1) the promise that a
+> killed OLD coai run (a legacy `testsToDelete-coai-run-*` folder) is collected by the next extension run is withdrawn —
+> only S2-A's one-off clean-up removes those folders (D4, corrected on this branch at `89494366`); (4.2) the native
+> measurement series (`scripts/lib/native-run.mjs` `SERIES_SHAPE`, `scripts/native/*.sh`) LEAVES the prefix family as
+> ONE bounded exception — its new shape `native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`, made only by `make-series.sh`,
+> removed only by `remove-series.sh`, never collected (§ S4, *[epoch 5]*; the parent's § *Epoch 5*, item 4). P1 is
+> closed by the owner's written statement (the parent's PR #124); merge condition (c) for the WSL machine waits for one
+> administrator scan. This document keeps no ledger: its changes are entries of the parent. What epoch 5 supersedes
+> carries a dated note *[epoch 5, 2026-11-04]* in place; the S4 implementation notes of the same date are NOT changes.
+> *[epoch 5, 2026-11-04, Opus review]* "made only by `make-series.sh`" above is corrected: the LEAD makes the bare
+> folder over ssh (`scripts/lib/native-run.mjs:91` `mkdirArgv`: `/bin/mkdir -m 700 -- <series>`), and
+> `make-series.sh` refuses unless it exists with mode 700 and the running user's uid (`make-series.sh:43-45`), then
+> fills it. The scripts that own the series are `native-run.mjs` (`mkdirArgv`, `seriesOf`, `removeArgv`) and the four
+> `scripts/native/*.sh` files. The Opus review's other corrections carry the same marker in § S4, D8, D10, S2-B, S6,
+> the DoD and the notes for the parent; coai's native plan (`todo/PLAN_kimi_and_vibe_on_native_linux.md`) opens its
+> ledger for the rename the same day.
+>
+> Was: **revised 2026-11-03 at the parent's epoch-4 re-review (entries 3.1 and 3.2 of the parent's ledger, found
 > writing S3's build brief); epoch 4 waits for the owner's approval (the record says `Narrowed: yes`), and no E5 story
 > takes new code until then.** Epoch 3 was approved by the owner (2026-11-03), and this document was merged for it as
 > #942 (`004c55fb`). The producer branch has no code; S3's build brief exists. Two changes: D2 becomes an ADAPTED copy of
@@ -102,7 +141,7 @@ kept; what it decided and no longer holds is marked *withdrawn* with the reason.
 Every folder a coai test run, test script or test-run CI step creates in a shared namespace is the run's own owned
 resource, named `testsToDelete-<owner>-coai-<what>-<id>` by one helper per language (C#: the copied library; Node: the
 shipped reference wrapped with the token `coai`), claimed first beside itself in the contract's grammar, removed by its
-run on every exit path, and — when the run was killed — collected by that user's next run on the two keys of rule §4.
+run on every exit path, and — when the run was killed — collected by that user's next run on the two keys of rule §4 (*[epoch 7, 2026-11-05]* except what a run in an ELEVATED Windows process leaves, which reads as a stranger's and waits for a person: the parent's § *Epoch 7*, F31).
 What a test makes INSIDE the run folder carries no prefix (rule §1). Both test sweeps judge by owner and liveness,
 never by age; **no test sweep matches a `coai-*` name at any age** (risk decision 2026-10-17), so the product's own
 `coai-*` working directories — a live chat, a round's answers, a Team server job, and every product prefix not invented
@@ -126,6 +165,11 @@ done BEFORE the producer got smaller; E5's final Done-when did not.
 back to the machine temp today (`RunTemp.cs:33-47`, `run-tests.mjs:221-230`), the run folder keeps its legacy name
 until S3, and a person can start a test file directly; by D10 no S5 site is contained until S3 and S4. So S5's
 renames are a commit of the producer PR, after S3, S2-B and S4.
+*[epoch 5, 2026-11-04]* The S4 clause ("every Node runner, script test and the editor-host run wraps the reference and
+leaks nothing") has ONE bounded exception: the native measurement series is not wrapped and is not a leak — it is a
+durable folder with its own maker and remover (§ S4, *[epoch 5]*). And the S2-B clause's "lists legacy names" is read
+with D4 as corrected for the parent's entry 4.1: a legacy `testsToDelete-coai-run-*` folder is listed by both sweeps and
+removed ONLY by S2-A's one-off clean-up; nothing collects it.
 
 ## Facts the split rests on
 
@@ -151,6 +195,15 @@ renames are a commit of the producer PR, after S3, S2-B and S4.
   | `npm run test:host`, `test:contract`, `test:seam`, `test:parity` | `package.json`; `ci.yml:425`, `:118`, `:125`, `:146` | the machine temp (each runner script) | the script; `run-host.mjs` leaks (must-not-copy #14) | S4 |
   | `node --test "scripts/**/*.test.mjs"` | `ci.yml:197` | the machine temp | each test's `after()` | S4 (and the start-of-run sweep of S2-B item 2) |
   | the measurement and probe scripts, run by a person | `scripts/*.mjs`, `scripts/native/*.sh` | the machine temp, or `/tmp` on a Linux box | the script | S4 |
+  | *[epoch 5, 2026-11-04]* the native measurement SERIES, a person's root-run `make-series.sh` → the phases → `remove-series.sh` (a KEPT line of its own: the parent's § *Epoch 5*, item 4) | `scripts/native/make-series.sh`, `abort.sh`, `remove-series.sh`; `scripts/lib/native-run.mjs:18` `SERIES_SHAPE` | the series root: `/tmp`, or `COAI_NATIVE_SERIES_ROOT` | nobody collects it: `make-series.sh` makes it, `remove-series.sh` removes it (the shape validated, anything else refused); no claim, no sweep, no janitor | nothing is dropped: the name LEAVES the prefix family (`native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`) in S4, with the survival and grammar tests |
+
+  *[epoch 5, 2026-11-04, Opus review]* The series row's "`make-series.sh` makes it" is read as: the lead's `mkdirArgv`
+  (`scripts/lib/native-run.mjs:91`, `/bin/mkdir -m 700 -- <series>` over ssh) makes the bare folder, and
+  `make-series.sh` refuses unless it exists with mode 700 and the running user's uid, then fills it; the owners are
+  `native-run.mjs` (`mkdirArgv`, `seriesOf`, `removeArgv`) and the four `scripts/native/*.sh` files. The row is read
+  as "a kept line of the INVENTORY" — the name leaves the prefix family. The same shape is a contract line of coai's
+  native plan (`todo/PLAN_kimi_and_vibe_on_native_linux.md` `:310`, `:330`, `:336`, `:407`, `:412`, `:609`) and of
+  its E1 stories (`…_E1.md:97`): the rename revises them too (§ S4, *[epoch 5, Opus review]*).
 
 - **The bare-prefix lines, counted for S5** (`git grep -c -i teststodelete`): `src_mcp/tests` 263 lines in 120 files;
   `src_vs_code` 21 lines in 8 files; `scripts/lib` 49 lines in 15 files; `src_server/tests` 1 (`GaugeCaptureTests.cs:30`);
@@ -449,6 +502,14 @@ root. The old-grammar claim's
 `<os>` tag `win32|darwin` (`OwnerClaim.cs:38`) is read by the legacy clause of the reference (`<host>@<os>:<pid>[:<start>]`)
 only when `<os>` is `linux|macos|windows`: a `win32`/`darwin` legacy claim is **unreadable ⇒ `unknown` ⇒ kept** and
 listed — the safe side; the one-off clean-up covers them.
+*[rollout entry 4.1, 2026-11-03]* **Corrected — the legacy-collection promise cannot hold at the pin.** "a killed old run of
+either runner is collected by the next extension run of the same user" is WITHDRAWN (the S2-B spec, B.10 item 1; the
+question consultants `08beb732`, `76d09c26`; the parent's entry 4.1, dew_flow_conventions #121). At `cc24f9e` the Node
+reference never collects a legacy coai folder: on a Linux reader `legacyOwnerState` is always `unknown` (`owned.mjs:580-587`,
+a legacy record has no `<ns>`); on Windows the sweep lists and changes nothing (F16 interim); and E2's claims carry
+`win32`/`darwin`, which `parseLegacyOwner` does not read. The C# copy LISTS a legacy name with the exact command and never
+reads its claim. **The only removal of E2's `testsToDelete-coai-run-*` folders is S2-A's one-off clean-up**
+(`scripts/old-coai-leftovers.mjs`, a person's tool). Both runners print the sweep's `legacy:` line per folder (S2-B spec B.1 § 3).
 
 **D5 — Product-named directories under test.** *Superseded for `src_mcp` and the extension by E2* (the three variables
 are the seam: `RunTemp.cs:14-15`); *becomes true for the Team server, ingest-server and bench suites in S3* when they
@@ -488,6 +549,13 @@ dependency above is met. The released form differs from this paragraph in one po
 `csharp` or `node`). The two files named above become two scopes of that one file. A scope's proof must hold for
 EVERY invocation that runs its tree (D10): for `src_vs_code/src/test/`, S4 must first route `sonarcloud.yml:302`
 through the runner (or give that job a run folder), because that job runs the compiled tests with no run folder.
+*[epoch 6, 2026-11-05]* Node detection stays with the shipped tool, as this decision says ("one Node guard … with
+discovery and patterns of its own" was withdrawn, and stays withdrawn): the Node trees' `legacy-name` and `owner-blind` zero is a
+zero of WHOLE literals until F30 ships, and the PR says so (row 2's note). "The copied C# guard (`LeftoversGuard`, byte-identical)"
+above reads as D2's ADAPTED copy (the manifest's ops, the diff check) since the parent's entry 3.1. The `raw-temp` class has
+TWO authorised forms here: the one baseline file with its scopes for sites inside a proven run folder, and the rule's inline
+exemption for the lines no scope can carry (`src_vs_code/scripts/`, 54 lines by the C# guard's count;
+`src_server/smoke-image.sh:73`; and up to 22 lines of product, deployment or helper code that no test run makes, `deploy/**`, the installers, `release.yml`, `scripts/probe-*`, `kimi.mjs`, `Serving.cs`, `TempDir.cs`, `Owned.cs`, less any file on the frozen exclusion list), each listed in the expected-exemption inventory with a reason proved as § *S6* says.
 
 **D7 — Stage A is the retirement of the age-only sweep, nothing else.** The barrier (rule § *The barrier*) names "a
 sweeper that matches the prefix without an owner segment, OR removes on age"; coai's two sweeps remove on age. R6
@@ -510,6 +578,10 @@ operator's WSL machine (open, 2026-10-31) AND the owner's Windows machine (R6: "
 the code gate on the PR reached `proceed`; (4) the macOS, Windows and Linux legs are green; (5) *[round-1 finding
 7]* the `raw-temp` baseline rule (D6) is released in `dew_flow_conventions` and coai's pin has moved to that release
 by a pin bump merged alone.
+*[rollout entry 4.1, 2026-11-03]* Q6's line "its Windows CI leg asserts that a planted gone-owner folder survives the Node
+sweep" is met AS WRITTEN (the question consultants on the S2-B spec's B.10 item 3): the `windows` job gets a step that runs
+the extension's Node sweep test file through the actual wrapper and the pinned reference, with an otherwise collectible
+fixture (S2-B spec B.1 § 5, N-S9, B.5). The `platform: 'win32'` seam test on Linux is an extra, not a substitute.
 *[epoch 3, 2026-11-03] Revised merge condition of the producer PR.* The PR merges only when ALL of these hold:
 (a) S2-A (#940, done) and the REVISED S5 (§ *S5 as revised*) are on `main`; (b) S3, S2-B, S4 and S6 squash-merge
 together in this one PR, and the PR INCLUDES every site S5 deferred (each listed in S3 or S4 below), with S6's
@@ -552,6 +624,30 @@ added by S3):
 at release time: release evidence, not a merge gate. **(l) NEW (finding r2):** before S6 creates the baseline, F24's
 acceptance check has passed against the RELEASED guard and THIS repository's real test host (S6's note). **(m) NEW
 (finding r1):** the rollback procedure of D11 is written in the PR description before it merges.
+*[epoch 5, 2026-11-04, Opus review]* **D8 read for epoch 5** (the parent's § *Epoch 5*, item 3). (c) is read as: the
+owner's Windows machine is met by the owner's written statement (the parent's PR #124: it does not build or test
+coai); the operator's WSL machine is met only when the administrator scan of its two root-only places
+(`sudo node tools/sweeper-scan.mjs --system`) is recorded in `research/security/machines.md`; a hosted runner needs
+no record. P1 is CLOSED by that statement; (c) stays a merge condition and is not waived. **(n) NEW:** the native
+measurement series' evidence (§ S4, *[epoch 5]*, items (1)–(7) of the S4 DoD line) is in the PR, each item green on
+the Linux leg and named in the PR record — the ownership refusals in the CALLER (the lead's argv builder) and in the
+copy, through the owner-uid seam. Also (g) is read with the exception: the series is a resource the PR renames and
+nothing collects. With this note, D8 "carries the same" as the parent's item 3; without it, it did not.
+*[epoch 6, 2026-11-05]* **D8 read for epoch 6** (the parent's § *Epoch 6*, items 3 and 4). **(b) is reworded (entry 5.3):**
+S6's repository-wide checks are green when `owner-blind` and `legacy-name` have zero UNEXEMPTED findings outside the helpers'
+own files, the expected-exemption inventory equals the guard's exemption list exactly, and ONLY the authorised `raw-temp`
+baseline AND the inline `raw-temp` exemptions of that inventory are left — each exemption with a containment reason proved
+line by line (a test or a read record on the PR, through every allocating library's callers). The folder `src_vs_code/scripts/`
+stays in the guard. Three conditions are ADDED, none narrows: **(o)** the end-of-run audit reads the run folder BEFORE
+the run ends — `LeftoversAudit.Discover` returns `[]` once the folder is gone (`LeftoversAudit.cs:41`), so a
+claim-only leftover is seen only audit-first. Fixture order is not the mechanism (§ *S6*): the audit and `RunTemp.EndOfRun` are ONE ordered call in the sweep fixture's disposal, and S6 plants an orphan claim absent from the registry in each of the four suites, RED before the call. *[epoch 7, 2026-11-05]* On an elevated Windows process a real claim is owned by `Administrators` and the audit does not read it, so there the plant re-owns its claim to prove the ORDER, and `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun` pins the limit (the parent's § *Epoch 7*, F31); **(p)** `src_server/smoke-image.sh` sets `finish` and its `trap` before `mktemp -d` (today `:73` and
+`:102`), RED first with a failing `chmod` or `openssl` stub on PATH in `TheImageSmokeUsesTheServerTests`; the exemption's
+reason names what stays open (a `kill -9` at any moment of the run, which no trap sees); **(q)** at the PR's LAST head before the squash merge,
+`leftovers-check.mjs --baseline-shrinks --base <the creation commit>` exits 0, recorded on the PR, with both wrappers green, because the standing shrink step is skipped on this
+PR by number (the brief § 12.4). Also: (g) and (i) are met by coai #947 (the pin at `bd795847`), still OPEN when this was
+written — S6 creates no baseline and runs no second F24 check before it merges and `main` is merged into the branch; (l)'s
+C# proof-check test (`TheProofCheck_ClosesForEachScope`) is NEW code of S6. The commit order is S3 → S2-B → S4 → S5 → S6, and
+S6 is the FIFTH commit (its heading was corrected on 2026-11-05).
 
 **D9 — The end-of-run audit is copied, and bounded to the run folder.** `LeftoversAudit` (never-disposed,
 disposed-not-removed, claimed-in-temp-root) runs at the end of every C# suite as in the template — but coai's four
@@ -581,6 +677,10 @@ either makes it REFUSE — a test that needs the run folder checks the runner's 
 one line naming the command to use, before it creates anything — or names it as uncontained, and the site keeps its
 prefix. S3 does this for C#, S4 for Node. A runner's fallback is uncontained too, so S3 and S4 also make both runners
 fail closed. Until both are done, NO S5 site is contained.
+*[epoch 5, 2026-11-04]* The inventory has ONE line that drops nothing and is backed by no owned folder: the native
+measurement series (§ *Facts*, the last row of the table; § S4, *[epoch 5]*). It leaves the prefix family by a rename
+the inventory records; it is made and removed only by its own scripts and never collected. The parent's merge condition
+(i) is read so (its § *Epoch 5*, item 3).
 
 **D11 — Rolling back the producer PR** *[re-review plan gate, 2026-11-03, the parent's session `7c66b50d`, finding r1]*. A
 plain revert of the squash merge is NOT the first step: it brings back the legacy producers while owner-form folders
@@ -632,7 +732,7 @@ record of 2026-11-01.
 Why S5 is commit 4: its renames are safe only once S3 and S4 have given every site an owner-form run folder that fails
 closed, under every invocation, with a refusal for a direct start; and S6's guard asserts the repository-wide zero, so
 it must read the tree after the renames. The squash merge makes the five commits one commit on `main`; the order is for
-the review and a bisect on the branch. The section headings below keep their old commit numbers (S6 says "commit 4").
+the review and a bisect on the branch. The section headings below keep their old commit numbers, except S6's, corrected on 2026-11-05.
 
 *[epoch 4, 2026-11-03]* Two rows read anew: **S3** is the ADAPTED copy of D2 (a manifest, permitted transformations, a diff check) with
 the gated custom `Main` (exit 78); **S6** also depends on F24 of the conventions (the baseline proof rule) released and
@@ -652,7 +752,7 @@ before S3 and S4 give the outside sites an owned folder — the parent's entry 2
 | B — the producer PR | S3 — the C# library (a copy), the run folder on the owner form in all four C# suites, the contract's claim grammar | Opus · Sonnet · Opus | S2-A, S5 on `main`; the baseline rule released and pinned; the barrier record (D8) | commit 1 of the PR — **never merged without S2-B** (D8's invariant, finding 4) |
 | B | **S2-B — the owner-aware sweep at the start of every C# suite and of the extension runner (cornerstone, second half)** | **Fable** (spec) · Sonnet · Opus | S3 | commit 2 |
 | B | S4 — the Node producers wrap the reference: `run-tests.mjs`, `run-host.mjs`, the 31 runner scripts, `http/run-contracts.mjs`, `scripts/lib` tests, `release.yml` | Opus · Sonnet · Opus | S3 (the claim grammar both runners write) | commit 3 |
-| B | S6 — the two guards, the audit, the `raw-temp` baseline, the CI legs | Opus · Sonnet · Opus | S3, S4; the baseline rule released and pinned | commit 4; the PR squash-merges once |
+| B | S6 — the two guards, the audit, the `raw-temp` baseline, the CI legs | Opus · Sonnet · Opus | S3, S4; the baseline rule released and pinned | commit 5 since S5 became commit 4 (epoch 3); the PR squash-merges once |
 | C — the drain | S7 — the `raw-temp` baseline drains to zero, suite by suite | Opus · Sonnet (one coder per suite) · Opus | S6 merged | after B; one PR per suite; not a producer |
 
 S2's spec decides; where this document and S2's spec differ, the spec wins and the difference is a defect of this
@@ -692,7 +792,7 @@ recorded in the PR; a planted violation never stays in CI). Story: where the tes
 | 3 | A rename that is not exclusive replaces an empty directory (F17; E4 item 9 on Windows, item 27) | an EMPTY directory pre-created at the drawn quarantine name through the hooks seam; the sweep draws another name, the pre-created directory is still there and still empty; on Windows the copy's `MoveFileEx` path, on Linux `renameat2(RENAME_NOREPLACE)` and its reserve-then-rename fallback (`EINVAL`/`ENOSYS` injected), on macOS `renamex_np` FAILING CLOSED on `ENOTSUP` (the folder is kept and listed, never moved by a plain rename). RED with a plain `Directory.Move`/`rename` | S2-B |
 | 4 | A quarantine suffix that is not hex (E4 item 25) | 5 000 draws of the quarantine name every one matches `^\.(.+)\.teststodelete-quarantine-[0-9]+-[0-9a-f]{8}$`; the sweep's own restore pattern recognises every one. RED with a `[a-z0-9]` alphabet | S2-B |
 | 5 | A FIFO swapped in at a claim path blocks the read (F20; E3 round 3; Darwin follow-up 4) | a FIFO at the claim path (POSIX; the Darwin child test asserts `(Mode & 0xF000) == 0x1000` so it cannot pass for the wrong reason) ⇒ the read returns `unreadable` within 5 s, the folder is kept; the claim identity is `fstat`-checked on the opened descriptor. RED with a plain `File.ReadAllText` | S2-B |
-| 6 | The hosted Windows runner is elevated; the default owner of a new file differs by how it is created (E4 items 10, 36; E3's `WindowsOwnership`) | Step 0 on `windows-latest`, BEFORE any helper code: the owner SID of a new temp file, the caller SID, `EqualSid` and elevation printed and asserted; then the helper's own claim is `mine`, a `BUILTIN\Administrators`-owned fixture (`WindowsOwnership.ForeignToCaller`) is `unknown`/kept, and both keys (profile AND SID) are required: a folder inside the profile owned by another SID is kept. RED with the profile-only check | S3 |
+| 6 | The hosted Windows runner is elevated; the default owner of a new file differs by how it is created (E4 items 10, 36; E3's `WindowsOwnership`) | Step 0 on `windows-latest`, BEFORE any helper code: the owner SID of a new temp file, the caller SID, `EqualSid` and elevation printed and asserted; then the helper's own claim is `mine` *[epoch 7: where the caller's SID owns it, so not on the elevated runner unless re-owned (`ScopeTests.cs:22-31`)]*, a `BUILTIN\Administrators`-owned fixture (`WindowsOwnership.ForeignToCaller`) is `unknown`/kept, and both keys (profile AND SID) are required: a folder inside the profile owned by another SID is kept. RED with the profile-only check | S3 |
 | 7 | The quarantine pass asks the probe about any pid (F18) | `-0-`, `-007-`, `-9007199254740993-`, `-1-` on Windows in a quarantine name ⇒ the probe is never called, the quarantine stays. RED when `isAskable` is skipped | S2-B |
 | 8 | The orphan-claim pass deletes the claim of a folder that sits in a quarantine (F19; E4 item 37) | a claim whose folder is in a sibling quarantine ⇒ kept `quarantined`. RED when the orphan pass does not look for the quarantine | S2-B |
 | 9 | `Errno.Current` guessed Linux on any non-macOS system (Darwin follow-up 5) | `Errno.For(isLinux: false, isMacOS: false)` throws `PlatformNotSupportedException`; on each of the three legs the table in use is the leg's. RED with the old guess | S3 |
@@ -707,6 +807,22 @@ recorded in the PR; a planted violation never stays in CI). Story: where the tes
 *[epoch 4, 2026-11-03]* Row 15's "the vectors file of the template, `OwnerVectors.cs`, extended by coai's cross-reader rows" cannot be done
 in the copy: `OwnerVectors.cs` reads the MOUNT's file (`OwnerVectors.cs:11`, another repository's). coai's cross-reader
 rows go in a coai-owned file, `shared/owner-record-cross-vectors.json` (the name of S3's brief), read by coai's own test.
+
+*[epoch 6, 2026-11-05]* **Row 2's Node half is NARROWED** (the parent's entry 5.2, option C). The shipped Node guard at
+`bd795847` has no folding reader: of fifteen spellings planted in a `scripts/zz.mjs` line it finds two — a whole legacy
+literal (`legacy-name`) and a bare-word glob passed to a removal (`owner-blind`); a split over `+`, `.concat`, `.join('')`, a
+template hole, a `\u` or `\x` escape, a one-character class, a regex over the word, the bare word and half of the word each
+answer `[]` (the S6 brief, Decision 1; consult `5d804d0c`; re-measured at the re-review). So "the same twelve in a `.mjs` …
+RED when the folding reader is switched off" cannot be met: there is no reader to switch off. S6's Node test is the POSITIVE
+test of the two detected classes, plus one sentence in the PR naming what the guard does not see; the two split fixtures
+(`scripts/lib/native-run.test.mjs:42`, `scripts/native/native.test.mjs:506`) become plain literals with the inline
+`legacy-name` exemption; the by-hand split-piece scan is recorded as a SEARCH for the spellings a person thought of, never as a
+proof that no other spelling exists. The folding reader for the `node` profile is **F30** of the conventions' follow-ups plan
+(an owner, a proposed deadline 2026-11-19, coai and creds covered). Rejected: a coai-own folding check (`foldedPrefix.mjs`,
+the brief's option A) — a second detector with different semantics whose findings could not carry the rule's exemption, and
+creds left behind. The C# half of row 2 (the template's `LeftoversGuardTests` fixtures through the copied folding reader) stands.
+*[the epoch-6 judge, 2026-11-05]* "A regex over the word" and "the bare word" hold only for a line with no anchor and no removal: `/…[-_]/i`, an anchored `new RegExp`, and the bare
+word beside `rmSync` answer `owner-blind` (F30's dated note). The sentence in the PR says so; the split, `.concat`, `.join('')`, hole, escape, class and half-word rows hold.
 
 ## S1 — The pin bump to `105d53c` — DONE
 
@@ -802,6 +918,9 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
   C# test projects' `[assembly: AssemblyFixture]` wiring; `src_vs_code/scripts/run-tests.mjs` (`sweepFirst` becomes
   `sweepLeftovers` of the mount); `src_vs_code/scripts/owned.mjs` (D3); `src_vs_code/src/test/sweepTemp.test.mjs` →
   `leftoversSweep.test.mjs`; `research/module_tests.md`.
+  *[2026-11-03, S2-B spec B.10 item 4]* `sweepTemp.test.mjs` was deleted by S2-A (#940); its survivors are
+  `src_vs_code/src/test/startOfRun.test.mjs`. S2-B ADDS `src_vs_code/src/test/leftoversSweep.test.mjs` beside it and
+  renames nothing; `startOfRun.test.mjs` loses the legacy-count tests (N7, N10, N8's arms).
   *[epoch 4, 2026-11-03]* "(S3 brought them)" is corrected: the copied `LeftoversSweepTests` take the fixture as a constructor
   parameter, so they land HERE, when the fixture is wired. S2-B registers `LeftoversSweepFixture` as the assembly fixture
   in EACH of the four test assemblies (each its own `[assembly: AssemblyFixture(...)]` line; the template's line is a
@@ -837,9 +956,18 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
      claim (injected probe) planted in a private root; the command's entry point run with that root; the folder is
      collected before the first test; the `package.json`/CI command is pinned to carry the preload. RED on `main`
      (no sweep in front of `node --test`).
+     *[2026-11-03, S2-B spec B.1 § 7, B.10 item 9 — not a change: this item already allows the runner]* **The tiny
+     runner is picked: `scripts/run-lib-tests.mjs`**, with its test `scripts/run-lib-tests.test.mjs` and `ci.yml:197`
+     running it. Not the `--import` preload: `--import` sits in `process.execArgv`, which `node --test` hands to every
+     test-file child, so a preload would sweep once per test file, concurrently, over the real temp root. Every
+     "preload" below (S4 Files, S4's direct-start note, S4's scenarios, Q5) reads as this runner.
   3. **Legacy names** (D4): the C# copy lists `testsToDelete-coai-run-*` of the old grammar with the exact `rm`
      command; the Node reference collects one only on kernel owner AND old-grammar `gone`; a legacy claim whose `<os>`
      is `win32`/`darwin` reads as `unknown` and is kept — asserted in both.
+     *[rollout entry 4.1, 2026-11-03]* Read with D4's correction: at the pin the Node reference's "collects on kernel
+     owner AND `gone`" never fires (Linux: always `unknown`; Windows: list-only; `win32`/`darwin` tags unreadable), so
+     BOTH runners list and neither collects a legacy name; the one-off clean-up is the only remover. The spec asserts the
+     listing in both (B7, N-S2) and nothing more.
   4. **Two sweeps at once** (plan-gate round 1 item 7, kept): a gone owner's folder removed by another sweep between
      the listing and the delete (an injected deleter that removes it first, and once two real sweeps over one private
      root at once) ⇒ no failure, no report line for the other's removal, no throw; a quarantine the OTHER sweep made
@@ -863,9 +991,19 @@ history: #848 merged first (`DefaultBudgetBytes = 90_000`, `RuleFiles.cs:181`), 
   src_vs_code && npm test`; on Windows, inside WSL, and the macOS leg; after a full run of every suite `bash
   .agents/conventions/tools/janitor.sh --token coai --dry-run` on Windows (Git for Windows' bash) and in WSL lists only
   folders of a live run.
+  *[epoch 5, 2026-11-04, Opus review]* **The Windows dry-run is a hosted run — an OPEN ITEM of the producer PR.**
+  `research/module_tests.md:6129` records only the WSL run. The owner's Windows machine does not test E5 (the
+  parent's PR #124), so the Windows dry-run gets P4's treatment (§ S4, implementation notes): a deliberately started,
+  recorded run of `bash .agents/conventions/tools/janitor.sh --token coai --dry-run` after a full run on a hosted
+  `windows-latest` runner (Git for Windows' bash), its output in the PR record, before the producer PR merges. Not a
+  narrowing: the commands line already asks for the run; this names where it happens.
 - **DoD (B).** Every scenario RED then GREEN on Windows, Linux and macOS; the break-its red; `PanelService.cs` and the
   characterization test unchanged; the product sweep's tests green; legacy names listed (C#) / collected on `gone` only
   (Node); concurrent sweeps silent on not-found; `module_tests.md` describes the one sweep in two languages.
+  *[epoch 5, 2026-11-04]* "collected on `gone` only (Node)" is read with the parent's entry 4.1: at the pin the Node
+  reference collects NO legacy coai folder (`legacyOwnerState` answers `unknown` on Linux; Windows only lists; E2's
+  `win32`/`darwin` tags do not parse), so the Node sweep LISTS each one, exactly as the C# one; S2-A's one-off clean-up
+  is the only removal. S2-B as built (#945) already does this (N-S2, the C# `LegacyNames…` tests).
 - **The claim-first race (2026-11-03, re-review gate, finding 1).** S3's initializer claims and creates the run folder
   before S2-B's sweep runs in the assembly fixture. S2-B adds a scenario where a sweep runs AFTER this process's claim is
   written and BEFORE its folder exists (a hook between the two): the sweep never removes or quarantines a claim or folder
@@ -930,7 +1068,7 @@ helper's; coai adds):
 5. `OldAndNewClaims_AreReadByBothReaders` (#15): the vectors.
 6. `ALostLinkTarget_StillFailsTheTest` — the existing junction case keeps re-throwing (the E4.1 guarantee of the
    Vibe-and-Kimi plan survives the move; `TempDir.cs:49-53`).
-7. **A killed run is collected** — a child suite executable (as E4's harness; with a filter and an env flag) makes its
+7. **A killed run is collected** (*[epoch 7]* on an elevated Windows process a real folder and claim read as a stranger's and wait for a person, so on Windows this scenario re-owns them first and proves collection of a prepared fixture: the parent's § *Epoch 7*) — a child suite executable (as E4's harness; with a filter and an env flag) makes its
    run folder and `Environment.FailFast`s; the folder and its claim remain and name the child's pid; S2-B's sweep with an
    injected probe `gone` and `now + 11 min` removes both through the quarantine; with `live`, keeps both.
 
@@ -1075,6 +1213,10 @@ the text above differ, this block wins.
   `.github/workflows/release.yml:307`, `:1154` ⇒ `mktemp -d -p "$RUNNER_TEMP"` (job-scoped, no finding under rule §7);
   new `src_vs_code/src/test/owned.test.mjs`, `runHost.test.mjs`, `runTests.test.mjs` (E2's `runTemp.test.mjs` rewritten);
   `research/module_tests.md`.
+  *[2026-11-03, S2-B spec B.10 item 9]* `scripts/lib/leftovers-preload.mjs` above is read as **`scripts/run-lib-tests.mjs`**
+  (S2-B builds it: the sweep, then `node --test "scripts/**/*.test.mjs"`); S4 adds to that runner the owned run folder of
+  the wrap and the marker its direct-start refusal reads, and `src_vs_code/scripts/owned.mjs` already exists from S2-B
+  (the one `ownedFor` call, `REPO_TOKEN`, `loadStartOfRunSweep`) — S4 extends it, never a second module.
 
 **The change — `run-host.mjs`.** `workspace`, `dataHome` and a NEW `userData` come from the wrap (`what` = `host-ws`,
 `host-data`, `host-profile`); `launchArgs` gains `--user-data-dir=<userData>` (the comment at `:87-88` becomes true);
@@ -1136,6 +1278,187 @@ name `testsToDelete-<owner>-coai-<what>-<id>`); the PR says which, per site:
   starts a Node test or script outside the runner — `sonarcloud.yml:302` (the coverage run), `ci.yml:197`, the runner
   scripts, a person's direct `node --test` — either runs inside an owned folder of the wrap, or refuses with one line
   before it creates anything. The S4 commit lists each row with its outcome.
+- *[epoch 5, 2026-11-04]* **The native measurement series — the ONE bounded exception (the parent's entry 4.2 and its
+  § *Epoch 5*, item 4; question consultants `b5c30429`, re-review consult `d7ad1ace`).** The two bullets above that
+  put `scripts/lib/native-run.mjs:18` (`SERIES_SHAPE`) and `scripts/native/abort.sh:31`, `make-series.sh:30`,
+  `remove-series.sh:22` under "an owned folder of the wrap, or the owner form through the wrap" are superseded for
+  the SERIES: neither option fits. The series is a root-run, multi-phase folder: `make-series.sh` creates it, each
+  phase (a root-run script) must find it again, `abort.sh` stops a phase, and `remove-series.sh` removes it when the
+  person is done — it outlives every script that writes it, on purpose. An owned folder of the wrap dies with its
+  script (rule §2); an owner-form claim names a pid that is gone when the script exits, and the next run's sweep would
+  remove the series after ten minutes (rule §4), destroying a measurement in progress.
+  **Decision:** the series LEAVES the prefix family. **Grammar:** `native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}` under the
+  series root (`/tmp`, or `COAI_NATIVE_SERIES_ROOT`): no `testsToDelete-` prefix, no owner segment, no claim.
+  `SERIES_SHAPE` stays the ONE literal the four files share, and `native.test.mjs` still fails unless all of them hold
+  exactly that text. It is still made ONLY by `make-series.sh` and removed ONLY by `remove-series.sh`, which keeps
+  validating the whole shape and refuses anything else (exit 78, one line); `abort.sh` keeps the same shape. **Nothing
+  collects it automatically** — not the test sweeps, not `run-lib-tests.mjs`, not the janitor (it matches
+  `^teststodelete[-_]`), not a next run. Its durable purpose, its two scripts and its grammar are written in the native
+  documents (the scripts' own headers and the native rows of `research/module_tests.md`, `:4514-4521` today) and it
+  stays in D10's inventory as a line of its own. The tests follow the shape: `native-run.test.mjs:9`, `:31-33`, `:68-69`; `native.test.mjs:26`
+  (the test's private root keeps its `testsToDelete-native-test-` name only if it is made through the wrap — else it
+  moves into an owned folder of the wrap like the other `scripts/lib` sites), `:112`, `:420`.
+  **Evidence (RED first, on the Linux leg — the series exists only on a Linux box):** (1) *survival between phases* —
+  a test makes a series with `make-series.sh` under a private root, runs one phase script to completion, then starts a
+  second phase: the folder and its phase-1 contents are still there, unchanged; the private root is swept in between
+  (S2-B's sweep, on purpose) and the series survives it. (2) *the remover's grammar* — `remove-series.sh` accepts a
+  valid NEW name (`native-kimi-20261104-0a1b2c`) and removes it; it refuses, with one line and exit 78, each malformed
+  one: the OLD prefixed name (`testsToDelete-native-vibe-…`), a wrong kind (`native-other-…`), a wrong date width,
+  upper-case hex, a path outside the series root, a leaf with a separator — the existing refusal cases of
+  `native-run.test.mjs:31-33` and `native.test.mjs:420` moved to the new shape, plus the old-prefix case. (3) *the
+  guard* — the name carries no `testsToDelete-` prefix, so rule §7's `legacy-name` class does not see it, and it is
+  outside every run folder, so it is never a `raw-temp` baseline entry; if the shipped guard classes `make-series.sh`'s
+  `mkdir` under another class, S6 names the line with the inline exemption and the reason `the native measurement
+  series — the parent's § Epoch 5 item 4`, and the expected-exemption inventory lists it. (4) *the remover's
+  ownership check* — `remove-series.sh` also refuses (exit 78, one line) a folder whose owner is not uid 0 or that is
+  group- or world-writable, a test for each; a Fable security read of the four native scripts is part of S4's Opus
+  review. It also refuses a series ROOT not owned by uid 0, or world-writable without the sticky bit: under a sticky,
+  root-owned root no other user can rename or replace a uid-0 folder, so what was checked is what `rm -rf` removes
+  (the parent's re-review gate, finding 0; a test per refusal). *Tests as a non-root user* (the interim document gate,
+  finding 3): the expected owner uid is a test seam beside `COAI_NATIVE_SERIES_ROOT` — `COAI_NATIVE_SERIES_OWNER_UID`,
+  default 0, read only by the native scripts — so the tests run as the CI user: the accepted case sets it to the test's
+  own uid under a private root of mode `1777`; the refusals use a mismatched uid, a root of mode `0777` without the
+  sticky bit, and a group-writable series folder. (5) *a phase whose series is gone* — after a reboot
+  that cleared `/tmp` or a removal, the next phase stops with one line (the series `<path>` is gone; start a new one
+  with `make-series.sh`) and a non-zero exit before it writes anything; a test (finding 1). *Size and a forgotten series:* BEFORE the rename lands, S4's first step measures a real series — the one
+  `native.test.mjs` makes under a private root with a full phase, and, where the person has one, a past series of a
+  real measurement (`du -sh`) — and writes the figure and its assumptions (phases, repeats) in S4's brief and the
+  native documents (the interim document gate, finding 0); it is measured again at the first real use after S4; a forgotten series is found with `ls -d <root>/native-*` and removed with
+  `remove-series.sh` — nothing else removes it; a reboot that clears `/tmp` clears it too, and the documents say so.
+  **Bound:** one shape in one family of scripts; a second durable resource anywhere is a new plan change, never a
+  second use of this note.
+- *[epoch 5, 2026-11-04, Opus review]* **Corrections to the series bullet above** (each verified against the code on
+  the branch at `0d03740d`; the parent's § *Epoch 5*, item 4 carries the same):
+  - **The real creator.** "made ONLY by `make-series.sh`" is read as: the LEAD makes the bare folder over ssh —
+    `mkdirArgv` is `ssh <host> -- /bin/mkdir -m 700 -- <series>` (`scripts/lib/native-run.mjs:91-93`, no `-p`, so an
+    existing folder fails) — then `make-series.sh` refuses (exit 78) unless its own folder matches the shape, is not a
+    symlink, is mode 700 and is owned by the user running it (`scripts/native/make-series.sh:37-46`), and fills it.
+    The scripts that own the series are `native-run.mjs` (`mkdirArgv`, `seriesOf`, `removeArgv`) and the four files
+    `scripts/native/*.sh` (`make-series.sh`, `abort.sh`, `remove-series.sh`, `run-template.sh`).
+  - **SAFETY — the ownership check moves to the CALLER.** The lead runs the series' COPY of the remover as root:
+    `removeArgv` is `ssh <host> -- /bin/bash -- <series>/run/remove-series.sh <series>` (`native-run.mjs:85-88`);
+    `abortArgv` and `launcherArgv` run `run/abort.sh` and `run/<phase>.sh` the same way (`:73-82`). A folder planted
+    in a shared `/tmp` under a valid name can carry its OWN `run/remove-series.sh`, so a check inside the copy
+    (evidence (4)) protects nothing by itself. So BEFORE the lead runs anything from a series folder (remove, abort,
+    any phase), it checks over ssh with `stat` — never a shell expansion of the folder's content — that: the series
+    folder and its `run/` are directories, not symlinks, owned by uid 0, mode 700; `run/remove-series.sh` (and the
+    phase script it is about to run) is a regular file owned by uid 0, not group- or world-writable; the series ROOT
+    is owned by uid 0 and, when world-writable, sticky. Any mismatch: one line, nothing runs. Evidence (4)'s checks in
+    the copy stay as defence in depth. Tests: the lead's argv builder refuses each mismatch (unit tests with a stubbed
+    `stat` result, in `native-run.test.mjs`, every platform), and the owner-uid seam (`COAI_NATIVE_SERIES_OWNER_UID`,
+    default 0) lets the CI user run the bash side. This is evidence item (4) of the DoD line, read in full.
+  - **The tests are NEW, not existing.** "the existing refusal cases of `native-run.test.mjs:31-33` and
+    `native.test.mjs:420` moved to the new shape" mislabels them: `native-run.test.mjs:31-33` tests
+    `renderRunScript`/`seriesOf` (the JS side); `native.test.mjs:420` is inside the `make-series.sh` refusal test
+    (`:418-439`); the remover's only refusal test today is the SERIES_PATH one near `:445`. So the wrong kind, the date
+    width, the upper-case hex, the separator in the leaf and the old prefix are NEW `remove-series.sh` tests, and the
+    JS `seriesOf` cases move to the new shape beside them. The native scripts set `LC_ALL=C` before the `=~` shape
+    test (`make-series.sh:42`, `remove-series.sh:38`, `abort.sh:43` today): the bracket range `[0-9a-f]` is
+    locale-dependent.
+  - **The documents the rename revises.** The shape is a contract line of coai's native plan,
+    `todo/PLAN_kimi_and_vibe_on_native_linux.md` (`:310`, `:330`, `:336`, `:407`, `:412`, `:609`), and of its E1
+    stories, `…_E1.md:97`. The plan is live in `todo/` and was approved before the change-control rule reached this
+    repository (its plan gate `942810c1`, 2026-10-21), so the rename opens its ledger: epoch 1 dated at that
+    approval, the rename as entry 1.1 (`contract`), a dated note at each shape line; the E1 stories document gets
+    dated notes only. Its size projection (`:606-607`: about 80 MB of Kimi cache plus under 50 MB of Vibe homes,
+    exports and logs — "total under 150 MB, in `/tmp`") is the figure the `du -sh` measurement above starts from.
+  - *[epoch 5, 2026-11-04, the parent's CodeRabbit finding, accepted — evidence (4), the series ROOT]* The root check is **not owned by uid 0 (the seam
+    `COAI_NATIVE_SERIES_OWNER_UID`), or group-writable OR world-writable without the sticky bit** — in BOTH the caller's `stat` check
+    (`native-run.mjs` `statRefusal`) and the `remove-series.sh` copy (and `abort.sh`). "Sticky when world-writable" alone let a group member rename the
+    checked folder. Accepted forms of the root: `1777` (sticky), `0755`, `0700`; refused: `0777`, `0775` and `0770` without the sticky bit. Tests: the
+    `0775` and `0770` roots beside the `0777` one in the unit cases, in the real-`stat` integration test and in the remover's cases.
+  - *[epoch 5, 2026-11-04, S4 fix round (the Opus review and the Fable security read)]* **What the caller's `stat` check had to become, and the text it changes.**
+    (a) Over a real ssh the check never worked: ssh joins the words and the REMOTE shell parsed the unquoted `%n|%F|%u|%a` (exit 127, no facts). The command is
+    `/usr/bin/env LC_ALL=C /usr/bin/stat -c '%n|%F|%u|%d|%a' -- …` — the format ONE quoted word, the locale fixed for this one command (`%F` is translated under a
+    forwarded locale). The tests' local-exec seam parses the words with `sh -c`, as sshd does. (b) `%d`: a series, `run/` or the script on another DEVICE than the root is
+    refused (a FUSE `allow_other` mount can fake every other fact). (c) The check is the only road: `launcherArgv`, `abortArgv`, `removeArgv` and `makeSeriesArgv` are not
+    exported; `scripts/native/lead.mjs <host> name|mkdir|copy|make|phase|abort|remove` is the lead's only entry, through `runChecked`, with NO root option (`/tmp`, always:
+    the ancestors of a custom root are not checked), a bare `stat` of the root and the series before every `scp`, and a stop on a non-zero `mkdir`. (d) `remove-series.sh` and
+    `abort.sh` refuse, as root (`id -u` 0), a non-zero `COAI_NATIVE_SERIES_OWNER_UID`: the test seam cannot reach a root run. The "evidence (4)" and "SAFETY" bullets above are
+    read with this.
+  - *[epoch 5, 2026-11-04, S4 fix round]* **Small corrections of S4's text.** The count of "P2": 27 listed entry scripts (24 in `src_vs_code/scripts`, `http/run-contracts.mjs`,
+    two in `scripts/`), plus `run-host`, `run-tests`, `run-lib-tests` and `lead.mjs` as run-folder owners, plus 13 libraries that own none (neither "31" nor "38"). A run folder is
+    owner-only (0700 on POSIX, as `mkdtemp` made it; the reference's `mkdir` gives 0755 under umask 022). With the mount missing, `run-tests.mjs` and `run-contract.mjs` print TWO
+    lines on stderr (`lower-priority`'s "this run is NOT lowered", then the mount line) and exit 2; a `.mjs` test started directly with the mount missing exits 1 with an
+    `ERR_MODULE_NOT_FOUND` stack (ES modules link before they run, so the guard's line is never reached) and creates nothing. The D-b line is `scratch was <path>, removed at
+    exit — pass --scratch <dir> to keep it` (two of the four probes have no `--reparse`). `scripts/run-lib-tests.mjs` carries the worker cap and the lowered priority itself.
+  - *[epoch 5, 2026-11-04, S4 final fix round]* **The driver grows to the run-book, and the check has one more road.** `lead.mjs` also does `copy <series> checkout <local-dir>`
+    (every entry of the folder, `scp -r -p`, after a bare check of the root, the series and `run/`), `done <series> <phase>` and `read <series> <phase>` (a check of the root and the
+    series, then `/bin/cat --` of the exit file and the log). `runChecked` has no builder parameter; the copies go through the narrow `copyChecked`, which builds the `scp` argv itself.
+    Every spawn has a finite timeout and a failed or hung one is reported. Exit 64 also covers a value refused by a pattern. **The first live use must verify, from the lead's machine,
+    the mode `scp -p` leaves on a copied script**; a refused mode is fixed by a CHECKED chmod step in the driver, never by relaxing the check. A server's `stop()` answers a promise that
+    settles when the process has ended (an exit code OR a signal), and every runner awaits it, or kills the tree synchronously from an `exit` listener, before the run folder holding the
+    server's data goes.
+  - **A series in progress at the merge.** A series started under the OLD name before the producer PR merges is
+    finished with the OLD checkout: the new `seriesOf` refuses the old shape, so the new lead cannot run, abort or
+    remove it. The person finishes and removes it with the checkout that made it, then starts the next series under
+    the new name.
+  - **The old-prefix fixture.** The old-prefix case of evidence (2) is a `legacy-name` literal in `native.test.mjs`,
+    so S6's expected-exemption inventory lists it with the inline exemption (§ S6, *[epoch 5, Opus review]*).
+  - **A reboot or a tmp cleaner.** `/tmp` is cleared by a reboot AND by a tmp cleaner (systemd-tmpfiles' age
+    clean-up; Fedora's default is 10 days); evidence (5) and the size note read "a reboot or a tmp cleaner". A
+    forgotten series is invisible to the janitor (`tools/janitor.sh:156`, `RX='teststodelete[-_]'`) and to the barrier
+    scan (`sweeper-scan.mjs`); only `ls -d <root>/native-*` finds it.
+- *[epoch 5, 2026-11-04]* **Implementation notes of S4 — classified as NOT changes at the epoch-5 re-review** (fixes
+  that satisfy this document as written, or approved constraints read more exactly; the coder and the reviewers read
+  them with the bullets above):
+  - **P1 — the first import refuses.** Every test file that needs the run folder gets a FIRST import (before any
+    import that can create a resource) that checks the runner's marker and refuses a direct `node --test` with one
+    line, before anything is created. The epoch-4 bullet above already says every direct invocation enters
+    containment or refuses; the order of the import is how it is done, and the reviewer checks that no
+    resource-creating dependency is imported above it.
+  - **D-b — the four person-run probes keep `--scratch`.** `probe-kimi-confinement.mjs:132`,
+    `probe-kimi-tree-hold.mjs:99`, `probe-vibe-confinement.mjs:92` and `vibe-home-manifest.mjs:71` already take
+    `--scratch <dir>`. Their DEFAULT scratch moves into an owned folder of the wrap (the first option of the bullet
+    above), removed at exit, with one printed line saying so. A person who keeps a run for `--reparse`/`--from` names a
+    folder with `--scratch` — a folder the person names, outside the machine temp's automatic lifecycle; the script's
+    usage line says so.
+  - **D-c — `run-host.mjs`'s three owned folders live inside the runner's run folder.** The paragraph *The change —
+    `run-host.mjs`* stands (`host-ws`, `host-data`, `host-profile` from the wrap, `--user-data-dir`, the
+    `try/finally`), AND the generic runner rule stands (one owned folder per runner, `TMPDIR`/`TEMP`/`TMP` handed to
+    every child): the three are made INSIDE the runner's own run folder, with the three variables moved there. Both
+    texts as written; nothing is dropped.
+  - **P4 — "`test:host` once on Windows" is a hosted run.** The owner's Windows machine does not test E5 (the parent's
+    PR #124). The Windows run of the commands line is a deliberately started, recorded run of `npm run test:host` on a
+    hosted `windows-latest` runner (a targeted job or a throwaway branch), with the before/after counts of `coai-host-*`
+    and `testsToDelete-*` in the record, taken BEFORE the runner is discarded.
+  - **P8 — the Node runners EXPORT `TESTSTODELETE_RUN`.** The detail (`common/test-leftovers-detail.md:120`): the top
+    of a run exports its record once, and a helper in a child uses it when it names a live run of the caller. So
+    `run-tests.mjs`, `run-lib-tests.mjs` and the runner scripts export their own record, and withhold an INHERITED one
+    only around their own claim (S2-B `6695ab36`: the run folder's claim names ITS process, never an inherited record).
+    *[the interim document gate, 2026-11-04, finding 2]* The scope, exactly: a child test process of a runner (every
+    `node --test` file under `run-tests.mjs` or `run-lib-tests.mjs`) is a LEAF inside that runner's run scope. Its
+    `ownedDir` folders are made inside the run folder (its temp variables point there) and their claims name the run's
+    record, as the detail asks; it makes no run folder of its own and is not a runner. Only a process that IS a runner —
+    a test that starts `run-tests.mjs` or `run-lib-tests.mjs` as a child (`runTests.test.mjs`) — makes a run folder,
+    and it withholds the inherited record around that one claim, then exports its own to its children.
+  - **P1 in ES modules** *[the interim document gate, finding 4]*. The guard is the FIRST static import of every test
+    file (`.mjs` and compiled `.js` alike): ES module evaluation runs the imports in source order, depth first, so the
+    first import and its dependencies evaluate before any later import. And no test helper or library a test imports
+    may make a folder or file when it is loaded (rule §2); the S4 commit checks the imported helpers for load-time
+    side effects and names any it moves into a hook.
+  - **P12 — a targeted macOS Node CI step**, so that must-not-copy #12 (`/var` → `/private/var`; the wrap's `isMine`
+    both ways) runs on macOS for the Node side too; row 12 already names S4.
+  - **P2, P9, P10, P11 — counts and references.** The "31 runner scripts" of the Files bullet are 25 entry scripts plus
+    13 library modules that get no folder of their own (only an entry script owns a folder); stale line numbers are
+    re-read at the commit; two script sites the lists above do not name are added: `scripts/live-consult-all.mjs:25`
+    (`coai-live-<vendor>-`) and `scripts/measure-idle-server.mjs:32` (`coai-idle-arm-`) — both person-run, both move
+    into an owned folder of the wrap like the probes.
+  - **P13 — for S6 (and F3's manifest scan):** no guard scans `src_vs_code/scripts/*.mjs` today; S6's Node guard must
+    include that folder, or its zero is false for the runners. S6's Files bullet is read with this note.
+  - *[epoch 5, 2026-11-04, Opus review]* **P1, the wording.** "Every test file that needs the run folder" means EVERY
+    test file (the parent's reading: every test file gets the first import); a test file that makes no resource still
+    refuses a direct `node --test`, so the rule has no list to keep.
+  - *[epoch 5, 2026-11-04, Opus review]* **P2, the count.** The real count is 38 files (25 entry scripts plus 13
+    library modules), not 31; the 25 entry scripts own a folder each, the 13 libraries none.
+  - *[epoch 5, 2026-11-04, Opus review]* **D-c, which text wins.** Both: the three host folders are owned folders of
+    the wrap INSIDE the runner's run folder, each with its own claim (the rule: an owned folder always has its claim).
+    S4 also checks VS Code's IPC socket path length under the deeper `--user-data-dir` (creds E2.1 met macOS's
+    103-byte socket cap, its E2 document `:284`); if the path is too long, the profile folder stays short.
+  - *[epoch 5, 2026-11-04, Opus review]* **P4 for S2-B — the Windows janitor dry-run.** S2-B's commands line (the
+    `janitor.sh --token coai --dry-run` on Windows and in WSL) is recorded for WSL only (`module_tests.md:6129`); the
+    Windows run is a deliberately started, recorded dry-run on a hosted `windows-latest` runner (Git for Windows'
+    bash), an open item of the producer PR before it merges (§ S2-B, *[epoch 5, Opus review]*); not a narrowing.
 
 Scenarios: the guard (`leftovers-check.mjs --profile node --token coai`) on the whole repository reports zero
 `legacy-name` and `owner-blind` for every listed line; `sonarcloudRunsThroughTheRunner` — a test that reads
@@ -1249,7 +1572,138 @@ only at the stop).
   its missing containment and its owning S3 or S4 change; no producer and no sweep in the diff; the suites green with
   the same counts; `research/module_tests.md` updated where it quotes a renamed name.
 
-## S6 — The two guards, the audit, the `raw-temp` baseline, the CI legs (commit 4 of the producer PR)
+## S6 — The two guards, the audit, the `raw-temp` baseline, the CI legs (commit 5 of the producer PR)
+
+**Current statement (2026-11-05, the parent's epoch-6 re-review).** This is S6's ONE operative text. S6 is the FIFTH commit
+of the producer PR (S3 → S2-B → S4 → S5 → S6; the heading's "commit 4" is from before S5 moved into the PR). The text it
+replaces is kept under *S6 — superseded text* below, dated, and is not edited; where the two differ, this statement decides.
+Its build brief (`todo/PLAN_test_leftovers_E5_S6_brief.md`) is revised by an Opus author to this statement before the code
+starts (the parent's § *Epoch 6*, item 4.7).
+
+- **Models.** Brief by Opus (revised); code by a Sonnet coder; review by Opus against rule §7, D6, D8 as read for epoch 6,
+  D9, must-not-copy #1 and #2 (its C# half; its Node half as narrowed).
+- **Goal.** One guard per language keeps every tree of the repository so: red on every class of rule §7 outside the helpers'
+  own files, red on an unregistered or disagreeing token, red on a scan of nothing; `raw-temp` held by the ONE baseline
+  file the released rule authorises (membership plus content hash, a multiset, only shrinking) for sites inside a proven
+  run folder, and by the rule's inline exemption, each with a PROVED containment reason, for the lines no scope can carry;
+  the end-of-run audit bounded to the run and run BEFORE the run folder goes; the three CI legs carry the self-tests.
+- **Depends on.** S3, S2-B, S4 and S5 on the branch (done, `524df50e`); coai #947 merged (the pin at `bd795847`: F3 and
+  F24) and `main` merged into the branch; then F24's SECOND acceptance check (the brief § 16) against the released guard
+  and this repository's real hosts, recorded on the PR and in `research/module_tests.md` — S6 creates no baseline before it.
+- **Files.** The copied `LeftoversGuard*.cs` through D2's manifest ops (an ADAPTED copy, never byte-identical: `GuardFiles`
+  for coai's layout — C# under `src_mcp/tests/`, `src_mcp/tests_leftovers/`, `src_mcp/tests_fakecli/`, `src_server/tests/`,
+  `src_bugs/tests/`, `src_bench/CoaiBench.Tests/`; workflows; `**/*.sh`, `**/*.ps1`; the `.mjs` under `.github/scripts/`,
+  `http/` and `src_vs_code/scripts/` (P13)); coai's own `LeftoversRepositoryGuardTests.cs` (calls the copied `Scan`, applies
+  the baseline's `csharp` scopes through the released library's applier, subtracts the exemptions of the inventory, asserts
+  the rest empty); `shared/leftovers-exemptions.json` (the expected-exemption inventory: file, the site's line and its sha256, class, guards; the reason
+  is the marker's own text; a `.cs` cannot be read by the Node wrapper) with `LeftoversInventory.cs`, its C# comparer (the brief § 7.3); the copied `LeftoversAudit.cs` wired as D9 says, through the ONE ordered call below; `LeftoversBaselineTests`
+  with `TheProofCheck_ClosesForEachScope` (new); `src_vs_code/src/test/testLeftovers.test.mjs` (the `node` profile wrapper
+  with `--baseline`, failing on exit 1 and on exit 2 with the tool's own sentence; the Node half of the inventory; the
+  positive detection test); ONE `raw-temp-baseline.json` at the repository root, never a symlink, with one scope per tree
+  (`root`, `proof`, `guard`: `csharp` or `node`), each proof a marked test file under its root (F24: a marker, no order);
+  `src_server/smoke-image.sh` (the trap move); the two split fixtures (`scripts/lib/native-run.test.mjs:42`,
+  `scripts/native/native.test.mjs:506`) as plain literals with the inline `legacy-name` exemption; `.github/workflows/ci.yml`
+  (`npm ci --ignore-scripts --prefix .agents/conventions` on the `macos` and `windows` jobs; the audit self-test steps on the
+  three legs; the standing shrink step; the Node wrapper on the two jobs' file lists); `research/module_tests.md`.
+- **The checks (merge condition (b), as D8 reads for epoch 6).** On the whole repository, both guards: `owner-blind`,
+  `legacy-name`, `exemption`, `token` at zero UNEXEMPTED; `raw-worktree` at zero unexempted (the `worktree add` lines, 23 at the brief's measure, § 10.2, 29 before S3 and S5, each
+  carry an exemption naming the owned folder they live in); the expected-exemption inventory EQUALS the guard's exemption list
+  exactly, so a new exemption is a visible diff; only the authorised baseline and the inline `raw-temp` exemptions of the
+  inventory are left; a scan of nothing is red; the token is a registered row written once. `owner-blind` takes no inline
+  exemption (rule §7): such a line is rewritten or lives in a helper's own file (the brief § 9.1 names seven).
+- **The inventory and the proof per exemption (entry 5.3).** Classes: `legacy-name` fixtures (the legacy run-folder fixtures
+  of `startOfRun.test.mjs`, `old-coai-leftovers.test.mjs` and `src_mcp/tests`; the old-prefix series fixture; the two split
+  fixtures made plain; the helper-own lines of `old-coai-leftovers.mjs:35-37`, `:139`, `startOfRun.mjs:19`, `:28`, and any
+  `run-tests.mjs` line that still names the legacy form — each listed with its reason; the 8 `.teststodelete-quarantine-`
+  fixture lines named so a later guard change cannot make them silent findings); `raw-worktree` (29); the series' line if
+  the guard classes `make-series.sh`'s `mkdir`; `raw-temp` INLINE for the lines no scope can carry — the `src_vs_code/scripts/`
+  lines the C# guard reports (54 at the brief's count; the PR re-counts on its base), `src_server/smoke-image.sh:73` and up to 22 more (the parent's item 4.2).
+  **Every `raw-temp` exemption's reason is proved on the PR**, not asserted: an ENTRY script's "runs inside its own run
+  folder" is proved once by the list of entries whose first effect is `startOwnedRun` (it moves `TEMP`/`TMP`/`TMPDIR` into
+  the run folder — `live-agent.mjs:24` before its three `mkdtempSync` at `:78-80`), with a test that `tmpdir()` answers the
+  run folder after it; a LIBRARY's (`browserLayout.mjs:51`, `:79`, `seam-catalog.mjs:69`, the `seam-*.mjs` lines) is proved
+  through EVERY caller: the PR lists each importer (`git grep -l`) and shows it is an entry with the wrap or a test under
+  the runner — one caller outside a run folder makes the line a finding, not an exemption; a READ of the root
+  (`run-tests.mjs:103`, `ownedRun.mjs:34`, `:36`) is a read record: the line allocates nothing, and the reason says so.
+  Taking `src_vs_code/scripts/` out of the guard is rejected: it would hide every future allocation there.
+- **The Node detection (row 2's Node half, narrowed; entry 5.2).** `testLeftovers.test.mjs` asserts what the shipped guard
+  DOES detect in a `.mjs`: a whole legacy literal ⇒ `legacy-name`; a bare-word glob passed to a removal ⇒ `owner-blind`. The
+  PR says in one sentence what it does not detect (a split, `.concat`, `.join('')`, a template hole, `\u`/`\x` escapes, a
+  one-character class, a regex over the word, the bare word, half of the word) and that the zero is a zero of WHOLE literals
+  until F30 ships. The split-piece scan (`'testsTo'`, `"tests", "To"`, `.join('')`, `string.Concat` beside `Delete`) runs on
+  the whole repository, its output recorded as a search, never as a proof. No coai-own folding reader (D6).
+- **The inventory's reasons have five kinds** (the parent's item 4.2 and entry 6.1, the coordinator's decisions of 2026-11-05): an entry script proved by its wrap; a library proved by every importer, kept true by a standing test beside `runnerScripts.test.mjs` E1 that fails when an importer of an exempted library is neither an entry with the wrap nor a test under the runner; a read that allocates nothing; a line no test run reaches, kept true by a standing test that fails when a test file names that file, except for a pinned list of the pairs that exist at creation, each saying why the line is not reached (a new spawn inside a listed test file is not seen); and a line a test under the gate reaches whose product caller is not a test run (`install-cli.sh:22`, `install-agy.sh:61`, `deploy/bugs/install-env.sh:101`, `deploy/systemd-release.sh:161`), pinned by an assertion in each of those test classes that the child's `TMPDIR` is inside `RunTemp.Folder`. The brief traces each row; `TempDir.cs:35` rests on the gate and the forced runs. A line a test run can reach is never the fourth kind. The C# guard's frozen exclusion list binds the C# guard only; the released Node guard reports those lines, so they keep the marker. Each row holds the sha256 of its SITE's trimmed line, not the marker's, as the baseline does, so a line cannot change under its marker.
+- **The audit (D9), audit-first (D8 (o)).** The template's wiring is replaced by the manifest op of the brief § 11:
+  `RealAudit(RunTemp.Folder, RunTemp.RegistryWithoutTheRunFolder())`, bounded to this run's folder and this process's record
+  (row 1). `LeftoversAudit.Discover` returns `[]` once the run folder is gone (`LeftoversAudit.cs:41`), so a claim-only
+  leftover (an orphan claim of a folder a test removed itself, absent from the registry) is seen only when the audit runs
+  BEFORE the run folder ends. xUnit 4.0.1 disposes assembly fixtures in creation order and all four `RunTempStart.cs` list `RunTempFixture` first, so today's order misses it. Swapping the attributes is not the fix (it runs the real-root sweep before `RunTempFixture`'s constructor, the fail-closed fallback). **The audit and the end of the run folder become ONE ordered call in the sweep fixture's disposal (the audit, then `RunTemp.EndOfRun` in `finally`), and `RunTempFixture.Dispose` no longer ends the run; the process-exit handler stays. It lands in the fourth op's `new` text for `LeftoversSweepFixture.cs`, and ending the run is a seam only the assembly fixture's own constructor sets, because the copied `LeftoversAuditTests` call that disposal directly.** `RunTemp.Start` registers the process-exit handler from the module initializer, before any fixture, so a run whose sweep fixture threw in its constructor, or that was aborted before disposal, still ends its folder there; `Restore` is safe to run twice, and that is pinned. A run like that has no audit, and it has already failed or been killed. S6 plants that orphan claim in a child run with no inherited `TESTSTODELETE_RUN`, in EACH of the four suites, and the audit reports it; RED before the ordered call, shown once.
+  `LeftoversSelfTest` leaks on purpose under `COAI_LEFTOVERS_SELFTEST`; CI asserts the run FAILS with the audit's first line
+  (the brief § 12, both values, on the three legs). **A leak the audit exposes is fixed in the test that made it before the
+  PR merges; the audit is never weakened and no entry skips it; each one found is recorded in `module_tests.md`.**
+- **`src_server/smoke-image.sh` (D8 (p)).** `finish()` and `trap finish EXIT` move to right after the globals line
+  (`work='' id='' logs_pid='' ok=false`), before `work=$(mktemp -d)`; `finish` already tolerates empty globals. RED first:
+  `TheImageSmokeUsesTheServerTests` gains a case with a failing `chmod` (or `openssl`) stub on PATH — today the folder
+  stays (the script exits under `set -e` before the trap line), after the move it is gone. The line's inline `raw-temp`
+  exemption names what stays unsolved: a `kill -9`, or the hard kill that ends a CI cancel, at any moment from `mktemp` to
+  the end of the script leaves the folder with no claim. So the folder takes an owner-form name (`owner="u$(id -u)"`, then `mktemp -d "${TMPDIR:-/tmp}/testsToDelete-$owner-coai-smoke-XXXXXX"`, two lines (a literal `testsToDelete-u` is a `legacy-name` as well as a `raw-temp`, measured at `bd795847`; with the variable the guard reports `raw-temp` only)): the janitor lists a killed run's folder as `unmarked` for a person to read, and never removes it. This is the parent's second bounded exception to the goal. No trap sees it; after the
+  move the trap stands before `mktemp`, so the window is the whole run, not one line.
+- **The baseline.** Generated once from the real tree after S5 (every `raw-temp` finding inside the six scopes that S3/S4
+  did not move; `GetTempPath`/`tmpdir` imports used only to READ the root are migrated, not baselined — the brief § 9.3);
+  `{ file, sha256, line }`, one entry per occurrence, `line` a hint, no `count` field (the released rule at `bd795847`); a multiset, exact membership per
+  occurrence, never a total; a test asserts it only shrinks against the committed one, that every entry's hash matches a
+  line of its file (a stale entry is red), that a moved line keeps its entry, and that a second identical line beside a
+  baselined one is red. The creation: ONE temporary commit on this PR adds a step with `git fetch --unshallow` and
+  `--allow-create`; its run id and log line go in the PR and in `module_tests.md`; the next commit removes it;
+  `workflowsStartTestsThroughARunner.test.mjs` pins that no workflow holds the creation flag. The standing step
+  (`--baseline-shrinks --base <base sha>`) skips this PR by number and runs on every later PR; S7's first PR removes the
+  clause. **The final content (D8 (q)):** at this PR's LAST head before the squash merge, `leftovers-check.mjs
+  --baseline-shrinks --base <the creation commit>` exits 0, recorded on the PR, with both wrappers green. The creation commit is the commit on this PR that first adds the file: `git log -1 --format=%H --diff-filter=A -- raw-temp-baseline.json`, in a FULL clone: at depth 1 it answers HEAD and a grown baseline passes (measured). `--print-baseline` cannot do this (it reads no `.cs` and prints `scopes: []`); `--baseline` already reconciles entries and sites, and what is open is growth after the creation, which the shrink check refuses with `new key`.
+- **Seeded violations and break-its.** One planted site per actual test root — `src_mcp/tests`, `src_mcp/tests_leftovers`,
+  `src_mcp/tests_fakecli`, `src_server/tests`, `src_bugs/tests`, `src_bench/CoaiBench.Tests`, `src_vs_code/src/test`,
+  `scripts/`, `src_vs_code/scripts/`, `.github/workflows`, `.github/scripts/`, `http/` — each red naming file and line, then
+  reverted; a scope whose proof file is missing ⇒ a `baseline` finding; a stale entry ⇒ a `baseline` finding; one
+  `Directory.CreateTempSubdirectory("x")` in a `src_server` test ⇒ red; one `mkdtempSync(join(tmpdir(), 'x-'))` in an
+  extension test ⇒ red; one `testsToDelete-x-` literal ⇒ red `legacy-name`; the submodule de-initialised ⇒ red with the
+  submodule sentence; an exemption added without its inventory row ⇒ red (the inventory check); the frozen exclusion list
+  pinned (`deploy/**`, `src_server/install-agy.sh`, `src_server/install-cli.sh` — product installers, each with its reason).
+  The repository-wide guard test lands here, never in S3.
+- **F24's second acceptance check (D8 (l)).** After #947, before the baseline is created, the brief § 16 as written: the
+  proof check closes both ways for each scope through the guard the scope names (the two `node` scopes through the released
+  `leftovers-check.mjs --baseline --profile node`; the four `csharp` scopes through `TheProofCheck_ClosesForEachScope`, new);
+  the five forced runs (`DiscoverySentinel`; `COAI_RUNTEMP_SELFTEST` = `fail-claim`, `mismatch-temp`, `mismatch-tmp`,
+  `mismatch-tmpdir`) each exit 78 with one line and the sentinel untouched, on the real C# host, then inside the suites and
+  both Node runners; a run under the gate passes. On red: stop, no baseline; the fault goes to the coordinator.
+- **The CI legs.** `build-test`: the audit self-test step after `Test`; the standing shrink step after `Lint suppressions
+  only shrink`. `macos` and `windows`: `npm ci --ignore-scripts --prefix .agents/conventions` after `setup-node`;
+  `testLeftovers.test.mjs` on the runner's file list; the audit step (bash on macOS, PowerShell on Windows, the template's
+  portable subset) after `Test`; the `DarwinLayoutTests` step stays first on `macos`. `release.yml` gets two comment lines;
+  `sonarcloud.yml` nothing; `actionlint` clean.
+- **Commands.** The four executables (`*LeftoversGuard*`, `*LeftoversAudit*`, `*LeftoversBaseline*` first); `cd src_vs_code &&
+  npm test`; `node .agents/conventions/tools/leftovers-check.mjs --repo . --baseline --profile node --token coai --identity
+  "the multi-model review extension and server"`; `node .agents/conventions/tools/leftovers-check.mjs --repo . --print-baseline --profile node --token coai --identity "the multi-model review extension and server"` (without `--profile node` it lists only 12 entries, under `deploy/` and `src_server/`);
+  `actionlint`.
+- **DoD (S6, epoch 6).** Every class red once and green with a valid exemption; the checks above green on the whole tree,
+  both guards, three legs; the inventory equal to the guard's list, every `raw-temp` exemption's reason proved on the PR as
+  above; the positive Node detection test green and the one sentence of what is not detected in the PR; the two split
+  fixtures plain; the orphan-claim plant green in each of the four suites through the ONE ordered call, its RED shown once (*[epoch 7]* on Windows the plant re-owns its claim, which proves the ORDER only, its RED is shown there too, and `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun` pins that a real claim is not seen); the smoke script's
+  trap moved with its RED observed; the audit self-test red-for-the-right-reason on three legs; F24's second check
+  recorded; the baseline created once, its creation step removed, no workflow holding the creation flag, the shrink check
+  against the creation commit green at the last head; every S5 deferral listed with where it was handled; the producer PR's squash merge carries
+  S3, S2-B, S4, S5 and S6 together with `TheProducerAndTheSweep_LandTogether` green; the pin at `bd795847`;
+  `module_tests.md` says all of it.
+
+### S6 — superseded text, kept for the record (moved here 2026-11-05)
+
+*[epoch 6, 2026-11-05]* The text below was S6's operative text from 2026-11-01 to 2026-11-05, with its dated notes of the
+epoch-3, epoch-4 and epoch-5 re-reviews. It is replaced whole by the statement above and is not edited. What the statement
+replaced: TWO baseline files (`src_mcp/tests/Leftovers/raw-temp-baseline.json`, `src_vs_code/src/test/raw-temp-baseline.json`) —
+the released rule has ONE file at the root with scopes; "the byte-identical `Scan`" — D2's adapted copy since entry 3.1; "the
+twelve planted spellings in C# and in `.mjs` (#2)" — the Node half is narrowed (row 2's note, F30); the exemption contract's
+"only the authorised `raw-temp` baseline" — the inline `raw-temp` exemptions with proved reasons are added (D8 (b)); the
+audit "bounded per D9" without an order — the order is audit-first (D8 (o)). Nothing else of it was wrong; the statement
+carries it forward in one place.
+
 
 *The exemption contract (2026-11-03, re-review gate, finding 3).* The pinned rule core at `cc24f9e`
 (`common/test-leftovers.md`, the § 7 paragraph, lines 96-98) has ONE exemption form, a comment on the line or the line
@@ -1367,6 +1821,13 @@ S6 creates the baseline:
   `raw-temp-baseline.json` at the repository root both when started from the project folder and when started from the
   binary output folder (`bin/Release/net10.0/`), as CI starts the executables.
 
+*[epoch 5, 2026-11-04, Opus review]* **The expected-exemption inventory and the native series.** Two lines of S4's
+series work land in S6's inventory: the series' own line, if the shipped guard classes `make-series.sh`'s `mkdir`
+under a class that takes the inline exemption (§ S4 evidence (3)); and the old-prefix refusal FIXTURE of
+`remove-series.sh`'s new grammar tests — a `testsToDelete-native-vibe-…` literal in `native.test.mjs`, a `legacy-name`
+the guard reports, which carries the inline `testsToDelete-exempt: legacy-name — <reason>` and is listed like the other
+legacy fixtures above. The parent's build order says the same ("the series' line and the old-prefix fixture").
+
 ## S7 — The drain: the `raw-temp` baseline to zero (stage C, after the producer PR)
 
 - **Models.** Brief by Opus (one brief per suite, listing the files and the helper call for each shape); code by one
@@ -1385,6 +1846,12 @@ S6 creates the baseline:
   classes inside a private machine temp.
 - **DoD.** The two baseline files empty and deleted with their only-shrinks tests, the guard then red on ANY raw temp
   call outside the helpers; `module_tests.md` says so.
+  *[epoch 6, 2026-11-05]* "The two baseline files" is the ONE `raw-temp-baseline.json` at the root with its scopes (the
+  released rule, D6's note of 2026-11-03): S7 ends when every scope's entries are gone and the file is deleted with its
+  only-shrinks test, and its first PR removes the `number != 945` clause from the standing shrink step (S6's statement). The
+  inline `raw-temp` exemptions of S6's inventory (the `src_vs_code/scripts/` lines, `smoke-image.sh:73`, the other rows of the parent's item 4.2) are NOT S7's debt:
+  they are contained lines with a proved reason and stay as exemptions; S7 drains only the baseline. S7 does not discover
+  whether containment works — S6 proved that before the merge.
 
 ## Test plan
 
@@ -1428,15 +1895,38 @@ S6 creates the baseline:
       tests of every suite green on all three OSes; the counts reconciled by name.
 - [ ] S2-B: every C# suite and the extension runner sweep at their start on two keys, by identity, through the
       quarantine; legacy names listed (C#) or collected on `gone` only (Node); concurrent sweeps never fail; the sweep
-      never fails the run.
+      never fails the run. *[epoch 5, 2026-11-04]* Legacy names are LISTED by both languages and collected by
+      neither (the parent's entry 4.1); the S2-A clean-up is their only removal.
 - [ ] S4: every Node runner, script test and the editor-host run owns its folder through the ONE wrap module; nothing
       leaks; `release.yml` uses `RUNNER_TEMP`.
+      *[epoch 5, 2026-11-04]* Read with ONE exception: the native measurement series (§ S4, *[epoch 5]*) owns no folder
+      through the wrap — it leaves the prefix family as `native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`, made only by
+      `make-series.sh`, removed only by `remove-series.sh`, never collected. Its evidence, every item green on the Linux
+      leg and each result named in the PR record (the interim document gate, finding 1): (1) the survival test between
+      phases; (2) the remover's grammar tests (a valid new name accepted, each malformed one refused, the old prefix
+      included); (3) the guard's reading of the series lines (or the inline exemption and its inventory line, in S6);
+      (4) the remover's ownership refusals (folder uid, group/world-writable folder, root uid, non-sticky world-writable
+      root) through the owner-uid seam; (5) a phase on a series that is gone stops with its one line and a non-zero
+      exit; (6) the size figure measured before the rename, with its assumptions; (7) the native documents say what the
+      series is, who removes it, how a forgotten one is found, that a reboot clearing `/tmp` ends it, and the bound. The S4 implementation notes
+      (P1, D-b, D-c, P4, P8, P12, P2/P9/P10/P11) are each handled and named in the S4 commit; P13 in S6.
+      *[epoch 5, 2026-11-04, Opus review]* Read with § S4's *Corrections*: "made only by `make-series.sh`" means the
+      lead's `mkdirArgv` makes the bare folder and `make-series.sh` checks and fills it; item (2)'s tests are NEW
+      `remove-series.sh` tests (the `seriesOf` cases moved beside them), with `LC_ALL=C` set before the shape test;
+      item (4) includes the CALLER's `stat` checks before the lead runs anything from the series folder, the copy's
+      checks as defence in depth; item (5) reads "a reboot or a tmp cleaner"; item (7)'s documents include coai's
+      native plan (its ledger opened, entry 1.1) and its E1 stories; the P4-for-S2-B Windows janitor dry-run is an
+      open item of the PR.
 - [ ] S6: both guards red on every class, on an unregistered token and on a scan of nothing; `owner-blind`,
       `legacy-name`, `exemption`, `token` at zero; the `raw-temp` baseline in the released rule's form (membership +
       hash, only shrinking); the audit bounded to the run (#1); the self-tests on the three legs.
 - [ ] *[round-1 findings 1–3, 5]* the sweep root is `RunTemp.Real` (tested); each C# suite has its own initializer and
       its first-ordered run-folder test; a run that cannot make its folder fails before any test (both runners); the
       bare `node --test` of `scripts/lib` sweeps first (tested).
+      *[2026-11-03, S2-B spec B.10 item 10]* "its first-ordered run-folder test" is superseded by S3 as revised at the
+      epoch-4 re-review: the collections run in parallel and no order exists; the gated `Main` (exit 78 before discovery)
+      is the guarantee, and the per-assembly run-folder test stays WITHOUT an order (F24 for the baseline's proof rule).
+      Read the line as: each C# suite has its own initializer, its gated entry point and its run-folder test.
 - [ ] *[round-1 finding 6, round-2 finding 0]* the one-off clean-up script re-checks every pick, removes only through
       an exclusive rename to a quarantine name while the listed identity holds, refuses otherwise; the swap test is
       RED then GREEN.
@@ -1469,6 +1959,14 @@ S6 creates the baseline:
       flags pass and `--list-tests` is refused, both tested; the fallback check behind the gate tested; the diff check
       reads the committed manifest (upstream path, blob SHA, transformations) with no network; F24's acceptance check
       recorded before S6; the `RepositoryRoot` baseline test from both folders; D11's rollback procedure in the PR.
+- [ ] *[epoch 6, 2026-11-05]* S6 as its current statement: the expected-exemption inventory equals the guard's list, every
+      inline `raw-temp` exemption's reason PROVED on the PR (entries through `startOwnedRun`, libraries through every caller,
+      reads as read records); the Node detection test positive for the two detected classes, the one sentence of what is
+      not detected, the split-piece scan recorded as a search (F30 open); the two split fixtures plain literals; the
+      orphan-claim plant in each of the four suites, re-owned on Windows, the pin of its limit and the ONE ordered call (D8 (o), epoch 7); `smoke-image.sh`'s trap before
+      `mktemp`, RED observed (D8 (p)); the shrink check against the creation commit green at the PR's last head (D8 (q)); the pin at
+      `bd795847` (#947) and F24's second check before the baseline is created. The boxes above that say "only the authorised
+      `raw-temp` baseline left" and "every must-not-copy row RED-GREEN-RED" are read with D8 (b) as reworded and row 2's note.
 - [ ] S7: the baseline drained to zero and deleted.
 - [ ] `research/module_tests.md` describes the run folder in its owner form, the sweep in two languages, the one-off
       clean-up, the residual risk, the two guards and the baseline's drain.
@@ -1502,6 +2000,10 @@ S6 creates the baseline:
   *Recommended:* keep the copy byte-identical (list only) and let the Node wrap collect under rule §4's legacy clause;
   the one-off clean-up covers the `win32`/`darwin`-tagged claims nobody reads (D4). Reason: a byte-identical copy is
   the whole value of the template; the Node reference already implements the clause with its tests.
+  *[rollout entry 4.1, 2026-11-03]* **DECIDED by the S2-B spec (B.1 § 3, B.10 items 1 and 12):** list only, in BOTH
+  runners. The copy is an adapted copy now (D2, epoch 4), so "byte-identical" is no longer the reason; the reason is that
+  nothing coai adds collects a legacy name, and the Node reference's clause never fires at the pin (D4's correction).
+  The one-off clean-up is the only remover of E2's folders.
 - **Q4 — `src_server/tests`, `src_bugs/tests` and bench get the run folder (S3) rather than per-test owned folders.**
   DECIDED *[round-1 finding 2]*: yes, and **each of the three assemblies gets its OWN `[ModuleInitializer]`** that
   calls `RunTemp.Start` — a module initializer runs only when its own assembly loads, so the library's cannot serve
@@ -1512,11 +2014,14 @@ S6 creates the baseline:
   finding 5]*: the command gets a start-of-run sweep in front of it (a `--import` preload or a tiny runner that calls
   the reference's sweep on the real temp root before the tests; S2-B item 2, tested). Still recommended for the sites
   themselves: per-test `ownedDir(t, …)` through the wrap inside hooks (rule §2).
+  *[2026-11-03, S2-B spec]* The runner, `scripts/run-lib-tests.mjs` (the S2-B item 2 note says why not the preload).
 - **Q6 — The Node sweeper on Windows checks the profile only (F16 open for Node; the C# side checks the SID too).**
   **Decided 2026-11-01 (the parent's epoch 2, § 4; consult `3310f6ba`): F16 (b).** Until F16's Fix, the reference sweep on
   Windows LISTS and changes nothing (`unverified:` lines); the C# sweep, which checks both keys, collects. coai's producer
   PR merges only after the release carrying that change is pinned, and its Windows CI leg asserts that a planted gone-owner
   folder survives the Node sweep. (Superseded recommendation: accept and record.)
+  *[rollout entry 4.1, 2026-11-03]* Met as written by S2-B: a NEW step of the `windows` job runs the extension's Node sweep
+  test file (the real wrapper, the pinned reference, an otherwise collectible fixture) — S2-B spec B.1 § 5, N-S9, B.5.
 - **Q7 — `temp-sweep.json`: keep `prefix`/`keepMinutes` as documentation or delete them.** *Recommended:* keep the
   file with `neverSwept` and a rewritten `why`; delete `prefix` and `keepMinutes` (nothing reads them after S2-A; an old
   checkout's `SweepRule` must be shown to fail soft — the spec's item 1).
@@ -1676,6 +2181,14 @@ The October notes 1–12 are kept below with what changed; 13–18 are new.
     *[epoch 4]*: D2 is an adapted copy (a manifest, permitted transformations, a diff check); the DoD names the suite ×
     OS matrix; S6 waits for F24 (the baseline proof rule). Upstream parameterisation of the template is a possible later
     follow-up for dew_flow_mcp's owner, if E2, E6 or E7 need the same adaptations.
+21. **The native measurement series is a durable resource outside the contract's form (the parent's entry 4.2)**
+    *[epoch 5, 2026-11-04]*: it leaves the prefix family as `native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}`, made only by
+    `make-series.sh`, removed only by `remove-series.sh`, never collected; the parent's § *Epoch 5*, item 4 is the one
+    bounded exception, with its evidence on the producer PR. And for entry 4.1: nothing collects a legacy
+    `testsToDelete-coai-run-*` folder at the pin; S2-A's one-off clean-up is the only removal (D4 as corrected). For the
+    conventions: the goal of the family's rollout needs a sentence for a resource that is durable on purpose; this is
+    the first one. The parent's P1 is closed by the owner's statement (its PR #124); merge condition (c) for the WSL
+    machine waits for one administrator scan.
 14. **A shared rule change is needed before E5's producer PR** *[round-1 finding 7, consult `abcaae48`]*: rule §7's
     `raw-temp` class needs a baseline form — only for sites proven inside an owned run folder, exact membership plus
     content hash, only shrinking, the line number a hint — written as its own plan in `dew_flow_conventions`, released,
@@ -1688,3 +2201,23 @@ The October notes 1–12 are kept below with what changed; 13–18 are new.
 17. **Two sweepers of unequal strictness on Windows** until F16 (Q6) — resolved by F16 (b): the Node one only lists there.
 18. **The Darwin path is exercised here on three C# suites** (`ci.yml:281-287`), more than the template's one; any
     Darwin defect found here goes back to E3's owner as a note (the boundary table).
+19. **A defect in the TEMPLATE's orphan-claim pass (dew_flow_mcp `LeftoversSweep.cs`, found by the S2-B Opus review, 2026-11-03) — for the template, NOT fixed in coai's copy** (the copy is byte-identical;
+    the plan's rule: the template wins, and a defect goes back as a note). `SweepOrphanClaims` reads the quarantine names ONCE (`var quarantined = QuarantinedNames()`), and `SweepOrphanClaim`
+    decides on that snapshot (`Native.IdentityOf(folder) is not null` → return; `quarantined.Contains(name)` → return). **The interleaving:** sweep A's folder pass sees `X` and keeps it (its verdict
+    was `young` or a transient `Unknown`, or an mtime crossed the ten-minute line between the two sweeps' reads); sweep B (another suite, the Node runner) then judges `X` removable and renames it to the
+    sibling quarantine; A's orphan pass now finds `X.owner` with no folder at `X` and no `X` in its (older) snapshot, judges the claim by its gone owner, and DELETES `X.owner`; B's `IntactAt` check then
+    fails (the claim at its original path changed), so B restores `X` under its name WITHOUT a claim: `X` stays `unmarked` for ever (must-not-copy row 8's outcome, reached through a race instead of a missing
+    check). **The fix** (a few lines in `SweepOrphanClaim`/`RemoveOrphanClaim`): just before `File.Delete`, re-check that the folder is still absent AND take a FRESH `QuarantinedNames` scan — a claim
+    whose folder sits in a sibling quarantine now is not an orphan. The Node reference has the same shape (`sweepOrphanClaims`); worth the same check there. Recorded in coai's `research/module_tests.md` as a
+    known template gap; coai changes nothing until the template does (a manifest operation then follows the template's blob).
+22. *[epoch 5, 2026-11-04, Opus review]* **The numbering of this list, by reference** (the old notes are not
+    rewritten): two notes carry the number 19 — the D10 note after 13 ("Containment is per invocation") is read as
+    **19a**, and the template-defect note after 18 ("A defect in the TEMPLATE's orphan-claim pass") as **19b**; notes
+    20 and 21 stand before 14 because they were added in epoch order, and are read by their titles. And note 21's
+    "made only by `make-series.sh`" is read with § S4's *Corrections*: the lead's `mkdirArgv` makes the bare folder,
+    `make-series.sh` checks and fills it; the series' owners are `native-run.mjs` (`mkdirArgv`, `seriesOf`,
+    `removeArgv`) and the four `scripts/native/*.sh` files. For the parent: the ownership check moved to the CALLER
+    (the lead's `stat` checks before it runs anything from the series folder), and coai's native plan opened its
+    ledger for the rename (entry 1.1, `contract`).
+23. *[2026-11-04, the S4 fix round]* **For dew_flow_mcp's session (the template), low:** on Windows a sweep that loses a race can read a folder the other sweep just took, and `ForEachEntry` reports one line `folder <path>: Could not find a part of the path …` (coai ci run 41843872560). Nothing is lost or removed twice, but S2-B's DoD says concurrent sweeps are silent on not-found, and this path is not. coai keeps the copy as it is ("template wins") and its test accepts that line. The template's owner decides whether a not-found in the folder pass should be silent.
+    *[2026-11-04, entry 5.1 — SUPERSEDED]* Note 23 left the "Could not find" line to the template's owner and kept the copy as it was. The cause is measured (two threads racing `Directory.Move` on one source both succeed in 39951 of 40000 races on hosted Windows, run 41873954643): `RenameExclusively` has no single winner there. coai now changes the copy by three exact-replace ops with their reason (a named mutex over the root, Windows only, `SweepLock.cs`), and the tests are strict again (zero error lines on Windows). See `research/module_tests.md`, § entry 5.1.

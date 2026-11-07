@@ -406,7 +406,7 @@ public sealed class VibeHomeTests : IDisposable
     public void AnEnvLinkToAFolder_StaysRefused_EvenOnAHostThatAdmitsTheSignIn()
     {
         TheInventoryVibeWrites();
-        using var outside = TempDir.For("testsToDelete-vibe-outside-");
+        using var outside = TempDir.For("vibe-outside-");
         SnapshotTestKit.LinkNow(_home.At(".env"), outside);
 
         VibeHome.Refusal(_home, Manifest, Entry, Admitted).Should().Contain("holds .env,").And.Contain("link to a folder");
@@ -426,7 +426,7 @@ public sealed class VibeHomeTests : IDisposable
     public void AWindowsHost_WithAnEnvLink_IsStillRefused()
     {
         TheInventoryVibeWrites();
-        using var outside = TempDir.For("testsToDelete-vibe-outside-");
+        using var outside = TempDir.For("vibe-outside-");
         SnapshotTestKit.LinkNow(_home.At(".env"), outside);
 
         VibeHome.Refusal(_home, Manifest, Entry).Should().Contain("holds .env,").And.Contain("is a link, and an owned home is never reached through one", "a link in a Windows Vibe home should still refuse");

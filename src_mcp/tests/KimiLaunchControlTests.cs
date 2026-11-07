@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// sign-in's gate held until the launch has been read; the version asked in the BUILT environment on the owned home; the shape
 /// checked again after it; and everything given back on every way out.
 /// </summary>
-/// <remarks>Every fake person, junction and lock is inside this test's own <c>testsToDelete-kimi-</c> folders; the lock root is overridden per async flow.</remarks>
+/// <remarks>Every fake person, junction and lock is inside this test's own <c>kimi-</c> folders; the lock root is overridden per async flow.</remarks>
 public sealed class KimiLaunchControlTests : IDisposable
 {
     private readonly KimiFixture _person = new();

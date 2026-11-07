@@ -61,7 +61,7 @@ public sealed class MountLocalityTests
     public void TheRealKernel_NamesTheMountOfARealFolder_AndItIsInTheRealTable()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "statx and /proc/self/mountinfo are Linux's");
-        using var dir = TempDir.For("testsToDelete-mountid-");
+        using var dir = TempDir.For("mountid-");
 
         var identity = MountLocality.Identify(dir.Path);
         var held = MountTable.Find(MountTable.Parse(File.ReadAllText(MountLocality.MountInfoPath)), dir.Path, identity);

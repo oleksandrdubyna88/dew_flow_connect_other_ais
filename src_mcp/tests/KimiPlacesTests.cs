@@ -73,7 +73,7 @@ public sealed class KimiPlacesTests
     [Fact]
     public void ForShim_ReadsNoEnvironment()
     {
-        using var os = TempDir.For("testsToDelete-kimi-shimenv-");
+        using var os = TempDir.For("kimi-shimenv-");
         var root = Path.Combine(os, "owned", "kh-x");
         var bin = Path.Combine(os, "bin");
         var places = KimiPlaces.ForShim(root, bin);

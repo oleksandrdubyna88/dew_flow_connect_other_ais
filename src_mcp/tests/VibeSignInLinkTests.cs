@@ -18,7 +18,7 @@ public sealed class VibeSignInLinkTests : IDisposable
 {
     private const string Persons = "/home/p/.vibe/.env";
 
-    private readonly TempDir _home = TempDir.For("testsToDelete-vsl-");
+    private readonly TempDir _home = TempDir.For("vsl-");
 
     public void Dispose() => _home.Dispose();
 

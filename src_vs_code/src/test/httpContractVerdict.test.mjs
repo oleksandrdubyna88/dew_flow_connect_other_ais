@@ -4,6 +4,7 @@
 // results hold a FAILED assertion, and 10 when a request errors — read off its dist/index.js. The runner used to treat
 // only 1 as a failed assertion, so every real contract regression was reported as exit 4, "the suite is
 // misconfigured, not the API": the one answer that sends a reader away from the server that broke.
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { test } from 'node:test';

@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class AReviewTreeIsErasedOnlyAtItsRealPathTests : IDisposable
 {
-    private readonly TempDir _work = TempDir.For("testsToDelete-rtroot-");
+    private readonly TempDir _work = TempDir.For("rtroot-");
     private readonly string _root;
     private readonly string _outside;
     private readonly ReviewTreeRoot _at;

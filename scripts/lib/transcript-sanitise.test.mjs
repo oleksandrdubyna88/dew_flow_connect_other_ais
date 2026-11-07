@@ -1,6 +1,7 @@
 // node --test scripts/lib/transcript-sanitise.test.mjs — the privacy boundary of the caller-transcript fixtures
 // (research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md, E1.S3). Everything here is a SYNTHETIC session built in
 // a temp folder: the real ~/.claude is never named, listed or read. CI runs it on Linux ("Probe script tests").
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -683,13 +684,13 @@ test('theCliExplainsAMissingSessionAnInvalidSpecAndADirectoryWithoutAPath', () =
   const missing = runCli(['--session-file', join(dir, `${SESSION}.jsonl`), ...flags]);
   assert.equal(missing.status, 74);
   assert.match(missing.stderr, /does not exist/);
-  assert.ok(!missing.stderr.includes('testsToDelete') && !missing.stderr.includes(dir), 'no path');
+  assert.ok(!missing.stderr.includes(base), 'no path: not the session file, not --out, not the run folder');
   const spec = join(dir, 'spec.json');
   writeFileSync(spec, '{ not json at all');
   const invalid = runCli(['--case-spec', spec, ...flags]);
   assert.equal(invalid.status, 65, invalid.stderr);
   assert.match(invalid.stderr, /not valid JSON/);
-  assert.ok(!invalid.stderr.includes(dir) && !invalid.stderr.includes('not json at all'));
+  assert.ok(!invalid.stderr.includes(base) && !invalid.stderr.includes('not json at all'));
   mkdirSync(join(dir, `${OTHER_SESSION}.jsonl`));
   const isDir = runCli(['--session-file', join(dir, `${OTHER_SESSION}.jsonl`), ...flags]);
   assert.equal(isDir.status, 74);

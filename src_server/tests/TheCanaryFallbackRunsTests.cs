@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -124,6 +125,7 @@ public sealed class TheCanaryFallbackRunsTests : IDisposable
         start.Environment["CANARY_STUB_SERVER"] = server;
         start.Environment["CANARY_STUB_LOG"] = ShellScripts.Posix(log);
         start.Environment["CANARY_STUB_OLD_ANSWER"] = OldServerRefusal;
+        RunTemp.RequireChildTempInRunFolder(start);
         using var process = Process.Start(start)!;
         // Both streams read without blocking, and the wait BOUNDED: a child that never exits must fail this test in a
         // minute, never hold a CI leg to its job limit (PR #761: a self-execing python3 shim did exactly that).

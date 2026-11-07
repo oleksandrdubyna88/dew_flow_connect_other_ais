@@ -12,7 +12,7 @@ public sealed class FolderLockTests : IDisposable
 {
     private const string LockName = ".lock";
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-folder-lock-");
+    private readonly TempDir _dir = TempDir.For("folder-lock-");
 
     public void Dispose() => _dir.Dispose();
 

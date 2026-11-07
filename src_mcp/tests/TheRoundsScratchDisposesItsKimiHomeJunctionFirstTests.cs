@@ -12,11 +12,11 @@ namespace CoaiMcp.Tests;
 /// judge's edit): the round KNOWS it holds Kimi homes, so D19's order is done explicitly by <see cref="KimiHome.DisposeAllUnder"/> before the shared
 /// deleter — which is the second belt and meets no link any more. The person's folder keeps every file, bytes and read-only bit.
 /// </summary>
-/// <remarks>The scratch lives in this test's own <c>testsToDelete-</c> folder (<c>RoundScratch.At</c>); the person is a fake one in another.</remarks>
+/// <remarks>The scratch lives in this test's own temp folder (<c>RoundScratch.At</c>); the person is a fake one in another.</remarks>
 public sealed class TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests : IDisposable
 {
     private readonly KimiFixture _person = new();
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-roundscratch-");
+    private readonly TempDir _dir = TempDir.For("kimi-roundscratch-");
     private readonly List<string> _notes = [];
 
     public void Dispose()

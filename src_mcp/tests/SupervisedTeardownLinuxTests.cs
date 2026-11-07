@@ -21,7 +21,7 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-teardown-");
+    private readonly TempDir _dir = TempDir.For("teardown-");
     private readonly List<Process> _started = [];
     private readonly List<PinnedMember> _members = [];
 

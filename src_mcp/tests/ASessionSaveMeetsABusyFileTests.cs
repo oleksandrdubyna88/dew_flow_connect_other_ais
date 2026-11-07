@@ -24,7 +24,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class ASessionSaveMeetsABusyFileTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-session-busy-");
+    private readonly TempDir _dir = TempDir.For("session-busy-");
 
     public void Dispose() => _dir.Dispose();
 

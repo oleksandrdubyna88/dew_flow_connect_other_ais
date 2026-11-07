@@ -25,8 +25,8 @@ public sealed class RoundCountsMergedTests : IDisposable
     private const string Codex = "codex";
     private const string Gemini = "gemini";
 
-    private readonly TempDir _store = TempDir.For("testsToDelete-merged-store-");
-    private readonly TempDir _elsewhere = TempDir.For("testsToDelete-merged-others-");
+    private readonly TempDir _store = TempDir.For("merged-store-");
+    private readonly TempDir _elsewhere = TempDir.For("merged-others-");
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     private string Dir => _store.Path;

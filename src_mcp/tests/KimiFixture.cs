@@ -6,7 +6,7 @@ using CoaiMcp.Runners.Platform;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A fake person's Kimi home — the shape the owner's real one has, built INSIDE the test's own <c>testsToDelete-kimi-</c>
+/// A fake person's Kimi home — the shape the owner's real one has, built INSIDE the test's own <c>kimi-</c>
 /// folder and never anywhere else (E4.2 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>): a <c>config.toml</c> with the managed
 /// provider and its OAuth slot, a <c>moonshot-ai</c> row with an <c>api_key</c>, a <c>[[hooks]]</c> entry and a model block of
 /// the person's own; <c>credentials/</c> with two READ-ONLY files; and <c>bin/</c> with empty <c>kimi.exe</c>, <c>rg.exe</c> and
@@ -26,7 +26,7 @@ internal sealed class KimiFixture : IDisposable
 
     public const string OauthHost = "https://auth.kimi.com";
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-");
+    private readonly TempDir _dir = TempDir.For("kimi-");
 
     public KimiFixture(string? config = null)
     {

@@ -299,7 +299,7 @@ public sealed class AskAcpModeTests
     [Fact]
     public async Task ATurnWithoutAHome_IsRefused65()
     {
-        using var folder = TempDir.For("testsToDelete-kimi-shim-");
+        using var folder = TempDir.For("kimi-shim-");
 
         var code = await KimiAsync(folder);
 
@@ -311,7 +311,7 @@ public sealed class AskAcpModeTests
     [Fact]
     public async Task AHomeThatIsNotThere_AndAMissingPersonsBin_AreRefused65_EachNamed()
     {
-        using var folder = TempDir.For("testsToDelete-kimi-shim-");
+        using var folder = TempDir.For("kimi-shim-");
         Directory.CreateDirectory(folder.At("root"));
 
         var absent = await KimiAsync(folder, "--home", folder.At("nowhere"), "--persons-bin", folder.At("bin"));
@@ -339,7 +339,7 @@ public sealed class AskAcpModeTests
     [Fact]
     public async Task AKimiProfileWithoutLocks_IsRefused65()
     {
-        using var folder = TempDir.For("testsToDelete-kimi-shim-");
+        using var folder = TempDir.For("kimi-shim-");
         Directory.CreateDirectory(folder.At("root"));
         Directory.CreateDirectory(folder.At("bin"));
 
@@ -353,7 +353,7 @@ public sealed class AskAcpModeTests
     public async Task AFakeProfileWithoutLocks_RunsItsTurn_AndTakesNoHold()
     {
         using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
-        using var locks = TempDir.For("testsToDelete-kimi-locks-");
+        using var locks = TempDir.For("kimi-locks-");
         using var rooted = CoaiMcp.Runners.Kimi.KimiCredentialsLock.RootFor(locks.Path);
 
         var code = await RunAsync(agent);

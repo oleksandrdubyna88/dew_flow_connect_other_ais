@@ -45,7 +45,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void A_file_held_open_for_writing_by_another_handle_is_still_read()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-held-");
+        using var dir = TempDir.For("transcript-held-");
         var file = dir.At("t.jsonl");
         string[] lines = [Stamped(At(10, 0)), Stamped(At(10, 1))];
         using var writer = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.Read);
@@ -59,7 +59,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void A_file_that_cannot_be_opened_is_no_lines_not_an_exception()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-open-");
+        using var dir = TempDir.For("transcript-open-");
         var meter = new ScanMeter();
 
         TranscriptLines.ReadShared(dir.At("missing.jsonl")).Should().BeEmpty();
@@ -109,7 +109,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void A_file_last_written_before_the_bound_is_skipped()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-written-");
+        using var dir = TempDir.For("transcript-written-");
         var file = dir.At("t.jsonl");
         Write(file, Joined(Stamped(At(10, 0))));
         File.SetLastWriteTimeUtc(file, At(10, 0));
@@ -123,7 +123,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     public void AgentLog_skips_a_transcript_last_written_before_its_window_opened()
     {
         // The proof that AgentLog.Files really goes through WrittenSince: the line is in the window, the file's mtime is not.
-        using var dir = TempDir.For("testsToDelete-coai-transcript-agentlog-");
+        using var dir = TempDir.For("transcript-agentlog-");
         var folder = Directory.CreateDirectory(dir.At("d--rsd-repo")).FullName;
         var file = Path.Combine(folder, "session.jsonl");
         var line = "{\"timestamp\":\"" + Stamp(At(13, 20)) + "\",\"type\":\"assistant\",\"cwd\":\"D:/repo\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"inside\"}]}}";
@@ -141,7 +141,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void A_line_stamped_before_the_bound_is_skipped()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-skip-");
+        using var dir = TempDir.For("transcript-skip-");
         var file = dir.At("t.jsonl");
         string[] lines =
         [
@@ -163,7 +163,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     {
         // The top-level stamp comes after `message`, so a line torn in the middle usually has no key at all: skipping it would hide
         // every torn MIDDLE line under a bound and `partial: torn line` could never fire.
-        using var dir = TempDir.For("testsToDelete-coai-transcript-nostamp-");
+        using var dir = TempDir.For("transcript-nostamp-");
         var file = dir.At("t.jsonl");
         var noKey = "{\"type\":\"last-prompt\",\"lastPrompt\":\"x\"}";
         var tornMiddle = "{\"type\":\"assistant\",\"message\":{\"id\":\"m1\",\"usage\":{\"input_tokens\":1";
@@ -184,7 +184,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [InlineData(200 * 1024)]
     public void A_line_longer_than_the_cap_is_skipped_not_buffered(int tooLong)
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-cap-");
+        using var dir = TempDir.For("transcript-cap-");
         var file = dir.At("t.jsonl");
         string[] shorts = [Stamped(At(10, 0)), Stamped(At(10, 1))];
         var huge = Stamped(At(10, 2), new string('x', tooLong));
@@ -202,7 +202,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void A_too_long_last_line_with_no_terminator_is_counted_and_not_yielded()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-captail-");
+        using var dir = TempDir.For("transcript-captail-");
         var file = dir.At("t.jsonl");
         var first = Stamped(At(10, 0));
         Write(file, first + "\n" + Stamped(At(10, 1), new string('x', 200 * 1024)));
@@ -215,7 +215,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void The_stop_hook_is_asked_before_a_line_is_yielded()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-stopfirst-");
+        using var dir = TempDir.For("transcript-stopfirst-");
         var file = dir.At("t.jsonl");
         string[] lines = [Stamped(At(10, 0)), Stamped(At(10, 1)), Stamped(At(10, 2))];
         Write(file, Joined(lines));
@@ -232,7 +232,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void The_stop_hook_ends_the_read()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-stop-");
+        using var dir = TempDir.For("transcript-stop-");
         var file = dir.At("t.jsonl");
         string[] lines = [Stamped(At(10, 0)), Stamped(At(10, 1)), Stamped(At(10, 2))];
         Write(file, Joined(lines));
@@ -254,7 +254,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     public void The_stop_hook_is_asked_while_lines_are_being_skipped_too()
     {
         // A file of stale lines yields nothing, so a stop that is asked only per yielded line would let the clock run unchecked.
-        using var dir = TempDir.For("testsToDelete-coai-transcript-stopscan-");
+        using var dir = TempDir.For("transcript-stopscan-");
         var file = dir.At("t.jsonl");
         var stale = Stamped(At(9, 0), new string('y', 900));
         Write(file, Joined([Stamped(At(11, 0)), .. Enumerable.Repeat(stale, 3 * 1024)]));
@@ -316,7 +316,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     public void The_head_is_yielded_up_to_the_first_stamped_line()
     {
         // A file can start with an `ai-title`, which has no timestamp (1 of 21 Windows main files).
-        using var dir = TempDir.For("testsToDelete-coai-transcript-head-");
+        using var dir = TempDir.For("transcript-head-");
         var file = dir.At("t.jsonl");
         string[] lines = ["{\"type\":\"ai-title\",\"aiTitle\":\"x\"}", Stamped(At(9, 0)), Stamped(At(9, 1))];
         Write(file, Joined(lines));
@@ -330,7 +330,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     public void An_unterminated_last_line_is_always_yielded()
     {
         // A torn tail usually ends before its stamp; the byte gate must still hand it over.
-        using var dir = TempDir.For("testsToDelete-coai-transcript-tail-");
+        using var dir = TempDir.For("transcript-tail-");
         var file = dir.At("t.jsonl");
         var head = Stamped(At(11, 0));
         var tail = "{\"type\":\"assistant\",\"message\":{\"id\":\"m9\"";
@@ -350,7 +350,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     public void Lines_out_of_order_are_judged_one_by_one()
     {
         // Stamps are not always in file order (11 of 19 fixtures), so no "first line past the bound ends the file".
-        using var dir = TempDir.For("testsToDelete-coai-transcript-order-");
+        using var dir = TempDir.For("transcript-order-");
         var file = dir.At("t.jsonl");
         string[] lines = [Stamped(At(11, 0)), Stamped(At(10, 0)), Stamped(At(12, 0)), Stamped(At(9, 0)), Stamped(At(10, 45))];
         Write(file, Joined(lines));
@@ -363,7 +363,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void Bytes_in_the_slice_are_bytes_not_chars()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-bytes-");
+        using var dir = TempDir.For("transcript-bytes-");
         var file = dir.At("t.jsonl");
         var line = Stamped(At(10, 0), "\u20ac");
         Write(file, Joined(line));
@@ -378,7 +378,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void A_line_longer_than_a_read_block_is_one_line()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-block-");
+        using var dir = TempDir.For("transcript-block-");
         var file = dir.At("t.jsonl");
         var big = Stamped(At(10, 0), new string('z', 200 * 1024));
         var small = Stamped(At(10, 1));
@@ -391,7 +391,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void A_CRLF_ends_a_line_and_is_not_yielded()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-crlf-");
+        using var dir = TempDir.For("transcript-crlf-");
         var file = dir.At("t.jsonl");
         string[] lines = [Stamped(At(10, 0)), Stamped(At(10, 1))];
         Write(file, string.Join("\r\n", lines) + "\r\n");
@@ -407,7 +407,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     [Fact]
     public void A_blank_line_is_not_a_line()
     {
-        using var dir = TempDir.For("testsToDelete-coai-transcript-blank-");
+        using var dir = TempDir.For("transcript-blank-");
         var file = dir.At("t.jsonl");
         string[] lines = [Stamped(At(10, 0)), Stamped(At(10, 1))];
         Write(file, lines[0] + "\n\n" + lines[1] + "\n");
@@ -492,7 +492,7 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
     {
         // StreamReader (ReadShared) skips a UTF-8 BOM; JsonDocument.Parse over bytes does not, and would call line 1 torn. The two
         // readers must not drift, so the byte reader skips it too — at stream offset 0 only, and the bytes still count as scanned.
-        using var dir = TempDir.For("testsToDelete-coai-transcript-bom-");
+        using var dir = TempDir.For("transcript-bom-");
         var file = dir.At("t.jsonl");
         string[] lines = [Stamped(At(10, 0)), Stamped(At(10, 1))];
         File.WriteAllBytes(file, [0xEF, 0xBB, 0xBF, .. Utf8(Joined(lines))]);

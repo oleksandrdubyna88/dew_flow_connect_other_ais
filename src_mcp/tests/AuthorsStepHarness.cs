@@ -42,7 +42,7 @@ internal sealed class AuthorsStepHarness : IDisposable
 
     public static AuthorsStepHarness Of(string fixtureName, int gateIndex = 0)
     {
-        var temp = TempDir.For("testsToDelete-coai-authors-fixture-");
+        var temp = TempDir.For("authors-fixture-");
         var fixture = CallerTranscriptFixture.Materialise(fixtureName, temp);
         var harness = new AuthorsStepHarness(temp, fixture, fixture.Rounds.GateSessions[gateIndex], temp.At("data"));
         Directory.CreateDirectory(harness.DataDir);

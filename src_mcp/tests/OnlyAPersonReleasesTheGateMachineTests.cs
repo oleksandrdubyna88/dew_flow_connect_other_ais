@@ -19,16 +19,9 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class OnlyAPersonReleasesTheGateMachineTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-person-releases-").FullName;
+    private readonly TempDir _data = TempDir.For("person-releases-");
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_data, recursive: true);
-        }
-        catch (IOException) { }
-    }
+    public void Dispose() => _data.Dispose();
 
     private static SessionState Fresh(PanelConfig? config = null) =>
         new("s-1", "D:/repo", "feature/x", config ?? new PanelConfig());

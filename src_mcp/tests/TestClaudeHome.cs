@@ -13,12 +13,12 @@ namespace CoaiMcp.Tests;
 /// <c>RoundEngine</c> — names <c>~/.claude/projects</c>, and a test run opens a person's real transcripts. The seam is ONE method,
 /// <c>ClaudeHome.ReplaceDefault</c>; the process's profile variables are never rewritten, because child processes the suite starts
 /// would inherit that too.</para>
-/// <para>The folder carries the <c>testsToDelete-</c> prefix (the family's <c>test-leftovers</c> rule) and is removed with the
+/// <para>The folder is made inside the run's own temp folder (the family's <c>test-leftovers</c> rule: what lives inside an owned folder needs no prefix of its own) and is removed with the
 /// fixture. E5.S4 adds only the clearing of the caller-identity variables on top of this.</para>
 /// </remarks>
 public sealed class TestClaudeHome : IDisposable
 {
-    private readonly TempDir _root = TempDir.For("testsToDelete-coai-claudehome-");
+    private readonly TempDir _root = TempDir.For("claudehome-");
     private readonly ClaudeHome _before = ClaudeHome.Default;
 
     public TestClaudeHome()

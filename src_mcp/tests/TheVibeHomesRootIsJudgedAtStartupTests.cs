@@ -14,7 +14,7 @@ public sealed class TheVibeHomesRootIsJudgedAtStartupTests : IDisposable
 {
     private const string Key = "COAI_CONSULTANT_HOMES";
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-vh-startup-");
+    private readonly TempDir _dir = TempDir.For("vh-startup-");
 
     public void Dispose() => _dir.Dispose();
 

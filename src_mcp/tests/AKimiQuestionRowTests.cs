@@ -34,8 +34,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 {
     private readonly ProcessLauncher _launcher = new();
     private readonly KimiFixture _person = new();
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-qrow-");
-    private readonly TempDir _homes = TempDir.For("testsToDelete-kimi-qrow-homes-");
+    private readonly TempDir _dir = TempDir.For("kimi-qrow-");
+    private readonly TempDir _homes = TempDir.For("kimi-qrow-homes-");
     private readonly List<string> _unlinkedByTheDeleter = [];
 
     private string Repo => _dir.At("repo");

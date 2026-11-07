@@ -16,7 +16,7 @@ public sealed class KimiClearMarkerModeTests : IDisposable
 {
     private static readonly DateTime Started = new(2026, 10, 16, 8, 0, 0, DateTimeKind.Utc);
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-clear-marker-");
+    private readonly TempDir _dir = TempDir.For("clear-marker-");
     private readonly List<string> _notes = [];
     private readonly StringWriter _stdout = new();
 

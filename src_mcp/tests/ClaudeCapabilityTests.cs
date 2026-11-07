@@ -37,7 +37,7 @@ public sealed class ClaudeCapabilityTests
         new(exit, stdout, string.Empty, timedOut);
 
     private static Task<ClaudeCapability> Probed(IProcessLauncher launcher) =>
-        ClaudeCapability.ProbeAsync(launcher, Claude, Path.GetTempPath(), TestContext.Current.CancellationToken);
+        ClaudeCapability.ProbeAsync(launcher, Claude, TempDir.Root, TestContext.Current.CancellationToken);
 
     /// <summary>A launcher that answers every request from <paramref name="answer"/> and never runs anything.</summary>
     private static WatchedLauncher Answering(Func<ProcessRequest, ProcessResult> answer) =>
@@ -245,7 +245,7 @@ public sealed class ClaudeCapabilityTests
         // The whole-branch review, L2: a missing executable is not the vendor refusing anything — the cure is to
         // install the CLI or point the row at it, not "check claude --help".
         var missing = new Throwing(new System.ComponentModel.Win32Exception(2, "The system cannot find the file specified"));
-        var launch = new CoaiMcp.Runners.Consultation.ConsultantLaunch(Path.GetTempPath(), "prompt", string.Empty, Path.GetTempPath(), new ReviewerSettings("claude"));
+        var launch = new CoaiMcp.Runners.Consultation.ConsultantLaunch(TempDir.Root, "prompt", string.Empty, TempDir.Root, new ReviewerSettings("claude"));
 
         var prepared = await new CoaiMcp.Runners.Consultation.ClaudeConsultant(new ClaudeRuntime())
             .PrepareAsync(launch, missing, TestContext.Current.CancellationToken);

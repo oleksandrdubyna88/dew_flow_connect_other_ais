@@ -48,6 +48,7 @@ function parsed(text) {
  * @param {{ width: number, html: string }[]} pages
  */
 export function measured(browser, prefix, pages) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dir = mkdtempSync(join(tmpdir(), prefix));
   try {
     return pages.map(({ width, html }, index) => {
@@ -76,6 +77,7 @@ export function measured(browser, prefix, pages) {
  * @returns {{ ok: boolean, said: string }}
  */
 export function screenshot(browser, prefix, { html, width, height, out }) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dir = mkdtempSync(join(tmpdir(), prefix));
   // The old picture goes first: a browser that fails leaves no file, and an old one left in its place
   // would read as a success.

@@ -100,7 +100,7 @@ public sealed class FileStatusTests
     public void AFileAndAFolder_AreReadWithTheirKind_AndAMissingPathIsEnoent()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "statx is a Linux call");
-        using var dir = TempDir.For("testsToDelete-statx-");
+        using var dir = TempDir.For("statx-");
         var file = dir.At("f.txt");
         File.WriteAllText(file, "x");
 
@@ -114,7 +114,7 @@ public sealed class FileStatusTests
     public void ASymlinkedSpelling_IsTheSameFolder_WhenFollowed_AndItsOwnFile_WhenNot()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "statx is a Linux call");
-        using var dir = TempDir.For("testsToDelete-statx-");
+        using var dir = TempDir.For("statx-");
         var real = Directory.CreateDirectory(dir.At("persons", "credentials")).FullName;
         var alias = dir.At("alias");
         Directory.CreateSymbolicLink(alias, dir.At("persons"));
@@ -140,7 +140,7 @@ public sealed class FileStatusTests
     public void AnOpenDescriptor_IsTheSameFileAsItsPath_AndANewFileAtThePath_IsNot()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "statx is a Linux call");
-        using var dir = TempDir.For("testsToDelete-statx-");
+        using var dir = TempDir.For("statx-");
         var path = dir.At("lock");
         using var held = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
 

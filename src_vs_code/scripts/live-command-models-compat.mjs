@@ -8,11 +8,16 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { flag, newServer, releasedServer, run } from './releasedHalves.mjs';
+import { flag, newServer, releasedServer, run as runServer } from './releasedHalves.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'compat-cmd-models' });
+
 
 const require = createRequire(import.meta.url);
 const { CODER_SLOT_SINCE, commandModelsEnv, commandModelsFrom } = require('../out/commandModels.js');
 const { compareVersions } = require('../out/coaiInstall.js');
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(join(tmpdir(), 'coai-command-models-compat-'));
 const old = releasedServer(work, flag('tag', ''));
 const current = flag('new', newServer());
@@ -22,7 +27,7 @@ if (!old || !current) {
 }
 // A user's ambient settings must not change an isolated compatibility fixture.
 for (const key of Object.keys(process.env)) if (key.startsWith('COAI_')) delete process.env[key];
-const versionReply = await run(old, ['--version'], work);
+const versionReply = await runServer(old, ['--version'], work);
 assert.equal(versionReply.code, 0, versionReply.err);
 const version = versionReply.out.match(/\d+\.\d+\.\d+/)?.[0];
 assert.ok(version, 'released binary must identify its version');
@@ -44,7 +49,7 @@ async function providers(binary, name, env = wire) {
   const data = join(work, name);
   mkdirSync(data);
   writeFileSync(join(data, 'settings.json'), JSON.stringify(env));
-  const reply = await run(binary, ['--providers'], data, env);
+  const reply = await runServer(binary, ['--providers'], data, env);
   assert.equal(reply.code, 0, reply.err);
   writeFileSync(join(work, name + '.json'), reply.out);
   return JSON.parse(reply.out);

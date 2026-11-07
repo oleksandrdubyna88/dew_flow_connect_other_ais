@@ -184,7 +184,7 @@ public sealed class AntigravityReadOnlyTests : IDisposable
 
     // ---------- every launch builder (the plan round's finding 2) ----------
 
-    private static readonly string Repo = Path.GetTempPath();
+    private static readonly string Repo = TempDir.Root;
 
     private static ReviewerSettings Settings => new("antigravity") { Timeout = TimeSpan.FromMinutes(1) };
 

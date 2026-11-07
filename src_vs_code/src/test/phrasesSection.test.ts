@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PANEL_COMMANDS, VSCODE_COMMAND_FOR, staticKey, type PanelState } from '../panelView';

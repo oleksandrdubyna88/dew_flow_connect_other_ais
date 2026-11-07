@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class AMoveOverAHeldFileIsRetriedTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-atomic-held-");
+    private readonly TempDir _dir = TempDir.For("atomic-held-");
 
     public void Dispose() => _dir.Dispose();
 

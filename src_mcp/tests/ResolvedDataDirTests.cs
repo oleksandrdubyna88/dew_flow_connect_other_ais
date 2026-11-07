@@ -73,7 +73,7 @@ public sealed class ResolvedDataDirTests
         // Rooted and non-empty, and the OS will still refuse it. That is the writer's problem and
         // its exception list is what answers it; a type that tried to be the whole guarantee would
         // have to be perfect.
-        var unusable = Path.Combine(Path.GetPathRoot(Path.GetTempPath())!, "data*");
+        var unusable = Path.Combine(Path.GetPathRoot(TempDir.Root)!, "data*");
 
         var constructed = ResolvedDataDir.For(unusable);
 

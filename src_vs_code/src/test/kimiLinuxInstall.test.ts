@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { execFile, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -15,7 +16,7 @@ import type { Vendor } from '../vendors';
  *
  * <p><b>The line is RUN here, against harmless substitutes, never against a real package manager or Moonshot's installer</b>
  * (common/generated-code-tests.md; an assertion over the text says the line was written, not that it works). The boundary: a
- * temporary folder whose name carries `testsToDelete-` and a SPACE, removed after; an `HOME` inside it; a `PATH` of a stand-in
+ * temporary folder whose name carries a SPACE, removed after; an `HOME` inside it; a `PATH` of a stand-in
  * folder and of the two real tools the line itself runs (`mkdir` and `ln` — the verbs S-K17's "fresh account" and "second
  * press" arms are about); and four stand-ins the test defines as shell FUNCTIONS in front of the line — `sudo`, `apt-get`,
  * `dnf`, and `curl`/`bash` for Moonshot's piped script. Each logs what it was asked; a package manager "installs" a package by
@@ -57,7 +58,7 @@ const skip = BASH === '' ? 'no bash on this machine (Git for Windows on Windows)
 /** A path as the shell inside spells it: `/c/Users/…` for a Windows drive path (a `C:` there would be read as a PATH separator). */
 const posix = (path: string): string => (WINDOWS ? path.replace(/^([A-Za-z]):/u, (_all, drive: string) => `/${drive.toLowerCase()}`).replaceAll('\\', '/') : path);
 
-const root = BASH === '' ? '' : mkdtempSync(join(tmpdir(), 'testsToDelete-kimi linux install '));
+const root = BASH === '' ? '' : mkdtempSync(join(tmpdir(), 'kimi linux install '));
 after(() => {
   if (root.length > 0) {
     rmSync(root, { recursive: true, force: true });

@@ -21,7 +21,7 @@ public sealed class RoundAuthorsQueryTests : IDisposable
 {
     private const string Sentinel = "SENTINEL-7f3a";
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-coai-authors-query-");
+    private readonly TempDir _dir = TempDir.For("authors-query-");
 
     public void Dispose()
     {
@@ -156,7 +156,7 @@ public sealed class RoundAuthorsQueryTests : IDisposable
 
         foreach (var step in new[] { Schema.ThePlanSource, Schema.TheRoundsAuthors })
         {
-            using var dir = TempDir.For("testsToDelete-coai-authors-query-old-");
+            using var dir = TempDir.For("authors-query-old-");
             var stopBefore = StepIndex(step);
             OlderFile(dir, stopBefore, OlderRound("s", "D:/r", "b", T0, ", effort", ", ''") + sizeSql);
             var before = Fingerprint(dir);

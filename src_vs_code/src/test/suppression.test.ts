@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert';
 import { test } from 'node:test';
 import { Notice } from '../notice';

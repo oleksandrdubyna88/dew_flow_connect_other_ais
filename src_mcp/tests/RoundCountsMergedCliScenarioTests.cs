@@ -22,8 +22,8 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class RoundCountsMergedCliScenarioTests : IDisposable
 {
-    private readonly TempDir _data = TempDir.For("testsToDelete-merged-cli-data-");
-    private readonly TempDir _others = TempDir.For("testsToDelete-merged-cli-others-");
+    private readonly TempDir _data = TempDir.For("merged-cli-data-");
+    private readonly TempDir _others = TempDir.For("merged-cli-others-");
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     public void Dispose()
