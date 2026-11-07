@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 public sealed class TheScratchSweepNeverDeletesAKimiHomeUnderALiveTreeTests : IDisposable
 {
     private readonly KimiFixture _person = new();
-    private readonly TempDir _root = TempDir.For("testsToDelete-sweep-live-");
+    private readonly TempDir _root = TempDir.For("sweep-live-");
 
     public void Dispose()
     {

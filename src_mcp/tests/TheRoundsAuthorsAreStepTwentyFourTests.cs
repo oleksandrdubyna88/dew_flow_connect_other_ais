@@ -16,11 +16,11 @@ namespace CoaiMcp.Tests;
 /// (<see cref="ThePlanSourceIsStepTwentyThreeTests"/>).
 /// </summary>
 /// <remarks>
-/// Real SQLite over a temp directory named <c>testsToDelete-…</c>; the two preview-fork shapes are built as step 23's test builds them.
+/// Real SQLite over a temp directory of its own; the two preview-fork shapes are built as step 23's test builds them.
 /// </remarks>
 public sealed class TheRoundsAuthorsAreStepTwentyFourTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-coai-step24-");
+    private readonly TempDir _dir = TempDir.For("step24-");
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     public void Dispose()

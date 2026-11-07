@@ -32,7 +32,7 @@ const { DEFAULTS } = await import('../out/settingsShape.js');
 const { vendorsFrom } = await import('../out/vendors.js');
 const { FEATURES } = await import('../out/binaryFeatures.js');
 const { parseUsageLine } = await import('../out/usage.js');
-const { answerOf, sessionsFor } = await import('./seam-session.mjs');
+const { answerOf, homeEnvironment, sessionsFor } = await import('./seam-session.mjs');
 
 /** The keys this leg exists for: the S1 labels, the consultation of S4 and the local cause of S2. */
 export const TRACKED = ['consultation', 'cli', 'cliVersion', 'effort', 'effortFrom', 'tier', 'endCause'];
@@ -70,6 +70,7 @@ function removeQuietly(path) {
  * server gets a home that is this folder and a configuration that names an effort — the leg now depends on nothing outside it.</p>
  */
 function isolatedHome() {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const home = mkdtempSync(join(tmpdir(), 'coai-seam-ledger-home-'));
   mkdirSync(join(home, '.codex'));
   writeFileSync(join(home, '.codex', 'config.toml'), `model_reasoning_effort = "${SEAM_EFFORT}"
@@ -78,16 +79,9 @@ function isolatedHome() {
   return home;
 }
 
-/**
- * The environment entries that make `home` the only home the server sees: `HOME` (read first by the server) and `USERPROFILE`
- * (Windows), and `CODEX_HOME` pointing into it so an inherited `CODEX_HOME` cannot win over them.
- */
-export function homeEnvironment(home) {
-  return { HOME: home, USERPROFILE: home, CODEX_HOME: join(home, '.codex') };
-}
-
 /** A checkout with a `feature` branch ahead of `main`, which is what a round reviews. */
 function scratchRepo() {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-ledger-repo-'));
   const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'] });
   git('init', '--initial-branch=main');
@@ -219,6 +213,7 @@ export async function ledgerFieldsSeam({ binary, fakeCli, fail, timeoutMs }) {
   if (fakeCli === '') {
     fail('no FakeCli build found. Run: dotnet build src_mcp/tests_fakecli/FakeCli.csproj');
   }
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-ledger-'));
   let outcome;
   try {

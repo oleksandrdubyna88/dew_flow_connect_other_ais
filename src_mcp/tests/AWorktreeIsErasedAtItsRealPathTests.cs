@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class AWorktreeIsErasedAtItsRealPathTests : IDisposable
 {
-    private readonly TempDir _work = TempDir.For("testsToDelete-wterase-");
+    private readonly TempDir _work = TempDir.For("wterase-");
     private readonly List<ProcessRequest> _seen = [];
     private readonly string _storage;
     private readonly string _repo;

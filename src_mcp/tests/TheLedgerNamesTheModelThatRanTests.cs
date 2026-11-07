@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class TheLedgerNamesTheModelThatRanTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-ledger-model-");
+    private readonly TempDir _dir = TempDir.For("ledger-model-");
 
     public void Dispose() => _dir.Dispose();
 

@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class RegularFilesTests : IDisposable
 {
-    private readonly TempDir _root = TempDir.For("testsToDelete-regular-files-");
+    private readonly TempDir _root = TempDir.For("regular-files-");
 
     public void Dispose() => _root.Dispose();
 
@@ -222,7 +222,10 @@ public sealed class RegularFilesTests : IDisposable
             made.ExitCode.Should().Be(0, "the fixture's FIFO must exist, or this proves nothing");
         }
 
-        var socket = _root.At("shown.sock");
+        // A Unix socket path holds at most 108 characters. The run folder is owner-form (E5 S3: seven longer than before), so a socket under it or under _root overran on
+        // machines whose TMPDIR is 27-33 characters long; this one lives in a SHORT owned folder made directly in the machine's temp, and is removed with it.
+        using var socketRoot = Leftovers.OwnedDir.Create("s", RunTemp.Real);
+        var socket = Path.Combine(socketRoot.Path, "shown.sock");
         using var bound = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         bound.Bind(new UnixDomainSocketEndPoint(socket));
 

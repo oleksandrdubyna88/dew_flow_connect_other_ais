@@ -1,6 +1,7 @@
 // node --test scripts/lib/ordinal.test.mjs — the explicit comparator the scripts sort with. It replaces a bare .sort() (Sonar S2871) and
 // must keep EXACTLY the order the bare sort had: UTF-16 code units, not the locale. The synthetic clock's ranks, the agent-file order and the
 // manifest key order all hang on it, so a locale-aware comparator (localeCompare) would silently renumber every fixture.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compareOrdinal } from './ordinal.mjs';

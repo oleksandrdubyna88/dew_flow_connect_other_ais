@@ -23,7 +23,7 @@ public sealed class VibeRuntimeTests : IDisposable
 {
     private readonly TempDir _out = TempDir.For("coai-answers-vibe-");
 
-    private readonly TempDir _owned = TempDir.For("testsToDelete-vh-owned-");
+    private readonly TempDir _owned = TempDir.For("vh-owned-");
 
     public void Dispose()
     {

@@ -42,16 +42,15 @@
 // symlink (DL6), the shim's environment is MinimalUnix with HOME alone redirected (DL11), and the killed-rg arm searches /usr.
 // The rule about another `kimi` is the same and matters more: the refresh token rotates (D19).
 import { spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes } from 'node:crypto';
 import { minimalWindowsEnv } from './lib/vibe.mjs';
 import { DEFAULT_MODEL, KIMI_EXE, REAL_HOME, scratchRefusal } from './lib/kimi.mjs';
 import { credentialNames, disposeOwnedHome, makeOwnedHome, ownedRoot, shimEnv } from './lib/kimi-home.mjs';
 import { KILL_ARMS, armsRefusal, buildSchedule, defaultArms, isLiveArm, killRecord, killSignal, liveSurvivor, liveVerdict, nextRow, refusalText, survivorMarkers, survivorsOf } from './lib/kimi-schedule.mjs';
 import { FLOCK, isKimi, listProcesses, lockState, startTimeOfPid, waitForNoOtherKimi } from './lib/proc.mjs';
+import { startDefaultScratch } from '../src_vs_code/scripts/ownedRun.mjs';
 
 const WINDOWS = process.platform === 'win32';
 
@@ -84,6 +83,7 @@ const repeats = Number.parseInt(flag('--repeats', '3'), 10);
 const armNames = flag('--arms', defaultArms(Object.keys(ARMS)).join(',')).split(',').filter(Boolean);
 if (armNames.some((a) => !(a in ARMS)) || !Number.isInteger(repeats) || repeats <= 0) {
   console.error(`usage: probe-kimi-tree-hold.mjs [--shim <exe>] [--scratch <dir>] [--repeats N] [--arms ${Object.keys(ARMS).join(',')}] [--allow-live-survivor]`);
+  console.error('without --scratch the scratch is an owned folder removed at exit; pass --scratch <dir> to keep a run');
   process.exit(65);
 }
 const liveRefusal = armsRefusal(armNames, { allowLive: argv.includes('--allow-live-survivor'), platform: process.platform });
@@ -96,7 +96,8 @@ if (!SUPPORTED || (!WINDOWS && !FLOCK) || !existsSync(shim) || !existsSync(KIMI_
   console.error(`refusing: needs Windows or Linux (with flock(1): ${WINDOWS || Boolean(FLOCK)}), the built shim (${shim}: ${existsSync(shim)}), kimi (${existsSync(KIMI_EXE)}) and a signed-in ${REAL_HOME}/credentials`);
   process.exit(65);
 }
-const scratch = flag('--scratch', '') || mkdtempSync(join(realpathSync.native(tmpdir()), `testsToDelete-kimi-mk15-${randomBytes(3).toString('hex')}-`));
+// Without --scratch the scratch is an owned folder of the wrap, removed at exit (one line says so): pass --scratch <dir> to keep a run.
+const scratch = flag('--scratch', '') || (await startDefaultScratch({ what: 'kimi-mk15', prefix: 'probe-kimi-tree-hold' })).path;
 const privacy = scratchRefusal(scratch);
 if (privacy.length > 0) {
   console.error(privacy);

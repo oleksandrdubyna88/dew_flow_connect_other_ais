@@ -24,14 +24,14 @@ public sealed class AntigravityStreamContinueTests
 {
     private const string Conversation = "5e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
-    private static readonly string Repo = Path.GetTempPath();
+    private static readonly string Repo = TempDir.Root;
 
     private static ReviewerInvocation Resumed(string handle = Conversation) =>
         new AntigravityConsultant(new AntigravityRuntime()).Build(new ConsultantLaunch(
             Repo,
             "and now?",
             handle,
-            Path.GetTempPath(),
+            TempDir.Root,
             new ReviewerSettings("antigravity") { Timeout = TimeSpan.FromMinutes(1) }));
 
     private static string Fixture(string name) =>

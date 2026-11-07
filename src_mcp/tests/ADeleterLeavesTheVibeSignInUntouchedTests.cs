@@ -24,7 +24,7 @@ namespace CoaiMcp.Tests;
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
 public sealed class ADeleterLeavesTheVibeSignInUntouchedTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-vsd-");
+    private readonly TempDir _dir = TempDir.For("vsd-");
 
     public void Dispose()
     {

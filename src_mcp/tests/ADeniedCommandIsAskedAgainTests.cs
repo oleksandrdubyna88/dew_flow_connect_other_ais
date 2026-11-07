@@ -33,7 +33,7 @@ public sealed class ADeniedCommandIsAskedAgainTests
     internal static string Transcript(string stdout, string stderr) => $"--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}";
 
     private static ReviewerInvocation First() =>
-        new AntigravityRuntime().Build("Architecture", "review this", Path.GetTempPath(), "schema.json", Path.GetTempPath(),
+        new AntigravityRuntime().Build("Architecture", "review this", TempDir.Root, "schema.json", TempDir.Root,
             new ReviewerSettings("antigravity") { Timeout = TimeSpan.FromMinutes(1) });
 
     [Fact]

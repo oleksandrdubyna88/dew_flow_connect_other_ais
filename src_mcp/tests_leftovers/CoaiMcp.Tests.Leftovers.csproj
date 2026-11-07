@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CoaiMcp.Tests.Leftovers</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <!-- Native.cs / NativeDarwin.cs / PosixFifo.cs call the OS through [LibraryImport]; generated marshalling is unsafe code. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- TestContext, AssemblyFixtureAttribute and Assert without the runner: this is not a test project. -->
+    <PackageReference Include="xunit.v3.extensibility.core" />
+    <PackageReference Include="xunit.v3.assert" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- TempDir keeps the product's deleter (GitScratch.DeleteEvenIfReadOnly, LinkTargetLostException): plan D2's epoch-4 note. -->
+    <ProjectReference Include="..\runners\CoaiMcp.Runners.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CoaiMcp.Tests" />
+    <InternalsVisibleTo Include="CoaiServer.Tests" />
+    <InternalsVisibleTo Include="CoaiBugs.Tests" />
+    <InternalsVisibleTo Include="CoaiBench.Tests" />
+  </ItemGroup>
+</Project>

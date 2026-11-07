@@ -218,6 +218,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
 
         var linked = Temp("coai-linked-");
         TryDelete(linked);
+        // testsToDelete-exempt: raw-worktree — inside this test's own Temp folder `linked`, under the run folder
         (await Run(_repo, "worktree", "add", "--detach", linked, _sha)).ExitCode.Should().Be(0);
 
         var second = await trees.PrepareAsync(
@@ -259,6 +260,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
             .PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
 
         again.Reused.Should().BeTrue();
+        // testsToDelete-exempt: raw-worktree — the words are an expected argv fragment, no worktree is made here
         watching.Ran.Should().NotContain(a => a.Contains("worktree add"), "a reuse must cost no checkout");
         watching.Ran.Should().NotContain(a => a.Contains("submodule"), "and no population either");
     }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Runs the whole `.http` suite against a stack this script starts, and reports the verdict as an
-// exit code: 0 pass · 1 CONTRACT regression · 3 environment · 4 configuration.
+// exit code: 0 pass · 1 CONTRACT regression · 2 the conventions are not mounted · 3 environment · 4 configuration · 78 the run's temp folder could not be made.
 //
 // The lifecycle is here rather than in a README because a suite whose setup is prose is a suite that
 // runs on one machine. Everything it needs — the build, a free port, a throwaway data directory, the
@@ -8,12 +8,15 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHmac, randomBytes } from 'node:crypto';
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CONFIG, CONTRACT, ENVIRONMENT, PASS, verdictOf } from './verdict.mjs';
+import { startOwnedRun } from '../src_vs_code/scripts/ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'http-contracts' });
+
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -124,7 +127,8 @@ const port = await freePort();
 const baseUrl = `http://127.0.0.1:${port}`;
 // A throwaway data directory per run: no vendors, no accounts, no sessions. That emptiness is
 // deliberate — see the README on why no review ever reaches a vendor.
-const dataDir = mkdtempSync(path.join(tmpdir(), 'coai-contracts-'));
+const dataDir = path.join(run.folder, 'data');
+mkdirSync(dataDir, { mode: 0o700 }); // owner-only, as mkdtemp made it
 
 
 // ONE vendor in the allowlist, and no account signed in for it.
@@ -255,11 +259,12 @@ function stop() {
   } catch {
     // Already closed, or never opened. Nothing to do and nothing to say.
   }
-
-  rmSync(dataDir, { recursive: true, force: true });
+  // The data folder is NOT removed here: it is inside the run folder, which the wrap removes at exit. A throw from an rm of a folder a still-writing server holds would skip
+  // the wrap's own exit listener and leave the whole run folder behind.
 }
 
-process.on('exit', stop);
+// PREPENDED: this listener must run BEFORE the wrap's (registered at the top), which removes the run folder the server's data lives in — the server is killed first (E5 S4).
+process.prependListener('exit', stop);
 process.on('SIGINT', () => { stop(); process.exit(ENVIRONMENT); });
 
 const readiness = await waitForReady(baseUrl, server, 40);

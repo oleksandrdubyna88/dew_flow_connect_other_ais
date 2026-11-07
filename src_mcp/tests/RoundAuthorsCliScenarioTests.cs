@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// <c>--round-authors</c>, run as the PROCESS a person runs (E6.S5): the argument parsing, the JSON contract, the table, <c>--add</c> and the exit
-/// codes through the built binary against real database files under <c>testsToDelete-</c> folders — never a live store.
+/// codes through the built binary against real database files under temp folders — never a live store.
 /// </summary>
 /// <remarks>
 /// The exit codes are the part nothing else can check: <b>0</b> is an answer (an empty one when no database exists), <b>65</b> a bad request,
@@ -23,7 +23,7 @@ public sealed class RoundAuthorsCliScenarioTests : IDisposable
 {
     private const string Sentinel = "SENTINEL-7f3a";
 
-    private readonly TempDir _root = TempDir.For("testsToDelete-coai-authors-cli-");
+    private readonly TempDir _root = TempDir.For("authors-cli-");
 
     public void Dispose()
     {

@@ -2,6 +2,7 @@
 // every arm — through the shim, in `-p`, or through the small client — carries an owned root (the shim refuses a Kimi turn without --home, --persons-bin
 // and --locks, E4.3; nothing may run on the person's real KIMI_CODE_HOME), and the launch REFUSES an arm that lost it. The arms are read off the table with
 // fakes for the probe's helpers: nothing is launched, no file is written, no credential is opened.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { test } from 'node:test';

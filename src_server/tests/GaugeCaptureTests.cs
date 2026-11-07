@@ -27,7 +27,7 @@ namespace CoaiServer.Tests;
 [Collection(ServerCollection.Name)]
 public sealed class GaugeCaptureTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "testsToDelete-gauge-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "gauge-" + Guid.NewGuid().ToString("N"));
 
     private readonly List<string> _notes = [];
 
@@ -48,6 +48,15 @@ public sealed class GaugeCaptureTests : IDisposable
     /// <summary>The capture refuses to spawn where descendants cannot be listed (macOS), so a test of what it reads skips there.</summary>
     private static void RequiresATree() =>
         Assert.SkipUnless(ProcessTree.Supported, "the capture refuses to spawn where descendants cannot be listed");
+
+    /// <summary>E5 S3, scenario 8: the folder lives INSIDE the run folder, which owns it, so it carries no prefix of its own.</summary>
+    [Fact]
+    public void TheGaugeFolder_IsInsideTheRunFolder()
+    {
+        CoaiMcp.Tests.RunTemp.Folder.Should().NotBeEmpty("this suite made a run folder before any test");
+        _dir.Should().StartWith(CoaiMcp.Tests.RunTemp.Folder + Path.DirectorySeparatorChar, "the run folder owns it and removes it with itself");
+        Path.GetFileName(_dir).Should().StartWith("gauge-");
+    }
 
     public void Dispose()
     {

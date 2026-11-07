@@ -128,7 +128,7 @@ public class LocalRuntimeTests
     {
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
         var invocation = runtime.Build(RoleCatalog.UxDxRole, "p", "/tmp/wt",
-            "/tmp/schema.json", Path.GetTempPath(), Settings());
+            "/tmp/schema.json", TempDir.Root, Settings());
 
         invocation.OutputFile.Should().NotBeEmpty("the shim writes where the executor already looks");
         File.WriteAllText(invocation.OutputFile, """{"findings":[]}""");

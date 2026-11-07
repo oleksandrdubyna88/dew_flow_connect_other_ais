@@ -33,6 +33,7 @@ const FAKE_VERSION = 'fake-cli 9.9.9';
  * @returns {Promise<{ skipped: string }>} the other side's path the leg saw skipped by both halves
  */
 export async function cliPathOtherSideSeam({ providersIn, fakeCli, fail }) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-clipath-'));
   const leave = (why) => {
     rmSync(dataDir, { recursive: true, force: true });
@@ -80,6 +81,7 @@ export async function cliPathOtherSideSeam({ providersIn, fakeCli, fail }) {
  */
 async function rootRelativeKept({ probed, fakeCli, dataDir, leave }) {
   const systemDrive = systemDriveOf(process.env['SystemDrive']);
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const home = mkdtempSync(join(tmpdir(), 'coai-seam-clicopy-'));
   if (hostFamily() !== 'windows' || !home.toLowerCase().startsWith(systemDrive.toLowerCase())) {
     rmSync(home, { recursive: true, force: true });

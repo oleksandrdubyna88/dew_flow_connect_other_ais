@@ -30,7 +30,7 @@ public sealed class ForeignKimiTests
         public ProcessListing Snapshot() => listings[Math.Min(Asked++, listings.Length - 1)];
     }
 
-    private static KimiPlaces Places() => KimiPlaces.ForShim(Path.Combine(Path.GetTempPath(), "testsToDelete-foreign-kimi-not-made"), Path.GetTempPath());
+    private static KimiPlaces Places() => KimiPlaces.ForShim(Path.Combine(Path.GetTempPath(), "foreign-kimi-not-made"), Path.GetTempPath());
 
     private static ForeignKimiWatch Watch(IProcessList list) => Watch(list, []);
 
@@ -156,7 +156,7 @@ public sealed class ForeignKimiTests
     public void TheKimiProfileAsksItsWatch_NotTheHost()
     {
         var profile = new KimiAcpProfile(Watch(new ScriptedList([P(4242, 2, "kimi.exe")])));
-        var ask = new AcpAsk("kimi.exe", Path.GetTempPath(), "kimi-code/k3-256k", "x", TimeSpan.FromSeconds(2), Path.Combine(Path.GetTempPath(), "testsToDelete-foreign-kimi-not-made"), Path.GetTempPath());
+        var ask = new AcpAsk("kimi.exe", Path.GetTempPath(), "kimi-code/k3-256k", "x", TimeSpan.FromSeconds(2), Path.Combine(Path.GetTempPath(), "foreign-kimi-not-made"), Path.GetTempPath());
 
         profile.Hold(ask, TimeSpan.FromSeconds(2)).Should().BeOfType<AcpHolding.Busy>();
     }

@@ -27,8 +27,12 @@ public sealed class TempDir : IDisposable
     /// <summary>Where it is. Also what an implicit conversion to <see cref="string"/> gives you.</summary>
     public string Path { get; }
 
+    /// <summary>The machine's temp root, as the one helper door gives it (the run folder's, once <c>RunTemp</c> moved the variables).</summary>
+    public static string Root => Leftovers.Owned.TempRoot();
+
     /// <summary>A fresh directory under the system temp root, named for the test that wanted it.</summary>
     public static TempDir For(string prefix) =>
+        // testsToDelete-exempt: raw-temp — a helper of the gated test assemblies; the module initializer moved TEMP into the run folder before this runs, the gated Main refuses a run where it did not, and the forced runs prove the gate
         new(Directory.CreateTempSubdirectory(prefix).FullName);
 
     /// <summary>So it can be passed anywhere a path is taken, without <c>.Path</c> at every call.</summary>

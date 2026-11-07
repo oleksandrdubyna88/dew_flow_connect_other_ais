@@ -99,7 +99,7 @@ public sealed class EveryPaidLaunchIsWrittenTests : IDisposable
     [Fact]
     public async Task AFollowUp_WritesTwoLinesSharingATurn()
     {
-        var first = new AntigravityRuntime().Build("Architecture", "review this", Path.GetTempPath(), "schema.json", Path.GetTempPath(),
+        var first = new AntigravityRuntime().Build("Architecture", "review this", TempDir.Root, "schema.json", TempDir.Root,
             new ReviewerSettings("antigravity") { Timeout = TimeSpan.FromMinutes(1) });
 
         var outcome = await new ReviewerExecutor(new DeniedThenAnswered()).RunAsync(first, repair: null, TestContext.Current.CancellationToken);

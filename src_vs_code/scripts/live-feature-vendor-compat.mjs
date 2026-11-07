@@ -43,8 +43,12 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { flag, HERE, LOCAL_MS, newServer, releasedExtension, releasedServer, run } from './releasedHalves.mjs';
+import { flag, HERE, LOCAL_MS, newServer, releasedExtension, releasedServer, run as runServer } from './releasedHalves.mjs';
 import { answerOf, sessionsFor } from './seam-session.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'compat-vendor' });
+
 
 const broken = [];
 const say = (ok, what, detail = '') => {
@@ -106,6 +110,7 @@ const LESSONS = JSON.stringify({
  * then RUN against a stub DOM — `bundledPage.test.ts`'s method, pointed at the older build.
  */
 function releasedPage(extensionRoot, sessions, log) {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const dir = mkdtempSync(path.join(tmpdir(), 'coai-old-page-'));
   const entry = path.join(dir, 'entry.mjs');
   const out = path.join(dir, 'bundle.cjs');
@@ -157,6 +162,7 @@ if (built.length === 0) {
   console.log('this checkout has no built server — run `dotnet build dew_flow_connect_other_ais.slnx -c Debug` first');
   process.exit(2);
 }
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(path.join(tmpdir(), 'coai-feature-vendor-compat-'));
 mkdirSync(path.join(work, 'server'));
 mkdirSync(path.join(work, 'extension'));
@@ -187,7 +193,7 @@ say(heldBack.length === 3 && heldBack.every((one) => !('feature' in one)),
 const dataA = path.join(work, 'a');
 mkdirSync(dataA);
 writeFileSync(path.join(dataA, 'settings.json'), newFile);
-const listed = await run(old, ['--providers'], dataA, noEnv);
+const listed = await runServer(old, ['--providers'], dataA, noEnv);
 say(listed.code === 0, 'the released server answers --providers over a settings file carrying the tick', `exit ${listed.code}`);
 say(JSON.stringify(idsOf(JSON.parse(listed.out || '{}'))) === '["codex","antigravity","codex-feature"]',
   'and lists every vendor the file names — it did not refuse the list and fall back to its defaults',
@@ -198,14 +204,14 @@ mkdirSync(dataA2);
 const untickedFile = fresh.file.serverSettingsJson(fresh.settings.DEFAULTS, stored.map(({ feature: _, ...rest }) => rest), 'compat-new', '');
 say(untickedFile !== newFile, 'the control differs from the ticked file only by the tick');
 writeFileSync(path.join(dataA2, 'settings.json'), untickedFile);
-const control = await run(old, ['--providers'], dataA2, noEnv);
+const control = await runServer(old, ['--providers'], dataA2, noEnv);
 say(control.code === 0 && providersOf(control.out) === providersOf(listed.out),
   'the released server answers the same list with and without the tick — the field changes nothing there');
 
 const dataA3 = path.join(work, 'a3');
 mkdirSync(dataA3);
 const block = fresh.settings.envBlock(fresh.settings.DEFAULTS, stored, '');
-const fromEnv = await run(old, ['--providers'], dataA3, { COAI_VENDORS: block.COAI_VENDORS, COAI_PROVIDERS: '' });
+const fromEnv = await runServer(old, ['--providers'], dataA3, { COAI_VENDORS: block.COAI_VENDORS, COAI_PROVIDERS: '' });
 say(fromEnv.code === 0 && JSON.stringify(idsOf(JSON.parse(fromEnv.out || '{}'))) === '["codex","antigravity","codex-feature"]',
   'the same list through the client\'s env block reads the same', idsOf(JSON.parse(fromEnv.out || '{}')).join(', '));
 
@@ -255,7 +261,7 @@ say(sessionTexts.length > 0 && parsed.every((one) => one !== undefined),
 say(featureRound?.verdict === 'skipped', 'including the feature session and its skipped round', `stage ${featureRound?.stage}, verdict ${featureRound?.verdict}`);
 say(released.rounds.stageName('FeatureReview') === 'FeatureReview', 'it names the stage by its raw enum, having no phrase for it');
 
-const newLog = await run(built, ['--log', '--paged'], dataB, noEnv);
+const newLog = await runServer(built, ['--log', '--paged'], dataB, noEnv);
 const log = released.roundsDb.parseLog(newLog.out, true);
 say(newLog.code === 0 && log.read === true && log.rounds.some((round) => round.stage === 'FeatureReview'),
   `${oldExtension.tag} parses this server's --log, the skipped feature round included`, `${log.rounds.length} round(s)`);

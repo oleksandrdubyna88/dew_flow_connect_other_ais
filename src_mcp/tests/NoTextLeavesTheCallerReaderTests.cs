@@ -23,7 +23,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class NoTextLeavesTheCallerReaderTests
 {
-    private const string Prefix = "testsToDelete-coai-notext-";
+    private const string Prefix = "notext-";
     private const string C02 = "message-as-several-lines";
     private const string C02Agent = "303b2866f0b3022b2";
     private const string C07 = "nested-agents";

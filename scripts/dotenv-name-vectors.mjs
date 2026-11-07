@@ -17,13 +17,12 @@
 // Without either it prints the document. It refuses (exit 70, nothing written) if any vector the reference ADMITS binds a name
 // other than MISTRAL_API_KEY in python-dotenv: that would be the grammar's soundness argument failing, which is a finding.
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ADMITTED_NAME, coaiVerdict } from './lib/dotenv-names.mjs';
 import { vibePython } from './lib/vibe.mjs';
+import { startOwnedScratch } from '../src_vs_code/scripts/ownedRun.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -130,8 +129,10 @@ const mustNotEcho = (text) => [...new Set(text.split(/[^A-Za-z0-9_-]+/u).filter(
 const bytesOf = (input) => (typeof input === 'string' ? Buffer.from(input, 'utf8') : input);
 const textOf = (input) => (typeof input === 'string' ? input : null);
 
-const scratch = given || mkdtempSync(join(tmpdir(), `testsToDelete-dotenv-vectors-${randomBytes(3).toString('hex')}-`));
-mkdirSync(scratch, { recursive: true });
+// Without --scratch the scratch is an owned folder of the wrap (claimed by this process, removed with its claim by `end()` — and at exit if the script ends first).
+const owned = given ? undefined : await startOwnedScratch({ what: 'dotenv-vectors', prefix: 'dotenv-name-vectors' });
+const scratch = given || owned.path;
+mkdirSync(scratch, { recursive: true, mode: 0o700 });
 const paths = VECTORS.map(([id, input], n) => {
   const path = join(scratch, `${String(n + 1).padStart(2, '0')}-${id}.env`);
   writeFileSync(path, bytesOf(input));
@@ -140,7 +141,7 @@ const paths = VECTORS.map(([id, input], n) => {
 
 console.error(`[dotenv-vectors] asking python-dotenv about ${paths.length} vectors …`);
 const r = spawnSync(python, ['-I', '-c', ORACLE, ...paths], { encoding: 'utf8', timeout: 120_000, maxBuffer: 16 * 1024 * 1024 });
-if (!given) rmSync(scratch, { recursive: true, force: true });
+owned?.end();
 if (r.status !== 0) {
   console.error(`the oracle failed (exit ${r.status}, ${r.error ?? ''}): ${String(r.stderr).slice(-2000)}`);
   process.exit(69);

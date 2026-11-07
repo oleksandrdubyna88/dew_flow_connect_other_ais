@@ -29,9 +29,10 @@
  * <p><b>Its own module</b>, as every leg after the sixth is: `run-seam.mjs` is past the repository's 800-line ceiling. What it needs
  * from the runner — the session factory, the reply reader, the binary and the stand-in CLI — is handed in.</p>
  */
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { owned } from './owned.mjs';
 
 import { runCli } from './cliHarness.mjs';
 
@@ -65,27 +66,50 @@ const ROW = {
  * @param {{serverSession: Function, answerOf: Function, fakeCli: string, fail: Function}} runner
  */
 export async function heldGateSeam({ serverSession, answerOf, fakeCli, fail }) {
-  const root = mkdtempSync(join(tmpdir(), 'coai-seam-held-'));
-  const home = mkdtempSync(join(tmpdir(), 'coai-seam-held-home-'));
-  const repo = mkdtempSync(join(tmpdir(), 'coai-seam-held-repo-'));
-  const forget = forgetting([root, home, repo]);
-  const stop = async (session, why) => {
-    await session.killAndWait();
-    forget();
-    fail(why);
-  };
+  const scope = owned.cleanupScope();
+  let session;
+  let outcome;
+  try {
+    outcome = await theLeg({ scope, start: (env) => { session = serverSession(env); return session; }, answerOf, fakeCli });
+    if (outcome.why === '') {
+      await session.close();
+      session = undefined;
+    }
+  } finally {
+    // Every road out ends here: a failed claim, a throw after the folders exist, a throw after the session started.
+    // The kill attempt and the scope close are independent: the close always runs, and a kill that fails is said, never what the leg reports.
+    try {
+      if (session !== undefined) {
+        await session.killAndWait();
+      }
+    } catch (e) {
+      console.error(`seam: could not end the held-gate session (${e?.message ?? e}); its folders are removed regardless`);
+    } finally {
+      await scope.close();
+    }
+  }
+  if (outcome.why !== '') {
+    fail(outcome.why);
+  }
 
+  return { decisions: outcome.decisions, stage: outcome.stage };
+}
+
+/** The claims, in order. Answers `{ why }` for the first that failed, or what the leg saw; never closes anything. */
+async function theLeg({ scope, start, answerOf, fakeCli }) {
+  const root = owned.ownedDir(scope, 'held');
+  const home = owned.ownedDir(scope, 'held-home');
+  const repo = owned.ownedDir(scope, 'held-repo');
   try {
     await scratchRepo(repo);
   } catch (e) {
-    forget();
-    fail(`the scratch repository for the held-gate leg could not be made: ${e.message}`);
+    return { why: `the scratch repository for the held-gate leg could not be made: ${e.message}` };
   }
   // The panel's own writer: one plan round, a threshold of zero, the stand-in CLI as the only vendor. Nothing is typed as JSON here.
   const settings = { ...DEFAULTS, thresholds: { ...DEFAULTS.thresholds, PlanCritique: 0 } };
   writeFileSync(join(root, 'settings.json'), serverSettingsJson(settings, vendorsFrom([{ ...ROW, executablePath: fakeCli }]), '9.9.9'), 'utf8');
 
-  const session = serverSession({
+  const session = start({
     COAI_DATA_DIR: root,
     HOME: home,
     USERPROFILE: home,
@@ -97,30 +121,17 @@ export async function heldGateSeam({ serverSession, answerOf, fakeCli, fail }) {
   });
 
   const held = await hold(session, repo, answerOf);
-  if (held !== '') {
-    await stop(session, held);
-  }
+  if (held !== '') return { why: held };
   const noticed = notice(root);
-  if (noticed.why !== '') {
-    await stop(session, noticed.why);
-  }
+  if (noticed.why !== '') return { why: noticed.why };
   const offered = offers(noticed.card);
-  if (offered.why !== '') {
-    await stop(session, offered.why);
-  }
+  if (offered.why !== '') return { why: offered.why };
   const claimed = await theClaimIsRefused(session, repo, answerOf);
-  if (claimed !== '') {
-    await stop(session, claimed);
-  }
+  if (claimed !== '') return { why: claimed };
   const released = await thePersonsProceedReleases(session, repo, root, noticed.card, answerOf);
-  if (released.why !== '') {
-    await stop(session, released.why);
-  }
+  if (released.why !== '') return { why: released.why };
 
-  await session.close();
-  forget();
-
-  return { decisions: offered.decisions, stage: released.stage };
+  return { why: '', decisions: offered.decisions, stage: released.stage };
 }
 
 /** Claim 1: `open`, then a plan round that ends in `call_human`. Answers why it did not, or `''`. */
@@ -234,17 +245,4 @@ async function scratchRepo(dir) {
   writeFileSync(join(dir, 'src', 'Poll.cs'), 'class Poll { }\n', 'utf8');
   await git('add', '-A');
   await git('commit', '-m', 'the committed state');
-}
-
-/** Remove the leg's directories, and never let that removal be what the run reports (the sixth leg's rule). */
-function forgetting(dirs) {
-  return () => {
-    for (const dir of dirs) {
-      try {
-        rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-      } catch (e) {
-        console.error(`seam: could not remove ${dir} (${e.code ?? e.message}); it is left behind`);
-      }
-    }
-  };
 }

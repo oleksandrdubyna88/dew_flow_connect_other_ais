@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -80,7 +81,9 @@ internal static class ShellScript
     {
         File.Exists(script).Should().BeTrue("{0} is what this checkout runs", script);
 
-        using var process = StartOrExplain(StartInfo(script, workingDirectory, arguments, input), what);
+        var start = StartInfo(script, workingDirectory, arguments, input);
+        RunTemp.RequireChildTempInRunFolder(start);
+        using var process = StartOrExplain(start, what);
 
         // Both streams are read BEFORE anything is written, and at once: a script that fills one pipe
         // while this reads the other would wait on this reader for ever, and one that writes before it

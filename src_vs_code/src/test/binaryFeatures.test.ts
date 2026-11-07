@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { FeaturesCache, hasFeature, modifiedMs, readBinaryFeatures } from '../binaryFeatures';

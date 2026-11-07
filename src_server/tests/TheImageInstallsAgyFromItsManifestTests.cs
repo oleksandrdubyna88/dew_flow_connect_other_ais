@@ -3,6 +3,7 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -265,6 +266,7 @@ public sealed class TheImageInstallsAgyFromItsManifestTests : IDisposable
         start.Environment["HOME"] = ShellScripts.Posix(Home);
         start.Environment["INSTALL_CLI_PAUSE"] = "0";
         start.Environment["AGY_MANIFEST_BASE"] = FileUrl(Manifests);
+        RunTemp.RequireChildTempInRunFolder(start);
         using var process = Process.Start(start)!;
         var stderr = process.StandardError.ReadToEndAsync();
         var stdout = process.StandardOutput.ReadToEnd();

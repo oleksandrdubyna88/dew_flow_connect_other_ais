@@ -134,6 +134,7 @@ preflight_token() {
     local cfg code
     require_https_origin
 
+    # testsToDelete-exempt: raw-temp — a product release script on a server; no test run reaches this line, pinned by E10
     cfg=$(mktemp)
     chmod 600 "$cfg"
     printf 'header = "Authorization: Bearer %s"\n' "$(session_token)" >"$cfg"
@@ -158,6 +159,7 @@ preflight_token() {
 
 canary() {
     local vendor=$1 model=$2 budget=${3:-180} id status body waited cfg submit http kind
+    # testsToDelete-exempt: raw-temp — the canary of a deploy; a test under the gate reaches this with TMPDIR in the run folder, and a deploy is not a test run
     cfg=$(mktemp)
     chmod 600 "$cfg"
     printf 'header = "Authorization: Bearer %s"\n' "$(session_token)" >"$cfg"
@@ -299,6 +301,7 @@ stage_from() {
         # workflow packages `coai-server-<version>-<rid>/coai-server`, but `--from` also takes an
         # archive somebody made by hand, and one packed from INSIDE the directory would have been
         # stripped down to nothing with only "no binary" to explain it. (gemini, code round.)
+        # testsToDelete-exempt: raw-temp — a product release script on a server; no test run reaches this line, pinned by E10
         scratch=$(mktemp -d "$target/.unpack.XXXXXX")
         tar xzf "$source" -C "$scratch" || die "$source did not unpack — is it the release .tar.gz?"
 

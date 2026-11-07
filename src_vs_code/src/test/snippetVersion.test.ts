@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';

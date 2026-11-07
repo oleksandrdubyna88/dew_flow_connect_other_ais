@@ -24,7 +24,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class RoundCountsSnapshotTests : IDisposable
 {
-    private readonly TempDir _store = TempDir.For("testsToDelete-snapshot-");
+    private readonly TempDir _store = TempDir.For("snapshot-");
     private readonly ListSink _sink = new();
     private readonly ILogger _log;
 

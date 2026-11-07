@@ -13,7 +13,7 @@ public sealed class KimiSurvivorSeamTests : IDisposable
 {
     private static readonly DateTime Started = new(2026, 10, 17, 8, 0, 0, DateTimeKind.Utc);
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-survivor-seam-");
+    private readonly TempDir _dir = TempDir.For("survivor-seam-");
 
     private string Locks => _dir.At("locks");
 

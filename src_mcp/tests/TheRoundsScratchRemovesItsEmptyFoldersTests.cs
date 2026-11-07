@@ -13,7 +13,7 @@ namespace CoaiMcp.Tests;
 /// <remarks>The round-level twins (a real code round, the repair launch, a surviving descendant) are in <c>PanelServiceTests.EmptyFolders.cs</c> (S7).</remarks>
 public sealed class TheRoundsScratchRemovesItsEmptyFoldersTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-roundscratch-empty-");
+    private readonly TempDir _dir = TempDir.For("roundscratch-empty-");
     private readonly List<string> _notes = [];
 
     public void Dispose() => _dir.Dispose();

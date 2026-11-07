@@ -16,7 +16,7 @@ public sealed class KimiTreeSupervisorTests : IDisposable
 {
     private static readonly DateTime Started = new(2026, 10, 16, 8, 0, 0, DateTimeKind.Utc);
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-tree-supervisor-");
+    private readonly TempDir _dir = TempDir.For("tree-supervisor-");
     private readonly List<string> _notes = [];
 
     private string MarkerPath => _dir.At("locks", "0123456789abcdef.survivors.json");

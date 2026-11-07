@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { calledBy, CallerDeclaration, costPhrase, decideSecondsOf, elapsed, instantOf, isRunning, parseSession, PlanSourceRecord, reviewedFrom, reviewerLines, reviewerRows, RoundRecord } from '../rounds';

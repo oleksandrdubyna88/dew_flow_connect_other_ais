@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class AHandleReadRootThatCannotBeResolvedIsRefusedTests : IDisposable
 {
-    private readonly TempDir _work = TempDir.For("testsToDelete-handleroot-");
+    private readonly TempDir _work = TempDir.For("handleroot-");
     private readonly string _root;
 
     public AHandleReadRootThatCannotBeResolvedIsRefusedTests()

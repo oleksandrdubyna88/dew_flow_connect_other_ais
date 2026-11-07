@@ -62,7 +62,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void The_registry_wins_over_the_variable_and_says_so()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-registry-");
+        using var dir = TempDir.For("locator-registry-");
         var home = HomeIn(dir);
         var main = Plant(home, "any-folder", A);
         Plant(home, "any-folder", B);
@@ -84,7 +84,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [InlineData("{\"sessionId\":\"../../etc/passwd\"}")]
     public void An_unreadable_or_absent_registry_falls_back_to_the_variable(string registry)
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-fallback-");
+        using var dir = TempDir.For("locator-fallback-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", B);
         if (registry != "absent")
@@ -100,7 +100,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void A_registry_file_over_64_KiB_is_not_read()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-big-");
+        using var dir = TempDir.For("locator-big-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
         Plant(home, "any-folder", B);
@@ -115,7 +115,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     public void The_registry_is_chosen_by_the_pid_never_by_a_listing()
     {
         // A listing implementation would find <otherpid>.json, and a `<pid>.<hash>.key` sits beside every real registry file.
-        using var dir = TempDir.For("testsToDelete-coai-locator-bypid-");
+        using var dir = TempDir.For("locator-bypid-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
         Plant(home, "any-folder", B);
@@ -135,7 +135,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [InlineData("1/2")]
     public void A_pid_that_is_not_one_to_ten_digits_is_never_made_into_a_file_name(string pid)
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-pid-");
+        using var dir = TempDir.For("locator-pid-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
         Plant(home, "any-folder", B);
@@ -151,7 +151,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     {
         // The id is a valid GUID with a transcript on disk, and it still names nothing: an operator's string says nothing about
         // whose client this is (parent §16 D9).
-        using var dir = TempDir.For("testsToDelete-coai-locator-stated-");
+        using var dir = TempDir.For("locator-stated-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
 
@@ -172,7 +172,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
 
         ladder.Id.Should().Be(A, "the round caller's ladder treats the stated string as the caller's id");
         ladder.Vendor.Should().Be(CallerIdentity.Stated);
-        using var dir = TempDir.For("testsToDelete-coai-locator-ladder-");
+        using var dir = TempDir.For("locator-ladder-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
         // CallerDeclaration resolves a stated id to the vendor "unknown", and that is what the locator is told.
@@ -182,7 +182,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void Nothing_set_is_no_session_id()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-none-");
+        using var dir = TempDir.For("locator-none-");
 
         Refused(CallerTranscriptLocator.Locate("claude", Env(), HomeIn(dir))).Reason.Should().Be(CallerTranscriptLocation.NoSessionId);
         Refused(CallerTranscriptLocator.Locate("claude", Env(("COAI_CALLER_SESSION", "  ")), HomeIn(dir))).Reason
@@ -197,7 +197,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     {
         // The vendor decides FIRST, with a valid Claude variable present and its transcript on disk. 6 of 405 Windows rounds
         // have a codex caller (E1 Q5), so this is a real, frequent state.
-        using var dir = TempDir.For("testsToDelete-coai-locator-vendor-");
+        using var dir = TempDir.For("locator-vendor-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
 
@@ -212,7 +212,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [InlineData("")]
     public void Claude_unknown_and_empty_vendors_are_read(string vendor)
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-vendorok-");
+        using var dir = TempDir.For("locator-vendorok-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
 
@@ -227,7 +227,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     public void A_vendor_word_off_the_closed_shape_is_this_vendor(string vendor)
     {
         // The vendor text becomes part of a reason, and a reason must never carry anything arbitrary.
-        using var dir = TempDir.For("testsToDelete-coai-locator-vendorword-");
+        using var dir = TempDir.For("locator-vendorword-");
 
         Refused(CallerTranscriptLocator.Locate(vendor, Env(("CLAUDE_CODE_SESSION_ID", A)), HomeIn(dir))).Reason
             .Should().Be("no reader for this vendor");
@@ -241,7 +241,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [InlineData("   ")]
     public void An_id_that_is_not_a_uuid_never_reaches_a_path(string id)
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-notuuid-");
+        using var dir = TempDir.For("locator-notuuid-");
         var home = HomeIn(dir);
         // Where a naive `<projects>/*/<id>.jsonl` built from `../sentinel` would land.
         File.WriteAllText(Path.Combine(home.ProjectsDir, "sentinel.jsonl"), "{}\n");
@@ -260,7 +260,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void The_transcript_is_found_in_any_project_folder_without_a_slug()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-slug-");
+        using var dir = TempDir.For("locator-slug-");
         var home = HomeIn(dir);
         Plant(home, "zz-unrelated-to-any-cwd", A);
         Plant(home, "another-folder", B);
@@ -273,7 +273,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void An_uppercase_id_finds_the_lowercase_file()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-case-");
+        using var dir = TempDir.For("locator-case-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
 
@@ -284,7 +284,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     public void A_transcript_in_a_subfolder_of_a_project_folder_is_not_found()
     {
         // No recursion: only <projects>/<dir>/<id>.jsonl counts.
-        using var dir = TempDir.For("testsToDelete-coai-locator-norecursion-");
+        using var dir = TempDir.For("locator-norecursion-");
         var home = HomeIn(dir);
         Plant(home, Path.Combine("any-folder", "nested"), A);
 
@@ -295,7 +295,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void Two_project_folders_holding_the_id_is_ambiguous_not_a_guess()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-ambiguous-");
+        using var dir = TempDir.For("locator-ambiguous-");
         var home = HomeIn(dir);
         Plant(home, "folder-one", A);
         Plant(home, "folder-two", A);
@@ -307,7 +307,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void Persistence_off_is_transcript_not_found()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-persistoff-");
+        using var dir = TempDir.For("locator-persistoff-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", B);
 
@@ -320,7 +320,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void A_missing_projects_folder_is_transcript_not_found_not_a_throw()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-noprojects-");
+        using var dir = TempDir.For("locator-noprojects-");
         var home = new ClaudeHome(dir.At("nowhere"), dir.At("also-nowhere"));
 
         Refused(CallerTranscriptLocator.Locate("claude", Env(("CLAUDE_CODE_SESSION_ID", A)), home)).Reason
@@ -332,7 +332,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     {
         // The /clear shape (parent §16 D9, rule 7): the variable is inherited stale and its transcript exists, the registry names
         // the live session, which has none. The registry wins, so this is NOT found — and Source says whose answer it was.
-        using var dir = TempDir.For("testsToDelete-coai-locator-clear-");
+        using var dir = TempDir.For("locator-clear-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", B);
         Register(home, Pid, RegistryEntry(A));
@@ -346,7 +346,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void COAI_AGENT_LOG_DIR_moves_the_transcripts_not_the_registry()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-logdir-");
+        using var dir = TempDir.For("locator-logdir-");
         var home = HomeIn(dir);
         var moved = home.With(dir.At("elsewhere"));
         Plant(moved, "any-folder", A);
@@ -363,7 +363,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void A_stored_id_is_found_with_source_stored()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-stored-");
+        using var dir = TempDir.For("locator-stored-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
 
@@ -373,7 +373,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void A_repo_caller_is_no_session_id()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-repocaller-");
+        using var dir = TempDir.For("locator-repocaller-");
 
         Refused(CallerTranscriptLocator.LocateStored("repo:dew_flow_connect_other_ais", HomeIn(dir))).Reason
             .Should().Be(CallerTranscriptLocation.NoSessionId);
@@ -393,7 +393,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void A_ten_digit_pid_is_accepted()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-pid10-");
+        using var dir = TempDir.For("locator-pid10-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
         Register(home, "1234567890", RegistryEntry(A));
@@ -407,7 +407,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [InlineData(64 * 1024 + 1, false)]
     public void A_registry_of_exactly_64_KiB_is_read_and_one_byte_more_is_refused(int size, bool read)
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-edge-");
+        using var dir = TempDir.For("locator-edge-");
         var home = HomeIn(dir);
         Plant(home, "any-folder", A);
         Plant(home, "any-folder", B);
@@ -425,7 +425,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [InlineData("a", "no reader for a")]
     public void A_vendor_word_of_one_to_twenty_letters_is_kept(string vendor, string reason)
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-vendoredge-");
+        using var dir = TempDir.For("locator-vendoredge-");
 
         Refused(CallerTranscriptLocator.Locate(vendor, Env(("CLAUDE_CODE_SESSION_ID", A)), HomeIn(dir))).Reason.Should().Be(reason);
     }
@@ -440,7 +440,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     public void The_registry_wins_even_when_only_the_variables_transcript_exists()
     {
         // E3.S2's fixture check, moved to E3.S4's materialiser (plan C7): E1's real registry bytes for the /clear shape.
-        using var dir = TempDir.For("testsToDelete-coai-locator-c12-");
+        using var dir = TempDir.For("locator-c12-");
         var fixture = CallerTranscriptFixture.Materialise("registry-and-variable-disagree", dir);
         var registry = Directory.EnumerateFiles(fixture.Home.SessionsDir, "*.json").Single();
         var pid = Path.GetFileNameWithoutExtension(registry);
@@ -456,7 +456,7 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     [Fact]
     public void Persistence_off_is_transcript_not_found_from_a_real_registry_entry()
     {
-        using var dir = TempDir.For("testsToDelete-coai-locator-c10-");
+        using var dir = TempDir.For("locator-c10-");
         var fixture = CallerTranscriptFixture.Materialise("persistence-off", dir);
         var pid = Path.GetFileNameWithoutExtension(Directory.EnumerateFiles(fixture.Home.SessionsDir, "*.json").Single());
 
@@ -474,13 +474,13 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var real = Path.Combine(profile, ".claude");
 
-        ClaudeHome.Default.ProjectsDir.Should().NotStartWith(real).And.Contain("testsToDelete-");
+        ClaudeHome.Default.ProjectsDir.Should().NotStartWith(real).And.StartWith(RunTemp.Folder, "the empty home is inside this run's own temp folder");
         ClaudeHome.Default.SessionsDir.Should().NotStartWith(real);
         AgentLog.DefaultProjectsDir.Should().Be(ClaudeHome.Default.ProjectsDir, "one default, not two");
 
         // The positive half: a sentinel transcript planted in that home is what a default read finds.
         var id = Guid.NewGuid().ToString("D");
-        var planted = Plant(ClaudeHome.Default, "testsToDelete-sentinel-folder", id);
+        var planted = Plant(ClaudeHome.Default, "sentinel-folder", id);
         try
         {
             Found(CallerTranscriptLocator.LocateStored(id, ClaudeHome.Default)).MainFile.Should().Be(planted);

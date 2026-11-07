@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn, chatInstruction, MATERIAL_NOTE, reinstructed, reinstructedHead, stillOurs, instructedBox, type Composer } from '../chatPrompt';

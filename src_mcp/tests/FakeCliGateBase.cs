@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// A real <see cref="PanelService"/> over a real git repository with FakeCli answering every reviewer — what the authors tests that go
 /// through the engine (E5.S4's two, S5's end to end) share, so each is one scenario and not forty lines of setup (the shape
-/// <see cref="ARoundIsMintedAKeyTests"/> wrote first). The repository and the data directory are <c>testsToDelete-…</c> temp folders.
+/// <see cref="ARoundIsMintedAKeyTests"/> wrote first). The repository and the data directory are temp folders.
 /// </summary>
 [Collection("fakecli-env")]
 public abstract class FakeCliGateBase : IAsyncLifetime
@@ -30,7 +30,7 @@ public abstract class FakeCliGateBase : IAsyncLifetime
 
     protected const string Clean = """{"findings": []}""";
 
-    private readonly TempDir _temp = TempDir.For("testsToDelete-coai-gate-");
+    private readonly TempDir _temp = TempDir.For("gate-");
     private readonly ProcessLauncher _launcher = new();
 
     /// <summary>The checkout under review. A scenario that needs it somewhere particular says where before <see cref="InitializeAsync"/> runs.</summary>

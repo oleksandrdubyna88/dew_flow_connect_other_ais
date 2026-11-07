@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from '../settingsLock';

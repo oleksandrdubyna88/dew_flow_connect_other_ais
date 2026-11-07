@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class AKimiLaunchIsLoggedTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-logged-");
+    private readonly TempDir _dir = TempDir.For("kimi-logged-");
 
     public void Dispose() => _dir.Dispose();
 

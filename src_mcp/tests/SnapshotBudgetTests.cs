@@ -111,6 +111,6 @@ public sealed class SnapshotBudgetTests : IAsyncLifetime
     [Fact]
     public void TheRealVolumeReader_AnswersForTheTempDirectory()
     {
-        SnapshotBudget.FreeBytesOn(Path.GetTempPath()).Should().BeGreaterThan(0, "the machine running this has some room");
+        SnapshotBudget.FreeBytesOn(TempDir.Root).Should().BeGreaterThan(0, "the machine running this has some room");
     }
 }

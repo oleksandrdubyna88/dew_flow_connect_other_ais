@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import * as assert from 'node:assert';
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

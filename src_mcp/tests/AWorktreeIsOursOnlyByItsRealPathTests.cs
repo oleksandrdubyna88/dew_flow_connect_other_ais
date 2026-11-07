@@ -20,7 +20,7 @@ public sealed class AWorktreeIsOursOnlyByItsRealPathTests : IDisposable
 {
     private const string Canary = "canary.txt";
 
-    private readonly TempDir _work = TempDir.For("testsToDelete-wtguard-");
+    private readonly TempDir _work = TempDir.For("wtguard-");
     private readonly string _storage;
     private readonly string _outside;
     private readonly string _repo;

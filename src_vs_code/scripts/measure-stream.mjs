@@ -64,6 +64,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'measure-stream' });
+
 
 /** Anchored to THIS file, never to the working directory. See the header. */
 const HERE = fileURLToPath(new URL('.', import.meta.url));
@@ -478,6 +482,7 @@ async function measure(name, useShell, raw) {
 
     return undefined;
   }
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const home = mkdtempSync(join(tmpdir(), 'coai-measure-'));
   const spec = launchSpecFor(row(vendor.runtime), home, '', resolved);
   if (spec.refusal.length > 0) {

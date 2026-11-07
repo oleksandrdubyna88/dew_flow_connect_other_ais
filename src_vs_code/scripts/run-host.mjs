@@ -1,9 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runTests } from '@vscode/test-electron';
+import { isMain, loadOwned } from './run-tests.mjs';
 
 /**
  * Run the scenarios inside a REAL VS Code, and exit non-zero unless they actually ran.
@@ -35,19 +33,6 @@ const ROOT = join(HERE, '..');
 /** How long the editor may take to download and launch before that is the failure. */
 const LAUNCH_MS = 10 * 60 * 1000;
 
-/** A workspace of its own, per run, deleted after — never the folder somebody is working in. */
-const workspace = mkdtempSync(join(tmpdir(), 'coai-host-ws-'));
-
-/**
- * A DATA directory of its own, for the same reason and one more.
- *
- * <p>The settings-mirror scenario asserts that the extension really writes `settings.json`, and the
- * only way to assert that without reading somebody's own installation is to tell this host where its
- * data lives. `COAI_DATA_DIR` is what both halves of the product read, so it is also what the
- * scenario asks rather than guessing a path.</p>
- */
-const dataHome = mkdtempSync(join(tmpdir(), 'coai-host-data-'));
-
 const bounded = (ms, what) => new Promise((_, no) => {
   setTimeout(() => { no(new Error(`${what} did not finish within ${Math.round(ms / 1000)}s`)); }, ms).unref();
 });
@@ -66,62 +51,118 @@ const POISONED = ['ELECTRON_RUN_AS_NODE', 'VSCODE_PID', 'VSCODE_CWD', 'VSCODE_IP
   'VSCODE_CODE_CACHE_PATH', 'VSCODE_ESM_ENTRYPOINT', 'VSCODE_L10N_BUNDLE_LOCATION',
   'VSCODE_HANDLES_UNCAUGHT_ERRORS', 'VSCODE_CRASH_REPORTER_PROCESS_TYPE'];
 
-async function main() {
-  for (const name of POISONED) {
-    delete process.env[name];
-  }
-  // BUILT FIRST, every time. The host loads `dist/extension.js`, so a run against a stale bundle is a
-  // run against yesterday's code — the defect `theBundleLoads.test.mjs` was written after hitting.
-  execFileSync('npm', ['run', 'bundle'], { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' });
+/**
+ * The OWNED folders of this run (E5 S4, `todo/PLAN_test_leftovers_E5_S4_brief.md` § 16 D-c; must-not-copy #14). The run has ONE run folder of the wrap (`what` `host`, TEMP, TMP,
+ * TMPDIR and the marker moved there), and INSIDE it three owned folders of the wrap, each with its claim:
+ *
+ * <ul>
+ *   <li>`host-ws` — a workspace of its own, per run, never the folder somebody is working in;</li>
+ *   <li>`host-data` — a DATA directory of its own: the settings-mirror scenario asserts that the extension really writes `settings.json`, and the only way to assert that without
+ *       reading somebody's own installation is to tell this host where its data lives (`COAI_DATA_DIR` is what both halves of the product read);</li>
+ *   <li>`host-profile` — the editor's USER-DATA directory (`--user-data-dir`), so neither a developer's settings nor the product's temp files land anywhere shared.</li>
+ * </ul>
+ *
+ * Everything is removed BEFORE the process exits: `main` removes them in a `finally` and RETURNS the exit code, and only the command line ends the process. The old
+ * `main().then(exit).finally(rm)` ended the process first and removed nothing (#14).
+ *
+ * <p><b>The IPC socket.</b> The editor puts its IPC socket (`<user-data-dir>/<version>-main.sock`) in the user-data directory, and a socket path has a byte limit (107 on Linux, 103 on
+ * macOS; creds E2.1 met the macOS one). The profile folder keeps its own name `host-profile` unless that would pass the limit, and then it is named `hp` (ten characters
+ * shorter); `socketRoom` is the measurement and `main` says one line when even that is too long.</p>
+ */
+const SOCKET_LEAF = '/1.999.9-main.sock';
+// Windows has no socket path (the editor uses a named pipe), so nothing there is measured: the limit is unbounded.
+const PLATFORM_SOCKET_LIMIT = process.platform === 'win32' ? Number.POSITIVE_INFINITY : process.platform === 'darwin' ? 103 : 107;
 
-  // Two launches, BOTH run whatever the first one says: a scenario that fails in the first (the clipboard ones do, on
-  // some machines) must not hide the second launch's answer, which is about something else entirely. The failures are
-  // collected and thrown together, so the exit code is still non-zero for either.
-  const failures = [];
-  const launch = async (label, extensionTestsEnv) => {
-    try {
-      await Promise.race([
-        runTests({
-          extensionDevelopmentPath: ROOT,
-          extensionTestsPath: join(ROOT, 'out', 'test', 'host', 'scenarios.js'),
-          // `--disable-extensions` so a developer's own installed extensions cannot change the answer,
-          // and a throwaway user-data dir so neither can their settings.
-          launchArgs: [workspace, '--disable-extensions'],
-          // The host process's environment, which is what the extension AND the scenarios read.
-          extensionTestsEnv,
-        }),
-        bounded(LAUNCH_MS, label),
-      ]);
-    } catch (reason) {
-      failures.push(`${label}: ${reason instanceof Error ? reason.message : String(reason)}`);
-    }
-  };
-
-  await launch('the extension host', { COAI_DATA_DIR: dataHome, COAI_DATA_SIDE: '' });
-
-  // A SECOND launch (research/PLAN_paths_per_side.md E5.7): its data directory is a folder that is NOT there, so the one
-  // scenario that can prove "nothing creates a missing named root" runs with the real activation, the real mirror and the
-  // real notice — and none of the ordinary scenarios, which would write into it. `missingDataRootScenario.ts` says what
-  // it drives; the environment variable is what tells the runner which list this launch is.
-  await launch('the extension host, second launch',
-    { COAI_DATA_DIR: join(dataHome, 'named-but-missing'), COAI_DATA_SIDE: '', COAI_HOST_MISSING_DATA_ROOT: '1' });
-
-  if (failures.length > 0) {
-    throw new Error(failures.join('\n'));
-  }
+/** How many bytes are left under `limit` (the platform's by default) for the editor's socket path under a profile folder `profile`; negative when it would not fit. */
+export function socketRoom(profile, limit = PLATFORM_SOCKET_LIMIT) {
+  return limit - Buffer.byteLength(`${profile}${SOCKET_LEAF}`);
 }
 
-main()
-  .then(() => {
-    console.log('extension-host scenarios: passed');
-    process.exit(0);
-  })
-  .catch((reason) => {
-    console.error('extension-host scenarios: FAILED');
-    console.error(reason instanceof Error ? reason.message : String(reason));
-    process.exit(1);
-  })
-  .finally(() => {
-    rmSync(workspace, { recursive: true, force: true });
-    rmSync(dataHome, { recursive: true, force: true });
-  });
+/** The runner's own default launch: `@vscode/test-electron` is loaded when a launch happens, not when this module is imported. */
+const runInTheEditor = async (options) => (await import('@vscode/test-electron')).runTests(options);
+
+/** BUILT FIRST, every time. The host loads `dist/extension.js`, so a run against a stale bundle is a run against yesterday's code. */
+const bundleTheExtension = () => execFileSync('npm', ['run', 'bundle'], { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' });
+
+/**
+ * Runs both launches and answers the exit code: 0 when every scenario passed, 1 otherwise, 78 when the run folder could not be made. `launch` (test-electron's `runTests`),
+ * `bundle`, `env` (the process's own by default: the editor inherits it), `root` (the temp root), `onExit`, `log`, `error`, `importOwned` and `socketLimit` are the seams of its test.
+ */
+export async function main({
+  launch = runInTheEditor, bundle = bundleTheExtension, env = process.env, root, onExit, log = console.log, error = console.error, importOwned, socketLimit = PLATFORM_SOCKET_LIMIT,
+} = {}) {
+  const wrap = await loadOwned({ ...(importOwned === undefined ? {} : { importOwned }), error, prefix: 'run-host' });
+  for (const name of POISONED) {
+    delete env[name];
+  }
+  let run;
+  try {
+    run = wrap.beginOwnedRun({ what: 'host', env, ...(root === undefined ? {} : { root }), ...(onExit === undefined ? {} : { onExit }) });
+  } catch (caught) {
+    if (caught?.name !== 'RunFolderRefused') throw caught;
+    error(`run-host: nothing ran — ${caught.message}. Make that folder writable, or point TMPDIR, TEMP and TMP at a folder you can write.`);
+    return 78;
+  }
+  const scope = wrap.owned.cleanupScope();
+  const failures = [];
+  try {
+    const owned = (what) => wrap.owned.ownedDir(scope, what, { parent: run.folder });
+    const workspace = owned('host-ws');
+    const dataHome = owned('host-data');
+    const room = socketRoom(join(run.folder, `${wrap.owned.ownedPrefix('host-profile')}abcdef`), socketLimit);
+    const profile = owned(room >= 0 ? 'host-profile' : 'hp');
+    if (socketRoom(profile, socketLimit) < 0) {
+      log(`run-host: the editor's IPC socket path under ${profile} is ${-socketRoom(profile, socketLimit)} bytes over the platform's limit; point TMPDIR at a shorter folder if the editor reports it`);
+    }
+    bundle();
+
+    // Two launches, BOTH run whatever the first one says: a scenario that fails in the first (the clipboard ones do, on
+    // some machines) must not hide the second launch's answer, which is about something else entirely. The failures are
+    // collected and reported together, so the exit code is still non-zero for either.
+    const run1 = async (label, extensionTestsEnv) => {
+      try {
+        await Promise.race([
+          launch({
+            extensionDevelopmentPath: ROOT,
+            extensionTestsPath: join(ROOT, 'out', 'test', 'host', 'scenarios.js'),
+            // `--disable-extensions` so a developer's own installed extensions cannot change the answer,
+            // and a user-data dir of this run's own so neither can their settings.
+            launchArgs: [workspace, '--disable-extensions', `--user-data-dir=${profile}`],
+            // The host process's environment, which is what the extension AND the scenarios read.
+            extensionTestsEnv,
+          }),
+          bounded(LAUNCH_MS, label),
+        ]);
+      } catch (reason) {
+        failures.push(`${label}: ${reason instanceof Error ? reason.message : String(reason)}`);
+      }
+    };
+
+    await run1('the extension host', { COAI_DATA_DIR: dataHome, COAI_DATA_SIDE: '' });
+
+    // A SECOND launch (research/PLAN_paths_per_side.md E5.7): its data directory is a folder that is NOT there, so the one
+    // scenario that can prove "nothing creates a missing named root" runs with the real activation, the real mirror and the
+    // real notice — and none of the ordinary scenarios, which would write into it. `missingDataRootScenario.ts` says what
+    // it drives; the environment variable is what tells the runner which list this launch is.
+    await run1('the extension host, second launch',
+      { COAI_DATA_DIR: join(dataHome, 'named-but-missing'), COAI_DATA_SIDE: '', COAI_HOST_MISSING_DATA_ROOT: '1' });
+  } catch (reason) {
+    failures.push(reason instanceof Error ? reason.message : String(reason));
+  } finally {
+    // BEFORE the process can exit: the three folders and their claims, then the run folder and its claim.
+    await scope.close();
+    run.end();
+  }
+  if (failures.length > 0) {
+    error('extension-host scenarios: FAILED');
+    error(failures.join('\n'));
+    return 1;
+  }
+  log('extension-host scenarios: passed');
+  return 0;
+}
+
+// Importable for its own test; still a script when node is pointed at it.
+if (isMain(import.meta.url)) {
+  process.exit(await main());
+}

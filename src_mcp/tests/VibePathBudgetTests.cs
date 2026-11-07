@@ -21,15 +21,29 @@ public sealed class VibePathBudgetTests
     /// </summary>
     private static string HomeOfLength(int length, string tail = "")
     {
-        var home = Path.Combine(Path.GetPathRoot(Path.GetFullPath(AppContext.BaseDirectory)) ?? Path.DirectorySeparatorChar.ToString(), "testsToDelete-vh-budget") + tail;
+        var home = Path.Combine(Path.GetPathRoot(Path.GetFullPath(AppContext.BaseDirectory)) ?? Path.DirectorySeparatorChar.ToString(), "vh-budget") + tail;
         while (home.Length < length)
         {
-            home += Path.DirectorySeparatorChar + new string('x', Math.Min(40, Math.Max(1, length - home.Length - 1)));
+            var room = length - home.Length;
+            home += room == 1 ? "x" : Path.DirectorySeparatorChar + new string('x', Math.Min(40, room - 1));
         }
 
         home.Length.Should().Be(length, "the fixture is exactly the length the case names");
 
         return home;
+    }
+
+    /// <summary>
+    /// The base's length depends on the drive and the name, so a case's padding can end with any remainder: every length is asserted here, on every OS.
+    /// One character left used to overshoot by one (a separator AND an x); it showed only where the sum landed on it, Windows at 300.
+    /// </summary>
+    [Fact]
+    public void TheFixture_IsExactlyTheLengthAsked_ForEveryRemainderOfItsPadding()
+    {
+        foreach (var length in Enumerable.Range(20, 120))
+        {
+            HomeOfLength(length).Length.Should().Be(length);
+        }
     }
 
     [Fact]

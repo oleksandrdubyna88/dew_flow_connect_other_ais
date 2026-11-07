@@ -19,14 +19,14 @@ namespace CoaiMcp.Tests;
 /// every turn, where the sign-in really is included; and serialised on the sign-in's gate with every other coai Kimi launch.
 /// </summary>
 /// <remarks>
-/// The homes root is a <c>testsToDelete-</c> folder of this test's; the person is <c>KimiFixture</c>'s, in another; the lock root is overridden
+/// The homes root is a temp folder of this test's; the person is <c>KimiFixture</c>'s, in another; the lock root is overridden
 /// per async flow. A network path is a SEAM's answer, never a real target. The arms that drive <c>ConsultationService</c> (S5.3.4's record state,
 /// S5.3.16 (i) through two consultations) wait for E5.4's <c>KimiConsultant</c>; what they pin is pinned here at the launch control.
 /// </remarks>
 public sealed class AConversationsKimiHomeTests : IDisposable
 {
     private readonly KimiFixture _person = new();
-    private readonly TempDir _homes = TempDir.For("testsToDelete-kimi-homes-");
+    private readonly TempDir _homes = TempDir.For("kimi-homes-");
     private readonly List<string> _notes = [];
 
     public void Dispose()

@@ -16,7 +16,7 @@ public sealed class TheStderrOnlyEvidenceReachesThePersonTests : IDisposable
 {
     private const string NamesNoRow = "Internal error";
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-stderr-evidence-");
+    private readonly TempDir _dir = TempDir.For("kimi-stderr-evidence-");
 
     public void Dispose() => _dir.Dispose();
 

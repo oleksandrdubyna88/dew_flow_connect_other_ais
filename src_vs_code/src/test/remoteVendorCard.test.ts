@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import * as assert from 'node:assert';
 import { test } from 'node:test';
 import { DEFAULTS } from '../settingsShape';

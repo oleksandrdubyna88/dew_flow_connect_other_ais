@@ -28,7 +28,9 @@ const { hostFamily } = await import('../out/hostSide.js');
  * @returns {Promise<{ missing: string, agreed: string[] }>} what both halves called missing
  */
 export async function pathMissingSeam({ providersIn, fail }) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-missing-data-'));
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const roots = mkdtempSync(join(tmpdir(), 'coai-seam-missing-roots-'));
   const leave = (why) => {
     rmSync(dataDir, { recursive: true, force: true });

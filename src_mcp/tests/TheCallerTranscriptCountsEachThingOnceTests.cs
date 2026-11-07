@@ -12,12 +12,12 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// Every expectation is read from the fixture's own lines (<see cref="TranscriptTruth"/>) or from its <c>rounds.json</c>; none is a typed
-/// number, a real date or a clock reading. A fixture is a manifest NAME, materialised into a <c>testsToDelete-</c> folder that the test
+/// number, a real date or a clock reading. A fixture is a manifest NAME, materialised into a temp folder that the test
 /// removes. The mutation helpers of <see cref="CallerTranscriptFixture"/> are the only way a test alters a fixture.
 /// </remarks>
 public sealed class TheCallerTranscriptCountsEachThingOnceTests
 {
-    private const string Prefix = "testsToDelete-coai-counts-";
+    private const string Prefix = "counts-";
     private const string C02Agent = "303b2866f0b3022b2";
     private const string C07Depth1 = "207bc560f3fb5a452";
     private const string C07Depth2 = "2553a2f49d265a4e3";

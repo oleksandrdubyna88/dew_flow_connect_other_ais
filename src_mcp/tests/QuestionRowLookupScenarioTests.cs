@@ -167,7 +167,7 @@ public sealed class QuestionRowLookupScenarioTests : IAsyncLifetime
     [Fact]
     public async Task ALookupOutsideTheRoot_IsRefusedInTheNextTurn_AndNothingOutsideIsRead()
     {
-        Steer(Stream("Looking around.\n" + Block("list ..", "list " + Path.GetTempPath()), 100, 5), Stream("Nothing outside the folder; Mailer.cs sends it.", 200, 9));
+        Steer(Stream("Looking around.\n" + Block("list ..", "list " + TempDir.Root), 100, 5), Stream("Nothing outside the folder; Mailer.cs sends it.", 200, 9));
 
         var row = Row(await AskAsync());
 

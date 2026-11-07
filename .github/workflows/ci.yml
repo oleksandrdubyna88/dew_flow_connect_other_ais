@@ -57,6 +57,25 @@ jobs:
       - name: Test
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
 
+      # The end-of-run audit has teeth (E5 S6, plan D9; the template's step). LeftoversSelfTest leaks a folder on purpose, ONLY when COAI_LEFTOVERS_SELFTEST
+      # is set; this step is green only on a NON-zero exit with the audit's first line and the folder's name on its own line, and with nothing of the case left.
+      - name: The audit fails a run that leaves a claimed folder
+        run: |
+          set -o pipefail
+          owner="u$(id -u)"
+          for entry in "1:never disposed:selftest" "failed-dispose:disposed but not removed:selftest-failed"; do
+            IFS=: read -r value words what <<< "$entry"
+            if COAI_LEFTOVERS_SELFTEST="$value" ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests --filter-class "*LeftoversSelfTest" 2>&1 | tee "$RUNNER_TEMP/selftest.log"; then
+              echo "the end-of-run audit did not fail the run ($value)"; exit 1; fi
+            first=$(grep -E "(^|[[:space:]]:[[:space:]])coai tests: this run left [0-9]+ folder\(s\) it claimed.*[0-9]+ $words" "$RUNNER_TEMP/selftest.log" | grep -v "testsToDelete-[uw][0-9]" || true)
+            [ -n "$first" ] || { echo "the run failed, but not with the audit's first line (counts and '$words', no path) ($value)"; exit 1; }
+            grep -Eq "^[[:space:]]+$words: .*/testsToDelete-[uw][0-9]{1,10}-coai-$what-[A-Za-z0-9]{6}" "$RUNNER_TEMP/selftest.log" \
+              || { echo "the audit's message does not name the folder on a line of its own under '$words' ($value)"; exit 1; }
+            left=$(find "${TMPDIR:-/tmp}" -maxdepth 1 \( -iname "teststodelete-${owner}-coai-$what-*" -o -iname "teststodelete-${owner}-coai-run-*" \)) \
+              || { echo "the temp root could not be listed"; exit 1; }
+            [ -z "$left" ] || { echo "the run left this behind: $left"; exit 1; }
+          done
+
       # The bench is BUILT by the solution and is deliberately not a release asset, so this step is
       # the only thing that would ever notice it breaking. An instrument nobody checks reports
       # whatever it last happened to compile to.
@@ -187,14 +206,24 @@ jobs:
           fi
           node .github/scripts/suppressions-only-shrink.mjs ${ABSENT:+"$ABSENT"} \
             src_vs_code/eslint-suppressions.json "$RUNNER_TEMP/base-suppressions.json"
+      # The raw-temp baseline only shrinks (E5 S6; common/test-leftovers-baseline.md, The ratchet). Never the creation flag here. PR 945 is the one creation, recorded there.
+      - name: The raw-temp baseline only shrinks
+        if: github.event_name == 'pull_request' && github.event.pull_request.number != 945
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin "$BASE_SHA"
+          node .agents/conventions/tools/leftovers-check.mjs --repo . --baseline-shrinks --base "$BASE_SHA"
       - name: Plan lifecycle
         run: node .agents/conventions/tools/plan-lifecycle.mjs
       # The measurement scripts' own tests — today `scripts/lib/kimi.test.mjs`, the refusal of a Kimi probe scratch another
       # local user could read (the copied sign-in sits there until the scrub). A test CI never runs guards nothing. The
-      # glob is node's own, quoted so the shell does not expand it, so a new `scripts/**/*.test.mjs` is picked up without
+      # runner (E5 S2-B) sweeps the real temp root FIRST, as every run that creates the kind does (the rule's start-of-run sweep),
+      # then starts node's own glob, `node --test "scripts/**/*.test.mjs"`, so a new `scripts/**/*.test.mjs` is picked up without
       # touching this step. On Linux the mode-bit cases run; they skip only on Windows, which has none.
       - name: Probe script tests
-        run: node --test "scripts/**/*.test.mjs"
+        run: node scripts/run-lib-tests.mjs
       # The protection `main` is supposed to have is a FILE now — `.github/branch-protection.json` —
       # because branch protection is the one part of a repository's CI that is not IN the repository.
       # Nothing makes GitHub read it; what it buys is that the intent is reviewed, and that the drift
@@ -271,20 +300,82 @@ jobs:
       - name: Conventions submodule
         run: git submodule update --init --depth 1 .agents/conventions
 
+      # E5 S4 (must-not-copy #12, the plan's P12): the Node run folder on macOS, where `os.tmpdir()` is /var/folders/… and a link into /private/var. W10 (owned.test.mjs) makes the
+      # run folder under it and asserts the wrap's `isMine` both ways; the proofs and the runner's refusals run here for the first time. Seconds, not minutes; no `npm ci`.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      # E5 S6: the Node guard (testLeftovers.test.mjs) reads workflows and needs `yaml`, which the mount carries after this `npm ci`; the C# guard needs only node and the mount.
+      - name: Shared instruction dependencies
+        run: npm ci --ignore-scripts --prefix .agents/conventions
+      - name: The Node run folder and its refusals (macOS, #12), and the Node guard
+        working-directory: src_vs_code
+        run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs src/test/testLeftovers.test.mjs
+      - name: The scripts' run folder and its refusals (macOS)
+        run: node scripts/run-lib-tests.mjs scripts/runFolder.test.mjs
+
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
+      # E5 S3. Order: who the runner is; the build; the layout self-test (its values are printed as test warnings; every identity read of the
+      # leftovers helper fails loudly if the layout does not hold); the Leftovers namespace; then the suites, each only when the build was green.
+      # The machine, printed; anything but Arm64 is red with a clear message (the Darwin layout was measured on Arm64 only).
+      - name: The runner is Arm64 (uid and system printed)
+        run: |
+          arch="$(uname -m)"
+          echo "uname -m: $arch; uid: $(id -u); gid: $(id -g); $(sw_vers -productName) $(sw_vers -productVersion)"
+          [ "$arch" = "arm64" ] || { echo "this runner is $arch, not arm64: the Darwin layout was measured on Arm64 only, and the x86-64 entry points were never run"; exit 1; }
+
       - name: Build
+        id: build
         run: dotnet build dew_flow_connect_other_ais.slnx -c Release
 
+      # The runner's architecture as .NET sees it and every value of the self-test (offsets of struct stat checked against getuid, a known file,
+      # a known mtime and stat(1)). The grep proves the values were PRINTED and that the uid read is the shell's.
+      - name: The stat layout self-test
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests --filter-class "*DarwinLayoutTests" 2>&1 | tee layout.log
+          grep -Eq "darwin layout: arch=Arm64" layout.log || { echo "the self-test did not report ProcessArchitecture Arm64"; exit 1; }
+          grep -Eq "darwin layout: getuid=$(id -u)\$" layout.log || { echo "the self-test did not report the shell's uid $(id -u)"; exit 1; }
+          grep -Eq "darwin layout: file: dev=" layout.log || { echo "the self-test did not print the values it read"; exit 1; }
+
+      # The helper's own tests alone first, so a defect in the library is named before the whole suite buries it.
+      - name: Leftovers
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests --filter-namespace "CoaiMcp.Tests.Leftovers"
+
       - name: Test
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
 
+      # E5 S6: the same teeth as build-test's step, on macOS (bash 3.2 and BSD grep and find: the commands are the template's portable subset).
+      - name: The audit fails a run that leaves a claimed folder
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          owner="u$(id -u)"
+          for entry in "1:never disposed:selftest" "failed-dispose:disposed but not removed:selftest-failed"; do
+            IFS=: read -r value words what <<< "$entry"
+            if COAI_LEFTOVERS_SELFTEST="$value" ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests --filter-class "*LeftoversSelfTest" 2>&1 | tee "$RUNNER_TEMP/selftest.log"; then
+              echo "the end-of-run audit did not fail the run ($value)"; exit 1; fi
+            first=$(grep -E "(^|[[:space:]]:[[:space:]])coai tests: this run left [0-9]+ folder\(s\) it claimed.*[0-9]+ $words" "$RUNNER_TEMP/selftest.log" | grep -v "testsToDelete-[uw][0-9]" || true)
+            [ -n "$first" ] || { echo "the run failed, but not with the audit's first line (counts and '$words', no path) ($value)"; exit 1; }
+            grep -Eq "^[[:space:]]+$words: .*/testsToDelete-[uw][0-9]{1,10}-coai-$what-[A-Za-z0-9]{6}" "$RUNNER_TEMP/selftest.log" \
+              || { echo "the audit's message does not name the folder on a line of its own under '$words' ($value)"; exit 1; }
+            left=$(find "${TMPDIR:-/tmp}" -maxdepth 1 \( -iname "teststodelete-${owner}-coai-$what-*" -o -iname "teststodelete-${owner}-coai-run-*" \)) \
+              || { echo "the temp root could not be listed"; exit 1; }
+            [ -z "$left" ] || { echo "the run left this behind: $left"; exit 1; }
+          done
+
       - name: Test the Team server
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests
 
       - name: Test the bench
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./src_bench/CoaiBench.Tests/bin/Release/net10.0/CoaiBench.Tests
 
   # THE MCP SUITE ON WINDOWS, on every pull request.
@@ -292,8 +383,9 @@ jobs:
   # The Vibe path budget, the private-folder DACLs (PrivateFolder) and the junction and read-only-folder cases are Windows facts: on
   # Linux and macOS their tests skip, so until this job ran them a defect there waited for the owner's machine. The runner is ELEVATED,
   # so a folder it makes may be owned by Administrators (PrivateFolderWindowsTests.E1 accepts that), and a denial that does not bite an
-  # elevated account skips its test with the reason (the Proven pattern of ConsultFailureScenarioTests). Only the MCP server's suite:
-  # the others have no Windows-only behaviour yet.
+  # elevated account skips its test with the reason (the Proven pattern of ConsultFailureScenarioTests). Only the MCP server's suite
+  # runs whole: the others have no Windows-only behaviour yet — but the Team server's run-folder proofs run too (E5 S3, plan D8's merge-gate
+  # table), and Step 0 measures who owns a new file before any helper code does.
   windows:
     name: Windows · mcp
     runs-on: windows-latest
@@ -303,8 +395,59 @@ jobs:
         with:
           persist-credentials: false
 
+      # Step 0 (E5 S3, plan D8): the facts the leftovers helper's Windows assertions are written against, measured BEFORE any helper code runs, and
+      # printed. A new file here is owned by BUILTIN\Administrators (the runner is elevated), not by the caller's SID: the kernel-owner key of the
+      # sweep would otherwise not separate two fixtures. A runner image that changes either fact turns this step red, naming what to re-read.
+      # It uses RUNNER_TEMP (job-scoped), never a machine temp path.
+      - name: Step 0 — who owns a new file here
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $caller = $id.User
+          $elevated = ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          $admins = New-Object Security.Principal.SecurityIdentifier([Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+          $dir = Join-Path $env:RUNNER_TEMP ('step0-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+          [IO.Directory]::CreateDirectory($dir) | Out-Null
+          $file = Join-Path $dir 'probe.txt'
+          [IO.File]::WriteAllText($file, 'step 0')
+          $fileOwner = (Get-Acl -LiteralPath $file).GetOwner([Security.Principal.SecurityIdentifier])
+          $dirOwner = (Get-Acl -LiteralPath $dir).GetOwner([Security.Principal.SecurityIdentifier])
+          Write-Host "step 0: caller SID = $($caller.Value); token owner SID = $($id.Owner.Value); elevated = $elevated"
+          Write-Host "step 0: new file owner = $($fileOwner.Value); new folder owner = $($dirOwner.Value)"
+          Write-Host "step 0: EqualSid(file owner, caller) = $($fileOwner.Equals($caller)); file owner is BUILTIN\Administrators = $($fileOwner.Equals($admins))"
+          Remove-Item -LiteralPath $dir -Recurse -Force
+          # The facts the helper's Windows assertions are written against (measured on mcp PR #58: dew_flow_mcp LeftoversSweepTests.cs:587-589).
+          if ($null -eq $caller) { throw 'step 0: the caller has no user SID' }
+          if (-not $elevated) { throw 'step 0: the runner is no longer elevated — re-read every Windows assertion of the leftovers helper (must-not-copy #6)' }
+          if (-not $fileOwner.Equals($admins)) { throw "step 0: a new file is owned by $($fileOwner.Value), not BUILTIN\Administrators — re-read the Windows assertions (#6)" }
+          if ($fileOwner.Equals($caller)) { throw 'step 0: the file owner equals the caller SID — the kernel-owner key would not separate the two fixtures (#6)' }
+          exit 0
+
       - name: Conventions submodule
         run: git submodule update --init --depth 1 .agents/conventions
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      # E5 S6: the Node guard reads workflows and needs `yaml`, which the mount carries after this `npm ci` (the C# guard needs only node and the mount).
+      - name: Shared instruction dependencies
+        run: npm ci --ignore-scripts --prefix .agents/conventions
+      # E5 S2-B (plan Q6, D8): the extension's start-of-run sweep is the MOUNTED reference with the coai token; on Windows it
+      # must list and change nothing (F16 interim). The test file runs the real wrapper against the real reference here, with a
+      # fixture that is collectible on every other key — a valid owner-form claim of this owner, an old mtime, a gone owner,
+      # inside the profile — so that survival can come only from the Windows gate, never from a malformed claim. It needs no
+      # `npm ci`: its import graph is node: modules and repository files only (L5 of the same file pins that). That sentence is about the sweep test; `testLeftovers.test.mjs` (E5 S6) runs the
+      # mounted Node guard, which needs the mount's `npm ci` of the step above.
+      #
+      # E5 S4: through the RUNNERS, never a bare `node --test` (a test file refuses to start outside its run folder). The extension's runner makes the owned run folder,
+      # fails closed before any test (exit 78 and one line when it cannot make or claim it), and runs exactly these files; the scripts' runner does the same for the proof
+      # of the `scripts/` scope. Both proofs force the five failures (no folder, no claim, each of TEMP, TMP, TMPDIR different) and assert the sentinel test never loaded.
+      - name: The Node sweep lists and changes nothing on Windows (F16, Q6); the Node run folder and its refusals
+        working-directory: src_vs_code
+        run: node scripts/run-tests.mjs src/test/leftoversSweep.test.mjs src/test/runFolder.test.mjs src/test/owned.test.mjs src/test/runTests.test.mjs src/test/testLeftovers.test.mjs
+      - name: The scripts' run folder and its refusals
+        run: node scripts/run-lib-tests.mjs scripts/runFolder.test.mjs
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -315,6 +458,51 @@ jobs:
 
       - name: Test
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe
+
+      # The pin of the elevated-Windows limit must RUN here and PASS (E5 epoch 7, F31): the test skips off Windows or without elevation, and a skip is not a pass.
+      # The hosted runner is elevated, so it must show `succeeded: 1` on its own line in this log.
+      - name: The pin of the elevated-Windows limit ran and passed
+        shell: pwsh
+        run: |
+          $log = (& ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe --filter-method '*AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun*' 2>&1 | Out-String)
+          $code = $LASTEXITCODE
+          Write-Host $log
+          if ($code -ne 0) { throw "the pin failed (exit $code)" }
+          if ($log -notmatch 'succeeded: 1\b') { throw 'the pin did not pass: a skip is not a pass (the runner must be elevated)' }
+          exit 0
+
+      # The same teeth in PowerShell (the template's step). Both values; a listing error is red, never ignored.
+      - name: The audit fails a run that leaves a claimed folder
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $exe = './src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe'
+          $cases = @(
+            @{ Value = '1'; Words = 'never disposed'; What = 'selftest' },
+            @{ Value = 'failed-dispose'; Words = 'disposed but not removed'; What = 'selftest-failed' }
+          )
+          foreach ($case in $cases) {
+            $env:COAI_LEFTOVERS_SELFTEST = $case.Value
+            $log = (& $exe --filter-class '*LeftoversSelfTest' 2>&1 | Out-String)
+            $code = $LASTEXITCODE
+            Remove-Item Env:COAI_LEFTOVERS_SELFTEST
+            Write-Host $log
+            if ($code -eq 0) { throw "the end-of-run audit did not fail the run ($($case.Value))" }
+            $firstLines = @($log -split "`r?`n" | Where-Object { $_ -match ('coai tests: this run left \d+ folder\(s\) it claimed.*\d+ ' + [regex]::Escape($case.Words)) -and $_ -notmatch 'testsToDelete-[uw][0-9]' })
+            if ($firstLines.Count -eq 0) { throw "the run failed, but not with the audit's first line (counts and '$($case.Words)', no path) ($($case.Value))" }
+            $named = '(?m)^\s*' + [regex]::Escape($case.Words) + ': .*[\\/]testsToDelete-[uw][0-9]{1,10}-coai-' + [regex]::Escape($case.What) + '-[A-Za-z0-9]{6}\s*$'
+            if ($log -notmatch $named) { throw "the audit's message does not name the folder on a line of its own under '$($case.Words)' ($($case.Value))" }
+            $left = @(Get-ChildItem -Force -LiteralPath $env:TMP -ErrorAction Stop | Where-Object { $_.Name -match ('^testsToDelete-[uw][0-9]{1,10}-coai-(' + [regex]::Escape($case.What) + '|run)-') })
+            if ($left.Count -gt 0) { throw "the run left this behind: $($left.FullName -join ', ')" }
+          }
+          # Actions appends `exit $LASTEXITCODE` to a pwsh step: the self-test's EXPECTED non-zero exit would leak out as the step's result
+          # (measured on dew_flow_mcp PR #58). Every check above throws on failure, so reaching here is green.
+          exit 0
+
+      # The Team server's own wiring of the run folder (E5 S3): its RunTempStart.cs made the folder, its TestEntryPoint.cs gates the run. The whole
+      # server suite runs on Windows at release time (release.yml, server-binaries); here only the run-folder proofs, which need no server.
+      - name: Run folder — Team server
+        run: ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests.exe --filter-class "*RunFolderTests"
 
   extension:
     name: extension · typecheck · test · package

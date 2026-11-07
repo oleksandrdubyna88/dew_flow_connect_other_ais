@@ -163,6 +163,7 @@ env "COAI_TOKEN_FILE=$TOKEN_FILE" "$RELEASE" --check-token \
 # an unauthenticated GET of a release asset, checked by the checksum published beside it.
 ASSET="coai-server-$VERSION-$RID.tar.gz"
 BASE="$RELEASES/server-v$VERSION"
+# testsToDelete-exempt: raw-temp — a product deploy script on a server, in a root-only folder; no test run reaches this line, pinned by E10
 STAGE=$(mktemp -d /root/.coai-deploy.XXXXXX)
 # NOT /tmp: the script unpacks what it is given and /tmp is world-writable, so anything else on the
 # box could pre-create a name as a symlink and have root extract through it.

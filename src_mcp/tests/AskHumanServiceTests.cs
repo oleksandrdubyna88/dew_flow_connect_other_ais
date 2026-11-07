@@ -387,7 +387,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         var cases = new (string Name, QuestionConsultRecord Record, string Why)[]
         {
             ("another caller", genuine with { Id = QuestionConsultStore.NewId(), Caller = "somebody-else" }, "caller"),
-            ("another repository", genuine with { Id = QuestionConsultStore.NewId(), RepoPath = Path.GetTempPath() }, "repositor"),
+            ("another repository", genuine with { Id = QuestionConsultStore.NewId(), RepoPath = TempDir.Root }, "repositor"),
             ("still consulting", genuine with { Id = QuestionConsultStore.NewId(), Status = QuestionConsultStatuses.Consulting, EndedUtc = string.Empty }, "still"),
             ("too old", genuine with { Id = QuestionConsultStore.NewId(), EndedUtc = QuestionConsultStore.Stamp(DateTime.UtcNow - QuestionPolicy.ConsultProofAge - TimeSpan.FromMinutes(1)) }, "minutes"),
         };

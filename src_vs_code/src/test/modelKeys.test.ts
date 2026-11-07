@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { copyWouldReplace, ignoredWorkspaceValues, Inspected, MODEL_KEYS, SAFETY_KEYS, userLayerReader } from '../modelKeys';

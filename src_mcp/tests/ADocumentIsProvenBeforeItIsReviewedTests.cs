@@ -33,7 +33,7 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
     /// shared temp folder, where a second run (or a person) using the same name changes the result (C10 of
     /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).
     /// </summary>
-    private readonly string _elsewhere = Directory.CreateTempSubdirectory("testsToDelete-doc-elsewhere-").FullName;
+    private readonly string _elsewhere = Directory.CreateTempSubdirectory("doc-elsewhere-").FullName;
 
     public void Dispose()
     {

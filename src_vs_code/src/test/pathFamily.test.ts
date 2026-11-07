@@ -1,9 +1,10 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs';
 import { hostExecutableSide } from '../hostSide';
+import { tempRoot } from './tempRoot';
 import { promises as fsp } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { ROOT_ANSWER_LIFETIME_MS, RootExistence, directoryAt, executableHere, existingHere, familyOf, fileAt, otherSideHere, pathForThisSide, qualified, spelledForTheOtherOs, systemDriveOf, useFileProbe, type ExecutableSide, type FilePresence } from '../pathFamily';
@@ -137,7 +138,7 @@ test('an unspellable root is ABSENT on the real stat, as the server\'s probe ans
   for (const row of unspellable) {
     assert.equal(await real(qualified(row.text('path'), process.platform === 'win32', 'C:')), false, `${row.where}: ${row.text('why')}`);
   }
-  assert.equal(await real(path.join(os.tmpdir(), 'coai-no-such<folder')), false, 'a name Windows cannot spell is no folder either');
+  assert.equal(await real(path.join(tempRoot(), 'coai-no-such<folder')), false, 'a name Windows cannot spell is no folder either');
 });
 
 test('an answer holding an unknown root is not kept: the next render asks the disk again', async () => {

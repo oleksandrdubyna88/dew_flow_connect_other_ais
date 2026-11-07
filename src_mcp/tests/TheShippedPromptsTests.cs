@@ -86,7 +86,7 @@ public sealed class TheShippedPromptsTests
         // two lists of twenty-five together.
         foreach (var choice in Shipped.Roles.SelectMany(r => r.Prompts))
         {
-            var act = () => new RolePrompts(Path.GetTempPath()).ForChoice(choice);
+            var act = () => new RolePrompts(TempDir.Root).ForChoice(choice);
             act.Should().NotThrow($"{choice.Id}.md must be an EmbeddedResource");
         }
     }

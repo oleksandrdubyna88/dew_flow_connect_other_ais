@@ -23,13 +23,14 @@
 // The pure core is lib/host-facts.mjs (this file runs on import, so a test cannot import it — hence the split).
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { collectHostFacts } from './lib/host-facts.mjs';
 import { ownedRoot } from './lib/kimi-home.mjs';
 import { linuxProcesses, waitForNoOtherKimi } from './lib/proc.mjs';
 import { minimalEnv } from './lib/vibe.mjs';
+import { startOwnedScratch } from '../src_vs_code/scripts/ownedRun.mjs';
 
 const EXIT = { ok: 0, badRequest: 65, unavailable: 69 };
 const FLAGS = ['--series', '--scratch', '--kimi', '--coai-mcp'];
@@ -90,7 +91,9 @@ async function main() {
     return EXIT.unavailable;
   }
   const own = args.values['--scratch'] === undefined;
-  const scratch = own ? mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-native-facts-')) : args.values['--scratch'];
+  // Without --scratch the scratch is an owned folder of the wrap (claimed by this process), removed by `end()` below — and at exit if the script ends first.
+  const ownedScratch = own ? await startOwnedScratch({ what: 'native-facts', prefix: 'probe-native-linux-host' }) : undefined;
+  const scratch = own ? ownedScratch.path : args.values['--scratch'];
   try {
     mkdirSync(scratch, { recursive: true, mode: 0o700 });
     const home = homedir();
@@ -106,7 +109,7 @@ async function main() {
     process.stdout.write(text);
     return EXIT.ok;
   } finally {
-    if (own) rmSync(scratch, { recursive: true, force: true });
+    ownedScratch?.end();
   }
 }
 

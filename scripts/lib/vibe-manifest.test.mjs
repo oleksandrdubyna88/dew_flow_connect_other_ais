@@ -1,16 +1,20 @@
 // node --test scripts/lib/*.test.mjs — the manifest script's per-platform write (DL3 of research/PLAN_kimi_and_vibe_on_linux.md) and its
 // inventory of a home that holds the .env sign-in link (DL2). Runs nothing of Vibe's; makes folders only under this user's own temp
 // folder, and removes them.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { after, before as beforeAll, test } from 'node:test';
 import { inventoryOf, platformOf, unstaged, withEntry, withoutSignInLink } from './vibe-manifest.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 
 const WINDOWS = process.platform === 'win32';
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-vibe-manifest-test-'));
-after(() => rmSync(base, { recursive: true, force: true }));
+// The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
+let base;
+const scope = wrap.cleanupScope();
+beforeAll(() => { base = wrap.ownedDir(scope, 'vibe-manifest', { parent: realpathSync.native(wrap.tempRoot()) }); });
+after(() => scope.close());
 
 const WIN = { version: '2.26.1', platform: 'win32', pinned: [{ path: 'p', sha256: 'a'.repeat(64), bytes: 1 }] };
 const OLD = { version: '2.25.0', pinned: [] }; // written before the field existed

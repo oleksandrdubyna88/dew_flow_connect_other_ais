@@ -12,17 +12,22 @@
 //     src_mcp/src/bin/Debug/net10.0/coai-mcp.exe \
 //     '[{"id":"claude","runtime":"claude","model":""}]'
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, readFileSync, existsSync, readdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { startOwnedRun } from '../src_vs_code/scripts/ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'live-consult' });
+
 
 const repo = process.argv[2];
 const exe = process.argv[3];
 const vendors = JSON.parse(process.argv[4]);
 const planted = 5417;
 
-const run = async (vendor) => {
-  const data = mkdtempSync(join(tmpdir(), `coai-live-${vendor.id}-`));
+const consultVendor = async (vendor) => {
+  // Inside this script's run folder (one per vendor: the vendor id is part of the name, and the folder is removed with the run).
+  const data = join(run.folder, `live-${vendor.id}`);
+  mkdirSync(data, { mode: 0o700 }); // owner-only, as mkdtemp made it
   const server = spawn(exe, [], {
     stdio: ['pipe', 'pipe', 'pipe'],
     env: {
@@ -137,7 +142,7 @@ const run = async (vendor) => {
 for (const vendor of vendors) {
   console.log(`\n===== ${vendor.id} (${vendor.runtime}) =====`);
   try {
-    const r = await run(vendor);
+    const r = await consultVendor(vendor);
     console.log(`turn1: ${r.first.ok ? 'ok' : 'REFUSED'} ${r.first.seconds}s ${r.first.error ? '\n  ' + r.first.error.slice(0, 300) : ''}`);
     if (r.second) {
       console.log(`turn2: ${r.second.ok ? 'ok' : 'REFUSED'} ${r.second.seconds}s turn=${r.second.turnIndex} contextKept=${r.second.keptContext}${r.second.error ? '\n  ' + r.second.error.slice(0, 300) : ''}`);

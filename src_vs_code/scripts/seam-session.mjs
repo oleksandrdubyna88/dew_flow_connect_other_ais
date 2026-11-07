@@ -8,6 +8,7 @@
  * test spawn a stand-in that dies mid-write.</p>
  */
 import { spawn } from 'node:child_process';
+import { join } from 'node:path';
 
 /**
  * ONE live server, driven over the transport a real client uses.
@@ -179,4 +180,12 @@ export function answerOf(reply) {
   } catch {
     return { error: text };
   }
+}
+
+/**
+ * The environment entries that make `home` the only home the server sees: `HOME` (read first by the server) and `USERPROFILE`
+ * (Windows), and `CODEX_HOME` pointing into it so an inherited `CODEX_HOME` cannot win over them.
+ */
+export function homeEnvironment(home) {
+  return { HOME: home, USERPROFILE: home, CODEX_HOME: join(home, '.codex') };
 }

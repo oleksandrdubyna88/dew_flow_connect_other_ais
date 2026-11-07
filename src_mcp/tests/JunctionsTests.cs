@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// leaving the person's folder whole.
 /// </summary>
 /// <remarks>
-/// <para>Every junction here is made INSIDE this test's own <c>testsToDelete-junc-</c> folder, to a sibling folder in the same
+/// <para>Every junction here is made INSIDE this test's own <c>junc-</c> folder, to a sibling folder in the same
 /// folder that plays "the person's credentials" — never to the real <c>~/.kimi-code</c>, never to another test's folder
 /// (test-leftovers.md): a leftover is swept by a recursive remove, and Windows PowerShell 5.1's walks INTO a junction.</para>
 /// <para>The tests' own maker (<see cref="DirectoryLink"/>, <c>mklink /J</c>) stays the INDEPENDENT oracle: it does not delegate to
@@ -25,7 +25,7 @@ public sealed class JunctionsTests : IDisposable
 {
     private static readonly byte[] Token = Encoding.UTF8.GetBytes("""{"refresh_token":"not-a-real-one"}""");
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-junc-");
+    private readonly TempDir _dir = TempDir.For("junc-");
 
     private string Target => _dir.At("persons-credentials");
 
@@ -408,10 +408,10 @@ public sealed class JunctionsTests : IDisposable
     public void ADisposalOfAHomeMadeWithTheProductsJunction_LeavesThePersonsFolderWhole(string deleter)
     {
         using var standIn = WindowsStandIn.Begin();
-        // Two folders of this test, both testsToDelete-: the person's must outlive the deletion of the home to be looked at,
+        // Two folders of this test, both temp folders: the person's must outlive the deletion of the home to be looked at,
         // and TempDir.Dispose — the tests' own path — removes its folder whole.
-        using var persons = TempDir.For("testsToDelete-junc-persons-");
-        using var home = TempDir.For("testsToDelete-junc-home-");
+        using var persons = TempDir.For("junc-persons-");
+        using var home = TempDir.For("junc-home-");
         foreach (var name in (string[])["kimi-code-env.json", "kimi-code.json"])
         {
             File.WriteAllBytes(persons.At(name), Token);
@@ -449,8 +449,8 @@ public sealed class JunctionsTests : IDisposable
         // The person's folder is NOT inside the tree being deleted (E4.1 deviation 17: two TempDirs). Inside it, whether the deleter meets the link before the
         // folder it points at is the file system's enumeration order — NTFS happens to sort "home" before "persons", ext4 hashes names — and a target deleted
         // first is simply gone, which is not a loss anybody can see (PR #817's Linux job, 2026-10-16).
-        using var person = TempDir.For("testsToDelete-junc-lost-person-");
-        var scope = TempDir.For("testsToDelete-junc-lost-");
+        using var person = TempDir.For("junc-lost-person-");
+        var scope = TempDir.For("junc-lost-");
         try
         {
             var persons = person.At("persons");

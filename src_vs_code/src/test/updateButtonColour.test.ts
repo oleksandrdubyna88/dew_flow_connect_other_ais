@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';

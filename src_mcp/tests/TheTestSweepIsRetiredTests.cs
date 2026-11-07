@@ -96,7 +96,6 @@ public sealed class TheTestSweepIsRetiredTests
         using var root = TempDir.For("retired-sweep-");
 
         StartOfRun.Run(Path.Combine(root, "not-there"), TempDirsAreSwept.Rule).Should().Be(0);
-        StartOfRun.RunFolders(Path.Combine(root, "not-there"), string.Empty).Should().Be(0);
     }
 
     [Fact]
@@ -109,28 +108,10 @@ public sealed class TheTestSweepIsRetiredTests
         text.Should().Contain("EnumerateDirectories", "the scan must still see what it knows is there");
     }
 
-    /// <summary>[S2-A gate finding 1] The legacy run folders are a count of their own, and this run's own folder is not in it.</summary>
-    [Fact]
-    public void TheLegacyRunFolders_AreCountedOnTheirOwnLine_ExceptThisRunsOwn()
-    {
-        using var root = TempDir.For("retired-sweep-");
-        foreach (var name in (string[])["testsToDelete-coai-run-abc123", "testsToDelete-coai-run-def456", "testsToDelete-coai-run-xyz", "testsToDelete-coai-runabc123",
-            "testsToDelete-u1000-coai-run-abc123", "coai-panel-x"])
-        {
-            Directory.CreateDirectory(Path.Combine(root, name));
-        }
-
-        File.WriteAllText(Path.Combine(root, "testsToDelete-coai-run-aaaaaa"), "a file, not a directory");
-
-        StartOfRun.RunFolders(root, Path.Combine(root, "testsToDelete-coai-run-def456")).Should().Be(1, "abc123 only: def456 is this run's own, the rest are no run folder");
-        StartOfRun.Run(root, TempDirsAreSwept.Rule).Should().Be(1, "the two counts never mix: coai-panel-x is the only old coai name");
-    }
-
     [Fact]
     public void TheSentences_NameTheNumberTheRootAndWhereToGo()
     {
         StartOfRun.Sentence(0, "/tmp").Should().Be("run: no old coai-* leftovers in /tmp");
         StartOfRun.Sentence(1, "/tmp").Should().Contain("1 old coai-* directory in /tmp").And.Contain("The one-off clean-up");
-        StartOfRun.LegacySentence(3, "/tmp").Should().Contain("3 legacy testsToDelete-coai-run-* directories").And.Contain("a run still going");
     }
 }

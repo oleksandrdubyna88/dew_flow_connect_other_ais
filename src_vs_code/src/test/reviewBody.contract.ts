@@ -18,6 +18,7 @@
  * <p>Like its siblings, it reads COAI_CONTRACT_URL from the runner (scripts/run-contract.mjs) and throws rather than
  * skipping when it is missing: a contract test that quietly does nothing is a green tick over an assertion nobody made.</p>
  */
+import '../../scripts/inRunFolder.cjs';
 import * as assert from 'node:assert';
 import { createHmac } from 'node:crypto';
 import { test } from 'node:test';

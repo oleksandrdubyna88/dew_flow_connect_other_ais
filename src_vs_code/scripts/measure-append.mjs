@@ -63,6 +63,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { noticeTool } from './noticeTool.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'measure-append' });
+
 
 const HERE = fileURLToPath(import.meta.url);
 
@@ -153,6 +157,7 @@ const each = Number(counts[1] ?? 500);
  */
 const dotnet = Number(args.find((a) => a.startsWith('--dotnet='))?.slice('--dotnet='.length) ?? 0);
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const home = join(chosen ?? tmpdir(), `coai-append-${process.pid}`);
 mkdirSync(home, { recursive: true });
 

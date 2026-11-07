@@ -18,7 +18,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class RoundAuthorsTableTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-coai-authors-table-");
+    private readonly TempDir _dir = TempDir.For("authors-table-");
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     public void Dispose()

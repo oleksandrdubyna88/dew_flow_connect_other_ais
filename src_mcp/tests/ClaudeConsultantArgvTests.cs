@@ -12,9 +12,8 @@ namespace CoaiMcp.Tests;
 /// <remarks>
 /// <para><b>These assert what is SENT, not what it does.</b> A flag in an argv is a request to the CLI; whether
 /// the CLI honours it is a fact about the CLI, and a unit test cannot see it (testing.md, <i>Asserting that you
-/// SENT a protective option is not testing that it protects</i>). The evidence of EFFECT is the live probe,
-/// <c>scripts/probe-claude-consultant-confinement.mjs</c>, and its record,
-/// <c>research/RESULTS_claude_consultant_confinement.md</c>: the supported argv below — the same flags, with
+/// SENT a protective option is not testing that it protects</i>). The evidence of EFFECT is the live probe
+/// recorded in <c>research/RESULTS_claude_consultant_confinement.md</c> (its line 4 names the script): the supported argv below — the same flags, with
 /// stream-json in place of json so the tool calls are visible — was confined 9 of 9 on Windows claude 2.1.258,
 /// fresh and resumed, with the sign-in intact. The unsupported argv held 9 of 9 on WSL claude 2.1.197, but the
 /// same shape LEAKED an outside read on Windows 2.1.258 on 2026-10-01, so it is not called confinement anywhere —

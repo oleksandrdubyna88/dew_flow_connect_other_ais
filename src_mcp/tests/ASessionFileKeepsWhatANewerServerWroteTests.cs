@@ -28,7 +28,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
     private const string Repo = "D:/fixture-bag";
     private const string Branch = "main";
 
-    private readonly TempDir _data = TempDir.For("testsToDelete-session-bag-");
+    private readonly TempDir _data = TempDir.For("session-bag-");
 
     /// <summary>The placeholder for the first role of <c>state.config.roles</c>, whatever it is called.</summary>
     private const string FirstRole = "{role}";
@@ -519,7 +519,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
     /// <summary>A real repository with one commit on <c>main</c> — <c>open</c> resolves the branch and prunes the repository it is given.</summary>
     private async Task<string> RepositoryWithOneCommit()
     {
-        var repo = TempDir.For("testsToDelete-session-bag-repo-");
+        var repo = TempDir.For("session-bag-repo-");
         _extra.Add(repo);
         var launcher = new ProcessLauncher();
         await File.WriteAllTextAsync(repo.At("a.txt"), "x\n", Ct);

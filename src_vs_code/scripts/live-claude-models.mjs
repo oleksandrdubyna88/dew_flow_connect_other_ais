@@ -37,13 +37,17 @@
 import { spawn } from 'node:child_process';
 
 import { answeredAsAsked, familyOf, modelThatAnswered } from '../out/claudeModels.js';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'live-models' });
+
 
 const CAP_MS = 60_000;
 const KNOWN = 'sonnet';
 /** A name no CLI will ever resolve. If this one day fails, the fourth assertion has changed. */
 const NONSENSE = 'no-such-family-4d9f';
 
-function run(args) {
+function runClaude(args) {
   return new Promise((resolve) => {
     const child = spawn(process.env['CLAUDE_CLI'] ?? 'claude', args, { shell: false });
     // The same EOF the probe now sends, and for the same measured reason: without it the CLI waits
@@ -67,7 +71,7 @@ function run(args) {
   });
 }
 
-const ask = (model) => run(['--model', model, '-p', 'hi', '--output-format', 'json']);
+const ask = (model) => runClaude(['--model', model, '-p', 'hi', '--output-format', 'json']);
 
 const broken = [];
 const say = (ok, what, detail = '') => {
@@ -77,7 +81,7 @@ const say = (ok, what, detail = '') => {
   }
 };
 
-const version = await run(['--version']);
+const version = await runClaude(['--version']);
 if (version.code !== 0) {
   console.log(`The Claude CLI did not answer --version. Nothing here is a contract result.\n${version.output.trim()}`);
   process.exit(2);

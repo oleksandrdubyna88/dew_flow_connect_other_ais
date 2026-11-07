@@ -1,7 +1,8 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { capture } from '../versionProbe';
 import { test } from 'node:test';
-import { tmpdir } from 'node:os';
+import { tempRoot } from './tempRoot';
 import { ProcessHandle, launch, workingDirectory } from '../processLauncher';
 
 /**
@@ -226,7 +227,7 @@ test('a child that never started still says why', async () => {
 test('a shell is never pointed at the opened workspace by omission', () => {
   const workspace = process.cwd();
 
-  assert.strictEqual(workingDirectory(true, undefined), tmpdir(), 'a shell inherited the workspace');
+  assert.strictEqual(workingDirectory(true, undefined), tempRoot(), 'a shell inherited the workspace');
   assert.notStrictEqual(workingDirectory(true, undefined), workspace);
   assert.strictEqual(workingDirectory(true, 'C:/chosen'), 'C:/chosen', 'an explicit choice was overridden');
   assert.strictEqual(workingDirectory(false, undefined), undefined, 'a non-shell child was moved for no reason');

@@ -39,7 +39,7 @@ public sealed class KimiNetworkSignInSettingTests : IDisposable
     [Fact]
     public void TheSettingsFile_CarriesIt_AsABooleanOrAString_AndTheEnvironmentWins()
     {
-        using var dir = TempDir.For("testsToDelete-kimi-netsetting-");
+        using var dir = TempDir.For("kimi-netsetting-");
         File.WriteAllText(Path.Combine(dir.Path, SettingsFile.Name), """{"COAI_KIMI_ALLOW_NETWORK_SIGNIN": true}""");
 
         PanelSettings.FromEnvironment(SettingsFile.Layer(dir.Path, _ => null, _ => { })).KimiAllowNetworkSignIn.Should().BeTrue("the extension's file turned it on");
