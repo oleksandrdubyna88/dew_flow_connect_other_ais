@@ -617,6 +617,28 @@ test('a v17-shaped paste, whose gate half carries a retired sentence, is older o
   assert.deepEqual(snippetStatus(stale), { kind: 'older', behind: ['coai-snippet'], current: ARTEFACT_VERSION });
 });
 
+test('a retired sentence OUTSIDE the gate half does not make it older', () => {
+  const retired = RETIRED_TEXT[0];
+  const snippet = claudeSnippet();
+  const before = `# Notes\nThe old rule said to pass ${retired.text}.\n\n${snippet}`;
+  const documentHalf = KNOWN_HALVES[1].text;
+  const inOtherHalf = snippet.replace(documentHalf, `${documentHalf}\nChangelog: it used to say ${retired.text}.\n`);
+  const after = `${snippet}\n\nA user note quoting ${retired.text}.\n`;
+
+  assert.notEqual(inOtherHalf, snippet, 'the fixture did not change the paste, so it proves nothing');
+  assert.deepEqual(snippetStatus(before), { kind: 'current', current: ARTEFACT_VERSION });
+  assert.deepEqual(snippetStatus(inOtherHalf), { kind: 'current', current: ARTEFACT_VERSION });
+  assert.deepEqual(snippetStatus(after), { kind: 'current', current: ARTEFACT_VERSION });
+});
+
+test('a stale gate block above a fresh paste is still older, by its retired sentence', () => {
+  const retired = RETIRED_TEXT[0];
+  const gate = KNOWN_HALVES[0].text;
+  const staleGate = `${gate}\nPass ${retired.text}.\n`;
+
+  assert.deepEqual(snippetStatus(`${staleGate}\n${claudeSnippet()}`), { kind: 'older', behind: ['coai-snippet'], current: ARTEFACT_VERSION });
+});
+
 test('the current paste stays current, so no retired sentence marks a fresh one stale', () => {
   assert.deepEqual(snippetStatus(claudeSnippet()), { kind: 'current', current: ARTEFACT_VERSION });
 });

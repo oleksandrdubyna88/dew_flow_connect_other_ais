@@ -4211,7 +4211,7 @@ A marker cannot tell an old paste of the FROZEN gate half from a current one, be
 moves — so a rule change there (the 2026-11 pin made the gate say "Never pass `humanDecision` yourself"
 where it had said to pass `humanDecision: "proceed"` to `resolve`) left a v17 paste reading `current`.
 `RETIRED_TEXT` in `claudeSnippet.ts` is the answer: a table of sentences an old paste carried, per half,
-and a half whose text contains one of its own is `older` exactly as if its marker were lower. A test holds
+and a half whose own SEGMENT — from each copy of its marker to the next `<!-- coai-… v<n> -->` marker, or the end of the text — contains one of its own is `older` exactly as if its marker were lower. The phrase outside that segment (a person's notes, a changelog, another half) counts for nothing. A test holds
 that the current artefact quotes none of them.
 
 > **An earlier version of this section described a design that never shipped.** It said
