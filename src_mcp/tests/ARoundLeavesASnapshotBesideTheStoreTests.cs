@@ -35,8 +35,8 @@ public sealed class ARoundLeavesASnapshotBesideTheStoreTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = TempDir.For("testsToDelete-snapshot-repo-");
-        _data = TempDir.For("testsToDelete-snapshot-data-");
+        _repo = TempDir.For("snapshot-repo-");
+        _data = TempDir.For("snapshot-data-");
         Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
         Environment.SetEnvironmentVariable("FAKECLI_STDOUT", Clean);
         Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", Clean);

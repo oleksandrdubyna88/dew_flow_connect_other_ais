@@ -18,7 +18,7 @@ namespace CoaiMcp.Tests;
 public sealed class AQuestionRowKeepsWhatItsPlaceSkippedWhateverEndsItTests : IDisposable
 {
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _dir = TempDir.For("testsToDelete-qrow-notes-");
+    private readonly TempDir _dir = TempDir.For("qrow-notes-");
 
     public void Dispose() => _dir.Dispose();
 

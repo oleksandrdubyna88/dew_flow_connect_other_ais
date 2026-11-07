@@ -18,7 +18,7 @@ public sealed class KimiLockRetirementTests : IDisposable
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimiretire-");
+    private readonly TempDir _dir = TempDir.For("kimiretire-");
 
     private readonly List<string> _notes = [];
 

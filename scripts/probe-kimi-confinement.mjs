@@ -68,8 +68,8 @@
 //   M-K14  (the refresh race) is NOT here — it runs later (plan §6, the owner's answer of 2026-10-13).
 //   --admit config,device_id,…   pre-admits owned-home candidates when M-K11 is not in --cells (M-K11 decides them itself)
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
@@ -86,6 +86,7 @@ import {
 import { D19_CELLS, cellsPlan, d19Arms, runInventory, runUsage, updatesIn } from './lib/kimi-d19.mjs';
 import { ownedShimArms } from './lib/kimi-arms.mjs';
 import { waitForNoOtherKimi } from './lib/proc.mjs';
+import { startDefaultScratch } from '../src_vs_code/scripts/ownedRun.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -114,6 +115,7 @@ const cells = cellsRun.cells;
 const unknown = cells.filter((c) => !ALL_CELLS.includes(c));
 if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || admitFlag.some((c) => !CANDIDATES.includes(c))) {
   console.error(`usage: probe-kimi-confinement.mjs [--shim <exe>] [--kimi <exe>] [--scratch <dir>] [--repeats N] [--model <id>] [--cells ${ALL_CELLS.join(',')}] [--admit ${CANDIDATES.join(',')}] [--allow-agents-canary] [--allow-copied-credentials] [--allow-real-home]`);
+  console.error('without --scratch the scratch is an owned folder removed at exit; pass --scratch <dir> to keep a run for --reparse');
   process.exit(65);
 }
 if (!flag('--reparse', '') && cellsRun.refusal) {
@@ -129,7 +131,8 @@ if (!reparse && (!existsSync(shim) || !existsSync(kimi))) {
   console.error(`refusing: shim ${shim} exists=${existsSync(shim)}, kimi ${kimi} exists=${existsSync(kimi)}`);
   process.exit(65);
 }
-const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kcp-'));
+// Without --scratch the scratch is an owned folder of the wrap, removed at exit (one line says so): pass --scratch <dir> to keep a run for --reparse.
+const scratch = reparse || flag('--scratch', '') || (await startDefaultScratch({ what: 'kcp', prefix: 'probe-kimi-confinement' })).path;
 // The scratch path ends up inside a hook's SHELL command (a hook's `command` is a shell string by Kimi's design), so it is held
 // to characters that need no quoting beyond the double quotes the command puts around it (the Vibe probe's rule).
 if (!/^[A-Za-z0-9 _\-.:\\/~()]+$/u.test(scratch)) {

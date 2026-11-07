@@ -70,18 +70,6 @@ main() {
     # GLOBALS, not locals: `finish` runs from the EXIT trap, after main has returned and its locals are gone.
     work='' id='' logs_pid='' ok=false
 
-    work=$(mktemp -d)
-    mkdir "$work/data"
-    # The app runs as uid 10001, not as the runner's user, and must be able to write here (health probes it).
-    chmod 0777 "$work/data"
-    seed "$work/data"
-
-    Auth__Local__SigningKey=$(new_key)
-    export Auth__Local__SigningKey
-    if [ "${GITHUB_ACTIONS:-}" = true ]; then
-        printf '::add-mask::%s\n' "$Auth__Local__SigningKey"
-    fi
-
     finish() {
         if [ -n "$id" ]; then
             docker stop --time 10 "$id" >/dev/null 2>&1 || true
@@ -100,6 +88,21 @@ main() {
         fi
     }
     trap finish EXIT
+
+    local owner
+    owner="u$(id -u)"
+    # testsToDelete-exempt: raw-temp — image smoke script a person may run outside a run folder; the trap above removes this folder on every exit except a kill -9 or the hard kill of a CI cancel, and that leaves it owner-named, listed as unmarked and never removed
+    work=$(mktemp -d "${TMPDIR:-/tmp}/testsToDelete-$owner-coai-smoke-XXXXXX")
+    mkdir "$work/data"
+    # The app runs as uid 10001, not as the runner's user, and must be able to write here (health probes it).
+    chmod 0777 "$work/data"
+    seed "$work/data"
+
+    Auth__Local__SigningKey=$(new_key)
+    export Auth__Local__SigningKey
+    if [ "${GITHUB_ACTIONS:-}" = true ]; then
+        printf '::add-mask::%s\n' "$Auth__Local__SigningKey"
+    fi
 
     say "starting $image on $base"
     id=$(docker run -d --rm \

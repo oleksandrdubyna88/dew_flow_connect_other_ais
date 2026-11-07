@@ -1,85 +1,98 @@
 using System.Text.Json;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Tests.Leftovers;
 using FluentAssertions;
 using Xunit;
 
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The C# writer of the owner claim agrees with the Node writer and the future reader, because both read ONE golden file,
-/// <c>shared/owner-claim-vectors.json</c> (<c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>, E2 code gate G0/G1 and judge J1/J2).
+/// The C# reader and the Node reader of the owner record agree on every row of <c>shared/owner-record-cross-vectors.json</c>, and on the live claim of
+/// this very run (E5 S3, plan row 15). Both read the contract's grammar <c>&lt;owner&gt;:&lt;host&gt;@&lt;os&gt;:&lt;pid&gt;[:&lt;start&gt;[:&lt;ns&gt;]]</c>; the old
+/// <c>&lt;host&gt;@win32|darwin|linux</c> spellings are unreadable to both.
 /// </summary>
 /// <remarks>
-/// <para>Two writers of one format — <see cref="OwnerClaim"/> here, <c>claimText</c> in <c>src_vs_code/scripts/run-tests.mjs</c> — and one reader to come
-/// (E5's Node sweeper) can drift apart without any test noticing: each side's own tests pass against its own idea of the format. The vectors are the
-/// shared idea. <c>runTemp.test.mjs</c> reads the same file; change one side's format and only that side goes red. <b>E5's reader must pass the same vectors.</b></para>
-/// <para><b>The host spelling is the vector that would have defeated the claim</b> (judge J1): the C# writer used <c>Environment.MachineName</c> (NetBIOS: upper case, cut
-/// at 15 characters, no domain) and Node's <c>os.hostname()</c> is the OS host name, so the same machine was <c>BUILD01</c> to one and <c>build01</c> to the other and a reader
-/// would have judged every C# claim "another host" and kept it for ever. The live test below asks Node for its own spelling.</para>
+/// <c>shared/owner-claim-vectors.json</c> is deleted (E5 S4): its one reader, the Node <c>runTemp.test.mjs</c>, went with the legacy writer. This file stopped reading it in S3.
+/// The Node reader is asked ONCE, by one <c>node --input-type=module -e</c> that imports the conventions' own <c>owned.mjs</c>.
 /// </remarks>
 public sealed class OwnerClaimVectorsTests
 {
-    private static JsonElement Vectors { get; } = JsonDocument.Parse(
-        File.ReadAllText(Path.Combine(RepoPaths.Root(), "shared", "owner-claim-vectors.json"))).RootElement;
+    private const string AskNode = """
+        import { parseOwner, parseLegacyOwner, ownerState } from process.argv[1];
+        const rows = JSON.parse(process.argv[2]);
+        const verdict = (read, text) => (read(text).unreadable ? "unreadable" : "owner");
+        process.stdout.write(JSON.stringify(rows.map((text) => ({
+          text,
+          node: verdict(parseOwner, text),
+          nodeOldForm: parseLegacyOwner(text).unreadable ? "unreadable" : "legacy",
+          state: ownerState(parseOwner(text)),
+        }))));
+        """;
 
-    public static TheoryData<string, string, int, long?, string> Formats()
+    private sealed record Row(string Text, string Csharp, string Node, string NodeLegacy);
+
+    private static List<Row> Rows()
     {
-        var rows = new TheoryData<string, string, int, long?, string>();
-        foreach (var row in Vectors.GetProperty("format").EnumerateArray())
-        {
-            rows.Add(
-                row.GetProperty("host").GetString()!, row.GetProperty("os").GetString()!, row.GetProperty("pid").GetInt32(),
-                row.TryGetProperty("start", out var start) ? start.GetInt64() : null, row.GetProperty("text").GetString()!);
-        }
+        var vectors = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoPaths.Root(), "shared", "owner-record-cross-vectors.json"))).RootElement;
 
-        return rows;
+        return
+        [
+            .. vectors.GetProperty("rows").EnumerateArray().Select(row => new Row(
+                row.GetProperty("text").GetString()!, row.GetProperty("csharp").GetString()!, row.GetProperty("node").GetString()!, row.GetProperty("nodeOldForm").GetString()!)),
+        ];
     }
 
-    [Theory]
-    [MemberData(nameof(Formats))]
-    public void TheWriter_ProducesExactlyTheVectorsText(string host, string os, int pid, long? start, string expected) =>
-        OwnerClaim.Format(host, os, pid, start).Should().Be(expected);
+    private static string CSharpVerdict(string text) => Owner.Parse(text) is null ? "unreadable" : "owner";
 
-    public static TheoryData<string> Valid() => [.. Vectors.GetProperty("valid").EnumerateArray().Select(e => e.GetString()!)];
-
-    public static TheoryData<string> Invalid() => [.. Vectors.GetProperty("invalid").EnumerateArray().Select(e => e.GetString()!)];
-
-    [Theory]
-    [MemberData(nameof(Valid))]
-    public void AStrictReader_AcceptsEveryValidVector(string text) => OwnerClaim.IsWellFormed(text).Should().BeTrue();
-
-    [Theory]
-    [MemberData(nameof(Invalid))]
-    public void AStrictReader_RefusesEveryInvalidVector(string text) => OwnerClaim.IsWellFormed(text).Should().BeFalse();
-
-    public static TheoryData<string, string, long?> LinuxStarts()
+    private static async Task<Dictionary<string, (string Node, string Legacy, string State)>> NodeVerdictsAsync(IEnumerable<string> texts)
     {
-        var rows = new TheoryData<string, string, long?>();
-        foreach (var row in Vectors.GetProperty("linuxStart").EnumerateArray())
-        {
-            var seconds = row.GetProperty("startSeconds");
-            rows.Add(row.GetProperty("stat").GetString()!, row.GetProperty("procStat").GetString()!, seconds.ValueKind == JsonValueKind.Null ? null : seconds.GetInt64());
-        }
+        var owned = new Uri(Path.Combine(RepoPaths.Root(), ".agents", "conventions", "tools", "lib", "owned.mjs")).AbsoluteUri;
+        var script = AskNode.Replace("process.argv[1]", $"\"{owned}\"", StringComparison.Ordinal).Replace("process.argv[2]", "process.argv[1]", StringComparison.Ordinal);
+        var node = await new ProcessLauncher().RunAsync(
+            new ProcessRequest("node", ["--input-type=module", "-e", script, "--", JsonSerializer.Serialize(texts)], AppContext.BaseDirectory) { Timeout = TimeSpan.FromSeconds(60) },
+            TestContext.Current.CancellationToken);
+        Assert.SkipWhen(node.ExitCode != 0 && node.StdErr.Contains("not found", StringComparison.OrdinalIgnoreCase), "node is not on PATH here, so the Node reader cannot be asked: " + node.StdErr);
+        node.ExitCode.Should().Be(0, node.StdErr);
 
-        return rows;
+        return JsonDocument.Parse(node.StdOut).RootElement.EnumerateArray().ToDictionary(
+            e => e.GetProperty("text").GetString()!, e => (e.GetProperty("node").GetString()!, e.GetProperty("nodeOldForm").GetString()!, e.GetProperty("state").GetString()!));
     }
 
-    [Theory]
-    [MemberData(nameof(LinuxStarts))]
-    public void TheLinuxStart_IsComputedByTheFormulaBothWritersShare(string stat, string procStat, long? expected) =>
-        OwnerClaim.LinuxStartSeconds(stat, procStat).Should().Be(expected);
+    [Fact]
+    public async Task OldAndNewClaims_AreReadByBothReaders()
+    {
+        var rows = Rows();
+        var live = File.ReadAllText(RunTemp.Folder + ".owner");
+        var asked = await NodeVerdictsAsync([.. rows.Select(r => r.Text), live]);
+
+        foreach (var row in rows)
+        {
+            CSharpVerdict(row.Text).Should().Be(row.Csharp, $"C# on '{row.Text}'");
+            asked[row.Text].Node.Should().Be(row.Node, $"Node's parseOwner on '{row.Text}'");
+            asked[row.Text].Legacy.Should().Be(row.NodeLegacy, $"Node's parseLegacyOwner on '{row.Text}'");
+        }
+
+        CSharpVerdict(live).Should().Be("owner", $"the live claim '{live}' is in the contract's grammar");
+        asked[live].Node.Should().Be("owner", "and Node reads it too");
+        // Reading it is not judging it: Node's liveness (the conventions' ownerState: same owner, same host spelling, same pid namespace, this pid alive, the
+        // START within two seconds of the process's own) must call this run's claim LIVE. A start field computed by another formula than the one both writers share
+        // would read "unknown" here — the guarantee the removed TheLinuxStart_IsComputedByTheFormulaBothWritersShare gave.
+        asked[live].State.Should().Be("live", "the claim of a running process, in the C# writer's own spelling, is live to the Node judge");
+    }
 
     [Fact]
     public async Task ThisMachinesHost_IsSpelledAsNodeSpellsIt()
     {
+        var owned = new Uri(Path.Combine(RepoPaths.Root(), ".agents", "conventions", "tools", "lib", "owned.mjs")).AbsoluteUri;
         var node = await new ProcessLauncher().RunAsync(
-            new ProcessRequest("node", ["-p", "require('os').hostname()"], AppContext.BaseDirectory) { Timeout = TimeSpan.FromSeconds(30) },
+            new ProcessRequest("node", ["--input-type=module", "-e", $"import {{ thisOwner }} from \"{owned}\"; process.stdout.write(thisOwner().host);"], AppContext.BaseDirectory)
+            {
+                Timeout = TimeSpan.FromSeconds(30),
+            },
             TestContext.Current.CancellationToken);
         Assert.SkipWhen(node.ExitCode != 0 || node.StdOut.Trim().Length == 0, "node is not on PATH here, so its host spelling cannot be asked: " + node.StdErr);
 
-        var claimHost = OwnerClaim.ForThisProcess().Split('@')[0];
-
-        claimHost.Should().Be(OwnerClaim.Format(node.StdOut.Trim(), "linux", 1, null).Split('@')[0],
-            "the Node sweeper compares this host with its own os.hostname(); a different spelling makes every claim 'another host'");
+        Owner.This.Host.Should().Be(node.StdOut.Trim(),
+            "the Node sweeper compares this host with its own thisOwner().host; a different spelling makes every claim 'another host'");
     }
 }

@@ -99,6 +99,12 @@ that ends every owned process and nothing else.
   under `~/.vscode-server/`; none → exit 69 "Remote-SSH must be connected"); audits that `PATH` — an empty or relative entry, or a
   directory that is world-writable or not owned by uid 0 BEFORE the directory a used tool (`node`, `vibe`, `kimi`, `rg`, `fd`) resolves
   to, refuses with exit 77 naming the entry; resolves node once, `realpath`, into `run/node.txt`.
+  *[epoch 5, 2026-11-04, Opus review — the parent's entry 1.1]* The shape becomes `^/tmp/native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}$`
+  (no `testsToDelete-` prefix): the series leaves the test-leftovers prefix family as the rollout's one bounded
+  exception (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`, § *Epoch 5* item 4; E5's S4). The literal
+  changes together in `native-run.mjs` `SERIES_SHAPE`, `make-series.sh`, `abort.sh` and `remove-series.sh`, and the
+  scripts set `LC_ALL=C` before the `=~` test. The lead makes the bare folder (`mkdirArgv`); this script checks and
+  fills it.
 - NEW `scripts/native/run-template.sh` — the template of parent §6, verbatim in shape: `set -eu`; `export PATH=/usr/bin:/bin`; the one
   `SERIES_PATH` literal; `exec` to the log; `finish` on `EXIT`, `exit 143/130/129` on `TERM`/`INT`/`HUP`; `<phase>.handle` = pid, pgid
   (field 5), start time (field 22, read after the LAST `)` of `/proc/$$/stat`); `NODE` and `HOST_PATH` read as data; the probe started in

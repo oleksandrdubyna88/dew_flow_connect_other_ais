@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheReaderVersionIsPinnedToTheFixturesTests
 {
-    private const string Prefix = "testsToDelete-coai-pinned-";
+    private const string Prefix = "pinned-";
 
     /// <summary>Messages, launches (agents other than main), writes and the four token terms summed over the messages. The writes of c12, c17 and c19 are the ones E1's re-cut (PR #851) added: 4 more than the same fixtures before it.</summary>
     private sealed record Totals(ObservationKind Kind, int Messages, int Launches, int Writes, long Input, long CacheCreation, long CacheRead, long Output);

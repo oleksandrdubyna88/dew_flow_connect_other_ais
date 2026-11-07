@@ -37,6 +37,10 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'compat-close' });
+
 
 /**
  * Every child here gets a deadline, and none of them had one.
@@ -62,7 +66,7 @@ const say = (ok, what, detail = '') => {
 };
 
 /** A one-shot mode: stdout is the answer, the exit code is what happened. */
-function run(exe, args, dataDir) {
+function runServer(exe, args, dataDir) {
   return new Promise((resolve) => {
     const child = spawn(exe, args, { shell: false, env: { ...process.env, COAI_DATA_DIR: dataDir } });
     let out = '';
@@ -179,6 +183,7 @@ function unpack(archive, into) {
 
 // ---------------------------------------------------------------------------------------------
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(path.join(tmpdir(), 'coai-close-compat-'));
 const data = path.join(work, 'data');
 const repo = path.join(work, 'repo');
@@ -226,7 +231,7 @@ console.log(`new: ${built}\n`);
 
 // 1. The NEW close against the OLD binary. This is the row of the boundary table that decides
 //    what the panel shows a person whose server has not been updated.
-const refused = await run(old, ['--close-consult', '--repo', repo, '--id', id, '--outcome', 'solved'], data);
+const refused = await runServer(old, ['--close-consult', '--repo', repo, '--id', id, '--outcome', 'solved'], data);
 say(refused.code !== 0,
   'the previous release REFUSES --close-consult rather than appearing to succeed', `exit ${refused.code}`);
 say(`${refused.out}${refused.err}`.includes('unknown argument'),
@@ -234,14 +239,14 @@ say(`${refused.out}${refused.err}`.includes('unknown argument'),
 
 // 2. The NEW binary reads the OLD record — written with no `outcome` at all — and closes it. The
 //    close is also what PROJECTS it, which is what makes step 3 possible.
-const closed = await run(built, ['--close-consult', '--repo', repo, '--id', id, '--outcome', 'solved'], data);
+const closed = await runServer(built, ['--close-consult', '--repo', repo, '--id', id, '--outcome', 'solved'], data);
 say(closed.code === 0, 'this build reads a record written without the field, and closes it',
   `exit ${closed.code}: ${closed.out.trim().slice(0, 120)}`);
 
 // 3. THE MIGRATION, from the other side. This build adds a column to `consultations`; the question
 //    a schema change always raises is whether the binary a person has NOT updated can still read
 //    the file afterwards. A migration is one-way, so getting this wrong strands them until they do.
-const oldAfter = await run(old, ['--log'], data);
+const oldAfter = await runServer(old, ['--log'], data);
 say(oldAfter.code === 0, 'the previous release still reads a database this build has migrated',
   `exit ${oldAfter.code}`);
 const oldRow = JSON.parse(oldAfter.out || '{}').consultations?.find((one) => one.id === id);
@@ -249,7 +254,7 @@ say(oldRow !== undefined, 'and still answers the consultation, column it has nev
 say(oldRow?.status === 'closed', 'with the status this build wrote', `status: ${oldRow?.status}`);
 
 // 4. And this build agrees with itself about the same row.
-const newAfter = await run(built, ['--log'], data);
+const newAfter = await runServer(built, ['--log'], data);
 const newRow = JSON.parse(newAfter.out || '{}').consultations?.find((one) => one.id === id);
 say(newRow?.outcome === 'solved', 'this build reads the outcome back', `outcome: ${newRow?.outcome}`);
 // The AUTHOR crosses the same boundary and is its own column, so it is its own assertion: a

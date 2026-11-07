@@ -13,7 +13,7 @@ namespace CoaiMcp.Tests;
 /// <c>config.toml</c> beside an empty <c>os/</c>; checked as an ALLOWLIST before every launch; disposed junction-first, with the
 /// person's folder verified, and never under a live tree.
 /// </summary>
-/// <remarks>Every fake person's home and every junction is inside this test's own <c>testsToDelete-kimi-</c> folder — never the real <c>~/.kimi-code</c>.</remarks>
+/// <remarks>Every fake person's home and every junction is inside this test's own <c>kimi-</c> folder — never the real <c>~/.kimi-code</c>.</remarks>
 public sealed class KimiHomeTests : IDisposable
 {
     private readonly KimiFixture _person = new();

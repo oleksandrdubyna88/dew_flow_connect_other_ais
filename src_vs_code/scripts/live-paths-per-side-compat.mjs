@@ -40,7 +40,11 @@ import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { flag, HERE, newServer, releasedExtension, releasedServer, run } from './releasedHalves.mjs';
+import { flag, HERE, newServer, releasedExtension, releasedServer, run as runServer } from './releasedHalves.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'compat-paths' });
+
 
 let broken = [];
 const say = (ok, what, detail = '') => {
@@ -107,6 +111,7 @@ if (built.length === 0 || cli.length === 0) {
   console.log('this checkout has no built server or fake CLI — run `dotnet build src_mcp/src/CoaiMcp.csproj` and `dotnet build src_mcp/tests_fakecli/FakeCli.csproj` first');
   process.exit(2);
 }
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(path.join(tmpdir(), 'coai-paths-per-side-compat-'));
 mkdirSync(path.join(work, 'server'));
 mkdirSync(path.join(work, 'extension'));
@@ -125,7 +130,7 @@ for (const tree of [fresh, released]) {
     tree.family.useFileProbe(tree.family.fileAt(statSync));
   }
 }
-const oldVersion = (await run(old, ['--version'], work)).out.trim().split(/\s+/u).pop() ?? '';
+const oldVersion = (await runServer(old, ['--version'], work)).out.trim().split(/\s+/u).pop() ?? '';
 const skipsOtherSide = atLeast(oldVersion, '0.46.0');
 
 const H = fresh.family.familyOf(process.platform);
@@ -172,7 +177,7 @@ const wire = JSON.parse(JSON.parse(newFile).COAI_VENDORS ?? '[]');
 say(!newFile.includes('executablePathBySide') && !newFile.includes('mirrored'), '(c) the settings file this build writes carries no per-side member');
 say(wire.length === 1 && wire[0].executablePath === cli, '(c) and carries THIS side\'s value as the row\'s one string', JSON.stringify(wire[0]?.executablePath));
 for (const [name, server] of [[`the released server (${oldVersion})`, old], ['this checkout\'s server', built]]) {
-  const answer = await run(server, ['--providers'], dataDir(work, `c-${name.length}-${server.length}`, newFile), { ...noEnv, COAI_EXE_COMPAT_CLI: nowhere });
+  const answer = await runServer(server, ['--providers'], dataDir(work, `c-${name.length}-${server.length}`, newFile), { ...noEnv, COAI_EXE_COMPAT_CLI: nowhere });
   const row = rowIn(answer.out);
   say(answer.code === 0 && ranTheFake(row), `(c) ${name} reads that file and runs this side's value`, `exit ${answer.code}, ${JSON.stringify({ cliFound: row.cliFound, version: row.version, note: row.note })}`);
 }
@@ -187,7 +192,7 @@ say(oldSent !== cli && (oldSent === otherSides || oldSent === ''),
 const fallback = { ...noEnv, COAI_EXE_COMPAT_CLI: cli };
 const sentRaw = JSON.stringify([{ id: ID, runtime: 'codex', executablePath: otherSides }]);
 for (const [name, server, skips] of [[`the released server (${oldVersion})`, old, skipsOtherSide], ['this checkout\'s server', built, true]]) {
-  const answer = await run(server, ['--providers'], dataDir(work, `b-${name.length}-${server.length}`, JSON.stringify({ COAI_VENDORS: sentRaw })), fallback);
+  const answer = await runServer(server, ['--providers'], dataDir(work, `b-${name.length}-${server.length}`, JSON.stringify({ COAI_VENDORS: sentRaw })), fallback);
   const row = rowIn(answer.out);
   if (skips) {
     say(answer.code === 0 && ranTheFake(row), `(b) ${name} skips the other side's path it is sent and looks the CLI up instead`,

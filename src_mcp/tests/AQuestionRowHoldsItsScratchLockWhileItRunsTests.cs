@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 public sealed class AQuestionRowHoldsItsScratchLockWhileItRunsTests : IAsyncLifetime
 {
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _dir = TempDir.For("testsToDelete-qrow-lock-");
+    private readonly TempDir _dir = TempDir.For("qrow-lock-");
 
     private string Repo => _dir.At("repo");
 

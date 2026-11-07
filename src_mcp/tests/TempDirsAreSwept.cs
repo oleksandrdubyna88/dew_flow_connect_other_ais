@@ -8,7 +8,8 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Since E5 S2-A this fixture sweeps NOTHING: at the start of the run it deletes a killed run's fake-CLI steering file, counts the old <c>coai-*</c> leftovers
-/// once and says how many; S2-B replaces it with the copied <c>LeftoversSweepFixture</c>.
+/// once and says how many. The owner-aware sweep is <c>LeftoversSweepFixture</c> (E5 S2-B), registered beside it; this class stays the home of the count, the steering-file
+/// delete and the product-sweep tests below.
 /// </summary>
 /// <remarks>
 /// <para><b>Why nothing is swept.</b> The age-only <c>coai-*</c> sweep that stood here (measured 2026-09-05: 21,857 folders, 4,650 of them old <c>coai-panel-*</c>) deleted on
@@ -20,7 +21,7 @@ namespace CoaiMcp.Tests;
 /// the PROCESS, and the next <c>BuildWork</c> anywhere then walks the real temp folder inside its round's deadline (C6 of
 /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>). It is also an assembly fixture; the attribute changes nothing about that.</para>
 /// <para><b>It counts in the MACHINE's temp folder, <see cref="RunTemp.Real"/> — not the run's.</b> Since E2 every run makes everything inside its own
-/// <c>testsToDelete-coai-run-&lt;6&gt;</c> folder, with the three temp variables pointed at it (<see cref="RunTemp"/>), so <c>Path.GetTempPath()</c> is the
+/// run folder — since E5 S3 <c>testsToDelete-&lt;owner&gt;-coai-run-&lt;id&gt;</c>, claimed first — with the three temp variables pointed at it (<see cref="RunTemp"/>), so <c>Path.GetTempPath()</c> is the
 /// run's folder; the leftovers of EARLIER runs and of the product are in the real one. The run folder and its restore belong to
 /// <see cref="RunTempFixture"/>, which has no test methods — never to this class.</para>
 /// </remarks>
@@ -56,10 +57,6 @@ public sealed class TempDirsAreSwept
         if (Interlocked.Exchange(ref _leftoversCounted, 1) == 0)
         {
             Console.Error.WriteLine(StartOfRun.Sentence(StartOfRun.Run(RunTemp.Real, Rule), RunTemp.Real));
-            if (StartOfRun.RunFolders(RunTemp.Real, RunTemp.Folder) is > 0 and var legacy)
-            {
-                Console.Error.WriteLine(StartOfRun.LegacySentence(legacy, RunTemp.Real));
-            }
         }
     }
 
@@ -147,7 +144,7 @@ public sealed class TempDirsAreSwept
     [InlineData(true)]
     public async Task ARoundsScratchHoldingAKimiHomeWithAJunction_IsSwept_AndThePersonsFolderKeepsItsFile(bool lossDuringTheUnlink)
     {
-        using var root = TempDir.For("testsToDelete-sweep-kh-");
+        using var root = TempDir.For("sweep-kh-");
         var persons = Directory.CreateDirectory(root.At("persons")).FullName;
         var secret = Path.Combine(persons, "kimi-code-env.json");
         var other = Path.Combine(persons, "kimi-code.json");

@@ -23,6 +23,7 @@ if (!exe || !settings || !scratchRoot || !out) {
 }
 
 const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
+// testsToDelete-exempt: raw-temp — a probe a person runs, under the scratch root named on its command line; no test run reaches it, pinned by E10
 const repo = mkdtempSync(join(scratchRoot, 'coai-agyprobe-'));
 execFileSync(GIT, ['init', '-q'], { cwd: repo });
 writeFileSync(join(repo, 'notes.txt'), 'nothing here\n');

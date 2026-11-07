@@ -27,7 +27,7 @@ public sealed class ConsultantTurnTests
 
     private static ReviewerInvocation First(TimeSpan timeout) =>
         new AntigravityConsultant(new AntigravityRuntime()).Build(new ConsultantLaunch(
-            Path.GetTempPath(), "where is the sweep invoked?", string.Empty, Path.GetTempPath(),
+            TempDir.Root, "where is the sweep invoked?", string.Empty, TempDir.Root,
             new ReviewerSettings("antigravity") { Timeout = timeout }));
 
     /// <summary>Answers each launch from a script, in order, and remembers what it was handed.</summary>

@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class OneKimiLaunchAtATimeTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-oneatatime-");
+    private readonly TempDir _dir = TempDir.For("kimi-oneatatime-");
 
     public void Dispose() => _dir.Dispose();
 

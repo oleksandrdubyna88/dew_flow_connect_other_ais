@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -127,6 +128,7 @@ public sealed class TheImageChecksEachInstallerTests : IDisposable
         start.ArgumentList.Add(url);
         start.ArgumentList.Add(shell);
         start.Environment["INSTALL_CLI_PAUSE"] = "0";
+        RunTemp.RequireChildTempInRunFolder(start);
         using var process = Process.Start(start)!;
         var stderr = process.StandardError.ReadToEndAsync();
         _ = process.StandardOutput.ReadToEnd();

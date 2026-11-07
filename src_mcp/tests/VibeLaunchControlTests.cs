@@ -85,7 +85,7 @@ public sealed class VibeLaunchControlTests : IDisposable
     [Fact]
     public async Task AHomeThatWouldPassTheWindowsLimit_IsRefused_BeforeTheHomeIsMade_AndNothingStarts()
     {
-        using var padded = TempDir.For("testsToDelete-vh-budget-");
+        using var padded = TempDir.For("vh-budget-");
         var home = Path.Combine(padded, new string('p', Math.Max(1, 120 - padded.Path.Length - 1)));
         var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), home, "glm-5-3");
         var vibe = new FakeVibe();

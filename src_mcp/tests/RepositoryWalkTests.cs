@@ -240,7 +240,7 @@ public sealed class RepositoryWalkTests
     [Fact]
     public void TheRealListing_TellsAFolderFromALink_DropsAPlainFile_AndAMissingFolderIsUnreadable()
     {
-        using var dir = TempDir.For("testsToDelete-walk-");
+        using var dir = TempDir.For("walk-");
         Directory.CreateDirectory(dir.At("a-folder"));
         File.WriteAllText(dir.At("a-file.txt"), "x");
         SnapshotTestKit.LinkNow(dir.At("a-link"), dir.At("a-folder"));
@@ -259,7 +259,7 @@ public sealed class RepositoryWalkTests
     [Fact]
     public void TheRealGitLookup_SeesAFolderAFileAndALink_ForOneNameOnly_AndNoneWhereThereIsNone()
     {
-        using var dir = TempDir.For("testsToDelete-walk-");
+        using var dir = TempDir.For("walk-");
         Directory.CreateDirectory(dir.At("with-folder", ".git"));
         Directory.CreateDirectory(dir.At("with-file"));
         File.WriteAllText(dir.At("with-file", ".git"), "gitdir: /elsewhere");
@@ -390,7 +390,7 @@ public sealed class RepositoryWalkTests
     public void TheRealListing_CarriesTheHiddenAndSystemAttributes_OnWindows()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "the Hidden and System attributes of a folder are Windows'");
-        using var dir = TempDir.For("testsToDelete-walk-hidden-");
+        using var dir = TempDir.For("walk-hidden-");
         Directory.CreateDirectory(dir.At("plain"));
         Directory.CreateDirectory(dir.At("hidden"));
         Directory.CreateDirectory(dir.At("system"));
@@ -433,7 +433,7 @@ public sealed class RepositoryWalkTests
     [Fact]
     public void TheRealListing_StopsAtTheBound_AndKeepsOnlyWhatTheWalkNeeds()
     {
-        using var dir = TempDir.For("testsToDelete-walk-bound-");
+        using var dir = TempDir.For("walk-bound-");
         foreach (var i in Enumerable.Range(0, 5))
         {
             File.WriteAllText(dir.At($"file{i}.txt"), "x");

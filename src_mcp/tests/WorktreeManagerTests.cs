@@ -115,6 +115,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     public async Task HumanWorktree_IsNeverRemoved()
     {
         var humanPath = Path.Combine(Directory.CreateTempSubdirectory("human-wt-").FullName, "mine");
+        // testsToDelete-exempt: raw-worktree — inside `human-wt-`, this test's own temp folder under the run folder
         await Git(_repo, "worktree", "add", "--detach", humanPath);
 
         await _manager.PruneOursAsync(_repo);
@@ -256,6 +257,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     {
         var sha = await _manager.ResolveShaAsync(_repo, "main");
         var leftover = Path.Combine(_storage, "coai-wt-S-r1");
+        // testsToDelete-exempt: raw-worktree — inside `_storage`, this test's own temp folder under the run folder
         await Git(_repo, "worktree", "add", "--detach", "--lock", "--reason", "initializing", leftover, sha);
         Directory.Delete(leftover, recursive: true);
 
@@ -420,10 +422,11 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     /// <summary>git without long paths cannot check this commit out — so a pass above is the flag's doing.</summary>
     private async Task TheFixtureNeedsTheFlag(string sha)
     {
-        var control = Path.Combine(_storage, "testsToDelete-wt-control-longpaths");
+        var control = Path.Combine(_storage, "wt-control-longpaths");
         var refused = await _launcher.RunAsync(
             new ProcessRequest(
                 "git",
+                // testsToDelete-exempt: raw-worktree — inside `_storage`, this test's own temp folder under the run folder
                 ["-c", "core.longpaths=false", "worktree", "add", "--detach", control, sha],
                 _repo),
             TestContext.Current.CancellationToken);
@@ -449,6 +452,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     {
         var sha = await _manager.ResolveShaAsync(_repo, "main");
         var legacy = Path.Combine(_storage, "coai-wt-legacy-r1");
+        // testsToDelete-exempt: raw-worktree — inside `_storage`, this test's own temp folder under the run folder
         await Git(_repo, "worktree", "add", "--detach", legacy, sha);
 
         await _manager.PruneOursAsync(_repo);
@@ -492,6 +496,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
 
         var sha = await _manager.ResolveShaAsync(_repo, "main");
         var leftover = Path.Combine(real, "coai-wt-S-r1");
+        // testsToDelete-exempt: raw-worktree — inside `real`, this test's own temp folder under the run folder
         await Git(_repo, "worktree", "add", "--detach", "--lock", "--reason", "initializing", leftover, sha);
         Directory.Delete(leftover, recursive: true);
 
@@ -523,6 +528,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
 
         var sha = await _manager.ResolveShaAsync(_repo, "main");
         var leftover = Path.Combine(storage, "coai-wt-S-r1");
+        // testsToDelete-exempt: raw-worktree — inside `storage`, this test's own temp folder under the run folder
         await Git(_repo, "worktree", "add", "--detach", "--lock", "--reason", "initializing", leftover, sha);
         Directory.Delete(leftover, recursive: true);
 

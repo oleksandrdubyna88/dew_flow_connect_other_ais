@@ -306,7 +306,7 @@ public sealed class PanelServiceHostTests : IDisposable
     /// <summary>What a data directory with no settings file at all gives the codex row.</summary>
     private static string DefaultCodexModel()
     {
-        using var empty = TempDir.For("testsToDelete-host-defaults-");
+        using var empty = TempDir.For("host-defaults-");
 
         return CodexModel(new PanelServiceHost(
             name => name == "COAI_DATA_DIR" ? empty.Path : null,

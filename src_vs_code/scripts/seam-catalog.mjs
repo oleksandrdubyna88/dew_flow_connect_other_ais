@@ -66,6 +66,7 @@ export async function catalogSeam({ providersIn, fail }) {
     fail('the migration did not add the consultant row, so this leg compares two unmigrated files');
   }
 
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-catalog-'));
   try {
     writeFileSync(join(dir, 'settings.json'), now, 'utf8');

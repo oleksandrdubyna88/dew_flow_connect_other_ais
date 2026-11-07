@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class KimiShimHoldTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimishimhold-");
+    private readonly TempDir _dir = TempDir.For("kimishimhold-");
 
     public void Dispose() => _dir.Dispose();
 

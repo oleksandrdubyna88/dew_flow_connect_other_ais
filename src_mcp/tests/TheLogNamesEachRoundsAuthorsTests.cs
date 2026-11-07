@@ -15,13 +15,13 @@ namespace CoaiMcp.Tests;
 /// has none, and a database written before step 24 is read exactly as before — read-only, and left at the version it had.
 /// </summary>
 /// <remarks>
-/// <para>Real SQLite over a <c>testsToDelete-…</c> temp directory, seeded through <c>RecordRound</c> — the writer S2 shipped — so the reader is
+/// <para>Real SQLite over a temp directory, seeded through <c>RecordRound</c> — the writer S2 shipped — so the reader is
 /// proved against what the writer writes. <b>Not recorded is never a word</b>: an empty column and a value the shared rule refuses
 /// (<see cref="Core.Authors.AuthorsSnapshot.IsWellFormed"/>) read as an ABSENT member, and a malformed row never fails the page.</para>
 /// </remarks>
 public sealed class TheLogNamesEachRoundsAuthorsTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-coai-logauthors-");
+    private readonly TempDir _dir = TempDir.For("logauthors-");
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     public void Dispose()

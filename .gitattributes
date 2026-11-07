@@ -30,3 +30,59 @@ shared/commands/*.md text eol=lf
 src_mcp/tests/fixtures/outline/** text eol=lf
 # Claude Code writes LF; the caller-transcript fixtures are read by E3 as Claude Code wrote them (E1.S5). core.autocrlf=true would give a .jsonl CRLF.
 src_mcp/tests/fixtures/caller-transcripts/** text eol=lf
+
+# E5 S3: the adapted copy of the leftovers helper is compared with the template as RAW bytes
+# (src_mcp/tests_leftovers/template-manifest.json, TheAdaptedCopyTests): no line-ending change on checkout or commit.
+# The later line wins over `*.cs text eol=lf` above. Only the copied file names are listed, never a glob: the coai-owned
+# files in the same two folders (RunTemp.cs, TempDir.cs, ...) keep the normal text rule.
+src_mcp/tests/Leftovers/DarwinFifoChild.cs -text
+src_mcp/tests/Leftovers/DarwinLayoutTests.cs -text
+src_mcp/tests/Leftovers/DarwinNativeTests.cs -text
+src_mcp/tests/Leftovers/ErrnoTests.cs -text
+src_mcp/tests/Leftovers/LayoutGateTests.cs -text
+src_mcp/tests/Leftovers/LivenessStateTests.cs -text
+src_mcp/tests/Leftovers/LivenessTests.cs -text
+src_mcp/tests/Leftovers/NativeDarwinTests.cs -text
+src_mcp/tests/Leftovers/NativeTests.cs -text
+src_mcp/tests/Leftovers/OwnedTests.cs -text
+src_mcp/tests/Leftovers/OwnerTests.cs -text
+src_mcp/tests/Leftovers/RunnerFactsTests.cs -text
+src_mcp/tests/Leftovers/ScopeTests.cs -text
+src_mcp/tests_leftovers/DarwinLayout.cs -text
+src_mcp/tests_leftovers/DirectoryLinks.cs -text
+src_mcp/tests_leftovers/Errno.cs -text
+src_mcp/tests_leftovers/LeftoversAudit.cs -text
+src_mcp/tests_leftovers/LeftoversAuditException.cs -text
+src_mcp/tests_leftovers/LeftoversSweep.cs -text
+src_mcp/tests_leftovers/LeftoversSweepFixture.cs -text
+src_mcp/tests_leftovers/Liveness.cs -text
+src_mcp/tests_leftovers/Native.cs -text
+src_mcp/tests_leftovers/NativeDarwin.cs -text
+src_mcp/tests_leftovers/Owned.cs -text
+src_mcp/tests_leftovers/OwnedDir.cs -text
+src_mcp/tests_leftovers/OwnedScope.cs -text
+src_mcp/tests_leftovers/OwnedToken.cs -text
+src_mcp/tests_leftovers/Owner.cs -text
+src_mcp/tests_leftovers/OwnerFixtures.cs -text
+src_mcp/tests_leftovers/OwnerToken.cs -text
+src_mcp/tests_leftovers/OwnerVectors.cs -text
+src_mcp/tests_leftovers/PosixFifo.cs -text
+src_mcp/tests_leftovers/Removal.cs -text
+src_mcp/tests_leftovers/RepositoryRoot.cs -text
+src_mcp/tests_leftovers/Scope.cs -text
+src_mcp/tests_leftovers/UnmatchablePid.cs -text
+src_mcp/tests_leftovers/Unremovable.cs -text
+src_mcp/tests_leftovers/WindowsOwnership.cs -text
+src_mcp/tests_leftovers/template-manifest.json -text
+src_mcp/tests/Leftovers/LeftoversAuditTests.cs -text
+src_mcp/tests/Leftovers/LeftoversSelfTest.cs -text
+src_mcp/tests_leftovers/LeftoversGuard.cs -text
+src_mcp/tests_leftovers/LeftoversGuardDocker.cs -text
+src_mcp/tests_leftovers/LeftoversGuardExemptions.cs -text
+src_mcp/tests_leftovers/LeftoversGuardFiles.cs -text
+src_mcp/tests_leftovers/LeftoversGuardLiterals.cs -text
+src_mcp/tests_leftovers/LeftoversGuardScripts.cs -text
+src_mcp/tests_leftovers/LeftoversGuardText.cs -text
+src_mcp/tests_leftovers/LeftoversGuardTokens.cs -text
+src_mcp/tests/Leftovers/LeftoversGuardTests.cs -text
+src_mcp/tests/Leftovers/LeftoversGuardScriptsTests.cs -text

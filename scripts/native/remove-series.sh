@@ -14,12 +14,20 @@
 # file, and step 5 still runs: bash reads a script through a descriptor it already holds, and on Linux an unlinked file stays
 # readable through one (the E1 plan round, finding 3, rejected on exactly that ground; native.test.mjs asserts step 5's output).
 # Exit codes: 0 removed and the sign-ins identical; 3 removed but a sign-in fact changed; 65 usage; 78 this place is wrong.
-# Test seams (the shipped default is /tmp): COAI_NATIVE_SERIES_ROOT.
+# Defence in depth (the lead's own `stat` checks run first and are the ones that protect: this copy lives IN the folder it judges): it also refuses a folder that is not
+# owned by the expected uid or is group- or world-writable, and a series ROOT that is not owned by that uid or is group- or world-writable without the sticky bit.
+# Test seams (the shipped defaults are /tmp and 0): COAI_NATIVE_SERIES_ROOT, COAI_NATIVE_SERIES_OWNER_UID (the uid the series, its root and its files must belong to;
+# root on the host — the tests run as the CI user).
+# The lead reaches this script ONLY through `node scripts/native/lead.mjs <host> <step>` (the caller's `stat` check runs first; it takes no root option) — never by a hand-built ssh line.
+# THE SERIES IS THE ONE BOUNDED EXCEPTION of the test-leftovers family (E5 S4): no test-leftovers prefix, no owner segment, no claim; THIS script is the only thing
+# that removes it (see make-series.sh). `ls -d <root>/native-*` finds a forgotten one.
 set -eu
 export PATH=/usr/bin:/bin
+export LC_ALL=C                                                               # the bracket ranges of the shape tests below are locale-dependent ([0-9a-f] in a UTF-8 locale can match more)
 
 SERIES_ROOT="${COAI_NATIVE_SERIES_ROOT:-/tmp}"
-SHAPE='testsToDelete-native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}'
+SHAPE='native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}'
+OWNER_UID="${COAI_NATIVE_SERIES_OWNER_UID:-0}"
 TAB=$'\t'
 
 refuse() { printf 'refused: %s\n' "$*"; exit 78; }
@@ -38,6 +46,16 @@ if [ "$NAME" = "$SERIES" ]; then refuse "SERIES_PATH '$SERIES' is not under $SER
 [[ $NAME =~ ^${SHAPE}$ ]] || refuse "SERIES_PATH '$SERIES' does not match $SHAPE"
 if [ "$SERIES" != "$FOLDER" ]; then refuse "SERIES_PATH says '$SERIES' but the folder given is '$FOLDER'"; fi
 if [ "$SERIES" != "$REAL" ]; then refuse "SERIES_PATH says '$SERIES' but the folder it was read from is '$REAL'"; fi
+# Defence in depth: who owns and who can write what `rm -rf` is about to remove.
+if ! [[ $OWNER_UID =~ ^[0-9]{1,10}$ ]]; then refuse "COAI_NATIVE_SERIES_OWNER_UID '$OWNER_UID' is not a uid"; fi
+# The seam exists so the tests can run as their own user. As root it would make every check below accept a folder of THAT user: a root run never takes it.
+if [ "$(id -u)" = 0 ] && [ "$OWNER_UID" != 0 ]; then refuse "running as root with COAI_NATIVE_SERIES_OWNER_UID=$OWNER_UID: the test seam is not for a root run"; fi
+FACTS="$(stat -c '%u %a' -- "$FOLDER")"
+if [ "${FACTS% *}" != "$OWNER_UID" ]; then refuse "'$FOLDER' is owned by uid ${FACTS% *}, not by uid $OWNER_UID"; fi
+if (( (8#${FACTS#* } & 8#022) != 0 )); then refuse "'$FOLDER' is mode ${FACTS#* }: group- or world-writable"; fi
+ROOT_FACTS="$(stat -c '%u %a' -- "$SERIES_ROOT")"
+if [ "${ROOT_FACTS% *}" != "$OWNER_UID" ]; then refuse "the series root '$SERIES_ROOT' is owned by uid ${ROOT_FACTS% *}, not by uid $OWNER_UID"; fi
+if (( (8#${ROOT_FACTS#* } & 8#022) != 0 && (8#${ROOT_FACTS#* } & 8#1000) == 0 )); then refuse "the series root '$SERIES_ROOT' is group- or world-writable (mode ${ROOT_FACTS#* }) without the sticky bit"; fi
 echo "step 1: SERIES_PATH names this folder: $SERIES"
 
 # Step 2.

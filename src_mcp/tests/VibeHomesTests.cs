@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The one-shot homes' folder, its owner and its sweep (D1, D3 of <c>research/PLAN_vibe_live_round_fixes.md</c>; scenarios A12 and B1–B5).
-/// Every root is a <c>testsToDelete-vh-*</c> folder, never the machine's own.
+/// Every root is a <c>vh-*</c> folder, never the machine's own.
 /// </summary>
 /// <remarks>
 /// <para>In the serial <c>fakecli-env</c> collection: it calls <c>PanelService.ForgetTheLastSweep</c>, which resets a static of the PROCESS, and the next
@@ -18,7 +18,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class VibeHomesTests : IDisposable
 {
-    private readonly TempDir _root = TempDir.For("testsToDelete-vh-sweep-");
+    private readonly TempDir _root = TempDir.For("vh-sweep-");
 
     public void Dispose() => _root.Dispose();
 
@@ -82,7 +82,7 @@ public sealed class VibeHomesTests : IDisposable
     [Fact]
     public void ALinkUnderCoaiVh_IsSaidAndLeftAlone_AndNeverEntered()
     {
-        using var target = TempDir.For("testsToDelete-vh-target-");
+        using var target = TempDir.For("vh-target-");
         File.WriteAllText(target.At("precious.txt"), "x");
         Directory.CreateDirectory(Path.Combine(_root, VibeHomes.OneShotFolder));
         var link = VibeHomes.OneShotIn(_root, "0badf00d");
@@ -99,7 +99,7 @@ public sealed class VibeHomesTests : IDisposable
     [Fact]
     public void CoaiVhItselfALink_SweepsNothing_AndIsRefusedForAReservation_NothingMadeUnderIt()
     {
-        using var target = TempDir.For("testsToDelete-vh-target-");
+        using var target = TempDir.For("vh-target-");
         var vh = Path.Combine(_root, VibeHomes.OneShotFolder);
         SnapshotTestKit.LinkNow(vh, target);
         var warnings = new List<string>();

@@ -24,7 +24,7 @@ public sealed class AFakeCliSteeringFileIsBesideItsBinaryTests : IDisposable
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _usersTemp = TempDir.For("testsToDelete-steering-temp-");
+    private readonly TempDir _usersTemp = TempDir.For("steering-temp-");
     private IDisposable _steering = FakeCliSteering.Unwritten;
 
     public AFakeCliSteeringFileIsBesideItsBinaryTests() => FakeCliSteering.Reset();

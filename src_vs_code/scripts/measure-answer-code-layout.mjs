@@ -17,6 +17,10 @@
  * `npm test`: CI's runners have no browser to measure with.</p>
  */
 import { browserOrExit, measured } from './browserLayout.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'measure-code' });
+
 
 // From the script's own place, so it runs from any directory.
 const OUT = new URL('../out/', import.meta.url).href;

@@ -96,13 +96,13 @@ public sealed class KimiAcpProfileTests
         AcpProfiles.Names(AcpProfiles.All).Should().Equal(["kimi"]);
     }
 
-    private static AcpAsk AskOn(string root, string bin) => new("kimi.exe", Path.GetTempPath(), "kimi-code/k3-256k", "x", TimeSpan.FromSeconds(2), root, bin);
+    private static AcpAsk AskOn(string root, string bin) => new("kimi.exe", TempDir.Root, "kimi-code/k3-256k", "x", TimeSpan.FromSeconds(2), root, bin);
 
     [Fact]
     public void TheAgentIsStartedInTheBuiltEnvironment_AndTheLaunchControlsOwnCheckAdmitsIt()
     {
-        var root = Path.Combine(Path.GetTempPath(), "testsToDelete-profile-owned");
-        var bin = Path.Combine(Path.GetTempPath(), "testsToDelete-profile-bin");
+        var root = Path.Combine(Path.GetTempPath(), "profile-owned");
+        var bin = Path.Combine(Path.GetTempPath(), "profile-bin");
         var ask = AskOn(root, bin);
 
         var request = _profile.AgentRequest(ask);
@@ -118,7 +118,7 @@ public sealed class KimiAcpProfileTests
     [Fact]
     public void ARequestThatWasNotBuilt_IsRefusedByTheSameCheck()
     {
-        var ask = AskOn(Path.Combine(Path.GetTempPath(), "testsToDelete-profile-owned"), Path.Combine(Path.GetTempPath(), "testsToDelete-profile-bin"));
+        var ask = AskOn(Path.Combine(Path.GetTempPath(), "profile-owned"), Path.Combine(Path.GetTempPath(), "profile-bin"));
         var inherited = _profile.AgentRequest(ask) with { InheritsEnvironment = true };
 
         _profile.AgentRefusal(inherited, ask).Should().Contain("was not built with coai's own environment");

@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Notice, answered, gapRecord, gapSentence, noticeRecord } from '../notice';

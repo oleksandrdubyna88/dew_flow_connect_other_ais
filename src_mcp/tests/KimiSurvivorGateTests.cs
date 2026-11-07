@@ -15,7 +15,7 @@ public sealed class KimiSurvivorGateTests : IDisposable
 {
     private static readonly DateTime Started = new(2026, 10, 16, 8, 0, 0, DateTimeKind.Utc);
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-survivor-gate-");
+    private readonly TempDir _dir = TempDir.For("survivor-gate-");
 
     private string MarkerPath => _dir.At("0123456789abcdef.survivors.json");
 

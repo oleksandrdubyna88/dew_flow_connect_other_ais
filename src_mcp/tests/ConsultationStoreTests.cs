@@ -458,7 +458,7 @@ public sealed class SameCheckoutTests
     /// <c>/private/var/folders/…</c>, so a seam keyed on the unresolved spelling never matches.
     /// </summary>
     private static string ResolvedTemp { get; } = Path.TrimEndingDirectorySeparator(
-        RealPath.Resolve(Path.GetTempPath()) is { Ok: true } real ? real.Path : Path.GetTempPath());
+        RealPath.Resolve(TempDir.Root) is { Ok: true } real ? real.Path : TempDir.Root);
 
     /// <summary>The ordinary case: one spelling, no links, still the same checkout.</summary>
     [Fact]

@@ -1,6 +1,7 @@
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -500,7 +501,7 @@ public sealed class ReviewLauncherTests
         TimeSpan? runBudget = null)
     {
         var slot = new AccountSlot(
-            vendorId, "a", Path.GetTempPath(), DateTimeOffset.UtcNow, null, false, string.Empty, 0);
+            vendorId, "a", TempDir.Root, DateTimeOffset.UtcNow, null, false, string.Empty, 0);
         var job = new JobRecord(
             JobId.New(), "dev@example.com", vendorId, model, "PlanCritique", "review this",
             JobStatus.Running, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(10),

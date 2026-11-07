@@ -29,8 +29,8 @@ public sealed class AReviewTreeWithALongPathTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Temp("testsToDelete-repo-");
-        _root = Temp("testsToDelete-review-root-");
+        _repo = Temp("repo-");
+        _root = Temp("review-root-");
         await Git(_repo, "init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "a.txt"), "v1", TestContext.Current.CancellationToken);
         await Git(_repo, "add", ".");
@@ -108,7 +108,7 @@ public sealed class AReviewTreeWithALongPathTests : IAsyncLifetime
     /// </summary>
     private async Task<string> MountADeepSubmoduleAsync(string relative)
     {
-        var sub = Temp("testsToDelete-sub-");
+        var sub = Temp("sub-");
         await Git(sub, "init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(sub, "s.txt"), "sub", TestContext.Current.CancellationToken);
         await Git(sub, "add", ".");
@@ -128,7 +128,8 @@ public sealed class AReviewTreeWithALongPathTests : IAsyncLifetime
 
     private async Task TheFixtureNeedsTheFlag(string sha)
     {
-        var control = Path.Combine(_root, "testsToDelete-wt-control-longpaths");
+        var control = Path.Combine(_root, "wt-control-longpaths");
+        // testsToDelete-exempt: raw-worktree — inside `_root`, this test's own temp folder under the run folder
         var refused = await Run(_repo, "-c", "core.longpaths=false", "worktree", "add", "--detach", control, sha);
 
         refused.ExitCode.Should().NotBe(0, "the control is a commit this git cannot check out without the flag");
@@ -162,7 +163,7 @@ public sealed class AReviewTreeWithALongPathTests : IAsyncLifetime
 
     /// <summary>
     /// Read-only flags cleared first: git's object files are read-only on Windows, and a delete that
-    /// stops at the first one leaves a <c>testsToDelete-</c> folder behind on every run.
+    /// stops at the first one leaves a temp folder behind on every run.
     /// </summary>
     private static void TryDelete(string path)
     {

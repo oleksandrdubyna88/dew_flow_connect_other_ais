@@ -56,6 +56,7 @@ canary() {
     # 1. The database, through the real binary, on a throwaway directory so a broken build cannot
     #    touch the live corpus on its way to being rejected.
     local scratch
+    # testsToDelete-exempt: raw-temp — a product release script on a server; no test run reaches this line, pinned by E10
     scratch=$(mktemp -d)
     # shellcheck disable=SC2064
     trap "rm -rf '$scratch'" RETURN
@@ -168,6 +169,7 @@ mkdir -p "$RELEASE"
 
 if [[ -n "$FROM" ]]; then
     say "installing $VERSION from $FROM"
+    # testsToDelete-exempt: raw-temp — a product release script on a server; no test run reaches this line, pinned by E10
     scratch=$(mktemp -d)
     if [[ -d "$FROM" ]]; then
         cp -a "$FROM/." "$scratch/"

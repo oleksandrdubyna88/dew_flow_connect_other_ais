@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class AntigravityDefaultModelTests
 {
-    private static readonly string Repo = Path.GetTempPath();
+    private static readonly string Repo = TempDir.Root;
 
     private static string[] ModelFlag(ReviewerSettings settings)
     {

@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class JunctionShellContractTests : IDisposable
 {
-    private readonly TempDir _dir = TempDir.For("testsToDelete-shell-contract-");
+    private readonly TempDir _dir = TempDir.For("shell-contract-");
 
     public void Dispose() => _dir.Dispose();
 

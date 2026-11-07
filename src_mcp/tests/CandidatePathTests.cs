@@ -14,11 +14,22 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class CandidatePathTests
 {
+    /// <summary>
+    /// The paths whose meaning needs the product's own scratch word. They live in <c>shared/candidate-path-vectors.json</c> (E5 S6), so that no test source holds a piece of the leftovers prefix: the guard
+    /// reads a piece of that word in a literal as a sweeper's pattern, and these are data about a path, not a pattern.
+    /// </summary>
+    private static IEnumerable<string> VectorsOf(string group) =>
+        System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoPaths.Root(), "shared", "candidate-path-vectors.json"))).RootElement
+            .GetProperty(group).EnumerateArray().Select(item => item.GetString()!).ToList();
+
+    public static TheoryData<string> Transient() => new TheoryData<string>(VectorsOf("transient"));
+
+    public static TheoryData<string> MerelyStartsTheSameWay() => new TheoryData<string>(VectorsOf("merelyStartsTheSameWay"));
+
     [Theory]
     [InlineData(@"C:\Users\x\AppData\Local\Temp\claude\d--rsd-Thing\abc\scratchpad\wt")]
     [InlineData("/home/x/.cache/temp/claude/session/scratchpad")]
-    [InlineData(@"D:\toDelete\Payment_endpoint")]
-    [InlineData("D:/toDelete/Payment_endpoint")]
+    [MemberData(nameof(Transient))]
     public void AScratchDirectoryIsTransient(string path) =>
         CandidatePath.IsTransient(path).Should().BeTrue();
 
@@ -49,8 +60,7 @@ public sealed class CandidatePathTests
     /// matched. Two reviewers found this; the second time after it had been accepted and not done.
     /// </remarks>
     [Theory]
-    [InlineData(@"D:\rsd\todelete_benchmarks\repo")]
-    [InlineData("/home/x/todelete-fixtures")]
+    [MemberData(nameof(MerelyStartsTheSameWay))]
     [InlineData(@"D:\work\temp\claudent\repo")]
     public void ANameThatMerelyStartsTheSameWayIsNot(string path) =>
         CandidatePath.IsTransient(path).Should().BeFalse();

@@ -32,8 +32,10 @@ import { moveToQuarantine as moveToQuarantineOf } from '../../.agents/convention
 import { hidepidActive, isAskablePid, legacyOwnerState, parseLegacyOwner, processProbe, readClaimText } from '../../.agents/conventions/tools/lib/owned.mjs';
 
 const OWNER_SUFFIX = '.owner';
+// testsToDelete-exempt: legacy-name — the one-off clean-up names the old run folders; helper-own, it is the only tool that may
 const LEGACY_RUN = /^testsToDelete-coai-run-[0-9a-f]{6}$/;
 /** A quarantine of THIS script: the picked name, `.teststodelete-quarantine-`, a pid, eight hex. */
+// testsToDelete-exempt: legacy-name — the same clean-up reads its own quarantine of an old run folder; helper-own
 const QUARANTINE = /^\.(coai-[^/\\]+|testsToDelete-coai-run-[0-9a-f]{6})\.teststodelete-quarantine-([0-9]+)-([0-9a-f]{8})$/i;
 
 /** Is `name` ONE path segment: not empty, not `.` or `..`, no separator of either kind, no `:` (`C:foo` is drive-relative on Windows; S2-A code5 3) and no NUL, and its own basename? A name that is not is never joined to a path. */
@@ -136,6 +138,7 @@ function entryOf(tmp, name, judged, { now, io, probe, claimPlatform, readClaim }
 
 /** Is this the shape of a name this tool would have offered, were it one segment? A folder of that shape that is not one on this system is REPORTED, not offered. */
 function looksLikeOurs(name, neverSwept) {
+  // testsToDelete-exempt: legacy-name — the same clean-up reports a folder of the old shape; helper-own
   return candidateKind(name, neverSwept) !== null || /^\.(coai-|testsToDelete-coai-run-)/i.test(name);
 }
 

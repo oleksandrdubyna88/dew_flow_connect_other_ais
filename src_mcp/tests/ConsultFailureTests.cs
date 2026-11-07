@@ -135,7 +135,7 @@ public sealed class ConsultFailureTests
     {
         // D1 of PLAN_vibe_live_round_fixes.md: the REAL refusal a hooks.toml in an owned home earns - its "delete {home}" ends a
         // sentence ~330 characters long, past the 240 a vendor's words are cut at.
-        using var home = TempDir.For("testsToDelete-vh-refusal-");
+        using var home = TempDir.For("vh-refusal-");
         var owned = home.At(new string('h', 60));
         Directory.CreateDirectory(owned);
         File.WriteAllText(Path.Combine(owned, "hooks.toml"), "[[hooks]]\n");

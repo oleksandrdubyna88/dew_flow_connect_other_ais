@@ -31,6 +31,10 @@ import { pathToFileURL } from 'node:url';
 
 import { flag, HERE, releasedExtension } from './releasedHalves.mjs';
 import { startTeamServer } from './team-server-child.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'compat-gauge' });
+
 
 let broken = [];
 const say = (ok, what, detail = '') => {
@@ -74,6 +78,7 @@ function localToken(key, email) {
   return `${head}.${body}.${createHmac('sha256', key).update(`${head}.${body}`).digest('base64url')}`;
 }
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const scratch = mkdtempSync(path.join(tmpdir(), 'coai-gauge-compat-'));
 const released = releasedExtension(scratch, flag('extension-tag', ''));
 if (released === undefined) {
@@ -86,6 +91,7 @@ const load = async (name) => await import(pathToFileURL(path.join(released.root,
 const oldApi = await load('teamServerApi');
 const oldUsage = await load('usage');
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const dataDir = mkdtempSync(path.join(tmpdir(), 'coai-gauge-compat-data-'));
 writeFileSync(path.join(dataDir, 'vendors.json'), JSON.stringify([{ id: 'codex', runtime: 'codex', models: ['gpt-6-luna'], slots: ['a'] }]));
 mkdirSync(path.join(dataDir, 'accounts', 'codex', 'a'), { recursive: true });
@@ -130,7 +136,7 @@ try {
 } catch (error) {
   say(false, 'the comparison ran to its end', error instanceof Error ? error.message : String(error));
 } finally {
-  server?.stop();
+  await server?.stop();
   rmSync(dataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
   rmSync(scratch, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 }

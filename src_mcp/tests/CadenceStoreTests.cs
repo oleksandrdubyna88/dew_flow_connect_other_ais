@@ -159,6 +159,7 @@ public sealed class CadenceStoreTests : IDisposable
         await repo.WriteAsync("a.txt", "a");
         await repo.CommitAsync("base");
         var linked = Path.Combine(Path.GetTempPath(), "coai-cadence-wt-" + Guid.NewGuid().ToString("N")[..8]);
+        // testsToDelete-exempt: raw-worktree — `linked` is directly in the run folder, the temp root of this process
         await repo.GitAsync("worktree", "add", "-b", "second", linked);
         try
         {

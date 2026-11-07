@@ -26,6 +26,7 @@ if (!exe || !scratchRoot || !out) {
 }
 const repeats = Number.parseInt(repeatsArg, 10);
 
+// testsToDelete-exempt: raw-temp — a probe a person runs, under the scratch root named on its command line; no test run reaches it, pinned by E10
 const root = mkdtempSync(join(scratchRoot, 'coai-claudeprobe-'));
 const repo = join(root, 'repo');
 const outside = join(root, 'outside');

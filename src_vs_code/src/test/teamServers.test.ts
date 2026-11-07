@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import * as assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

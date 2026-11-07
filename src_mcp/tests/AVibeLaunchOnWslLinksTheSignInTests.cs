@@ -23,8 +23,8 @@ public sealed class AVibeLaunchOnWslLinksTheSignInTests : IDisposable
 {
     private const string Persons = "/home/p/.vibe/.env";
 
-    private readonly TempDir _scratch = TempDir.For("testsToDelete-vlw-");
-    private readonly TempDir _work = TempDir.For("testsToDelete-vlw-work-");
+    private readonly TempDir _scratch = TempDir.For("vlw-");
+    private readonly TempDir _work = TempDir.For("vlw-work-");
 
     public void Dispose()
     {

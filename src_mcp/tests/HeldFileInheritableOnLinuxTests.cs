@@ -22,7 +22,7 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-heldfile-");
+    private readonly TempDir _dir = TempDir.For("heldfile-");
 
     private readonly List<Process> _children = [];
 

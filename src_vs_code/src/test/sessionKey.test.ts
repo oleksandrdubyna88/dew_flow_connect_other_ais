@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CLAUDE_PANEL_VIEW_TYPE, KnownPanel, SessionMatch, TabSnapshot, sourceSession } from '../sessionKey';

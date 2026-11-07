@@ -10,7 +10,7 @@
  * the `stop` it returns — callers put it on every exit path, because a server left holding a port is the next run's
  * mystery.</p>
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -57,13 +57,16 @@ export function freePort() {
   });
 }
 
+/** A child that has ended: an exit CODE, or a SIGNAL (a process killed by one has `exitCode` null and `signalCode` set, and its 'exit' event has already fired). */
+const hasEnded = (child) => child.exitCode !== null || child.signalCode !== null;
+
 /** Polls the server's own anonymous health route — the one thing it answers before any credential. */
-async function waitForHealth(url, child, say) {
+async function waitForHealth(url, child, say, readyTimeoutMs = READY_TIMEOUT_MS) {
   say(`waiting for ${url}/api/health`);
-  const deadline = Date.now() + READY_TIMEOUT_MS;
+  const deadline = Date.now() + readyTimeoutMs;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      throw new Error(`the server exited with code ${child.exitCode} before it became healthy — its output is above`);
+    if (hasEnded(child)) {
+      throw new Error(`the server exited (${child.signalCode === null ? `code ${child.exitCode}` : `signal ${child.signalCode}`}) before it became healthy — its output is above`);
     }
     try {
       const response = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(HEALTH_REQUEST_TIMEOUT_MS) });
@@ -76,15 +79,15 @@ async function waitForHealth(url, child, say) {
     await new Promise((r) => setTimeout(r, 250));
   }
 
-  throw new Error(`the server did not answer ${url}/api/health within ${READY_TIMEOUT_MS / 1000}s`);
+  throw new Error(`the server did not answer ${url}/api/health within ${readyTimeoutMs / 1000}s`);
 }
 
 /**
  * Start the server over `dataDir`, with a fresh signing key, `domain` allowed and `admins` in `Coai:Admins`.
  *
- * @returns {Promise<{ url: string, key: string, stop: () => void }>}
+ * @returns {Promise<{ url: string, key: string, stop: () => Promise<void>, killNow: () => void }>}
  */
-export async function startTeamServer({ extensionRoot, dataDir, domain, admins, say = () => {}, stdio = 'inherit' }) {
+export async function startTeamServer({ extensionRoot, dataDir, domain, admins, say = () => {}, stdio = 'inherit', readyTimeoutMs = READY_TIMEOUT_MS }) {
   const assembly = serverAssembly(extensionRoot);
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
@@ -126,25 +129,40 @@ export async function startTeamServer({ extensionRoot, dataDir, domain, admins, 
   child.on('error', (error) => { spawnError = error; });
   const stop = () => stopServer(child);
   try {
-    await waitForHealth(url, child, say);
+    await waitForHealth(url, child, say, readyTimeoutMs);
   } catch (error) {
-    stop();
+    // WAITED for: a server that ignores the polite signal must be gone before the caller's `fail()` ends the process and the run folder holding its data is removed.
+    await stop();
     throw spawnError === undefined ? error : new Error(`the server could not be started: ${spawnError.message}`);
   }
 
-  return { url, key, stop };
+  return { url, key, stop, killNow: () => killTreeSync(child) };
 }
 
-/** SIGTERM, then the whole tree — in that order and never conditionally. */
-function stopServer(child) {
-  if (child.exitCode === null && child.pid !== undefined) {
-    kill(child, 'SIGTERM');
+/**
+ * SIGTERM, then the whole tree — in that order and never conditionally. Answers a promise that settles when the server has EXITED (or, past the grace and a further
+ * bound, anyway): a caller that is about to remove the server's data folder awaits it, because a graceful shutdown writes into that folder (E5 S4: the run folder's removal
+ * at exit would otherwise race a server still shutting down). A caller on its way out of the process cannot await and calls it as before.
+ */
+export function stopServer(child) {
+  return new Promise((settled) => {
+    if (hasEnded(child) || child.pid === undefined) {
+      settled();
+      return;
+    }
     // A server that ignores the polite signal still has to release the port before the next run.
     // NOT unref'd: this timer is the escalation, and a timer nothing waits for is a timer that
     // never fires when the process is on its way out.
     const hard = setTimeout(() => kill(child, 'SIGKILL'), STOP_GRACE_MS);
-    child.on('exit', () => clearTimeout(hard));
-  }
+    const give = setTimeout(settled, STOP_GRACE_MS + 5_000);
+    give.unref();
+    child.once('exit', () => {
+      clearTimeout(hard);
+      clearTimeout(give);
+      settled();
+    });
+    kill(child, 'SIGTERM');
+  });
 }
 
 /**
@@ -167,5 +185,23 @@ export function kill(child, signal) {
     process.kill(-child.pid, signal);
   } catch {
     // Already gone, or never had a group. Nothing left to stop either way.
+  }
+}
+
+/**
+ * The server's whole tree, killed SYNCHRONOUSLY — for an `exit` listener, which can do no asynchronous work: the group on POSIX, `taskkill /T /F` waited for on Windows.
+ * Nothing is awaited and nothing is thrown.
+ */
+export function killTreeSync(child) {
+  if (hasEnded(child) || child.pid === undefined) return;
+  try {
+    if (process.platform === 'win32') {
+      const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+      spawnSync(taskkill, ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', timeout: 5_000 });
+      return;
+    }
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    // Already gone, or never had a group.
   }
 }

@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ADOPT_PREFIX, DISCARD, NO_SERVER, revokeRefusal, settleChoice, settledSentence } from '../bugzKeyChoices';

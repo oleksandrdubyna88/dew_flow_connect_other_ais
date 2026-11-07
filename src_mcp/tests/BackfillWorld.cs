@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 /// One of E1's fixture cases made into a STORE the backfill can be run over (E7): its transcripts in a temp Claude home, and every gate session of
 /// its <c>rounds.json</c> recorded through the LIVE path — <see cref="RoundAuthorsStep"/> for the snapshot, <see cref="SessionStore"/> for the file,
 /// <see cref="RoundsDb.RecordRound"/> for the projection — so what the backfill is compared against is what the live writers left, not a table a
-/// test typed. Everything is under a <c>testsToDelete-</c> temp folder; no live store is ever named.
+/// test typed. Everything is under a temp folder; no live store is ever named.
 /// </summary>
 internal sealed class BackfillWorld : IDisposable
 {
@@ -43,7 +43,7 @@ internal sealed class BackfillWorld : IDisposable
 
     public static BackfillWorld Of(string fixtureName)
     {
-        var temp = TempDir.For("testsToDelete-coai-backfill-");
+        var temp = TempDir.For("backfill-");
 
         return new BackfillWorld(temp, CallerTranscriptFixture.Materialise(fixtureName, temp));
     }

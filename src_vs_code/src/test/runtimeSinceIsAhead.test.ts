@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -144,7 +145,7 @@ test('every entry of ON_LINUX_SINCE is held to the same guard: ahead of the newe
 
 // ---------------------------------------------------------------- the guard's own teeth
 
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-runtimeSince-'));
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'runtimeSince-'));
 after(() => fs.rmSync(scratch, { recursive: true, force: true }));
 
 function changelogWith(...sections: string[]): string {

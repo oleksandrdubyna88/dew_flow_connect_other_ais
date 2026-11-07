@@ -162,6 +162,7 @@ function removeData(dataDir) {
 
 /** @returns {Promise<{ windows: string[], vendorsRead: number }>} */
 export async function usageCountsSeam({ fail, extensionRoot = resolve(import.meta.dirname, '..') }) {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-usage-'));
   writeFileSync(join(dataDir, 'usage.jsonl'), `${LEDGER.join('\n')}\n`, 'utf8');
   let server;
@@ -176,7 +177,7 @@ export async function usageCountsSeam({ fail, extensionRoot = resolve(import.met
     outcome = error instanceof Error ? error.message : String(error);
   } finally {
     // Before any `fail`, which exits the process and would skip a `finally` that ran after it.
-    server?.stop();
+    await server?.stop();
     removeData(dataDir);
   }
   if (typeof outcome === 'string') {

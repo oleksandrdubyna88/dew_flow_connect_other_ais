@@ -1,6 +1,7 @@
 // node --test scripts/lib/launch-tree.test.mjs — runTree: a child started with a timeout whose expiry ends its WHOLE process tree
 // (on Windows spawnSync's timeout ends only the direct child and its grandchildren live on). The children are `node -e` scripts
 // this test starts; only the pids they report are ever ended, never an image name.
+import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { runTree } from './launch-tree.mjs';

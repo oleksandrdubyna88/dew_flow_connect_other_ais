@@ -28,6 +28,7 @@ if (!exe || !scratchRoot || !out || !followUp || Boolean(questionRoot) !== Boole
 const repeats = Number.parseInt(repeatsArg, 10);
 
 function plantedRepository() {
+  // testsToDelete-exempt: raw-temp — a probe a person runs, under the scratch root named on its command line; no test run reaches it, pinned by E10
   const planted = mkdtempSync(join(scratchRoot, 'coai-agyfollow-'));
   const git = (...args) => execFileSync(GIT, ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
     '-c', 'commit.gpgsign=false', ...args], { cwd: planted });

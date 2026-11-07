@@ -98,6 +98,7 @@ fi
 
 install -d -m 0750 -o root -g coai-bugs /etc/coai-bugs
 umask 077
+# testsToDelete-exempt: raw-temp — the root helper of a deploy; a test under the gate reaches this with TMPDIR in the run folder, and a deploy is not a test run
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 

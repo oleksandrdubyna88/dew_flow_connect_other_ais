@@ -15,14 +15,14 @@ namespace CoaiMcp.Tests;
 /// file, every other entry goes under the lock, and the lock file and the folder go last, after the release.
 /// </summary>
 /// <remarks>
-/// Every junction points at a fake person's folder inside this test's own <c>testsToDelete-kimi-</c> fixture, which lives OUTSIDE the
+/// Every junction points at a fake person's folder inside this test's own <c>kimi-</c> fixture, which lives OUTSIDE the
 /// one-shot root being deleted (a past CI failure: a person's folder inside the swept tree is deleted by enumeration order). The
 /// tree hold is a plain non-inheriting <c>HeldFile.Take</c> in the test host; no test ever runs a real <c>kimi</c>.
 /// </remarks>
 public sealed class AOneShotKimiHomeIsDisposedJunctionFirstTests : IDisposable
 {
     private readonly KimiFixture _person = new();
-    private readonly TempDir _root = TempDir.For("testsToDelete-kimi-oneshot-");
+    private readonly TempDir _root = TempDir.For("kimi-oneshot-");
     private readonly List<string> _warned = [];
     private readonly List<string> _unlinkedByTheDeleter = [];
 

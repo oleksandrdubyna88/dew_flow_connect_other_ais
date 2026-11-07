@@ -19,7 +19,7 @@ public sealed class TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests : IDisposa
 
     private const string FakeKey = "ak-9z8y7x6w5v4u3t2s";
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-once-and-hidden-");
+    private readonly TempDir _dir = TempDir.For("kimi-once-and-hidden-");
 
     public void Dispose() => _dir.Dispose();
 

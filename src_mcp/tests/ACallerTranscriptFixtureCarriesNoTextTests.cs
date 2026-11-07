@@ -709,6 +709,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         var tooLong = Directory.GetFiles(Root, "*", SearchOption.AllDirectories)
             .Select(f => FixtureRootFromRepo + Path.GetRelativePath(Root, f).Replace('\\', '/'))
             .Where(p => p.Length > MaxRelativePathLength).Select(p => $"{p.Length}: {Clip(p)}").ToList();
+        // testsToDelete-exempt: raw-worktree — the words are in an assertion message, no worktree is made here
         tooLong.Should().BeEmpty($"a path over {MaxRelativePathLength} characters relative to the repository root breaks 'git worktree add' on Windows when the checkout sits in a long folder");
     }
 

@@ -38,6 +38,10 @@ import './lower-priority.mjs';
 import { nodeTestArgs } from './run-tests.mjs';
 // How the real server is started, waited for and stopped — shared with the seam's usage-counts leg.
 import { kill, startTeamServer } from './team-server-child.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'contract' });
+
 
 const DOMAIN = process.env.COAI_CONTRACT_DOMAIN ?? 'contract.test';
 // The admin persona the Team server tab's contract needs (teamUsage.contract.ts): an email in Coai:Admins. Pointed at
@@ -55,49 +59,57 @@ const TEST_RUN_TIMEOUT_MS = 180_000;
  * script gets to its afterwards. A killed run used to leave a server holding a port.</p>
  */
 let cleanUp = () => {};
-let cleaned = false;
+// All an `exit` listener can do: no await, no timer. Kills the server's tree and removes the data (the run folder's own removal follows it).
+let syncCleanUp = () => {};
+// The cleanup IN FLIGHT. A second caller (Ctrl-C, then the `finally`; `fail()` under a signal) gets the same promise and waits for it, not for nothing.
+let cleaning;
 
 function runCleanUp() {
-  if (cleaned) {
-    return;
+  if (cleaning === undefined) {
+    try {
+      cleaning = Promise.resolve(cleanUp());
+    } catch (error) {
+      console.error(`run-contract: the cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+      cleaning = Promise.resolve();
+    }
   }
-  cleaned = true;
-  cleanUp();
+  return cleaning;
 }
 
-process.on('exit', runCleanUp);
+process.on('exit', () => syncCleanUp());
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, () => {
     // Not process.exit() here: that would run in the same tick and cancel the SIGKILL escalation
     // the teardown just scheduled, which is the orphan it exists to prevent. Letting the handler
     // return leaves the loop alive until the timer fires and the child's exit unrefs everything.
-    runCleanUp();
+    void runCleanUp();
   });
 }
 process.on('uncaughtException', (error) => {
   console.error(error);
-  runCleanUp();
-  process.exitCode = 1;
+  // The cleanup finishes (the server is gone before the run folder), then the process ends: it is not left to drain, which would end an unsettled top-level await with exit 13.
+  void runCleanUp().finally(() => process.exit(1));
 });
 
-function fail(message) {
+/** Says why, WAITS for the cleanup (a server told to stop is gone before the process ends and the run folder with its data is removed), then ends the run. */
+async function fail(message) {
   console.error(`run-contract: ${message}`);
-  runCleanUp();
+  await runCleanUp();
   process.exit(1);
 }
 
 /** The compiled contract tests: *.contract.js beside the unit tests, which are *.test.js. */
-function contractTests() {
+async function contractTests() {
   const dir = join('out', 'test');
   if (!existsSync(dir)) {
-    fail(`no compiled tests in ${dir} — did the compile step run?`);
+    await fail(`no compiled tests in ${dir} — did the compile step run?`);
   }
 
   const files = readdirSync(dir)
     .filter((f) => f.endsWith('.contract.js'))
     .map((f) => join(dir, f));
   if (files.length === 0) {
-    fail(`no *.contract.js in ${dir}`);
+    await fail(`no *.contract.js in ${dir}`);
   }
 
   return files;
@@ -133,9 +145,11 @@ function seedLedger(dir) {
  * half way still takes the directory with it.
  */
 async function startServer() {
+  // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const data = mkdtempSync(join(tmpdir(), 'coai-contract-'));
   seedLedger(data);
   cleanUp = () => removeData(data);
+  syncCleanUp = () => removeData(data);
   try {
     const server = await startTeamServer({
       extensionRoot: resolve(import.meta.dirname, '..'),
@@ -144,14 +158,19 @@ async function startServer() {
       admins: ADMIN,
       say: (line) => console.log(`run-contract: ${line}`),
     });
-    cleanUp = () => {
-      server.stop();
+    cleanUp = async () => {
+      // The server has EXITED before its data goes: a graceful shutdown writes there, and the run folder is removed right after (E5 S4).
+      await server.stop();
+      removeData(data);
+    };
+    syncCleanUp = () => {
+      server.killNow();
       removeData(data);
     };
 
     return { url: server.url, key: server.key };
   } catch (error) {
-    fail(error instanceof Error ? error.message : String(error));
+    await fail(error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -164,11 +183,12 @@ function removeData(data) {
   }
 }
 
-function runTests(env) {
+async function runTests(env) {
+  const files = await contractTests();
   return new Promise((ok) => {
     const child = spawn(
       process.execPath,
-      nodeTestArgs(contractTests(), [`--test-timeout=${TEST_TIMEOUT_MS}`]),
+      nodeTestArgs(files, [`--test-timeout=${TEST_TIMEOUT_MS}`]),
       { stdio: 'inherit', env: { ...process.env, ...env } });
 
     // A whole-run deadline as well as --test-timeout: a child that hangs before any test starts —
@@ -215,14 +235,14 @@ function safeToPrint(url) {
 const given = process.env.COAI_CONTRACT_URL ?? '';
 if (given.length > 0) {
   if ((process.env.COAI_CONTRACT_KEY ?? '').length === 0) {
-    fail(
+    await fail(
       'COAI_CONTRACT_URL is set but COAI_CONTRACT_KEY is not. The tests mint their own identity '
       + 'token and it has to be signed with the key THAT server was started with, so this script '
       + 'will not generate one: a key it invented would not match, and every assertion would fail '
       + 'as a 401 that looks like a contract break. Pass the key you gave the server.');
   }
   if (!isLoopback(given) && process.env.COAI_CONTRACT_ALLOW_REMOTE !== '1') {
-    fail(
+    await fail(
       `${safeToPrint(given)} is not loopback. These tests mint sessions and probe a refusal, so `
       + 'pointed at a real deployment they would leave real session state on it. Set '
       + 'COAI_CONTRACT_ALLOW_REMOTE=1 if that is genuinely what you want.');
@@ -243,6 +263,6 @@ try {
     COAI_CONTRACT_SEEDED: '1',
   });
 } finally {
-  runCleanUp();
+  await runCleanUp();
 }
 process.exit(status);

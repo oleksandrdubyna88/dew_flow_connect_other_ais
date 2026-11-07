@@ -106,6 +106,7 @@ case "$VERB" in
     CONF=''
     trap 'rm -f "$CONF"' EXIT INT TERM HUP
     umask 077
+    # testsToDelete-exempt: raw-temp — a product deploy script on a server; no test run reaches this line, pinned by E10
     CONF=$(mktemp) || refuse "could not make a temporary file"
     printf 'header = "Authorization: Bearer %s"\n' "$KEY" > "$CONF"
 
@@ -162,6 +163,7 @@ esac
 printf '%s' "$WHAT" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || refuse "'$WHAT' is not a version"
 
 ARCHIVE="coai-bugs-$WHAT-$RID.tar.gz"
+# testsToDelete-exempt: raw-temp — a product deploy script on a server; no test run reaches this line, pinned by E10
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 

@@ -23,7 +23,7 @@ public sealed class ASpentKimiQuotaReadsAsAQuotaTests : IDisposable
     /// <summary>What the agent answers the turn with — constructed from the owner's CLI line, wrapped in the sign-in prefix (S1's hypothesis).</summary>
     private const string PromptError = "Authentication required: 429 You've reached your 5-hour usage limit. Your quota will reset at 14:00 UTC.";
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-quota-round-");
+    private readonly TempDir _dir = TempDir.For("kimi-quota-round-");
 
     public void Dispose() => _dir.Dispose();
 

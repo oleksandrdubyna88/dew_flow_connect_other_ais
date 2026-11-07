@@ -129,7 +129,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
         var lane = SecurityLaneSetting.Parse("""
             {"enabled":true,"runs":[{"vendor":"codex","prompt":"redteam-sql"}]}
             """, [new("codex")]);
-        using var dir = TempDir.For("testsToDelete-security-empty-folders-");
+        using var dir = TempDir.For("security-empty-folders-");
         var scratch = RoundScratch.At(dir.At("round"), _ => { });
         var work = Service(laneSetting: lane).Roster.BuildWork([RoleCatalog.ArchitectureRole], _repo.Path,
             "fixture", 1, Stage.CodeReview, true, securityFiles: Files, codexTiers: CodexTiers.None, scratch: scratch);

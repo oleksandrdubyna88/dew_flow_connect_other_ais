@@ -1,3 +1,4 @@
+import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { backupFileName, backupSettings, CONFIG_FORMAT, CONFIG_VERSION, exportedSettings, importedConfig, modelsSentence, staleBackups, type Declared } from '../configTransfer';

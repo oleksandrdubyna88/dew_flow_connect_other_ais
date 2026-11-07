@@ -89,7 +89,7 @@ public sealed class AKimiShimScenarioTests : IDisposable
         OnWindows();
         var places = _person.MadeHome("kh-env");
         using var agent = AgentFor();
-        using var elsewhere = TempDir.For("testsToDelete-kimi-elsewhere-");
+        using var elsewhere = TempDir.For("kimi-elsewhere-");
         agent.WithFields(agent.EnvField());
         var request = ShimRequest(places, agent, new Dictionary<string, string?>
         {
@@ -165,7 +165,7 @@ public sealed class AKimiShimScenarioTests : IDisposable
         OnWindows();
         var places = _person.MadeHome("kh-redirected");
         var (tree, home) = HoldFiles(places);
-        using var decoy = TempDir.For("testsToDelete-kimi-decoy-");
+        using var decoy = TempDir.For("kimi-decoy-");
         using var agent = AgentFor();
         agent.WithFields(agent.EnvField(tree, home));
         var redirected = new Dictionary<string, string?>

@@ -25,7 +25,7 @@ public sealed class ALinkCannotCarryTheReaderOutsideTests : IDisposable
     private const string Inside = "INSIDE-TEXT-3141";
     private const string Outside = "OUTSIDE-SECRET-2718";
 
-    private readonly TempDir _work = TempDir.For("testsToDelete-realpath-");
+    private readonly TempDir _work = TempDir.For("realpath-");
     private readonly string _root;
     private readonly string _outside;
 

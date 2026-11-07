@@ -137,6 +137,7 @@ static class Serving
     /// <summary>The <c>app-server</c> argv: steered by the file in the temp directory, or the defaults.</summary>
     public static int AppServer()
     {
+        // testsToDelete-exempt: raw-temp — reads the path of a steering file and allocates nothing
         var path = Path.Combine(Path.GetTempPath(), SteeringFile);
         var steering = File.Exists(path) ? Steering.From(File.ReadAllText(path)) : Steering.Default;
 

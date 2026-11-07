@@ -18,14 +18,14 @@ namespace CoaiMcp.Tests;
 /// another — and the handle is held for the reservation's life.
 /// </summary>
 /// <remarks>
-/// Windows only (E1–E8), plus E9 on the Unix legs. Every root is a <c>testsToDelete-vh-*</c> folder, never the machine's own. The
+/// Windows only (E1–E8), plus E9 on the Unix legs. Every root is a <c>vh-*</c> folder, never the machine's own. The
 /// CI runner is ELEVATED, so a folder it makes may be owned by Administrators rather than the user: E1 asserts the owner is either.
 /// </remarks>
 [SupportedOSPlatform("windows")]
 [Collection("process-privileges")]
 public sealed class PrivateFolderWindowsTests : IDisposable
 {
-    private readonly TempDir _root = TempDir.For("testsToDelete-vh-private-");
+    private readonly TempDir _root = TempDir.For("vh-private-");
 
     public void Dispose() => _root.Dispose();
 
@@ -191,7 +191,7 @@ public sealed class PrivateFolderWindowsTests : IDisposable
     public async Task E4_AFolderThatIsAJunctionToAPrivateOne_IsRefused_AndNothingIsMadeThroughIt()
     {
         OnWindows();
-        using var target = TempDir.For("testsToDelete-vh-target-");
+        using var target = TempDir.For("vh-target-");
         await DirectoryLink.MakeAsync(new ProcessLauncher(), Path.Combine(_root, "coai-vh"), target);
 
         var refused = PrivateFolder.Open(_root, "coai-vh").Should().BeOfType<PrivateFolderOutcome.Refused>().Subject;
@@ -226,7 +226,7 @@ public sealed class PrivateFolderWindowsTests : IDisposable
     public async Task E6_AConversationAndItsSweep_AreRefused_OnARootWhoseCoaiVibeIsAJunction()
     {
         OnWindows();
-        using var target = TempDir.For("testsToDelete-vh-target-");
+        using var target = TempDir.For("vh-target-");
         Directory.CreateDirectory(Path.Combine(target, "0123456789abcdef0123456789abcdef"));
         var link = Path.Combine(_root, ConsultantHomes.Vibe);
         await DirectoryLink.MakeAsync(new ProcessLauncher(), link, target);
@@ -388,7 +388,7 @@ public sealed class PrivateFolderWindowsTests : IDisposable
     {
         OnWindows();
         var parent = WideFolder("coai-vibe");
-        using var target = TempDir.For("testsToDelete-vh-target-");
+        using var target = TempDir.For("vh-target-");
         File.WriteAllText(target.At("outside.txt"), "not ours");
         var targetBefore = new DirectoryInfo(target).GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All);
         var fileBefore = new FileInfo(target.At("outside.txt")).GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All);

@@ -19,7 +19,7 @@ public sealed class AuthorPeersTests : IDisposable
     private static readonly DateTime T0 = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     private const string Caller = "11111111-1111-1111-1111-111111111111";
 
-    private readonly TempDir _dir = TempDir.For("testsToDelete-coai-peers-");
+    private readonly TempDir _dir = TempDir.For("peers-");
 
     public void Dispose()
     {

@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class KimiEnvironmentOnLinuxTests : IDisposable
 {
-    private static readonly string Tmp = Path.Combine(Path.GetTempPath(), "testsToDelete-kimi-env-unix");
+    private static readonly string Tmp = Path.Combine(Path.GetTempPath(), "kimi-env-unix");
 
     private static readonly KimiPlaces Places = new(Path.Combine(Tmp, "owned", "kh-x"), Path.Combine(Tmp, "ki"), Path.Combine(Tmp, "ki", "bin"), [], string.Empty, Path.Combine(Tmp, "ki", "bin", "kimi"));
 

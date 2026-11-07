@@ -22,13 +22,19 @@
 #
 # What it cannot find: a process that left the group AND lost its parent before the snapshot (a double-forked daemon). No probe
 # here daemonizes (parent plan §6).
-# Test seams (the shipped defaults are /tmp and 10): COAI_NATIVE_SERIES_ROOT, COAI_NATIVE_ABORT_GRACE (seconds).
+# Defence in depth (the lead's own `stat` checks run first): it also refuses a series folder not owned by the expected uid or group- or world-writable, and a series ROOT not
+# owned by it or group- or world-writable without the sticky bit.
+# Test seams (the shipped defaults are /tmp, 10 and 0): COAI_NATIVE_SERIES_ROOT, COAI_NATIVE_ABORT_GRACE (seconds), COAI_NATIVE_SERIES_OWNER_UID.
+# The lead reaches this script ONLY through `node scripts/native/lead.mjs <host> <step>` (the caller's `stat` check runs first; it takes no root option) — never by a hand-built ssh line.
+# The series is the ONE BOUNDED EXCEPTION of the test-leftovers family (E5 S4): no test-leftovers prefix, no owner, no claim — see make-series.sh.
 set -eu
 export PATH=/usr/bin:/bin
+export LC_ALL=C                                                               # the bracket ranges of the shape tests below are locale-dependent ([0-9a-f] in a UTF-8 locale can match more)
 
 SERIES_ROOT="${COAI_NATIVE_SERIES_ROOT:-/tmp}"
 GRACE="${COAI_NATIVE_ABORT_GRACE:-10}"
-SHAPE='testsToDelete-native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}'
+OWNER_UID="${COAI_NATIVE_SERIES_OWNER_UID:-0}"
+SHAPE='native-(vibe|kimi)-[0-9]{8}-[0-9a-f]{6}'
 
 refuse() { printf 'refused: %s\n' "$*" >&2; exit 78; }
 
@@ -42,6 +48,15 @@ NAME="${SERIES#"$SERIES_ROOT"/}"
 if [ "$NAME" = "$SERIES" ]; then refuse "'$SERIES' is not under $SERIES_ROOT"; fi
 [[ $NAME =~ ^${SHAPE}$ ]] || refuse "'$NAME' does not match $SHAPE"
 if [ "$(cat -- "$SERIES/SERIES_PATH" 2>/dev/null)" != "$SERIES" ]; then refuse "SERIES_PATH does not name '$SERIES'"; fi
+if ! [[ $OWNER_UID =~ ^[0-9]{1,10}$ ]]; then refuse "COAI_NATIVE_SERIES_OWNER_UID '$OWNER_UID' is not a uid"; fi
+# The seam exists so the tests can run as their own user. As root it would make every check below accept a folder of THAT user: a root run never takes it.
+if [ "$(id -u)" = 0 ] && [ "$OWNER_UID" != 0 ]; then refuse "running as root with COAI_NATIVE_SERIES_OWNER_UID=$OWNER_UID: the test seam is not for a root run"; fi
+FACTS="$(stat -c '%u %a' -- "$SERIES")"
+if [ "${FACTS% *}" != "$OWNER_UID" ]; then refuse "'$SERIES' is owned by uid ${FACTS% *}, not by uid $OWNER_UID"; fi
+if (( (8#${FACTS#* } & 8#022) != 0 )); then refuse "'$SERIES' is mode ${FACTS#* }: group- or world-writable"; fi
+ROOT_FACTS="$(stat -c '%u %a' -- "$SERIES_ROOT")"
+if [ "${ROOT_FACTS% *}" != "$OWNER_UID" ]; then refuse "the series root '$SERIES_ROOT' is owned by uid ${ROOT_FACTS% *}, not by uid $OWNER_UID"; fi
+if (( (8#${ROOT_FACTS#* } & 8#022) != 0 && (8#${ROOT_FACTS#* } & 8#1000) == 0 )); then refuse "the series root '$SERIES_ROOT' is group- or world-writable (mode ${ROOT_FACTS#* }) without the sticky bit"; fi
 
 HANDLE="$SERIES/logs/$PHASE.handle"
 if [ ! -f "$HANDLE" ]; then echo "abort $PHASE: no handle — the run script never started, nothing to end"; exit 0; fi

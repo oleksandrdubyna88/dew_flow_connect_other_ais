@@ -74,6 +74,7 @@ function localToken(key, email) {
 }
 
 function seeded() {
+  // testsToDelete-exempt: raw-temp — a library; every importer is an entry with the wrap or a test under the runner, pinned by runnerScripts E9
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-gauge-'));
   writeFileSync(join(dataDir, 'vendors.json'), JSON.stringify([{ id: 'codex', runtime: 'codex', models: ['m'], slots: ['a'] }]));
   mkdirSync(join(dataDir, 'accounts', 'codex', 'a'), { recursive: true });
@@ -129,7 +130,7 @@ export async function gaugeSeam({ fail, extensionRoot = resolve(import.meta.dirn
   } catch (error) {
     outcome = error instanceof Error ? error.message : String(error);
   } finally {
-    server?.stop();
+    await server?.stop();
     try {
       rmSync(dataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
     } catch {

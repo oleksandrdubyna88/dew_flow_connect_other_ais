@@ -33,7 +33,11 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { flag, HERE, newServer, releasedServer, run } from './releasedHalves.mjs';
+import { flag, HERE, newServer, releasedServer, run as runServer } from './releasedHalves.mjs';
+import { startOwnedRun } from './ownedRun.mjs';
+// E5 S4: this script owns ONE run folder (TEMP, TMP and TMPDIR name it from here on, so what it and its children make in temp lands inside and is removed with it).
+const run = await startOwnedRun({ what: 'compat-vibe' });
+
 
 const broken = [];
 const say = (ok, what, detail = '') => {
@@ -54,6 +58,7 @@ const { DEFAULTS } = await load('settingsShape');
 const { DEFAULT_VENDORS } = await load('vendors');
 const { VIBE_RUNTIME_SINCE, runtimeOnServer } = await load('runtimeSince');
 
+// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
 const work = mkdtempSync(path.join(tmpdir(), 'coai-vibe-runtime-compat-'));
 mkdirSync(path.join(work, 'server'));
 const old = releasedServer(path.join(work, 'server'), flag('server-tag', ''));
@@ -61,7 +66,7 @@ if (old.length === 0) {
   console.log('the released server could not be obtained; nothing here is a contract result');
   process.exit(2);
 }
-const oldVersion = (await run(old, ['--version'], work)).out.trim().split(/\s+/u).pop() ?? '';
+const oldVersion = (await runServer(old, ['--version'], work)).out.trim().split(/\s+/u).pop() ?? '';
 // The settings file is the only source the servers below may read: an inherited variable would win.
 const noEnv = { COAI_VENDORS: '', COAI_PROVIDERS: '' };
 
@@ -92,8 +97,8 @@ const gated = serverSettingsJson(DEFAULTS, withVibe, 'compat-new', oldVersion);
 const gatedRows = JSON.parse(JSON.parse(gated).COAI_VENDORS ?? '[]');
 say(gatedRows.every((one) => one.id !== 'vibe') && gatedRows.length === DEFAULT_VENDORS.length,
   'the settings file holds the vibe row back and keeps every other row', gatedRows.map((one) => one.id).join(', '));
-const served = await run(old, ['--providers'], dataDir('gated', gated), noEnv);
-const plain = await run(old, ['--providers'], dataDir('plain', serverSettingsJson(DEFAULTS, [...DEFAULT_VENDORS], 'compat-new', oldVersion)), noEnv);
+const served = await runServer(old, ['--providers'], dataDir('gated', gated), noEnv);
+const plain = await runServer(old, ['--providers'], dataDir('plain', serverSettingsJson(DEFAULTS, [...DEFAULT_VENDORS], 'compat-new', oldVersion)), noEnv);
 say(served.code === 0, `the released server answers --providers over that file`, `exit ${served.code}`);
 say(JSON.stringify(rowsOf(served.out)) === JSON.stringify(rowsOf(plain.out)),
   'and serves its other rows exactly as it serves a file that never had the vibe row',
@@ -101,7 +106,7 @@ say(JSON.stringify(rowsOf(served.out)) === JSON.stringify(rowsOf(plain.out)),
 
 // ---------- 2. Why: the same rows with the gate bypassed ----------
 const ungated = serverSettingsJson(DEFAULTS, withVibe, 'compat-new', '');
-const told = await run(old, ['--providers'], dataDir('ungated', ungated), noEnv);
+const told = await runServer(old, ['--providers'], dataDir('ungated', ungated), noEnv);
 const vibeThere = rowsOf(told.out).find((one) => one.provider === 'vibe');
 say(told.code === 0 && vibeThere !== undefined, 'with the gate bypassed the released server is handed the vibe row', `exit ${told.code}`);
 say(vibeThere?.auth === 'unavailable' && /vibe/u.test(vibeThere?.note ?? ''),
@@ -112,7 +117,7 @@ const built = newServer();
 if (built.length === 0) {
   console.log('SKIP  seam 3 — this checkout has no built server (`dotnet build dew_flow_connect_other_ais.slnx -c Debug`)');
 } else {
-  const ours3 = await run(built, ['--providers'], dataDir('ours', ungated), noEnv);
+  const ours3 = await runServer(built, ['--providers'], dataDir('ours', ungated), noEnv);
   const vibeHere = rowsOf(ours3.out).find((one) => one.provider === 'vibe');
   say(ours3.code === 0 && vibeHere !== undefined, 'this checkout\'s server lists the vibe row', `exit ${ours3.code}`);
   say(!/not one this build of coai-mcp runs/u.test(vibeHere?.note ?? ''),

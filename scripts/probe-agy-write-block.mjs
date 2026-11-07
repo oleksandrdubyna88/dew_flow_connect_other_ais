@@ -69,6 +69,7 @@ process.stdin.on('data', (c) => { input += c; }).on('end', () => {
 
 /** A git repository holding the file to read: the tree agy is given with --add-dir. */
 function tree() {
+  // testsToDelete-exempt: raw-temp — a probe a person runs, under the scratch root named on its command line; no test run reaches it, pinned by E10
   const dir = mkdtempSync(join(scratchRoot, 'coai-wb-tree-'));
   const git = (...args) => execFileSync(GIT, ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
     '-c', 'commit.gpgsign=false', ...args], { cwd: dir });
@@ -81,6 +82,7 @@ function tree() {
 
 /** The cwd the arm owns, with whatever block the arm puts in it — a git repository, so it is its own project root. */
 function home(arm) {
+  // testsToDelete-exempt: raw-temp — a probe a person runs, under the scratch root named on its command line; no test run reaches it, pinned by E10
   const dir = mkdtempSync(join(scratchRoot, `coai-wb-${arm}-`));
   if (!arm.includes('nogit')) {
     execFileSync(GIT, ['init', '-q'], { cwd: dir });
