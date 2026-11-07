@@ -1229,6 +1229,13 @@ state was 56 bytes and zero) and `AtNinetyKilobytes_TheTestLeftoversRule_IsShown
 `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes`, which pins the number. The figures in the
 paragraph above are the 80 000-byte history. Numbers: `RESULTS_rules_selection_budget.md`.
 
+*Update 2026-11-06:* the owner raised the budget again, to 93 301 (after consultants, consult 53578f8a), because pin `37b9aa5` grew the tier by 3 301
+to 65 336 (base 17 988, pair 83 324) and at 90 000 `common/test-leftovers.md` would have fitted on no branch. The free tail is 9 977 again, the figure
+before the pin; the canary list (`gpu-lease`, `nuget-packages`, `durable-status`), the bound of three and the four test-leftovers rows are unchanged and
+were re-measured, not assumed. The tests now carry the names `AtTheDefaultBudget_*` and `TheDefaultBudget_IsTheOperatorsNumber` (they were
+`AtNinetyKilobytes_*` and `TheDefaultBudget_IsTheOperatorsNinetyKilobytes`; the old names stay in the dated sections above and in
+`RESULTS_rules_selection_budget.md`). The base-and-tier drift guard now pins tier 65 336 and the pair 83 324.
+
 **What these still do not prove.** The no-client-IP promise is a deployment fact — a reverse proxy
 writes `remote_addr` before the request reaches any route — and no test in this process can reach
 it. It is verified by reading the deployed stack's logs after a real ingest. The unit's `UMask=0027`

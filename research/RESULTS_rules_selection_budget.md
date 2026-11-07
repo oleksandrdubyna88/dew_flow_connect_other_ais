@@ -1,4 +1,4 @@
-# RESULTS — what a round's rules budget actually holds (80 KB on 2026-09-15; 90 KB since 2026-10-16, see the last section)
+# RESULTS — what a round's rules budget actually holds (80 KB on 2026-09-15; 90 KB from 2026-10-16; 93 301 characters since 2026-11-06 — see the last section)
 
 > **Subject:** this repository at `c6ff353f`, conventions pin `126f58d7` (that day's release tip).
 > **Harness:** a byte-count over the mounted corpus applying `RuleOrder`'s documented order, run from
@@ -6,7 +6,7 @@
 > sizes come from `find .agents/conventions/{common,csharp,rust,typescript} -name '*.md' | xargs wc -c`.
 > **Date:** 2026-09-15 (re-measured at 90 000 bytes on 2026-10-16: last section). **Pinned:** budget
 > 90 000 bytes (`RuleFiles.DefaultBudgetBytes`, raised from 80 000 on 2026-10-16; the 2026-09-15 sections
-> below were measured at 80 000), whole-file selection, no resolver (it cannot run — see condition 2).
+> below were measured at 80 000; **93 301 since 2026-11-06**, the owner's decision for pin `37b9aa5`, last section), whole-file selection, no resolver (it cannot run — see condition 2).
 >
 > Evidence for epic 3 of
 > [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](PLAN_the_rules_a_round_shows_are_drawn_at_random.md)
@@ -367,3 +367,44 @@ three identities, maximum 3), `…EveryBranchReachesAtLeastOneTailRule` (minimum
 | widest / narrowest tail among the hundred | 3 / 1 | 3 / 1 |
 
 **Re-pinned:** `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (base 17 988 + tier 62 035 = 80 023). All 22 `StageRulesTests` pass unchanged otherwise: the at-most-three and at-least-one canaries and the test-leftovers rows (`feat/branch-0`, `fix/issue-9-thing` drawn; `fix/issue-1-thing`, `feat/branch-2` not). The 3 000-name figures are one run of a deterministic harness, not a sample.
+
+## RE-MEASURED, 2026-11-06 — the conventions pin moves to release `37b9aa5`, and the owner raises the budget to 93 301
+
+> **Decision (owner, 2026-11-06, after two consultants recommended it; consult `53578f8a`):** `RuleFiles.DefaultBudgetBytes` goes from 90 000 to 93 301.
+> **Why:** the pin moved to `37b9aa5` and `common/testing.md`, a tier rule, grew by 3 301 characters, so the tier is 65 336 (it was 62 035). The base is 17 988. The pair is 83 324.
+> At 90 000 that leaves 6 676, less than the 8 794-character `common/test-leftovers.md`: it would fit on no branch and reach no reviewer, the 80 000-byte state of 2026-10-16 again.
+> 90 000 + 3 301 = 93 301 restores the free tail to 9 977, which is what it was before the pin.
+> **Subject:** branch `chore/pin-37b9aa5-rebaseline` over `main` at `634be6a8`, the conventions mount at `37b9aa5773fc8ca1f79702b8535f9147d12a8626` (`git rev-parse HEAD` in the mount).
+> **Harness:** the 2026-11-01 harness above (`RuleBudgetMeasurementTests`, explicit, Debug build), unchanged, run once: `COAI_RULE_BUDGET_OUT=/home/jinx/git/wt/rule-budget-2026-11-06.txt
+> node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests --explicit only --filter-class CoaiMcp.Tests.RuleBudgetMeasurementTests`, after `dotnet build src_mcp/tests/CoaiMcp.Tests.csproj -c Debug -m:4 --disable-build-servers`.
+> Sizes are characters of the line-ending-normalised text, the unit the collector spends (the code calls them bytes).
+> **Order of work:** the pins in `RuleFilesTests` (93 301) and `StageRulesTests` (tier 65 336, pair 83 324) were changed first and run against the old constant: `TheDefaultBudget_IsTheOperatorsNinetyKilobytes` failed
+> ("Expected RuleFiles.DefaultBudgetBytes to be 93301 ... but found 90000"), and so did `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the tail was two rules, `common/durable-status.md` missing) and both `AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` rows that expect true (`feat/branch-0`, `fix/issue-9-thing`).
+> The base-and-tier test passed on the new pins at once, which confirms the 65 336 and the 83 324. Then the constant moved to 93 301 and all of it went green.
+
+**Predicted (before the measurement run):** the free tail is exactly 93 301 - 83 324 = 9 977, so the tail on every branch is what it was at 9 977 on 2026-11-05 as far as the budget goes: the canary tail
+(`common/gpu-lease.md`, `csharp/nuget-packages.md`, `common/durable-status.md`), the maximum of three and the minimum of one, and 7 of the 100 fixed names drawing the core (indexes 0, 9, 21, 34, 36, 42, 95), so the four test-leftovers rows stay as they are.
+No prediction was made about the 3 000-name size split, because rules outside the tier may have changed size with the pin.
+
+| | Predicted | Observed |
+|---|---|---|
+| base | 17 988 (unchanged) | **17 988** |
+| the eight tier rules | 65 336 (the pins) | **65 336** |
+| base + tier | 83 324 | **83 324** |
+| free tail, of 93 301 | 9 977 | **9 977** |
+| smallest rules outside the tier | 2 197, 3 066, 3 421, 3 460 | 2 197, 3 066, 3 421, 3 460 (the three smallest 8 684; the fourth makes 12 144, more than 9 977, so never four) |
+| canary branch | the same three tail rules | the same three: `common/gpu-lease.md`, `csharp/nuget-packages.md`, `common/durable-status.md`; 16 files, 92 047 characters |
+| documented population drawing `common/test-leftovers.md` | 7 of 100, the same indexes | **7 of 100, the same indexes** (0, 9, 21, 34, 36, 42, 95) |
+| `common/test-leftovers.md` size | 8 794 | 8 794 (9 977 - 8 794 = 1 183 left, below the smallest other tail rule, so it fits only as the first rule a branch draws) |
+| 3 000 names, `common/test-leftovers.md` drawn | 153 (5.1 %) | **153 (5.1 %)** |
+| widest / narrowest tail among the hundred | 3 / 1 | **3 / 1** (widest `fix/issue-27-thing`, narrowest `feat/branch-0`) |
+| 3 000 names, tails of size 1 / 2 / 3 | not predicted (2026-11-05: 930 / 1 833 / 237) | **1 102 / 1 655 / 243** (36.7 / 55.2 / 8.1 %, mean 1.71); none of size 0 or 4 or more |
+
+**Reading it.** Every prediction held. The one number that moved is the split of tail sizes over 3 000 names, at the same free tail as on 2026-11-05: one rule on 1 102 names instead of 930, two on 1 655 instead of 1 833. The set outside the tier now
+holds 33 rules and the draw is a hash of (branch, rule name), so the pin's change of which rules sit outside the tier or how large they are re-orders the draw even where it does not move the budget; the cause was not isolated further, and nothing pinned depends on it.
+For the test-leftovers rule: it is drawn on 153 of 3 000 names with the same seven of the hundred, so the four rows (`feat/branch-0`, `fix/issue-9-thing` drawn; `fix/issue-1-thing`, `feat/branch-2` not) are true as they stand; a rule that no branch showed would belong to the owner's decision again, and one that every branch showed would belong in the tier.
+The measurement licenses these sentences for this corpus at this pin and this budget, on one run of a deterministic harness.
+
+**Re-pinned:** `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNumber` (93 301) and `StageRulesTests.AtTheDefaultBudget_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (tier 65 336, pair 83 324, base 17 988). Unchanged and green after the raise, as measured: the canary list of
+`AtTheDefaultBudget_TheRotatedTail_FitsAtMostThreeRules` (and its bound of three), `AtTheDefaultBudget_EveryBranchReachesAtLeastOneTailRule` (minimum 1) and the four rows of `AtTheDefaultBudget_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt`.
+**Renamed:** the tests named `AtNinetyKilobytes_*` are now `AtTheDefaultBudget_*` and `TheDefaultBudget_IsTheOperatorsNinetyKilobytes` is `TheDefaultBudget_IsTheOperatorsNumber`, because the number is no longer ninety; the sections above keep the old names.
