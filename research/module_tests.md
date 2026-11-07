@@ -6639,6 +6639,24 @@ Twelve test files from main lacked the guard import (G5 `every test file imports
 
 Code-gate fixes (same day): `seam-held-gate.mjs` closes its scope and kills its session in one `finally` (`seamLegs.test.mjs`: a throw after the folders exist left three `-held` folders, RED, then none; a failed claim kills the session once); `roundCountsRead.test.ts` names the wrap's shape as an interface noting why the cast remains and drops its `cleanup` calls (owned folders go with the test); the `homeEnvironment` re-export is gone, callers import it from `seam-session.mjs`. `npm test` 6918 tests. A second gate round: the leg's `finally` nests the kill attempt and the scope close so a rejected `killAndWait` still leaves no folder (RED: `seamLegs.test.mjs`, a rejecting kill left the folders), and `heldFolders()` matches the wrap's own prefix plus a six-character id of its alphabet, with a companion test that it finds folders made by `ownedDir`; `npm test` 6920 tests.
 
+### E5 S6 — the elevated-Windows pin reads who owns a new file (2026-11-07)
+
+**Symptom.** The release of `mcp-v0.65.0` (run 42388147284) failed on both Windows legs, `win-x64` (job 128449876931) and
+`win-arm64` (job 128449876879): 14 847 tests, 1 failed, `AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun`, with the audit's
+`this run left 1 folder(s) it claimed`. On the same tree, `ci`'s `Windows · mcp` passed it, both in the suite and in the pin step.
+
+**Cause.** The shell. `release.yml`'s "Build and test" runs the suite from `shell: bash` (Git Bash). `ci.yml`'s `Test` and pin steps
+use PowerShell. An elevated process started from Git Bash owns the files it makes, so `Scope.IsMine` holds and the audit sees the
+claim. The test took "elevated" to mean "a new file is `BUILTIN\Administrators`'", and that holds only for the PowerShell path.
+
+**RED.** `ci.yml` gained the step "The pin, run the way the release runs it (Git Bash)", the same command under `shell: bash`. On
+`7064dfb4` (`ci` run 42391235904, `Windows · mcp`): the suite had 14 847 tests, 0 failed; the pwsh pin had 1 test, 0 failed; and the
+Git Bash step failed with the release's message (`Expected result.ExitCode to be 0 … this run left 1 folder(s) it claimed`).
+
+**Fix.** The test makes the helper's own folder (`_owned.Dir("s6-natural")`) first and skips, saying why, when `Scope.IsMine` holds
+for it. There the limit it pins does not hold. On the PowerShell path nothing changes, and the pin step still demands `succeeded: 1`.
+F31's limit itself is unchanged: an elevated run that is not started from Git Bash still makes files a person must remove.
+
 ## Two stores, one count — E6.S1 (extension), S2 and S3: both stores' counts and ledgers, and launches per round (2026-10-21, `todo/PLAN_the_round_counter_tail_E6.md`)
 
 The C# half (the snapshot, `--round-counts-merged`) is recorded above; the parser and the loader here are driven by a fixture that follows the

@@ -473,7 +473,8 @@ jobs:
 
       # The release workflow runs this suite from Git Bash (release.yml, "Build and test"), and there the pin failed on both Windows
       # legs of mcp-v0.65.0 (run 42388147284): a process started from Git Bash owns the files it makes, so the audit DID see the
-      # claim. The same suite must not pass here and fail at the release, so it runs here the way the release runs it, too.
+      # claim. The same suite must not pass here and fail at the release, so it runs here the way the release runs it, too. There the
+      # test skips, saying why (it reads who owns a new file); the pwsh step above is the one that must show `succeeded: 1`.
       - name: The pin, run the way the release runs it (Git Bash)
         shell: bash
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe --filter-method '*AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun*'
