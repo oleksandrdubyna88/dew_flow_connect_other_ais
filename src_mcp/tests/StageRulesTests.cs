@@ -206,7 +206,7 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// At the 90 KB budget the ROTATED TAIL fits at most three rules — and on the canary branch it is exactly
+    /// At the default budget the ROTATED TAIL fits at most three rules — and on the canary branch it is exactly
     /// these three.
     /// </summary>
     /// <remarks>
@@ -256,13 +256,13 @@ public sealed class StageRulesTests : IDisposable
 
         widest.Tail.Should().HaveCountLessThanOrEqualTo(3,
             $"branch '{widest.Branch}' reached [{string.Join(", ", widest.Tail)}] and at most three rules can "
-            + "fit: the leftover is 9 977 of 93 301 since 2026-11-06 (10 002 of 90 000 before the pin 37b9aa5, 9 977 again since the 2026-11-05 merge, 9 976 before 2026-11-01, 9 992 before 2026-10-21), and the smallest rules outside the tier are 2 197, 3 066, 3 421 "
+            + "fit: the leftover is 9 977 of 93 301 since 2026-11-06 (9 977 of 90 000 from the 2026-11-05 merge until pin 37b9aa5, 10 002 from 2026-11-01, 9 976 before 2026-11-01, 9 992 before 2026-10-21), and the smallest rules outside the tier are 2 197, 3 066, 3 421 "
             + "and 3 460. That number is the same on every platform since the collector stopped spending the "
             + "budget on carriage returns.");
     }
 
     /// <summary>
-    /// The room the 90 KB budget bought exists on EVERY branch, not only on the canary one.
+    /// The room the default budget buys exists on EVERY branch, not only on the canary one.
     /// </summary>
     /// <remarks>
     /// The other half of the canary above, and the one that would have caught the budget being
@@ -280,8 +280,8 @@ public sealed class StageRulesTests : IDisposable
         var emptiest = TailsOfTheFixedBranches.Value.MinBy(entry => entry.Tail.Count);
 
         emptiest.Tail.Should().HaveCountGreaterThanOrEqualTo(1,
-            $"branch '{emptiest.Branch}' reached no tail rule. The tier leaves about 10 KB of a 90 000-byte "
-            + "budget and the smallest rule outside it is 2 197: if nothing fits, the base or the tier grew into "
+            $"branch '{emptiest.Branch}' reached no tail rule. The tier leaves about 10 KB of the default "
+            + "budget (93 301 since 2026-11-06, 90 000 before) and the smallest rule outside it is 2 197: if nothing fits, the base or the tier grew into "
             + "the headroom the operator paid for on 2026-10-16 (it was 56 bytes at 80 000, and a rule added to "
             + "the corpus then reached nobody)");
     }
