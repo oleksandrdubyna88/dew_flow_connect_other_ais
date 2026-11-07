@@ -346,6 +346,12 @@ touched.
    it gets the refusal naming the card. The bump here, with its regenerated `gateRule.ts` and snippets, comes with that release.
    The private conventions repository is set aside by the owner, so its copy is not changed either.
 
+   **Note, 2026-11-06 (the rules lag).** The pin `37b9aa5` carries the Proceed rule: the shared gate rule now sends the person to the notice card
+   instead of telling the AI to pass `humanDecision: "proceed"`. `mcp 0.64.0` and `extension 0.84.0` shipped on the OLD pin, so the lag described
+   above is still open in those released builds. It closes with the next mcp release and the next extension release, which carry this pin; the
+   extension's snippet is v18 on the branch that moves the pin, and the review budget there is 93 301 (`RuleFiles.DefaultBudgetBytes`). Neither of those
+   releases has happened.
+
 **Mixed versions during the window between 1 and 2.** New server + old extension: the card offers three; a Proceed
 has no road until the extension updates — the `resolve` refusal and the release note say so; Keep going / Stop and
 act work. Old server + new extension: the old server writes no `decisions` list → the extension offers three → no
