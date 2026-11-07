@@ -27,6 +27,11 @@ families reviewed the same input, how often does a finding have a twin from anot
 Vendor families: OpenAI (codex), Google (antigravity/gemini + a Gemini Flash chat preset),
 Mistral (vibe), Moonshot (kimi), Qwen, Anthropic (claude), and `local` (a model on this machine).
 
+`local` is a placement, not a vendor: the model it ran may belong to one of the other families, and the
+analysis counts it as a family of its own. A pair involving `local` may therefore be a same-vendor pair
+counted as cross-vendor, so the cross-vendor figures below separate placements as well as vendors.
+(Note added 2026-11-07 on review; the counts are unchanged.)
+
 ## 1. What the product itself records
 
 The `providers` column (the gate's own dedup) lists more than one vendor on **36 of 13,518**
@@ -92,6 +97,8 @@ Caller acceptance (`resolve`) of a finding:
 4. **Roles of one vendor overlap less than vendors do** (6 % against 21 %). A role is a stronger
    divider than a vendor on the same round — consistent with
    [RESULTS_focused_vs_universal.md](RESULTS_focused_vs_universal.md).
+   Qualified 2026-11-07: neither rate holds the other factor constant (the cross-vendor rate mixes
+   roles), so this is a lead to test with roles held fixed, not a measured ranking of the two.
 5. **The gate still sees almost none of the agreement it has** — 0.3 % recorded against ~21 % by
    reading. The plan-round dedup defect from 2026-09-02 is still the reason, and it now hides the
    one signal that measurably predicts acceptance.

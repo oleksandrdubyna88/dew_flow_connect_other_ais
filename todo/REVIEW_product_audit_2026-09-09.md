@@ -287,3 +287,7 @@ Reproduction: in WSL from the repository root run
 `node artifacts/audit-20260909/chat.cjs` after compiling the extension.
 These are diagnostic programs that record the current behavior; they make no fixes
 and do not replace the regression tests in the main suite.
+
+Historical (note added 2026-11-07): `artifacts/` is ignored, so these programs are not in the
+repository and both commands fail in a fresh checkout. They existed only on the machine the audit
+ran on; the reproductions above are recorded as the audit saw them.
