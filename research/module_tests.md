@@ -6657,6 +6657,11 @@ Git Bash step failed with the release's message (`Expected result.ExitCode to be
 for it. There the limit it pins does not hold. On the PowerShell path nothing changes, and the pin step still demands `succeeded: 1`.
 F31's limit itself is unchanged: an elevated run that is not started from Git Bash still makes files a person must remove.
 
+**GREEN.** On `151274ca` (`ci` run 42403407904, `Windows · mcp` job 128495935041). The suite (`Test`) had 14 847 tests, 0 failed and
+148 skipped. The pwsh pin step printed `succeeded: 1`, `skipped: 0`. The Git Bash step printed the skip reason (`this elevated process
+owns the files it makes …`) with `total: 1`, `failed: 0`, `skipped: 1`, and it passed. The step now also fails unless the filter
+selected the one test. The RED without the fix is the run on `7064dfb4` above.
+
 ## Two stores, one count — E6.S1 (extension), S2 and S3: both stores' counts and ledgers, and launches per round (2026-10-21, `todo/PLAN_the_round_counter_tail_E6.md`)
 
 The C# half (the snapshot, `--round-counts-merged`) is recorded above; the parser and the loader here are driven by a fixture that follows the
