@@ -40,7 +40,7 @@ import { QUESTION_RULE } from './generated/questionRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '7aa91821dcfdf0b8';
+export const SNIPPET_BODY_SHA = '9833b04294fc083a';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
@@ -65,7 +65,7 @@ export const SNIPPET_BODY_SHA = '7aa91821dcfdf0b8';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 17;
+export const ARTEFACT_VERSION = 18;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
