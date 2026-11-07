@@ -1,0 +1,13 @@
+rounds judged: 30
+('ALL', 'auto') 28.1% (101/359)
+('ALL', 'judged') 21.2% (76/359)
+('ALL', 'judged same model, other role') 6.1% (22/359)
+('CodeReview', 'auto') 31.4% (65/207)
+('CodeReview', 'judged') 17.4% (36/207)
+('PlanReview', 'auto') 23.7% (36/152)
+('PlanReview', 'judged') 26.3% (40/152)
+('accept', 'alone') 50.5% (143/283)
+('accept', 'shared') 65.3% (49/75)
+('groups', 'CodeReview') 9.9% (17/172)
+('groups', 'PlanReview') 14.1% (18/128)
+cross-vendor PAIRS: auto precision 27/70, auto recall 27/29, true pairs 29 of 1362

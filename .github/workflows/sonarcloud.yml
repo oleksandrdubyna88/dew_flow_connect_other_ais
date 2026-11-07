@@ -55,6 +55,12 @@ jobs:
         run: |
           dotnet tool install --global dotnet-sonarscanner
           dotnet tool install --global dotnet-coverage
+      #   sonar.exclusions        + research/data/**
+      #     By the owner's decision of 2026-11-06. This folder holds measurements kept as they were
+      #     collected, with the throwaway scripts that produced them. They ship in nothing, and a
+      #     collected record must not be rewritten to satisfy a linter. Consequence, accepted: nothing
+      #     placed under this folder is analysed, so product code does not belong here.
+      #
       #   sonar.exclusions        + .agents/conventions/**
       #     A SUBMODULE. It is `dew_flow_conventions`, a separate repository with its own CI and its
       #     own Sonar project, mounted here so the shared rules travel with the checkout. Scanning it
@@ -244,7 +250,7 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**,.agents/conventions/**" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**,.agents/conventions/**,research/data/**" \
             /d:sonar.cpd.exclusions="src_vs_code/src/helpContent.ts,src_vs_code/src/helpRu.ts,src_vs_code/src/helpUk.ts,src_vs_code/src/helpDe.ts,src_vs_code/src/helpEs.ts,src_vs_code/src/securityLane.generated.ts,src_vs_code/src/runtimeCapabilities.generated.ts" \
             /d:sonar.issue.ignore.multicriteria="e1,e2" \
             /d:sonar.issue.ignore.multicriteria.e1.ruleKey="typescript:S1523" \
