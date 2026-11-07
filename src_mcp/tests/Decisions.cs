@@ -24,4 +24,8 @@ internal static class Decisions
     internal static DecisionAt Reject(IReadOnlyList<Finding> pending, int ordinal, string reason) =>
         DecisionAt.Reject(pending, ordinal, reason) ?? throw new ArgumentOutOfRangeException(
             nameof(ordinal), ordinal, $"this round has {pending.Count} finding(s)");
+
+    internal static DecisionAt ProceedOver(IReadOnlyList<Finding> pending, int ordinal) =>
+        DecisionAt.ProceedOver(pending, ordinal) ?? throw new ArgumentOutOfRangeException(
+            nameof(ordinal), ordinal, $"this round has {pending.Count} finding(s)");
 }

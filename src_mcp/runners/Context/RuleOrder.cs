@@ -73,8 +73,14 @@ public sealed record RuleOrder
     /// carriage returns. The tail is still a lottery by design: what would make a rule reach EVERY
     /// reviewer is a place in the tier (<see cref="TierRules"/>), rule modularization or the resolver.
     /// <c>research/RESULTS_rules_selection_budget.md</c> carries the numbers and
-    /// <c>StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules</c> fails the day this
+    /// <c>StageRulesTests.AtTheDefaultBudget_TheRotatedTail_FitsAtMostThreeRules</c> fails the day this
     /// changes.</para>
+    /// <para><b>Re-measured 2026-11-06, at the owner's 93 301-character budget (pin <c>37b9aa5</c>).</b> The pin grew the tier to 65 336 (from 62 035) and the pair
+    /// with the base (17 988) to 83 324; the owner raised the budget from 90 000 to 93 301, so the free tail is again 9 977, as it was before the pin. The
+    /// tail takes one rule on 1 102 of 3 000 branch names (36.7 %), two on 1 655 (55.2 %) and three on 243 (8.1 %), never four; the narrowest of the
+    /// hundred fixed names is one rule and the widest three. <c>common/test-leftovers.md</c> is an 8 794-character core (8 403 until 2026-11-02) and is drawn on 153 of 3 000
+    /// names (5.1 %; 7 of the 100 fixed names, the same seven), as the first rule a branch draws. The figures above stay as the earlier record; at 90 000 the
+    /// rule would have reached no reviewer.</para>
     /// <para><b>Why SHA-256 and not <see cref="object.GetHashCode"/>.</b> .NET randomises string
     /// hashing per PROCESS, so a GetHashCode-ordered tail would differ between two rounds of one fix
     /// on one machine — the exact defect this removes, reintroduced by its own fix. This is a pure

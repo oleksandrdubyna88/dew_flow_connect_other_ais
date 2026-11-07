@@ -40,7 +40,7 @@ import { QUESTION_RULE } from './generated/questionRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '7aa91821dcfdf0b8';
+export const SNIPPET_BODY_SHA = '9833b04294fc083a';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
@@ -65,7 +65,7 @@ export const SNIPPET_BODY_SHA = '7aa91821dcfdf0b8';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 17;
+export const ARTEFACT_VERSION = 18;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -217,6 +217,30 @@ export const KNOWN_HALVES = [
   { id: 'coai-question', name: 'the question consultant', version: QUESTION_VERSION, text: QUESTION_RULE, frozen: false, file: 'coai-question-consultant.md' },
 ] as const;
 
+/**
+ * Sentences an OLD paste of a half carried that the current rule no longer says, per half.
+ *
+ * <p><b>Why a table of text when every half has a marker.</b> The gate half's marker is `frozen` at 5
+ * by the conventions baseline and may never be raised, so a change to the gate rule cannot be told
+ * apart from the old one by number: a paste made from an earlier build still reads `current` while
+ * telling the agent to do what the server now refuses. A retired sentence is the only way to tell
+ * an old paste of the frozen half. {@link isBehind} treats a half whose own segment — from its marker
+ * to the next half marker — contains a retired sentence of its own exactly as it treats a lower marker;
+ * the phrase elsewhere in a file (a person's notes, another half) counts for nothing.</p>
+ *
+ * <p>Append a row when a rule change makes an earlier instruction harmful, with the artefact version
+ * that stopped carrying it. `retiredAt` is a record, not an input to the comparison: a paste that
+ * contains the sentence is old whatever it is numbered. The current artefact must never contain a
+ * retired sentence — a test holds that, because a rule quoting the old phrase would mark every fresh
+ * paste stale.</p>
+ *
+ * <p>The first row: bd79584's gate rule told the agent to pass `humanDecision: "proceed"` to
+ * `resolve`; the server now refuses that, and the rule says "Never pass `humanDecision` yourself."</p>
+ */
+export const RETIRED_TEXT: readonly { readonly half: string; readonly text: string; readonly retiredAt: number }[] = [
+  { half: 'coai-snippet', text: '`humanDecision: "proceed"` to `resolve`', retiredAt: 18 },
+];
+
 /** The ids this build reads, in the order the artefact carries them. */
 export const HALF_IDS: readonly string[] = KNOWN_HALVES.map((half) => half.id);
 
@@ -224,6 +248,9 @@ export const HALF_IDS: readonly string[] = KNOWN_HALVES.map((half) => half.id);
 function label(id: string): string {
   return KNOWN_HALVES.find((half) => half.id === id)?.name ?? id;
 }
+
+/** Every half's marker, whatever its id: what `halvesIn` reads and where `segmentsOf` ends a segment. */
+const ANY_HALF_MARKER = /<!-- (coai-[a-z-]+) v(\d+) -->/g;
 
 /** Any half's marker, from its id — never a second literal to keep in step. */
 function markerOf(id: string): RegExp {
@@ -245,7 +272,29 @@ function versionsOf(text: string, id: string): readonly number[] {
 }
 
 /**
+ * Every SEGMENT of one half in a text: from each copy of its marker to the next half marker of any id
+ * (or the end of the text) — because a half is delimited by the markers a paste carries.
+ *
+ * <p>Every rule body begins with its own marker (the conventions' `canonical-markers.test.mjs` pins
+ * it), so the next `<!-- coai-… v<n> -->` is where this half stops. Like {@link versionsOf} it returns
+ * ALL copies, so a stale block above a fresh paste is still seen.</p>
+ */
+function segmentsOf(text: string, id: string): readonly string[] {
+  // One pass over every half marker, then each segment is cut between known offsets: no copy of the
+  // remaining text per segment, and the delimiter is the same pattern `halvesIn` reads.
+  const boundaries = [...text.matchAll(ANY_HALF_MARKER)].map((match) => match.index);
+
+  return [...text.matchAll(new RegExp(markerOf(id), 'g'))].map((match) => {
+    const next = boundaries.find((offset) => offset > match.index);
+
+    return text.slice(match.index, next ?? text.length);
+  });
+}
+
+/**
  * Whether a half is ABSENT from a text, or older than ours in any copy the text holds.
+ *
+ * <p>A half whose own segment (see {@link segmentsOf}) carries one of its {@link RETIRED_TEXT} sentences is behind too, whatever its marker says.</p>
  *
  * <p>Absent counts as behind, and that is the half of this the arithmetic gets wrong if it is
  * written inline: a missing half has no versions at all, so a plain `Math.min` over an empty list
@@ -259,7 +308,18 @@ function isBehind(text: string, half: { readonly id: string; readonly version: n
   // limit, and spreading an unbounded list into a call exceeds the argument limit and throws
   // RangeError — which would take out the panel refresh rather than answer a question about a
   // silly file. Same predicate, no expansion. (CodeRabbit, on the pull request.)
-  return versions.length === 0 || versions.some((version) => version < half.version);
+  if (versions.length === 0 || versions.some((version) => version < half.version)) {
+    return true;
+  }
+
+  // A retired sentence of this half's own, INSIDE one of this half's segments, is as good as a lower
+  // marker: the frozen gate half's marker cannot move, so this is the only way an old paste of it is
+  // told from a current one. Outside its segment the phrase proves nothing — a person's own notes or
+  // another half quoting it must not mark a fresh paste stale for good.
+  const retired = RETIRED_TEXT.filter((row) => row.half === half.id);
+
+  return retired.length > 0
+    && segmentsOf(text, half.id).some((segment) => retired.some((row) => segment.includes(row.text)));
 }
 
 /** One half's version, or nothing when that half is not in the text. */
@@ -282,7 +342,7 @@ function versionOf(text: string, id: string): number | undefined {
  * somebody to paste over it.</p>
  */
 export function halvesIn(text: string): readonly { readonly id: string; readonly version: number }[] {
-  return [...text.matchAll(/<!-- (coai-[a-z-]+) v(\d+) -->/g)]
+  return [...text.matchAll(ANY_HALF_MARKER)]
     .map((match) => ({ id: match[1], version: Number.parseInt(match[2], 10) }));
 }
 

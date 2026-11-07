@@ -309,7 +309,7 @@ public sealed class RegularFilesTests : IDisposable
     }
 
     /// <summary>A stream whose <see cref="Length"/> says one thing and whose reads say another.</summary>
-    private sealed class LyingStream(long claimedLength, int actualBytes) : Stream
+    internal sealed class LyingStream(long claimedLength, int actualBytes) : Stream
     {
         public int Served { get; private set; }
 

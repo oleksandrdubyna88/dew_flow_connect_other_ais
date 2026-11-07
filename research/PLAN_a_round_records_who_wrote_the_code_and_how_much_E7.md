@@ -1207,7 +1207,7 @@ The check boxes in *Definition of Done* above were not ticked as work landed. Th
 | Unrecoverable rounds counted per reason; ran on both sides, twice each, predictions first | **Not done.** The per-reason counts exist in the summary. |
 | Ten rounds per side hand-checked, 10 of 10 agreeing, before any number | **Not done.** |
 | The `RESULTS_who_wrote_the_code_under_review.md` file | **Not done.** |
-| The code was released before the operation; every running server on the release | **Not done.** No release contains `42eb3a95a`. The newest tag on 2026-10-21 is `mcp-v0.62.0`. |
+| The code was released before the operation; every running server on the release | **Half done.** `mcp-v0.63.0` (2026-10-21) contains `42eb3a95a`. That every running server is on it is the live-backfill plan's N1 check, which has not run. |
 | Every writing run backed up its live store first | **Not done** (no writing run). Met offline: `TheFirstWriteComesAfterTheVerifiedBackup`. |
 | A backfilled size takes `Whole.From` from `rounds.base_ref`; the two row writers ran in one transaction | Met (§11). |
 | The RESULTS file reports the share of corrective rounds whose delta ended `unavailable` | **Not done.** |

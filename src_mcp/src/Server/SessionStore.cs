@@ -34,8 +34,8 @@ namespace CoaiMcp.Server;
 /// <para>Empty is the normal case and is not a gap: no hosted adapter in this product puts a
 /// reasoning flag on its CLI's command line, so recording an effort for one would claim something
 /// that did not happen. <c>LocalRuntime</c> passes <c>--reasoning-effort</c> and records what it
-/// passed. Antigravity's effort lives inside its model id (<c>gemini-3.7-flash-high</c>) and is not
-/// a separate switch — which is why no line reads <c>gemini-3.7-flash-high (effort: high)</c>.</para>
+/// passed. Antigravity's effort lives inside its model id (<c>gemini-3.8-flash-high</c>) and is not
+/// a separate switch — which is why no line reads <c>gemini-3.8-flash-high (effort: high)</c>.</para>
 /// </remarks>
 public sealed record ReviewerState(
     string Provider,

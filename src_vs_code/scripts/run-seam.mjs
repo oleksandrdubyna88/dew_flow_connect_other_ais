@@ -64,6 +64,8 @@ const { catalogSeam } = await import('./seam-catalog.mjs');
 const { usageCountsSeam } = await import('./seam-usage-counts.mjs');
 // E3's ledger fields: the lines the REAL writer leaves, read through the extension's own parseUsageLine.
 const { ledgerFieldsSeam } = await import('./seam-ledger-fields.mjs');
+// E6's round counts: the REAL binary's `--round-counts` and `--round-counts-merged` over a real round and a hand-written snapshot, read by parseRoundCounts.
+const { roundCountsMergedSeam } = await import('./seam-round-counts-merged.mjs');
 // The vendor gauge (story 6.2): the slot's reading and the derived figures, read and drawn by the extension's own code.
 const { gaugeSeam } = await import('./seam-gauge.mjs');
 const { consultantRowSeam } = await import('./seam-consultant-row.mjs');
@@ -75,6 +77,8 @@ const { cliPathOtherSideSeam } = await import('./seam-cli-path-other-side.mjs');
 const { pathMissingSeam } = await import('./seam-path-missing.mjs');
 // A missing NAMED data folder: the extension's own decision against the real binary's writer mode and served tools.
 const { missingNamedRootSeam } = await import('./seam-missing-named-root.mjs');
+// A HELD gate: the notice the real binary writes at call_human, parsed by the extension's parser, offering the decisions it lists.
+const { heldGateSeam } = await import('./seam-held-gate.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -536,6 +540,11 @@ console.log(`  ok  a consultant's catalog row (effort ${consultantRow.effort}) c
 const ledgerFields = await ledgerFieldsSeam({ binary, fakeCli: fakeCli(), fail, timeoutMs: TIMEOUT_MS });
 console.log(`  ok  ${ledgerFields.lines} ledger lines the real writer left carry ${ledgerFields.keys.join(', ')}, each read back by parseUsageLine`);
 
+// The round-counts leg (E6.S5): a real round leaves a snapshot beside coai.db; the merged mode over a hand-written snapshot of another store
+// (the same integer round id, another key) and a missing path, and the plain mode, are read BY VALUE through the extension's own parser.
+const roundCounts = await roundCountsMergedSeam({ binary, fakeCli: fakeCli(), fail, timeoutMs: TIMEOUT_MS });
+console.log(`  ok  ${roundCounts.stores} stores and ${roundCounts.rounds} rounds (one integer id, two keys) cross from --round-counts-merged to parseRoundCounts, the missing snapshot not included`);
+
 // The ELEVENTH leg: the binary lists every capability the extension knows (PLAN_one_model_catalog.md E2) — a field
 // is sent only when `--features` lists it, so the two lists must agree on the real binary.
 const olderForFeatures = (process.env['COAI_MCP_DLL'] ?? '').length > 0 && process.env['COAI_SEAM_OLDER_SERVER'] === '1';
@@ -873,6 +882,16 @@ const namedRoot = await missingNamedRootSeam({
   fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
 });
 console.log('  ok  a missing named data folder is refused by the extension and by the server alike, and nothing makes it; a side folder and the default are still made');
+
+// A held gate (todo/PLAN_only_a_person_releases_the_gate.md §11.2): a real plan round to call_human over the stand-in CLI, with
+// HOME, USERPROFILE and CODEX_HOME isolated. The notice it wrote is read by the extension's own parser, the answer window offers
+// exactly the decisions the notice lists (Proceed included), the caller's argument is refused over the wire, and the extension's
+// own Proceed answer is what releases the hold.
+const held = await heldGateSeam({
+  serverSession, answerOf, fakeCli: cli,
+  fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
+});
+console.log(`  ok  a held gate's notice lists ${held.decisions.join(', ')}; the answer window offers exactly those, the caller's argument is refused, and the extension's own Proceed advances the stage to ${held.stage}`);
 
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });

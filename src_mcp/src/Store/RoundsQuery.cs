@@ -961,9 +961,11 @@ public static class RoundsQuery
         using var read = db.CreateCommand();
         // The column is one of three names written HERE, never anything a caller sends — and it is
         // quoted anyway, so the shape cannot become an injection the day somebody makes it dynamic.
+        // Only a JUDGEMENT counts toward "how often was this kind accepted": a finding a person proceeded over was
+        // neither taken nor argued with, so it is in neither the accepted count nor the total.
         read.CommandText = $"""
             SELECT "{column}" AS grouped, SUM(resolution = 'accept') AS accepted, COUNT(*) AS total
-            FROM findings WHERE resolution <> '' AND {InPeriod} GROUP BY "{column}" ORDER BY accepted DESC
+            FROM findings WHERE resolution IN ('accept', 'reject') AND {InPeriod} GROUP BY "{column}" ORDER BY accepted DESC
             """;
         read.Parameters.AddWithValue("$since", since);
         using var rows = read.ExecuteReader();

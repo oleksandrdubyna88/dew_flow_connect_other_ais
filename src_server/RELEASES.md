@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.14.1...server-v0.15.0) (2026-11-06)
+
+
+### Features
+
+* **tests:** E5 stage A — the age-only coai- test sweep is retired; a one-off clean-up removes only what a person picks ([#940](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/940)) ([d02ed40](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d02ed40e643ec61cd48142ca1427a175d7054a39))
+
 ## [0.14.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.14.0...server-v0.14.1) (2026-10-21)
 
 

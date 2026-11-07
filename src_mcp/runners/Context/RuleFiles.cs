@@ -154,7 +154,7 @@ public static class RuleFiles
         [.. InstructionFiles, .. RuleFolders.Select(f => f.Dir).Distinct(StringComparer.Ordinal)];
 
     /// <summary>
-    /// Rules are text and a prompt is finite. 90 KB is about sixteen real rule files.
+    /// Rules are text and a prompt is finite. 93 301 (90 000 until 2026-11-06) is about sixteen real rule files.
     /// </summary>
     /// <remarks>
     /// Raised from 40 KB on 2026-09-06, after measuring what this repository actually shows a
@@ -176,9 +176,18 @@ public static class RuleFiles
     /// round (mean 1.72 over 3 000 branch names at 10 002; 1.78 at 9 976). At 10 002 `common/test-leftovers.md` is an 8 403-character core that fits only as the first
     /// rule a branch draws (7 of 100 fixed branch names, 147 of 3 000); its detail `common/test-leftovers-detail.md` and `common/plan-change-control.md` (12 204, for agents only by owner decision) never fit. Measured in
     /// `research/RESULTS_rules_selection_budget.md`; the canary that pins it is
-    /// `StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules`.</para>
+    /// `StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (renamed `AtTheDefaultBudget_TheRotatedTail_FitsAtMostThreeRules` on 2026-11-06).</para>
+    /// <para><b>Raised again, to 93 301, on 2026-11-06 — the owner's decision, taken after two consultants recommended it (consult 53578f8a).</b>
+    /// The conventions pin moved to release `37b9aa5`, and `common/testing.md`, a tier rule, grew by 3 301 characters, so the tier is 65 336
+    /// (it was 62 035). With the base at 17 988 the pair is 83 324 (it was 80 023). At 90 000 that leaves 6 676 free, and
+    /// `common/test-leftovers.md`, an 8 403-character core, would fit on no branch — it would reach no reviewer, the 80 000-byte state again.
+    /// 90 000 + 3 301 = 93 301 restores the free tail to 9 977 (93 301 - 83 324), which is what it was before this pin (90 000 - 80 023).
+    /// The unit is unchanged: the collector spends characters of the normalised text (`RuleFile.Text.Length`) and this constant calls them
+    /// bytes. The figure 90 000 above stays as the record of the earlier decisions. Measured at 93 301 (`RuleBudgetMeasurementTests`, explicit): free 9 977;
+    /// the tail takes one rule on 1 102 of 3 000 branch names, two on 1 655 and three on 243 (mean 1.71); `common/test-leftovers.md`, an 8 794-character core
+    /// (8 403 until 2026-11-02), is drawn on 153 of 3 000 (7 of the 100 fixed names). The canary tail and the four test-leftovers rows did not move.</para>
     /// </remarks>
-    public const int DefaultBudgetBytes = 90_000;
+    public const int DefaultBudgetBytes = 93_301;
 
     /// <summary>Somebody else's conventions, vendored or generated, are not this project's rules.</summary>
     private static readonly string[] NotOurs =
@@ -409,7 +418,7 @@ public static class RuleFiles
     /// worse half of this fix, because the budget would then be honest about bytes nobody wanted.</para>
     /// <para><b>Why it went unseen for a day.</b> Every job in <c>ci.yml</c> is
     /// <c>ubuntu-latest</c>; the only Windows legs are the release matrix. So
-    /// <c>AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules</c> — the one check that can see this — ran on a
+    /// <c>AtTheDefaultBudget_TheRotatedTail_FitsAtMostThreeRules</c> — the one check that can see this — ran on a
     /// tag and nowhere else, and the release of <c>mcp-v0.29.0</c> is where it surfaced.</para>
     /// </remarks>
     private static string? Read(string path)

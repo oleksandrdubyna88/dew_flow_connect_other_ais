@@ -62,6 +62,7 @@ const LAUNCHES: Readonly<Record<string, Launch>> = {
   '--tree-at': 'reader',
   '--trees': 'reader',
   '--round-counts': 'reader',
+  '--round-counts-merged': 'reader',
   '--providers': 'reader',
   '--features': 'reader',
   '--version': 'reader',
