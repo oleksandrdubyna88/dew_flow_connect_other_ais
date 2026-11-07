@@ -471,6 +471,13 @@ jobs:
           if ($log -notmatch 'succeeded: 1\b') { throw 'the pin did not pass: a skip is not a pass (the runner must be elevated)' }
           exit 0
 
+      # The release workflow runs this suite from Git Bash (release.yml, "Build and test"), and there the pin failed on both Windows
+      # legs of mcp-v0.65.0 (run 42388147284): a process started from Git Bash owns the files it makes, so the audit DID see the
+      # claim. The same suite must not pass here and fail at the release, so it runs here the way the release runs it, too.
+      - name: The pin, run the way the release runs it (Git Bash)
+        shell: bash
+        run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe --filter-method '*AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun*'
+
       # The same teeth in PowerShell (the template's step). Both values; a listing error is red, never ignored.
       - name: The audit fails a run that leaves a claimed folder
         shell: pwsh
