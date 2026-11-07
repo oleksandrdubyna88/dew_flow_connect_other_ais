@@ -2,7 +2,7 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import path, { join } from 'node:path';
 import { test } from 'node:test';
 import { notificationLine } from '../../out/notifications.js';
 import { owned } from '../../scripts/owned.mjs';
@@ -89,8 +89,20 @@ test('only a server the run DECLARES older may skip the text leg; a refusal alon
   assert.equal(textLegVerdict({ olderExpected: true, code: 0, stderr: '' }), 'ok');
 });
 
-/** The folders the held-gate leg makes in this run's temp folder, claims aside. */
-const heldFolders = () => readdirSync(owned.tempRoot()).filter((name) => /-held(?:-home|-repo)?-[A-Za-z0-9]+$/u.test(name));
+/**
+ * The folders the held-gate leg makes in this run's temp folder, claims aside: the wrap's own prefix for each name the leg gives `ownedDir`
+ * (`owned.ownedPrefix`) followed by an id of exactly the wrap's six-character alphabet (`ID_ALPHABET` in the reference, letters and digits).
+ */
+const heldFolders = () => readdirSync(owned.tempRoot()).filter((name) => ['held', 'held-home', 'held-repo']
+  .some((what) => name.startsWith(owned.ownedPrefix(what)) && /^[A-Za-z0-9]{6}$/u.test(name.slice(owned.ownedPrefix(what).length))));
+
+test('the scan finds a held-gate folder made the natural way — a scan that matches nothing would pass forever', (t) => {
+  for (const what of ['held', 'held-home', 'held-repo']) {
+    const made = path.basename(owned.ownedDir(t, what));
+
+    assert.ok(heldFolders().includes(made), `${made} is an owned folder of the leg's kind and the scan did not see it`);
+  }
+});
 
 test('the held-gate leg removes its folders when something throws after they exist', async () => {
   assert.deepEqual(heldFolders(), [], 'the run folder starts without the leg\'s folders');
@@ -114,4 +126,17 @@ test('the held-gate leg kills its session and removes its folders when a claim f
 
   assert.deepEqual(killed, [true], 'the session was killed once');
   assert.deepEqual(heldFolders(), [], 'a failed claim left the leg\'s folders behind');
+});
+
+test('the held-gate leg removes its folders even when killing its session rejects, and reports the claim that failed', async () => {
+  const serverSession = () => ({
+    ready: Promise.resolve(),
+    call: async () => ({}),
+    killAndWait: async () => { throw new Error('the kill could not be waited for'); },
+    close: async () => {},
+  });
+
+  await assert.rejects(heldGateSeam({ serverSession, answerOf: () => ({ verdict: 'proceed' }), fakeCli: 'fake-cli', fail: (why) => { throw new Error(`fail: ${why}`); } }), /fail: .*did not end in call_human/u);
+
+  assert.deepEqual(heldFolders(), [], 'a rejected kill left the leg\'s folders behind');
 });

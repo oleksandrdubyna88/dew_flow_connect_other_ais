@@ -77,10 +77,16 @@ export async function heldGateSeam({ serverSession, answerOf, fakeCli, fail }) {
     }
   } finally {
     // Every road out ends here: a failed claim, a throw after the folders exist, a throw after the session started.
-    if (session !== undefined) {
-      await session.killAndWait();
+    // The kill attempt and the scope close are independent: the close always runs, and a kill that fails is said, never what the leg reports.
+    try {
+      if (session !== undefined) {
+        await session.killAndWait();
+      }
+    } catch (e) {
+      console.error(`seam: could not end the held-gate session (${e?.message ?? e}); its folders are removed regardless`);
+    } finally {
+      await scope.close();
     }
-    await scope.close();
   }
   if (outcome.why !== '') {
     fail(outcome.why);
