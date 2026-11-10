@@ -2,7 +2,7 @@
 
   <!--
     Package policy: bump to the latest STABLE release monthly, all at once, across the
-    dew_flow_* repositories (.claude/rules/shared/csharp/nuget-packages.md). Exceptions
+    dew_flow_* repositories (.agents/conventions/csharp/nuget-packages.md). Exceptions
     are pinned below with the reason, because an exception without a reason gets bumped
     by the next person who runs the sweep.
   -->
@@ -26,7 +26,7 @@
          mismatch that only shows up as a signature nobody can validate. -->
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
 
-    <!-- The one logging stack, per .claude/rules/shared/common/logging-serilog.md.
+    <!-- The one logging stack, per .agents/conventions/common/logging-serilog.md.
          The console sink is our own AnsiConsoleSink (the packaged themes emit nothing
          once stdout is redirected - measured, see the rule); only the core pipeline
          and the file sink come from packages. Apache-2.0. -->
@@ -71,7 +71,7 @@
   <ItemGroup>
     <!-- xUnit v3 on the native Microsoft Testing Platform: the test project builds into a
          self-contained runner executable. There is no VSTest testhost here, so `dotnet test`
-         aborts — run the executable (.claude/rules/shared/common/testing.md). -->
+         aborts — run the executable (.agents/conventions/common/testing.md). -->
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
 
     <!-- The leftovers library (src_mcp/tests_leftovers) is not a test project, so it takes xUnit's extensibility core and

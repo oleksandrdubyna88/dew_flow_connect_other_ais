@@ -7,7 +7,7 @@ import { asText } from './asText';
  * — grew a private copy rather than create a cycle. That copy had already drifted: it did not escape
  * an apostrophe.</p>
  *
- * <p>This is the anti-pattern `.claude/rules/shared/common/security.md` names by example — "the HTML
+ * <p>This is the anti-pattern `.agents/conventions/common/security.md` names by example — "the HTML
  * escaper | three byte-identical private copies | hardening one left the other two behind". Caught
  * on the code round of epic 3, at the moment a second copy appeared.</p>
  *

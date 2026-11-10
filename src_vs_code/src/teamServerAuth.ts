@@ -203,7 +203,7 @@ export interface AuthHost {
    */
   readonly perSide?: boolean | undefined;
   /**
-   * The clock, injected — `.claude/rules/shared/common/utc-timestamps.md` rule 2.
+   * The clock, injected — `.agents/conventions/common/utc-timestamps.md` rule 2.
    *
    * <p>Both stamps this module writes are PERSISTED and then COMPARED to each other: a token's mint
    * time against a sign-out on another side. An ambient clock in a value a test has to pin is the

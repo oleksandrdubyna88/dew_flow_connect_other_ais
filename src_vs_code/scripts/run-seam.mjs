@@ -7,7 +7,7 @@
  * because each compares its own list against itself, and that is not a hypothetical here: for the
  * whole life of the `remote` runtime the extension never wrote `remoteVendor` into `COAI_VENDORS`
  * while the server parsed it faithfully, so every Team-server reviewer was dropped from every round
- * and 1600 tests said nothing. `.claude/rules/shared/common/testing.md` names exactly that failure
+ * and 1600 tests said nothing. `.agents/conventions/common/testing.md` names exactly that failure
  * and asks for exactly this: one check that exercises the two implementations against each other.</p>
  *
  * <p>So this produces the file with the EXTENSION's own `serverSettingsJson` — no fixture, no
