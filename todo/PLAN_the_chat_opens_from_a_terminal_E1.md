@@ -7,7 +7,8 @@
 >
 > Scope: `src_vs_code` only, plus `research/` and the help. Three stories. **Cornerstone: E1.S2** — the `terminal`
 > conversation source, its key and identity rules, and the steal filter (area (b)). Fable writes its scenarios and
-> brief in `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`; that file does not exist yet. The parent's ledger
+> brief in [PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md](PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md) (written, and
+> coded in 1f7c14a5). The parent's ledger
 > line reads `Cornerstones: 1 of 2 — E1.S2`.
 
 ## 1. Goal, before any solution

@@ -9,7 +9,7 @@ import { isClaudeSessionTab } from '../../sessionKey';
 import { registeredChat, until } from './hostHelpers';
 
 /**
- * The chat's terminal road and the steal filter, in a real editor (todo/PLAN_the_chat_opens_from_a_terminal_E1.md, S2-H1 and S2-H2).
+ * The chat's terminal road and the steal filter, in a real editor (S2-H1 and S2-H2 of the E1 stories document, the chat opens from a terminal).
  *
  * <p>What a value cannot answer: `Terminal.show()` and the window's terminal list exist only in a host, and a webview of
  * Claude Code's view type is what makes the tab match by label real. They run only in CI's job `extension · a real editor`: a

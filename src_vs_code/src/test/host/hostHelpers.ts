@@ -18,7 +18,8 @@ export async function until(ready: () => boolean, whatDidNotHappen: string, ms =
     if (ready()) {
       return;
     }
-    await new Promise((wake) => setTimeout(wake, 100));
+    // Polling on purpose — each probe must finish before the next one starts (S9382).
+    await new Promise((wake) => setTimeout(wake, 100)); // NOSONAR
   }
   assert.fail(`${whatDidNotHappen} (waited ${Math.round(ms / 1000)}s)`);
 }

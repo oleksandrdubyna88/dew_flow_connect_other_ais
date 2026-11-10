@@ -134,11 +134,14 @@ test('a terminal whose name cannot name a conversation is refused BEFORE its sel
   // capture borrows the clipboard — and it has to be the store's own rule, not a second copy of it.
   const text = sourceOf('chatCommand.ts');
   const command = bodyOf(text, 'export async function askFromTerminal(');
-  const guard = bodyOf(text, 'function terminalDoorUsable(');
+  const guard = bodyOf(text, 'function terminalDoorName(');
 
   assert.ok(guard.includes('isTerminalName('), 'the terminal door never asks whether the terminal\u2019s name is an identity, so such a terminal opens a chat with no source');
   assert.ok(guard.includes("code: 'terminal-name-unusable'") || terminalDoorSource().includes("code: 'terminal-name-unusable'"),
     'the refusal of an unusable name has no notice of its own');
-  assert.ok(command.includes('terminalDoorUsable('), 'the command does not ask the guard');
-  assert.ok(command.indexOf('terminalDoorUsable(') < command.indexOf('fromTheTerminal('), 'the name is checked after the selection was captured');
+  assert.ok(command.includes('terminalDoorName('), 'the command does not ask the guard');
+  // A title can change while the selection is copied: the name is read ONCE, by the guard, and the command works with that value —
+  // a second read after the capture could judge one name and file the conversation under another.
+  assert.ok(!command.includes('terminal.name'), 'the command reads the terminal\u2019s name itself, so it can differ from the one the guard judged');
+  assert.ok(command.indexOf('terminalDoorName(') < command.indexOf('fromTheTerminal('), 'the name is checked after the selection was captured');
 });

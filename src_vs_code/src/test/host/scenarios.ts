@@ -927,13 +927,13 @@ const SCENARIOS: readonly Scenario[] = [
     run: aStillMissingPathIsSaidOnceAcrossSettingsChanges,
   },
   {
-    // todo/PLAN_the_chat_opens_from_a_terminal_E1.md S1-H1: the terminal capture through the real `copySelection` and the real
+    // S1-H1 of the E1 stories document (the chat opens from a terminal): the terminal capture through the real `copySelection` and the real
     // clipboard. What it drives is in `terminalCaptureScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
     name: 'a terminal\'s selection is captured through the clipboard, which is given back, and no selection says so',
     run: aTerminalSelectionIsCapturedAndTheClipboardGivenBack,
   },
   {
-    // todo/PLAN_the_chat_opens_from_a_terminal_E1.md S3-H1: the host reports `coai.askFromTerminal` in the default of
+    // S3-H1 of the E1 stories document (the chat opens from a terminal): the host reports `coai.askFromTerminal` in the default of
     // `terminal.integrated.commandsToSkipShell`, so Ctrl+Alt+A in a terminal reaches the extension and not the shell.
     // What it reads is in `terminalCaptureScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
     name: 'the skip list of the terminal holds the terminal door by default, so its chord is not sent to the shell',

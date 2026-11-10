@@ -6,7 +6,7 @@ import { NO_TERMINAL_SELECTION } from '../../terminalSource';
 import { activated, settle } from './missingDataRootScenario';
 
 /**
- * A terminal's selection through the clipboard borrow, in a real editor (todo/PLAN_the_chat_opens_from_a_terminal_E1.md, S1-H1).
+ * A terminal's selection through the clipboard borrow, in a real editor (S1-H1 of the E1 stories document, the chat opens from a terminal).
  *
  * <p>What a value cannot answer: that `workbench.action.terminal.copySelection`, awaited, has put the selection on the clipboard
  * by the time the borrow reads it, and that the borrow gives the clipboard back. The unit tests (`terminalCapture.test.ts`) fake the
@@ -36,7 +36,8 @@ async function captureUntil(probe: string): Promise<string> {
     if (passage.text.includes(probe)) {
       return passage.text;
     }
-    await settle(STEP_MS);
+    // Polling on purpose — each capture borrows the one clipboard and must finish before the next starts (S9382).
+    await settle(STEP_MS); // NOSONAR
   }
   assert.fail(`the terminal's selection never held the probe within ${WAIT_MS / 1000}s; the last capture said: ${last}`);
 }
@@ -76,7 +77,7 @@ export async function aTerminalSelectionIsCapturedAndTheClipboardGivenBack(): Pr
 }
 
 /**
- * The skip list's DEFAULT, as the host reports it (todo/PLAN_the_chat_opens_from_a_terminal_E1.md, S3-H1).
+ * The skip list's DEFAULT, as the host reports it (S3-H1 of the E1 stories document, the chat opens from a terminal).
  *
  * <p>The manifest test (`terminalDoorWiring.test.ts`) proves `package.json` asks for the default; only a real window can say
  * the host took it. If this is red in CI, `configurationDefaults` does not work for this setting and the chord goes to the

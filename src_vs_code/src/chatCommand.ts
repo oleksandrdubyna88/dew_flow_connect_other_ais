@@ -292,24 +292,27 @@ function terminalDoorNameUnusable(): void {
 }
 
 /**
- * Whether there is a terminal this door can open a chat from — and the person is told when there is not.
+ * The terminal this door can open a chat from, with its name — or nothing, and the person is told why.
  *
  * <p>The name is judged by the store's own rule (`isTerminalName`) BEFORE anything is captured: a name that is not an identity
- * builds the source `none`, and a chat with no source has no road back and no protection against a Claude tab taking it.</p>
+ * builds the source `none`, and a chat with no source has no road back and no protection against a Claude tab taking it. It is
+ * read ONCE and handed back, because a program can retitle a terminal while its selection is being copied: the name that was
+ * judged is the name the conversation is matched and filed under.</p>
  */
-function terminalDoorUsable(terminal: vscode.Terminal | undefined): terminal is vscode.Terminal {
+function terminalDoorName(terminal: vscode.Terminal | undefined): { readonly terminal: vscode.Terminal; readonly name: string } | undefined {
   if (terminal === undefined) {
     terminalDoorNoTerminal();
 
-    return false;
+    return undefined;
   }
-  if (!isTerminalName(terminal.name)) {
+  const name = terminal.name;
+  if (!isTerminalName(name)) {
     terminalDoorNameUnusable();
 
-    return false;
+    return undefined;
   }
 
-  return true;
+  return { terminal, name };
 }
 
 /** Said when the copy found no selection, or could not be made: the capture's own sentence, which says which. */
@@ -346,7 +349,8 @@ export async function askFromTerminal(
 
     return;
   }
-  if (!terminalDoorUsable(terminal)) {
+  const door = terminalDoorName(terminal);
+  if (door === undefined) {
     return;
   }
   const passage = await fromTheTerminal();
@@ -357,9 +361,9 @@ export async function askFromTerminal(
     return;
   }
   const { autoSend } = chatSettingsFrom(chatRead(vscode.workspace.getConfiguration('coai')));
-  const match = terminalMatch(panels.known(), terminal, terminal.name);
+  const match = terminalMatch(panels.known(), door.terminal, door.name);
 
-  await deliverPassage(panels, extensionUri, ready, match, passage, sendsImmediately(autoSend, false), false, sourceOfTerminal(terminal.name));
+  await deliverPassage(panels, extensionUri, ready, match, passage, sendsImmediately(autoSend, false), false, sourceOfTerminal(door.name));
 }
 
 /**

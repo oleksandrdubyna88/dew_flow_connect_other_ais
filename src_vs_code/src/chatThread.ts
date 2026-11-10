@@ -340,7 +340,8 @@ export const threads = new WeakMap<object, Thread>();
 export function threadUnder(panels: Pick<ChatPanels, 'get'>, key: object): Thread | undefined {
   const entry = panels.get(key);
 
-  return entry === undefined ? undefined : threads.get(entry.id);
+  // `threads` is filled in chatCommand.ts (a new conversation) and chatConversationRestore.ts (a restored one); the rule sees one file (S4158).
+  return entry === undefined ? undefined : threads.get(entry.id); // NOSONAR
 }
 
 /**

@@ -13496,7 +13496,7 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   `terminal-door-failed` notice.
 - **The door is counted.** `'terminal'` is in `Door` and last in `DOORS` (`chatDoors.ts`); the handler in `extension.ts` calls
   `noteChatDoor('terminal')` first, which the door census (`chatWiring.test.ts`) derives from the keybinding and requires. It is an *Opened*, not an
-  *Asked*. Three notify sites were added; `notification-sites.json` was regenerated.
+  *Asked*. Four notify sites were added (`no-terminal-here`, `nothing-selected-in-terminal`, `terminal-door-failed`, `terminal-name-unusable`); `notification-sites.json` was regenerated.
 - **Agent mode is off for a terminal conversation, at every place that decides it.** `agentRuledOutBy(source)` (`chatAccessRules.ts`; a record typed
   by the kind, so a fifth kind of source does not compile until it is placed — a four-arm switch would have `complexity` 5) is true
   for `terminal`. The module spells the four kinds itself (`SourceKind`, `AgentSource`) and does not import `chatStore`: that import closed a new
