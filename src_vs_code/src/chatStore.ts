@@ -66,12 +66,19 @@ export const LAST_LINE_MAX = 120;
  * both hold a `README.md`; a store keyed by name hands the second one the first one's conversation,
  * and the failure is silent — the transcript arrives, it is simply somebody else's. `chatPanels.ts`
  * exists because of that, and this type is the same ruling applied to disk.</p>
+ *
+ * <p>A terminal has no uri and no session id, so its NAME is its durable identity. A name is therefore
+ * allowed to do two things only: compare equal (`sameSource`), and find ONE live terminal to show on
+ * request (`oneLiveNamed`, which never picks). It never re-keys and never binds. Several conversations
+ * can carry one terminal source — that is normal, not damage.</p>
  */
 export type ConversationSource =
   /** Claude Code's own session, by the UUID its session file is named for. A file does not move. */
   | { readonly kind: 'claude'; readonly sessionId: string }
   /** A document, by its URI. `file:` or `untitled:`, and an untitled one is followed when it is saved. */
   | { readonly kind: 'file'; readonly uri: string }
+  /** A terminal, by its FULL name as the host reported it at the first press. See the note below. */
+  | { readonly kind: 'terminal'; readonly name: string }
   /** Nothing this build can match a tab to: a migrated record, or a tab whose identity was ambiguous. */
   | { readonly kind: 'none' };
 
@@ -89,6 +96,23 @@ export const sourceOfSession = (sessionId: string): ConversationSource =>
 
 export const sourceOfFile = (uri: string): ConversationSource =>
   uri.length === 0 ? { kind: 'none' } : { kind: 'file', uri };
+
+/** The longest terminal name that is an identity, in UTF-16 units. ONE constant: the builder and the reader both read it. */
+export const TERMINAL_NAME_MAX = 500;
+
+/** A control character (category Cc) or a line separator: what makes a name more than one line. */
+const NOT_ONE_LINE = /[\p{Cc}\u{2028}\u{2029}]/u;
+
+/** Whether this value is a terminal name this build keeps as an identity. The ONE rule, for the builder and the reader. */
+export const isTerminalName = (name: unknown): name is string =>
+  typeof name === 'string' && name.length > 0 && name.length <= TERMINAL_NAME_MAX && !NOT_ONE_LINE.test(name);
+
+export const sourceOfTerminal = (name: string): ConversationSource =>
+  (isTerminalName(name) ? { kind: 'terminal', name } : { kind: 'none' });
+
+/** What a TAB door files a new conversation under: a Claude tab has no id yet (`pinSession` writes it), a file tab has its document. */
+export const sourceOfTab = (fromSession: boolean, uri: string): ConversationSource =>
+  (fromSession ? { kind: 'none' } : sourceOfFile(uri));
 
 /** The whole of one conversation, as it is written to disk. */
 export interface ConversationRecord {
@@ -242,7 +266,7 @@ const isInstant = (value: unknown): value is number =>
  * matching against an empty string, which every other empty string would equal.</p>
  */
 function sourceFrom(value: unknown): ConversationSource | undefined {
-  const row = value as { kind?: unknown; sessionId?: unknown; uri?: unknown } | null;
+  const row = value as { kind?: unknown; sessionId?: unknown; uri?: unknown; name?: unknown } | null;
   if (row === null || typeof row !== 'object') {
     return undefined;
   }
@@ -255,9 +279,31 @@ function sourceFrom(value: unknown): ConversationSource | undefined {
   if (row.kind === 'file') {
     return isText(row.uri) && row.uri.length > 0 ? sourceOfFile(row.uri) : undefined;
   }
+  if (row.kind === 'terminal') {
+    return isTerminalName(row.name) ? sourceOfTerminal(row.name) : undefined;
+  }
 
   return undefined;
 }
+
+/** What a kind of source says about `fromSession`. */
+type OriginRule =
+  /** It must be true: a Claude session. */
+  | 'must'
+  /** It must be false: a document. */
+  | 'must not'
+  /** Either, and it is read as written: a migrated record recorded the door and never the session. */
+  | 'as written'
+  /** Either on disk, and it is read as FALSE: no terminal conversation reads a Claude session in stage 1. */
+  | 'not yet';
+
+/** Exhaustive: a fifth kind of source does not compile until it has a row here. */
+const ORIGIN: Readonly<Record<ConversationSource['kind'], OriginRule>> = {
+  claude: 'must',
+  file: 'must not',
+  none: 'as written',
+  terminal: 'not yet',
+};
 
 /**
  * Whether a record's two statements about where it came from agree.
@@ -272,16 +318,23 @@ function sourceFrom(value: unknown): ConversationSource | undefined {
  * legitimately says `fromSession: true` while naming no source at all, because the memento recorded
  * which door a conversation came through and never recorded which session. So `none` permits either
  * answer, and a source that names an identity must agree with it.</p>
+ *
+ * <p>A terminal is the third case: either value is accepted on disk, so a record a later build wrote with `true` is not
+ * dropped after a rollback — and it is read as `false` (`readsSession`).</p>
  */
 function agreeOnOrigin(source: ConversationSource, fromSession: boolean): boolean {
-  if (source.kind === 'claude') {
-    return fromSession;
-  }
-  if (source.kind === 'file') {
-    return !fromSession;
-  }
+  const rule = ORIGIN[source.kind];
 
-  return true;
+  return (rule !== 'must' || fromSession) && (rule !== 'must not' || !fromSession);
+}
+
+/**
+ * Whether a conversation of this source reads a Claude session back — what its thread's `fromSession` is.
+ * A terminal never does in stage 1: `pinSession` and the Asked press walk the LOCAL home by title, and a terminal's
+ * session is on another machine. Stage 2 changes the `terminal` row together with its guard.
+ */
+export function readsSession(source: ConversationSource, fromSession: boolean): boolean {
+  return ORIGIN[source.kind] === 'not yet' ? false : fromSession;
 }
 
 /**
@@ -347,7 +400,7 @@ export function recordFrom(value: unknown): ConversationRecord | undefined {
     passage: row.passage,
     modelId: row.modelId,
     messages: row.messages,
-    fromSession: row.fromSession === true,
+    fromSession: readsSession(source, row.fromSession === true),
     carryFrom: row.carryFrom ?? 0,
     source,
     workspace: row.workspace ?? '',
@@ -448,6 +501,28 @@ export function metaOf(record: ConversationRecord): ConversationMeta {
 export const isStale = (meta: ConversationMeta, record: ConversationRecord): boolean =>
   meta.rev !== record.rev || meta.version !== record.version;
 
+/** What a source is compared BY — nothing for `none`, which is the absence of an identity. */
+function identityOf(source: ConversationSource): string | undefined {
+  return source.kind === 'none' ? undefined : namedBy(source);
+}
+
+/** Exhaustive: a fifth kind of source does not compile until it says what it is compared by. */
+function namedBy(source: Exclude<ConversationSource, { kind: 'none' }>): string {
+  switch (source.kind) {
+    case 'claude':
+      return source.sessionId;
+    case 'file':
+      return source.uri;
+    case 'terminal':
+      return source.name;
+    default: {
+      const unhandled: never = source;
+
+      throw new Error(`a conversation source this build cannot compare: ${JSON.stringify(unhandled)}`);
+    }
+  }
+}
+
 /**
  * Whether two sources are the same source.
  *
@@ -456,14 +531,9 @@ export const isStale = (meta: ConversationMeta, record: ConversationRecord): boo
  * every other. A record that names no source is reachable only by a person choosing it.</p>
  */
 export function sameSource(left: ConversationSource, right: ConversationSource): boolean {
-  if (left.kind === 'claude' && right.kind === 'claude') {
-    return left.sessionId === right.sessionId;
-  }
-  if (left.kind === 'file' && right.kind === 'file') {
-    return left.uri === right.uri;
-  }
+  const one = identityOf(left);
 
-  return false;
+  return left.kind === right.kind && one !== undefined && one === identityOf(right);
 }
 
 /** Whether this conversation is past the window, measured from when it was last USED. */

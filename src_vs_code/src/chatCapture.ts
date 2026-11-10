@@ -6,8 +6,8 @@ import { windowsReach } from './hostSide';
 import { oneAtATime } from './oneAtATime';
 import { launch } from './processLauncher';
 import { COPY_SCRIPT, RunOutcome, argvFor, captureSelection, ran } from './selectionCapture';
-import { captureTerminalSelection } from './terminalSource';
-import { TabSnapshot, isOrdinaryEditorTab, sourceSession } from './sessionKey';
+import { captureTerminalSelection, tabPanels } from './terminalSource';
+import { SessionMatch, TabSnapshot, isOrdinaryEditorTab, sourceSession } from './sessionKey';
 import { notifyAndAsk } from './notify';
 
 /**
@@ -177,6 +177,29 @@ export async function fromTheEditor(): Promise<{ text: string; failure: string }
   return { text: '', failure: CANCELLED };
 }
 
+/** What one look at the tabs found: the snapshot, the Claude match, and the match of either door. */
+export interface TabMatch {
+  readonly active: TabSnapshot | undefined;
+  readonly all: readonly TabSnapshot[];
+  readonly claude: SessionMatch | undefined;
+  readonly matched: SessionMatch | undefined;
+}
+
+/**
+ * The active tab, matched against the panels a TAB may own — one snapshot and one list, for every caller.
+ *
+ * <p>A panel opened from a terminal is not in that list. Its key was never a tab, so `sourceSession` reads it as a
+ * panel whose tab has gone, and would hand it to a Claude tab of the same name: the answer then arrives in the
+ * terminal's conversation and nothing says so. This is the ONLY place that calls `sourceSession`.</p>
+ */
+export function tabMatch(panels: ChatPanels): TabMatch {
+  const { active, all } = snapshots();
+  const known = tabPanels(panels);
+  const claude = sourceSession(active, all, known);
+
+  return { active, all, claude, matched: claude ?? sourceSession(active, all, known, isOrdinaryEditorTab) };
+}
+
 /**
  * Which conversation this belongs to, over ONE snapshot of the tabs.
  *
@@ -191,11 +214,7 @@ export function matchedSource(panels: ChatPanels): {
   /** The active document's uri, from the SAME snapshot — what a file conversation is filed under. */
   uri: string;
 } {
-  const { active, all } = snapshots();
-  const known = panels.known();
-  const claude = sourceSession(active, all, known);
-
-  const matched = claude ?? sourceSession(active, all, known, isOrdinaryEditorTab);
+  const { all, claude, matched } = tabMatch(panels);
 
   return {
     claude,

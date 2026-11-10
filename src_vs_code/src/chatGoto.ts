@@ -41,7 +41,11 @@ export type TabKind =
   | 'claude'
   /** A document a person is reading: `file` or `untitled`. Named by its uri. */
   | 'document'
-  /** A terminal, the Output pane, a settings tab, our own chat tab — anything a conversation cannot belong to. */
+  /**
+   * The Output pane, a settings tab, our own chat tab, a terminal in the editor area — a TAB this command cannot start
+   * from. A terminal CAN own a conversation (the terminal door, terminalSource.ts); go-to does not start from one
+   * before stage 3 of that plan.
+   */
   | 'other';
 
 /** Why a narrowed picker is being shown, so the title can say it in the person's own terms. */
@@ -232,8 +236,8 @@ export function goto(asked: GotoAsked): Goto {
     return { kind: 'reveal', id: asked.live };
   }
   if (!eligible(asked.tab.kind)) {
-    // A terminal, the Output pane, our own chat tab. The operator's decision: a tab with nothing
-    // behind it gets the LIST, never an error and never silence.
+    // The Output pane, our own chat tab, a terminal in the editor area. The operator's decision: a tab with nothing
+    // behind it gets the LIST, never an error and never silence. A terminal's own conversation is in that list.
     return { kind: 'everything' };
   }
   const offer = offerFor(asked.tab.label);

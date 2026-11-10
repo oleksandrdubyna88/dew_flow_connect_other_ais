@@ -1,4 +1,8 @@
+import type { ChatPanels } from './chatPanels';
+import type { ConversationSource } from './chatStore';
+import { threads } from './chatThread';
 import { Borrowed, Capture, Clipboard, borrowClipboard } from './selectionCapture';
+import type { KnownPanel, SessionMatch } from './sessionKey';
 
 /**
  * Copying the active terminal's selection — pure, with no `vscode` in it.
@@ -51,4 +55,66 @@ export async function captureTerminalSelection(
 
     return { text: '', failure: `The terminal selection could not be copied: ${said}` };
   }
+}
+
+const CREDS = 'Creds: ';
+
+/** The chat's title: the terminal's name without a leading `Creds: ` — at the start only, and only when something is left. */
+export function terminalLabel(name: string): string {
+  return name.startsWith(CREDS) && name.length > CREDS.length ? name.slice(CREDS.length) : name;
+}
+
+/** The conversation of THIS terminal object, or a new one. It never matches by name and never answers `rekey`. */
+export function terminalMatch(known: readonly KnownPanel[], terminal: object, name: string): SessionMatch {
+  const label = terminalLabel(name);
+
+  return known.some((panel) => panel.key === terminal)
+    ? { kind: 'existing', key: terminal, label }
+    : { kind: 'new', key: terminal, label };
+}
+
+/** One terminal of the window, narrowed to what the rules read. `key` is the host's `vscode.Terminal` object. */
+export interface LiveTerminal {
+  readonly key: object;
+  readonly name: string;
+  /** The terminal's process has ended (`exitStatus` is set). Such a terminal is never shown. */
+  readonly exited: boolean;
+}
+
+export type NamedTerminal =
+  | { readonly kind: 'one'; readonly key: object }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'several'; readonly count: number };
+
+/** The ONE live terminal of this exact name — or that there is none, or how many there are. It never picks. */
+export function oneLiveNamed(live: readonly LiveTerminal[], name: string): NamedTerminal {
+  const named = live.filter((one) => !one.exited && one.name === name);
+  if (named.length === 1) {
+    return { kind: 'one', key: named[0]!.key };
+  }
+
+  return named.length === 0 ? { kind: 'none' } : { kind: 'several', count: named.length };
+}
+
+/**
+ * The panels a TAB may be matched against: every panel but the ones opened from a terminal.
+ * Judged by the conversation's durable source, never by its key — a restored terminal conversation is keyed by a plain object.
+ */
+export function tabSourced(
+  known: readonly KnownPanel[],
+  sourceOf: (key: object) => ConversationSource | undefined,
+): readonly KnownPanel[] {
+  return known.filter((panel) => sourceOf(panel.key)?.kind !== 'terminal');
+}
+
+/** The durable source of the conversation registered under this key, or nothing for a key that holds none. */
+function sourceUnder(panels: Pick<ChatPanels, 'get'>, key: object): ConversationSource | undefined {
+  const entry = panels.get(key);
+
+  return entry === undefined ? undefined : threads.get(entry.id)?.source;
+}
+
+/** The registry's panels a tab may be matched against — `tabSourced`, read from each panel's own thread. */
+export function tabPanels(panels: Pick<ChatPanels, 'known' | 'get'>): readonly KnownPanel[] {
+  return tabSourced(panels.known(), (key) => sourceUnder(panels, key));
 }

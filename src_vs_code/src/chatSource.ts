@@ -90,13 +90,20 @@ export function isSessionId(id: string): boolean {
  * silence — matched for navigation and wrong in the picker. A `never` makes it a compile error
  * instead. (codex, the code round.)</p>
  *
+ * <p>A terminal names no folder either — its session can be on another machine — so its conversation is
+ * filed under the fallback root, as a record with no source is.</p>
+ *
  * @param fsPath the host's uri-to-path spelling; this module has none of its own
  */
 export function knownFolder(source: ConversationSource, fsPath: (uri: string) => string): string {
+  return source.kind === 'file' ? fsPath(source.uri) : noFolder(source);
+}
+
+/** The kinds that name no folder. Exhaustive: a fifth kind does not compile until it says whether it names one. */
+function noFolder(source: Exclude<ConversationSource, { kind: 'file' }>): string {
   switch (source.kind) {
-    case 'file':
-      return fsPath(source.uri);
     case 'claude':
+    case 'terminal':
     case 'none':
       return '';
     default: {
@@ -104,7 +111,7 @@ export function knownFolder(source: ConversationSource, fsPath: (uri: string) =>
 
       throw new Error(
         `a conversation source this build has no arm for: ${JSON.stringify(unhandled)}`
-        + ' — the kinds it may be are file, claude and none',
+        + ' — the kinds it may be are file, claude, terminal and none',
       );
     }
   }

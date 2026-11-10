@@ -277,8 +277,9 @@ export interface Thread extends ChatMemory {
    * WHAT THIS CONVERSATION WAS OPENED FROM — the identity that outlives the window.
    *
    * <p>The live key is the tab object, which dies with the window; this is the durable half, and it
-   * is what *go to* will match a tab against. A file's uri, a Claude session's id, or `none` for a
-   * conversation restored from a record written before story C1 — and `none` matches no tab at all,
+   * is what *go to* will match a tab against. A file's uri, a Claude session's id, a terminal's FULL name
+   * (never matched to a tab — a name compares equal and finds one live terminal, nothing more), or `none` for
+   * a conversation restored from a record written before story C1 — and `none` matches no tab at all,
    * deliberately, because a title is never a key.</p>
    */
   source: ConversationSource;

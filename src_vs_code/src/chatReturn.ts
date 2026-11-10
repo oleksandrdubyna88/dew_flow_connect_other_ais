@@ -1,4 +1,5 @@
 import type { ConversationSource } from './chatStore';
+import { type LiveTerminal, type NamedTerminal, oneLiveNamed } from './terminalSource';
 import { type TabSnapshot, isOrdinaryEditorTab, rekeysByLabel } from './sessionKey';
 
 /**
@@ -7,7 +8,8 @@ import { type TabSnapshot, isOrdinaryEditorTab, rekeysByLabel } from './sessionK
  * <p>*Go to* (`chatGoto.ts`) takes a Claude Code tab or an editor to its conversation; this is the road
  * the other way. It only FOLLOWS what the conversation already records and never binds anything: the
  * live tab it was opened from while that tab is open and reachable, else the recorded Claude session,
- * else the recorded file. A conversation that knows none of them says so — a title is never a key
+ * else the recorded file, else the terminal it was opened from — the chat's own while it runs, then the ONE
+ * live terminal of the recorded name. A conversation that knows none of them says so — a title is never a key
  * (`chatGoto.ts`).</p>
  */
 
@@ -24,6 +26,8 @@ export type BackTo =
   | { readonly kind: 'session'; readonly sessionId: string }
   /** The recorded document. */
   | { readonly kind: 'file'; readonly uri: string }
+  /** The terminal the chat was opened from, by its recorded full name. */
+  | { readonly kind: 'terminal'; readonly name: string }
   /** Nothing this chat can be taken back to. */
   | { readonly kind: 'nowhere' };
 
@@ -36,15 +40,62 @@ export function backTo(asked: ReturnAsked): BackTo {
   return asked.liveTab ? { kind: 'tab' } : recordedRoute(asked.source);
 }
 
+/** Everything but the live tab: what the conversation RECORDED. */
+export type Recorded = Exclude<BackTo, { kind: 'tab' }>;
+
+/** Which terminal to show, or the sentence that says why none is. */
+export type TerminalRoad =
+  | { readonly kind: 'show'; readonly key: object }
+  | { readonly kind: 'refuse'; readonly sentence: string };
+
+/**
+ * The chat's OWN terminal while it is open and running — exact, like the live tab — else the ONE live terminal of
+ * the recorded name. A restored chat is keyed by a plain object, so it always takes the second road.
+ */
+export function terminalRoad(chatKey: object, live: readonly LiveTerminal[], name: string): TerminalRoad {
+  const own = live.find((one) => one.key === chatKey && !one.exited);
+
+  return own === undefined ? namedRoad(oneLiveNamed(live, name), name) : { kind: 'show', key: own.key };
+}
+
+function namedRoad(found: NamedTerminal, name: string): TerminalRoad {
+  switch (found.kind) {
+    case 'one':
+      return { kind: 'show', key: found.key };
+    case 'none':
+      return { kind: 'refuse', sentence: terminalNotOpen(name) };
+    case 'several':
+      return { kind: 'refuse', sentence: terminalsShareName(found.count, name) };
+    default: {
+      const unhandled: never = found;
+
+      throw new Error(`a terminal lookup answer this build has no arm for: ${JSON.stringify(unhandled)}`);
+    }
+  }
+}
+
+export function terminalNotOpen(name: string): string {
+  return `The terminal \u201c${name}\u201d is not open.`;
+}
+
+export function terminalsShareName(count: number, name: string): string {
+  return `${count} terminals are called \u201c${name}\u201d \u2014 open the one you mean.`;
+}
+
 /** The road the conversation RECORDED — also what a tab that would not come forward falls back to. */
-export function recordedRoute(source: ConversationSource): Exclude<BackTo, { kind: 'tab' }> {
+export function recordedRoute(source: ConversationSource): Recorded {
+  return source.kind === 'none' ? { kind: 'nowhere' } : namedRoute(source);
+}
+
+/** Exhaustive: a new kind of source is a compile error here, not a chat that goes nowhere in silence. */
+function namedRoute(source: Exclude<ConversationSource, { kind: 'none' }>): Recorded {
   switch (source.kind) {
     case 'claude':
       return { kind: 'session', sessionId: source.sessionId };
     case 'file':
       return { kind: 'file', uri: source.uri };
-    case 'none':
-      return { kind: 'nowhere' };
+    case 'terminal':
+      return { kind: 'terminal', name: source.name };
     default:
       // Exhaustive: a new kind of source is a compile error here, not a chat that silently goes
       // nowhere. (codex, the code round.)
@@ -52,7 +103,7 @@ export function recordedRoute(source: ConversationSource): Exclude<BackTo, { kin
   }
 }
 
-function unknownSource(source: never): Exclude<BackTo, { kind: 'tab' }> {
+function unknownSource(source: never): Recorded {
   return source;
 }
 
@@ -64,7 +115,8 @@ function unknownSource(source: never): Exclude<BackTo, { kind: 'tab' }> {
  * <p>The same identities `sessionKey.ts` re-keys by: a FILE by its document's uri (any tab showing it —
  * the document is the same wherever it is split), and — for a chat that recorded no session — a Claude
  * tab by its label, only when ONE Claude tab wears it. Two of one name are never guessed between, and a document tab is never taken for
- * a Claude session because it happens to wear the chat's name.</p>
+ * a Claude session because it happens to wear the chat's name. A terminal source never takes a tab — a Claude tab
+ * that wears the chat's name is not where the chat came from.</p>
  */
 export function recoveredTab(all: readonly TabSnapshot[], source: ConversationSource, label: string): TabSnapshot | undefined {
   if (source.kind === 'file') {

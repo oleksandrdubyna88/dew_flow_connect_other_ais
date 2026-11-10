@@ -5848,6 +5848,10 @@ answering `start` there offers a second conversation for a tab that already has 
 A source of `none` matches nothing, including another `none`. That single line of `sameSource` is
 what keeps every conversation written before C1 from being handed to a tab that never owned it.
 
+A fourth kind of source exists since E1.S2: a terminal's full name. It compares equal to a terminal source of the
+same name and to nothing else, and it is never bound to a tab (`bindable` needs `sameSource`, which is false
+across kinds). See *The terminal source and its identity (E1.S2)* in the section *The chat opens from a terminal (E1)*.
+
 ### The root is the tab's own
 
 Not membership in the window's roots: with two open, membership lets a record filed under the first
@@ -10316,8 +10320,10 @@ is active, and on the SAME chord as *go to* (`Ctrl+Alt+G` / `Cmd+Alt+G`) scoped 
 
 - **The decision** is `chatReturn.ts` `backTo({liveTab, source})`, pure: the live tab the chat was opened
   from wins while it is open and reachable (a group the eight fixed focus commands reach, an index still
-  in its group's list), else the recorded Claude session, else the recorded file, else `nowhere` — said
-  out loud, never a guess by title.
+  in its group's list), else the recorded Claude session, else the recorded file, else — since E1.S2 — the
+  terminal the chat was opened from, else `nowhere` — said out loud, never a guess by title. The fourth road is
+  `Terminal.show()`: the chat's own terminal while it runs, then the ONE live terminal of the recorded name, never a
+  guess between two (`terminalRoad`; details in the E1 section).
 - **The executor** is `chatReturnCommand.ts`. It finds the chat by the store id the page puts in
   `<body data-vscode-context='{"coaiConversation": …}'>` (VS Code merges that into a menu command's
   argument from any clicked child), falling back to the active chat panel for the chord
@@ -13385,3 +13391,83 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This sectio
 - **Tests**: `terminalCapture.test.ts` (S1-T1…T9 and T11: the borrow, the terminal capture, the source scan that the terminal door presses no
   key and shares the latch, and that a failing restore never replaces the copy's reason). The host scenario also sends two presses at once and
   requires exactly one to be refused with the latch's sentence — the check a locally shadowed latch would pass in the source scan; `chatCapture.test.ts` is the unedited regression net for the extraction.
+
+### The terminal source and its identity (E1.S2)
+
+Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation opened from a terminal is filed under a
+`terminal` source, and the rest of E1 builds on it.
+
+- **The kind.** `ConversationSource` has a fourth kind, `{ kind: 'terminal'; name }`: the terminal's FULL name as the host reported it at the
+  first press (`Creds: ai1-dev2 / small-tasks`, prefix and all), compared exactly — no trim, no case fold, no normalisation. A terminal has no
+  uri and no session id, so a name is allowed to do two things only: compare equal (`sameSource`) and find ONE live terminal to show on request
+  (`oneLiveNamed`, which never picks). It never re-keys and never binds. Several conversations may carry one terminal source; that is normal.
+- **One name rule, `isTerminalName` in `chatStore.ts`**, called by the builder (`sourceOfTerminal`, an invalid name builds `none`) and the reader
+  (`sourceFrom`, an invalid name is `undefined`, so the record is dropped as `incompatible` and stays on disk — never read as sourceless). A valid
+  name is 1 to `TERMINAL_NAME_MAX` (500) UTF-16 units and ONE line: no control character (category `Cc`) and no U+2028 or U+2029. Why: the name is
+  external data (a program in the terminal sets it with a title sequence, another extension can give `createTerminal` any string); it goes into
+  two sentences a person reads and, in E2, selects an ssh host; the identity is exact, so a name cannot be cleaned and kept — all or nothing. 500
+  bounds a field that is copied into every index entry and into a notification. A conversation from a terminal with such a name is saved with `none`.
+- **The name is recorded once and never updated.** While the window lives, the KEY decides: the live key is the `vscode.Terminal` object and
+  `terminalMatch` (`terminalSource.ts`) never reads a name to match. The same object is the same conversation, also after a rename; a new
+  terminal of the same name is a new conversation; two live terminals of one name are two conversations with equal sources. The title is
+  `terminalLabel(name)`: a leading `Creds: ` dropped, at the start only and only when something is left.
+- **`fromSession` reads as `false` for every terminal source, on both roads into a thread** — the door (`newConversation`) and the disk
+  (`recordFrom`), through one rule, `readsSession` over the `ORIGIN` table typed by the kind. On disk either value is accepted (`agreeOnOrigin`),
+  so a record that E2 wrote with `true` is not dropped after a rollback — but it does not offer *Asked*, because the Asked press walks the LOCAL
+  home by title and `adoptFound` would replace the terminal source with a local session's (`pinSession` and `resolveAndPin`). E2 changes the one
+  row together with its guard. `pinSession` takes the decided flag, so no door can pin a terminal conversation.
+- **Every switch over the source kind is exhaustive, in a form that passes `complexity` 4**: `namedBy` (behind `sameSource`), `noFolder` (behind
+  `knownFolder`), `namedRoute` (behind `recordedRoute`) and `toRecorded` (behind `fromRecord`) each end in a `never`; `ORIGIN` is a table typed
+  by the kind. `sameSource` stopped being a lint violation, so the complexity count of `src/chatStore.ts` fell from 4 to 3.
+- **The steal, and the one road `tabMatch`.** `sourceSession` reads a known panel whose key is not one of the tabs as "its tab has gone" and
+  re-keys it to a Claude tab of the same label — so a Claude tab called `main` would take the conversation of a terminal called `main`, and the
+  answer would arrive there with nothing saying so (pinned as it is, without the filter, by a test). `tabMatch(panels)` in `chatCapture.ts` takes
+  the snapshot, the panels a TAB may own (`tabPanels`: every panel but the ones whose thread's durable source is a `terminal` — judged by the
+  thread, never by the key, because a restored terminal conversation is keyed by a plain object) and makes both `sourceSession` calls. It is the
+  only caller of `sourceSession`; `matchedSource` and `askedForGoto` both go through it (a scan test holds that, with a companion that still finds
+  the two known calls). `terminalMatch` is given the UNFILTERED list, because the terminal's own panel must be in it.
+- **The road back (fourth road of *back to where this chat came from*).** `terminalRoad(chatKey, live, name)`: the chat's OWN terminal while it
+  is open and running (exact, like the live tab), else the ONE live terminal of the recorded name (`oneLiveNamed`; exited terminals are left out),
+  else a refusal in the plan's words — *The terminal “<name>” is not open.* or *N terminals are called “<name>” — open the one you mean.* Never a
+  guess between two. `toTerminal` in `chatReturnCommand.ts` reads `vscode.window.terminals` ONCE, decides and acts on that list, and calls
+  `Terminal.show()` with no argument (the terminal comes forward and takes the focus). No other extension is called; `refuse` is the existing
+  `notify` site. A restored chat (key `{}`) always takes the name road. A conversation is not attached to its terminal again in E1 (that is E3).
+- **Go-to in E1 is not changed.** A terminal is not a tab kind; a terminal in the editor area is a tab of kind `other` and gets the whole list.
+  A terminal record is never matched by source and never bound (`bindable` needs `sameSource`, which is false across kinds). The name fallback
+  for an ambiguous Claude tab can still OPEN a terminal conversation titled like that tab when it is the only one — opened, not bound.
+- **`deliverPassage` takes `origin: ConversationSource`** in place of a uri. The two tab doors build it with `sourceOfTab(fromSession, uri)`, the
+  bug door with `sourceOfFile(fileUriOf(chat))`.
+- **Disk and rollback — measured 2026-11-10 on the released 0.85.0.** A `terminal` record and its index entry (`version` 1, last used 200 days
+  ago) in an empty store, through the real store, index, sweep and restore of the unchanged tree:
+
+  | # | What was done | Result |
+  |---|---|---|
+  | M1 | `recordFrom`, `metaFrom` | `undefined`, `undefined` |
+  | M2 | `store.read(id)` | `incompatible` |
+  | M3 | `listMeta()`, `entry(id)`, `index.size`, `index.bySource(...)` | 0 rows; `undefined`; 0; 0 — the picker and go-to do not show it |
+  | M4 | `index.refresh()` twice | the entry is read again on EACH refresh; one `console.error` each time |
+  | M5 | `store.save(another record, same id, base 0)` | `incompatible`; nothing written |
+  | M6 | `store.retireIfExpired(id, …)` at 200 days | `kept`, `incompatible` |
+  | M7 | `planSweep(...)` | nothing expired, no orphan: the sweep leaves both files |
+  | M8 | the reload serializer; the picker | a notice tab *"… written in a form this build cannot read — most likely by a newer version …"*; *"… could not be opened … Nothing has been deleted."* |
+  | M9 | both files after all of it | byte-identical |
+
+  E1 adds nothing to the record for an older build: no version move (that would hide EVERY conversation from 0.85.0), no marker (0.85.0 already
+  refuses at `sourceFrom`), no side field (0.85.0 drops unknown fields on save, so the identity would be lost). The cost is console lines: one per
+  terminal conversation on disk at each index refresh and one per read of the record; no notification. Installing this version again brings the
+  conversations back, their age counted from the last use. The release note for the epic's release pull request: *Going back to 0.85.0. A
+  conversation opened from a terminal is saved with a source that 0.85.0 does not know. 0.85.0 does not show it in the conversation list, and a
+  chat tab restored from one says that a newer version wrote it. 0.85.0 does not delete, change or expire these files. Install this version again
+  and the conversations are back. Conversations opened from a Claude Code tab or from a file are not affected.*
+- **What S2 does not close.** (1) A terminal whose name is not valid gets a conversation with source `none`: no road back, and the filter does
+  not see it; a Claude tab can take it only when that tab's label equals the terminal's label exactly. (2) The recorded name is the name at the
+  FIRST press; for a terminal whose title follows the running program, the road back after a reload can say *not open* or show another terminal
+  that wears the name now — on request and visible; not measured. (3) The name fallback of go-to can open a terminal conversation for an
+  ambiguous Claude tab. (4) Whether `Terminal` objects stay the same when a terminal moves between the panel and the editor area is not measured;
+  if the object changes, the name road still finds it.
+- **Tests**: `chatStore.test.ts` (the name rule and its unit, the round trip and the exact bytes, every kind read back, a damaged name dropped,
+  `readsSession`, `sameSource`, `sourceOfTab`, the version), `chatSource.test.ts`, `terminalSource.test.ts`, `chatReturn.test.ts`,
+  `chatGoto.test.ts`, `chatStoreCache.test.ts`, `chatStoreRefile.test.ts`, `chatStoreFile.test.ts` (a record of a source kind a build does not
+  know is kept, hidden and never overwritten — the M2–M9 mechanism on the real store), and the wiring in `chatSourceWiring.test.ts` and
+  `bugzReviewWiring.test.ts`. Two host scenarios in `src/test/host/scenarios.ts` (the road back to a terminal; a tab that looks like Claude's does
+  not take a terminal conversation) run only in CI's job `extension · a real editor`.

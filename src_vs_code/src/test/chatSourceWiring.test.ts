@@ -1,7 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bodyOf } from './sourceReading';
+import { bodyOf, sourceFiles } from './sourceReading';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -168,7 +168,15 @@ test('a tab snapshot carries the document’s uri, from the SAME read as its sch
   // source at all. Still out of the SAME snapshot, so the two cannot disagree about the tabs.
   assert.match(capture, /uri: all\.find\(\(tab\) => tab\.key === matched\?\.key\)\?\.uri \?\? '',/u,
     'the uri comes from the focused tab rather than the matched one, so a chat opened from the panel has no source');
-  assert.match(command, /source: fromSession \? \{ kind: 'none' \} : sourceOfFile\(sourceUri\),/u, 'a new conversation is not given its source');
+  // And a new conversation is given the origin its DOOR built (E1.S2): `deliverPassage` no longer decides
+  // between a file and `none` itself — the tab doors build it with `sourceOfTab`, the bug door with `sourceOfFile`.
+  const deliver = bodyOf(command, 'async function deliverPassage(');
+  assert.match(deliver, /source: origin,/u, 'a new conversation is not given its source');
+  assert.match(deliver, /origin: ConversationSource,/u, 'the door does not hand over its origin');
+  assert.doesNotMatch(deliver, /sourceUri/u, 'the delivery still takes a uri and decides the source itself');
+  assert.match(bodyOf(command, 'export async function chatWithOtherAi('), /sourceOfTab\(match !== undefined, uri\)/u, 'the chat door does not build its origin');
+  assert.match(bodyOf(command, 'export async function takeTheQuestion('), /sourceOfTab\(claude !== undefined, uri\)/u, 'the question door does not build its origin');
+  assert.doesNotMatch(command, /fromSession \? \{ kind: 'none' \}/u, 'the tab rule is written a second time in the command; it lives in chatStore.ts');
 });
 
 test('a renamed file is followed; a SAVED untitled buffer deliberately is not', () => {
@@ -258,4 +266,46 @@ test('the renames are put into comparable form once, not once per conversation',
   const prepared = follow.indexOf('prepareMoves(renames,');
   assert.notEqual(prepared, -1, 'the renames are never put into comparable form at all');
   assert.ok(prepared < follow.indexOf('for (const'), 'the preparation happens inside a loop');
+});
+
+test('the road back to a terminal uses the chat\u2019s own key and one read of the window', () => {
+  const command = source('chatReturnCommand.ts');
+  const toTerminal = bodyOf(command, 'function toTerminal(');
+
+  assert.match(toTerminal, /const all = vscode\.window\.terminals;/u, 'the window\u2019s terminals are not read once, into one list');
+  assert.match(toTerminal, /terminalRoad\(key, all\.map\(asLive\), name\)/u, 'the decision does not get the chat\u2019s own key and the list');
+  assert.match(toTerminal, /all\.find\(\(one\) => one === road\.key\)\?\.show\(\);/u, 'the terminal is not shown by the key the decision returned');
+  assert.equal(toTerminal.split('vscode.window.terminals').length - 1, 1, 'the window\u2019s terminals are read more than once, so the decision and the act can see two lists');
+  assert.match(bodyOf(command, 'export async function backToSource('), /thread\.source, chat\.key\);/u, 'the chat\u2019s own key does not reach the road back');
+  assert.match(command, /const asLive = [^\n]*exited: one\.exitStatus !== undefined/u, 'a terminal that has ended is not told apart from one that runs');
+});
+
+test('every tab match goes through the one filtered road', () => {
+  const capture = source('chatCapture.ts');
+  const join = source('chatSessionJoin.ts');
+  const road = bodyOf(capture, 'export function tabMatch(');
+
+  // (a) the road itself: the filtered list, and both calls.
+  assert.match(road, /const known = tabPanels\(panels\);/u, 'the tab match is not made against the panels a TAB may own');
+  assert.equal(road.split('sourceSession(').length - 1, 2, 'the tab match does not make both of its calls');
+  // (b) the scan: no other file calls it. Its companion is (a) — the scan still finds the two known calls.
+  const callers = sourceFiles()
+    .filter((file) => file !== 'sessionKey.ts')
+    .map((file) => ({ file, calls: source(file).split('sourceSession(').length - 1 }))
+    .filter((one) => one.calls > 0);
+  assert.deepEqual(callers, [{ file: 'chatCapture.ts', calls: 2 }], `sourceSession is called outside the one road: ${JSON.stringify(callers)}`);
+  // (c) both doors take the road, and neither reads the registry's unfiltered list. (`matchedSource`'s own
+  // signature ends in a line that starts with a brace, so `bodyOf` cannot read its body: the file is read for it.)
+  assert.match(capture, /const \{ all, claude, matched \} = tabMatch\(panels\);/u, 'the capture door does not take the one road');
+  assert.doesNotMatch(capture, /panels\.known\(\)/u, 'the capture reads the unfiltered list of panels');
+  assert.match(bodyOf(join, 'export async function askedForGoto('), /tabMatch\(panels\)/u, 'go-to does not take the one road');
+  assert.doesNotMatch(join, /panels\.known\(\)/u, 'the session join reads the unfiltered list of panels');
+});
+
+test('a new conversation\u2019s session flag is decided by its source', () => {
+  const made = bodyOf(source('chatCommand.ts'), 'function newConversation(');
+
+  assert.match(made, /const fromSession = readsSession\(state\.source, state\.fromSession\);/u, 'the flag is not decided by the source');
+  assert.equal(made.split('state.fromSession').length - 1, 1, 'a place still reads the door\u2019s flag instead of the decided one');
+  assert.match(made, /pinSession\(entry, state\.title, fromSession\);/u, 'a terminal conversation could be pinned to a LOCAL Claude session of its name');
 });

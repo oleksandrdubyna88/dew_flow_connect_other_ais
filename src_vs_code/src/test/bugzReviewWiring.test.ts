@@ -479,7 +479,7 @@ test('the sidebar hands its hook to the chat, and the extension gives it the win
 test('a second press on the same bug only brings its conversation back, and a first one is never sent', () => {
   const body = bodyOf(code('chatCommand.ts'), 'export async function chooseFromBug(');
   const reveal = body.search(/const open = bugChats\.openFor\(chat\.key, panels\);\s*if \(open !== undefined\) \{\s*open\.panel\.reveal\(\);\s*return;\s*\}/u);
-  const deliver = body.search(/const key = bugChats\.keyFor\(chat\.key\);\s*await deliverPassage\(panels, extensionUri, ready, \{ kind: 'new', key, label: chat\.label \}, \{ text: chat\.text \}, false, false, fileUriOf\(chat\)\);\s*bugChats\.remember\(chat\.key, panels\);/u);
+  const deliver = body.search(/const key = bugChats\.keyFor\(chat\.key\);\s*await deliverPassage\(panels, extensionUri, ready, \{ kind: 'new', key, label: chat\.label \}, \{ text: chat\.text \}, false, false, sourceOfFile\(fileUriOf\(chat\)\)\);\s*bugChats\.remember\(chat\.key, panels\);/u);
 
   assert.ok(reveal >= 0, 'an open conversation — found by its id, wherever it was re-keyed — is revealed and its composer left alone');
   assert.ok(deliver > reveal,

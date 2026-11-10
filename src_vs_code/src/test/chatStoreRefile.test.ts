@@ -11,6 +11,7 @@ import {
   ConversationRecord,
   sourceOfFile,
   sourceOfSession,
+  sourceOfTerminal,
 } from '../chatStore';
 
 /**
@@ -204,4 +205,63 @@ test('a follow whose INDEX ENTRY could not be written says so, rather than repor
       rmSync(dir, { recursive: true, force: true });
     }
   })();
+});
+
+// ---------------------------------------------------------------------------------------------
+// A terminal conversation on the real store (E1.S2).
+// ---------------------------------------------------------------------------------------------
+
+const TERMINAL = 'Creds: ai1-dev2 / small-tasks';
+
+test('a terminal conversation is saved, listed and read back', async () => {
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const mine = record({ source: sourceOfTerminal(TERMINAL), fromSession: false });
+
+    const saved = await store.save(mine, 0);
+    assert.equal(saved.kind, 'ok', `a terminal conversation was not saved: ${JSON.stringify(saved)}`);
+    const seen = await store.read('a1');
+    assert.equal(seen.kind, 'record');
+    assert.deepEqual(seen.kind === 'record' ? { ...seen.record, rev: 1 } : undefined, { ...mine, rev: 1 }, 'it did not come back as it went in');
+    const listed = await store.listMeta();
+    assert.equal(listed.kind, 'listed');
+    assert.deepEqual(listed.kind === 'listed' ? listed.metas.map((meta) => meta.source) : [], [sourceOfTerminal(TERMINAL)]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the store refuses to write a terminal record its reader would refuse', async () => {
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const damaged = record({ source: { kind: 'terminal', name: '' }, fromSession: false });
+
+    const saved = await store.save(damaged, 0);
+
+    assert.equal(saved.kind, 'failed', `a record with a refused name was written: ${JSON.stringify(saved)}`);
+    assert.match(saved.kind === 'failed' ? saved.reason : '', /not one this build could read back/u, `the save failed, but not by the self-check: ${JSON.stringify(saved)}`);
+    assert.deepEqual(readdirSync(dir), [], 'a refused record left a file behind');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a file rename never refiles a terminal conversation, even one named like the file', async () => {
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const mine = record({ source: sourceOfTerminal(WAS), fromSession: false });
+    assert.equal((await store.save(mine, 0)).kind, 'ok');
+
+    const done = await store.refile('a1', sourceOfFile(WAS), sourceOfFile(NOW), 'D:\\rsd\\two', AT);
+
+    assert.deepEqual(done, { kind: 'kept', why: 'moved on' }, 'a terminal conversation was followed to a file');
+    const seen = await store.read('a1');
+    assert.deepEqual(seen.kind === 'record' ? seen.record.source : undefined, sourceOfTerminal(WAS));
+    assert.equal(seen.kind === 'record' ? seen.record.rev : 0, 1, 'a refused follow still wrote a revision');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

@@ -8,8 +8,8 @@ import { ConversationIndex } from './chatStoreCache';
 import { GotoAsked, sessionSourceOf, tabKindOf } from './chatGoto';
 import { NAMES_ARE_CASE_BLIND, conversationWorkspace, everyFolder, fsPathOf, whereToLook } from './chatRoots';
 import { filedUnder, sameRoot, sessionIdOf } from './chatSource';
-import { snapshots } from './chatCapture';
-import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession } from './sessionKey';
+import { tabMatch } from './chatCapture';
+import { isClaudeSessionTab, isOrdinaryEditorTab } from './sessionKey';
 import { Asked, Found, oneAnswerFrom, pinnable, promptsFrom, sessionFileIn, sessionFileOf, severalMatch } from './claudeSessions';
 
 /**
@@ -249,10 +249,7 @@ export async function askedForGoto(
   panels: ChatPanels,
   index: ConversationIndex,
 ): Promise<{ readonly asked: GotoAsked; readonly key: object | undefined }> {
-  const { active, all } = snapshots();
-  const known = panels.known();
-  const claude = sourceSession(active, all, known);
-  const matched = claude ?? sourceSession(active, all, known, isOrdinaryEditorTab);
+  const { active, all, matched } = tabMatch(panels);
   const tab = all.find((one) => one.key === matched?.key) ?? active;
   const kind = tabKindOf({ claude: tab !== undefined && isClaudeSessionTab(tab), document: tab !== undefined && isOrdinaryEditorTab(tab) });
   const path = kind === 'document' ? fsPathOf(tab?.uri ?? '') : '';
