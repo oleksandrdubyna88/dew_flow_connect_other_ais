@@ -1,12 +1,28 @@
 import * as assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { matchedSource, snapshots } from '../../chatCapture';
 import { ChatPanels } from '../../chatPanels';
 import { sourceOfTerminal } from '../../chatStore';
+import { terminalsShareName } from '../../chatReturn';
 import { backToSource } from '../../chatReturnCommand';
 import { isClaudeSessionTab } from '../../sessionKey';
 import { registeredChat, until } from './hostHelpers';
+
+/**
+ * How many times the notice ledger holds this exact refusal. The ledger (`notifications.jsonl` in the launch's data directory) is where
+ * every `notify` is written down, and the sentence is the one the road back says for several terminals of one name — taken from the
+ * code that says it, so the two cannot drift. A row of an earlier press is counted too: the caller compares before and after.
+ */
+function severalNamedSaid(count: number, name: string): number {
+  const ledger = path.join(process.env['COAI_DATA_DIR'] ?? '', 'notifications.jsonl');
+  const lines = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').split('\n') : [];
+  const sentence = JSON.stringify(terminalsShareName(count, name)).slice(1, -1);
+
+  return lines.filter((line) => line.includes('"chat-cannot-go-back"') && line.includes(sentence)).length;
+}
 
 /**
  * The chat's terminal road and the steal filter, in a real editor (S2-H1 and S2-H2 of the E1 stories document, the chat opens from a terminal).
@@ -48,9 +64,13 @@ export async function backToATerminalInARealEditor(): Promise<void> {
 
     // (3) With a namesake open the name names two terminals: nothing is guessed.
     namesake.push(vscode.window.createTerminal({ name }));
+    // The refusal is awaited by name as well as the terminal in front being unchanged: `away()` has already made `other` active, so
+    // "nothing changed" alone would also pass when the door did nothing at all, or when it said nothing.
+    assert.ok(process.env['COAI_DATA_DIR'], 'the launcher named no data directory, so the notice ledger cannot be read');
+    const saidBefore = severalNamedSaid(2, name);
     await away();
     await backToSource(restored, { webview: 'coaiChat', coaiConversation: 'host-back-restored' });
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await until(() => severalNamedSaid(2, name) > saidBefore, `the refusal "${terminalsShareName(2, name)}" was never said for this press`, 5000);
     assert.equal(vscode.window.activeTerminal, other, 'a terminal was picked between two of one name');
 
     // (4) The chat's own terminal still wins while its namesake is open.
@@ -61,7 +81,8 @@ export async function backToATerminalInARealEditor(): Promise<void> {
     own.dispose();
     other.dispose();
     namesake.forEach((one) => one.dispose());
-  }}
+  }
+}
 
 /**
  * A tab that looks like Claude Code's and wears the name of a terminal conversation must not take it: `sourceSession` reads a panel
@@ -98,4 +119,5 @@ export async function aClaudeLookingTabDoesNotTakeATerminalChat(): Promise<void>
   } finally {
     panel.dispose();
     terminal.dispose();
-  }}
+  }
+}

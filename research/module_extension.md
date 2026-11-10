@@ -13406,7 +13406,7 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   name is 1 to `TERMINAL_NAME_MAX` (500) UTF-16 units and ONE line: no control character (category `Cc`) and no U+2028 or U+2029. Why: the name is
   external data (a program in the terminal sets it with a title sequence, another extension can give `createTerminal` any string); it goes into
   two sentences a person reads and, in E2, selects an ssh host; the identity is exact, so a name cannot be cleaned and kept — all or nothing. 500
-  bounds a field that is copied into every index entry and into a notification. A conversation from a terminal with such a name is saved with `none`.
+  bounds a field that is copied into every index entry and into a notification. The builder's fallback for such a name is `none`; the terminal door does not rely on it — it refuses the terminal before capturing anything (`terminal-name-unusable`, see the S3 section).
 - **The name is recorded once and never updated.** While the window lives, the KEY decides: the live key is the `vscode.Terminal` object and
   `terminalMatch` (`terminalSource.ts`) never reads a name to match. The same object is the same conversation, also after a rename; a new
   terminal of the same name is a new conversation; two live terminals of one name are two conversations with equal sources. The title is
@@ -13459,8 +13459,8 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   conversation opened from a terminal is saved with a source that 0.85.0 does not know. 0.85.0 does not show it in the conversation list, and a
   chat tab restored from one says that a newer version wrote it. 0.85.0 does not delete, change or expire these files. Install this version again
   and the conversations are back. Conversations opened from a Claude Code tab or from a file are not affected.*
-- **What S2 does not close.** (1) A terminal whose name is not valid gets a conversation with source `none`: no road back, and the filter does
-  not see it; a Claude tab can take it only when that tab's label equals the terminal's label exactly. (2) The recorded name is the name at the
+- **What S2 does not close.** (1) A terminal whose name is not valid: `sourceOfTerminal` falls back to `none` (no road back, and the filter would not see it),
+  but the terminal door refuses such a terminal before capturing (S3, `terminal-name-unusable`), so no conversation is opened with that fallback. (2) The recorded name is the name at the
   FIRST press; for a terminal whose title follows the running program, the road back after a reload can say *not open* or show another terminal
   that wears the name now — on request and visible; not measured. (3) The name fallback of go-to can open a terminal conversation for an
   ambiguous Claude tab. (4) Whether `Terminal` objects stay the same when a terminal moves between the panel and the editor area is not measured;
@@ -13509,8 +13509,8 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   where no source is known, and a terminal conversation never reaches a launch in agent mode because `accessOn` and the box refuse first.
 - **The help** (`helpContent.ts`, `helpRu.ts`, `helpUk.ts`, `helpDe.ts`, `helpEs.ts`, the `chat-with-other-ai` article): one paragraph that names
   **Ask other AI** in English in every language, and *or the terminal* in the back-to-source paragraph.
-- **A terminal whose name cannot name a conversation is refused before anything is captured** (`terminalDoorUsable` in `chatCommand.ts`, the store's
-  own `isTerminalName`): empty, over 500 UTF-16 units, or holding a control character or a line separator. Such a name builds the source `none`, and a
+- **A terminal whose name cannot name a conversation is refused before anything is captured** (`terminalDoorName` in `chatCommand.ts`, the store's
+  own `isTerminalName`): empty, over 500 UTF-16 units, or holding a control character or a line separator. The builder (`sourceOfTerminal`) would fall back to the source `none` for such a name, and a
   chat with no source has no road back and no protection against a Claude tab taking it, silently. The notice is `terminal-name-unusable`: *This
   terminal's name cannot name a conversation (it is empty, longer than 500 characters, or holds a control character) — rename the terminal and press
   again.* The check runs before the capture because a capture borrows the clipboard. (The help does not list this refusal.)
