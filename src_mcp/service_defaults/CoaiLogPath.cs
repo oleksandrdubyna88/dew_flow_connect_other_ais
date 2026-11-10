@@ -9,7 +9,7 @@ namespace CoaiMcp.ServiceDefaults;
 /// disambiguates two hosts started in the same second.</para>
 /// <para><b>Everything is UTC</b> — the folder and the file name here, the line timestamps in
 /// <see cref="CoaiTextFormatter"/>. One clock everywhere, so logs from different hosts of the
-/// family land in the same day folder (.claude/rules/shared/common/logging-serilog.md).</para>
+/// family land in the same day folder (.agents/conventions/common/logging-serilog.md).</para>
 /// <para>Pure, so the shape is a unit test rather than something discovered on disk.</para>
 /// </remarks>
 public static class CoaiLogPath

@@ -123,7 +123,7 @@ test('nothing waiting draws nothing', () => {
 
 test('a waiting question that is markup is escaped, not rendered', () => {
   // A waiting row is text a person PASTED, and the webview holds a privileged message bridge.
-  // `.claude/rules/shared/common/security.md` names this exact anti-pattern by example.
+  // `.agents/conventions/common/security.md` names this exact anti-pattern by example.
   const html = chatWaitingHtml([{ id: 'w1', text: '<img src=x onerror=alert(1)>' }]);
 
   assert.ok(!html.includes('<img src=x'), 'the question reached the page as markup');
