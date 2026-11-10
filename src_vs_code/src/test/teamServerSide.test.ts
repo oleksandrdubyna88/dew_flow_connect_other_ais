@@ -437,7 +437,7 @@ test('a token file that will not delete keeps its record, so the next refresh tr
 });
 
 test('the mint stamp comes from the injected clock, not the machine', async () => {
-  // `.claude/rules/shared/common/utc-timestamps.md` rule 2: it is persisted and then COMPARED
+  // `.agents/conventions/common/utc-timestamps.md` rule 2: it is persisted and then COMPARED
   // against another side's sign-out, which is exactly the case that rule names.
   const dir = temp();
   try {

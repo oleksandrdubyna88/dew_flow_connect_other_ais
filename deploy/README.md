@@ -68,7 +68,7 @@ The AOT publish takes several minutes — run it detached rather than inside a c
 ### The release script, and why it is a script
 
 [`systemd-release.sh`](systemd-release.sh) is the whole procedure, because the family rule
-(`.claude/rules/shared/common/development-workflow.md`) asks for things a list of commands in a README
+(`.agents/conventions/common/development-workflow.md`) asks for things a list of commands in a README
 cannot give: an immutable version-addressed artefact, the last three retrievable, a rollback that
 builds nothing and is **one command**, and a look inside the artefact before it is trusted.
 
