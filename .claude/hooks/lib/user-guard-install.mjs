@@ -134,12 +134,17 @@ export function drift(settings, hookPath, installedBytes, sourceBytes) {
   return [...out, ...registrationProblems(settings, hookPath)];
 }
 
-/** Temp file + rename; the temp file never outlives a failed write, and `mode` (when given) is kept. */
+/**
+ * Temp file + rename; the temp file never outlives a failed write, and `mode` (when given) is kept. The mode is SET
+ * with chmod before the rename: a create mode is cut by the umask, so 0644 under umask 0077 became 0600 and other
+ * users lost their read of settings.json (CodeRabbit on #148, 2026-11-10).
+ */
 function writeAtomic(dest, data, mode) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.tmp-${process.pid}`;
   try {
     fs.writeFileSync(tmp, data, mode === undefined ? undefined : { mode });
+    if (mode !== undefined) fs.chmodSync(tmp, mode);
     fs.renameSync(tmp, dest);
   } finally {
     fs.rmSync(tmp, { force: true });
@@ -229,12 +234,14 @@ export function repairRegistration({ home, beforeWrite = () => {} }) {
   const original = readOrNull(t.settings);
   const parsed = parseSettings(original);
   if (parsed.error) return unparsable(t.settings, parsed.error);
+  const target = settingsFileOf(t.settings);
+  if (target.refusal) return result(1, [target.refusal]);
   const merged = serialise(mergeEntry(parsed.settings, t.hook));
   if (original !== null && original.equals(Buffer.from(merged))) return result(0, ['already registered']);
-  const lines = original === null ? [] : [`backup ${writeBackup(t.settings, original)}`];
+  const lines = original === null ? [] : [`backup ${writeBackup(t.settings, original, modeOf(t.settings))}`];
   beforeWrite();
   if (!sameBytes(readOrNull(t.settings), original)) return result(1, [...lines, CHANGED]);
-  writeAtomic(t.settings, merged);
+  writeSettings(target.file, merged);
   return result(0, [...lines, `wrote ${t.settings} (hooks.PreToolUse: ${MATCHER})`]);
 }
 
@@ -277,6 +284,8 @@ export function install({ home, source, beforeWrite = () => {}, clearOptout = fa
   const original = readOrNull(t.settings);
   const parsed = parseSettings(original);
   if (parsed.error) return unparsable(t.settings, parsed.error);
+  const target = settingsFileOf(t.settings);
+  if (target.refusal) return result(1, [target.refusal]);
   const merged = mergeEntry(parsed.settings, t.hook);
   const sourceBytes = fs.readFileSync(source);
   const refusal = downgradeRefusal(t, sourceBytes, force) || changedRefusal(t, sourceBytes, force);
@@ -284,7 +293,7 @@ export function install({ home, source, beforeWrite = () => {}, clearOptout = fa
   const upToDate = original !== null && original.equals(Buffer.from(serialise(merged))) && sameBytes(readOrNull(t.hook), sourceBytes) && isRegistered(t);
   if (upToDate) return result(0, [...dropOptout(t, clearOptout), 'already installed']);
   const lines = [...dropOptout(t, clearOptout)];
-  if (original !== null) lines.push(`backup ${writeBackup(t.settings, original)}`);
+  if (original !== null) lines.push(`backup ${writeBackup(t.settings, original, modeOf(t.settings))}`);
   beforeWrite();
   if (!sameBytes(readOrNull(t.settings), original)) return result(1, [...lines, CHANGED]);
   // Every refusal is above, so a refused install never writes the hook, the manifest or settings.json (the backup and
@@ -294,7 +303,7 @@ export function install({ home, source, beforeWrite = () => {}, clearOptout = fa
   // leave a registration of a missing script, run on every Agent call (2026-11-10).
   writeManifest(t, source, sourceBytes, by, readOrNull(t.hook));
   writeAtomic(t.hook, sourceBytes);
-  writeAtomic(t.settings, serialise(merged));
+  writeSettings(target.file, serialise(merged));
   return result(0, [`wrote ${t.hook}`, ...lines, `wrote ${t.settings} (hooks.PreToolUse: ${MATCHER})`]);
 }
 
@@ -310,10 +319,14 @@ export function uninstall({ home, beforeWrite = () => {} }) {
   if (!present && !hookThere && !fs.existsSync(t.manifest)) return result(0, ['not installed', markOptout()]);
   const lines = [];
   if (present) {
-    lines.push(`backup ${writeBackup(t.settings, original)}`);
+    // The target only matters when settings.json is written, which needs our entry in it. A loop reads as no file,
+    // so it never gets here, and it does not stop the hook, manifest and marker steps below (CodeRabbit on #149).
+    const target = settingsFileOf(t.settings);
+    if (target.refusal) return result(1, [target.refusal]);
+    lines.push(`backup ${writeBackup(t.settings, original, modeOf(t.settings))}`);
     beforeWrite();
     if (!sameBytes(readOrNull(t.settings), original)) return result(1, [CHANGED]);
-    writeAtomic(t.settings, serialise(removeEntry(parsed.settings, t.hook)));
+    writeSettings(target.file, serialise(removeEntry(parsed.settings, t.hook)));
     lines.push(`removed the hook entry from ${t.settings}`);
   }
   if (hookThere) {
@@ -388,6 +401,64 @@ function writableReason(file) {
     return `is not writable (${e.code})`;
   }
 }
+
+/** The permission bits of an existing file (a symlink is followed); undefined when there is none. */
+const modeOf = file => (fs.existsSync(file) ? fs.statSync(file).mode & 0o777 : undefined);
+
+/**
+ * settings.json written where it really lives — a symlink (stow, chezmoi) is followed, never replaced by a plain
+ * file — and with its own mode (a 0600 file may hold tokens in `env`). `applyEffort` did both; install,
+ * repairRegistration and uninstall did neither until 2026-11-10 (CodeRabbit on creds #328).
+ */
+function writeSettings(file, data) {
+  writeAtomic(file, data, modeOf(file));
+}
+
+/** How many links a settings path may pass through before it is called a loop (the kernel's own ELOOP limit). */
+const MAX_LINKS = 40;
+
+/**
+ * The file a settings write goes to, found BEFORE anything is written: the real file when one exists; otherwise the
+ * last target of a chain of links that ends in a missing file (one link or several — CodeRabbit on #148 and coai
+ * #969, 2026-11-10: a single-level read replaced the middle link of a chain with a plain file); otherwise the path
+ * itself. More than 40 links is a `refusal` (a result, like the installer's other refusals — the code round), so
+ * the operation stops before its backup, manifest, hook or settings are touched.
+ */
+function settingsFileOf(settingsPath) {
+  const existing = effortTarget(settingsPath);
+  if (existing !== null) return { file: existing };
+  const last = lastLinkTarget(settingsPath);
+  if (last === TOO_MANY_LINKS) {
+    return { refusal: `${settingsPath} has more than ${MAX_LINKS} links (a loop, or a chain too long to open); nothing changed — point it at one file` };
+  }
+  return { file: last ?? settingsPath };
+}
+
+/** What `lastLinkTarget` answers when the chain does not end within `MAX_LINKS`. */
+const TOO_MANY_LINKS = Symbol('too many links');
+
+/**
+ * The missing file a chain of links ends in, each hop read from its own folder; null when the path is no link;
+ * `TOO_MANY_LINKS` past the limit. At most `MAX_LINKS` links are followed, as the kernel follows them.
+ */
+function lastLinkTarget(settingsPath) {
+  let current = settingsPath;
+  for (let hop = 0; hop <= MAX_LINKS; hop += 1) {
+    const stat = lstatOrNull(current);
+    if (stat === null || !stat.isSymbolicLink()) return hop === 0 ? null : current;
+    current = path.resolve(path.dirname(current), fs.readlinkSync(current));
+  }
+  return TOO_MANY_LINKS;
+}
+
+const lstatOrNull = file => {
+  try {
+    return fs.lstatSync(file);
+  } catch (e) {
+    if (e.code === 'ENOENT') return null;
+    throw e;
+  }
+};
 
 /** Where to read and write: the symlink's target when settings.json is a link; null when there is no file. */
 function effortTarget(settingsPath) {
