@@ -197,6 +197,96 @@ export function shouldRestore(current: string, captured: string): boolean {
   return current === captured;
 }
 
+/** What a borrow of the clipboard came to: whether the copy landed, the text it landed, what `run` said. */
+export interface Borrowed<T> {
+  readonly landed: boolean;
+  readonly text: string;
+  readonly outcome: T;
+}
+
+/** What was on the clipboard before the borrow, and the marker standing in for it while `run` works. */
+interface Loan {
+  readonly borrowed: string;
+  /** Empty when there was nothing readable to give back — and then nothing was written either. */
+  readonly marker: string;
+}
+
+/**
+ * Take the clipboard's text and put a marker where it was.
+ *
+ * <p>Nothing readable as TEXT — an image, a file, a copied cell — reads back as an empty string, and
+ * `vscode.env.clipboard` offers no way to see it, let alone put it back. So it is not taken: the
+ * emptiness is its own sentinel, and a capture that lands nothing leaves what the person had exactly
+ * where it was. Writing a sentinel over an image and then "restoring" the empty string we had read is
+ * a tidy-up that destroys something it never held. (gemini, the plan round.)</p>
+ */
+async function lend(clipboard: Clipboard): Promise<Loan> {
+  const borrowed = await clipboard.read();
+  const marker = borrowed.length > 0 ? markerFor() : '';
+  if (marker.length > 0) {
+    await clipboard.write(marker);
+  }
+
+  return { borrowed, marker };
+}
+
+/**
+ * Put the loan back — unless somebody wrote to the clipboard while it was out.
+ *
+ * <p>`captured` is what the run landed, and `undefined` when it never got as far as reading (it
+ * rejected): the marker is then what we expect to find, and a clipboard still holding it is ours to
+ * restore.</p>
+ */
+async function giveBack(clipboard: Clipboard, loan: Loan, captured: string | undefined): Promise<void> {
+  if (loan.marker.length > 0 && shouldRestore(await clipboard.read(), captured ?? loan.marker)) {
+    await clipboard.write(loan.borrowed);
+  }
+}
+
+/**
+ * Run something that copies, and say what landed on the clipboard — giving the clipboard back.
+ *
+ * <p>Extracted from `captureSelection` so the terminal door and the keyboard door borrow the one
+ * clipboard by one rule. It is NOT unchanged in what it does, in three ways. A `run` that REJECTS now
+ * restores and then rejects with the same reason (before, a copy command that threw left our marker on
+ * the clipboard); and a restore that fails on that path never replaces the reason. On the NOT-LANDED
+ * path the old code wrote `borrowed` back unconditionally after two reads; this one makes a third read
+ * and restores only when the clipboard still holds this borrow's marker, so a clipboard somebody
+ * changed in that gap is left alone. The landed path is the same: restore when the current text is
+ * still what our own copy landed.</p>
+ *
+ * <p>The reads happen in the order borrow, landed, current — `chatCapture.test.ts` counts them in
+ * that order.</p>
+ *
+ * @param clipboard the clipboard, injected
+ * @param run does the copy; its own answer travels back as `outcome`
+ * @returns `landed` false when the clipboard still holds this borrow's marker after `run`
+ */
+export async function borrowClipboard<T>(
+  clipboard: Clipboard,
+  run: () => PromiseLike<T>,
+): Promise<Borrowed<T>> {
+  const loan = await lend(clipboard);
+  let outcome: T;
+  try {
+    outcome = await run();
+  } catch (reason) {
+    // The copy's own failure is the one the caller must see: a restore that also fails (an unreadable
+    // clipboard) is the lesser fault, and letting it win would hide the cause.
+    await giveBack(clipboard, loan, undefined).catch(() => undefined);
+    throw reason;
+  }
+  let captured: string | undefined;
+  try {
+    captured = await clipboard.read();
+    const landed = captured !== loan.marker;
+
+    return { landed, text: landed ? captured : '', outcome };
+  } finally {
+    await giveBack(clipboard, loan, captured);
+  }
+}
+
 /**
  * Press `Ctrl+C` for the person, and read what landed.
  *
@@ -218,38 +308,16 @@ export async function captureSelection(
     };
   }
 
-  const borrowed = await clipboard.read();
-  // Nothing readable as TEXT — an image, a file, a copied cell — reads back as an empty string, and
-  // `vscode.env.clipboard` offers no way to see it, let alone put it back. So it is not taken: the
-  // emptiness is its own sentinel, and a capture that lands nothing leaves what the person had
-  // exactly where it was. Writing a sentinel over an image and then "restoring" the empty string we
-  // had read is a tidy-up that destroys something it never held. (gemini, the plan round.)
-  const restorable = borrowed.length > 0;
-  const marker = restorable ? markerFor() : '';
-  if (restorable) {
-    await clipboard.write(marker);
-  }
-  const outcome = await run();
-  const captured = await clipboard.read();
+  const borrowed = await borrowClipboard(clipboard, run);
 
   // The CLIPBOARD is asked first and the phase only explains a failure, which is deliberate and not
   // an ordering accident: a helper that copied the passage and then exited badly has still copied the
   // passage, and refusing it on the strength of its exit code would throw away work the person can
   // see happened. So the phase never overrules evidence — it is what turns "nothing landed" from one
   // sentence into four.
-  if (captured === marker) {
-    if (restorable) {
-      await clipboard.write(borrowed);
-    }
-
-    return { text: '', failure: refusalFor(reach, outcome) };
-  }
-
-  if (restorable && shouldRestore(await clipboard.read(), captured)) {
-    await clipboard.write(borrowed);
-  }
-
-  return { text: captured, failure: '' };
+  return borrowed.landed
+    ? { text: borrowed.text, failure: '' }
+    : { text: '', failure: refusalFor(reach, borrowed.outcome) };
 }
 
 /** How much of a failing helper's stderr is worth putting in a notification. */

@@ -13354,3 +13354,34 @@ flowchart LR
   what it reads …` from `qconsultView.whyItStaysOn`) and refuses `kimi × web`, naming research/RESULTS_kimi_confinement.md; the picker
   disables that pair with the table's reason. Tests: `capabilityAdmission.test.ts` (S5.6.8 and the three vectors), `qconsultSection.test.ts`
   (`VENDOR_OF` gains `kimi`, so the A3 picker test walks the Kimi vectors).
+
+## The chat opens from a terminal (E1)
+
+Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This section grows with each story of E1; S1 is the capture.
+
+- **The capture (S1) never presses a key.** A synthetic Ctrl+C reaches a terminal as SIGINT — in `ssh`, `tmux` or the Claude CLI that is an
+  interrupt, not a copy. The terminal copy is VS Code's own `workbench.action.terminal.copySelection`, run by `captureTerminalSelection`
+  (`src/terminalSource.ts`, pure: the command runner and the clipboard are injected) inside the clipboard borrow. The host half is
+  `fromTheTerminal()` in `chatCapture.ts`. It has no PowerShell side, no launch and no reach check.
+- **The borrow was extracted, and its restore moved into a `finally`.** `borrowClipboard(clipboard, run)` in `selectionCapture.ts` is the rule
+  that `captureSelection` carried inline — read the clipboard; write a unique marker only when something readable was there; run; read what
+  landed; give the clipboard back unless somebody wrote to it meanwhile — and it is NOT unchanged. `captureSelection` keeps its Windows reach
+  check and its sentences and calls it. Three behaviours differ. A `run` that REJECTS still restores, then rejects with the same reason —
+  before, a copy command that threw left our marker on the clipboard; and a restore that fails on that path does not replace the reason. On
+  the NOT-LANDED path the old code wrote `borrowed` back unconditionally after two reads; the new one makes a third read and restores only
+  when the clipboard still holds this borrow's marker, so a clipboard somebody changed in that gap is left alone. The landed path is the same.
+  The reads stay in the order borrow, landed, current. A copy that landed nothing is `landed: false`
+  (the clipboard still holds the marker), and for a terminal that means *"Select text in the terminal first."*; white space alone means the
+  same; the text is never trimmed. A command that rejects is NOT that sentence — it says *"The terminal selection could not be copied: …"*.
+- **Known limit: with no selection the person may see two messages.** VS Code's own `copySelection` shows *"The terminal has no selection to
+  copy"* when nothing is selected, and `executeCommand` does not check the action's precondition first. The stable API gives no way to ask
+  (`Terminal.selection` is a proposed API), so our sentence *"Select text in the terminal first."* comes after VS Code's. Left as it is;
+  S3 and the owner's R3 check judge whether it is acceptable.
+- **One latch for both captures.** `fromTheTerminal` goes through the same `oneCapture` as the keyboard door, because both borrow the one
+  clipboard: a second press while either runs is refused with the existing *"That selection is still being copied"*.
+- **Not yet measured: the marker timing.** Whether the clipboard still holds the marker right after the awaited command while a selection
+  exists is what the host scenario (`terminalCaptureScenario.ts`) shows in CI. A bounded re-read (at most 500 ms, 50 ms steps) goes into
+  `captureTerminalSelection` ONLY if that shows it needed, and its measurement is written here; none exists until then.
+- **Tests**: `terminalCapture.test.ts` (S1-T1…T9 and T11: the borrow, the terminal capture, the source scan that the terminal door presses no
+  key and shares the latch, and that a failing restore never replaces the copy's reason). The host scenario also sends two presses at once and
+  requires exactly one to be refused with the latch's sentence — the check a locally shadowed latch would pass in the source scan; `chatCapture.test.ts` is the unedited regression net for the extraction.

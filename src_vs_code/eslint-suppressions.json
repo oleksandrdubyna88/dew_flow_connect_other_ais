@@ -845,11 +845,6 @@
       "count": 2
     }
   },
-  "src/selectionCapture.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/serverSettingsFile.ts": {
     "complexity": {
       "count": 2

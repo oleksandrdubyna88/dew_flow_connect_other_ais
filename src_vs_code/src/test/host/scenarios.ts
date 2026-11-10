@@ -16,6 +16,7 @@ import { theMigrationKeysAreKnownInARealEditor } from './migrationKeysScenario';
 import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingNamedDataRootStaysAbsent } from './missingDataRootScenario';
 import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathSaidOnceScenario';
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
+import { aTerminalSelectionIsCapturedAndTheClipboardGivenBack } from './terminalCaptureScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
 
 /**
@@ -928,6 +929,12 @@ const SCENARIOS: readonly Scenario[] = [
     // for one CLI path, one per settings change. What it drives is in `missingPathSaidOnceScenario.ts`.
     name: 'a path still missing is said once per window run, however many settings changes follow',
     run: aStillMissingPathIsSaidOnceAcrossSettingsChanges,
+  },
+  {
+    // todo/PLAN_the_chat_opens_from_a_terminal_E1.md S1-H1: the terminal capture through the real `copySelection` and the real
+    // clipboard. What it drives is in `terminalCaptureScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
+    name: 'a terminal\'s selection is captured through the clipboard, which is given back, and no selection says so',
+    run: aTerminalSelectionIsCapturedAndTheClipboardGivenBack,
   },
 ];
 

@@ -6,6 +6,7 @@ import { windowsReach } from './hostSide';
 import { oneAtATime } from './oneAtATime';
 import { launch } from './processLauncher';
 import { COPY_SCRIPT, RunOutcome, argvFor, captureSelection, ran } from './selectionCapture';
+import { captureTerminalSelection } from './terminalSource';
 import { TabSnapshot, isOrdinaryEditorTab, sourceSession } from './sessionKey';
 import { notifyAndAsk } from './notify';
 
@@ -119,6 +120,19 @@ export async function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: str
   ));
 }
 
+/**
+ * The terminal door's capture: the active terminal's selection, through the same borrow and the same latch.
+ *
+ * <p>ONE latch for both captures (`oneCapture`), because both borrow the one clipboard: a terminal
+ * press that arrives while a keyboard capture is running would take the marker for the passage, and
+ * the other way round. No key is pressed here — the copy is VS Code's own `copySelection`.</p>
+ */
+export async function fromTheTerminal(): Promise<{ text: string; failure: string }> {
+  return oneCapture(() => vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Window, title: 'Copying the terminal selection…' },
+    async () => captureTerminalSelection((id) => vscode.commands.executeCommand(id), hostClipboard),
+  ));
+}
 
 /** A refusal nobody needs to read: the person just cancelled the question that caused it. */
 export const CANCELLED = '\u0000';
