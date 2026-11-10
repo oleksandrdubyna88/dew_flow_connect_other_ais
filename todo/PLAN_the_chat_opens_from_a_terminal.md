@@ -234,7 +234,9 @@ All paths under `src_vs_code/`.
   moment of subscribing — rejected).
 - No proposed API (`Terminal.selection`): an installed extension cannot use one.
 - No following of a renamed terminal and no re-check of a picked session against a newer namesake: the
-  owner did not ask for them. A renamed terminal starts a new conversation.
+  owner did not ask for them. While the terminal lives, its conversation is keyed by the `Terminal` object, so a
+  rename keeps it; after a reload the recorded name (the name at the first press) no longer matches a renamed
+  terminal, so that terminal starts a new conversation.
 - If R9 shows the command palette cannot see the terminal's focus, `coai.chatWithOtherAi` run from the palette
   with a terminal focused still takes the last file tab's text, as today; the terminal door is the cure.
 

@@ -427,6 +427,16 @@ Open, recorded here and NOT built (each would be a plan change):
 3. **`coai.backToSource`'s chord** (`ctrl+alt+g`, `activeWebviewPanelId == 'coaiChat'`) has no `!terminalFocus`. It
    does not matter in E1; when E3 binds Ctrl+Alt+G on `terminalFocus`, it must add `!terminalFocus` here too, or the
    two chords compete as R2's do.
+4. **`coai.goToConversation` from the palette**, with a terminal focused, judges the last active editor tab — the same
+   class as item 2. (Fable, the S2 spec.)
+
+Carried to later epics (found while the S2 spec was written, 2026-11-10; not E1 work):
+
+- **E2** takes the ssh host from the LIVE `terminal.name` of the keyed terminal at the time of the read, never from the
+  recorded name, which is the name at the first press and can be stale after a rename.
+- **E3**'s `reattachPlan` must expect SEVERAL stored records with one terminal name: each reload makes a new
+  conversation with an equal source, so `chatGoto.ts:310`'s "one source belongs to one conversation" does not hold
+  for terminal sources.
 
 ## 12. Definition of Done — epic E1
 
