@@ -48,7 +48,7 @@ import { chatTextTone, chatUiScale, createChatPanel } from './chatPanel';
 function agentBoxOf(saved: ConversationRecord, ready: Ready): Pick<ChatPageState, 'access' | 'agentOffered'> {
   return {
     access: saved.access ?? 'text',
-    agentOffered: agentOffered(!ready.ok || isRemote(ready.vendor), saved.workspace),
+    agentOffered: agentOffered(!ready.ok || isRemote(ready.vendor), saved.workspace, saved.source),
   };
 }
 

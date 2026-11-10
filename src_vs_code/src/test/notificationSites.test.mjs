@@ -266,7 +266,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // refusal. The restore never runs on its own — a missing value looks the same whoever removed it.
 // 166 -> 167 on 2026-10-17 (E6 of research/PLAN_kimi_and_vibe_on_linux.md): the Kimi card's *Clear the stuck Kimi marker* says what its one-shot
 // mode answered (`kimi-marker-cleared`, class outcome) — one outcome, routed through `notify`; the press is the only thing that speaks.
-const PLACES_THIS_SPEAKS = 167;
+// 167 -> 170 on 2026-11-10 (E1.S3 of todo/PLAN_the_chat_opens_from_a_terminal_E1.md): the terminal door says three things, each a refusal or a
+// failure routed through `notify` — there is no terminal to read (`no-terminal-here`), nothing was selected or the copy failed
+// (`nothing-selected-in-terminal`), and the whole command failed (`terminal-door-failed`).
+const PLACES_THIS_SPEAKS = 170;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

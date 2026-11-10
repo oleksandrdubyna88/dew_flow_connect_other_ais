@@ -5,7 +5,7 @@ import { notify } from './notify';
 import {
   mainModel,
 } from './chatPresets';
-import { ConversationSource, readsSession, sourceOfFile, sourceOfTab } from './chatStore';
+import { ConversationSource, readsSession, sourceOfFile, sourceOfTab, sourceOfTerminal } from './chatStore';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { threads } from './chatThread';
 import { pulse } from './chatHost';
@@ -21,7 +21,8 @@ import {
 } from './chatRoots';
 import { agentOffered } from './chatAccessRules';
 import { Ready, chatCatalogFrom, chatRead, openingPrompt, readyToChat, roleOf, savedModels, savedPick, savedPrompts, taskOf } from './chatConfig';
-import { CANCELLED, fromTheEditor, matchedSource, passageFor } from './chatCapture';
+import { CANCELLED, fromTheEditor, fromTheTerminal, matchedSource, passageFor } from './chatCapture';
+import { terminalMatch } from './terminalSource';
 import { ChatSession } from './chatSession';
 import {
   chatProvidersFromPresets,
@@ -33,7 +34,7 @@ import { coaiDataDir } from './dataDir';
 import { Door, chatDoorRecord } from './chatDoors';
 import { recordChatDoor } from './chatDoorsFile';
 import { BugChat, BugChats } from './reviewChoose';
-import { chatSettingsFrom } from './chatSettings';
+import { chatSettingsFrom, sendsImmediately } from './chatSettings';
 import { CARRY_EVERYTHING } from './chatCarry';
 import { chatTextTone, chatUiScale, createChatPanel, pushChatDraft, setChatDraft } from './chatPanel';
 import {
@@ -104,7 +105,7 @@ function newConversation(
       modelPresets: savedModels(config),
       // Text, always, for a new conversation — and the box offered only where agent mode could run.
       access: 'text',
-      agentOffered: agentOffered(isRemote(ready.vendor), originOf(state.source).workspace),
+      agentOffered: agentOffered(isRemote(ready.vendor), originOf(state.source).workspace, state.source),
       // A conversation that has just opened has said nothing, so there is nothing to ask again.
       reask: '',
       // Nor anything to send again: nothing has failed yet, and the failure line is empty.
@@ -265,6 +266,68 @@ export async function chatWithOtherAi(
   }
 
   await deliverPassage(panels, extensionUri, ready, source, passage, plan.send, match !== undefined, sourceOfTab(match !== undefined, uri));
+}
+
+/** Said when the button or the chord is used and the window has no terminal to read. */
+function terminalDoorNoTerminal(): void {
+  void notify({
+    as: 'warning',
+    class: 'refusal',
+    source: 'chat',
+    code: 'no-terminal-here',
+    title: 'There is no terminal here — open one and select text in it first.',
+  });
+}
+
+/** Said when the copy found no selection, or could not be made: the capture's own sentence, which says which. */
+function terminalDoorNothing(failure: string): void {
+  void notify({
+    as: 'warning',
+    class: 'refusal',
+    source: 'chat',
+    code: 'nothing-selected-in-terminal',
+    title: failure,
+  });
+}
+
+/**
+ * The terminal door: the selection of a terminal, through VS Code's own copy, as a new chat named after that terminal.
+ *
+ * <p>It never calls `matchedSource`, `snapshots` or `sourceSession`: a terminal is not a tab, and asking the tabs what the
+ * person meant is how the file door once took a file's text for a terminal's. The conversation is keyed by the terminal
+ * object itself (`terminalMatch`) and filed under the terminal's full name (`sourceOfTerminal`). The button and the chord
+ * both follow <b>Who presses send</b>, as the chord does everywhere else.</p>
+ *
+ * @param panels the registry of open conversations
+ * @param extensionUri where the extension lives
+ * @param terminal the terminal to read — the caller passes the window's active one, or nothing when there is none
+ */
+export async function askFromTerminal(
+  panels: ChatPanels,
+  extensionUri: vscode.Uri,
+  terminal: vscode.Terminal | undefined,
+): Promise<void> {
+  const ready = readyForChat();
+  if (!ready.ok) {
+    notReady(ready.refusal);
+
+    return;
+  }
+  if (terminal === undefined) {
+    terminalDoorNoTerminal();
+
+    return;
+  }
+  const passage = await fromTheTerminal();
+  if (passage.text.trim().length === 0) {
+    terminalDoorNothing(passage.failure);
+
+    return;
+  }
+  const { autoSend } = chatSettingsFrom(chatRead(vscode.workspace.getConfiguration('coai')));
+  const match = terminalMatch(panels.known(), terminal, terminal.name);
+
+  await deliverPassage(panels, extensionUri, ready, match, passage, sendsImmediately(autoSend, false), false, sourceOfTerminal(terminal.name));
 }
 
 /**

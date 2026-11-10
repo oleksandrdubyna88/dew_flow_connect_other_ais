@@ -27,17 +27,20 @@
  */
 
 /**
- * The six ways into a chat, as the commands that open them.
+ * The ways into a chat, as the commands that open them.
  *
  * <p>`switch` is the odd one and is deliberately here: it opens the conversation PICKER rather than a
  * conversation, and a person may dismiss it without opening anything. It is still the chat being
  * reached for, which is the only question this ledger answers — *Opened* counts attempts, which is
  * why the recording happens at the command handler and before anything that can refuse.</p>
+ *
+ * <p>`terminal` is the title-bar button and the chord typed in a terminal (`coai.askFromTerminal`). It opens a chat from a
+ * passage, so it is an opening and not an *Asked*.</p>
  */
-export type Door = 'key' | 'default' | 'choose' | 'take' | 'add' | 'switch' | 'goto';
+export type Door = 'key' | 'default' | 'choose' | 'take' | 'add' | 'switch' | 'goto' | 'terminal';
 
-/** Every door this version knows how to open, in the order the commands are registered. */
-export const DOORS: readonly Door[] = ['key', 'default', 'choose', 'take', 'add', 'switch', 'goto'];
+/** Every door this version knows how to open, in the order they were added. */
+export const DOORS: readonly Door[] = ['key', 'default', 'choose', 'take', 'add', 'switch', 'goto', 'terminal'];
 
 /**
  * The doors that take a question rather than a passage — what *Asked* counts.

@@ -295,7 +295,7 @@ export async function switchNow(entry: ChatEntry, providerId: string, modelId: s
   // Agent mode moves with the conversation unless the row it moves to cannot have it — a Team-server
   // model is launched in text mode and the notice says so (codex, the plan round of issue #289).
   const before = thread.access;
-  install(thread, vendor, cli.resolved, modelId, remote.session, accessOn(isRemote(vendor), before, thread.workspace));
+  install(thread, vendor, cli.resolved, modelId, remote.session, accessOn(isRemote(vendor), before, thread.workspace, thread.source));
   thread.providerId = providerId;
   thread.modelId = modelId;
   // The ROW as well as the session: a model chosen in the dropdown below the buttons is still a

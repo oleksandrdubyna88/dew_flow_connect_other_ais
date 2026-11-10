@@ -13363,7 +13363,7 @@ flowchart LR
 
 ## The chat opens from a terminal (E1)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This section grows with each story of E1; S1 is the capture.
+Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This section grows with each story of E1; S1 is the capture, S2 the source, S3 the door.
 
 - **The capture (S1) never presses a key.** A synthetic Ctrl+C reaches a terminal as SIGINT — in `ssh`, `tmux` or the Claude CLI that is an
   interrupt, not a copy. The terminal copy is VS Code's own `workbench.action.terminal.copySelection`, run by `captureTerminalSelection`
@@ -13471,3 +13471,44 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   know is kept, hidden and never overwritten — the M2–M9 mechanism on the real store), and the wiring in `chatSourceWiring.test.ts` and
   `bugzReviewWiring.test.ts`. Two host scenarios in `src/test/host/scenarios.ts` (the road back to a terminal; a tab that looks like Claude's does
   not take a terminal conversation) run only in CI's job `extension · a real editor`.
+
+### The door: the button, the chord, the skip list, agent mode off (E1.S3)
+
+- **The command is `coai.askFromTerminal`** (title *Ask other AI*, icon `$(comment-discussion)`). It is offered in two places, both for a terminal only:
+  a `view/title` row with `when: view == terminal`, group `navigation@90` (the icon in the terminal panel's title bar), and the keybinding
+  `ctrl+alt+a` when `terminalFocus`. The command palette offers *Chat with other AI* only while `!terminalFocus` (a `commandPalette` row), because that command reads the
+  last file tab, and a terminal must not take a file's text.
+- **The old chords give way.** Both `coai.chatWithOtherAi` chords (`ctrl+alt+a`) and `coai.goToConversation` gain `&& !terminalFocus`, so in a
+  terminal the one `ctrl+alt+a` row left is the terminal door's; two rows never compete for the chord.
+- **The skip list, and its limit.** A terminal sends a chord to the shell unless the command is in `terminal.integrated.commandsToSkipShell`. The
+  extension contributes the default `["coai.askFromTerminal"]` (`contributes.configurationDefaults`). A person's OWN
+  `terminal.integrated.commandsToSkipShell` hides the default, and then the chord goes to the shell; adding `coai.askFromTerminal` to their list
+  brings it back (the help says so, in five languages). Whether the host reports the default is the host scenario S3-H1; if it is red in CI the
+  `configurationDefaults` route does not work for this setting and the owner decides — nothing is worked around. Other chords that a terminal
+  would send to the shell (`coai.switchConversations`) are an open question in the plan, not built here.
+- **`askFromTerminal(panels, extensionUri, terminal)`** (`chatCommand.ts`) in small helpers: not ready → `notReady`; no terminal →
+  *There is no terminal here — open one and select text in it first.* (`no-terminal-here`); an empty capture → the capture's own sentence
+  (`nothing-selected-in-terminal`: *Select text in the terminal first.* or the copy failure); else `deliverPassage` with
+  `terminalMatch(panels.known(), terminal, terminal.name)`, `sendsImmediately(autoSend, false)` — the button and the chord both follow **Who presses
+  send** — `fromSession` false and `sourceOfTerminal(terminal.name)`. It never calls `matchedSource`, `snapshots` or `sourceSession`, so the
+  file-text defect cannot happen on this door. The terminal is a parameter: `extension.ts` passes `vscode.window.activeTerminal` (a default
+  parameter would count against `complexity` 4). A failure of the whole command is caught like `coai.takeTheQuestion`'s: console detail, a
+  `terminal-door-failed` notice.
+- **The door is counted.** `'terminal'` is in `Door` and last in `DOORS` (`chatDoors.ts`); the handler in `extension.ts` calls
+  `noteChatDoor('terminal')` first, which the door census (`chatWiring.test.ts`) derives from the keybinding and requires. It is an *Opened*, not an
+  *Asked*. Three notify sites were added; `notification-sites.json` was regenerated.
+- **Agent mode is off for a terminal conversation, at every place that decides it.** `agentRuledOutBy(source)` (`chatAccessRules.ts`; a record typed
+  by the kind, so a fifth kind of source does not compile until it is placed — a four-arm switch would have `complexity` 5) is true
+  for `terminal`. The module spells the four kinds itself (`SourceKind`, `AgentSource`) and does not import `chatStore`: that import closed a new
+  import cycle through the chat page (`importCycles.test.mjs`). A `ConversationSource` of a kind missing there is not assignable to `AgentSource`,
+  so every caller fails to compile. `agentOffered(remote, workspace, source)` and `accessOn(remote, asked, workspace, source)` take the source as a REQUIRED argument,
+  so the compiler listed the sites: the new conversation (`chatCommand.ts`, `state.source`), the page state (`chatShow.ts`), a reopen
+  (`chatTurn.ts`), a model switch (`chatLaunch.ts`) and a restore (`chatConversationRestore.ts`, `saved.source`) pass the source, and the box
+  (`chatAccess.ts`) asks `agentRefusalFor`, whose refusal for a terminal is `TERMINAL_NO_AGENT`: *Agent mode is not offered for a terminal
+  conversation: the session it came from may be on another machine.* `agentRefusal` keeps its two arguments — `cliChatLaunch.ts` uses it at launch,
+  where no source is known, and a terminal conversation never reaches a launch in agent mode because `accessOn` and the box refuse first.
+- **The help** (`helpContent.ts`, `helpRu.ts`, `helpUk.ts`, `helpDe.ts`, `helpEs.ts`, the `chat-with-other-ai` article): one paragraph that names
+  **Ask other AI** in English in every language, and *or the terminal* in the back-to-source paragraph.
+- **Tests**: `terminalDoorWiring.test.ts` (new; the manifest is parsed, and the door's code is scanned for the tab readers), `chatAgentMode.test.ts`,
+  `chatDoors.test.ts`, `helpCoverage.test.ts`, the door census in `chatWiring.test.ts`. Host scenario S3-H1 (the skip-list default) in
+  `terminalCaptureScenario.ts`; it runs only in CI's job `extension · a real editor`.

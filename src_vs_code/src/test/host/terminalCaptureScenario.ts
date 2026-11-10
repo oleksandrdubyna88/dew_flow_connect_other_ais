@@ -77,3 +77,21 @@ export async function aTerminalSelectionIsCapturedAndTheClipboardGivenBack(): Pr
     terminal.dispose();
   }
 }
+
+/**
+ * The skip list's DEFAULT, as the host reports it (todo/PLAN_the_chat_opens_from_a_terminal_E1.md, S3-H1).
+ *
+ * <p>The manifest test (`terminalDoorWiring.test.ts`) proves `package.json` asks for the default; only a real window can say
+ * the host took it. If this is red in CI, `configurationDefaults` does not work for this setting and the chord goes to the
+ * shell: stop and tell the owner, do not work around it.</p>
+ */
+export async function theSkipListDefaultHoldsTheTerminalDoor(): Promise<void> {
+  await activated();
+  const inspected = vscode.workspace.getConfiguration().inspect<readonly string[]>('terminal.integrated.commandsToSkipShell');
+  const fallback = inspected?.defaultValue ?? [];
+
+  assert.ok(
+    fallback.includes('coai.askFromTerminal'),
+    `the default of terminal.integrated.commandsToSkipShell does not hold coai.askFromTerminal, so Ctrl+Alt+A in a terminal goes to the shell; it holds ${fallback.length} commands`,
+  );
+}

@@ -44,6 +44,22 @@ test('every language’s chat article names the header button, not just the arti
   }
 });
 
+test('every language’s chat article names the terminal door by its own English label', () => {
+  // The button's title is English in every language, as every control name in this catalogue is, so it is the one string all
+  // five can be asked for. `bodyFor` marks a missing translation, not one written before the door existed.
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} chat article is missing, so a reader of it gets English`);
+    assert.ok(
+      Object.values(body).join(' ').includes('**Ask other AI**'),
+      `the ${language} chat article never names Ask other AI, so a reader of it never learns that a terminal is a door`,
+    );
+  }
+});
+
 test('every language describes the sides seen and the path-fields switch, by the controls\' own English labels (paths per side E2.3)', () => {
   // The operator's ruling: the help is in FIVE languages. bodyFor marks a MISSING translation, not a stale one, so each
   // language is asked for the labels a person meets on Setup › This side — English in every language, as every control

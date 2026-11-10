@@ -11,8 +11,10 @@ import { codexAdapter } from '../codexAdapter';
 import { CHAT_RUNTIMES, isFolder, launchSpecFor } from '../cliChatLaunch';
 import { AGENT_BUDGETS, DEFAULT_BUDGETS, budgetsFor } from '../chatSession';
 import { Vendor } from '../vendors';
-import { accessDropped, accessNotice, accessOn, agentOffered, agentQuestion, agentRefusal } from '../chatAccessRules';
-import { CONVERSATION_VERSION, recordFrom } from '../chatStore';
+import {
+  TERMINAL_NO_AGENT, accessDropped, accessNotice, accessOn, agentOffered, agentQuestion, agentRefusal, agentRefusalFor,
+} from '../chatAccessRules';
+import { CONVERSATION_VERSION, recordFrom, sourceOfFile, sourceOfTerminal, type ConversationSource } from '../chatStore';
 import { chatCommandOf } from '../chatMessages';
 import { chatAgentToggleHtml } from '../chatAgentToggle';
 
@@ -135,23 +137,43 @@ test('an agent turn gets twenty minutes; a text turn keeps its three', () => {
 // The rules the host decides by, the record, the command and the box.
 // ---------------------------------------------------------------------------------------------
 
+/** The meaning the three tests below had before a source was asked for: a conversation with no durable origin. */
+const NO_SOURCE: ConversationSource = { kind: 'none' };
+
 test('the box is offered for a local model in a folder, and for nothing else', () => {
-  assert.equal(agentOffered(false, 'D:/work'), true);
-  assert.equal(agentOffered(true, 'D:/work'), false, 'a Team-server model was offered this computer');
-  assert.equal(agentOffered(false, ''), false, 'a conversation with no folder was offered agent mode');
+  assert.equal(agentOffered(false, 'D:/work', NO_SOURCE), true);
+  assert.equal(agentOffered(true, 'D:/work', NO_SOURCE), false, 'a Team-server model was offered this computer');
+  assert.equal(agentOffered(false, '', NO_SOURCE), false, 'a conversation with no folder was offered agent mode');
 });
 
 test('a relaunch keeps agent mode only where it can run, and drops it where it cannot', () => {
-  assert.equal(accessOn(false, 'agent', 'D:/work'), 'agent');
-  assert.equal(accessOn(true, 'agent', 'D:/work'), 'text', 'a switch to a Team-server model kept agent mode');
-  assert.equal(accessOn(false, 'agent', ''), 'text');
-  assert.equal(accessOn(false, 'text', 'D:/work'), 'text', 'a relaunch turned agent mode on by itself');
+  assert.equal(accessOn(false, 'agent', 'D:/work', NO_SOURCE), 'agent');
+  assert.equal(accessOn(true, 'agent', 'D:/work', NO_SOURCE), 'text', 'a switch to a Team-server model kept agent mode');
+  assert.equal(accessOn(false, 'agent', '', NO_SOURCE), 'text');
+  assert.equal(accessOn(false, 'text', 'D:/work', NO_SOURCE), 'text', 'a relaunch turned agent mode on by itself');
 });
 
 test('a refusal says which of the two things is missing, and nothing when neither is', () => {
   assert.match(agentRefusal(true, 'D:/work'), /Team server/);
   assert.match(agentRefusal(false, ''), /workspace folder/);
   assert.equal(agentRefusal(false, 'D:/work'), '');
+});
+
+test('a terminal conversation is never offered agent mode, and a file one still is', () => {
+  const terminal = sourceOfTerminal('Creds: h / s');
+
+  assert.equal(agentOffered(false, 'D:/work', terminal), false, 'a terminal conversation was offered agent mode');
+  assert.equal(agentOffered(false, 'D:/work', sourceOfFile('file:///D:/work/a.md')), true, 'a file conversation lost agent mode');
+});
+
+test('agent mode cannot be switched on or carried into a terminal conversation, and the refusal says why', () => {
+  const terminal = sourceOfTerminal('Creds: h / s');
+
+  assert.equal(accessOn(false, 'agent', 'D:/work', terminal), 'text', 'a relaunch carried agent mode into a terminal conversation');
+  assert.equal(agentRefusalFor(false, 'D:/work', terminal), TERMINAL_NO_AGENT);
+  assert.match(TERMINAL_NO_AGENT, /may be on another machine/);
+  assert.equal(agentRefusalFor(false, 'D:/work', NO_SOURCE), '', 'a conversation with no source was refused agent mode');
+  assert.equal(agentRefusalFor(true, 'D:/work', NO_SOURCE), agentRefusal(true, 'D:/work'));
 });
 
 test('the question asked before turning it on names the model, the folder and what it allows', () => {
