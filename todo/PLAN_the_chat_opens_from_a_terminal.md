@@ -1,14 +1,19 @@
 # PLAN — the chat opens from a terminal
 
-> Status: **plan only, nothing implemented yet, 2026-11-10.** Scope: `src_vs_code` only — a terminal
-> door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a read-only ssh reader
-> for a Claude Code session that runs inside tmux on another machine. No change to `src_mcp`,
-> `src_server` or CredsForDevs. Three epics; one extension release per epic.
+> Status: **plan only, nothing implemented yet, 2026-11-10 — plan gate round 1 `proceed` (codex, antigravity;
+> 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
+> only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
+> read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
+> `src_mcp`, `src_server` or CredsForDevs. Three epics; one extension release per epic.
 
 Related: [../research/PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md) (the feature),
 [../research/PLAN_the_chat_opens_anywhere.md](../research/PLAN_the_chat_opens_anywhere.md) (the file door and
 reading Claude's session files), [../research/PLAN_a_conversation_survives_a_reload.md](../research/PLAN_a_conversation_survives_a_reload.md),
 [../research/PLAN_the_chat_goes_back_where_it_came_from.md](../research/PLAN_the_chat_goes_back_where_it_came_from.md).
+
+## Plan changes
+
+> Epoch 1 · approved 2026-11-10 · by reviewers · state: open
 
 ## The symptom
 
@@ -150,14 +155,18 @@ All paths under `src_vs_code/`.
 
 - **Which terminals.** `credsSession(name)` matches strictly
   `^Creds: ([A-Za-z0-9][A-Za-z0-9._-]*) / ([A-Za-z0-9][A-Za-z0-9_-]*)$` → `{host, session}`; anything else is
-  selection-only. A leading `-` is impossible by the pattern (no ssh option injection); a session name with
+  selection-only. A name that starts with `Creds: ` but fails the pattern still shows the two overflow items,
+  and pressing one answers with a sentence naming the part that failed (plan round 1), so the person is never
+  left guessing why a creds terminal reads nothing. A leading `-` is impossible by the pattern (no ssh option
+  injection); a session name with
   `.` is refused (tmux rewrites it and `.` is the target's window separator).
 - **The person agrees to each host once.** The terminal name is only a name: any program can open a
   terminal called `Creds: x / y`. So the first remote read for a host asks *"Read the Claude session on
   “x” over ssh?"*; the answer is remembered per host in `globalState`, and a "no" makes that host
   selection-only until the person changes it from the panel.
 - **One ssh call per question on the registry path, read-only.** Local `ssh` (Windows OpenSSH where the host is Windows, the
-  side the terminals run on), argv only, no shell: `-n -T -o BatchMode=yes -o ConnectTimeout=5 -o
+  side the terminals run on), argv only, no shell, and **no `-n`** (it would give the remote `sh -s` an empty
+  stdin — plan round 1): `-T -o BatchMode=yes -o ConnectTimeout=5 -o
   RequestTTY=no -o RemoteCommand=none -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o
   LogLevel=ERROR -- <host> sh -s -- <session>`. The script travels on **stdin**, so the remote login shell
   does not matter. `ClearAllForwardings` and `RemoteCommand=none` matter: the owner's `Host` blocks carry a
@@ -237,7 +246,9 @@ All paths under `src_vs_code/`.
 - **The ssh child**: one process per question, killed at 15 s, nothing left behind; stdout capped at 8 MiB.
 - **A picked session id per terminal** (stage 2, fallback only): in memory, one entry per open terminal, dropped
   with the terminal (`WeakMap`).
-- **The per-host consent** (stage 2): one `globalState` entry per host the person was asked about — a handful.
+- **The per-host consent** (stage 2): one `globalState` list of `{host, answer, askedUtc}`, capped at 100
+  entries; at the cap the oldest answer is dropped (that host is simply asked again). Projected size: the
+  owner has three hosts today, so a few hundred bytes; at the cap under 10 KiB (plan round 1).
 - Nothing grows on the VM: every remote command is read-only.
 
 ## Build order
@@ -343,7 +354,9 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
   and its three callers (`src/chatCommand.ts`); the agent rule beside `agentOffered` (`src/chatAccessRules.ts`) at its
   three call sites; `BackTo` and `recordedRoute` (`src/chatReturn.ts`, `src/chatReturnCommand.ts`); the `tabSourced`
   filter where a panel is re-keyed (`src/chatCapture.ts`, `src/chatSessionJoin.ts`); `Door` (`src/chatDoors.ts`); the
-  help paragraph in five languages.
+  help paragraph in five languages; the documents that describe the changed behaviour — `research/module_extension.md`
+  (the chat section), `research/architecture.md` where a module boundary moves, and every new flow catalogued in
+  `research/module_tests.md` (plan round 1; the same holds for E2 and E3, with `SECURITY.md` in E2).
 - **Depends on.** Nothing.
 - **Done when.** The stage-1 rows of the test plan are green (`npm test`, `npm run test:host`), and the steal test was
   seen RED without the filter. DoD items 1–3 hold. The PR is merged; the extension release is cut and verified (tag
