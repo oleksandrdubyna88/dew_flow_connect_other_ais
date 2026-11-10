@@ -15,6 +15,16 @@ reading Claude's session files), [../research/PLAN_a_conversation_survives_a_rel
 
 > Epoch 1 · approved 2026-11-10 · by reviewers · state: open
 
+- 1.1 · 2026-11-10 · agent · build-order, merge-conditions — each epic's real-window checks run on a pre-release VSIX the owner installs, before its release is tagged
+  (cadence consult ea91bb56, codex: a door whose prerequisites are unproven must not ship. No real VS Code can
+  start on this machine, so the owner runs R1–R3 and R9 for E1, R6–R7 for E2, R8, R10 and R11 for E3 on the
+  VSIX built from the epic's merged head; a failed check is fixed before the tag. If R1 fails only under a
+  user-level skip list, the skip-shell repair of E3 is pulled into E1 under this same entry.
+  The same consult's two other points satisfy the plan as written and go to the E2 stories document, not here:
+  an E1 `Creds:` conversation restored under E2 gains *Asked* (its `fromSession` is derived again from the
+  source on restore and reuse), and a tmux session with several panes or several `claude` descendants is
+  ambiguity, so it gives a list or a refusal, never a pick.)
+
 ## The symptom
 
 The owner, 2026-11-10: six or more Claude Code sessions now run as the **CLI** on two Linux VMs, several
@@ -360,8 +370,8 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
 - **Depends on.** Nothing.
 - **Done when.** The stage-1 rows of the test plan are green (`npm test`, `npm run test:host`), and the steal test was
   seen RED without the filter. DoD items 1–3 hold. The PR is merged; the extension release is cut and verified (tag
-  pushed alone, its run observed). The owner did R1–R5 and R9 in a real window and each result is recorded in the
-  R-table.
+  pushed alone, its run observed) AFTER the owner did R1–R5 and R9 in a real window on the pre-release VSIX (entry 1.1);
+  each result is recorded in the R-table.
   E2 does not start before that.
 - **Cornerstone areas.** (a) the capture; (b) identity and key — the recommended cornerstone; (c) its first part only:
   no agent mode for a `terminal` source (a rule the types enforce — Opus).
@@ -383,7 +393,7 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
 - **Done when.** The stage-2 rows of the test plan are green, with the script run by `sh -s` on Linux CI and the
   hostile operands through a real `sh -c`. DoD item 4 holds. Absent, ambiguous, unreadable and truncated each give
   their own sentence, each with a test. No log line carries stdout. `SECURITY.md` has the paragraph. The PR is merged;
-  the release is cut and verified. R6 and R7 are measured on a VM and recorded in the R-table.
+  R6 and R7 are measured on a VM with the pre-release VSIX (entry 1.1) and recorded; then the release is cut and verified.
 - **Cornerstone areas.** (c) local against remote; (d) the ssh command; (e) the four results — (d) and (e) together
   are the recommended cornerstone.
 
@@ -398,7 +408,7 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
 - **Depends on.** E2 released, R6–R7 recorded. Re-attach reads the records E1 writes and the `credsSession` pattern
   of E2.
 - **Done when.** The stage-3 rows of the test plan are green. DoD item 5 holds. The PR is merged; the third release is
-  cut and verified. R8, R10 and R11 are recorded. Then `review_feature` over the three epics, and the plan is promoted with its
+  cut and verified after R8, R10 and R11 were recorded on the pre-release VSIX (entry 1.1). Then `review_feature` over the three epics, and the plan is promoted with its
   deviations — the parent and the three stories documents together (DoD items 6–7).
 - **Cornerstone areas.** (b) again — the re-attach rule (one live terminal, one orphan, checked again before the
   re-key). No cornerstone story is recommended here: the rule is small, pure and already specified.
