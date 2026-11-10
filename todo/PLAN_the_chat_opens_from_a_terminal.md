@@ -17,7 +17,7 @@ reading Claude's session files), [../research/PLAN_a_conversation_survives_a_rel
 
 - 1.1 · 2026-11-10 · agent · build-order, merge-conditions — each epic's real-window checks run on a pre-release VSIX the owner installs, before its release is tagged
   (cadence consult ea91bb56, codex: a door whose prerequisites are unproven must not ship. No real VS Code can
-  start on this machine, so the owner runs R1–R3 and R9 for E1, R6–R7 for E2, R8, R10 and R11 for E3 on the
+  start on this machine, so the owner runs R1–R5 and R9 for E1, R6–R7 for E2, R8, R10 and R11 for E3 on the
   VSIX built from the epic's merged head; a failed check is fixed before the tag. If R1 fails only under a
   user-level skip list, the skip-shell repair of E3 is pulled into E1 under this same entry.
   The same consult's two other points satisfy the plan as written and go to the E2 stories document, not here:
@@ -341,7 +341,7 @@ identity, a Claude tab never re-keys a terminal conversation, re-attach only wit
 only; **(d)** ssh command construction, quoting, cancellation and limits; **(e)** absent, ambiguous, unreadable and
 truncated session data are four different results.
 
-Cornerstones: 0 of 2 — none marked yet
+Cornerstones: 1 of 2 — E1.S2
 
 *Recommendation for the Opus story writer (not a mark).* One cornerstone in E1, one in E2, none in E3.
 **E1: the story that adds the `terminal` source and its key — area (b).** The record is on disk from the first
@@ -375,6 +375,9 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
   E2 does not start before that.
 - **Cornerstone areas.** (a) the capture; (b) identity and key — the recommended cornerstone; (c) its first part only:
   no agent mode for a `terminal` source (a rule the types enforce — Opus).
+- **Stories.** [PLAN_the_chat_opens_from_a_terminal_E1.md](PLAN_the_chat_opens_from_a_terminal_E1.md) — three stories,
+  written by Opus 2026-11-10: E1.S1 the capture, E1.S2 the `terminal` source and its identity, E1.S3 the door. **E1.S2 is
+  the cornerstone** (area (b), spec by Fable).
 
 ### E2 — The remote Claude session, read over ssh (stage 2) · depends on E1
 
