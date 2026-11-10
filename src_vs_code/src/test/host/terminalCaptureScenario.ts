@@ -1,7 +1,7 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 
-import { fromTheTerminal } from '../../chatCapture';
+import { STILL_COPYING, fromTheTerminal } from '../../chatCapture';
 import { NO_TERMINAL_SELECTION } from '../../terminalSource';
 import { activated, settle } from './missingDataRootScenario';
 
@@ -18,9 +18,6 @@ import { activated, settle } from './missingDataRootScenario';
  * echo. Then the selection is cleared and the capture must say there is none. The clipboard holds a sentinel the whole time, and
  * must hold it again after every capture, which is the borrow's promise.</p>
  */
-
-/** What the shared latch answers a press that arrives while a capture is running (`oneCapture` in `chatCapture.ts`). */
-const STILL_COPYING = 'That selection is still being copied — the second press was ignored.';
 
 const WAIT_MS = 10_000;
 const STEP_MS = 250;

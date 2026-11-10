@@ -52,18 +52,11 @@ test('the same terminal is its own conversation; another terminal of the same na
   assert.deepEqual(terminalMatch([{ key: {}, label: 'h / s' }], b, name), { kind: 'new', key: b, label: 'h / s' });
   // The key decides, not the name: the same terminal after a rename is the same conversation.
   assert.deepEqual(terminalMatch([{ key: a, label: 'h / s' }], a, 'other'), { kind: 'existing', key: a, label: 'other' });
+  // Two terminals of one name are two conversations, and their sources are equal.
+  assert.equal(sameSource(sourceOfTerminal(name), sourceOfTerminal(name)), true);
   for (const answer of [terminalMatch([], a, name), terminalMatch([{ key: a, label: 'x' }], a, name)]) {
     assert.notEqual(answer.kind, 'rekey', 'a terminal conversation was handed to another key');
   }
-});
-
-test('two live terminals of one name are two conversations with equal sources', () => {
-  const [a, b] = [terminalKey(), terminalKey()];
-  const name = 'bash';
-
-  assert.deepEqual(terminalMatch([], a, name), { kind: 'new', key: a, label: 'bash' });
-  assert.deepEqual(terminalMatch([{ key: a, label: 'bash' }], b, name), { kind: 'new', key: b, label: 'bash' });
-  assert.equal(sameSource(sourceOfTerminal(name), sourceOfTerminal(name)), true);
 });
 
 test('one live terminal of a name is found; none and several are said, and never picked', () => {
@@ -88,26 +81,6 @@ test('without the filter a Claude tab of the same name takes the terminal’s co
   assert.deepEqual(sourceSession(claude, [claude], known), { kind: 'rekey', from: terminal, key: claude.key, label: 'main' });
 });
 
-test('a Claude tab named like a terminal conversation gets a NEW conversation, never that one', () => {
-  const claude = tab('main');
-  const terminal = terminalKey();
-  const restored = {};
-  const known: readonly KnownPanel[] = [{ key: terminal, label: 'main' }];
-  const sourceOf = (key: object): ConversationSource | undefined => (key === terminal ? sourceOfTerminal('main') : undefined);
-
-  assert.deepEqual(
-    sourceSession(claude, [claude], tabSourced(known, sourceOf)),
-    { kind: 'new', key: claude.key, label: 'main' },
-    'a Claude tab called “main” took the terminal’s conversation',
-  );
-  // The restored form: the panel's key is a plain object and only its thread says where it came from.
-  assert.deepEqual(
-    sourceSession(claude, [claude], tabSourced([{ key: restored, label: 'main' }], (key) => (key === restored ? sourceOfTerminal('main') : undefined))),
-    { kind: 'new', key: claude.key, label: 'main' },
-    'a Claude tab took a RESTORED terminal conversation',
-  );
-});
-
 test('the filter takes out terminal conversations and nothing else — judged by the thread, read from the real registry', () => {
   // (a) the pure filter.
   const keys = { claude: {}, file: {}, none: {}, orphan: {}, noThread: {}, terminal: {} };
@@ -122,6 +95,19 @@ test('the filter takes out terminal conversations and nothing else — judged by
   const kept = tabSourced(known, (key) => sources.get(key)).map((panel) => panel.label);
 
   assert.deepEqual(kept, ['claude', 'file', 'none', 'orphan', 'noThread'], 'the filter did not take out exactly the terminal conversations');
+
+  // A Claude tab named like a terminal conversation gets a NEW conversation, never that one — live, and restored (keyed by a plain object).
+  const tabOfTheSameName = tab('main');
+  const liveKey = terminalKey();
+  const restoredKey = {};
+  const byThread = (key: object): ConversationSource | undefined => (key === liveKey || key === restoredKey ? sourceOfTerminal('main') : undefined);
+  for (const key of [liveKey, restoredKey]) {
+    assert.deepEqual(
+      sourceSession(tabOfTheSameName, [tabOfTheSameName], tabSourced([{ key, label: 'main' }], byThread)),
+      { kind: 'new', key: tabOfTheSameName.key, label: 'main' },
+      `a Claude tab called “main” took ${key === liveKey ? 'the terminal’s' : 'a RESTORED terminal'} conversation`,
+    );
+  }
 
   // An orphaned Claude panel `main` still re-keys to the Claude tab through the filter, and with BOTH a
   // terminal panel and that orphan the answer is the orphan.

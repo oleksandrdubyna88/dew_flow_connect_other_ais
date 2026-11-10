@@ -1,6 +1,7 @@
 # PLAN — the chat opens from a terminal
 
-> Status: **plan only, nothing implemented yet, 2026-11-10 — plan gate round 1 `proceed` (codex, antigravity;
+> Status: **in progress, 2026-11-10 — E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate round 1 `proceed`, 8 of 8
+> reviewers), not merged; E2 and E3 not started. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
 > read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
@@ -238,7 +239,11 @@ All paths under `src_vs_code/`.
   rename keeps it; after a reload the recorded name (the name at the first press) no longer matches a renamed
   terminal, so that terminal starts a new conversation.
 - If R9 shows the command palette cannot see the terminal's focus, `coai.chatWithOtherAi` run from the palette
-  with a terminal focused still takes the last file tab's text, as today; the terminal door is the cure.
+  with a terminal focused still behaves as it does today: with a file tab active it takes that file's text, and
+  with a Claude tab active its keyboard path sends the PowerShell Ctrl+C about a second later — after the palette
+  closed and focus went back to the terminal, which is an interrupt for the program there (found by the E1 review;
+  it predates this plan). The terminal door is the cure for the person; a fix for the old command is a decision
+  for the owner after R9.
 
 ## Security
 
@@ -299,13 +304,13 @@ All paths under `src_vs_code/`.
 |---|---|---|
 | R1 | In a `Creds:` tmux terminal running `cat -v`, and with the Claude TUI, Ctrl+Alt+A prints nothing in the pane and the chat opens. | E1 |
 | R2 | A Claude tab is the active editor and the terminal has focus: Ctrl+Alt+A runs the terminal door. | E1 |
-| R3 | The button copies the selection after the click moved focus; split terminals pick the active one; the clipboard is restored; no selection → the sentence, clipboard untouched. | E1 |
+| R3 | The button copies the selection after the click moved focus; split terminals pick the active one; the clipboard is restored; no selection → the sentence, clipboard untouched (VS Code's own "The terminal has no selection to copy" may appear first — expected, not a failure). | E1 |
 | R4 | `terminal.name` stays `Creds: host / session` while tmux and Claude send title sequences. | E1 |
 | R5 | Back to source shows the right terminal, in the panel and in the editor area. | E1 |
 | R6 | One ssh call from Windows: time to the first answer (target under 4 s); the owner's real `Host` blocks with `LocalForward`. | E2 |
 | R7 | The registry path finds the right session on each of the three users; the fallback list works when two sessions share a name. | E2 |
 | R8 | After a VS Code reload, creds reopens its terminals and the conversations re-attach. | E3 |
-| R9 | With a terminal focused, the command palette no longer lists `coai.chatWithOtherAi` (its `!terminalFocus` entry). | E1 |
+| R9 | With a terminal focused, the command palette no longer lists `coai.chatWithOtherAi` (its `!terminalFocus` entry). If it IS listed: with a Claude tab as the active editor, running it must not interrupt the terminal's program (see *What this plan does NOT do*). | E1 |
 | R10 | Ctrl+Alt+G in a `Creds:` tmux terminal opens go-to and prints nothing in the pane. | E3 |
 | R11 | With a user-level `commandsToSkipShell` that lacks the ids, the notification appears once, *Add* appends them, and R1 then passes. | E3 |
 

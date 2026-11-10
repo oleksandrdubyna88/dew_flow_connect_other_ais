@@ -1,6 +1,6 @@
 # PLAN — E1.S2 spec: the terminal source and its identity (CORNERSTONE)
 
-> Status: **plan only, nothing implemented yet, 2026-11-10, by Fable.** Cornerstone spec, written before its code. Story
+> Status: **coded, 2026-11-10 — written by Fable before its code; implemented in 1f7c14a5, Opus review accept with fixes (applied); not merged.** Cornerstone spec, written before its code. Story
 > E1.S2 of [PLAN_the_chat_opens_from_a_terminal_E1.md](PLAN_the_chat_opens_from_a_terminal_E1.md) (parent
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md), § *Stage 1*, ledger entry 1.1). Its own
 > file because the stories document goes whole to a review gate and must stay short. It keeps no change ledger: a change

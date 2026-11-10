@@ -1,5 +1,5 @@
 import { ChatPanels } from './chatPanels';
-import { threads } from './chatThread';
+import { threadUnder, threads } from './chatThread';
 import { recordOf } from './chatPersist';
 import { metaOf } from './chatStore';
 import { snapshots } from './chatCapture';
@@ -23,8 +23,7 @@ import { OpenConversation } from './conversationPicker';
  */
 export function heldConversationIds(panels: ChatPanels): readonly string[] {
   return panels.known().flatMap(({ key }) => {
-    const entry = panels.get(key);
-    const thread = entry === undefined ? undefined : threads.get(entry.id);
+    const thread = threadUnder(panels, key);
 
     return thread === undefined ? [] : [thread.saveId];
   });
@@ -50,8 +49,7 @@ export function heldConversationIds(panels: ChatPanels): readonly string[] {
  */
 export function openConversations(panels: ChatPanels): readonly OpenConversation[] {
   return panels.known().flatMap(({ key }) => {
-    const entry = panels.get(key);
-    const thread = entry === undefined ? undefined : threads.get(entry.id);
+    const thread = threadUnder(panels, key);
     if (thread === undefined) {
       return [];
     }
@@ -80,8 +78,7 @@ export function openConversations(panels: ChatPanels): readonly OpenConversation
  */
 export function whereConversationSits(panels: ChatPanels, saveId: string): object | undefined {
   for (const { key } of panels.known()) {
-    const entry = panels.get(key);
-    const thread = entry === undefined ? undefined : threads.get(entry.id);
+    const thread = threadUnder(panels, key);
     if (thread?.saveId === saveId) {
       return key;
     }

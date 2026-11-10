@@ -13382,7 +13382,7 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This sectio
 - **Known limit: with no selection the person may see two messages.** VS Code's own `copySelection` shows *"The terminal has no selection to
   copy"* when nothing is selected, and `executeCommand` does not check the action's precondition first. The stable API gives no way to ask
   (`Terminal.selection` is a proposed API), so our sentence *"Select text in the terminal first."* comes after VS Code's. Left as it is;
-  S3 and the owner's R3 check judge whether it is acceptable.
+  accepted in the S3 section below, and the owner's R3 check records it.
 - **One latch for both captures.** `fromTheTerminal` goes through the same `oneCapture` as the keyboard door, because both borrow the one
   clipboard: a second press while either runs is refused with the existing *"That selection is still being copied"*.
 - **Not yet measured: the marker timing.** Whether the clipboard still holds the marker right after the awaited command while a selection
@@ -13509,6 +13509,15 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   where no source is known, and a terminal conversation never reaches a launch in agent mode because `accessOn` and the box refuse first.
 - **The help** (`helpContent.ts`, `helpRu.ts`, `helpUk.ts`, `helpDe.ts`, `helpEs.ts`, the `chat-with-other-ai` article): one paragraph that names
   **Ask other AI** in English in every language, and *or the terminal* in the back-to-source paragraph.
+- **A terminal whose name cannot name a conversation is refused before anything is captured** (`terminalDoorUsable` in `chatCommand.ts`, the store's
+  own `isTerminalName`): empty, over 500 UTF-16 units, or holding a control character or a line separator. Such a name builds the source `none`, and a
+  chat with no source has no road back and no protection against a Claude tab taking it, silently. The notice is `terminal-name-unusable`: *This
+  terminal's name cannot name a conversation (it is empty, longer than 500 characters, or holds a control character) — rename the terminal and press
+  again.* The check runs before the capture because a capture borrows the clipboard. (The help does not list this refusal.)
+- **Known limit, accepted: with no selection a person may see two messages.** Read in VS Code's source by two reviewers: the terminal's own
+  `copySelection` shows *"The terminal has no selection to copy"* when nothing is selected, and then our *"Select text in the terminal first."*
+  follows. The stable API has no way to ask whether a selection exists (`Terminal.selection` is proposed), so no code can avoid it. The help
+  says VS Code may show its own message first, in five languages; the owner's check R3 records how it looks.
 - **Tests**: `terminalDoorWiring.test.ts` (new; the manifest is parsed, and the door's code is scanned for the tab readers), `chatAgentMode.test.ts`,
   `chatDoors.test.ts`, `helpCoverage.test.ts`, the door census in `chatWiring.test.ts`. Host scenario S3-H1 (the skip-list default) in
   `terminalCaptureScenario.ts`; it runs only in CI's job `extension · a real editor`.

@@ -21,7 +21,7 @@
  *
  * <p>{@link Door} is what a CALLER must pass, so a new door cannot be added without the compiler
  * asking which it is. The record holds a plain string, so a line written by a LATER version — a
- * sixth door nobody here has heard of — still counts towards how often the chat was opened instead
+ * door nobody here has heard of — still counts towards how often the chat was opened instead
  * of being dropped by the reader that came first. Strict where it is written, tolerant where it is
  * read.</p>
  */

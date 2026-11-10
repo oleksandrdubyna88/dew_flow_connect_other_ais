@@ -5,7 +5,7 @@ import { notify } from './notify';
 import {
   mainModel,
 } from './chatPresets';
-import { ConversationSource, readsSession, sourceOfFile, sourceOfTab, sourceOfTerminal } from './chatStore';
+import { ConversationSource, isTerminalName, readsSession, sourceOfFile, sourceOfTab, sourceOfTerminal } from './chatStore';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { threads } from './chatThread';
 import { pulse } from './chatHost';
@@ -279,6 +279,39 @@ function terminalDoorNoTerminal(): void {
   });
 }
 
+/** Said when the terminal's name is not an identity: a chat opened from it would be saved with no source. */
+function terminalDoorNameUnusable(): void {
+  void notify({
+    as: 'warning',
+    class: 'refusal',
+    source: 'chat',
+    code: 'terminal-name-unusable',
+    title: 'This terminal\u2019s name cannot name a conversation (it is empty, longer than 500 characters, or holds a control '
+      + 'character) — rename the terminal and press again.',
+  });
+}
+
+/**
+ * Whether there is a terminal this door can open a chat from — and the person is told when there is not.
+ *
+ * <p>The name is judged by the store's own rule (`isTerminalName`) BEFORE anything is captured: a name that is not an identity
+ * builds the source `none`, and a chat with no source has no road back and no protection against a Claude tab taking it.</p>
+ */
+function terminalDoorUsable(terminal: vscode.Terminal | undefined): terminal is vscode.Terminal {
+  if (terminal === undefined) {
+    terminalDoorNoTerminal();
+
+    return false;
+  }
+  if (!isTerminalName(terminal.name)) {
+    terminalDoorNameUnusable();
+
+    return false;
+  }
+
+  return true;
+}
+
 /** Said when the copy found no selection, or could not be made: the capture's own sentence, which says which. */
 function terminalDoorNothing(failure: string): void {
   void notify({
@@ -313,13 +346,12 @@ export async function askFromTerminal(
 
     return;
   }
-  if (terminal === undefined) {
-    terminalDoorNoTerminal();
-
+  if (!terminalDoorUsable(terminal)) {
     return;
   }
   const passage = await fromTheTerminal();
-  if (passage.text.trim().length === 0) {
+  // `terminalPassage` has already decided what white space means, so an empty text is the only "nothing" left.
+  if (passage.text.length === 0) {
     terminalDoorNothing(passage.failure);
 
     return;

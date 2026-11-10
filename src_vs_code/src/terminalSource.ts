@@ -1,11 +1,14 @@
 import type { ChatPanels } from './chatPanels';
 import type { ConversationSource } from './chatStore';
-import { threads } from './chatThread';
+import { threadUnder } from './chatThread';
 import { Borrowed, Capture, Clipboard, borrowClipboard } from './selectionCapture';
 import type { KnownPanel, SessionMatch } from './sessionKey';
 
 /**
- * Copying the active terminal's selection — pure, with no `vscode` in it.
+ * The terminal as a conversation source: copying its selection, naming its conversation, finding its panel — with no `vscode` in it.
+ *
+ * <p>The rules are pure values and take their seams as parameters. The one exception is `tabPanels`, which reads the chat registry
+ * and the thread table once to say which panels a tab may match; it is the only function here that touches shared state.</p>
  *
  * <p><b>No keystroke, ever.</b> A synthetic Ctrl+C reaches a terminal as SIGINT: in `ssh`, `tmux` or
  * the Claude CLI that interrupts the program instead of copying anything. The copy is VS Code's own
@@ -107,14 +110,7 @@ export function tabSourced(
   return known.filter((panel) => sourceOf(panel.key)?.kind !== 'terminal');
 }
 
-/** The durable source of the conversation registered under this key, or nothing for a key that holds none. */
-function sourceUnder(panels: Pick<ChatPanels, 'get'>, key: object): ConversationSource | undefined {
-  const entry = panels.get(key);
-
-  return entry === undefined ? undefined : threads.get(entry.id)?.source;
-}
-
 /** The registry's panels a tab may be matched against — `tabSourced`, read from each panel's own thread. */
 export function tabPanels(panels: Pick<ChatPanels, 'known' | 'get'>): readonly KnownPanel[] {
-  return tabSourced(panels.known(), (key) => sourceUnder(panels, key));
+  return tabSourced(panels.known(), (key) => threadUnder(panels, key)?.source);
 }

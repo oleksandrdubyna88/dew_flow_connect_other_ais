@@ -269,7 +269,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 167 -> 170 on 2026-11-10 (E1.S3 of todo/PLAN_the_chat_opens_from_a_terminal_E1.md): the terminal door says three things, each a refusal or a
 // failure routed through `notify` — there is no terminal to read (`no-terminal-here`), nothing was selected or the copy failed
 // (`nothing-selected-in-terminal`), and the whole command failed (`terminal-door-failed`).
-const PLACES_THIS_SPEAKS = 170;
+// 170 -> 171 on 2026-11-10 (E1 review): a terminal whose name is not an identity — empty, over 500 units, or holding a control
+// character — is refused before its selection is captured (`terminal-name-unusable`), because the chat it would open is saved
+// with no source and so has no road back and no protection against a Claude tab taking it.
+const PLACES_THIS_SPEAKS = 171;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

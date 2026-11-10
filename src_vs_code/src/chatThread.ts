@@ -1,6 +1,7 @@
 import { ChatMemory, ChatProvider } from './chatModels';
 import { ChatHome } from './cliChatLaunch';
 import type { ChatAccess } from './chatAdapter';
+import type { ChatPanels } from './chatPanels';
 import { ChatMessage } from './chatPage';
 import { ChatModelChoice } from './chatContracts';
 import { ChatSession, TurnResult } from './chatSession';
@@ -334,6 +335,13 @@ export interface Thread extends ChatMemory {
 }
 
 export const threads = new WeakMap<object, Thread>();
+
+/** The conversation registered under this key, or nothing for a key that holds none — the registry's entry, then its thread. */
+export function threadUnder(panels: Pick<ChatPanels, 'get'>, key: object): Thread | undefined {
+  const entry = panels.get(key);
+
+  return entry === undefined ? undefined : threads.get(entry.id);
+}
 
 /**
  * Whether the next turn carries the row's system prompt (PLAN_one_model_catalog.md E4.6c): when the session sending it has

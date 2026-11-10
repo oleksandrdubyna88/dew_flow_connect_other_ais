@@ -1,6 +1,6 @@
 # PLAN — E1 stories: the terminal door
 
-> Status: **plan only, nothing implemented yet, 2026-11-10.** Epic E1 of
+> Status: **coded, 2026-11-10 — S1, S2 and S3 on `feat/chat-from-a-terminal`; code gate round 1 `proceed`; review fixes in progress; not merged.** Epic E1 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics`, and its § *Stage 1*).
 > Written by Opus when the epic started. A stories document keeps no change ledger: a change to this epic is an entry
 > in the parent.

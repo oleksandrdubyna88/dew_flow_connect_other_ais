@@ -97,8 +97,6 @@ function namedRoute(source: Exclude<ConversationSource, { kind: 'none' }>): Reco
     case 'terminal':
       return { kind: 'terminal', name: source.name };
     default:
-      // Exhaustive: a new kind of source is a compile error here, not a chat that silently goes
-      // nowhere. (codex, the code round.)
       return unknownSource(source);
   }
 }

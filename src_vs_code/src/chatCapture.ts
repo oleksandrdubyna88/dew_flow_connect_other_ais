@@ -5,7 +5,7 @@ import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage
 import { windowsReach } from './hostSide';
 import { oneAtATime } from './oneAtATime';
 import { launch } from './processLauncher';
-import { COPY_SCRIPT, RunOutcome, argvFor, captureSelection, ran } from './selectionCapture';
+import { COPY_SCRIPT, Capture, RunOutcome, argvFor, captureSelection, ran } from './selectionCapture';
 import { captureTerminalSelection, tabPanels } from './terminalSource';
 import { SessionMatch, TabSnapshot, isOrdinaryEditorTab, sourceSession } from './sessionKey';
 import { notifyAndAsk } from './notify';
@@ -93,6 +93,9 @@ const hostClipboard = {
  * the round trip is ~1 s rather than the ~1.7 s this label was written for, so the label and the cap
  * both stand as they are.</p>
  */
+/** What a press is told while another capture is still running — one latch for the keyboard and the terminal doors. */
+export const STILL_COPYING = 'That selection is still being copied — the second press was ignored.';
+
 /**
  * The keyboard door, and it opens once at a time.
  *
@@ -101,10 +104,7 @@ const hostClipboard = {
  * makes the wait legible; it does NOT make the path single-entry, and an earlier draft of this fix
  * stopped at the progress and would have shipped as decoration.</p>
  */
-const oneCapture = oneAtATime<{ text: string; failure: string }>({
-  text: '',
-  failure: 'That selection is still being copied — the second press was ignored.',
-});
+const oneCapture = oneAtATime<Capture>({ text: '', failure: STILL_COPYING });
 
 export async function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: string; failure: string }> {
   if (path === 'menu') {
@@ -127,7 +127,7 @@ export async function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: str
  * press that arrives while a keyboard capture is running would take the marker for the passage, and
  * the other way round. No key is pressed here — the copy is VS Code's own `copySelection`.</p>
  */
-export async function fromTheTerminal(): Promise<{ text: string; failure: string }> {
+export async function fromTheTerminal(): Promise<Capture> {
   return oneCapture(() => vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Copying the terminal selection…' },
     async () => captureTerminalSelection((id) => vscode.commands.executeCommand(id), hostClipboard),

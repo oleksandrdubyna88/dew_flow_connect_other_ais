@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { bodyOf, sourceOf } from './sourceReading';
 
 /**
  * The terminal door, as the manifest declares it and as the command is written (todo/PLAN_the_chat_opens_from_a_terminal_E1.md, S3).
@@ -107,22 +108,37 @@ test('the palette does not offer the file door while a terminal has focus', () =
   assert.equal(rows[0]?.when, '!terminalFocus');
 });
 
-/** The source of the top-level functions that make up the terminal door: `askFromTerminal` and every `terminalDoor…` helper. */
+/** The source of the functions that make up the terminal door: `askFromTerminal` and every `terminalDoor…` helper. */
 function terminalDoorSource(): string {
-  const text = read('src/chatCommand.ts');
-  const found = text.match(/^(?:export )?(?:async )?function (?:askFromTerminal|terminalDoor\w*)\b[\s\S]*?\r?\n\}\r?\n/gmu);
+  const text = sourceOf('chatCommand.ts');
+  const helpers = [...text.matchAll(/^function (terminalDoor\w*)\(/gmu)].map((one) => bodyOf(text, `function ${one[1]}(`));
 
-  return (found ?? []).join('\n');
+  return [bodyOf(text, 'export async function askFromTerminal('), ...helpers].join('\n');
 }
 
 test('the terminal door never reads the tabs', () => {
   const door = terminalDoorSource();
-  const chat = /^export async function chatWithOtherAi\b[\s\S]*?\r?\n\}\r?\n/mu.exec(read('src/chatCommand.ts'))?.[0] ?? '';
+  const chat = bodyOf(sourceOf('chatCommand.ts'), 'export async function chatWithOtherAi(');
 
   // The scans' own proof: the door's code is found and is the terminal's, and the file door still reads the tabs.
-  assert.ok(door.includes('fromTheTerminal('), 'the derivation no longer finds the terminal door’s code');
+  assert.ok(door.includes('fromTheTerminal('), 'the derivation no longer finds the terminal door\u2019s code');
   assert.ok(chat.includes('matchedSource('), 'the file door no longer calls matchedSource, so this scan guards a function that moved');
   for (const call of ['matchedSource(', 'snapshots(', 'sourceSession(']) {
     assert.ok(!door.includes(call), `the terminal door calls ${call}…) — the file-text defect can happen on this door again`);
   }
+});
+
+test('a terminal whose name cannot name a conversation is refused BEFORE its selection is captured', () => {
+  // A name that is not an identity (a control character, a line separator, over 500 units, empty) builds the source `none`: the chat
+  // would lose its road back and the steal protection, silently. So the door says so and stops. The guard has to come first — a
+  // capture borrows the clipboard — and it has to be the store's own rule, not a second copy of it.
+  const text = sourceOf('chatCommand.ts');
+  const command = bodyOf(text, 'export async function askFromTerminal(');
+  const guard = bodyOf(text, 'function terminalDoorUsable(');
+
+  assert.ok(guard.includes('isTerminalName('), 'the terminal door never asks whether the terminal\u2019s name is an identity, so such a terminal opens a chat with no source');
+  assert.ok(guard.includes("code: 'terminal-name-unusable'") || terminalDoorSource().includes("code: 'terminal-name-unusable'"),
+    'the refusal of an unusable name has no notice of its own');
+  assert.ok(command.includes('terminalDoorUsable('), 'the command does not ask the guard');
+  assert.ok(command.indexOf('terminalDoorUsable(') < command.indexOf('fromTheTerminal('), 'the name is checked after the selection was captured');
 });
