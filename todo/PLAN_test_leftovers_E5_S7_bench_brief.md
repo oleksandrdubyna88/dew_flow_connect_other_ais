@@ -48,8 +48,11 @@ proves the drain's whole loop (C# guard RED, rewrite, GREEN, ratchet) on 8 lines
   `testsToDelete-baseline-proof:`** (the rule's last *Never*: the gate stays while a baseline names the scope).
 - **No inline exemption** replaces an entry.
 - No product code changes; tests only, plus `ci.yml` line 209-211 and the docs.
-- `TempDir.Dispose` never throws and uses the product's read-only-aware deleter; the hand-written `try { Directory.Delete
-  } catch` blocks it replaces go with it (they are the same thing written out per class — `TempDir.cs`'s own remarks).
+- `TempDir.Dispose` uses the product's read-only-aware deleter and swallows `IOException` and
+  `UnauthorizedAccessException` — except `LinkTargetLostException`, which it lets through on purpose (a link's target that
+  lost a file is a failing test, `TempDir.cs`); the hand-written `try { Directory.Delete } catch (IOException)` blocks it
+  replaces go with it (they are the same thing written out per class — `TempDir.cs`'s own remarks). No bench site makes a
+  link, so that one exception cannot arise here.
 
 ## 4. The sites — one shape each
 
