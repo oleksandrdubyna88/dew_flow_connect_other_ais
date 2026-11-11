@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -23,7 +24,7 @@ namespace CoaiBugs.Tests;
 public sealed class TheSchemaIsFrozenTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-frozen-" + Guid.NewGuid().ToString("N")[..8]);
+        TempDir.For("coai-frozen-").Path;
 
     public TheSchemaIsFrozenTests() => Directory.CreateDirectory(_dir);
 

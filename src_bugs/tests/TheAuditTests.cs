@@ -23,7 +23,7 @@ namespace CoaiBugs.Tests;
 public sealed class TheAuditTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-audit-" + Guid.NewGuid().ToString("N")[..8]);
+        CoaiMcp.Tests.TempDir.For("coai-audit-").Path;
 
     private readonly FrozenClock _clock = new(new DateTimeOffset(2026, 9, 17, 12, 30, 15, TimeSpan.Zero));
 

@@ -2,6 +2,7 @@ using CoaiBugs;
 using CoaiMcp.Core.Collecting;
 using CoaiMcp.Core.Normalising;
 using CoaiMcp.Normalizer;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -17,7 +18,7 @@ namespace CoaiBugs.Tests;
 public sealed class TheIngestTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-bugs-" + Guid.NewGuid().ToString("N")[..8]);
+        TempDir.For("coai-bugs-").Path;
 
     private readonly IReadOnlyDictionary<string, IReadOnlySet<string>> _keywords;
 

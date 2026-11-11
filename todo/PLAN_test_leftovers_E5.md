@@ -1,6 +1,6 @@
 # PLAN — Test leftovers, E5: coai's run folder takes the owner form, both test sweeps judge by owner, and the product's `coai-*` directories stay untouched
 
-> Status: S7 started 2026-11-11 — its first drain PR (the bench suite, and the 945 bypass removed) is built from todo/PLAN_test_leftovers_E5_S7_bench_brief.md. Its second drain PR (the `scripts/` suite, 10 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_scripts_brief.md. **epoch 7 approved by the owner, 2026-11-05 (`Narrowed: yes`, entry 6.2). What is left of S6 is the parent's § *Epoch 7* item 5.** S6 is built to `3fcba8a0`, but for those items.
+> Status: S7 started 2026-11-11 — its first drain PR (the bench suite, and the 945 bypass removed) is built from todo/PLAN_test_leftovers_E5_S7_bench_brief.md. Its second drain PR (the `scripts/` suite, 10 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_scripts_brief.md. Its third drain PR (the `src_bugs/` ingest suite, 26 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_bugs_brief.md. **epoch 7 approved by the owner, 2026-11-05 (`Narrowed: yes`, entry 6.2). What is left of S6 is the parent's § *Epoch 7* item 5.** S6 is built to `3fcba8a0`, but for those items.
 >
 > Was: **revised 2026-11-05 at the parent's epoch-6 re-review (entries 5.2 and 5.3 of the parent's ledger, both found
 > writing the S6 build brief; entry 5.1, the Windows sweep mutex, is built on #945 and unchanged); epoch 6 was approved by

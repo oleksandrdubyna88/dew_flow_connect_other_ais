@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -104,7 +105,7 @@ public sealed class TheRevokedKeyTests
     [Fact]
     public void AKeyRevokedBetweenTheGateAndTheWriteStoresNothing()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "coai-interleave-" + Guid.NewGuid().ToString("N")[..8]);
+        var dir = TempDir.For("coai-interleave-").Path;
         Directory.CreateDirectory(dir);
         var db = Path.Combine(dir, "coai-bugs.db");
         var clock = new FrozenClock(new DateTimeOffset(2026, 9, 17, 12, 0, 0, TimeSpan.Zero));
@@ -150,7 +151,7 @@ public sealed class TheRevokedKeyTests
     [Fact]
     public void AScopeCannotOutliveTheBatchThatMadeIt()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "coai-scope-" + Guid.NewGuid().ToString("N")[..8]);
+        var dir = TempDir.For("coai-scope-").Path;
         Directory.CreateDirectory(dir);
         var clock = new FrozenClock(new DateTimeOffset(2026, 9, 17, 12, 0, 0, TimeSpan.Zero));
         try

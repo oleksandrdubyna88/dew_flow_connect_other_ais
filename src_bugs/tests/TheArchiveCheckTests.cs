@@ -1,5 +1,6 @@
 using System.Formats.Tar;
 using System.IO.Compression;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -108,7 +109,7 @@ public sealed class TheArchiveCheckTests
     [Fact]
     public void AnArchiveThatIsNotThereIsNotAPass()
     {
-        var missing = Path.Combine(Path.GetTempPath(), $"absent-{Guid.NewGuid():N}.tar.gz");
+        var missing = Path.Combine(TempDir.Root, $"absent-{Guid.NewGuid():N}.tar.gz");
 
         var (code, _) = Check(missing, WhatTheReleaseWants);
 
@@ -172,8 +173,8 @@ public sealed class TheArchiveCheckTests
     [Fact]
     public void AFileThatIsNotAZipIsNotAPass()
     {
-        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
-        var archive = Path.Combine(work.FullName, "coai-mcp-0.1.0-win-x64.zip");
+        using var work = TempDir.For("archive-check-");
+        var archive = Path.Combine(work.Path, "coai-mcp-0.1.0-win-x64.zip");
         File.WriteAllText(archive, "this is not a zip");
 
         var (code, _) = Check(archive, WhatTheWindowsPackageWants);
@@ -274,19 +275,19 @@ public sealed class TheArchiveCheckTests
     [Fact]
     public void AZipThatIsNotThereOrNotAZipIsNotAPass()
     {
-        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
-        var junk = Path.Combine(work.FullName, "coai-mcp-0.1.0-win-x64.zip");
+        using var work = TempDir.For("archive-check-");
+        var junk = Path.Combine(work.Path, "coai-mcp-0.1.0-win-x64.zip");
         File.WriteAllText(junk, "this is not a zip");
 
         Layout(junk).Code.Should().Be(2, "a check that cannot list the archive must not answer 'the layout is right'");
-        Layout(Path.Combine(work.FullName, "coai-mcp-9.9.9-win-x64.zip")).Code.Should().Be(2);
+        Layout(Path.Combine(work.Path, "coai-mcp-9.9.9-win-x64.zip")).Code.Should().Be(2);
     }
 
     /// <summary>A `.zip` of one named folder holding empty files; a name with a slash is a file in a subfolder.</summary>
     private static string ZipOf(string directory, params string[] names)
     {
-        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
-        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.FullName, "tree"));
+        var work = TempDir.For("archive-check-");
+        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.Path, "tree"));
         var staged = System.IO.Directory.CreateDirectory(Path.Combine(tree.FullName, directory));
         foreach (var name in names)
         {
@@ -295,7 +296,7 @@ public sealed class TheArchiveCheckTests
             File.WriteAllText(path, string.Empty);
         }
 
-        var archive = Path.Combine(work.FullName, $"{directory}.zip");
+        var archive = Path.Combine(work.Path, $"{directory}.zip");
         ZipFile.CreateFromDirectory(tree.FullName, archive, CompressionLevel.Fastest, includeBaseDirectory: false);
 
         return archive;
@@ -304,14 +305,14 @@ public sealed class TheArchiveCheckTests
     /// <summary>A `.zip` named like the package's, with the files at its ROOT: the package folder is missing.</summary>
     private static string FlatZip(string name, params string[] files)
     {
-        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
-        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.FullName, "tree"));
+        var work = TempDir.For("archive-check-");
+        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.Path, "tree"));
         foreach (var file in files)
         {
             File.WriteAllText(Path.Combine(tree.FullName, file), string.Empty);
         }
 
-        var archive = Path.Combine(work.FullName, $"{name}.zip");
+        var archive = Path.Combine(work.Path, $"{name}.zip");
         ZipFile.CreateFromDirectory(tree.FullName, archive, CompressionLevel.Fastest, includeBaseDirectory: false);
 
         return archive;
@@ -325,17 +326,17 @@ public sealed class TheArchiveCheckTests
     private static string Zip(params string[] names)
     {
         const string Directory = "coai-mcp-0.1.0-win-x64";
-        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
+        var work = TempDir.For("archive-check-");
 
         // Staging tree and archive are separate, for the same reason as in <see cref="Archive"/>.
-        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.FullName, "tree"));
+        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.Path, "tree"));
         var staged = System.IO.Directory.CreateDirectory(Path.Combine(tree.FullName, Directory));
         foreach (var name in names)
         {
             File.WriteAllText(Path.Combine(staged.FullName, name), string.Empty);
         }
 
-        var archive = Path.Combine(work.FullName, $"{Directory}.zip");
+        var archive = Path.Combine(work.Path, $"{Directory}.zip");
         ZipFile.CreateFromDirectory(tree.FullName, archive, CompressionLevel.Fastest, includeBaseDirectory: false);
 
         return archive;
@@ -345,18 +346,18 @@ public sealed class TheArchiveCheckTests
     private static string Archive(params string[] names)
     {
         const string Directory = "coai-bugs-0.1.0-linux-x64";
-        var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");
+        var work = TempDir.For("archive-check-");
 
         // The staging tree and the archive are SEPARATE: writing the `.tar.gz` inside the directory
         // being walked means the writer reads the file it is still writing.
-        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.FullName, "tree"));
+        var tree = System.IO.Directory.CreateDirectory(Path.Combine(work.Path, "tree"));
         var staged = System.IO.Directory.CreateDirectory(Path.Combine(tree.FullName, Directory));
         foreach (var name in names)
         {
             File.WriteAllText(Path.Combine(staged.FullName, name), string.Empty);
         }
 
-        var archive = Path.Combine(work.FullName, $"{Directory}.tar.gz");
+        var archive = Path.Combine(work.Path, $"{Directory}.tar.gz");
         using (var file = File.Create(archive))
         using (var gzip = new GZipStream(file, CompressionLevel.Fastest))
         {

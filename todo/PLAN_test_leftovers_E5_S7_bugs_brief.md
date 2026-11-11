@@ -1,6 +1,6 @@
 # Build brief — coai E5 story S7, the third drain PR: the `src_bugs/tests/` suite's `raw-temp` entries to zero
 
-> Status: **plan only, 2026-11-11, by Opus.** Scope: the 26 `raw-temp` baseline entries of `src_bugs/tests/`. Tests only.
+> Status: **built 2026-11-11, on branch feat/test-leftovers-e5-s7-bugs.** Scope: the 26 `raw-temp` baseline entries of `src_bugs/tests/`. Tests only.
 > A Sonnet coder builds from this brief alone.
 
 The plan is [PLAN_test_leftovers_E5.md](PLAN_test_leftovers_E5.md) § *S7 — The drain* ("`src_bugs` `Scratch.Delete`

@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -34,7 +35,7 @@ namespace CoaiBugs.Tests;
 public sealed partial class TheBuiltBinariesTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-built-" + Guid.NewGuid().ToString("N")[..8]);
+        TempDir.For("coai-built-").Path;
 
     private const string Secret = "a-secret-for-this-scenario-only";
 

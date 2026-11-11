@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -206,7 +207,7 @@ public sealed class TheAdminUploadTests
     [Fact]
     public void AccceptRefusesWhatAcceptAdminStores()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "coai-bugs-tests", Guid.NewGuid().ToString("N"));
+        var dir = TempDir.For("coai-bugs-tests-").Path;
         Directory.CreateDirectory(dir);
         try
         {
@@ -238,7 +239,7 @@ public sealed class TheAdminUploadTests
     [Fact]
     public void AnAdministratorsScopeCannotOutliveItsBatch()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "coai-bugs-tests", Guid.NewGuid().ToString("N"));
+        var dir = TempDir.For("coai-bugs-tests-").Path;
         Directory.CreateDirectory(dir);
         try
         {

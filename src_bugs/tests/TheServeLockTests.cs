@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -15,7 +16,7 @@ namespace CoaiBugs.Tests;
 public sealed class TheServeLockTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-lock-" + Guid.NewGuid().ToString("N")[..8]);
+        TempDir.For("coai-lock-").Path;
 
     [Fact]
     public void ASecondServerOnTheSameDirectoryIsRefusedUntilTheFirstLetsGo()
