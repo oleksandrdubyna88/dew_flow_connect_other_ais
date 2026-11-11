@@ -42,6 +42,9 @@ export type RemoteCall =
  */
 const FOLDER = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,254}$/u;
 
+/** Whether this is a project folder's name by the operand rule — the ONE place it is written; the parser asks it for the names it is told. */
+export const isFolderName = (name: string): boolean => FOLDER.test(name);
+
 /** The most folders one `titles` call may name. */
 const FOLDERS_MAX = 3;
 
@@ -64,7 +67,7 @@ function titlesCall(session: string, rest: readonly string[]): RemoteCall | unde
 
 /** One to three folders, each by the folder rule, no two the same. */
 function foldersOk(folders: readonly string[]): boolean {
-  return folders.length >= 1 && folders.length <= FOLDERS_MAX && folders.every((folder) => FOLDER.test(folder))
+  return folders.length >= 1 && folders.length <= FOLDERS_MAX && folders.every(isFolderName)
     && new Set(folders).size === folders.length;
 }
 
