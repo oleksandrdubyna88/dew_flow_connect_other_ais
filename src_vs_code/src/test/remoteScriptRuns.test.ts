@@ -644,6 +644,9 @@ shellTest('S2-T43: the title scan stops at its bounds', async (shell) => {
     }
     const call: RemoteCall = { kind: 'titles', session: S, folders: ['-home-git-a'] };
 
+    // A clock that stands still, so that 251 files cannot hit the 8 s of the scan on a busy machine: the COUNT bound is what is tested here.
+    rmSync(join(t.bin, 'date'));
+    writeFileSync(join(t.bin, 'date'), '#!/bin/sh\necho 100\n', { mode: 0o755 });
     const count = await read(shell, t, call);
     assert.ok(count.read.kind === 'titles' && count.read.scan.why === 'count' && count.read.sessions.length === 250, `251 files: ${count.read.kind === 'titles' ? `${count.read.scan.why} ${count.read.sessions.length}` : count.read.kind}`);
 
