@@ -1,6 +1,6 @@
 # Security — what this product guarantees about paths, and where it stops
 
-This file states the path guarantees of `coai-mcp` (`src_mcp`). It is not a vulnerability-reporting policy; report a
+This file states the path guarantees of `coai-mcp` (`src_mcp`), and — in its own section — the one call that leaves the machine from the VS Code extension. It is not a vulnerability-reporting policy; report a
 problem to the repository owners privately.
 
 ## A path is resolved by one resolver — `RealPath`
@@ -94,6 +94,24 @@ fails for a new one. The ones that remain, each with its reason:
 - **Length.** A path over 32 KiB is refused at once. A 200,000-segment path took 36 s in a quadratic walk in the sibling
   `dew_flow_mcp`; this resolver does not walk after a missing name and refuses long input first.
 - A Windows reparse point with no link target (a cloud-file placeholder) is read as a plain entry; it redirects no path.
+
+## The extension's one outward ssh call
+
+The ConnectOtherAIs extension (`src_vs_code`) makes one call that leaves the machine: when a terminal is called `Creds: <host> / <session>`, **CoAI: take the question**, **CoAI: add the question** and *Asked* of that terminal's chat read the Claude session that runs in tmux session `<session>` on `<host>`, over the local `ssh`. This section says what the extension PASSES and does there. Where it says "we pass", it states what is sent, not what the other side does with it: the effect of each option on a real server is observed only where `research/module_extension.md` says so (M-O1…M-O7 are owed, below).
+
+- **Read-only, to a host the person agreed to.** The first read for a host asks once (a modal naming the host); the answer is kept, and a "no" keeps that host clipboard-only until the person changes it in **CoAI: hosts read over ssh**. No ssh child is started before a "yes". The host is taken from the LIVE name of the terminal, and the name is checked again just before every spawn; a name is a request, never proof.
+- **Whose configuration, whose keys.** The host is an alias in the person's own `~/.ssh/config`, which is the authority for it (`ProxyJump`, `ProxyCommand`, `IdentityFile` and the rest). The keys and the agent are the person's, through that configuration. The extension handles no key, no password and no secret, and none is in an argv or in a log. We pass `BatchMode=yes`: a password or passphrase prompt is a refusal, never a question on the terminal.
+- **No forwarding, no terminal.** We pass `-T`, `RequestTTY=no`, `RemoteCommand=none`, `ClearAllForwardings=yes`, `ForwardAgent=no` and `ForwardX11=no`, `ConnectTimeout=5` and `LogLevel=ERROR`, before the person's own configuration (for each setting ssh keeps the first value it is given).
+- **Argv only.** The program is started with its words as an argument list, `shell` off, `--` right before the host. The host and every operand are validated by a rule whose alphabet has no space, tab, quote or shell character, checked again at the one road in; each operand is single-quoted for the REMOTE login shell, and the script travels on stdin, never in an argument. On Windows node therefore hands `ssh.exe` the words as built.
+- **Which `ssh`.** ONE absolute path for each platform (Windows `<SystemRoot>\System32\OpenSSH\ssh.exe`, else `/usr/bin/ssh`), never the `PATH`, and the child's working folder is that executable's folder — the extension host's own folder can be the opened workspace. The cost: a person whose terminal uses another ssh gets the system one here; the call then ends with ssh's own line, not with a wrong answer.
+- **Bounded, and nothing left running.** 15 seconds, then the whole process tree is killed (`taskkill /t /f` on Windows, so a `ProxyJump` child goes with it); at most 8 MiB of stdout, counted in bytes; one read per terminal at a time and at most three calls for one press. The remote script is one function that reads, writes and starts nothing in the background, and leaves nothing on the VM.
+- **The transcript stays in memory.** What comes back is input from another machine: it is parsed by a strict frame, never run, never used as a local path, never logged and never part of an error's text. The log of a call holds the host, the session name, how it ended and ssh's own stderr tail, never stdout and never an operand. The question taken and the prompts shown ARE saved with the conversation, as every passage is; the rest of the transcript is dropped after the parse.
+
+**Plan change 2.1 (host keys).** The read passes `-o StrictHostKeyChecking=yes`, before your own configuration. With it, ssh refuses a host whose key is not already in your `known_hosts`, and a host whose key changed, whatever your configuration says (`accept-new` or `no` included); the read then ends with ssh's own sentence. A host your terminal's ssh already trusts is read as usual. (We pass the option; that a real host not in `known_hosts` is refused and nothing is written is owed, M-O3.)
+
+**The residual of change 2.1 (connection sharing).** The read does not turn off ssh connection sharing: `ControlPath=none` was proposed and NOT taken, because it is an independent cause and a second change of epoch 2. On Windows, the OpenSSH client that comes with Windows has no released connection sharing, so a read cannot share a connection or leave one open. When the extension runs on Linux or macOS — or on the remote machine of a Remote window — and your ssh configuration shares connections (`ControlMaster`, `ControlPersist`), the read can go through a connection that is already open, or open one that stays open for the `ControlPersist` time, as your configuration says.
+
+**Owed measurements (M-O1…M-O7).** A real call from Windows (the argv reaches `ssh.exe` unchanged); the size of the residual on Linux; the refusal of an unknown or changed host key; no `ssh` process left after a read killed at the limit, `ProxyJump` included; the `comm` of the Claude CLI on the VMs; tmux's exact `-t "=name:"` match; whether the registry's `cwd` follows a `cd`. They are observed in the owner's R6 and R7 checks on a pre-release build, and until then this section says what is passed, not what is achieved.
 
 ## Past defects
 

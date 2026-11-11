@@ -276,7 +276,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // once for each host (`read-remote-session`, a modal confirmation), asks again from the panel's *hosts read over ssh* list
 // (`change-remote-host-answer`, a modal with **Forget**), and says that no host has been asked yet (`no-remote-host-asked`, an outcome) —
 // all three through `notifyAndAsk` / `notify`.
-const PLACES_THIS_SPEAKS = 174;
+// 174 -> 177 on 2026-11-11 (E2.S4 of todo/PLAN_the_chat_opens_from_a_terminal_E2.md): the two terminal doors say what they found — a refusal when there is no
+// question to hand over (`no-question-from-terminal`, one site for both verbs) — and each fails with a fixed sentence and no error text
+// (`question-not-taken-from-terminal`, `question-not-added-from-terminal`).
+const PLACES_THIS_SPEAKS = 177;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

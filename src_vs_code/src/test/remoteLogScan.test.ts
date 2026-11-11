@@ -1,7 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sourceFiles, sourceOf } from './sourceReading';
+import { bodyOf, sourceFiles, sourceOf } from './sourceReading';
 
 /**
  * No stdout, no operand and no caught error in any log (E2.S2, S2-T10; parent § Limits).
@@ -91,4 +91,47 @@ test('S2-T10 companions: the scan finds the three S2 modules, and the one consol
   assert.equal(ssh.split('logLine(').length - 1, 2, 'logLine( must be declared once and called once');
   const declared = /function logLine\(([^)]*)\)/u.exec(ssh);
   assert.deepEqual(declared?.[1]?.split(',').map((parameter) => parameter.split(':')[0]?.trim()), ['host', 'session', 'end', 'stderrTail'], 'logLine does not take exactly host, session, end, stderrTail');
+});
+
+// ───────────────── S4-T11: the doors' catches and the Asked hook, scanned with the same scanner (X10) ─────────────────
+
+/** A command's registration in `extension.ts`: from its `registerCommand('<id>'` to the next registration. */
+function registrationOf(command: string): string {
+  const text = sourceOf('extension.ts');
+  const at = text.indexOf(`registerCommand('${command}'`);
+  assert.ok(at >= 0, `extension.ts registers no ${command}, so the scan has nothing to look at`);
+  const next = text.indexOf('registerCommand(', at + 20);
+
+  return text.slice(at, next < 0 ? text.length : next);
+}
+
+/** The terminal branch of the Asked hook: the whole `onShowAsked` hook and the function that reads the remote prompts. */
+const askedBranches = (): readonly string[] => {
+  const text = sourceOf('chatHooks.ts');
+
+  return [/onShowAsked:[\s\S]*?onStop:/u.exec(text)?.[0] ?? '', bodyOf(text, 'async function askedFromTerminal(')];
+};
+
+test('S4-T11: the catches of the two terminal doors and the Asked branch carry no error message and no stdout', () => {
+  for (const command of ['coai.takeFromTerminal', 'coai.addFromTerminal']) {
+    assert.deepEqual(logLeaks(registrationOf(command)), [], `${command} writes an error's message, stdout or an operand to a log or a notice`);
+  }
+  for (const branch of askedBranches()) {
+    assert.deepEqual(logLeaks(branch), [], 'the Asked branch of a terminal writes an error\'s message, stdout or an operand to a log');
+  }
+});
+
+test('S4-T11 companions: the scan finds the two registrations and the Asked branch, and a console call and a notice in each', () => {
+  for (const command of ['coai.takeFromTerminal', 'coai.addFromTerminal']) {
+    const handler = registrationOf(command);
+    assert.ok(/console\.error\(/u.test(handler), `${command} has no console.error call, so the scan of it matches nothing`);
+    assert.ok(/\bnotify\(/u.test(handler), `${command} has no notify call, so the scan of it matches nothing`);
+    assert.ok(handler.includes('FromTerminal(chatPanels'), `${command} no longer reaches its door`);
+  }
+  const [hook, helper] = askedBranches();
+  assert.ok(hook?.includes('askedFromTerminal('), 'the Asked hook no longer calls the terminal branch');
+  assert.ok(helper?.includes('readRemoteSession('), 'the Asked terminal branch no longer reads the remote session');
+  assert.ok(/console\.error\(/u.test(helper ?? ''), 'the Asked terminal branch has no console.error call, so the scan of it matches nothing');
+  // The scanner itself reaches this shape: a terminal door's catch that put the error back.
+  assert.equal(logLeaks(`registerCommand('coai.takeFromTerminal', () => { takeFromTerminal(a).catch((reason: unknown) => { void notify({ detail: asText(reason) }); }); })`).length, 1, 'the scanner misses a terminal door that logs an error');
 });

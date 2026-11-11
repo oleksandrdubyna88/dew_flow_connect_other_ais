@@ -686,6 +686,9 @@ export function severalMatch(answers: readonly Found[]): boolean {
 export const MOST_PROMPTS = 200;
 export const MOST_PER_PROMPT = 8_000;
 
+/** Said when a session that can be read holds nothing the person wrote. */
+export const NOTHING_OF_YOURS = 'Nothing of yours is in that session yet.';
+
 /** What the person wrote in a session, or why there is nothing to show. */
 export type Asked =
   | { readonly kind: 'said'; readonly said: readonly string[] }
@@ -933,7 +936,7 @@ export async function promptsFrom(file: string): Promise<Asked> {
     // Told apart from a file that is gone: an empty read of a file that IS there means the person
     // has not written in it yet, and a read of one that is not means the tab has outlived it.
     return await readable(file)
-      ? { kind: 'none', refusal: 'Nothing of yours is in that session yet.' }
+      ? { kind: 'none', refusal: NOTHING_OF_YOURS }
       : { kind: 'none', refusal: 'That session file is no longer on disk.' };
   }
 
@@ -1089,17 +1092,32 @@ export async function namesOf(file: string): Promise<SessionNames> {
 async function promptsOf(file: string): Promise<readonly string[]> {
   const said: string[] = [];
   await eachLine(file, (line) => {
-    const spoken = humanSaid(line);
-    if (spoken.length > 0) {
-      said.push(spoken.length <= MOST_PER_PROMPT
-        ? spoken
-        : `${spoken.slice(0, MOST_PER_PROMPT)}\n\n… (cut here — the rest is in the session file)`);
+    const prompt = promptIn(line);
+    if (prompt.length > 0) {
+      said.push(prompt);
     }
 
     return said.length < MOST_PROMPTS;
   });
 
   return said;
+}
+
+/** What the person said in ONE line, as it is shown: empty when nobody did, and cut at {@link MOST_PER_PROMPT} with a note. */
+function promptIn(line: string): string {
+  const spoken = humanSaid(line);
+
+  return spoken.length <= MOST_PER_PROMPT
+    ? spoken
+    : `${spoken.slice(0, MOST_PER_PROMPT)}\n\n… (cut here — the rest is in the session file)`;
+}
+
+/**
+ * What the person wrote in lines already read (the tail of a remote session), EARLIEST first, at most {@link MOST_PROMPTS}, each cut
+ * as {@link promptsOf} cuts it — one rule for the file on this computer and the lines that came over ssh.
+ */
+export function promptsIn(lines: readonly string[]): readonly string[] {
+  return lines.map(promptIn).filter((prompt) => prompt.length > 0).slice(0, MOST_PROMPTS);
 }
 
 /** What is said when a question was found that this build cannot read, `where` being the file or the session it was in. One sentence for the local road and the remote one. */

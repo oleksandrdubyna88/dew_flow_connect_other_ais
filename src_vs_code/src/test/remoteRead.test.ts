@@ -2,12 +2,13 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
-import { projectDirNames } from '../claudeSessions';
+import { MOST_PER_PROMPT, MOST_PROMPTS, NOTHING_OF_YOURS, projectDirNames, promptsFrom } from '../claudeSessions';
 import { RemoteRead, UNREADABLE_SAID } from '../remoteFrame';
 import {
   HostAnswer, PickRow, Picked, RemoteAnswer, RoadSeams,
-  answerFrom, answersOf, consentOf, nextStep, onePerTerminal, reachOf, readsKey, remoteRoad, withAnswer, withoutHost,
+  answerFrom, answersOf, consentOf, nextStep, onePerTerminal, promptsSaid, reachOf, readsKey, remoteRoad, withAnswer, withoutHost,
 } from '../remoteRead';
 import { RemoteCall, TAIL_MAX, operandsOf } from '../remoteScript';
 import { RemoteRun } from '../remoteSsh';
@@ -507,6 +508,40 @@ test('S4-T9: the context key follows the name and the answer', () => {
   }
   assert.equal(readsKey(NAME, 'junk'), true, 'a damaged answer list hid the items instead of asking again');
   assert.equal(readsKey(`Creds: other-host / ${S}`, no), true, 'the answer of one host was applied to another');
+});
+
+test('S4-T5b: what Asked shows for a terminal is the person\'s words of the tail, earliest first, with the same rules as the local file', async () => {
+  const lines = [said('first'), ai('t'), asks('q1'), said('second'), '{broken half line', said('third')];
+  assert.deepEqual(promptsSaid({ kind: 'lines', lines, note: '' }), { asked: ['first', 'second', 'third'], refusal: '' });
+
+  const NOTE = 'Only the last 4 MiB of this session were read, so its first prompts are not shown.';
+  assert.deepEqual(promptsSaid({ kind: 'lines', lines, note: NOTE }), { asked: ['first', 'second', 'third'], refusal: NOTE }, 'the cut note was not carried beside the prompts');
+  assert.deepEqual(promptsSaid({ kind: 'lines', lines: [ai('t')], note: '' }), { asked: [], refusal: NOTHING_OF_YOURS }, 'a tail without a prompt was not the local sentence');
+  assert.deepEqual(promptsSaid({ kind: 'lines', lines: [ai('t')], note: NOTE }), { asked: [], refusal: NOTE }, 'a part of a session without a prompt claimed nothing was ever written');
+  assert.deepEqual(promptsSaid({ kind: 'refused', refusal: 'ssh said no' }), { asked: [], refusal: 'ssh said no' }, 'the road\'s refusal was changed');
+
+  const long = said('x'.repeat(MOST_PER_PROMPT + 10));
+  const cut = promptsSaid({ kind: 'lines', lines: [long], note: '' }).asked[0] ?? '';
+  assert.ok(cut.length < MOST_PER_PROMPT + 100 && cut.includes('(cut here'), 'a long prompt was not cut as the local reader cuts it');
+  const many = Array.from({ length: MOST_PROMPTS + 5 }, (_, index) => said(`p${index}`));
+  const kept = promptsSaid({ kind: 'lines', lines: many, note: '' }).asked;
+  assert.equal(kept.length, MOST_PROMPTS, 'more prompts than the local reader shows were handed over');
+  assert.equal(kept[0], 'p0', 'the earliest prompts are not the ones kept');
+});
+
+test('S4-T5b: the same lines give the same prompts from a file and from the road (one rule, not two copies)', async () => {
+  const lines = [said('alpha'), ai('t'), said('b'.repeat(MOST_PER_PROMPT + 5)), said('gamma')];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-prompts-'));
+  try {
+    const file = path.join(dir, 'session.jsonl');
+    fs.writeFileSync(file, lines.join('\n') + '\n');
+    const local = await promptsFrom(file);
+
+    assert.equal(local.kind, 'said');
+    assert.deepEqual(promptsSaid({ kind: 'lines', lines, note: '' }).asked, local.kind === 'said' ? local.said : [], 'the road and the file read one session into different prompts');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('S3-T11: the host road says five different things', async () => {

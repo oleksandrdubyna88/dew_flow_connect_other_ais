@@ -22,7 +22,9 @@ import {
   askFromTerminal,
   chatWithOtherAi,
   chooseFromBug,
+  addFromTerminal,
   noteChatDoor,
+  takeFromTerminal,
   takeTheQuestion,
 } from './chatCommand';
 import { followRenames } from './chatFollow';
@@ -747,6 +749,36 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
           code: 'question-not-added',
           title: 'The question could not be added.',
           detail: asText(reason),
+        });
+      });
+    }),
+    // The same two verbs for a `Creds: <host> / <session>` terminal: the question is read off the Claude session on that machine over ssh
+    // (the road of `remoteSessionHost`), and the items sit in the terminal panel's overflow while the terminal reads a session. Each
+    // records its door FIRST. THE CATCH LOGS A FIXED SENTENCE and passes no error and no message on: a V8 `JSON.parse` error quotes its
+    // input, and here the input is the transcript.
+    vscode.commands.registerCommand('coai.takeFromTerminal', () => {
+      noteChatDoor('take');
+      takeFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal).catch(() => {
+        console.error('coai.takeFromTerminal failed');
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'takeFromTerminal',
+          code: 'question-not-taken-from-terminal',
+          title: 'The question could not be taken from the terminal.',
+        });
+      });
+    }),
+    vscode.commands.registerCommand('coai.addFromTerminal', () => {
+      noteChatDoor('add');
+      addFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal).catch(() => {
+        console.error('coai.addFromTerminal failed');
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'addFromTerminal',
+          code: 'question-not-added-from-terminal',
+          title: 'The question could not be added from the terminal.',
         });
       });
     }),

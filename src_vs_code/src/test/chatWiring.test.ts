@@ -479,7 +479,10 @@ const OUR_CHAT_ACTIVE = "activeWebviewPanelId == 'coaiChat'";
 /** Which commands a person can actually open a chat with, TAKEN FROM THE MANIFEST rather than typed. */
 function doorCommands(): readonly string[] {
   const menus = MANIFEST.contributes.menus;
-  const fromMenus = [...(menus['webview/context'] ?? []), ...(menus['editor/context'] ?? [])];
+  // The terminal panel's title bar is a door too: its button and the two overflow items (E2.S4) open a chat, and only `view/title` rows
+  // whose `when` names the terminal view do. The panel's own rows (`view == coai.panel`) open none.
+  const fromTerminalTitle = (menus['view/title'] ?? []).filter((one) => /\bview == terminal\b/u.test(one.when ?? ''));
+  const fromMenus = [...(menus['webview/context'] ?? []), ...(menus['editor/context'] ?? []), ...fromTerminalTitle];
   const offered = [...fromMenus, ...MANIFEST.contributes.keybindings.filter((one) => !actsOnOurPicker(one))]
     .map((one) => one.command ?? '')
     .filter((one) => one.length > 0 && !ACTS_INSIDE_A_CHAT.includes(one));
@@ -573,6 +576,21 @@ test('each door offered by the manifest records itself, once, before it does any
     assert.ok(handler.indexOf(CALL) < work,
       command + ' records the invocation after the work that can refuse it, so a refusal goes uncounted');
   }
+});
+
+test('S4-T8: the terminal doors are found in the manifest and each records its own short name first', () => {
+  const doors = doorCommands();
+  const source = read('src/extension.ts');
+
+  for (const [command, door] of [['coai.takeFromTerminal', 'take'], ['coai.addFromTerminal', 'add'], ['coai.askFromTerminal', 'terminal']] as const) {
+    assert.ok(doors.includes(command), command + ' is a door of the terminal title bar and the census does not find it');
+    const at = source.indexOf("registerCommand('" + command + "'");
+    assert.notStrictEqual(at, -1, command + ' is registered by nothing');
+    const handler = source.slice(at, source.indexOf('registerCommand(', at + 20));
+    assert.ok(handler.indexOf("noteChatDoor('" + door + "')") >= 0, command + ' does not record as the door ' + door);
+    assert.ok(handler.indexOf('noteChatDoor(') < handler.indexOf('(chatPanels'), command + ' records after the work that can refuse it');
+  }
+  assert.ok(!doors.includes('coai.help') && !doors.includes('coai.terminalHosts'), 'a panel title command is counted as a door');
 });
 
 test('nothing records a door the manifest does not offer', () => {

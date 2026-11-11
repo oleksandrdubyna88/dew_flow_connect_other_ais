@@ -631,6 +631,7 @@ extension that crosses to another machine, so its shape is fixed by what can go 
 - **What comes back is input from another machine.** It is parsed by a strict frame (a data line starts with `:`, so no byte of a transcript can end a section), never run, never used as a local path, never logged and never
   part of an error's text. The log of a call holds the host, the session, how it ended and ssh's own stderr tail — nothing else.
 - **A consent stands before the first call** (S3), and the road re-checks the terminal just before each spawn.
+- **Who reaches it** (S4): the `chat` module depends on the remote reader through ONE entry, `readRemoteSession(terminal, purpose)` of `remoteSessionHost.ts` — from `chatCommand.ts` (*take / add the question* from a terminal) and from `chatHooks.ts` (*Asked* of a terminal conversation). Nothing else spawns `ssh`. The words of the doors are one pure module (`waitingSaid.ts`), shared with the local road.
 
 Details: `module_extension.md`, *The remote reader's contract: the script, the frame and the ssh edge (E2.S2)*.
 

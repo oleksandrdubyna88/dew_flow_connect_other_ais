@@ -1,5 +1,5 @@
 import { lastAsked } from './claudeQuestion';
-import { namedAmong, projectDirNames } from './claudeSessions';
+import { NOTHING_OF_YOURS, namedAmong, projectDirNames, promptsIn } from './claudeSessions';
 import { CredsName, credsSession } from './credsSession';
 import { oneAtATime } from './oneAtATime';
 import { RemoteCandidate, RemoteRead, TitledSession, UNREADABLE_SAID, Unreadable, readRemote } from './remoteFrame';
@@ -289,6 +289,20 @@ export function answerFrom(found: Found, purpose: Purpose, host: string): Remote
 /** A cut tail with no question in it says so: the person is not told "nothing was asked" about a session that was only half read. */
 function questionFrom(found: Found, host: string): RemoteAnswer {
   return found.cut && lastAsked(found.lines).kind === 'nothing' ? refuse(SAID.truncated(host)) : { kind: 'lines', lines: found.lines, note: '' };
+}
+
+/**
+ * What *Asked* shows for a terminal's conversation, from the road's answer: what the person wrote in the lines that were read — the
+ * local reader's own rule, over lines — and the answer's note beside it. A read of only the last part of a session that holds no
+ * prompt says so by the note, and never that nothing was written; a refusal of the road is handed on as it is.
+ */
+export function promptsSaid(answer: RemoteAnswer): { readonly asked: readonly string[]; readonly refusal: string } {
+  if (answer.kind === 'refused') {
+    return { asked: [], refusal: answer.refusal };
+  }
+  const asked = promptsIn(answer.lines);
+
+  return { asked, refusal: answer.note.length > 0 ? answer.note : asked.length > 0 ? '' : NOTHING_OF_YOURS };
 }
 
 // ─────────────────────────────────── The road ───────────────────────────────────

@@ -3,7 +3,7 @@ import type { ChatPanels } from './chatPanels';
 import { threads } from './chatThread';
 import { notify, notifyAndAsk } from './notify';
 import { askPerson } from './personWait';
-import { HostAnswer, PickRow, Picked, Purpose, RemoteAnswer, RoadSeams, answersOf, onePerTerminal, reachOf, remoteRoad, withAnswer, withoutHost } from './remoteRead';
+import { HostAnswer, PickRow, Picked, Purpose, RemoteAnswer, RoadSeams, answersOf, onePerTerminal, reachOf, readsKey, remoteRoad, withAnswer, withoutHost } from './remoteRead';
 import { runRemote } from './remoteSsh';
 
 /**
@@ -154,10 +154,16 @@ async function changeHostsOf(store: AnswerStore): Promise<void> {
  * The road over a `Memento` and a run seam. `run` is `runRemote` unless a test says otherwise (S3-H1 passes a fake that counts).
  * The per-terminal state — the picked id and the latch — lives here, in `WeakMap`s keyed by the terminal object, so it goes with it.
  */
-export function remoteSessionsOf(state: vscode.Memento, run: RoadSeams['run'] = runRemote): RemoteSessions {
+export function remoteSessionsOf(state: vscode.Memento, run: RoadSeams['run'] = runRemote, changed: () => void = () => undefined): RemoteSessions {
   const picked = new WeakMap<vscode.Terminal, Picked>();
   const latch = onePerTerminal<vscode.Terminal>();
-  const answers: AnswerStore = { read: () => state.get(TERMINAL_HOSTS_KEY), write: (rows) => state.update(TERMINAL_HOSTS_KEY, rows) };
+  const answers: AnswerStore = {
+    read: () => state.get(TERMINAL_HOSTS_KEY),
+    write: async (rows) => {
+      await state.update(TERMINAL_HOSTS_KEY, rows);
+      changed();
+    },
+  };
   const seamsOf = (terminal: vscode.Terminal): RoadSeams => ({
     store: answers,
     now: () => new Date().toISOString(),
@@ -191,11 +197,21 @@ let bound: RemoteSessions | undefined;
 /** The ssh call of the bound road: `runRemote`, until the test door replaces it. */
 let boundRun: RoadSeams['run'] = runRemote;
 
-/** Activation: the one road of this window, its terminal listener and the panel's command. */
+/** The context key the terminal panel's two overflow items follow: the active terminal reads a session and its host is not answered "no" (`readsKey`). */
+const READS_KEY = 'coai.terminalReadsSession';
+
+function setReadsKey(answers: AnswerStore): void {
+  void vscode.commands.executeCommand('setContext', READS_KEY, readsKey(vscode.window.activeTerminal?.name ?? '', answers.read()));
+}
+
+/** Activation: the one road of this window, its terminal listener, the context key of the terminal items and the panel's command. */
 export function bindRemoteSessions(context: vscode.ExtensionContext): RemoteSessions {
-  const sessions = remoteSessionsOf(context.globalState, (host, session, operands, script) => boundRun(host, session, operands, script));
+  // The key is set again whenever an answer is written — by the first read of a host, or from the panel's list.
+  const sessions = remoteSessionsOf(context.globalState, (host, session, operands, script) => boundRun(host, session, operands, script), () => { setReadsKey(sessions.answers); });
   bound = sessions;
+  setReadsKey(sessions.answers);
   context.subscriptions.push(
+    vscode.window.onDidChangeActiveTerminal(() => { setReadsKey(sessions.answers); }),
     vscode.window.onDidCloseTerminal((closed) => { sessions.forget(closed); }),
     vscode.commands.registerCommand('coai.terminalHosts', () => sessions.changeHosts()),
   );
