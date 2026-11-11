@@ -35,6 +35,34 @@ reading Claude's session files), [../research/PLAN_a_conversation_survives_a_rel
   clipboard." Assumed, to be confirmed in the re-review: the door keeps the `autoSend` setting of the other doors.
   This second change stopped the plan.)
 
+### Re-review for epoch 2
+
+Narrowed: yes — the door no longer copies a VS Code terminal selection for the person: the person copies and the door reads the clipboard (decision 3, DoD item 1), so the selection copy, its clipboard restore, their tests and their real-window steps leave E1
+
+| Work | Where | Verdict | Action |
+|---|---|---|---|
+| the plan, three epics, 0b78beee | pushed, unmerged (PR #971) | fits | kept — revised in place by this re-review (decision 3, the capture, the test plan, DoD item 1, R3) |
+| plan round 1 folded in, epoch 1 opened, 549c633d | pushed, unmerged (PR #971) | fits | kept |
+| change 1.1: real-window checks on a pre-release VSIX before each tag, 7a6bc01b | pushed, unmerged (PR #971) | fits | kept — that check found change 1.2 |
+| E1 stories document, b8b1f127 | pushed, unmerged (PR #971) | fits | kept — its E1.S1 (and the S3 sentences it names) is rewritten for epoch 2 as the fix forward below |
+| rules pin to 9b1d668, 0d43e191 | main (#969), merged into the branch | fits | kept — not this plan's work |
+| E1.S1 `borrowClipboard` extracted from `captureSelection`, restore in `finally` (S1-T1…T5, T10, T11), 9ac886c9 | pushed, unmerged (PR #971) | fits | kept — the Claude-tab door uses it |
+| E1.S1 terminal copy: `TERMINAL_COPY`, `NO_TERMINAL_SELECTION`, `captureTerminalSelection`, `terminalPassage` over a borrow, the borrow and progress in `fromTheTerminal` (S1-T6…T9, S1-H1), 9ac886c9 | pushed, unmerged (PR #971) | cut | fix forward in PR #971 — E1.S1 epoch-2 revision: the door reads the clipboard; `fromTheTerminal` keeps the one latch |
+| E1.S2 cornerstone spec by Fable, 3c9d0ac2 | pushed, unmerged (PR #971) | fits | kept |
+| E1.S2 the `terminal` source, its identity, the steal filter, the road back, 1f7c14a5 | pushed, unmerged (PR #971) | fits | kept — the source does not depend on how the text arrives |
+| E1.S3 the door: command, button, chord, skip-list default, `!terminalFocus`, palette entry, door count, agent mode off, 6d48a190 | pushed, unmerged (PR #971) | fits | kept |
+| E1.S3 the door's sentences and the help paragraph that describe the selection copy (`no-terminal-here`, `nothing-selected-in-terminal`, `terminal-door-failed`; help in five languages), 6d48a190 | pushed, unmerged (PR #971) | cut | fix forward in PR #971 with the E1.S1 epoch-2 revision |
+| rules pin to 1341995, ee8ad53c | main (#970), merged into the branch | fits | kept — not this plan's work |
+| E1 review: an unusable terminal name refused, `threadUnder`, one `STILL_COPYING`, the host scenarios moved out, 00d97dcb | pushed, unmerged (PR #971) | fits | kept |
+| E1 review: the two-message limit (VS Code's own "no selection" toast) in the help and the docs, 00d97dcb | pushed, unmerged (PR #971) | cut | fix forward in PR #971 — the door runs no copy command, so the limit and its text go |
+| PR review: the terminal's name read once, the road back in the help, Sonar notes, 8adc29d3 | pushed, unmerged (PR #971) | fits | kept |
+| PR review: the help on what the borrow cannot give back (an empty or image clipboard), 8adc29d3 | pushed, unmerged (PR #971) | cut | fix forward in PR #971 — the terminal door borrows nothing |
+| rules pin to 153e6b5, c1c36ce2 | main (#973), merged into the branch | fits | kept — not this plan's work |
+| shared-rule citations at `.agents/conventions`, 7b39a706 | main (#972), merged into the branch | fits | kept — not this plan's work |
+| rules pin to 26589a5, 63a868f2 | main (#974), merged into the branch | fits | kept — not this plan's work |
+| PR review: the `none` fallback apart from the door's refusal, "switch conversations" in the help, the ambiguous-name host case, 8fc00cba | pushed, unmerged (PR #971) | fits | kept |
+| change 1.2 and the stop, f540ed97 | pushed, unmerged (PR #971) | fits | kept — the change this re-review answers |
+
 ## The symptom
 
 The owner, 2026-11-10: six or more Claude Code sessions now run as the **CLI** on two Linux VMs, several
@@ -62,20 +90,27 @@ second opinion they used several times an hour.
    terminal is copy/paste, so no context-menu door.)
 2. **Any terminal** is a source. The panel title is the terminal name without a leading `Creds: `
    (`ai1-dev3 / small-tasks`); other terminals keep their full name.
-3. **No selection** → the warning *"Select text in the terminal first"*, nothing sent.
+3. **The person copies; the door takes the clipboard** (owner, 2026-11-11, change 1.2). In Claude's view a mouse
+   drag already puts the text on the local clipboard; in a plain terminal the owner's right-click copies. The door
+   runs no copy command and synthesises no keystroke. An empty clipboard → *"Copy the text first, then press Ask other
+   AI."*, nothing sent. Any non-empty clipboard text may be sent — the door cannot tell a fresh copy from an old one,
+   and no guard pretends to; it follows the `autoSend` setting of the other doors. (Replaces 2026-11-10's "No
+   selection → 'Select text in the terminal first'".)
 4. **Back to source** brings that terminal forward (`terminal.show()`), on request only — nothing switches
    by itself.
 5. For a `Creds: <host> / <session>` terminal the extension **reads the remote Claude session over plain ssh**
    (checked by the owner: `ssh ai1-dev2 echo ok` answers from Windows PowerShell with no prompt; each folder
    — `ai1-dev2`, `ai1-dev3`, `ai1-root` — is a different Linux user with its own `~/.claude`), so *take the
    question*, *add the question* and *Asked* work. **The AI runs locally on Windows**, as today. Other
-   terminals: selection only.
+   terminals: the copied text only (epoch 2).
 6. **After a reload or restart**, a conversation re-attaches to the terminal with the same name, **only for
    `Creds: …` terminals** and only when it is unambiguous.
 7. **Order:** a minimal version first, released and checked in a real window; then the ssh reading; then
    the polish.
-8. The owner's VM tmux has `mouse off` (`ssh ai1-dev2 tmux show -g mouse` → `mouse off`, 2026-11-10), so a
-   mouse drag is an xterm selection, which VS Code can copy.
+8. The owner's VM tmux has `mouse off` (`ssh ai1-dev2 tmux show -g mouse` → `mouse off`, 2026-11-10). The inference
+   drawn from it on 2026-11-10 — "so a mouse drag is an xterm selection VS Code can copy" — was DISPROVEN by the first
+   real-window check (2026-11-11): the Claude CLI captures the mouse itself, its drag is its own selection copied to
+   the tmux buffer and the local clipboard, and VS Code's terminal has none (Shift+drag the same). Hence 1.2.
 
 The question consultants were asked before this plan (consult `f7a90c66…`, 2026-11-10; codex and gemini
 answered, one row refused for its folder grant). What was taken from them is marked *(consultants)* below.
@@ -138,13 +173,14 @@ All paths under `src_vs_code/`.
     `when: !terminalFocus`, so the palette no longer offers the file door while a terminal has focus (R9
     measures that the palette sees the terminal's focus; if it does not, the result is recorded and the
     defect stays as today, named under *What this plan does NOT do*).
-- **Capture.** `workbench.action.terminal.copySelection`, inside the existing clipboard borrow: extract
-  `borrowClipboard(clipboard, run)` from `captureSelection` (`selectionCapture.ts:221-252`) with the marker
-  and the restore rule unchanged, and the restore moved into `finally` so a rejected `executeCommand` still
-  restores. `captureSelection` keeps its Windows reach check and calls the extracted function. The terminal
-  path is serialised with `oneAtATime` like the keyboard path. The marker still on the clipboard means *no
-  selection* → the owner's sentence. Only text survives the borrow (an image on the clipboard is lost) —
-  already true of the Claude-tab door (`selectionCapture.ts:33`).
+- **Capture (epoch 2, change 1.2).** The terminal door READS the clipboard text and nothing else: no copy command, no
+  borrow, no marker, no restore — the clipboard is left exactly as the person left it. Empty or whitespace-only text →
+  the owner's sentence (decision 3); a read that fails → a sentence naming the failure. The read runs inside the SAME
+  one-at-a-time latch as the Claude-tab keyboard path (`chatCapture.ts`, `oneCapture`), because that path writes a
+  temporary marker to the clipboard: a terminal press during it must be refused by the latch, never deliver the
+  marker *(consultants, 5faf4657)*. The extraction of `borrowClipboard` from `captureSelection` built in epoch 1
+  stays: the Claude-tab door uses it, and its restore-in-`finally` fixes stand on their own. Only text is read — an
+  image on the clipboard reads as empty.
 - **Source and key.** A pure `src/terminalSource.ts`: `terminalLabel(name)` (drops `Creds: ` at the start
   only; `Creds run: x`, `Creds VPN: x` stay whole), `terminalPassage(capture)`, `oneLiveNamed(names, name)`
   (`one | none | several`, never a guess), and `tabSourced(known, sourceOf)` that removes terminal-sourced
@@ -175,7 +211,7 @@ All paths under `src_vs_code/`.
 
 - **Which terminals.** `credsSession(name)` matches strictly
   `^Creds: ([A-Za-z0-9][A-Za-z0-9._-]*) / ([A-Za-z0-9][A-Za-z0-9_-]*)$` → `{host, session}`; anything else is
-  selection-only. A name that starts with `Creds: ` but fails the pattern still shows the two overflow items,
+  clipboard-only (the copied text, no session reading). A name that starts with `Creds: ` but fails the pattern still shows the two overflow items,
   and pressing one answers with a sentence naming the part that failed (plan round 1), so the person is never
   left guessing why a creds terminal reads nothing. A leading `-` is impossible by the pattern (no ssh option
   injection); a session name with
@@ -183,7 +219,7 @@ All paths under `src_vs_code/`.
 - **The person agrees to each host once.** The terminal name is only a name: any program can open a
   terminal called `Creds: x / y`. So the first remote read for a host asks *"Read the Claude session on
   “x” over ssh?"*; the answer is remembered per host in `globalState`, and a "no" makes that host
-  selection-only until the person changes it from the panel.
+  clipboard-only until the person changes it from the panel.
 - **One ssh call per question on the registry path, read-only.** Local `ssh` (Windows OpenSSH where the host is Windows, the
   side the terminals run on), argv only, no shell, and **no `-n`** (it would give the remote `sh -s` an empty
   stdin — plan round 1): `-T -o BatchMode=yes -o ConnectTimeout=5 -o
@@ -243,6 +279,9 @@ All paths under `src_vs_code/`.
 - No reading of a terminal's screen buffer (`shellIntegration` streams are raw escape sequences from the
   moment of subscribing — rejected).
 - No proposed API (`Terminal.selection`): an installed extension cannot use one.
+- No check that the clipboard text is fresh or came from this terminal (epoch 2): the person copies, and any
+  non-empty clipboard text may be sent under the `autoSend` setting. An "unchanged since last time" guard was
+  rejected: the same text copied twice on purpose cannot be told from an old copy *(consultants, 5faf4657)*.
 - No following of a renamed terminal and no re-check of a picked session against a newer namesake: the
   owner did not ask for them. While the terminal lives, its conversation is keyed by the `Terminal` object, so a
   rename keeps it; after a reload the recorded name (the name at the first press) no longer matches a renamed
@@ -288,14 +327,17 @@ All paths under `src_vs_code/`.
 - **Pure (`npm test`)**: `terminalSource` (label, passage, `oneLiveNamed` 0/1/2, the steal: a Claude tab with a
   terminal conversation's label gets `new`, not `rekey`, and the test goes RED without the filter);
   `borrowClipboard` (restore when untouched, no restore when changed, empty clipboard never overwritten, marker
-  back = nothing copied, a rejecting `run` still restores; the existing `captureSelection` tests stay green);
+  back = nothing copied, a rejecting `run` still restores; the existing `captureSelection` tests stay green); the
+  terminal capture (epoch 2): the clipboard text is delivered and the clipboard is not written; empty and
+  whitespace-only give the sentence; a failing read gives its own sentence; no command is executed; the same text
+  twice is delivered twice; a press while the keyboard path holds the latch is refused, never the marker;
   `chatStore` (terminal round trip; empty or non-string name refused; `sameSource`; `agreeOnOrigin`);
   `chatReturn` (live and recorded terminal routes); the agent rule; manifest tests (the button, the chord with
   `terminalFocus`, every `terminalFocus` binding's command in the skip-list default, no old chord matching under
   `terminalFocus`, the door counted).
-- **Host scenario (`npm run test:host`)**: a terminal named `Creds: h / s` echoes a probe; `selectAll`; the door's
-  capture returns it and restores the clipboard; after `clearSelection` the owner's sentence and no clipboard write;
-  `inspect('terminal.integrated.commandsToSkipShell').defaultValue` holds the id.
+- **Host scenario (`npm run test:host`)**: with a terminal named `Creds: h / s` active, a probe text seeded on the
+  real clipboard is what the door delivers, and the clipboard still holds it afterwards; an empty clipboard gives the
+  owner's sentence; `inspect('terminal.integrated.commandsToSkipShell').defaultValue` holds the id.
 - **Stage 2**: operand validation against hostile strings through a real `sh -c`; the parsers (banner before the
   sentinel, registry JSON, NUL lists, a cut tail, the title rows); the script itself run by `sh -s` on Linux CI
   against a temporary `HOME` with a fake `tmux` and `ps` on `PATH` — the text sent to the VM is the text under
@@ -313,7 +355,8 @@ All paths under `src_vs_code/`.
 |---|---|---|
 | R1 | In a `Creds:` tmux terminal running `cat -v`, and with the Claude TUI, Ctrl+Alt+A prints nothing in the pane and the chat opens. | E1 |
 | R2 | A Claude tab is the active editor and the terminal has focus: Ctrl+Alt+A runs the terminal door. | E1 |
-| R3 | The button copies the selection after the click moved focus; split terminals pick the active one; the clipboard is restored; no selection → the sentence, clipboard untouched (VS Code's own "The terminal has no selection to copy" may appear first — expected, not a failure). | E1 |
+| R3 | (epoch 2) In Claude's view, drag to select (it copies), then the button: the chat opens with that text, and no VS Code "no selection" warning appears. In a plain terminal, right-click to copy, then Ctrl+Alt+A: the same. With split terminals, the chat is named after the active one. With an empty clipboard: "Copy the text first, then press Ask other AI." | E1 |
+|  | First run, 2026-11-11, VSIX 0.85.901 (epoch 1's copySelection): FAILED — a drag in Claude's view is not a VS Code selection; Shift+drag the same. Led to change 1.2. |  |
 | R4 | `terminal.name` stays `Creds: host / session` while tmux and Claude send title sequences. | E1 |
 | R5 | Back to source shows the right terminal, in the panel and in the editor area. | E1 |
 | R6 | One ssh call from Windows: time to the first answer (target under 4 s); the owner's real `Host` blocks with `LocalForward`. | E2 |
@@ -325,9 +368,9 @@ All paths under `src_vs_code/`.
 
 ## Definition of Done
 
-- [ ] From any terminal, the title-bar button and Ctrl+Alt+A open a coai chat with the selected text, named
-      after the terminal; with no selection the owner's sentence and nothing sent; no Ctrl+C ever reaches the
-      terminal.
+- [ ] From any terminal, the title-bar button and Ctrl+Alt+A open a coai chat with the text the person copied,
+      named after the terminal; with an empty clipboard the owner's sentence and nothing sent; the terminal door
+      synthesises no keystroke and runs no copy command, and leaves the clipboard as it was.
 - [ ] A Claude tab can never take a terminal's conversation, and the old chords never fire in a terminal.
 - [ ] A terminal conversation is saved with a `terminal` source, has no agent mode, and *back to source*
       brings its terminal forward or says why it cannot.
@@ -351,7 +394,8 @@ concrete stories in the stories documents, within the quota, and updates the led
 
 *Question consultants (2026-11-10, codex and gemini), used for this split.* What is important, as areas:
 **(a)** clipboard and focus capture — never a synthetic Ctrl+C into a terminal, the restore in `finally`, the meaning
-of the marker; **(b)** source identity against display label — the `terminal` source kind, the full name as the
+of the marker (epoch 2: for the terminal door this area is the clipboard read and the shared latch; the restore and
+the marker are the Claude-tab door's); **(b)** source identity against display label — the `terminal` source kind, the full name as the
 identity, a Claude tab never re-keys a terminal conversation, re-attach only with one live terminal and one orphan;
 **(c)** local against remote execution — the vendor CLI stays local, no agent mode, a remote transcript is context
 only; **(d)** ssh command construction, quoting, cancellation and limits; **(e)** absent, ambiguous, unreadable and
@@ -370,13 +414,14 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
 
 ### E1 — The terminal door (stage 1, the minimal version) · depends on nothing
 
-- **Goal.** From any terminal, the title-bar button and Ctrl+Alt+A open a chat with the selected text, named after the
-  terminal. The conversation is saved with a `terminal` source, has no agent mode, and *back to source* shows its
-  terminal. Selection only: reading a Claude session is E2.
+- **Goal.** From any terminal, the title-bar button and Ctrl+Alt+A open a chat with the text the person copied (epoch 2,
+  change 1.2), named after the terminal. The conversation is saved with a `terminal` source, has no agent mode, and *back to source* shows its
+  terminal. The copied text only: reading a Claude session is E2.
 - **Scope.** `src_vs_code` only. `package.json` (the command `coai.askFromTerminal`, the `view/title` button, the
   `terminalFocus` chord, the skip-shell default, `!terminalFocus` on the existing chords and on the palette entry of
   `coai.chatWithOtherAi`); new `src/terminalSource.ts`; `fromSession` `false` for every terminal conversation;
-  `borrowClipboard` extracted in `src/selectionCapture.ts`; the `terminal` kind in `src/chatStore.ts`; `deliverPassage`
+  `borrowClipboard` extracted in `src/selectionCapture.ts` (kept for the Claude-tab door); the terminal capture reads
+  the clipboard (epoch 2); the `terminal` kind in `src/chatStore.ts`; `deliverPassage`
   and its three callers (`src/chatCommand.ts`); the agent rule beside `agentOffered` (`src/chatAccessRules.ts`) at its
   three call sites; `BackTo` and `recordedRoute` (`src/chatReturn.ts`, `src/chatReturnCommand.ts`); the `tabSourced`
   filter where a panel is re-keyed (`src/chatCapture.ts`, `src/chatSessionJoin.ts`); `Door` (`src/chatDoors.ts`); the
@@ -399,7 +444,7 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
 
 - **Goal.** For a `Creds: <host> / <session>` terminal, *take the question*, *add the question* and *Asked* read the
   Claude session on the VM through a read-only ssh call. The AI still runs locally. Every other terminal stays
-  selection-only.
+  clipboard-only (the copied text).
 - **Scope.** `credsSession(name)`; the ssh runner (argv, options, the 15 s kill, the 8 MiB cap, the log rule) and the
   POSIX script on stdin; the local parsers over the existing pure rules (`src/claudeQuestion.ts`,
   `src/claudeSessions.ts`); identity — the registry first, the title fallback, the QuickPick; `takeFromTerminal` /

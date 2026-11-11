@@ -1,6 +1,9 @@
 # PLAN — E1 stories: the terminal door
 
-> Status: **coded, 2026-11-10 — S1, S2 and S3 on `feat/chat-from-a-terminal`; code gate round 1 `proceed`; review fixes in progress; not merged.** Epic E1 of
+> Status: **revised for epoch 2, 2026-11-11 — the parent is stopped for re-review at change 1.2 (the terminal door takes the
+> clipboard). S1, S2 and S3 are coded on `feat/chat-from-a-terminal` (PR #971, not merged); the re-review judged S2 and most of
+> S3 `fits` and S1's terminal copy `cut`. The fix forward is § 5 *E1.S1 — epoch-2 revision*: not coded, and not started
+> until the owner approves epoch 2 (the record says `Narrowed: yes`).** Epic E1 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics`, and its § *Stage 1*).
 > Written by Opus when the epic started. A stories document keeps no change ledger: a change to this epic is an entry
 > in the parent.
@@ -18,20 +21,28 @@ CredsForDevs terminal called `Creds: <host> / <session>`. In such a terminal, *C
 Ctrl+Alt+A does nothing, the palette says *"Open this from a Claude Code session tab or from a file"*, and when the last
 editor tab is a file the command silently takes that FILE's text (parent § *The symptom*, § *What the code does today*).
 
-When E1 is done:
+When E1 is done (items 1–3 as revised for epoch 2, parent change 1.2; the epoch-1 text is kept below them):
 
-1. From any terminal, the title-bar button **Ask other AI** and Ctrl+Alt+A open a chat with the selected text. The
-   chat is named after the terminal (`Creds: ` dropped from the start of the title only).
-2. With no selection, the person sees *"Select text in the terminal first"* and nothing is sent.
-3. No synthetic Ctrl+C ever reaches a terminal. The copy is `workbench.action.terminal.copySelection`, inside the
-   clipboard borrow, and the clipboard is given back even when the copy command rejects.
+1. From any terminal, the title-bar button **Ask other AI** and Ctrl+Alt+A open a chat with the text the person copied —
+   the clipboard text, read as it is. The chat is named after the terminal (`Creds: ` dropped from the start of the title
+   only).
+2. With an empty clipboard (or only white space, or an image), the person sees *"Copy the text first, then press Ask other
+   AI."* and nothing is sent. A clipboard that cannot be read gives its own sentence.
+3. No synthetic Ctrl+C ever reaches a terminal, and the terminal door runs no copy command and never writes the
+   clipboard. It reads under the same one-at-a-time latch as the Claude-tab keyboard path, so it never delivers that
+   path's marker.
+
+   *Epoch 1, superseded:* 1 said "the selected text"; 2 said *"Select text in the terminal first"* for no selection; 3
+   said the copy is `workbench.action.terminal.copySelection` inside the clipboard borrow, with the clipboard given back.
+   The first real-window check (VSIX 0.85.901, 2026-11-11) showed that a drag in the Claude CLI is not a VS Code selection.
 4. The conversation is saved with a `terminal` source (the full terminal name). It has no agent mode. *Back to
    source* brings its terminal forward, or says why it cannot.
 5. A Claude tab can never take a terminal's conversation, and the old chords never fire in a terminal.
 
 The silent failures this epic must not ship: a stolen conversation (a Claude tab that re-keys a terminal's
 conversation by label gives no error — the answer simply arrives in the wrong place), a SIGINT sent to ssh/tmux/claude,
-and a clipboard left holding our marker.
+and a clipboard left holding our marker — or (epoch 2) a terminal press that sends the Claude-tab path's marker as the
+passage. An old clipboard text that the person did not mean is NOT one of these: decision 3 accepts it, and the help says it.
 
 ## 2. What exists — verified at `ad5f783c`, 2026-11-10
 
@@ -104,6 +115,10 @@ From the worktree root: `node .agents/conventions/tools/plan-lifecycle.mjs` befo
 S2's spec may refine C2. If it changes a name or a signature below, it updates this section and S3's brief in the
 same commit.
 
+- **C1r — the terminal read (S1 owns; epoch 2).** In `src/terminalSource.ts`, pure:
+  `readCopiedText(read: () => PromiseLike<string>): Promise<Capture>` and `terminalPassage(text: string): Capture`, with
+  `NOTHING_COPIED = 'Copy the text first, then press Ask other AI.'`. The host half stays `fromTheTerminal(): Promise<Capture>`
+  in `src/chatCapture.ts`. It replaces C1's use by the terminal; C1 itself stays for the Claude-tab door.
 - **C1 — the borrow (S1 owns).** In `src/selectionCapture.ts`:
   `borrowClipboard<T>(clipboard: Clipboard, run: () => PromiseLike<T>): Promise<Borrowed<T>>`, with
   `Borrowed<T> = { readonly landed: boolean; readonly text: string; readonly outcome: T }`. `landed` is false when the
@@ -120,8 +135,162 @@ same commit.
 ## 5. Stories
 
 Build order: S1, then S2, then S3, one coder at a time on the one branch. Fable may write S2's spec while S1 is coded.
+Epoch 2: the E1.S1 revision below comes after S3, on the same branch, as the fix forward in PR #971 — after the owner
+approves epoch 2.
 
-### E1.S1 — The capture: a terminal's selection through the borrow, never a keystroke
+### E1.S1 — EPOCH-2 REVISION: the terminal door reads the clipboard (fix forward in PR #971)
+
+`model: opus` (spec, this section, written by the re-review's judge, 2026-11-11) · coder: sonnet · review: opus · area (a).
+Not a cornerstone; the ledger line stays `Cornerstones: 1 of 2 — E1.S2`. It replaces the terminal half of the epoch-1 S1
+below (verdict `cut` in the parent's *Re-review for epoch 2*); the borrow half of S1 is kept (verdict `fits`). Not started
+before the owner approves epoch 2 (`Narrowed: yes`).
+
+- **Why.** Parent change 1.2. In the first real-window check (VSIX 0.85.901, 2026-11-11), in a `Creds:` tmux terminal
+  running the Claude CLI, a mouse drag was Claude's own selection, already copied to the local clipboard. VS Code's terminal
+  had no selection, so `copySelection` copied nothing, and the door said *"Select text in the terminal first."* beside VS
+  Code's *"The terminal has no selection to copy"*. Shift+drag gave the same. The owner: the person copies; the door takes
+  the clipboard.
+- **Goal.** The terminal door's text is the clipboard text, read once and never written. Empty or white space only (an
+  image reads as empty) → *"Copy the text first, then press Ask other AI."*; a read that rejects → *"The clipboard could
+  not be read: <reason>"*. No copy command, no borrow, no marker, no restore, no progress line. The read runs inside the
+  ONE `oneCapture` latch of the Claude-tab keyboard path, because that path writes a marker to the clipboard while it
+  runs: a terminal press then is refused with `STILL_COPYING` and never sends the marker (consult 5faf4657). Any non-empty
+  text is sent, the same text twice included (no freshness guard: parent § *What this plan does NOT do*). The send follows
+  **Who presses send** — `sendsImmediately(autoSend, false)`, unchanged. `borrowClipboard` and `captureSelection` stay as
+  they are.
+- **What exists at HEAD `f540ed97`** (verified 2026-11-11; paths under `src_vs_code/` unless they start with `research/`).
+
+| Fact | Where |
+|---|---|
+| The terminal copy to cut: the header comment, `TERMINAL_COPY`, `NO_TERMINAL_SELECTION`, `terminalPassage(borrowed)`, `captureTerminalSelection`; the import of `Borrowed`, `Clipboard`, `borrowClipboard` | `src/terminalSource.ts:7-18`, `:21`, `:24`, `:32-38`, `:50-61`; `:4` |
+| The host half: its import; the shared latch and its refusal; the menu path's clipboard read; `fromTheTerminal` with its progress line | `src/chatCapture.ts:8-9`; `:97` `STILL_COPYING`, `:107` `oneCapture`; `:110-112`; `:123-135` |
+| The host clipboard | `src/chatCapture.ts:76-81` `hostClipboard` |
+| The borrow, KEPT, and its comment that names the terminal door | `src/selectionCapture.ts:265-290` `borrowClipboard`, comment `:248-249`; `:297` `captureSelection` |
+| The door's sentences, code and comments | `src/chatCommand.ts:271-280` `terminalDoorNoTerminal` (title `:278`); `:299` in the comment of `terminalDoorName` (*"while its selection is being copied"*); `:318-327` `terminalDoorNothing` (code `:324`); `:329-340` the comment of `askFromTerminal`; `:356-358` the capture and the empty check |
+| The door's failure notice | `src/extension.ts:677-690`, title `:686` |
+| The help paragraph, five languages | `src/helpContent.ts:294`, `src/helpDe.ts:53`, `src/helpEs.ts:53`, `src/helpRu.ts:53`, `src/helpUk.ts:117` |
+| The unit tests: the terminal copy (to replace) and the borrow (to keep) | `src/test/terminalCapture.test.ts:124-195` (S1-T6…T9); `:48-122` (S1-T1…T5) and `:197` on (S1-T11) |
+| The door's wiring tests that name the capture | `src/test/terminalDoorWiring.test.ts:119-129`, `:131-147` |
+| The help test that names the door | `src/test/helpCoverage.test.ts:47-61` |
+| The host scenario and its registration | `src/test/host/terminalCaptureScenario.ts:1-77` (S3-H1 at `:79-95` stays); `src/test/host/scenarios.ts:21`, `:929-934` |
+| The notification census | `notification-sites.json:118-119`, `:170` |
+| The docs | `research/module_extension.md:13368-13393` (the S1 bullets), `:13489-13496` (`askFromTerminal`), `:13499` (the notify codes), `:13516` (*"a capture borrows the clipboard"*), `:13517-13520` (the accepted two-message limit); `research/module_tests.md:297` (the trigger row), `:306` (the terminal door row) |
+
+- **Files and functions (what and how).**
+  1. `src/terminalSource.ts` — delete `TERMINAL_COPY`, `NO_TERMINAL_SELECTION`, `captureTerminalSelection` and the import
+     of `Borrowed`, `Clipboard`, `borrowClipboard` (keep `Capture`). Add:
+     `export const NOTHING_COPIED = 'Copy the text first, then press Ask other AI.';` (the owner's sentence, decision 3);
+     `terminalPassage(text: string): Capture` — `text.trim().length === 0` → `{ text: '', failure: NOTHING_COPIED }`, else
+     `{ text, failure: '' }`, never trimmed; `readCopiedText(read: () => PromiseLike<string>): Promise<Capture>` —
+     `try { return terminalPassage(await read()); } catch (reason) { … }` with the failure
+     `The clipboard could not be read: ${said}` and `said = reason instanceof Error ? reason.message : String(reason)`. It
+     takes a READ function only, so it cannot write the clipboard or run a command (safe by construction), and it never
+     rejects. Rewrite the header comment (`:7-18`): the door reads what the person copied; why it runs no copy command
+     (change 1.2: a drag in the Claude CLI is not a VS Code selection); still no keystroke, ever. `terminalLabel`,
+     `terminalMatch`, `oneLiveNamed`, `tabSourced` and `tabPanels` do not change.
+  2. `src/chatCapture.ts` — `fromTheTerminal()` becomes `return oneCapture(() => readCopiedText(hostClipboard.read));`: no
+     `withProgress` (the read is instant, and *"Copying the terminal selection…"* would be false). Its comment: ONE latch,
+     because the keyboard path writes a marker to the clipboard while it runs; a terminal press then is refused, never handed
+     the marker (consult 5faf4657). Import `readCopiedText` in place of `captureTerminalSelection` (`:9`). `passageFor`,
+     `oneCapture` and `STILL_COPYING` do not change.
+  3. `src/selectionCapture.ts` — the comment at `:248-249` only: the borrow was extracted so its rule is one tested
+     function; its caller is `captureSelection` (the Claude-tab door); the terminal door does not borrow (epoch 2). No code
+     change; `chatCapture.test.ts` is not edited.
+  4. `src/chatCommand.ts` — `terminalDoorNoTerminal`'s title: *"There is no terminal here — open one, copy the text, then
+     press Ask other AI."*; in the comment of `terminalDoorName` (`:299`) *"while the clipboard is read"* in place of *"while
+     its selection is being copied"*; `terminalDoorNothing`: code `nothing-copied-for-terminal` (was
+     `nothing-selected-in-terminal`), comment *"the clipboard held no text, could not be read, or another capture held the
+     latch"*; the comment of `askFromTerminal` (`:329-340`): *"the text the person copied, read from the clipboard"* in place
+     of *"the selection of a terminal, through VS Code's own copy"*. The order (the name guard, then `fromTheTerminal`) and
+     `sendsImmediately(autoSend, false)` do not change.
+  5. `src/extension.ts:686` — title *"The copied text could not be sent to a chat."*.
+  6. Help, five languages (`helpContent.ts:294` and the four translations): in the **Ask other AI** paragraph, DELETE
+     *"Select text in the terminal."*, *"The selection is copied through the clipboard, and the clipboard is given back."*,
+     the sentence on an empty or image clipboard that is not borrowed (8adc29d3), *"VS Code makes the copy: no key is sent to
+     the program in the terminal."*, *"With nothing selected you see Select text in the terminal first. and nothing is
+     sent."* and *"VS Code may also show its own no selection message first."* (00d97dcb). PUT IN their place (English;
+     translate in the four other files, with the bold label and the italic sentence kept in English): *"Copy the text first.
+     In Claude Code's view a mouse selection is already copied; in another terminal, copy it as you usually do there. Then
+     press the icon in the title bar of the terminal panel, or press `Ctrl+Alt+A` while the terminal has focus. The door reads
+     your clipboard and nothing else: it runs no copy command, sends no key to the program in the terminal, and leaves the
+     clipboard as it is. It sends whatever text is on the clipboard — also text you copied earlier somewhere else — and, like
+     the keys, it follows **Who presses send**. With an empty clipboard (or an image) you see *Copy the text first, then
+     press Ask other AI.* and nothing is sent."* Keep the rest of the paragraph (the name, `Creds: `, no **Agent mode**, the
+     skip list) and the back-to-source and *switch conversations* sentences of 8adc29d3 and 8fc00cba.
+  7. `notification-sites.json` — `node scripts/count-notifications.mjs --write` (one code renamed; the number of sites does
+     not change).
+- **Scenarios** (`src/test/terminalCapture.test.ts`: S1-T6…T9 are REPLACED by S1r-T1…T6; S1-T1…T5, T10 and T11 stay as
+  they are; the file's header comment says the terminal door reads the clipboard and the borrow is the Claude-tab door's).
+
+| # | Name | Assertion | Break-it → the RED it must show |
+|---|---|---|---|
+| S1r-T1 | the copied text is the passage, as it is, and the clipboard is not written | a fake clipboard holding `'  ls -la\n'`; `readCopiedText(() => clip.read())` → `{ text: '  ls -la\n', failure: '' }`; the fake's writes are `[]` and it still holds the text | trim in `terminalPassage` → `the copied text was trimmed` |
+| S1r-T2 | nothing copied gives the owner's sentence | `''` and `'  \n\t'` → `{ text: '', failure: 'Copy the text first, then press Ask other AI.' }`; `NOTHING_COPIED` is that string | remove the white-space check → a passage of `'  \n\t'` is returned |
+| S1r-T3 | a clipboard that cannot be read says so, and the read never rejects | `read` rejects `new Error('clipboard busy')` → failure exactly `The clipboard could not be read: clipboard busy`, not `NOTHING_COPIED`; a thrown string `'odd'` → `…: odd`; `readCopiedText` resolves both times | map every failure to `NOTHING_COPIED` → `the sentence lies about the cause`; remove the `catch` → the test fails on the rejection |
+| S1r-T4 | the same text twice is sent twice | two calls over one fake holding `'same'` → both `{ text: 'same', failure: '' }` | add a "same as last time" guard → `an unchanged clipboard was refused; decision 3 sends it` |
+| S1r-T5 | a press while the keyboard path holds the latch is refused, never the marker | one `oneAtATime<Capture>({ text: '', failure: 'busy' })`; a keyboard-like work writes `MARKER` to the fake and waits on a gate; while it waits, `latch(() => readCopiedText(() => clip.read()))` → `{ text: '', failure: 'busy' }`; then the gate opens and the work restores | read through a latch of its own (or none) → its text is `MARKER`: `a terminal press during the keyboard capture sent the marker` |
+| S1r-T6 | the terminal door reads under the one latch and runs nothing (replaces S1-T9) | the blanked body of `fromTheTerminal` contains `oneCapture(` and `readCopiedText(`, and none of `pressCopy`, `COPY_SCRIPT`, `launch`, `sendText`, `sendSequence`, `executeCommand`, `borrowClipboard`, `captureSelection`, `write`, `writeText`; its raw body has none of `copySelection`, `powershell`, `keybd_event`; the blanked `terminalSource.ts` has no `executeCommand` and the raw file no `copySelection`; companion: the body of `passageFor` still contains `pressCopy` and `oneCapture(` | put `vscode.commands.executeCommand('workbench.action.terminal.copySelection')` back → red naming `executeCommand`; wrap the read in `borrowClipboard` → red; give `fromTheTerminal` its own `oneAtATime` → `the terminal door has a latch of its own, or none` |
+| S1r-T7 | every language's chat article gives the new sentence and not the old (`helpCoverage.test.ts`, after `:61`) | for each of the five languages, not a fallback: the article contains `Copy the text first, then press Ask other AI.` and contains neither `Select text in the terminal first` nor `no selection` | leave `helpRu.ts` as it is → `the ru chat article still tells a reader to select text in the terminal` |
+
+  `terminalDoorWiring.test.ts`: the test at `:131` is renamed *"…is refused BEFORE the clipboard is read"*, and its
+  messages at `:143-146` say *"read"* for *"captured"* and *"copied"*; its assertions do not change. The test at `:119-129`
+  does not change (it finds `fromTheTerminal(`, which stays).
+- **Host scenario S1r-H1** (replaces S1-H1 in `terminalCaptureScenario.ts:1-77`; S3-H1 stays). `activated()`; create a
+  terminal named `Creds: h / s` and `show()` it, so the press happens as it would (the read does not use the terminal);
+  write a random probe `coai-probe-<random>` to the real clipboard; `fromTheTerminal()` → `{ text: probe, failure: '' }`,
+  and the clipboard still holds the probe. Two presses at once (`Promise.all`) → exactly one refused with `STILL_COPYING`
+  and one with the probe; the clipboard still holds the probe. Then `writeText('')` → `{ text: '', failure: NOTHING_COPIED }`
+  and the clipboard is still `''`; `writeText('  \n')` → the same sentence. Dispose the terminal in `finally`. No
+  `selectAll`, no `clearSelection`, no polling (the NOSONAR loop of 8adc29d3 goes with it). Its registration at
+  `scenarios.ts:929-934` gets the new function and the name *"a terminal press takes the text the person copied, leaves the
+  clipboard as it is, and an empty clipboard says so"*. Break-it: put the epoch-1 `fromTheTerminal` back (the copy through
+  the borrow) → with nothing selected the first assertion fails: *the door did not deliver the copied text; it said: Select
+  text in the terminal first.* — the real-window failure, reproduced. It runs only in CI's `extension · a real editor` (§ 9).
+- **Docs.**
+  - `research/module_extension.md`, § *The chat opens from a terminal (E1)*: the bullet *"The capture (S1) never presses a
+    key"* (`:13368-13371`) becomes *the terminal door reads the clipboard (epoch 2, change 1.2)* — why (R3's first run), no
+    copy command, no borrow, no write, the sentence and the read failure, the one latch and why (the keyboard path's marker,
+    consult 5faf4657), no freshness guard and why. The borrow bullet (`:13372-13381`) stays, without its two sentences about
+    the terminal, and says the borrow now serves the Claude-tab door only. DELETE *Known limit: … two messages*
+    (`:13382-13385`) and *Not yet measured: the marker timing* (`:13388-13390`). Rewrite *One latch* (`:13386-13387`) and
+    *Tests* (`:13391-13393`). In the S3 part: the `askFromTerminal` bullet (`:13489-13496`) with the new sentences and code;
+    the notify codes (`:13499`); `:13516` — the name is judged before the clipboard is read; DELETE *Known limit, accepted*
+    (`:13517-13520`).
+  - `research/module_tests.md:297`: the terminal capture sentence becomes the terminal read (S1r-T1…T6) beside the borrow
+    tests that stay (S1-T1…T5, T11). `:306`: S1-H1 becomes S1r-H1; the help test gains S1r-T7; **not covered**: whether the
+    person's own copy reached the clipboard — R3.
+  - `research/architecture.md`: no change (no module boundary moves).
+- **Brief for the Sonnet coder.** Worktree `/home/jinx/git/wt/coai-chat-terminal`, branch `feat/chat-from-a-terminal`
+  (PR #971, pushed, NOT merged — never rewrite its history). Read this section and § 3 first; do not re-discover.
+  1. Tests first. In `terminalCapture.test.ts` replace S1-T6…T9 with S1r-T1…T6; add S1r-T7 to `helpCoverage.test.ts`. So
+     that they compile, add `NOTHING_COPIED`, the new `terminalPassage(text)` and a `readCopiedText` stub that returns
+     `{ text: '', failure: '' }`. Run them: each must be RED for its own reason (not a compile error); write the messages down.
+  2. Implement items 1 and 2 → S1r-T1…T6 GREEN.
+  3. Each break-it in the table, one at a time: see it RED with its message, restore, GREEN again.
+  4. Items 3, 4 and 5, and the `terminalDoorWiring.test.ts` renames.
+  5. Item 6 (help, five languages) → S1r-T7 GREEN; its break-it.
+  6. S1r-H1 and its registration. It compiles here; it cannot run here (no `libnss3`).
+  7. Item 7, the docs above, `npm run lint`, the whole suite.
+  8. Commit by path (never `git add -A`), one commit: `fix(chat): E1.S1 epoch 2 — the terminal door reads the clipboard
+     the person filled; no copy command, no borrow (change 1.2)`, with the observed numbers in the body. Do not push.
+  Do NOT change: `borrowClipboard`, `captureSelection`, `chatCapture.test.ts`, `passageFor`, `oneCapture`, `STILL_COPYING`,
+  any S2 code, the manifest, `sendsImmediately(autoSend, false)`. A new function keeps `complexity` ≤ 4 and ≤ 50 lines; no
+  suppression count grows; no new host module (`terminalSource.ts` stays pure).
+- **Commands.** As § 3: `npm run compile` (read the exit code); `node scripts/run-tests.mjs out/test/terminalCapture.test.js`,
+  the same for `terminalDoorWiring`, `helpCoverage` and `chatCapture`; the whole suite; `npm run lint`;
+  `node scripts/count-notifications.mjs --write`; from the worktree root `node .agents/conventions/tools/plan-lifecycle.mjs`.
+- **Done when.** S1r-T1…T7 green, each break-it seen red with its message, then restored; S1-T1…T5, T10 and T11 green with
+  no edit; `npm run compile` exit 0; the whole suite and lint green; no suppression count grew; `notification-sites.json`
+  regenerated; S1r-H1 and S3-H1 green in CI's `extension · a real editor` job on the head commit, read from that job; the
+  owner's second R3 run recorded in the parent's R-table.
+- **Size.** About 250 lines changed (≈ 40 code, ≈ 60 help in five languages, ≈ 110 tests, ≈ 40 docs), most of them
+  replacing epoch-1 lines.
+
+### E1.S1 — EPOCH 1, as built in 9ac886c9: a terminal's selection through the borrow, never a keystroke
+
+*Kept as the record of what was built. Its terminal half (`TERMINAL_COPY`, `captureTerminalSelection`, S1-T6…T9, S1-H1) is
+`cut` by the re-review for epoch 2 and replaced by the revision above; its borrow half (`borrowClipboard`, S1-T1…T5, T10,
+T11) is `fits` and kept.*
 
 `model: opus` (spec, this section) · coder: sonnet · review: opus · area (a).
 
@@ -247,8 +416,12 @@ that S1's tests and R1/R3 catch before E2; area (c)'s first part is a small rule
 
 `model: opus` (spec, this section) · coder: sonnet · review: opus · areas (c) first part, and the trigger.
 
-- **Goal.** The person can use the door: an icon button and Ctrl+Alt+A in any terminal open a chat from the selection,
-  through S1's capture and S2's source. The old chords and the palette stop competing with it in a terminal. A terminal
+*Epoch 2: the door, the manifest, the agent rule and the door count below are `fits` and kept. The door's sentences, its
+notify code and the help paragraph that describe the selection copy are `cut`; their fix forward is in the E1.S1 epoch-2
+revision (items 4–7), and the lines below that name them are marked (epoch 2).*
+
+- **Goal.** The person can use the door: an icon button and Ctrl+Alt+A in any terminal open a chat from the selection
+  (epoch 2: from the text the person copied), through S1's capture and S2's source. The old chords and the palette stop competing with it in a terminal. A terminal
   conversation is never offered agent mode, at every place that decides it. The door is counted and described.
 - **Files and functions.**
   - `package.json`:
@@ -277,21 +450,25 @@ that S1's tests and R1/R3 catch before E2; area (c)'s first part is a small rule
     vscode.window.activeTerminal)`, in small helpers (complexity ≤ 4):
     1. `readyForChat()`; not ready → `notReady` (as every door).
     2. No terminal → warning, code `no-terminal-here`, *"There is no terminal here — open one and select text in it
-       first."*
+       first."* (epoch 2: *"There is no terminal here — open one, copy the text, then press Ask other AI."*)
     3. `const passage = await fromTheTerminal()` (S1). Empty text → warning, code `nothing-selected-in-terminal`,
-       title `passage.failure` (the owner's sentence, or the copy failure).
+       title `passage.failure` (the owner's sentence, or the copy failure). (Epoch 2: code `nothing-copied-for-terminal`;
+       the failure is `NOTHING_COPIED`, the clipboard read failure, or `STILL_COPYING`.)
     4. `deliverPassage(panels, extensionUri, ready, terminalMatch(panels.known(), terminal, terminal.name), passage,
        sendsImmediately(settings.autoSend, false), false, sourceOfTerminal(terminal.name))` (`sendsImmediately` from `chatSettings.ts`). The send rule is the
        chord's: the button and the chord both follow **Who presses send** (`coai.chatAutoSend`).
     It never calls `matchedSource`, `snapshots` or `sourceSession`: the file-text defect cannot happen on this door.
   - `src/extension.ts` — after `coai.chatWithOtherAi` (`:666-672`): `registerCommand('coai.askFromTerminal', () => {
     noteChatDoor('terminal'); askFromTerminal(chatPanels, context.extensionUri).catch(...) })`, the catch shaped like
-    `coai.takeTheQuestion`'s (`:690-711`): console detail, a `failure` notify, code `terminal-door-failed`. The door
+    `coai.takeTheQuestion`'s (`:690-711`): console detail, a `failure` notify, code `terminal-door-failed` (epoch 2: its
+    title *"The copied text could not be sent to a chat."*, not *"The terminal selection …"*). The door
     census (`chatWiring.test.ts:555-585`) then finds the chord's command and requires exactly this order.
   - Help, five languages, in the `chat-with-other-ai` article (`helpContent.ts:287`, `helpRu.ts:51`, `helpUk.ts:115`,
     `helpDe.ts:51`, `helpEs.ts:51`): ONE paragraph that names **Ask other AI** in English in every language — the icon
     in the terminal panel's title bar and Ctrl+Alt+A in a terminal; the selection is copied through the clipboard and
-    the clipboard is given back; no selection → the sentence; the chat is named after the terminal; no agent mode; a
+    the clipboard is given back; no selection → the sentence (epoch 2: replaced — the person copies, the door reads the
+    clipboard and leaves it as it is, any clipboard text is sent, an empty clipboard → *"Copy the text first, then press
+    Ask other AI."*; the wording is in the E1.S1 revision, item 6); the chat is named after the terminal; no agent mode; a
     person's own `terminal.integrated.commandsToSkipShell` hides the default, and adding `coai.askFromTerminal` to it
     brings the chord back. And in the existing back-to-source paragraph, *"or the terminal"* beside the Claude tab and
     the editor.
@@ -320,8 +497,8 @@ that S1's tests and R1/R3 catch before E2; area (c)'s first part is a small rule
   around it (ledger entry 1.1 already says what happens if R1 fails).
 - **Docs.** `research/module_extension.md`: the section *The chat opens from a terminal (E1)* — the door, the chords,
   the skip list and its limit, agent mode off, the door count. `research/module_tests.md`: one row *Chat with other
-  AI — the terminal door* (the manifest tests, the agent rule, the help, S1-H1/S3-H1, and **not covered**: the
-  keystroke itself, the button click and the palette's view of `terminalFocus` — R1, R3, R9 on the VSIX); and the
+  AI — the terminal door* (the manifest tests, the agent rule, the help, S1-H1/S3-H1 (epoch 2: S1r-H1/S3-H1), and **not
+  covered**: the keystroke itself, the button click and the palette's view of `terminalFocus` — R1, R3, R9 on the VSIX); and the
   doors row (`:300`) gains `terminal`. `research/architecture.md` (`:604-613`, the roads back): one sentence — a
   terminal comes forward through VS Code's own `Terminal.show()`, no other extension is called. No module boundary
   moves in E1; the ssh edge is E2's. No `CHANGELOG.md` edit in this pull request: the extension's prose goes into the
@@ -367,6 +544,10 @@ checked and read no source.
 1. **S1** — spec here; Sonnet codes; Opus reviews; Sonnet fixes. Meanwhile Fable writes the S2 spec.
 2. **S2** — from the Fable spec; Sonnet codes; Opus reviews; Sonnet fixes.
 3. **S3** — spec here; Sonnet codes; Opus reviews; Sonnet fixes.
+3a. **E1.S1 epoch-2 revision** — after the owner approves epoch 2: Sonnet codes it on the same branch (PR #971); Opus
+   reviews; Sonnet fixes. The next code round takes the revised parent plan as `planText`, with `again: true` (the parent's
+   rule, *Reviewing the revised plan*). Then a new pre-release VSIX for the owner's R3 second run before the merge
+   conditions below.
 4. One pull request for the epic. The code round of the review gate gets the epic's scope (this document's § 1 and
    § 9) as `planText`. Every CI check green, and the `extension · a real editor` job read by its own result (§ 9).
 5. Merge. Build the VSIX from the merged head (`npm run package`). The owner installs it and does R1–R5 and R9
@@ -379,18 +560,20 @@ checked and read no source.
 
 | Parent row (§ *Test plan*, Pure and Host) | Story | Tests |
 |---|---|---|
-| `terminalSource`: label, passage, `oneLiveNamed` 0/1/2, the steal (RED without the filter) | S1 (passage), S2 (the rest) | S1-T7, S1-T8; the S2 spec |
+| `terminalSource`: label, passage, `oneLiveNamed` 0/1/2, the steal (RED without the filter) | S1 (passage), S2 (the rest) | S1r-T1, S1r-T2 (epoch 2; were S1-T7, S1-T8); the S2 spec |
+| The terminal capture (epoch 2): clipboard text delivered and not written; empty and white space → the sentence; a failing read → its own sentence; no command run; the same text twice sent twice; a press under the keyboard latch refused, never the marker | S1 (epoch-2 revision) | S1r-T1…T6; the help, S1r-T7 |
 | `borrowClipboard`: restore, no restore when changed, empty never overwritten, marker = nothing, a rejecting run restores; `captureSelection` green | S1 | S1-T1…T5, S1-T10 |
 | `chatStore`: round trip, bad name refused, `sameSource`, `agreeOnOrigin` | S2 | the S2 spec |
 | `chatReturn`: live and recorded terminal routes | S2 | the S2 spec |
 | The agent rule | S3 | S3-T10, S3-T11 |
 | Manifest: the button, the chord, the skip list, no old chord under `terminalFocus`, the door counted | S3 | S3-T1…T8 |
 | Host: a `Creds: h / s` terminal, `selectAll`, capture and restore; `clearSelection` → the sentence; the skip-list default | S1, S3 | S1-H1, S3-H1 |
+| Host (epoch 2, replaces the row above for S1): a `Creds: h / s` terminal active, a probe seeded on the real clipboard is what the door delivers and the clipboard still holds it; an empty clipboard → the sentence; the skip-list default | S1 (epoch-2 revision), S3 | S1r-H1, S3-H1 |
 
 ## 9. Where each proof runs
 
 - **Unit and wiring tests**: `npm test`, here and in CI (`ci.yml:575`, required).
-- **Host scenarios** (S1-H1, S3-H1, and S2's back-to-source scenario): `npm run test:host` CANNOT run on this machine —
+- **Host scenarios** (S1-H1 — S1r-H1 from epoch 2 —, S3-H1, and S2's back-to-source scenario): `npm run test:host` CANNOT run on this machine —
   a real VS Code does not start here (no `libnss3`). They run only in CI's job `extension · a real editor`
   (`ci.yml:592`, `xvfb-run -a npm run test:host` at `:627`). That job has `continue-on-error: true` (`:596`), so a red
   scenario does NOT turn the pull request red. Read the job's own conclusion and log on the head commit, and write
@@ -398,7 +581,10 @@ checked and read no source.
   required.
 - **Real window** (parent R-table): the owner, on the VSIX built from the merged head — R1 (no keystroke reaches the
   shell, with `cat -v` and with the Claude TUI), R2 (a Claude tab active, terminal focused: the terminal door wins), R3
-  (the button after a click moved focus; split terminals; clipboard restored; no selection), R4 (the name stays
+  (epoch 2, as the parent's R3 row now reads: in Claude's view a drag copies, then the button sends that text and no VS
+  Code "no selection" warning appears; in a plain terminal a copy, then Ctrl+Alt+A, the same; split terminals name the
+  active one; an empty clipboard gives *"Copy the text first, then press Ask other AI."* — the first run, on epoch 1's
+  copy, FAILED and led to change 1.2), R4 (the name stays
   `Creds: host / session` under title sequences), R5 (back to source in the panel and in the editor area), R9 (the
   palette hides `coai.chatWithOtherAi` while a terminal has focus).
 
@@ -409,6 +595,9 @@ checked and read no source.
   holds a `Tab` today.
 - **Security.** No new outward edge in E1. The clipboard is borrowed and given back, never kept; only text survives the
   borrow (an image is lost — already true of the Claude-tab door). No keystroke is synthesised for a terminal.
+  (Epoch 2: the terminal door only READS the clipboard and never writes it; the borrow above is the Claude-tab door's. The
+  door sends whatever text the person has on the clipboard, also an old copy — the person's own text, to the models they
+  chose, under **Who presses send**; no new edge.)
 
 ## 11. What E1 does not do, and open questions for the owner
 
@@ -430,6 +619,13 @@ Open, recorded here and NOT built (each would be a plan change):
    two chords compete as R2's do.
 4. **`coai.goToConversation` from the palette**, with a terminal focused, judges the last active editor tab — the same
    class as item 2. (Fable, the S2 spec.)
+5. **The Claude-tab door's MENU path reads the clipboard outside the latch** (epoch 2, found by the re-review's judge):
+   `passageFor('menu')` (`chatCapture.ts:110-112`) reads `hostClipboard` directly, not through `oneCapture`, so a menu
+   item used while a keyboard capture holds its marker could send the marker — the same hazard the latch now guards for
+   the terminal door (consult 5faf4657). It predates this plan and is not measured; it is not E1 work.
+6. **`autoSend` on a clipboard read** (epoch 2): with **Who presses send** set to send at once, an old clipboard text is
+   sent to the vendor without a look at it. Decision 3 accepts this and the help says it; the owner confirms it when
+   approving epoch 2 (ledger entry 1.2 named it as assumed).
 
 Carried to later epics (found while the S2 spec was written, 2026-11-10; not E1 work):
 
@@ -443,6 +639,9 @@ Carried to later epics (found while the S2 spec was written, 2026-11-10; not E1 
 
 - [ ] S1, S2 and S3 coded to their specs; every scenario green; every break-it observed red, then green, and both
       observations in the summary.
+- [ ] (Epoch 2) The E1.S1 epoch-2 revision coded as a fix forward in PR #971 (no history rewrite): S1r-T1…T7 and S1r-H1
+      green with their break-its observed; the terminal door runs no copy command and never writes the clipboard; the help
+      in five languages gives the new sentence; the owner's second R3 run recorded.
 - [ ] `npm run compile` exit 0; `npm test` green; `npm run lint` green; no suppression count grew.
 - [ ] `notification-sites.json` regenerated; the door census and the help census green.
 - [ ] The host scenarios green in CI's `extension · a real editor` job on the head commit, read from that job, named in
