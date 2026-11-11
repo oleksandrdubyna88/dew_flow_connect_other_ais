@@ -576,6 +576,30 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
   assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 3', 'a re-read threw away the arrow they just pressed');
 });
 
+test('S4-T6: the shipped Asked box shows the prompts and the note about them together, and the note alone only when there are no prompts', () => {
+  // A terminal's session is read by ssh and may be the last 4 MiB of it: the prompts are shown AND a line says the first ones are
+  // not. The local road never sends both, so it never had a line above its prompts. A reason with NO prompts is still the box itself.
+  const { nodes, press, push } = runPage();
+  const NOTE = 'Only the last 4 MiB of this session were read, so its first prompts are not shown.';
+  press('asked');
+
+  push({ type: 'asked', at: 1, asked: ['the first prompt', 'the second prompt'], refusal: NOTE });
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'the first prompt', 'the prompts were replaced by the note');
+  assert.strictEqual(nodes['askedNote']?.['textContent'], NOTE, 'the cut note is not shown beside the prompts');
+  assert.strictEqual(nodes['askedNote']?.['hidden'], false, 'the note line is in the page but hidden');
+  assert.strictEqual(nodes['askedNote']?.['innerHTML'], '', 'the note was written into the page as markup');
+
+  push({ type: 'asked', at: 2, asked: ['the first prompt', 'the second prompt'], refusal: '' });
+  assert.strictEqual(nodes['askedNote']?.['textContent'], '', 'an old note stayed above prompts that were read whole');
+  assert.strictEqual(nodes['askedNote']?.['hidden'], true, 'an empty note line was left showing');
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'the first prompt');
+
+  push({ type: 'asked', at: 3, asked: [], refusal: 'Nothing of yours is in that session yet.' });
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'Nothing of yours is in that session yet.', 'a reason with no prompts is not the box');
+  assert.strictEqual(nodes['askedNote']?.['textContent'], '', 'the reason was shown twice');
+  assert.strictEqual(nodes['askedNote']?.['hidden'], true);
+});
+
 test('an answer from an earlier press cannot replace the one just asked for', () => {
   // Open, fold, open again: two reads are in flight and the slower one is the older one. Landing
   // second it would put back what the person had already moved on from. (codex and gemini, the code
