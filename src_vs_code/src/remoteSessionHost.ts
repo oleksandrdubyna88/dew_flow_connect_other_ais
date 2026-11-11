@@ -200,8 +200,12 @@ let boundRun: RoadSeams['run'] = runRemote;
 /** The context key the terminal panel's two overflow items follow: the active terminal reads a session and its host is not answered "no" (`readsKey`). */
 const READS_KEY = 'coai.terminalReadsSession';
 
+/** The value last given to the key: a context key cannot be read back from the host, so a host scenario reads it here (test door only). */
+let lastKey: boolean | undefined;
+
 function setReadsKey(answers: AnswerStore): void {
-  void vscode.commands.executeCommand('setContext', READS_KEY, readsKey(vscode.window.activeTerminal?.name ?? '', answers.read()));
+  lastKey = readsKey(vscode.window.activeTerminal?.name ?? '', answers.read());
+  void vscode.commands.executeCommand('setContext', READS_KEY, lastKey);
 }
 
 /** Activation: the one road of this window, its terminal listener, the context key of the terminal items and the panel's command. */
@@ -229,6 +233,8 @@ export interface RemoteSessionsTestDoor {
   readonly read: RemoteSessions['read'];
   readonly pickedOf: RemoteSessions['pickedOf'];
   readonly answers: AnswerStore;
+  /** What the context key `coai.terminalReadsSession` was last set to, or nothing before the first set. */
+  readonly readsKey: () => boolean | undefined;
 }
 
 export const testDoorOf = (sessions: RemoteSessions): RemoteSessionsTestDoor => ({
@@ -236,6 +242,7 @@ export const testDoorOf = (sessions: RemoteSessions): RemoteSessionsTestDoor => 
   read: sessions.read,
   pickedOf: sessions.pickedOf,
   answers: sessions.answers,
+  readsKey: () => lastKey,
 });
 
 /** The ONE entry the doors and *Asked* call: read this terminal's remote Claude session for this purpose. */
