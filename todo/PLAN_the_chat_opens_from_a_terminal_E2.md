@@ -1,6 +1,8 @@
 # PLAN — E2 stories: the remote Claude session, read over ssh
 
-> Status: **plan only, nothing implemented yet, 2026-11-11; plan gate `proceed`, its findings folded in.** Epic E2 of
+> Status: **coded and tested on `feat/chat-from-a-terminal-e2` (PR #982), 2026-11-11; plan gate `proceed`, its findings
+> folded in; coai code gate `proceed`. Owed before the tag: the owner's R6 and R7 (and M-O1…M-O7) on a pre-release VSIX,
+> then the merge and the extension release.** Epic E2 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics`, its § *Stage 2*, its
 > § *Security* and its ledger entry 1.1). Written by Opus when the epic started, on `feat/chat-from-a-terminal-e2` from
 > `main` `45b070a2`. A stories document keeps no change ledger: a change to this epic is an entry in the parent (epoch 2,
@@ -606,6 +608,14 @@ and the typed result, areas (d) and (e)"*.
      or macOS — or on the remote machine of a Remote window — and your ssh configuration shares connections
      (`ControlMaster`, `ControlPersist`), the read can go through a connection that is already open, or open one that
      stays open for the `ControlPersist` time, as your configuration says."*).
+
+     *Erratum, 2026-11-11 (CodeRabbit on #982; not a plan change — it satisfies the parent's § Security, "the transcript
+     text is held in memory only, never written to disk or logged"; consult 30d62b27).* The parenthetical in item 9,
+     "the prompts shown are saved with the conversation", is wrong: the question taken or added is saved, as every
+     passage; the prompts *Asked* shows are not saved and are read again at each press. `SECURITY.md` says so. It also
+     gains, after the two paragraphs above (kept as written), one sentence that a read through an already open shared
+     connection does not check the host key again, and the note that on Linux and macOS a process ssh itself started
+     (a `ProxyCommand`) is ssh's to end, not observed.
 - **Scenarios.**
 
 | # | Name (file) | Assertion | Break-it → the RED it must show |

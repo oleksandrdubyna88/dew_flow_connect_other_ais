@@ -5,7 +5,7 @@
 > twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3. E1 merged
 > (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
 > 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, plan gate `proceed`,
-> E2.S1 coded; change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`) — the next change stops the plan. E3
+> E2.S1–S4 coded and tested (PR #982, coai code gate `proceed`; R6, R7 and M-O1…M-O7 owed before the tag); change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`) — the next change stops the plan. E3
 > not started. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a

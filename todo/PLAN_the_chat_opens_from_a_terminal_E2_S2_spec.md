@@ -1,7 +1,8 @@
 # PLAN — E2.S2 spec: the remote reader's contract — the ssh argv, the stdin script and the typed result (CORNERSTONE)
 
-> Status: **plan only, nothing implemented yet, 2026-11-11 — written by Fable before its code; reviewed by Opus 2026-11-11
-> (gate G6), its findings fixed in this text; change 2.1 decided (§ S2.7).**
+> Status: **coded and tested on `feat/chat-from-a-terminal-e2` (PR #982), 2026-11-11 — written by Fable before its code;
+> reviewed by Opus 2026-11-11 (gate G6), its findings fixed in this text; change 2.1 decided (§ S2.7): `StrictHostKeyChecking=yes`
+> taken, `ControlPath=none` not taken. Owed before the tag: the owner's R6, R7 and M-O1…M-O7.**
 > Cornerstone spec of story E2.S2 of [PLAN_the_chat_opens_from_a_terminal_E2.md](PLAN_the_chat_opens_from_a_terminal_E2.md)
 > (parent [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md), § *Stage 2*, § *Security*, ledger
 > entry 1.1). It holds the security judgement on the ssh edge (gate G2 + G4, § S2.6), which must stand before any S2 code.
