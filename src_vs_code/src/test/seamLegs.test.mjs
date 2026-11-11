@@ -1,6 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path, { join } from 'node:path';
 import { test } from 'node:test';
 import { notificationLine } from '../../out/notifications.js';
@@ -50,7 +50,7 @@ test('a malformed line mentioning a refusal cannot throw past the leg\'s cleanup
   // destructuring. The reader skips a malformed line, so this only bites when a malformed line comes
   // FIRST and a good refusal after it: the reader's own check passes, and the throw escaped
   // `theRecordCrosses` before `forget()` ran, leaving the temporary root behind. (CodeRabbit, #465.)
-  const root = owned.ownedDir(t, 'coai-seam-legs', { parent: realpathSync.native(owned.tempRoot()) });
+  const root = owned.ownedDir(t, 'coai-seam-legs');
   try {
     const good = notificationLine({
       utc: '2026-09-22T12:00:00.000Z',

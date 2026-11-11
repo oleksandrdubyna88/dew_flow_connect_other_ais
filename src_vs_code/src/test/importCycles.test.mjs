@@ -1,6 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { cyclesIn, graphOf, importsOf } from '../../scripts/import-graph.mjs';
@@ -119,7 +119,7 @@ test('both quote styles are edges, because a guard must not depend on house styl
 test('a module in a subfolder is scanned, and its relative imports resolve', (t) => {
   // `src/` is flat today. A check that assumed it would stay flat would report no cycle for two
   // modules put in a subfolder tomorrow — silence that reads exactly like safety.
-  const here = owned.ownedDir(t, 'coai-graph', { parent: realpathSync.native(owned.tempRoot()) });
+  const here = owned.ownedDir(t, 'coai-graph');
   try {
     mkdirSync(join(here, 'inner'));
     writeFileSync(join(here, 'top.ts'), "import { a } from './inner/deep';\n");

@@ -32,7 +32,7 @@ const probe = (pid) => (pid === DEAD_PID ? { state: 'dead' } : mount.processProb
 
 function privateRoot(t) {
   const { owned } = ownedModule;
-  const root = owned.ownedDir(t, 'leftovers-sweep', { parent: fs.realpathSync.native(owned.tempRoot()) });
+  const root = owned.ownedDir(t, 'leftovers-sweep');
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }

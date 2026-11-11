@@ -1,4 +1,3 @@
-import { realpathSync } from 'node:fs';
 import { after } from 'node:test';
 
 /** The part of the owned wrap (`scripts/owned.mjs`) this file uses — one shape, named instead of an `any`. */
@@ -17,5 +16,5 @@ after(() => scope.close());
 
 /** A fresh owned folder of the wrap inside the run folder — never a raw temp folder (E5 S7). Call it inside a test or a hook, never at module load. */
 export function ownedTemp(what: string): string {
-  return owned.ownedDir(scope, what, { parent: realpathSync.native(owned.tempRoot()) });
+  return owned.ownedDir(scope, what); // the default parent: owned.tempRoot(), unresolved, as tmpdir() was
 }

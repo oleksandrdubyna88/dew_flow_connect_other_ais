@@ -68,7 +68,7 @@ after(() => scope.close());
 
 /** A fresh owned folder of the wrap inside the run folder — never a raw temp folder (E5 S7). Call it inside a test or a hook, never at module load. */
 export function ownedTemp(what: string): string {
-  return owned.ownedDir(scope, what, { parent: realpathSync.native(owned.tempRoot()) });
+  return owned.ownedDir(scope, what); // the default parent: owned.tempRoot(), UNRESOLVED, as tmpdir() was
 }
 ```
 
@@ -78,7 +78,7 @@ top-level `after(...)` registration is the precedent of `scripts/lib/kimi.test.m
 
 **M — `mkdtempSync(join(tmpdir(), '<prefix>'))`** (and its spelled variants: `path.join(os.tmpdir(), …)`,
 `realpathSync(…)` around it): → `ownedTemp('<prefix without its trailing ->')` in a `.ts` test; in a `.mjs` test,
-`owned.ownedDir(t, '<what>', { parent: fs.realpathSync.native(owned.tempRoot()) })` when the site is inside a test with its
+`owned.ownedDir(t, '<what>')` (its default parent, the UNRESOLVED `owned.tempRoot()`) when the site is inside a test with its
 context `t`, else the file-level-scope pattern of `scripts/lib/kimi.test.mjs:16-20`. A site at MODULE LOAD (top level of a
 file) moves into a `before` hook, as `scripts/lib/transcript-sanitise.test.mjs` did in #979. If the original wrapped the
 call in `realpathSync`, keep the `realpathSync` around the result. Remove imports that become unused.
@@ -99,6 +99,13 @@ source it describes if that makes a stronger assertion (#981's Dockerfile `COPY`
 one-line comment saying it is data, not a call. List every S site in the report — the judge reviews each.
 
 If a site fits none of these, or a change would alter what a test asserts, stop and report it.
+
+**Correction after CI (2026-11-11, macOS N-S8 on #984).** The first version of this brief resolved the parent
+(`realpathSync.native(owned.tempRoot())`). The sites it replaced used the UNRESOLVED root (`tmpdir()`), and on macOS
+(`/var` is a link to `/private/var`) and on Windows (8.3 short names) the two spellings differ — `leftoversSweep.test.mjs`
+N-S8, whose premise is exactly that the root as given and as resolved differ, went red. No site wrapped its `mkdtemp` in
+`realpath`, so every replacement keeps the unresolved parent (`ownedDir`'s default). Linux cannot show the difference
+(its temp root is no link); the macOS CI leg is the evidence.
 
 ## 5. Steps — RED, GREEN, RED again
 

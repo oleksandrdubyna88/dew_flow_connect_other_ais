@@ -31,7 +31,7 @@ const names = [
 ];
 
 function privateRoot(t) {
-  const root = owned.ownedDir(t, 'retired-sweep', { parent: fs.realpathSync.native(owned.tempRoot()) });
+  const root = owned.ownedDir(t, 'retired-sweep');
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }

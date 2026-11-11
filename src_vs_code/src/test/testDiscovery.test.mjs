@@ -31,7 +31,7 @@ import { discover } from '../../scripts/run-tests.mjs';
 // The file's ONE scope: every folder is an owned folder of the wrap inside the run folder, removed with its claim when the file ends; none is made at module load.
 const scope = owned.cleanupScope();
 after(() => scope.close());
-const folder = (what) => owned.ownedDir(scope, what, { parent: fs.realpathSync.native(owned.tempRoot()) });
+const folder = (what) => owned.ownedDir(scope, what);
 
 function fixture() {
   const root = folder('coai-discovery');

@@ -1,6 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { test } from 'node:test';
 import { ownedTemp } from './ownedTemp';
@@ -27,6 +27,6 @@ test('ownedTemp makes two different folders of the wrap, each named in the owner
     assert.equal(name.form, 'owner', `${basename(dir)} is named in the owner form`);
     assert.equal(name.token, 'coai', `${basename(dir)} holds the repository token`);
     assert.ok(existsSync(`${dir}.owner`), `${dir}.owner, the claim, lies beside the folder`);
-    assert.equal(dirname(dir), realpathSync.native(owned.tempRoot()), 'the folder lies in the run folder');
+    assert.equal(dirname(dir), owned.tempRoot(), 'the folder lies in the run folder');
   }
 });

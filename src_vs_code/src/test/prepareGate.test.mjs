@@ -44,7 +44,7 @@ test('the ownership markers a rule carries are metadata too, and never reach the
 });
 
 test('the real pinned resolver rejects a dirty or wrong mount and leaves no stale build policy', async t => {
-  const root = owned.ownedDir(t, 'coai-pinned-gate', { parent: fs.realpathSync.native(owned.tempRoot()) });
+  const root = owned.ownedDir(t, 'coai-pinned-gate');
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
   const sourceMount = path.join(sourceRoot, '.agents/conventions');
@@ -120,7 +120,7 @@ async function exported(file, name) {
 }
 
 test('missing canonical checkout fails preparation and invalidates previous generated policy', t => {
-  const root = owned.ownedDir(t, 'coai-prepare-gate', { parent: fs.realpathSync.native(owned.tempRoot()) });
+  const root = owned.ownedDir(t, 'coai-prepare-gate');
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const output = path.join(root, OUTPUT);
   fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -178,7 +178,7 @@ test('a pinned mount without the feature rule fails naming it, and says to move 
  */
 function pinnedMountWithout(t, file, id) {
   // The name is cut to the wrap's 31 characters: the prefix keeps the file's own name without its repeated `coai-`.
-  const root = owned.ownedDir(t, `gate-no-${path.parse(file).name.replace(/^coai-/, '')}`, { parent: fs.realpathSync.native(owned.tempRoot()) });
+  const root = owned.ownedDir(t, `gate-no-${path.parse(file).name.replace(/^coai-/, '')}`);
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
   const sourceMount = path.join(sourceRoot, '.agents/conventions');
