@@ -1,5 +1,17 @@
 # Changelog
 
+## Extension 0.86.0 — 2026-11-11
+
+**Added: *Ask other AI* from a terminal.** A terminal is now a door to *Chat with other AIs*: press the icon in the title bar of the terminal panel, or `Ctrl+Alt+A` while the terminal has focus, and a coai chat opens with the text you copied. Copy first — in Claude Code's view a mouse selection is already copied; in another terminal, copy as you usually do there. The door reads your clipboard and nothing else: it runs no copy command, sends no key to the program in the terminal, and leaves the clipboard as it is. With an empty or white-space-only clipboard it says "Copy the text first, then press Ask other AI." and sends nothing. The chord is in the shell skip list (`terminal.integrated.commandsToSkipShell`) by default, so the shell does not get the key.
+
+**Added: a conversation remembers the terminal it came from.** The chat is named after the terminal (a `Creds: ` at the start of the name is dropped). *Back to source* shows that terminal, or the one open terminal with the recorded name, and says so when it is not open or when several have that name. A chat from a terminal has no **Agent mode** box, because the session may be on another machine. A Claude Code tab can no longer take over a terminal's conversation.
+
+**Changed: the old chat chords and the palette row of *Chat with other AI* are off while a terminal has focus**, so they cannot judge the last editor tab instead of the terminal. In a terminal, use *Ask other AI*, and **CoAI: switch conversations…** for the list.
+
+**Rollback:** 0.85.0 hides a conversation that came from a terminal, refuses to save over it and deletes nothing.
+
+**The MCP server to pair it with is `coai-mcp` 0.65.1**, unchanged.
+
 ## Server 0.65.1 — 2026-11-07
 
 **0.65.1 is published; 0.65.0 was not.** 0.65.1 releases the changes listed under 0.65.0 below. 0.65.0 was tagged but never published: its Windows builds failed one test of this repository's own suite, so the release stayed a draft without Windows packages, and a tag is never moved. 0.65.1 is the same server, with everything listed under 0.65.0 below. Use 0.65.1; the 0.65.0 draft is marked not published.

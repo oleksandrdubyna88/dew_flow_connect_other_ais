@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.86.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.85.0...extension-v0.86.0) (2026-11-11)
+
+
+### Features
+
+* **chat:** the chat opens from a terminal — E1, the terminal door ("Ask other AI" button, Ctrl+Alt+A, a terminal conversation source) ([#971](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/971)) ([0851f07](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0851f074665e4097c39a527eeeb8b0cb04ce24c6))
+
 ## [0.85.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.84.0...extension-v0.85.0) (2026-11-07)
 
 
