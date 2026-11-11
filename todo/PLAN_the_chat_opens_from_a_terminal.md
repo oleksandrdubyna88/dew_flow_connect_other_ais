@@ -92,8 +92,8 @@ second opinion they used several times an hour.
    (`ai1-dev3 / small-tasks`); other terminals keep their full name.
 3. **The person copies; the door takes the clipboard** (owner, 2026-11-11, change 1.2). In Claude's view a mouse
    drag already puts the text on the local clipboard; in a plain terminal the owner's right-click copies. The door
-   runs no copy command and synthesises no keystroke. An empty clipboard → *"Copy the text first, then press Ask other
-   AI."*, nothing sent. Any non-empty clipboard text may be sent — the door cannot tell a fresh copy from an old one,
+   runs no copy command and synthesises no keystroke. An empty or whitespace-only clipboard → *"Copy the text first,
+   then press Ask other AI."*, nothing sent. Any other clipboard text may be sent — the door cannot tell a fresh copy from an old one,
    and no guard pretends to; it follows the `autoSend` setting of the other doors. (Replaces 2026-11-10's "No
    selection → 'Select text in the terminal first'".)
 4. **Back to source** brings that terminal forward (`terminal.show()`), on request only — nothing switches
@@ -280,7 +280,7 @@ All paths under `src_vs_code/`.
   moment of subscribing — rejected).
 - No proposed API (`Terminal.selection`): an installed extension cannot use one.
 - No check that the clipboard text is fresh or came from this terminal (epoch 2): the person copies, and any
-  non-empty clipboard text may be sent under the `autoSend` setting. An "unchanged since last time" guard was
+  clipboard text that is not empty or whitespace-only may be sent under the `autoSend` setting. An "unchanged since last time" guard was
   rejected: the same text copied twice on purpose cannot be told from an old copy *(consultants, 5faf4657)*.
 - No following of a renamed terminal and no re-check of a picked session against a newer namesake: the
   owner did not ask for them. While the terminal lives, its conversation is keyed by the `Terminal` object, so a
@@ -336,7 +336,7 @@ All paths under `src_vs_code/`.
   `terminalFocus`, every `terminalFocus` binding's command in the skip-list default, no old chord matching under
   `terminalFocus`, the door counted).
 - **Host scenario (`npm run test:host`)**: with a terminal named `Creds: h / s` active, a probe text seeded on the
-  real clipboard is what the door delivers, and the clipboard still holds it afterwards; an empty clipboard gives the
+  real clipboard is what the door delivers, and the clipboard still holds it afterwards; an empty or whitespace-only clipboard gives the
   owner's sentence; `inspect('terminal.integrated.commandsToSkipShell').defaultValue` holds the id.
 - **Stage 2**: operand validation against hostile strings through a real `sh -c`; the parsers (banner before the
   sentinel, registry JSON, NUL lists, a cut tail, the title rows); the script itself run by `sh -s` on Linux CI
@@ -355,7 +355,7 @@ All paths under `src_vs_code/`.
 |---|---|---|
 | R1 | In a `Creds:` tmux terminal running `cat -v`, and with the Claude TUI, Ctrl+Alt+A prints nothing in the pane and the chat opens. | E1 |
 | R2 | A Claude tab is the active editor and the terminal has focus: Ctrl+Alt+A runs the terminal door. | E1 |
-| R3 | (epoch 2) In Claude's view, drag to select (it copies), then the button: the chat opens with that text, and no VS Code "no selection" warning appears. In a plain terminal, right-click to copy, then Ctrl+Alt+A: the same. With split terminals, the chat is named after the active one. With an empty clipboard: "Copy the text first, then press Ask other AI." | E1 |
+| R3 | (epoch 2) In Claude's view, drag to select (it copies), then the button: the chat opens with that text, and no VS Code "no selection" warning appears. In a plain terminal, right-click to copy, then Ctrl+Alt+A: the same. With split terminals, the chat is named after the active one. With an empty or whitespace-only clipboard: "Copy the text first, then press Ask other AI." | E1 |
 |  | First run, 2026-11-11, VSIX 0.85.901 (epoch 1's copySelection): FAILED — a drag in Claude's view is not a VS Code selection; Shift+drag the same. Led to change 1.2. |  |
 | R4 | `terminal.name` stays `Creds: host / session` while tmux and Claude send title sequences. | E1 |
 | R5 | Back to source shows the right terminal, in the panel and in the editor area. | E1 |
@@ -369,7 +369,7 @@ All paths under `src_vs_code/`.
 ## Definition of Done
 
 - [ ] From any terminal, the title-bar button and Ctrl+Alt+A open a coai chat with the text the person copied,
-      named after the terminal; with an empty clipboard the owner's sentence and nothing sent; the terminal door
+      named after the terminal; with an empty or whitespace-only clipboard the owner's sentence and nothing sent; the terminal door
       synthesises no keystroke and runs no copy command, and leaves the clipboard as it was.
 - [ ] A Claude tab can never take a terminal's conversation, and the old chords never fire in a terminal.
 - [ ] A terminal conversation is saved with a `terminal` source, has no agent mode, and *back to source*
