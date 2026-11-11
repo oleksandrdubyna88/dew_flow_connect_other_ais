@@ -287,6 +287,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.terminalHosts",
+        "title": "CoAI: hosts read over ssh",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.chatNow",
         "title": "CoAI: default",
         "category": "ConnectOtherAIs"
@@ -1233,6 +1238,11 @@
           "command": "coai.importConfig",
           "when": "view == coai.panel",
           "group": "config@2"
+        },
+        {
+          "command": "coai.terminalHosts",
+          "when": "view == coai.panel",
+          "group": "remote@1"
         }
       ],
       "commandPalette": [

@@ -272,7 +272,11 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 170 -> 171 on 2026-11-10 (E1 review): a terminal whose name is not an identity — empty, over 500 units, or holding a control
 // character — is refused before its selection is captured (`terminal-name-unusable`), because the chat it would open is saved
 // with no source and so has no road back and no protection against a Claude tab taking it.
-const PLACES_THIS_SPEAKS = 171;
+// 171 -> 174 on 2026-11-11 (E2.S3 of todo/PLAN_the_chat_opens_from_a_terminal_E2.md): the road to a terminal's remote Claude session asks the person
+// once for each host (`read-remote-session`, a modal confirmation), asks again from the panel's *hosts read over ssh* list
+// (`change-remote-host-answer`, a modal with **Forget**), and says that no host has been asked yet (`no-remote-host-asked`, an outcome) —
+// all three through `notifyAndAsk` / `notify`.
+const PLACES_THIS_SPEAKS = 174;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

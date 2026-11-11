@@ -411,6 +411,8 @@ const ALIAS: Record<string, string> = {
 /** Why a command needs no article. A sentence, on the record — never an empty string. */
 const SELF_EVIDENT: Record<string, string> = {
   'coai.help': 'It opens this help. An article explaining how to open the thing you are reading would be a joke at the reader’s expense.',
+  // E2.S3 declares it here because the help in five languages is E2.S4's: S4 deletes this entry and writes the article.
+  'coai.terminalHosts': 'It lists the hosts whose Claude session was asked about and changes one answer; its article in the five languages is written by E2.S4, which removes this entry.',
 };
 
 const SETTING_ALIAS: Record<string, string> = {

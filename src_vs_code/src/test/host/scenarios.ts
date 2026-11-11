@@ -19,6 +19,7 @@ import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingName
 import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathSaidOnceScenario';
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
 import { aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
+import { theConsentOfAHostIsKeptInTheRealGlobalState } from './terminalHostsScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
 
 /**
@@ -938,6 +939,13 @@ const SCENARIOS: readonly Scenario[] = [
     // What it reads is in `terminalCaptureScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
     name: 'the skip list of the terminal holds the terminal door by default, so its chord is not sent to the shell',
     run: theSkipListDefaultHoldsTheTerminalDoor,
+  },
+  {
+    // S3-H1 of the E2 stories document (the chat reads the remote Claude session): the per-host consent through the real `globalState` —
+    // a remembered "no" stops a press with its own sentence and no ssh, a "yes" reaches the run seam. What it drives is in
+    // `terminalHostsScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
+    name: 'the consent of a host is kept in globalState: a "no" refuses a terminal press before any ssh, and a "yes" reaches the run seam',
+    run: theConsentOfAHostIsKeptInTheRealGlobalState,
   },
 ];
 

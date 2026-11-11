@@ -137,6 +137,14 @@ export function withAnswer(list: unknown, host: string, answer: 'yes' | 'no', no
   return [...kept.filter((row) => !dropped.has(row)), { host, answer, askedUtc: now }];
 }
 
+const byHost = (a: HostAnswer, b: HostAnswer): number => Number(a.host > b.host) - Number(a.host < b.host);
+
+/** The remembered answers, by host name, for the panel's list; a damaged list is none. */
+export const answersOf = (list: unknown): readonly HostAnswer[] => [...rowsOf(list)].sort(byHost);
+
+/** A NEW list without this host: *Forget*. The host is asked again the next time. */
+export const withoutHost = (list: unknown, host: string): readonly HostAnswer[] => rowsOf(list).filter((row) => row.host !== host);
+
 // ─────────────────────────────── The identity ───────────────────────────────
 
 /** One row of the pick list. The host draws it; the order (newest first) and the folders it carries are decided here. */

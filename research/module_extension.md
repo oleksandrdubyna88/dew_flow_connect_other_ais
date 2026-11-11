@@ -13621,3 +13621,43 @@ ssh option does below is said as "we pass": the effect on the configuration ssh 
   unreachable socket all read as `absent` `session`.
 - **Tests**: `remoteScript.test.ts` (S2-T4 a real `sh -c`, S2-T16, S2-T17), `remoteFrame.test.ts` (S2-T24…T33), `remoteScriptRuns.test.ts` (S2-T12…T15, S2-T34…T44: the REAL script by `sh -s`
   and `bash --posix` against a temporary HOME), `remoteSsh.test.ts` (S2-T1…T3, T5…T7, T9, T18…T21), `remoteLogScan.test.ts` (S2-T10), `captureWidened.test.ts` (S2-T8, S2-T11, S2-T22, S2-T23).
+
+### One road to the VM: the consent, the registry path, the fallback and the pick list (E2.S3)
+
+Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4) and § 5 *E2.S3*. Two new modules: `src/remoteRead.ts` (pure — it imports no `vscode`, and `sonarExclusions.test.ts` holds it out of the host
+list) and `src/remoteSessionHost.ts` (host: only the `vscode` seams; it is listed in `sonar.coverage.exclusions`). `remoteScript.ts` exports `FOLDERS_MAX` so the road does not type the bound again. Nothing here is
+reached by a door yet: the two doors and *Asked* are E2.S4's, and they call `readRemoteSession(terminal, purpose)`.
+
+- **The consent.** The first read for a host asks once, in a modal (*"Read the Claude session on “<host>” over ssh?"*, **Read** / **Not this host**, through `notifyAndAsk`, so the question and its answer are in the ledger).
+  The answer is a row `{ host, answer, askedUtc }` in `globalState` key `coai.terminalHosts`, at most 100 rows, one per host (compared exactly, so `H` is not `h`). `withAnswer` returns a NEW list: the host's old row is
+  replaced, and at the cap the row with the OLDEST `askedUtc` goes (that host is simply asked again). A list that is not an array of whole rows reads as empty — `ask`, never `yes`. Escape writes nothing and refuses
+  that press. A remembered "no" refuses with its own sentence and starts no ssh and no prompt. *CoAI: hosts read over ssh* (`coai.terminalHosts`; the panel's title bar overflow, group `remote@1`, and the palette) lists the
+  remembered hosts, asks again for the one chosen (**Read**, **Not this host**, **Forget**) and writes the new answer or removes the row. No webview page changes.
+- **The order of the road** (`remoteRoad(seams, terminalName, purpose, picked?)`): `credsSession` (a malformed name gets its own refusal, a name that is not a creds name its own) → the consent → **the re-check, just
+  before EACH spawn** (the terminal is still in `window.terminals`, its process has not ended, and its LIVE name still gives the same host and session; else no spawn) → `runRemote` under the progress line
+  (*"Reading the Claude session on “<host>”…"*, `ProgressLocation.Window`) → `readRemote(run, call)` over the SAME call that made the operands → `nextStep`. The road never reads `run.code`.
+- **The identity** (`nextStep`, a table with one entry for each arm of `RemoteRead`, so a new arm is a compile error). `found` by the registry is `done` and drops the picked id. `found` by an id is `done` only when its
+  `folder` is one of the folders the pick came with (a title pick: that session's folder; an ambiguity pick: `projectDirNames` of the candidate's `cwd`), else the folder sentence, and the id is KEPT. `fallback` →
+  the titles call over `projectDirNames(paneCwd)` ∩ the VM's folders (at most `FOLDERS_MAX`, in `projectDirNames` order); none → a refusal that names host, session and the pane's folder (control characters taken out, at most 80
+  characters), and says that some folders could not be listed when the VM said so. `titles` → `namedAmong`: one session → the id call (that session becomes the pick); several → a list; none → a refusal, and when the scan was
+  not `all`, had `more`, or skipped a session, it says that not every session was read (a cut scan is never "no session"). `ambiguous` with candidates → a list, EVEN OF ONE; with none → a refusal. `gone`, `absent`
+  and `unreadable` are refusals. **At most three calls in one press**: before a spawn or a list that would need a fourth the press ends with its own sentence and asks for nothing.
+- **The pick list.** One row for each candidate, newest first (a stable sort by the file's time; candidates of the same pane list keep the VM's order), `canPickMany: false`, nothing preselected; a cancel is
+  *"No session was chosen, so nothing was read."* and spawns nothing more. The host draws it with `askPerson(() => showQuickPick(…))`.
+- **The picked id** lives in a `WeakMap<Terminal, Picked>` of the host module; `Picked = { id, folders }`. The next press of that terminal sends it as its FIRST call. It is dropped ONLY on a registry success, on `gone`
+  (its file is not there: its own sentence, naming the id and the host, and the NEXT press discovers again from the start) and with the terminal (`onDidCloseTerminal`). It is never dropped by an ssh refusal, a timeout, a cap,
+  an unreadable answer, a folder refusal, a re-check refusal or a cancel.
+- **The meaning of a cut** is decided in ONE place, `answerFrom(found, purpose, host)`: for `'question'` a cut tail that holds no `AskUserQuestion` (by `lastAsked`) is a refusal (*"No question was found in the last 4 MiB of the
+  session on “<host>” that were read; an older one may be beyond the cut."*), else the lines as they are; for `'prompts'` the lines with a note when cut, *"Only the last 4 MiB of this session were read, so its first prompts
+  are not shown."*, and `''` when not. A scan test says no other module that takes the road's answer reads `cut`.
+- **One read per terminal at a time**: `onePerTerminal` is a `WeakMap` of `oneAtATime` latches; a second press answers *"The Claude session of this terminal is still being read — the second press was ignored."* and starts neither
+  an ssh child nor a modal.
+- **Five different sentences** for absent, unreadable, an ambiguity with no candidate, a cut question and an ssh refusal, each naming the host; the "absent session" one says no tmux session of that name *that ssh can see*
+  (tmux's exit 1 also covers a socket ssh cannot reach).
+- **The reach** (for *Asked*, E2.S4): `reachOf(live, keyed, recordedName)` takes the live terminal the conversation is keyed by while it is open — under its NEW name if it was renamed — else the ONE live terminal with the
+  recorded name; none is *"The terminal “<name>” is not open — open it to read its Claude session."*, several *"<N> terminals are called “<name>” — open the one you mean and press again."*. The host is always read from a
+  LIVE terminal's name, never from the record. `terminalOf(id, panels)` in the host module only reads `window.terminals`.
+- **No log carries the session.** `remoteRead.ts` and `remoteSessionHost.ts` have no `console` call; a sentence names a host, a tmux session, an id the person chose, the pane's folder and a fixed clause of
+  `UNREADABLE_SAID`, never stdout. `remoteLogScan.test.ts` (S2-T10) scans both files from the day they exist.
+- **Not covered:** the modal's wording on screen and the real QuickPick (R7); that a real ssh call, in a real window, goes through this road (R6, R7).
+- **Tests**: `remoteRead.test.ts` (S3-T1…T15, with the real parser over frames typed out as `remoteFrame.test.ts` types them), `src/test/host/terminalHostsScenario.ts` (S3-H1, CI only).

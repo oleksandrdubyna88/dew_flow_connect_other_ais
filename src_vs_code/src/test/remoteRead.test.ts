@@ -7,7 +7,7 @@ import { projectDirNames } from '../claudeSessions';
 import { RemoteRead, UNREADABLE_SAID } from '../remoteFrame';
 import {
   HostAnswer, PickRow, Picked, RemoteAnswer, RoadSeams,
-  answerFrom, consentOf, nextStep, onePerTerminal, reachOf, remoteRoad, withAnswer,
+  answerFrom, answersOf, consentOf, nextStep, onePerTerminal, reachOf, remoteRoad, withAnswer, withoutHost,
 } from '../remoteRead';
 import { RemoteCall, TAIL_MAX, operandsOf } from '../remoteScript';
 import { RemoteRun } from '../remoteSsh';
@@ -177,6 +177,19 @@ test('S3-T2: the list is capped at 100 and the oldest answer goes', () => {
   assert.equal(JSON.stringify(rows), before, 'the input array was changed');
   assert.equal(withAnswer(rows, 'h5', 'no', NOW).length, 100, 'a changed answer of a known host dropped a row');
   assert.ok(withAnswer(rows, 'h5', 'no', NOW).some((row) => row.host === 'oldest'), 'a changed answer of a known host dropped the oldest');
+});
+
+test('S3-T2b: the panel lists every remembered host, and Forget removes one row', () => {
+  const list = withAnswer(withAnswer([], 'b-host', 'no', NOW), 'a-host', 'yes', NOW);
+  assert.deepEqual(answersOf(list).map((row) => row.host), ['a-host', 'b-host'], 'the hosts are not listed by name');
+  assert.deepEqual(answersOf('junk'), [], 'a damaged list was listed');
+
+  const without = withoutHost(list, 'b-host');
+  assert.equal(consentOf(without, 'b-host'), 'ask', 'a forgotten host was still remembered');
+  assert.equal(consentOf(without, 'a-host'), 'yes', 'Forget removed another host\'s row');
+  assert.equal(list.length, 2, 'the input array was changed');
+  assert.equal(withoutHost(list, 'nobody').length, 2, 'Forget of an unknown host removed a row');
+  assert.deepEqual(withoutHost('junk', 'a-host'), [], 'a damaged list was carried through Forget');
 });
 
 test('S3-T3: no ssh before a "yes"', async () => {
@@ -452,7 +465,7 @@ test('S3-T10b: the cut is read in remoteRead.ts only — no module that takes th
   const files = fs.readdirSync(dir).filter((name) => name.endsWith('.ts'));
   const talksToTheRoad = (text: string): boolean => /from '\.\/(remoteFrame|remoteRead|remoteSessionHost)'/u.test(text);
   const readers = files.filter((name) => talksToTheRoad(fs.readFileSync(path.join(dir, name), 'utf8')));
-  for (const wanted of ['remoteRead.ts']) {
+  for (const wanted of ['remoteRead.ts', 'remoteSessionHost.ts']) {
     assert.ok(readers.includes(wanted), `the scan did not find ${wanted}, so it proves nothing`);
   }
   assert.ok(/\.cut\b/u.test(fs.readFileSync(path.join(dir, 'remoteRead.ts'), 'utf8')), 'remoteRead.ts does not read the cut, so the one place is not the one place');

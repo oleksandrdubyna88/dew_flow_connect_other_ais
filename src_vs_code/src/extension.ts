@@ -73,6 +73,8 @@ import { readLog, serverRun, serverRunAt } from './roundsDbRead';
 import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { sideHereOf, sidesIn, stampThisSide, type SeenSide } from './sidesSeen';
+import { bindRemoteSessions, remoteSessionsOf, type RemoteSessions } from './remoteSessionHost';
+import type { RoadSeams } from './remoteRead';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -97,6 +99,8 @@ import { askPerson } from './personWait';
 export interface CoaiExports {
   /** The sides this profile has been used on, as Setup › This side lists them. */
   readonly sidesSeen: () => readonly SeenSide[];
+  /** The road to a terminal's remote Claude session over this profile's `globalState`, with its `run` seam replaceable: a host scenario (S3-H1) counts the calls. */
+  readonly remoteSessions: (run?: RoadSeams['run']) => RemoteSessions;
 }
 
 /**
@@ -135,6 +139,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   bindCommands(context);
   // The chat reads this side's catalog rows (E4.6a).
   bindChatSide(context);
+  // The road to a `Creds: <host> / <session>` terminal's Claude session (E2.S3): the consent, the picked ids, the hosts command.
+  bindRemoteSessions(context);
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
   // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
   noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));
@@ -845,7 +851,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
 
   void offerUpdate(context);
 
-  return { sidesSeen: () => sidesIn(context.globalState, Date.now()) };
+  return { sidesSeen: () => sidesIn(context.globalState, Date.now()), remoteSessions: (run) => remoteSessionsOf(context.globalState, run) };
 }
 
 export async function deactivate(): Promise<void> {
