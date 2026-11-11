@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using Xunit;
 using FluentAssertions;
 using CoaiBench.Running;
@@ -14,18 +15,9 @@ namespace CoaiBench.Tests;
 /// </remarks>
 public sealed class PanelSettingsFileTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-settings-").FullName;
+    private readonly TempDir _dir = TempDir.For("coai-settings-");
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     private string FileWith(string json)
     {

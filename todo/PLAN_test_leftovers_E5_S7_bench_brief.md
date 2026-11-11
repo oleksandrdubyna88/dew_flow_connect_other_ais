@@ -1,6 +1,6 @@
 # Build brief — coai E5 story S7, the first drain PR: the bench suite's `raw-temp` entries to zero, and the creation bypass goes
 
-> Status: **plan only, 2026-11-11, by Opus.** Scope: the 8 `raw-temp` baseline entries of `src_bench/CoaiBench.Tests/`,
+> Status: **built 2026-11-11, on branch feat/test-leftovers-e5-s7-first.** Scope: the 8 `raw-temp` baseline entries of `src_bench/CoaiBench.Tests/`,
 > the `number != 945` clause of the standing shrink step, and the docs that count them. A Sonnet coder builds from this
 > brief alone.
 
