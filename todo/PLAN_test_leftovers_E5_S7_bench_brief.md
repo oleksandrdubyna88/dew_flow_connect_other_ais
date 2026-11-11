@@ -100,9 +100,14 @@ Run everything from the repository root, lowered (`common/local-cpu-budget.md`):
 
 - The other five scopes (770 entries) are untouched; their PRs follow, one per suite.
 - Windows and macOS: the bench suite runs on the CI legs that run it today; nothing here adds a leg.
-- `NoTestLeavesAFolderBehind` (the plan's S7 scenario) is not added for this suite: all 8 bench sites already removed
-  their folder on every path before this change, and `TempDir` keeps that; the end-of-run audit of S6 (D9) reads the run
-  folder after every run.
+- `NoTestLeavesAFolderBehind` (the plan's S7 scenario) is not added for this suite. Every one of the 8 bench sites
+  already TRIED to remove its folder on every path before this change, and `TempDir` keeps that — but neither removal is
+  guaranteed: the old blocks swallowed an `IOException`, and `TempDir.Dispose` swallows `IOException` and
+  `UnauthorizedAccessException`, so a folder whose delete loses a race can stay. What bounds such a folder is where it
+  lives, not the delete: it is inside the run's own claimed folder, which `RunTemp.EndOfRun` removes with its claim at
+  the end of the run (and the owner-aware sweep collects after a killed run). The end-of-run audit of S6 (D9) reads the
+  run folder before that, for folders the helper still holds; it does not make a failed delete succeed. This PR changes
+  none of that, so the scenario would prove nothing about this change that the run folder does not already bound.
 
 ## 7. Definition of Done
 
