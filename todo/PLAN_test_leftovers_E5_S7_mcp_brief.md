@@ -44,6 +44,9 @@ site keeps its CURRENT remover and lifetime; only the call that names or makes t
 - No change to `TempDir`, `RunTemp`, `Owned`, the gate, the proof markers or their child runs, or product code.
 - Every site keeps its remover (`Directory.Delete`, `DeleteEvenIfReadOnly`, `SqliteConnection.ClearAllPools()` + delete,
   a `TempDir`'s `Dispose`, or none) exactly as today. Prefixes keep their text.
+- **The line-keyed inventory, measured at `9a429757`: 24 rows in 16 files** — `ACallerTranscriptFixtureCarriesNoTextTests.cs` (713), `AReviewTreeIsGivenBackTests.cs` (271, 317), `AReviewTreeTests.cs` (222, 264), `AReviewTreeWithALongPathTests.cs` (133), `AVibeDiskRowExpandsAParentFolderTests.cs` (432), `AVibeDiskRowReadsAParentFolderThroughTheServiceTests.cs` (60), `AVibeDiskRowSaysWhatItSkippedTests.cs` (117), `BackfillAuthorsBackupTests.cs` (149), `CadenceStoreTests.cs` (163), `FilesystemInvariantTests.cs` (191, 222, 419), `RepositoryFactsTests.cs` (81, 118), `TreeGitTests.cs` (44, 51), `WorktreeManagerTests.cs` (119, 261, 430, 456, 500, 532). In THESE files no line is added or
+  removed above a row: the type is written fully qualified (`CoaiMcp.Tests.TempDir`), never a new `using` line, and a swap
+  stays on its own line(s) (plan gate, finding 0). In every other file a `using CoaiMcp.Tests;` may be added.
 - **No Python** (the owner's rule). Edit with the Edit tool or a Node script; never `dotnet test` (run the MTP executable).
 - Coders on the edit pass do not build; only the integration pass builds and runs (one build at a time, lowered).
 
@@ -112,14 +115,19 @@ If a site fits no shape, or a swap would change what a test asserts, stop and re
 or Node only, no build. Each reports per site: shape, and for D whether neutral or temp-semantic; and any stop.
 
 **Integration coder, last (steps 2b–4):**
-2b. **GREEN.** Apply shape Z. Build; fix only compile errors the swaps caused (a missing `using CoaiMcp.Tests;` — except where an inventory
+2b. **GREEN.** Apply shape Z. Check that no repository-level invocation still asks for the baseline: `git grep -n -E
+   "leftovers-check[^\n]*--baseline([^-]|$)|LeftoversBaseline\.Apply\(report, root, root\)|raw-temp-baseline\.json"` over
+   everything but `todo/`, `research/` and the private-repository tests that write their own baseline file — list what
+   remains and why each is allowed (plan gate, finding 1). Build; fix only compile errors the swaps caused (a missing `using CoaiMcp.Tests;` — except where an inventory
    row forbids a new line, then fully qualify — or `.Path` vs `DirectoryInfo`). The guard class green; the whole suite's
    counts equal step 0's minus the two retired tests (the same failing set); the Node guard WITHOUT `--baseline` clean; `--baseline-shrinks --base origin/main`
    only shrinks; `plan-lifecycle` clean; `cd src_vs_code && node ../.agents/conventions/tools/low-priority.mjs node
    scripts/run-tests.mjs src/test/testLeftovers.test.mjs` green.
 3. **RED again.** (a) Put one shape-C line back → exactly one finding (with no baseline, nothing can carry it); restore.
    (b) In one shape-D neutral test, put the original `/tmp` literal back → exactly one finding; restore. (c) Re-create an
-   empty `raw-temp-baseline.json` → `The_drained_baseline_file_stays_gone` fails; remove it.
+   empty `raw-temp-baseline.json` → `The_drained_baseline_file_stays_gone` fails; remove it. (d) Put one shape-P planted
+   line back in its old `+`-split form → the guard class has exactly one finding there (the C# guard joins the pieces);
+   restore (plan gate, finding 2).
 4. **Docs.** `research/module_tests.md`, the *S7, the drain* paragraph: the coai-mcp suite sixth and last (458 → 0) and S7-d
    (the file deleted with its last entries; `--baseline` dropped; the shrink step kept), the C/G/D/V/P shapes in one sentence each. The E5 status line: S7 DONE with this PR (all six suites
    drained, S7-d done); the DoD box `S7: the baseline drained to zero and deleted.` ticked. This brief's status and its `todo/README.md` row.
