@@ -578,7 +578,7 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
 
 /** The declarations of the one rule of the page's stylesheet whose selector is exactly `selector`, or `''`. */
 function ruleOf(html: string, selector: string): string {
-  const escaped = selector.replace(/[.]/g, '\\.');
+  const escaped = selector.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 
   return new RegExp(`(?:^|[\\s}])${escaped} \\{([^}]*)\\}`, 'm').exec(html.split('<script')[0])?.[1] ?? '';
 }
