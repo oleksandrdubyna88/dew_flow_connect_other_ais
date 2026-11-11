@@ -1,9 +1,10 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { MOST_PER_PROMPT, MOST_PROMPTS, NOTHING_OF_YOURS, projectDirNames } from '../claudeSessions';
+import { MOST_PER_PROMPT, MOST_PROMPTS, NOTHING_OF_YOURS, projectDirNames, promptsFrom } from '../claudeSessions';
 import { RemoteRead, UNREADABLE_SAID } from '../remoteFrame';
 import {
   HostAnswer, PickRow, Picked, RemoteAnswer, RoadSeams,
@@ -526,6 +527,30 @@ test('S4-T5b: what Asked shows for a terminal is the person\'s words of the tail
   const kept = promptsSaid({ kind: 'lines', lines: many, note: '' }).asked;
   assert.equal(kept.length, MOST_PROMPTS, 'more prompts than the local reader shows were handed over');
   assert.equal(kept[0], 'p0', 'the earliest prompts are not the ones kept');
+});
+
+/** The run folder this test run owns (`inRunFolder.cjs` has checked it is set): the one place a test file may be written. */
+function runFolder(): string {
+  const folder = process.env['COAI_TEST_RUN_FOLDER'];
+  assert.ok(folder !== undefined && folder.length > 0, 'the run folder is not set');
+
+  return folder;
+}
+
+test('S4-T5b: the same lines give the same prompts from a REAL file and from the road', async () => {
+  const lines = [said('alpha'), ai('t'), said('b'.repeat(MOST_PER_PROMPT + 5)), asks('q1'), said('gamma')];
+  const file = path.join(runFolder(), `prompts-${randomUUID()}.jsonl`);
+  fs.writeFileSync(file, `${lines.join('\n')}\n`);
+  try {
+    const local = await promptsFrom(file);
+    const road = promptsSaid({ kind: 'lines', lines, note: '' }).asked;
+
+    assert.equal(local.kind, 'said', 'the file was not read as a session with prompts, so the comparison below proves nothing');
+    assert.equal(road.length, 3, 'the fixture does not hold the three prompts this test is about');
+    assert.deepEqual(road, local.kind === 'said' ? local.said : [], 'the road and the file read one session into different prompts');
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
 });
 
 test('S4-T5b: the local file reader and the road\'s lines make a prompt by ONE function, not two copies', () => {

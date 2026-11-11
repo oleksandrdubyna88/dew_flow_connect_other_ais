@@ -638,7 +638,7 @@ export async function takeFromTerminal(
   panels: ChatPanels,
   extensionUri: vscode.Uri,
   terminal: vscode.Terminal | undefined,
-  append = false,
+  append: boolean,
 ): Promise<void> {
   const ready = readyForChat();
   if (!ready.ok) {

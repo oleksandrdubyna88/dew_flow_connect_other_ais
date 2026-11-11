@@ -212,6 +212,18 @@ test('S2-T9: ssh\'s own failure is not "no session"', async () => {
   assert.equal(refusalOf(await run255('Perm\u0007ission\u001b[31m denied\n')), 'ssh could not read from “ai1-dev2”: Permission[31m denied');
 });
 
+test('S2-T9b: format controls of a VM\'s stderr — a bidi override, a zero-width space — reach neither the refusal nor the log line', async () => {
+  // ESC is a control (Cc) and was already dropped; U+202E and U+200B are FORMAT characters (Cf) and still reorder or hide text.
+  const spoof = 'Permission \u202Edenied\u200B (publickey).';
+  const spy = fake({ code: 255, output: '', stderrTail: `first\n${spoof}\n` });
+  const run = await runRemote(H, S, [S], REMOTE_SCRIPT, REMOTE_LIMITS, spy.seams);
+
+  assert.equal(refusalOf(run), 'ssh could not read from “ai1-dev2”: Permission denied (publickey).', 'a format control reached the refusal');
+  assert.equal(spy.logs.length, 1);
+  assert.equal(spy.logs[0], 'ConnectOtherAIs: remote read host=ai1-dev2 session=small-tasks end=exit 255 stderr=first | Permission denied (publickey).', 'a format control reached the log line');
+  assert.ok(!/[\u202E\u200B]/u.test(spy.logs[0] ?? ''), 'a bidi override or a zero-width space is in the log line');
+});
+
 test('S2-T18: the ssh executable is one absolute path, and its folder is the child\'s', async () => {
   assert.deepEqual(sshExecutable('win32', { SystemRoot: 'D:\\W' }), { path: 'D:\\W\\System32\\OpenSSH\\ssh.exe', cwd: 'D:\\W\\System32\\OpenSSH' });
   assert.equal(sshExecutable('win32', { WINDIR: 'E:\\Win' }).path, 'E:\\Win\\System32\\OpenSSH\\ssh.exe');

@@ -758,7 +758,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // input, and here the input is the transcript.
     vscode.commands.registerCommand('coai.takeFromTerminal', () => {
       noteChatDoor('take');
-      takeFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal).catch(() => {
+      takeFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal, false).catch(() => {
         console.error('coai.takeFromTerminal failed');
         void notify({
           as: 'warning',

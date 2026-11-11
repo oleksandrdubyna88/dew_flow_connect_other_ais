@@ -121,6 +121,19 @@ test('S4-T11: the catches of the two terminal doors and the Asked branch carry n
   }
 });
 
+test('S4-T11: the bodies of takeFromTerminal and addFromTerminal pass no stdout, operand or error to a notice', () => {
+  // The refusal sentence the door shows is the road's own (it can name the remote pane folder, and a picked id), and notify keeps its title in the
+  // notifications ledger: so what may reach that call is the sentence and nothing else. A scan of the bodies, with its companion.
+  const text = sourceOf('chatCommand.ts');
+  const bodies = ['export async function takeFromTerminal(', 'export async function addFromTerminal('].map((opening) => bodyOf(text, opening));
+
+  for (const body of bodies) {
+    assert.deepEqual(logLeaks(body), [], 'a terminal door passes stdout, lines, an operand or an error to a notice');
+  }
+  assert.ok(/\bnotify\(/u.test(bodies[0] ?? ''), 'takeFromTerminal has no notify call, so the scan of it matches nothing');
+  assert.ok((bodies[0] ?? '').includes('question.refusal'), 'the sentence the notice carries is no longer the road\'s refusal');
+});
+
 test('S4-T11 companions: the scan finds the two registrations and the Asked branch, and a console call and a notice in each', () => {
   for (const command of ['coai.takeFromTerminal', 'coai.addFromTerminal']) {
     const handler = registrationOf(command);
