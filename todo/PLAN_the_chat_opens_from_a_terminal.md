@@ -357,15 +357,21 @@ All paths under `src_vs_code/`.
 | # | Check | Epic |
 |---|---|---|
 | R1 | In a `Creds:` tmux terminal running `cat -v`, and with the Claude TUI, Ctrl+Alt+A prints nothing in the pane and the chat opens. | E1 |
+|  | 2026-11-11, VSIX 0.85.902 (a2d7d416): PASSED — the owner's report. |  |
 | R2 | A Claude tab is the active editor and the terminal has focus: Ctrl+Alt+A runs the terminal door. | E1 |
+|  | 2026-11-11, VSIX 0.85.902 (a2d7d416): PASSED — the owner's report. |  |
 | R3 | (epoch 2) In Claude's view, drag to select (it copies), then the button: the chat opens with that text, and no VS Code "no selection" warning appears. In a plain terminal, right-click to copy, then Ctrl+Alt+A: the same. With split terminals, the chat is named after the active one. With an empty or whitespace-only clipboard: "Copy the text first, then press Ask other AI." | E1 |
 |  | First run, 2026-11-11, VSIX 0.85.901 (epoch 1's copySelection): FAILED — a drag in Claude's view is not a VS Code selection; Shift+drag the same. Led to change 1.2. |  |
+|  | Second run, 2026-11-11, VSIX 0.85.902 (a2d7d416, epoch 2's clipboard read): PASSED — the owner's report. |  |
 | R4 | `terminal.name` stays `Creds: host / session` while tmux and Claude send title sequences. | E1 |
+|  | 2026-11-11, VSIX 0.85.902 (a2d7d416): PASSED — the owner's report. |  |
 | R5 | Back to source shows the right terminal, in the panel and in the editor area. | E1 |
+|  | 2026-11-11, VSIX 0.85.902 (a2d7d416): PASSED — the owner's report. |  |
 | R6 | One ssh call from Windows: time to the first answer (target under 4 s); the owner's real `Host` blocks with `LocalForward`. | E2 |
 | R7 | The registry path finds the right session on each of the three users; the fallback list works when two sessions share a name. | E2 |
 | R8 | After a VS Code reload, creds reopens its terminals and the conversations re-attach. | E3 |
 | R9 | With a terminal focused, the command palette no longer lists `coai.chatWithOtherAi` (its `!terminalFocus` entry). If it IS listed: with a Claude tab as the active editor, running it must not interrupt the terminal's program (see *What this plan does NOT do*). | E1 |
+|  | 2026-11-11, VSIX 0.85.902 (a2d7d416): PASSED — the owner's report. The VSIX's extension code is the merged head's: from a2d7d416 to the head only the conventions pin, two `.claude/hooks` files and `POST_DEPLOY.md` changed (a merge of `main`). |  |
 | R10 | Ctrl+Alt+G in a `Creds:` tmux terminal opens go-to and prints nothing in the pane. | E3 |
 | R11 | With a user-level `commandsToSkipShell` that lacks the ids, the notification appears once, *Add* appends them, and R1 then passes. | E3 |
 
