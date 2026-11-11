@@ -1,4 +1,5 @@
 using System.Text;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -10,15 +11,9 @@ namespace CoaiServer.Tests;
 /// </summary>
 public sealed class AMalformedTokenIsAnUnknownExpiryTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-expiry-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-expiry-");
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_dir))
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public void AStringExp_IsNoExpiry() => ExpiryOfPayload("""{"exp":"1791964091"}""").Should().Be(new Expiry.Unknown(CodexAuthExpiry.NoExpiry));

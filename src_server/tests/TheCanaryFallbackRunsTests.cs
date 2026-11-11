@@ -49,21 +49,9 @@ public sealed class TheCanaryFallbackRunsTests : IDisposable
         printf '%s' '{"status":"done","answer":"{\"findings\":[]}"}'
         """;
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-canary-run-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-canary-run-");
 
-    public TheCanaryFallbackRunsTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a stray handle still holds is the OS's to clean.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public void AnOldServer_RefusesTheKind_AndTheCanaryAsksAgainAsAPlainReview()

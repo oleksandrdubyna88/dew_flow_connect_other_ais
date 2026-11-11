@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using CoaiServer;
 using Microsoft.Extensions.DependencyInjection;
 using FluentAssertions;
@@ -498,11 +499,10 @@ public sealed class ReviewEndpointTests
 /// <summary>The runner's rules, driven against a vendor that answers however the test says.</summary>
 public sealed class JobRunnerTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-runner-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-runner-");
 
     public JobRunnerTests()
     {
-        Directory.CreateDirectory(_dir);
         File.WriteAllText(
             Path.Combine(_dir, "vendors.json"),
             """[{ "id": "codex", "runtime": "codex", "models": ["m"], "slots": ["a", "b"] }]""");
@@ -517,7 +517,7 @@ public sealed class JobRunnerTests : IDisposable
         }
     }
 
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose() => _dir.Dispose();
 
     /// <summary>
     /// Hands the runner whole ATTEMPTS, because that is what a launcher returns.

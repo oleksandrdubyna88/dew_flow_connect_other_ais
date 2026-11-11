@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -30,7 +31,7 @@ public sealed class StartupGuardTests
             localKey,
             domains ?? Company,
             allowAny,
-            dataDir ?? Directory.CreateTempSubdirectory("coai-guard-").FullName,
+            dataDir ?? TempDir.For("coai-guard-").Path,
             ttlDays);
 
     [Fact]
@@ -153,7 +154,7 @@ public sealed class StartupGuardTests
     {
         // A path whose PARENT is a file: creating a directory there is impossible on every OS,
         // which is what makes this a portable stand-in for an unwritable mount.
-        var file = Path.Combine(Directory.CreateTempSubdirectory("coai-guard-").FullName, "a-file");
+        var file = TempDir.For("coai-guard-").At("a-file");
         File.WriteAllText(file, "");
 
         Guard(dataDir: Path.Combine(file, "data")).Should().Throw<InvalidOperationException>()

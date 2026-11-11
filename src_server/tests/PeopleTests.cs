@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -172,7 +173,7 @@ public sealed class PeopleTests
     [Fact]
     public async Task ADomainChange_FlipsTheGateAndTheRosterTogether()
     {
-        var data = Path.Combine(Path.GetTempPath(), "coai-server-tests", Guid.NewGuid().ToString("N"));
+        using var data = TempDir.For("coai-server-tests-");
         using (var before = new TeamServer(new Dictionary<string, string?> { ["Coai__DataDir"] = data }))
         {
             await SignInAsync(before, Dev, "A Developer");
@@ -220,7 +221,7 @@ public sealed class PeopleTests
     [Fact]
     public async Task ASessionWhoseDomainIsNoLongerAllowed_IsNotListed()
     {
-        var data = Path.Combine(Path.GetTempPath(), "coai-server-tests", Guid.NewGuid().ToString("N"));
+        using var data = TempDir.For("coai-server-tests-");
         using (var before = new TeamServer(new Dictionary<string, string?> { ["Coai__DataDir"] = data }))
         {
             await SignInAsync(before, $"leaver@{TeamServer.Domain}", "A Leaver");
@@ -296,7 +297,7 @@ public sealed class PeopleTests
 /// </summary>
 public sealed class SessionStoreActiveTests
 {
-    private static string FreshDir() => Directory.CreateTempSubdirectory("coai-people-").FullName;
+    private static string FreshDir() => TempDir.For("coai-people-").Path;
 
     [Fact]
     public void Active_OnAStoreThatNeverIssuedASession_IsEmpty()

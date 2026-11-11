@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -110,7 +111,7 @@ public sealed class SessionTests
     [Fact]
     public async Task ASessionWhoseDomainIsNoLongerAllowed_StopsBeingServed()
     {
-        var data = Path.Combine(Path.GetTempPath(), "coai-server-tests", Guid.NewGuid().ToString("N"));
+        using var data = TempDir.For("coai-server-tests-");
         SessionDto session;
         using (var before = new TeamServer(new Dictionary<string, string?> { ["Coai__DataDir"] = data }))
         {
@@ -143,7 +144,7 @@ public sealed class SessionTests
     [Fact]
     public void RevokingSaysWhetherItHappened_AndTwiceIsStillSuccess()
     {
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var store = new SessionStore(data, TimeSpan.FromDays(7));
         var (token, _) = store.Issue($"dev@{TeamServer.Domain}", "", DateTimeOffset.UtcNow);
 
@@ -160,7 +161,7 @@ public sealed class SessionTests
     [Fact]
     public void ASessionFileThatWillNotParse_IsReported_AndRefused()
     {
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var reported = new List<string>();
         var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
         var (token, _) = store.Issue($"dev@{TeamServer.Domain}", "", DateTimeOffset.UtcNow);
@@ -187,7 +188,7 @@ public sealed class SessionTests
     [Fact]
     public void AnExpiredSession_IsRefusedAndSweptOnSight()
     {
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var store = new SessionStore(data, TimeSpan.FromDays(7));
         var (token, _) = store.Issue($"dev@{TeamServer.Domain}", "A Developer", DateTimeOffset.UtcNow);
 
@@ -204,7 +205,7 @@ public sealed class SessionTests
     [Fact]
     public void UsingASession_DoesNotExtendIt()
     {
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var store = new SessionStore(data, TimeSpan.FromDays(7));
         var start = DateTimeOffset.UtcNow;
         var (token, issued) = store.Issue($"dev@{TeamServer.Domain}", "", start);
@@ -219,7 +220,7 @@ public sealed class SessionTests
     [Fact]
     public void TheSweep_TakesTheExpiredAndLeavesTheLiving()
     {
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var store = new SessionStore(data, TimeSpan.FromDays(7));
         var start = DateTimeOffset.UtcNow;
         store.Issue($"old@{TeamServer.Domain}", "", start.AddDays(-30));
@@ -240,7 +241,7 @@ public sealed class SessionTests
     public void AStampThatCannotBeWritten_StillAnswersTheSession_AndIsReported()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows refuses to replace a file somebody holds open");
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var reported = new List<string>();
         var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
         var start = DateTimeOffset.UtcNow;
@@ -268,7 +269,7 @@ public sealed class SessionTests
     public void TheSweep_KeepsASessionItCouldNotReadThisTime()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows lets a holder deny other readers");
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var reported = new List<string>();
         var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
         var now = DateTimeOffset.UtcNow;
@@ -289,7 +290,7 @@ public sealed class SessionTests
     [Fact]
     public void TheSweep_RemovesATornFile_AndSaysSo()
     {
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var reported = new List<string>();
         var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
         var now = DateTimeOffset.UtcNow;
@@ -311,7 +312,7 @@ public sealed class SessionTests
     [Fact]
     public void TheSweep_RemovesASessionNobodyCanBeAuthorisedAs()
     {
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var reported = new List<string>();
         var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
         var now = DateTimeOffset.UtcNow;
@@ -328,7 +329,7 @@ public sealed class SessionTests
     [Fact]
     public void Validate_RefusesARecordWithNoEmail()
     {
-        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        using var data = TempDir.For("coai-session-");
         var store = new SessionStore(data, TimeSpan.FromDays(7));
         var now = DateTimeOffset.UtcNow;
         const string token = "a-token-somebody-wrote-a-file-for";

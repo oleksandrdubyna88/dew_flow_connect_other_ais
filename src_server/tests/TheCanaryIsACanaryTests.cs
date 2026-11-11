@@ -1,4 +1,5 @@
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -18,11 +19,9 @@ public sealed class TheCanaryIsACanaryTests : IDisposable
 {
     private static readonly AcceptedRoles Shipped = AcceptedRoles.From([], allowAny: false);
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-canary-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-canary-");
 
-    public TheCanaryIsACanaryTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public void TheCanary_IsAReviewTheDeploySends_SaidAsItsOwnKind()
