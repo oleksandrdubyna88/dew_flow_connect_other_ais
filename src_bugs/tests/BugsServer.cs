@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Routing;
@@ -58,7 +59,7 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
     /// </param>
     public BugsServer(int? ratePerMinute = null, string? adminKeys = null, int? adminRatePerMinute = null)
     {
-        DataDir = Path.Combine(Path.GetTempPath(), "coai-bugs-tests", Guid.NewGuid().ToString("N"));
+        DataDir = TempDir.For("coai-bugs-tests-").Path;
         Directory.CreateDirectory(DataDir);
 
         Set("COAI_BUGS_SECRET", Secret);

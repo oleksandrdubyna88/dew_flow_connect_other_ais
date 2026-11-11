@@ -4,13 +4,13 @@
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { after, before, test } from 'node:test';
 import { cutSession, createSanitiser, loadAllowlist } from './transcript-sanitise.mjs';
 import { compareOrdinal } from './ordinal.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 import * as sanitise from './transcript-sanitise.mjs'; // names the fixes add are reached through here: a missing one fails ITS test, not the whole file
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -19,8 +19,11 @@ const ALLOWLIST_FILE = join(here, '..', '..', 'src_mcp', 'tests', 'fixtures', 'c
 const allowlist = loadAllowlist(JSON.parse(readFileSync(ALLOWLIST_FILE, 'utf8')));
 const SENTINEL = allowlist.sentinel;
 
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'transcript-sanitise-test-'));
-after(() => rmSync(base, { recursive: true, force: true }));
+// The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
+let base;
+const scope = wrap.cleanupScope();
+before(() => { base = wrap.ownedDir(scope, 'transcript-sanitise', { parent: realpathSync.native(wrap.tempRoot()) }); });
+after(() => scope.close());
 let counter = 0;
 const scratch = (name) => { const d = join(base, `${name}-${++counter}`); mkdirSync(d, { recursive: true }); return d; };
 

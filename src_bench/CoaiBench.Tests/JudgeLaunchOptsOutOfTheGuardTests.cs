@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using CoaiMcp.Tests;
 using Xunit;
 using FluentAssertions;
 using CoaiBench.Judging;
@@ -12,9 +13,9 @@ namespace CoaiBench.Tests;
 /// </summary>
 public sealed class JudgeLaunchOptsOutOfTheGuardTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-judge-fake-").FullName;
+    private readonly TempDir _dir = TempDir.For("coai-judge-fake-");
 
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose() => _dir.Dispose();
 
     private string FakeClaude()
     {

@@ -5,7 +5,7 @@
 // two mode-bit cases run; on Windows they skip, because Windows has no mode bits and the profile's ACL is what it relies on.
 import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmdirSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, realpathSync, rmdirSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, parse } from 'node:path';
 import { after, before as beforeAll, test } from 'node:test';
@@ -15,6 +15,8 @@ import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 const WINDOWS = process.platform === 'win32';
 // The folder is made in a hook, never at module load (rule §2): an owned folder of the wrap, inside the run folder, removed with its claim by `scope.close()`.
 let base;
+// Each home gets its own counter-numbered folder inside the owned folder, made exclusively (a repeat would throw EEXIST).
+let homes = 0;
 const scope = wrap.cleanupScope();
 beforeAll(() => { base = wrap.ownedDir(scope, 'kimi-scratch', { parent: realpathSync.native(wrap.tempRoot()) }); });
 after(() => scope.close());
@@ -102,7 +104,8 @@ test('trailing separators go, in linear time on a pathological run', () => {
 
 /** A home whose credentials/<name>.json carries this refresh token. */
 function homeWith(name, refresh, access = 'a') {
-  const home = mkdtempSync(join(base, `${name}-`));
+  const home = join(base, `${name}-${++homes}`);
+  mkdirSync(home);
   mkdirSync(join(home, 'credentials'));
   writeFileSync(join(home, 'credentials', 'kimi.json'), JSON.stringify({ refresh_token: refresh, access_token: access, expires_at: 1 }));
   return home;
@@ -284,7 +287,8 @@ test('a child is killed by pid only while it is still running', async () => {
 
 /** A fake ~/.kimi-code: a config, a session file, and credentials/ holding the named files. */
 function fakeKimiHome(name, credentialFiles) {
-  const home = mkdtempSync(join(base, `${name}-`));
+  const home = join(base, `${name}-${++homes}`);
+  mkdirSync(home);
   mkdirSync(join(home, 'credentials'));
   mkdirSync(join(home, 'sessions'));
   writeFileSync(join(home, 'config.toml'), 'default_model = "k3"\n');

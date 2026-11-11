@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -23,7 +24,7 @@ public sealed class TheRootHelperFramesTwoRecordsTests : IDisposable
 {
     private const string Helper = "deploy/bugs/install-env.sh";
 
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-install-env-").FullName;
+    private readonly string _dir = TempDir.For("coai-install-env-").Path;
 
     public TheRootHelperFramesTwoRecordsTests()
     {

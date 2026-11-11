@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -100,7 +101,7 @@ public sealed class WhatTheArgumentsMeanTests
         // override was read or ignored entirely. It was the only cover on the branch its own
         // remarks call the one that rots. (CodeRabbit, #328.)
         const string OverrideOnly = "[NotALanguageThisBinaryShips]\nkeyword-that-exists-only-here\n";
-        var file = Path.Combine(Path.GetTempPath(), $"kw-{Guid.NewGuid():N}.txt");
+        var file = Path.Combine(TempDir.Root, $"kw-{Guid.NewGuid():N}.txt");
         File.WriteAllText(file, OverrideOnly);
         var was = Environment.GetEnvironmentVariable("COAI_BUGS_KEYWORDS");
         try
