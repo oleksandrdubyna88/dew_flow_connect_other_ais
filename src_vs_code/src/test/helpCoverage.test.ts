@@ -81,6 +81,30 @@ test('S1r-T7 every language’s chat article gives the terminal door’s new sen
   }
 });
 
+test('S1r-T8 no language’s chat article says the terminal door uses VS Code’s copy command', () => {
+  // Epoch 1's "what can go wrong" sentence outlived change 1.2 in all five languages: the door no longer runs a copy command,
+  // it only reads the clipboard. Each language's epoch-1 wording is named here, because a translation cannot be matched by
+  // one English phrase.
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+  const epochOne: Record<string, string> = {
+    en: 'it uses VS Code’s own copy command',
+    de: 'sie nutzt den eigenen Kopierbefehl von VS Code',
+    es: 'usa el propio comando de copia de VS Code',
+    ru: 'она использует собственную команду копирования VS Code',
+    uk: 'вони використовують власну команду копіювання VS Code',
+  };
+  assert.deepEqual(Object.keys(epochOne).sort(), [...HELP_LANGUAGES].sort(), 'a help language has no epoch-1 wording named here');
+
+  for (const language of HELP_LANGUAGES) {
+    const text = Object.values(bodyFor(article, language).body).join(' ');
+    assert.ok(
+      !text.includes(epochOne[language]),
+      `the ${language} chat article still says the terminal door uses VS Code’s copy command; since change 1.2 it only reads the clipboard`,
+    );
+  }
+});
+
 test('every language describes the sides seen and the path-fields switch, by the controls\' own English labels (paths per side E2.3)', () => {
   // The operator's ruling: the help is in FIVE languages. bodyFor marks a MISSING translation, not a stale one, so each
   // language is asked for the labels a person meets on Setup › This side — English in every language, as every control
