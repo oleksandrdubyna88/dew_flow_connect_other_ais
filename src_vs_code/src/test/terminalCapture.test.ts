@@ -1,24 +1,19 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Clipboard, borrowClipboard } from '../selectionCapture';
-import {
-  NO_TERMINAL_SELECTION,
-  TERMINAL_COPY,
-  captureTerminalSelection,
-  terminalPassage,
-} from '../terminalSource';
+import { oneAtATime } from '../oneAtATime';
+import { Capture, Clipboard, borrowClipboard } from '../selectionCapture';
+import { NOTHING_COPIED, readCopiedText, terminalPassage } from '../terminalSource';
 import { blanked } from './blankedSource';
 import { bodyOf, sourceOf } from './sourceReading';
 
 /**
- * Copying a terminal's selection: the borrow, and the sentence when there is none.
+ * The terminal door reads the clipboard; the borrow is the Claude-tab door's.
  *
- * <p>A terminal is never sent a keystroke. A synthetic Ctrl+C reaches the shell as SIGINT — in `ssh`,
- * `tmux` or the Claude CLI that is an interrupt, not a copy — so the terminal copy is VS Code's own
- * `copySelection` command, run inside the same clipboard borrow the keyboard capture uses. The
- * borrow is tested here on its own (S1-T1…T5), then the terminal capture built on it (T6…T9).
- * `chatCapture.test.ts` is the regression net for the extraction and is not edited.</p>
+ * <p>The person copies, and the door takes what is on the clipboard (epoch 2, change 1.2): it runs no copy command, no borrow
+ * and writes nothing, so a terminal is never sent a keystroke either. The borrow is tested here on its own (S1-T1…T5, T11);
+ * the terminal read built on the clipboard is S1r-T1…T6. `chatCapture.test.ts` is the regression net for the borrow's
+ * extraction and is not edited.</p>
  */
 
 /**
@@ -121,58 +116,92 @@ test('S1-T5 an empty clipboard is never written', async () => {
   assert.strictEqual(copying.held(), 'the selected passage', 'the restore blanked the clipboard');
 });
 
-test('S1-T6 the terminal capture runs exactly one command, the copy', async () => {
-  const seen: string[] = [];
+test('S1r-T1 the copied text is the passage, as it is, and the clipboard is not written', async () => {
+  const clip = fakeClipboard('  ls -la\n');
 
-  await captureTerminalSelection(async (command) => {
-    seen.push(command);
-  }, fakeClipboard(ORIGINAL));
+  const capture = await readCopiedText(() => clip.read());
 
-  assert.deepStrictEqual(seen, ['workbench.action.terminal.copySelection']);
-  assert.strictEqual(TERMINAL_COPY, 'workbench.action.terminal.copySelection');
+  assert.deepStrictEqual(capture, { text: '  ls -la\n', failure: '' }, 'the copied text was trimmed');
+  assert.deepStrictEqual(clip.writes(), [], 'the terminal door wrote to the clipboard');
+  assert.strictEqual(clip.held(), '  ls -la\n');
 });
 
-test('S1-T7 no selection gives the owner’s sentence, and so does a selection of nothing but space', async () => {
-  const none = await captureTerminalSelection(async () => undefined, fakeClipboard(ORIGINAL));
+test('S1r-T2 nothing copied gives the owner’s sentence, an empty clipboard and white space alike', async () => {
+  for (const held of ['', '  \n\t']) {
+    const clip = fakeClipboard(held);
 
-  assert.deepStrictEqual(none, { text: '', failure: 'Select text in the terminal first.' });
-  assert.strictEqual(NO_TERMINAL_SELECTION, 'Select text in the terminal first.');
+    const capture = await readCopiedText(() => clip.read());
 
-  const clipboard = fakeClipboard(ORIGINAL);
-  const blank = await captureTerminalSelection(async () => clipboard.write('  \n'), clipboard);
+    assert.deepStrictEqual(
+      capture,
+      { text: '', failure: 'Copy the text first, then press Ask other AI.' },
+      `a passage of ${JSON.stringify(held)} was returned`,
+    );
+    assert.deepStrictEqual(clip.writes(), []);
+  }
 
-  assert.deepStrictEqual(blank, { text: '', failure: NO_TERMINAL_SELECTION }, 'a passage of white space was returned');
-  assert.strictEqual(clipboard.held(), ORIGINAL);
-
-  const kept = await captureTerminalSelection(async () => clipboard.write('  ls -la\n'), clipboard);
-
-  assert.deepStrictEqual(kept, { text: '  ls -la\n', failure: '' }, 'the selection is the passage and is not trimmed');
-  assert.deepStrictEqual(
-    terminalPassage({ landed: false, text: '', outcome: undefined }),
-    { text: '', failure: NO_TERMINAL_SELECTION },
-  );
+  assert.strictEqual(NOTHING_COPIED, 'Copy the text first, then press Ask other AI.');
+  assert.deepStrictEqual(terminalPassage('  \n\t'), { text: '', failure: NOTHING_COPIED });
 });
 
-test('S1-T8 a copy command that rejects says so, and not "select text"', async () => {
-  const clipboard = fakeClipboard(ORIGINAL);
+test('S1r-T3 a clipboard that cannot be read says so, and the read never rejects', async () => {
+  const busy = await readCopiedText(async () => {
+    throw new Error('clipboard busy');
+  });
 
-  const capture = await captureTerminalSelection(async () => {
-    throw new Error('no terminal');
-  }, clipboard);
+  assert.strictEqual(busy.text, '');
+  assert.notStrictEqual(busy.failure, NOTHING_COPIED, 'the sentence lies about the cause');
+  assert.strictEqual(busy.failure, 'The clipboard could not be read: clipboard busy');
 
-  assert.strictEqual(capture.text, '');
-  assert.match(capture.failure, /^The terminal selection could not be copied: no terminal$/);
-  assert.notStrictEqual(capture.failure, NO_TERMINAL_SELECTION, 'the sentence lies about the cause');
-  assert.strictEqual(clipboard.held(), ORIGINAL, 'a rejected copy kept the marker');
+  const odd = await readCopiedText(async () => {
+    throw 'odd';
+  });
 
-  const odd = await captureTerminalSelection(async () => {
-    throw 'a string, not an Error';
-  }, fakeClipboard(ORIGINAL));
-
-  assert.match(odd.failure, /could not be copied: a string, not an Error$/);
+  assert.strictEqual(odd.failure, 'The clipboard could not be read: odd');
 });
 
-test('S1-T9 the terminal path presses no key and shares the keyboard latch', () => {
+test('S1r-T4 the same text twice is sent twice', async () => {
+  const clip = fakeClipboard('same');
+
+  const first = await readCopiedText(() => clip.read());
+  const second = await readCopiedText(() => clip.read());
+
+  assert.deepStrictEqual(first, { text: 'same', failure: '' });
+  assert.deepStrictEqual(second, { text: 'same', failure: '' }, 'an unchanged clipboard was refused; decision 3 sends it');
+});
+
+test('S1r-T5 a press while the keyboard path holds the latch is refused, never the marker', async () => {
+  const clip = fakeClipboard(ORIGINAL);
+  const latch = oneAtATime<Capture>({ text: '', failure: 'busy' });
+  let open: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let started: () => void = () => undefined;
+  const running = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+
+  const keyboard = latch(async () => {
+    await clip.write('coai-marker-1234');
+    started();
+    await gate;
+    await clip.write(ORIGINAL);
+
+    return { text: 'the keyboard passage', failure: '' };
+  });
+  await running;
+
+  const pressed = await latch(() => readCopiedText(() => clip.read()));
+
+  assert.deepStrictEqual(pressed, { text: '', failure: 'busy' }, 'a terminal press during the keyboard capture sent the marker');
+
+  open();
+  assert.deepStrictEqual(await keyboard, { text: 'the keyboard passage', failure: '' });
+  assert.deepStrictEqual(await latch(() => readCopiedText(() => clip.read())), { text: ORIGINAL, failure: '' });
+});
+
+test('S1r-T6 the terminal door reads under the one latch and runs nothing', () => {
   const raw = sourceOf('chatCapture.ts');
   const code = blanked(raw);
   const terminal = bodyOf(code, 'export async function fromTheTerminal(');
@@ -180,18 +209,26 @@ test('S1-T9 the terminal path presses no key and shares the keyboard latch', () 
   const keyboard = bodyOf(code, 'export async function passageFor(');
 
   assert.match(terminal, /oneCapture\(/, 'the terminal door has a latch of its own, or none');
-  assert.match(terminal, /captureTerminalSelection\(/, 'the terminal door does not use the terminal capture');
-  // IDENTIFIERS, in the body with its strings and comments blanked: a call that starts a helper or types into the terminal.
-  // `sendText('\u0003')` is a real Ctrl+C into a shell — the very thing this door exists not to do.
-  for (const forbidden of ['pressCopy', 'COPY_SCRIPT', 'launch', 'sendText', 'sendSequence']) {
-    assert.ok(!new RegExp(`\\b${forbidden}\\b`).test(terminal), `the terminal door reaches for ${forbidden}, which is a keystroke`);
+  assert.match(terminal, /readCopiedText\(/, 'the terminal door does not read the copied text');
+  // IDENTIFIERS, in the body with its strings and comments blanked: a call that starts a helper, types into the terminal,
+  // runs a command, or borrows the clipboard. `sendText('\u0003')` is a real Ctrl+C into a shell.
+  const forbidden = [
+    'pressCopy', 'COPY_SCRIPT', 'launch', 'sendText', 'sendSequence', 'executeCommand',
+    'borrowClipboard', 'captureSelection', 'write', 'writeText',
+  ];
+  for (const name of forbidden) {
+    assert.ok(!new RegExp(`\\b${name}\\b`).test(terminal), `the terminal door reaches for ${name}, which is not a read`);
   }
-  // WORDS, in the raw body: a helper's name only ever appears inside a string, which the blanking removes.
-  for (const forbidden of ['powershell', 'keybd_event']) {
-    assert.ok(!rawTerminal.toLowerCase().includes(forbidden), `the terminal door names ${forbidden}, which is a keystroke`);
+  // WORDS, in the raw body: a helper's or a command's name only ever appears inside a string, which the blanking removes.
+  for (const word of ['copySelection', 'powershell', 'keybd_event']) {
+    assert.ok(!rawTerminal.toLowerCase().includes(word.toLowerCase()), `the terminal door names ${word}`);
   }
-  // Companion: the scan is alive — the keyboard door still holds the key press it forbids here.
+  const source = sourceOf('terminalSource.ts');
+  assert.ok(!/\bexecuteCommand\b/.test(blanked(source)), 'terminalSource.ts runs a command');
+  assert.ok(!source.includes('copySelection'), 'terminalSource.ts still names the copy command');
+  // Companion: the scan is alive — the keyboard door still holds the key press it forbids here, under the same latch.
   assert.match(keyboard, /pressCopy/, 'the scan reads the wrong function: the keyboard door no longer presses the key');
+  assert.match(keyboard, /oneCapture\(/, 'the scan reads the wrong function: the keyboard door has no latch');
 });
 
 test('S1-T11 a restore that fails after a rejected copy does not replace the copy\'s reason', async () => {

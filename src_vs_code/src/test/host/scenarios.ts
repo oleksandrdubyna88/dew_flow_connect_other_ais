@@ -18,7 +18,7 @@ import { theMigrationKeysAreKnownInARealEditor } from './migrationKeysScenario';
 import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingNamedDataRootStaysAbsent } from './missingDataRootScenario';
 import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathSaidOnceScenario';
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
-import { aTerminalSelectionIsCapturedAndTheClipboardGivenBack, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
+import { aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
 
 /**
@@ -927,10 +927,10 @@ const SCENARIOS: readonly Scenario[] = [
     run: aStillMissingPathIsSaidOnceAcrossSettingsChanges,
   },
   {
-    // S1-H1 of the E1 stories document (the chat opens from a terminal): the terminal capture through the real `copySelection` and the real
-    // clipboard. What it drives is in `terminalCaptureScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
-    name: 'a terminal\'s selection is captured through the clipboard, which is given back, and no selection says so',
-    run: aTerminalSelectionIsCapturedAndTheClipboardGivenBack,
+    // S1r-H1 of the E1 stories document (the chat opens from a terminal): a terminal press takes what the person copied, through the
+    // real clipboard. What it drives is in `terminalCaptureScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
+    name: 'a terminal press takes the text the person copied, leaves the clipboard as it is, and an empty clipboard says so',
+    run: aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard,
   },
   {
     // S3-H1 of the E1 stories document (the chat opens from a terminal): the host reports `coai.askFromTerminal` in the default of

@@ -128,10 +128,10 @@ test('the terminal door never reads the tabs', () => {
   }
 });
 
-test('a terminal whose name cannot name a conversation is refused BEFORE its selection is captured', () => {
+test('a terminal whose name cannot name a conversation is refused BEFORE the clipboard is read', () => {
   // A name that is not an identity (a control character, a line separator, over 500 units, empty) builds the source `none`: the chat
-  // would lose its road back and the steal protection, silently. So the door says so and stops. The guard has to come first — a
-  // capture borrows the clipboard — and it has to be the store's own rule, not a second copy of it.
+  // would lose its road back and the steal protection, silently. So the door says so and stops. The guard has to come first — the
+  // clipboard is read only for a terminal that can be filed — and it has to be the store's own rule, not a second copy of it.
   const text = sourceOf('chatCommand.ts');
   const command = bodyOf(text, 'export async function askFromTerminal(');
   const guard = bodyOf(text, 'function terminalDoorName(');
@@ -140,8 +140,8 @@ test('a terminal whose name cannot name a conversation is refused BEFORE its sel
   assert.ok(guard.includes("code: 'terminal-name-unusable'") || terminalDoorSource().includes("code: 'terminal-name-unusable'"),
     'the refusal of an unusable name has no notice of its own');
   assert.ok(command.includes('terminalDoorName('), 'the command does not ask the guard');
-  // A title can change while the selection is copied: the name is read ONCE, by the guard, and the command works with that value —
-  // a second read after the capture could judge one name and file the conversation under another.
+  // A title can change while the clipboard is read: the name is read ONCE, by the guard, and the command works with that value —
+  // a second read after the clipboard was read could judge one name and file the conversation under another.
   assert.ok(!command.includes('terminal.name'), 'the command reads the terminal\u2019s name itself, so it can differ from the one the guard judged');
-  assert.ok(command.indexOf('terminalDoorName(') < command.indexOf('fromTheTerminal('), 'the name is checked after the selection was captured');
+  assert.ok(command.indexOf('terminalDoorName(') < command.indexOf('fromTheTerminal('), 'the name is checked after the clipboard was read');
 });

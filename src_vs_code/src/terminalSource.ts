@@ -1,62 +1,56 @@
 import type { ChatPanels } from './chatPanels';
 import type { ConversationSource } from './chatStore';
 import { threadUnder } from './chatThread';
-import { Borrowed, Capture, Clipboard, borrowClipboard } from './selectionCapture';
+import type { Capture } from './selectionCapture';
 import type { KnownPanel, SessionMatch } from './sessionKey';
 
 /**
- * The terminal as a conversation source: copying its selection, naming its conversation, finding its panel — with no `vscode` in it.
+ * The terminal as a conversation source: the text the person copied, naming its conversation, finding its panel — with no `vscode` in it.
  *
  * <p>The rules are pure values and take their seams as parameters. The one exception is `tabPanels`, which reads the chat registry
  * and the thread table once to say which panels a tab may match; it is the only function here that touches shared state.</p>
  *
- * <p><b>No keystroke, ever.</b> A synthetic Ctrl+C reaches a terminal as SIGINT: in `ssh`, `tmux` or
- * the Claude CLI that interrupts the program instead of copying anything. The copy is VS Code's own
- * `copySelection` command, which the host runs through the `execute` seam below, inside the same
- * clipboard borrow the keyboard capture uses. There is no PowerShell side, no launch and no reach
- * check here: nothing about a terminal copy needs the Windows half of the machine.</p>
+ * <p><b>The door reads what the person copied.</b> A drag in the Claude CLI (or in `tmux`) is that program's own selection, already
+ * copied by it, and is not a VS Code selection: a copy command then copies nothing (change 1.2, the first real-window
+ * run). So the person copies, and the door reads the clipboard once. It is given a READ function only, so it cannot write the
+ * clipboard or run a command.</p>
+ *
+ * <p><b>No keystroke, ever.</b> A synthetic Ctrl+C reaches a terminal as SIGINT: in `ssh`, `tmux` or the Claude CLI that
+ * interrupts the program instead of copying anything.</p>
  */
 
-/** The command that copies the active terminal's selection to the clipboard. */
-export const TERMINAL_COPY = 'workbench.action.terminal.copySelection';
-
-/** What a person is told when nothing was selected — the owner's own words. */
-export const NO_TERMINAL_SELECTION = 'Select text in the terminal first.';
+/** What a person is told when the clipboard holds no text — the owner's own words. */
+export const NOTHING_COPIED = 'Copy the text first, then press Ask other AI.';
 
 /**
- * What a finished borrow means for a terminal.
+ * What the clipboard's text means for a terminal.
  *
- * <p>Nothing landed, or only white space landed: no selection. The text is NOT trimmed — the
- * selection is the passage, and indentation in a terminal is content.</p>
+ * <p>Empty or white space only (an image reads as empty): nothing was copied. The text is NOT trimmed — what the person copied
+ * is the passage, and indentation in a terminal is content.</p>
  */
-export function terminalPassage(borrowed: Borrowed<unknown>): Capture {
-  if (!borrowed.landed || borrowed.text.trim().length === 0) {
-    return { text: '', failure: NO_TERMINAL_SELECTION };
+export function terminalPassage(text: string): Capture {
+  if (text.trim().length === 0) {
+    return { text: '', failure: NOTHING_COPIED };
   }
 
-  return { text: borrowed.text, failure: '' };
+  return { text, failure: '' };
 }
 
 /**
- * Copy the active terminal's selection through the clipboard, and give the clipboard back.
+ * Read the text the person copied, once. It never writes, and it never rejects.
  *
- * <p>A copy command that REJECTS is not "select text first": the person did select, and a sentence
- * that blames them hides the real cause. It says what the command said. The borrow has restored the
- * clipboard by then, whichever way the command ended.</p>
+ * <p>A clipboard that cannot be read is not "copy the text first": the person may have copied, and a sentence that blames them
+ * hides the real cause. It says what the read said.</p>
  *
- * @param execute runs one VS Code command by id — `vscode.commands.executeCommand` in the host
- * @param clipboard the clipboard, injected
+ * @param read reads the clipboard's text — `vscode.env.clipboard.readText` in the host
  */
-export async function captureTerminalSelection(
-  execute: (command: string) => PromiseLike<unknown>,
-  clipboard: Clipboard,
-): Promise<Capture> {
+export async function readCopiedText(read: () => PromiseLike<string>): Promise<Capture> {
   try {
-    return terminalPassage(await borrowClipboard(clipboard, () => execute(TERMINAL_COPY)));
+    return terminalPassage(await read());
   } catch (reason) {
     const said = reason instanceof Error ? reason.message : String(reason);
 
-    return { text: '', failure: `The terminal selection could not be copied: ${said}` };
+    return { text: '', failure: `The clipboard could not be read: ${said}` };
   }
 }
 

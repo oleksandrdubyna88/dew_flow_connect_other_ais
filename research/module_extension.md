@@ -13365,32 +13365,35 @@ flowchart LR
 
 Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This section grows with each story of E1; S1 is the capture, S2 the source, S3 the door.
 
-- **The capture (S1) never presses a key.** A synthetic Ctrl+C reaches a terminal as SIGINT — in `ssh`, `tmux` or the Claude CLI that is an
-  interrupt, not a copy. The terminal copy is VS Code's own `workbench.action.terminal.copySelection`, run by `captureTerminalSelection`
-  (`src/terminalSource.ts`, pure: the command runner and the clipboard are injected) inside the clipboard borrow. The host half is
-  `fromTheTerminal()` in `chatCapture.ts`. It has no PowerShell side, no launch and no reach check.
+- **The terminal door reads the clipboard (epoch 2, change 1.2).** The first real-window check (VSIX 0.85.901, 2026-11-11) showed why a
+  copy command cannot serve this door: in a `Creds:` tmux terminal running the Claude CLI, a mouse drag is Claude's own selection, already
+  copied by it to the local clipboard, and VS Code's terminal has no selection — so `copySelection` copied nothing, and the door said
+  *"Select text in the terminal first."* beside VS Code's *"The terminal has no selection to copy"*. So the person copies, and the door
+  reads the clipboard ONCE: `readCopiedText(read)` in `src/terminalSource.ts` (pure) is given a read function only, so it cannot write
+  the clipboard or run a command, and it never rejects. `fromTheTerminal()` in `chatCapture.ts` is `oneCapture(() =>
+  readCopiedText(hostClipboard.read))` — no copy command, no borrow, no marker, no restore, no progress line (the read is instant).
+  Empty or white-space-only text (an image reads as empty) gives *"Copy the text first, then press Ask other AI."* (`NOTHING_COPIED`);
+  a read that rejects gives *"The clipboard could not be read: <reason>"*, never the first sentence; any other text is the passage,
+  never trimmed. There is no freshness guard: the same text twice is sent twice, also text copied earlier somewhere else (the help
+  says so). A synthetic Ctrl+C is still never sent: in `ssh`, `tmux` or the Claude CLI it is an interrupt (SIGINT), not a copy.
 - **The borrow was extracted, and its restore moved into a `finally`.** `borrowClipboard(clipboard, run)` in `selectionCapture.ts` is the rule
   that `captureSelection` carried inline — read the clipboard; write a unique marker only when something readable was there; run; read what
   landed; give the clipboard back unless somebody wrote to it meanwhile — and it is NOT unchanged. `captureSelection` keeps its Windows reach
-  check and its sentences and calls it. Three behaviours differ. A `run` that REJECTS still restores, then rejects with the same reason —
+  check and its sentences and calls it; the borrow now serves the Claude-tab door only (the terminal door reads the clipboard and does not borrow). Three behaviours differ. A `run` that REJECTS still restores, then rejects with the same reason —
   before, a copy command that threw left our marker on the clipboard; and a restore that fails on that path does not replace the reason. On
   the NOT-LANDED path the old code wrote `borrowed` back unconditionally after two reads; the new one makes a third read and restores only
   when the clipboard still holds this borrow's marker, so a clipboard somebody changed in that gap is left alone. The landed path is the same.
-  The reads stay in the order borrow, landed, current. A copy that landed nothing is `landed: false`
-  (the clipboard still holds the marker), and for a terminal that means *"Select text in the terminal first."*; white space alone means the
-  same; the text is never trimmed. A command that rejects is NOT that sentence — it says *"The terminal selection could not be copied: …"*.
-- **Known limit: with no selection the person may see two messages.** VS Code's own `copySelection` shows *"The terminal has no selection to
-  copy"* when nothing is selected, and `executeCommand` does not check the action's precondition first. The stable API gives no way to ask
-  (`Terminal.selection` is a proposed API), so our sentence *"Select text in the terminal first."* comes after VS Code's. Left as it is;
-  accepted in the S3 section below, and the owner's R3 check records it.
-- **One latch for both captures.** `fromTheTerminal` goes through the same `oneCapture` as the keyboard door, because both borrow the one
-  clipboard: a second press while either runs is refused with the existing *"That selection is still being copied"*.
-- **Not yet measured: the marker timing.** Whether the clipboard still holds the marker right after the awaited command while a selection
-  exists is what the host scenario (`terminalCaptureScenario.ts`) shows in CI. A bounded re-read (at most 500 ms, 50 ms steps) goes into
-  `captureTerminalSelection` ONLY if that shows it needed, and its measurement is written here; none exists until then.
-- **Tests**: `terminalCapture.test.ts` (S1-T1…T9 and T11: the borrow, the terminal capture, the source scan that the terminal door presses no
-  key and shares the latch, and that a failing restore never replaces the copy's reason). The host scenario also sends two presses at once and
-  requires exactly one to be refused with the latch's sentence — the check a locally shadowed latch would pass in the source scan; `chatCapture.test.ts` is the unedited regression net for the extraction.
+  The reads stay in the order borrow, landed, current.
+- **One latch.** `fromTheTerminal` goes through the same `oneCapture` as the keyboard door, because the keyboard path writes a marker to the
+  clipboard while it runs: a terminal press that arrives then is refused with the existing *"That selection is still being copied"* and
+  is never handed the marker (consult 5faf4657). A latch of its own, or none, would read the marker as the passage.
+- **Tests**: `terminalCapture.test.ts` — the borrow (S1-T1…T5, T11: a rejecting copy still gives the clipboard back, a failing restore never
+  replaces the copy's reason) and the terminal read (S1r-T1…T6: the copied text as it is and nothing written, the owner's sentence for empty and
+  white space, a read failure said with its own reason and never rejecting, the same text twice sent twice, a press during the keyboard capture
+  refused and never the marker, and the source scan that `fromTheTerminal` reads under `oneCapture` and runs no command, borrow or write).
+  S1r-T7 in `helpCoverage.test.ts`: every language's chat article gives the new sentence and not the old. The host scenario S1r-H1
+  (`terminalCaptureScenario.ts`) sends two presses at once and requires exactly one to be refused with the latch's sentence — the check a
+  locally shadowed latch would pass in the source scan; `chatCapture.test.ts` is the unedited regression net for the borrow's extraction.
 
 ### The terminal source and its identity (E1.S2)
 
@@ -13487,16 +13490,16 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   `configurationDefaults` route does not work for this setting and the owner decides — nothing is worked around. Other chords that a terminal
   would send to the shell (`coai.switchConversations`) are an open question in the plan, not built here.
 - **`askFromTerminal(panels, extensionUri, terminal)`** (`chatCommand.ts`) in small helpers: not ready → `notReady`; no terminal →
-  *There is no terminal here — open one and select text in it first.* (`no-terminal-here`); an empty capture → the capture's own sentence
-  (`nothing-selected-in-terminal`: *Select text in the terminal first.* or the copy failure); else `deliverPassage` with
+  *There is no terminal here — open one, copy the text, then press Ask other AI.* (`no-terminal-here`); an empty read → the read's own sentence
+  (`nothing-copied-for-terminal`: *Copy the text first, then press Ask other AI.* or the read failure); else `deliverPassage` with
   `terminalMatch(panels.known(), terminal, terminal.name)`, `sendsImmediately(autoSend, false)` — the button and the chord both follow **Who presses
   send** — `fromSession` false and `sourceOfTerminal(terminal.name)`. It never calls `matchedSource`, `snapshots` or `sourceSession`, so the
   file-text defect cannot happen on this door. The terminal is a parameter: `extension.ts` passes `vscode.window.activeTerminal` (a default
   parameter would count against `complexity` 4). A failure of the whole command is caught like `coai.takeTheQuestion`'s: console detail, a
-  `terminal-door-failed` notice.
+  `terminal-door-failed` notice (*The copied text could not be sent to a chat.*).
 - **The door is counted.** `'terminal'` is in `Door` and last in `DOORS` (`chatDoors.ts`); the handler in `extension.ts` calls
   `noteChatDoor('terminal')` first, which the door census (`chatWiring.test.ts`) derives from the keybinding and requires. It is an *Opened*, not an
-  *Asked*. Four notify sites were added (`no-terminal-here`, `nothing-selected-in-terminal`, `terminal-door-failed`, `terminal-name-unusable`); `notification-sites.json` was regenerated.
+  *Asked*. Four notify sites were added (`no-terminal-here`, `nothing-copied-for-terminal`, `terminal-door-failed`, `terminal-name-unusable`); `notification-sites.json` was regenerated.
 - **Agent mode is off for a terminal conversation, at every place that decides it.** `agentRuledOutBy(source)` (`chatAccessRules.ts`; a record typed
   by the kind, so a fifth kind of source does not compile until it is placed — a four-arm switch would have `complexity` 5) is true
   for `terminal`. The module spells the four kinds itself (`SourceKind`, `AgentSource`) and does not import `chatStore`: that import closed a new
@@ -13509,15 +13512,11 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   where no source is known, and a terminal conversation never reaches a launch in agent mode because `accessOn` and the box refuse first.
 - **The help** (`helpContent.ts`, `helpRu.ts`, `helpUk.ts`, `helpDe.ts`, `helpEs.ts`, the `chat-with-other-ai` article): one paragraph that names
   **Ask other AI** in English in every language, and *or the terminal* in the back-to-source paragraph.
-- **A terminal whose name cannot name a conversation is refused before anything is captured** (`terminalDoorName` in `chatCommand.ts`, the store's
+- **A terminal whose name cannot name a conversation is refused before the clipboard is read** (`terminalDoorName` in `chatCommand.ts`, the store's
   own `isTerminalName`): empty, over 500 UTF-16 units, or holding a control character or a line separator. The builder (`sourceOfTerminal`) would fall back to the source `none` for such a name, and a
   chat with no source has no road back and no protection against a Claude tab taking it, silently. The notice is `terminal-name-unusable`: *This
   terminal's name cannot name a conversation (it is empty, longer than 500 characters, or holds a control character) — rename the terminal and press
-  again.* The check runs before the capture because a capture borrows the clipboard. (The help does not list this refusal.)
-- **Known limit, accepted: with no selection a person may see two messages.** Read in VS Code's source by two reviewers: the terminal's own
-  `copySelection` shows *"The terminal has no selection to copy"* when nothing is selected, and then our *"Select text in the terminal first."*
-  follows. The stable API has no way to ask whether a selection exists (`Terminal.selection` is proposed), so no code can avoid it. The help
-  says VS Code may show its own message first, in five languages; the owner's check R3 records how it looks.
+  again.* The name is judged before the clipboard is read: the text is read only for a terminal that can be filed. (The help does not list this refusal.)
 - **Tests**: `terminalDoorWiring.test.ts` (new; the manifest is parsed, and the door's code is scanned for the tab readers), `chatAgentMode.test.ts`,
   `chatDoors.test.ts`, `helpCoverage.test.ts`, the door census in `chatWiring.test.ts`. Host scenario S3-H1 (the skip-list default) in
   `terminalCaptureScenario.ts`; it runs only in CI's job `extension · a real editor`.

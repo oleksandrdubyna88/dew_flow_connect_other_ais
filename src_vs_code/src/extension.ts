@@ -683,7 +683,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
           class: 'failure',
           source: 'askFromTerminal',
           code: 'terminal-door-failed',
-          title: 'The terminal selection could not be sent to a chat.',
+          title: 'The copied text could not be sent to a chat.',
           detail: asText(reason),
         });
       });

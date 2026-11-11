@@ -275,7 +275,7 @@ function terminalDoorNoTerminal(): void {
     class: 'refusal',
     source: 'chat',
     code: 'no-terminal-here',
-    title: 'There is no terminal here — open one and select text in it first.',
+    title: 'There is no terminal here — open one, copy the text, then press Ask other AI.',
   });
 }
 
@@ -296,7 +296,7 @@ function terminalDoorNameUnusable(): void {
  *
  * <p>The name is judged by the store's own rule (`isTerminalName`) BEFORE anything is captured: a name that is not an identity
  * builds the source `none`, and a chat with no source has no road back and no protection against a Claude tab taking it. It is
- * read ONCE and handed back, because a program can retitle a terminal while its selection is being copied: the name that was
+ * read ONCE and handed back, because a program can retitle a terminal while the clipboard is read: the name that was
  * judged is the name the conversation is matched and filed under.</p>
  */
 function terminalDoorName(terminal: vscode.Terminal | undefined): { readonly terminal: vscode.Terminal; readonly name: string } | undefined {
@@ -315,19 +315,19 @@ function terminalDoorName(terminal: vscode.Terminal | undefined): { readonly ter
   return { terminal, name };
 }
 
-/** Said when the copy found no selection, or could not be made: the capture's own sentence, which says which. */
+/** Said when the clipboard held no text, could not be read, or another capture held the latch: the capture's own sentence, which says which. */
 function terminalDoorNothing(failure: string): void {
   void notify({
     as: 'warning',
     class: 'refusal',
     source: 'chat',
-    code: 'nothing-selected-in-terminal',
+    code: 'nothing-copied-for-terminal',
     title: failure,
   });
 }
 
 /**
- * The terminal door: the selection of a terminal, through VS Code's own copy, as a new chat named after that terminal.
+ * The terminal door: the text the person copied, read from the clipboard, as a new chat named after that terminal.
  *
  * <p>It never calls `matchedSource`, `snapshots` or `sourceSession`: a terminal is not a tab, and asking the tabs what the
  * person meant is how the file door once took a file's text for a terminal's. The conversation is keyed by the terminal

@@ -246,8 +246,8 @@ async function giveBack(clipboard: Clipboard, loan: Loan, captured: string | und
 /**
  * Run something that copies, and say what landed on the clipboard — giving the clipboard back.
  *
- * <p>Extracted from `captureSelection` so the terminal door and the keyboard door borrow the one
- * clipboard by one rule. It is NOT unchanged in what it does, in three ways. A `run` that REJECTS now
+ * <p>Extracted from `captureSelection` so its rule is one tested function. Its caller is `captureSelection`, the Claude-tab
+ * door; the terminal door does not borrow (it reads the clipboard, epoch 2). It is NOT unchanged in what it does, in three ways. A `run` that REJECTS now
  * restores and then rejects with the same reason (before, a copy command that threw left our marker on
  * the clipboard); and a restore that fails on that path never replaces the reason. On the NOT-LANDED
  * path the old code wrote `borrowed` back unconditionally after two reads; this one makes a third read

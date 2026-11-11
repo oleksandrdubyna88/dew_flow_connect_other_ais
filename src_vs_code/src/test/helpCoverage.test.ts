@@ -60,6 +60,27 @@ test('every language’s chat article names the terminal door by its own English
   }
 });
 
+test('S1r-T7 every language’s chat article gives the terminal door’s new sentence and not the old', () => {
+  // The terminal door reads the clipboard (epoch 2, change 1.2). The sentence is English in every language, like the control
+  // names, so all five can be asked for it; the old sentences must be gone, or a reader is told to select text that is not read.
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} chat article is missing, so a reader of it gets English`);
+    const text = Object.values(body).join(' ');
+    assert.ok(
+      !text.includes('Select text in the terminal first') && !/no selection/iu.test(text),
+      `the ${language} chat article still tells a reader to select text in the terminal`,
+    );
+    assert.ok(
+      text.includes('Copy the text first, then press Ask other AI.'),
+      `the ${language} chat article does not give the sentence an empty clipboard shows`,
+    );
+  }
+});
+
 test('every language describes the sides seen and the path-fields switch, by the controls\' own English labels (paths per side E2.3)', () => {
   // The operator's ruling: the help is in FIVE languages. bodyFor marks a MISSING translation, not a stale one, so each
   // language is asked for the labels a person meets on Setup › This side — English in every language, as every control
