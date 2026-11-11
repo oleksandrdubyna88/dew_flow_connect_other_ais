@@ -4,7 +4,8 @@
 > selection; `autoSend` kept as on the other doors). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
 > twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3. E1 merged
 > (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
-> 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, nothing coded; E3
+> 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, plan gate `proceed`,
+> E2.S1 coded; change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`) — the next change stops the plan. E3
 > not started. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
@@ -67,6 +68,16 @@ Narrowed: yes — the door no longer copies a VS Code terminal selection for the
 | change 1.2 and the stop, f540ed97 | pushed, unmerged (PR #971) | fits | kept — the change this re-review answers |
 
 > Epoch 2 · approved 2026-11-11 · by owner · state: open
+
+- 2.1 · 2026-11-11 · agent · contract — the automatic ssh call pins StrictHostKeyChecking=yes, so a person's accept-new or no cannot make it accept a host key
+  (Fable's security judgement in the E2.S2 spec: under `BatchMode=yes` an unknown or changed host key is refused only
+  when the person's config keeps the default `ask`; with `accept-new` or `no`, a call started only because a terminal
+  has a certain name would accept and save the key. The option goes after `LogLevel=ERROR`, before `--`. The same
+  judgement also proposed `ControlPath=none` (a person's `ControlMaster`/`ControlPersist` can make the call a persisting
+  master on a Linux or macOS extension host, or in a Remote window). That is an independent cause, so it would be a
+  second change and a full stop: it is NOT taken. Win32-OpenSSH, the owner's extension host, has no released
+  multiplexing; `SECURITY.md` names the residual in words. Question consultant a81ed863 (codex, antigravity): two
+  causes; take only the host-key option. The next accepted change stops the plan.)
 
 ## The symptom
 
@@ -230,9 +241,10 @@ All paths under `src_vs_code/`.
   side the terminals run on), argv only, no shell, and **no `-n`** (it would give the remote `sh -s` an empty
   stdin — plan round 1): `-T -o BatchMode=yes -o ConnectTimeout=5 -o
   RequestTTY=no -o RemoteCommand=none -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o
-  LogLevel=ERROR -- <host> sh -s -- <session>`. The script travels on **stdin**, so the remote login shell
+  LogLevel=ERROR -o StrictHostKeyChecking=yes -- <host> sh -s -- <session>`. The script travels on **stdin**, so the remote login shell
   does not matter. `ClearAllForwardings` and `RemoteCommand=none` matter: the owner's `Host` blocks carry a
-  `LocalForward` the open terminal already holds, and a `RemoteCommand` would run tmux.
+  `LocalForward` the open terminal already holds, and a `RemoteCommand` would run tmux. `StrictHostKeyChecking=yes`
+  (change 2.1): a host key not already in `known_hosts` is a refusal, whatever the person's config says.
 - **What the script does** (POSIX `sh`, prints a `COAI-BEGIN` sentinel first so login banners are ignored):
   1. `tmux display-message -p -t "=$1:" '#{pane_pid}'` — `=` forces an exact session match.
   2. the `claude` process among that pane's descendants (`ps -o pid=,comm= --ppid …`, walked);
@@ -304,7 +316,11 @@ All paths under `src_vs_code/`.
 - The only new outward edge is a **read-only** ssh from the extension host to a host the person agreed to
   once (above), as the user the person's own `~/.ssh/config` logs in as. The terminal name chooses the host,
   and a name is not proof, which is why the consent exists. No secret is handled: ssh uses the
-  person's keys and agent; `BatchMode=yes` means a password prompt is a refusal, never a hang.
+  person's keys and agent; `BatchMode=yes` means a password prompt is a refusal, never a hang, and
+  `StrictHostKeyChecking=yes` (change 2.1) means an unknown or changed host key is a refusal, never an accept.
+  Not pinned, on purpose: connection sharing. On a Linux or macOS extension host, or in a Remote window, a person's
+  `ControlMaster`/`ControlPersist` can make the call a persisting master; `SECURITY.md` says so (Win32-OpenSSH has
+  no released multiplexing).
 - Remote command construction: argv only (`shell: false`), the host after `--`, the script on stdin, every
   operand validated (the regexes above) and single-quoted; a NUL or newline in an operand throws.
 - The transcript text is held in memory only, never written to disk or logged.
