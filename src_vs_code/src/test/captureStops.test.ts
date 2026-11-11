@@ -1,12 +1,13 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 import { setTimeout as after } from 'node:timers/promises';
 import { capture } from '../versionProbe';
+import { ownedTemp } from './ownedTemp';
+import { tempRoot } from './tempRoot';
 
 /**
  * Giving up on a child that is still working.
@@ -48,7 +49,7 @@ test('the child is KILLED, not merely stopped being waited for', async () => {
   // the database for as long as it liked, and the person who cancelled would have changed nothing
   // but what they can see. So the child says it is alive by writing to a file, and the test watches
   // that stop.
-  const folder = await mkdtemp(join(tmpdir(), 'coai-capture-test-'));
+  const folder = ownedTemp('coai-capture-test');
   const alive = join(folder, 'alive');
   try {
     // Cancel only once the child has PROVED it is running, by writing its first line. A fixed
@@ -93,7 +94,7 @@ test('a read with nothing watching it behaves exactly as it always has', async (
 
 test('a read that did not finish says WHY: its cap ran out, the program never started, or it was given up on — and a real exit says nothing (L of the review of 2026-10-18)', async () => {
   const timedOut = await capture(NODE, SLEEPS, false, 300);
-  const missing = await capture(join(tmpdir(), 'coai-no-such-program-for-capture'), [], false, 30_000);
+  const missing = await capture(join(tempRoot(), 'coai-no-such-program-for-capture'), [], false, 30_000);
   let cancelled = false;
   setTimeout(() => {
     cancelled = true;

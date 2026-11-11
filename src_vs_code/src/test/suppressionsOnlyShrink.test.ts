@@ -2,9 +2,9 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The lint ratchet turns only one way.
@@ -34,7 +34,7 @@ const one = (count: number) => ({ count });
 
 function compare(current: unknown, base: unknown, extra: string[] = []):
 { code: number; said: string } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'suppressions-'));
+  const dir = ownedTemp('suppressions');
   try {
     const now = path.join(dir, 'now.json');
     const before = path.join(dir, 'before.json');
@@ -133,7 +133,7 @@ test('a third path is REFUSED rather than silently taken for the pair', () => {
   // at runtime but not in its type view. Looking at WHY found a real hole behind it — with three
   // paths the script read the FIRST TWO, so it compared the wrong pair and reported on files
   // nobody asked about. All three exist here, so the refusal cannot come from a missing file.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'suppressions-'));
+  const dir = ownedTemp('suppressions');
   try {
     const grew = { 'src/new.ts': { complexity: { count: 9 } } };
     const clean = {};

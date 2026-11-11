@@ -1,10 +1,10 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { promptNames, promptTexts, readPromptOrAbsent } from '../configPromptFiles';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The prompt files an export reads and an import touches — issue #467, the code round (our own reviewer,
@@ -12,7 +12,7 @@ import { promptNames, promptTexts, readPromptOrAbsent } from '../configPromptFil
  */
 
 function folder(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-prompts-'));
+  return ownedTemp('coai-prompts');
 }
 
 test('only regular .md files with a valid prompt name are prompts; a folder named like one is not', async () => {

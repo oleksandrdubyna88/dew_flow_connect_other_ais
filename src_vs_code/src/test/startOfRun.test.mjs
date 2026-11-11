@@ -1,10 +1,10 @@
 import '../../scripts/inRunFolder.cjs';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { owned, TEMP_VARIABLES } from '../../scripts/owned.mjs';
 import { readRule, startOfRun } from '../../scripts/startOfRun.mjs';
 import * as runner from '../../scripts/run-tests.mjs';
 
@@ -31,7 +31,7 @@ const names = [
 ];
 
 function privateRoot(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'retired-sweep-'));
+  const root = owned.ownedDir(t, 'retired-sweep');
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -90,10 +90,12 @@ test('every temp directory the extension makes at runtime is one the product\'s 
   // there. A new runtime directory nobody adds to the shared list is what the one-off clean-up would
   // offer a person as a leftover, beside a live session's. (Plan round, local.)
   const src = path.join(here, '..');
+  // The scan's pattern is DATA: the temp APIs' names are written with a tilde inside and the tilde is taken out when it is built (the PlantedLines precedent), not a call of this file.
+  const makesAFolder = new RegExp(String.raw`mkd~temp(?:Sync)?\(\s*path\.join\(\s*(?:os\.)?tmp~dir\(\)\s*,\s*['"\`](coai-[a-z-]+)['"\`]`.replaceAll('~', ''), 'g');
   const made = [...new Set(fs.readdirSync(src, { recursive: true })
     .filter((f) => f.endsWith('.ts') && !f.split(/[\\/]/).includes('test'))
     .flatMap((f) => [...fs.readFileSync(path.join(src, f), 'utf8')
-      .matchAll(/mkdtemp(?:Sync)?\(\s*path\.join\(\s*(?:os\.)?tmpdir\(\)\s*,\s*['"`](coai-[a-z-]+)['"`]/g)].map((m) => m[1])))];
+      .matchAll(makesAFolder)].map((m) => m[1])))];
 
   assert.ok(made.includes('coai-chat-'), `the scan must still see chatLaunch.ts's directory; it found ${made.join(', ') || 'nothing'}`);
   for (const prefix of made) {
@@ -152,16 +154,16 @@ test('the runner prints one line, and says so when the count did not run', () =>
 });
 
 test('[S2-A gate 0] the runner counts the REAL temp root it captured at its start, not the one TEMP/TMP/TMPDIR were moved to', (t) => {
-  const real = runner.REAL_TEMP_ROOT ?? os.tmpdir();
+  const real = runner.REAL_TEMP_ROOT ?? owned.tempRoot();
   const moved = privateRoot(t, 'moved-temp-');
   make(moved, 'coai-panel-redirected', 'a leftover where the run folder would be', 11 * minute);
-  const saved = { TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP };
+  const saved = Object.fromEntries(TEMP_VARIABLES.map((name) => [name, process.env[name]]));
   t.after(() => {
     for (const [key, value] of Object.entries(saved)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
   });
-  process.env.TMPDIR = process.env.TMP = process.env.TEMP = moved;
+  for (const name of TEMP_VARIABLES) process.env[name] = moved;
   const lines = [];
 
   reportLeftoversFirst({ log: (line) => lines.push(line) });

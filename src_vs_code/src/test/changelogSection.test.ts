@@ -2,9 +2,9 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The notes a release carries are the notes somebody wrote.
@@ -29,7 +29,7 @@ const FALLBACK = 'Native AOT builds of the ConnectOtherAIs MCP server.';
 interface Ran { code: number; out: string; said: string }
 
 function section(tag: string, changelog: string, extra: string[] = []): Ran {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'changelogsection-'));
+  const dir = ownedTemp('changelogsection');
   try {
     const file = path.join(dir, 'CHANGELOG.md');
     fs.writeFileSync(file, changelog, 'utf8');
@@ -176,7 +176,7 @@ test('the section ends at the next RELEASE heading, not at any "## "', () => {
 test('--out writes the body to a file instead of stdout', () => {
   // How the workflow uses it: multiline markdown cannot travel as a shell argument, so it is
   // written and the PATH is what gets passed.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'changelogsection-'));
+  const dir = ownedTemp('changelogsection');
   try {
     const changelog = path.join(dir, 'CHANGELOG.md');
     const out = path.join(dir, 'notes.md');
@@ -295,7 +295,7 @@ test('two tags are refused rather than one of them silently winning', () => {
 });
 
 test('an empty fallback is refused, because a release with an empty body is not a release', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'changelogsection-'));
+  const dir = ownedTemp('changelogsection');
   try {
     const file = path.join(dir, 'CHANGELOG.md');
     fs.writeFileSync(file, CHANGELOG, 'utf8');

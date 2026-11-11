@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatStoreFile, QUARANTINE_DIR, SaveOutcome } from '../chatStoreFile';
@@ -18,6 +17,7 @@ import {
   sourceOfSession,
 } from '../chatStore';
 import { ChatMessage } from '../chatPage';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The conversation store's file half, against a REAL temporary directory — never a mocked disk.
@@ -43,7 +43,7 @@ import { ChatMessage } from '../chatPage';
 const AT = Date.UTC(2026, 8, 12, 12, 0, 0);
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-chat-store-'));
+  return ownedTemp('coai-chat-store');
 }
 
 const said = (role: 'you' | 'model', text: string): ChatMessage => ({ role, text });

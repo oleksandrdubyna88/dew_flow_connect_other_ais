@@ -2,13 +2,13 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import {
   bundledPage, clickInRow, COMPLETED, firstRenderedKey, LOG, PRICED, ROOT, runningPage, SESSION, STARTED,
   stub, type Stub,
 } from './roundsLogPageHarness';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The page is checked as it SHIPS — bundled and minified — not as it compiles.
@@ -258,7 +258,7 @@ test('the fixture lands on the local day the page opens on', () => {
 
 /** Bundles one module the way `npm run bundle` does, and returns the text esbuild produced. */
 function bundleOf(module_: string, exported: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-bundle-'));
+  const dir = ownedTemp('coai-bundle');
   const entry = path.join(dir, 'entry.mjs');
   const out = path.join(dir, 'bundle.cjs');
   fs.writeFileSync(entry, `export { ${exported} } from ${JSON.stringify(path.join(ROOT, 'src', module_))};\n`);
@@ -1161,7 +1161,7 @@ function bundledLog(): {
   qconsultLogHtml: (questions: readonly unknown[]) => string;
   roundsLogHtml: (rows: unknown[], questions: unknown[], nonce: string, usage?: string, spots?: string, totals?: unknown, options?: Record<string, unknown>) => string;
 } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-bundle-'));
+  const dir = ownedTemp('coai-bundle');
   const entry = path.join(dir, 'entry.mjs');
   const out = path.join(dir, 'bundle.cjs');
   fs.writeFileSync(entry, [

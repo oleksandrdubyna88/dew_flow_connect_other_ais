@@ -2,9 +2,9 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * A release that tells nobody what is in it does not ship.
@@ -50,7 +50,7 @@ interface Ran { code: number; said: string }
  * hold it open.</p>
  */
 function guard(tag: string, changelog: string, baseline?: string): Ran {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'changelogguard-'));
+  const dir = ownedTemp('changelogguard');
   try {
     const changelogPath = path.join(dir, 'CHANGELOG.md');
     fs.writeFileSync(changelogPath, changelog, 'utf8');
@@ -178,7 +178,7 @@ test('a malformed argument is refused rather than assumed', () => {
 });
 
 test('a changelog it cannot read is refused, never passed', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'changelogguard-'));
+  const dir = ownedTemp('changelogguard');
   try {
     const ran = spawnSync(process.execPath,
       [script, 'mcp-v0.28.0', '--changelog', path.join(dir, 'nothing-here.md')],
@@ -394,7 +394,7 @@ test('a baseline whose line is not a list of versions is refused, not crashed on
   // `recorded.includes` then throws OUTSIDE the try that turns a read failure into exit 2 — so the
   // process exits 1, which in this guard's vocabulary means "a release has no entry". A specific and
   // wrong accusation, from a file that is simply malformed. Found by CodeRabbit on the pull request.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'changelogguard-'));
+  const dir = ownedTemp('changelogguard');
   try {
     const changelog = path.join(dir, 'CHANGELOG.md');
     fs.writeFileSync(changelog, entry('## Server 0.28.0 — 2026-09-17'), 'utf8');

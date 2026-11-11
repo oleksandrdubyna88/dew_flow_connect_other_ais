@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 
@@ -9,6 +8,7 @@ import { flushLedgers } from '../jsonlLedger';
 import { PROBE_USAGE_FILE, probeLine, probeUsagePath, recordingRun } from '../probeUsageFile';
 import { roundsLoader } from '../roundCountsRead';
 import { parseUsage } from '../usage';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The extension's Claude model probe writes what it spent (story 3.3 of research/PLAN_every_round_is_counted.md, the
@@ -58,7 +58,7 @@ test('a probe that did not finish is "usage not captured" — never a free 0/0',
 });
 
 test('the recording run writes one line per candidate it asked, failures included, and hands the answer back unchanged', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-probe-ledger-'));
+  const dir = ownedTemp('coai-probe-ledger');
   const answers = [{ code: 0, output: ANSWERED }, { code: -1, output: '' }];
   let call = 0;
   const run = recordingRun(async () => answers[call++]!, probeUsagePath(dir), () => NOW);
@@ -75,7 +75,7 @@ test('the recording run writes one line per candidate it asked, failures include
 });
 
 test('the Rounds block reads the probe ledger beside usage.jsonl', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-probe-ledger-'));
+  const dir = ownedTemp('coai-probe-ledger');
   fs.writeFileSync(path.join(dir, PROBE_USAGE_FILE), probeLine('haiku', { code: 0, output: ANSWERED }, NOW - 1_000, NOW));
   const load = roundsLoader(() => '', path.join(dir, 'usage.jsonl'), async () => ({ code: 64, output: '' }), [probeUsagePath(dir)]);
 
@@ -101,7 +101,7 @@ test('AProbeLine_WhoseVersionWasNeverAsked_HasNoVersion — absent, never an emp
 });
 
 test('TheRecordingRun_WritesTheVersionItWasGiven_AndParsesBackThroughTheUsageReader', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-probe-ledger-'));
+  const dir = ownedTemp('coai-probe-ledger');
   try {
     const run = recordingRun(async () => ({ code: 0, output: ANSWERED }), probeUsagePath(dir), () => NOW, '2.1.5');
 

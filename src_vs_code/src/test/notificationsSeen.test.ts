@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { flushLedgers } from '../jsonlLedger';
@@ -23,6 +22,7 @@ import {
   seenPath,
   tailBegins,
 } from '../notificationsSeen';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * What the person has already been shown, and what it costs to ask.
@@ -36,7 +36,7 @@ import {
 const NEWLINE = String.fromCharCode(10);
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-seen-'));
+  return ownedTemp('coai-seen');
 }
 
 const span = (from: number, to: number): Span => ({ from, to });

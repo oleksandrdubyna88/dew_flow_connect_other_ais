@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
 
@@ -16,6 +15,7 @@ import { appendLine } from '../jsonlLedger';
 import { ensureOverride } from '../securityPromptOverride';
 import { writeToken } from '../teamServerAuth';
 import { UNDER_THE_DATA_DIRECTORY, WRITERS, codeOf } from './dataDirWriters';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * Every writer that can make a folder under the data directory, RUN with a named root that is not there — and the root
@@ -76,7 +76,7 @@ let root = '';
 
 beforeEach(() => {
   forgetFindingsBoard();
-  parent = mkdtempSync(join(tmpdir(), 'coai-writers-'));
+  parent = ownedTemp('coai-writers');
   root = join(parent, 'named-but-missing');
   useStorageSettings({ directory: root, side: '' }, NOTHING_CHOSEN);
 });

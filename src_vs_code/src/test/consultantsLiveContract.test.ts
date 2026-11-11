@@ -2,13 +2,13 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 
 import { runConsultantCheck } from '../consultantCheckRun';
 import { parseConsultantsAnswer } from '../consultantHealth';
 import { CALLER_KINDS } from '../consultSettings';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The Consultant tab's two modes, against the REAL `coai-mcp` this checkout built (E5.T's contract half).
@@ -39,7 +39,7 @@ function spawnIn(data: string, args: readonly string[]): { code: number; output:
 }
 
 function withData<T>(work: (data: string) => T): T {
-  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-consultants-'));
+  const data = ownedTemp('coai-consultants');
   try {
     return work(data);
   } finally {
@@ -61,7 +61,7 @@ test('the real --consultants answers every caller kind, with the staleness it pu
 });
 
 test('a binary that knows --check-consultant refuses a bad request with 65 — read as a refusal, never as too old', { skip: built ? false : 'the server is not built', timeout: 150_000 }, async () => {
-  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-consultants-'));
+  const data = ownedTemp('coai-consultants');
   try {
     const result = await runConsultantCheck('', {
       run: (args) => Promise.resolve(spawnIn(data, args)),
@@ -77,7 +77,7 @@ test('a binary that knows --check-consultant refuses a bad request with 65 — r
 });
 
 test('a binary that has never heard of a mode exits 64, and the run reads that as a server too old', { skip: built ? false : 'the server is not built', timeout: 150_000 }, async () => {
-  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-consultants-'));
+  const data = ownedTemp('coai-consultants');
   try {
     // The mode renamed into one this binary cannot know — what an older binary is to --check-consultant.
     const result = await runConsultantCheck('claude', {

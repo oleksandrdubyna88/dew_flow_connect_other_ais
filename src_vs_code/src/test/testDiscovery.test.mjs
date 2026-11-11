@@ -1,9 +1,9 @@
 import '../../scripts/inRunFolder.cjs';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
+import { owned } from '../../scripts/owned.mjs';
 import { discover } from '../../scripts/run-tests.mjs';
 
 /**
@@ -28,8 +28,13 @@ import { discover } from '../../scripts/run-tests.mjs';
  * list next to it, and a list can grow back.</p>
  */
 
+// The file's ONE scope: every folder is an owned folder of the wrap inside the run folder, removed with its claim when the file ends; none is made at module load.
+const scope = owned.cleanupScope();
+after(() => scope.close());
+const folder = (what) => owned.ownedDir(scope, what);
+
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-discovery-'));
+  const root = folder('coai-discovery');
   fs.mkdirSync(path.join(root, 'out', 'test'), { recursive: true });
   fs.mkdirSync(path.join(root, 'src', 'test'), { recursive: true });
   return root;
@@ -83,7 +88,7 @@ test('nothing that is not a test is picked up', () => {
 });
 
 test('a missing directory is empty rather than a crash', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-discovery-bare-'));
+  const root = folder('coai-discovery-bare');
 
   const found = discover(root);
 

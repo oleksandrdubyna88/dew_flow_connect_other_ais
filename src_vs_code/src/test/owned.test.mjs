@@ -1,6 +1,5 @@
 import '../../scripts/inRunFolder.cjs';
 import nodeFs, * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -8,7 +7,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  REPO_ROW, REPO_TOKEN, RunFolderRefused, SELF_TEST_VARIABLE, beginOwnedRun, owned, ownedScratch,
+  REPO_ROW, REPO_TOKEN, RunFolderRefused, SELF_TEST_VARIABLE, TEMP_VARIABLES, beginOwnedRun, owned, ownedScratch,
 } from '../../scripts/owned.mjs';
 import { startOwnedRun } from '../../scripts/ownedRun.mjs';
 
@@ -210,8 +209,8 @@ test('W10 the run folder is mine under the root as given and as resolved', (t) =
   }
   const roots = [alias];
   if (process.platform === 'darwin') {
-    assert.notEqual(os.tmpdir(), fs.realpathSync.native(os.tmpdir()), 'the premise: the temp root is itself a link (/var is /private/var)');
-    roots.push(os.tmpdir());
+    assert.notEqual(owned.tempRoot(), fs.realpathSync.native(owned.tempRoot()), 'the premise: the temp root is itself a link (/var is /private/var)');
+    roots.push(owned.tempRoot());
   }
   for (const root of roots) {
     const run = beginOwnedRun({ what: 'w10', root, env: {}, onExit: quiet, exit: quiet, selfTest: '' });
@@ -230,7 +229,7 @@ test('W10 the run folder is mine under the root as given and as resolved', (t) =
 
 test('W11 ownedScratch claims for this process, leaves TEMP alone, and is removed at exit', (t) => {
   const root = privateRoot(t, 'w11');
-  const temp = process.env.TEMP;
+  const temp = TEMP_VARIABLES.map((name) => process.env[name]);
   const hooks = [];
   const scratch = ownedScratch('w11', { root, onExit: (fn) => hooks.push(fn), selfTest: '' });
   t.after(() => scratch.end());
@@ -238,7 +237,7 @@ test('W11 ownedScratch claims for this process, leaves TEMP alone, and is remove
   assert.equal(path.dirname(scratch.path), root);
   assert.equal(owned.classifyName(path.basename(scratch.path)).form, 'owner');
   assert.equal(owned.parseOwner(fs.readFileSync(`${scratch.path}.owner`, 'utf8').trim()).pid, process.pid);
-  assert.equal(process.env.TEMP, temp, 'TEMP is not touched: a probe that measures where a vendor CLI writes must not have it moved');
+  assert.deepEqual(TEMP_VARIABLES.map((name) => process.env[name]), temp, 'TEMP, TMP and TMPDIR are not touched: a probe that measures where a vendor CLI writes must not have it moved');
   assert.equal(hooks.length, 1);
 
   hooks[0]();

@@ -1,12 +1,12 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatDoorRecord, chatDoorRecord } from '../chatDoors';
 import { CHAT_DOORS_FILE, chatDoorsPath, readChatDoors, recordChatDoor } from '../chatDoorsFile';
 import { flushChatUsage } from '../chatUsageFile';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The door ledger's file, against a real directory.
@@ -22,7 +22,7 @@ import { flushChatUsage } from '../chatUsageFile';
  */
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-doors-'));
+  return ownedTemp('coai-doors');
 }
 
 const NOON = new Date('2026-09-12T12:00:00.000Z');

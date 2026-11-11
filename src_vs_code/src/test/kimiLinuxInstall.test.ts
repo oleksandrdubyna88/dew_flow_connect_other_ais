@@ -1,15 +1,15 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { execFile, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { after, before, test } from 'node:test';
 
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import { KIMI_TOOLS_NOTE } from '../kimiLinuxLine';
 import { fromOfficialSources, vendorInstall, vendorUpdate } from '../vendorTerminal';
 import type { Vendor } from '../vendors';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * ⤓ and ⟳ for Kimi on a Linux host — DL12 of research/PLAN_kimi_and_vibe_on_linux.md (E6), scenarios S-K9/S-K10/S-K17.
@@ -58,7 +58,8 @@ const skip = BASH === '' ? 'no bash on this machine (Git for Windows on Windows)
 /** A path as the shell inside spells it: `/c/Users/…` for a Windows drive path (a `C:` there would be read as a PATH separator). */
 const posix = (path: string): string => (WINDOWS ? path.replace(/^([A-Za-z]):/u, (_all, drive: string) => `/${drive.toLowerCase()}`).replaceAll('\\', '/') : path);
 
-const root = BASH === '' ? '' : mkdtempSync(join(tmpdir(), 'kimi linux install '));
+// Made in the hook below, never at module load.
+let root = '';
 after(() => {
   if (root.length > 0) {
     rmSync(root, { recursive: true, force: true });
@@ -81,7 +82,13 @@ function coreFolder(): string {
   return folder;
 }
 
-const CORE = BASH === '' ? '' : coreFolder();
+let CORE = '';
+before(() => {
+  if (BASH !== '') {
+    root = ownedTemp('kimi linux install');
+    CORE = coreFolder();
+  }
+});
 
 /**
  * A package manager that logs, can be told to fail, and "installs" a package by putting its program's folder on the PATH — and

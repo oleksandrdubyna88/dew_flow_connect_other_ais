@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import {
@@ -13,9 +12,10 @@ import {
   SNIPPET_LOCATIONS,
   SNIPPET_VERSION,
 } from '../claudeSnippet';
+import { ownedTemp } from './ownedTemp';
 
 test('neutral shared rules are discovered and older project/local copies take priority', async t => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-'));
+  const root = ownedTemp('coai-snippet');
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const write = async (name: string, text: string): Promise<void> => {
     const file = path.join(root, name);
@@ -72,7 +72,7 @@ test('all candidate reads start together but a slower older root copy still wins
  * snippet into the gate file, which no real mount does — these use the real mounted files.</p>
  */
 test('a mount is read with its sibling rules, and an actual paste still takes precedence', async t => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-mount-'));
+  const root = ownedTemp('coai-snippet-mount');
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const write = async (name: string, text: string): Promise<void> => {
     const file = path.join(root, name);
@@ -112,7 +112,7 @@ test('a mount is read with its sibling rules, and an actual paste still takes pr
 test('the legacy mount location is read with its siblings too', async t => {
   // Two mount folders are known, and a reader tested through one of them says nothing about the other.
   // (Story 5.2's plan round, codex.)
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-legacy-mount-'));
+  const root = ownedTemp('coai-snippet-legacy-mount');
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
   const rules = KNOWN_HALVES.map((half) => half.file);
@@ -123,7 +123,7 @@ test('the legacy mount location is read with its siblings too', async t => {
 });
 
 test('a missing half is never filled from ANOTHER mount', async t => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-two-mounts-'));
+  const root = ownedTemp('coai-snippet-two-mounts');
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
   const text = async (name: string): Promise<string> => fs.readFile(path.join(real, name), 'utf8');

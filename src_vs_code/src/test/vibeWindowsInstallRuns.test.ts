@@ -1,13 +1,13 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { after, before, test } from 'node:test';
 
 import { vendorInstall, vendorUpdate } from '../vendorTerminal';
 import type { Vendor } from '../vendors';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The Windows ⤓/⟳ line for Mistral Vibe, RUN — against harmless substitutes, never against Astral's installer or a real
@@ -70,7 +70,8 @@ const HARNESS = [
 ].join('\n');
 
 const WINDOWS = process.platform === 'win32';
-const root = WINDOWS ? mkdtempSync(join(tmpdir(), 'coai uv run ')) : '';
+// Made in the hook below, never at module load.
+let root = '';
 after(() => {
   if (root.length > 0) {
     rmSync(root, { recursive: true, force: true });
@@ -113,8 +114,15 @@ function minimalEnv(): Record<string, string> {
   };
 }
 
-const UV = WINDOWS ? fakeUv() : '';
-const SHELLS = WINDOWS ? shells() : [];
+let UV = '';
+let SHELLS: readonly string[] = [];
+before(() => {
+  if (WINDOWS) {
+    root = ownedTemp('coai uv run');
+    UV = fakeUv();
+    SHELLS = shells();
+  }
+});
 const skip = !WINDOWS ? 'the line is PowerShell for a Windows host, and the fake uv is compiled by Windows PowerShell' : false;
 
 interface Run {

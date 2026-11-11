@@ -2,12 +2,12 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
-import { after, test } from 'node:test';
+import { after, before, test } from 'node:test';
 
 import { compareVersions } from '../coaiInstall';
 import { CONSULTANT_SINCE, ON_LINUX_SINCE, RUNTIME_SINCE } from '../runtimeSince';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * A runtime's "first server that knows it" is a release that must NOT already exist without it (the release-guards family: `releaseAnchors`,
@@ -145,7 +145,9 @@ test('every entry of ON_LINUX_SINCE is held to the same guard: ahead of the newe
 
 // ---------------------------------------------------------------- the guard's own teeth
 
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'runtimeSince-'));
+// Made in the hook, never at module load.
+let scratch = '';
+before(() => { scratch = ownedTemp('runtimeSince'); });
 after(() => fs.rmSync(scratch, { recursive: true, force: true }));
 
 function changelogWith(...sections: string[]): string {

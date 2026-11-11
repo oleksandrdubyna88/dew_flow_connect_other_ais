@@ -1,12 +1,12 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ConversationHeartbeat, HeartbeatTimers } from '../chatStoreHeartbeat';
 import { ChatStoreKeeper } from '../chatStoreKeeper';
 import { HEARTBEAT_EVERY_MS, HOUSEKEEPING_DIR, heartbeatName, parseHeartbeat } from '../chatStoreSweep';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * This window's heartbeat writer, against a real directory and hand-driven timers.
@@ -19,7 +19,7 @@ import { HEARTBEAT_EVERY_MS, HOUSEKEEPING_DIR, heartbeatName, parseHeartbeat } f
 const NOW = Date.UTC(2026, 8, 13, 12, 0, 0);
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-chat-heartbeat-'));
+  return ownedTemp('coai-chat-heartbeat');
 }
 
 /** A keeper whose beats are counted. */

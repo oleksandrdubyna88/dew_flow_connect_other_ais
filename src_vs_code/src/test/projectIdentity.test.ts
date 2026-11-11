@@ -2,11 +2,11 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { askedOnce, GitMark, identityOf, normalisePath, readGitMark, shaped, UNKNOWN_PROJECT } from '../projectIdentity';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * Which sessions belong to the SAME project, decided without spawning anything.
@@ -246,7 +246,7 @@ test('the real reader tells a checkout from a worktree from nothing at all', () 
   // the folded path instead of the repository. That is the defect the fold now stays out of the way
   // of, and a test that relies on six random characters to contain a capital is a test that passes
   // most days.
-  const root = mkdtempSync(join(tmpdir(), 'coai-identity-'));
+  const root = ownedTemp('coai-identity');
 
   try {
     // A main checkout: `.git` is a directory.

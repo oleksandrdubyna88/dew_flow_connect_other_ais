@@ -1,13 +1,13 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { after, before, test } from 'node:test';
 
 import { vendorInstall, vendorUpdate } from '../vendorTerminal';
 import type { Vendor } from '../vendors';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The Windows ⤓/⟳ line for Kimi Code, RUN — against harmless substitutes, never against winget or Moonshot's installer
@@ -60,7 +60,8 @@ const HARNESS = [
 
 const WINDOWS = process.platform === 'win32';
 // A folder with spaces in its name, inside the run's own folder (TEMP is the run folder; the guard import refuses any start without one): the line must work for a person whose paths have them.
-const root = WINDOWS ? mkdtempSync(join(tmpdir(), 'kimi install run ')) : '';
+// Made in the hook below, never at module load.
+let root = '';
 after(() => {
   if (root.length > 0) {
     rmSync(root, { recursive: true, force: true });
@@ -95,7 +96,13 @@ function shells(): readonly string[] {
     spawnSync(exe, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { env: minimalEnv(), timeout: 60_000 }).status === 0);
 }
 
-const SHELLS = WINDOWS ? shells() : [];
+let SHELLS: readonly string[] = [];
+before(() => {
+  if (WINDOWS) {
+    root = ownedTemp('kimi install run');
+    SHELLS = shells();
+  }
+});
 const skip = !WINDOWS ? 'the line is PowerShell for a Windows host' : false;
 
 interface Run {

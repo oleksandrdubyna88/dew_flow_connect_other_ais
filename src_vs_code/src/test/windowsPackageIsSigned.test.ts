@@ -1,10 +1,10 @@
 import '../../scripts/inRunFolder.cjs';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The shape of the Windows signing in `release.yml`, held as a reading of the YAML.
@@ -398,7 +398,7 @@ function runFinalZipStep(zips: readonly string[], exits: { carries?: number; lay
   const body = runBodies('mcp-sign-attach').find((b) => b.includes('for RID in'));
   assert.ok(body, 'the step has a run body with the platform loop');
 
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'finalzipstep-'));
+  const dir = ownedTemp('finalzipstep');
   try {
     const log = path.join(dir, 'calls.txt').replace(/\\/g, '/');
     const scripts = path.join(dir, '.github', 'scripts');

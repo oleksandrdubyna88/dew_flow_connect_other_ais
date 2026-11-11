@@ -1,12 +1,12 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { promises as fsp } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
 import { ROOT_ANSWER_LIFETIME_MS, type FilePresence } from '../pathFamily';
 import { PROBE_DEADLINE_MS, PathProbes, statProbe } from '../pathProbes';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The bounded probes (research/PLAN_paths_per_side.md E5.1, the cadence consultant's amendment): every probe has a deadline
@@ -155,7 +155,7 @@ test('settled() on a fresh definitive answer waits for nothing, and a rejected s
 });
 
 test('the real stat answers here for a folder asked as a folder, absent for it asked as a file, absent for nothing, unknown for a disk that would not say', async () => {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'coai-probes-'));
+  const dir = ownedTemp('coai-probes');
   try {
     const file = path.join(dir, 'a.txt');
     await fsp.writeFile(file, 'x', 'utf8');

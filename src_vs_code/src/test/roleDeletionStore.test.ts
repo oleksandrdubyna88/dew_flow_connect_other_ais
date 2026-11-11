@@ -1,12 +1,12 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { Tombstone } from '../roleDeletion';
 import { deletionFile, deletionsDir, tombstonesIn } from '../roleDeletionStore';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The tombstone on disk: it is a real directory of real files, so these tests use one.
@@ -17,7 +17,7 @@ import { deletionFile, deletionsDir, tombstonesIn } from '../roleDeletionStore';
  */
 
 function inATempDir(): { readonly dir: string; readonly dispose: () => void } {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-deletions-'));
+  const dir = ownedTemp('coai-deletions');
 
   return { dir, dispose: () => rmSync(dir, { recursive: true, force: true }) };
 }

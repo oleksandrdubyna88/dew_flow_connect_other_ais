@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { forgetFindingsBoard, heldNotices, noteDataRoot, publishFindings } from '../findingsBoard';
@@ -22,6 +21,7 @@ import {
   recordNotification,
   serverNoticesPath,
 } from '../notificationsFile';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The notifications ledgers against a real directory.
@@ -34,7 +34,7 @@ import {
  */
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-notes-'));
+  return ownedTemp('coai-notes');
 }
 
 function record(over: Partial<NotificationRecord> = {}): NotificationRecord {
