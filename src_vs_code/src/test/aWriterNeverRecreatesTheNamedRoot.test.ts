@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
 
@@ -9,6 +8,7 @@ import { writeFileAtomically, writeFileAtomicallySync } from '../atomicFile';
 import { NOTHING_CHOSEN, coaiDataDir, defaultDataDir, useStorageSettings } from '../dataDir';
 import { forgetFindingsBoard } from '../findingsBoard';
 import { appendLine } from '../jsonlLedger';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * No writer recreates a NAMED data root — not even one the board believes is there (research/PLAN_paths_per_side.md E5.7,
@@ -30,7 +30,7 @@ const savedHome = { LOCALAPPDATA: process.env['LOCALAPPDATA'], COAI_DATA_DIR: pr
 
 beforeEach(() => {
   forgetFindingsBoard();
-  parent = mkdtempSync(join(tmpdir(), 'coai-maker-'));
+  parent = ownedTemp('coai-maker');
   // The default location lives under the test's own folder, so "the default is created" never touches this machine's.
   process.env['LOCALAPPDATA'] = join(parent, 'local-app-data');
   delete process.env['COAI_DATA_DIR'];

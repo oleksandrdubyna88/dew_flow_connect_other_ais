@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import * as assert from 'node:assert';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { response } from './responseFixture';
@@ -22,6 +21,7 @@ import {
   writeToken,
 } from '../teamServerAuth';
 import { TeamServer, tokenFileName } from '../teamServers';
+import { ownedTemp } from './ownedTemp';
 
 const SERVER: TeamServer = { id: 'remsoft-dev', name: 'RemSoft Dev', url: 'https://coai.example.com/' };
 
@@ -79,7 +79,7 @@ function host(
 }
 
 test('a token lands exactly where the MCP shim will look for it', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     await writeToken(dir, SERVER.url, 'the-token');
 
@@ -101,7 +101,7 @@ test('the token file is readable by its owner and nobody else', async (t) => {
     return;
   }
 
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     await writeToken(dir, SERVER.url, 'first');
     // Written TWICE on purpose: `mode` on writeFile only applies when the file is created, so a
@@ -116,7 +116,7 @@ test('the token file is readable by its owner and nobody else', async (t) => {
 });
 
 test('deleting a token that is not there is not an error', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     await deleteToken(dir, SERVER.url);
   } finally {
@@ -147,7 +147,7 @@ test('an unreadable expiry is treated as due rather than as never', () => {
 });
 
 test('reconciling does nothing at all when nobody is signed in', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const done = await reconcile(SERVER, host(dir, store()), Date.now());
 
@@ -158,7 +158,7 @@ test('reconciling does nothing at all when nobody is signed in', async () => {
 });
 
 test('reconciling does nothing while THIS SIDE holds a comfortable session', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const signedIn: SignedIn = { email: 'a@b.c', expiresUtc: '2027-01-01T00:00:00Z' };
     const state = store({
@@ -181,7 +181,7 @@ test('a renewal that is due is attempted WITHOUT asking the person anything', as
   // forbids showing one — so the pair can only return nothing, the extension would conclude the
   // identity session was gone, and it would sign the person out. Weekly. Which is the exact thing
   // silent renewal exists to prevent.
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const state = store({
       [signedInKey(SERVER.id)]: { email: 'a@b.c', expiresUtc: '2026-09-06T13:00:00Z' } satisfies SignedIn,
@@ -212,7 +212,7 @@ test('a renewal that is due is attempted WITHOUT asking the person anything', as
 });
 
 test('a server this build cannot sign into never reaches the identity provider', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const state = store({
       [signedInKey(SERVER.id)]: { email: 'a@b.c', expiresUtc: '2026-09-06T13:00:00Z' } satisfies SignedIn,
@@ -242,7 +242,7 @@ test('a server this build cannot sign into never reaches the identity provider',
 });
 
 test('a good sign-in writes the token and remembers who it is', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const state = store();
     const result = await signIn(SERVER, host(dir, state));
@@ -262,7 +262,7 @@ test('a good sign-in writes the token and remembers who it is', async () => {
 test('the person is asked to confirm the application ONCE, then never again', async () => {
   // The application id is the server's to choose and the scope check cannot say whether it belongs
   // to the company — only a person can. Asking on every sign-in would train them to click through.
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const state = store();
     const shown: string[] = [];
@@ -285,7 +285,7 @@ test('the person is asked to confirm the application ONCE, then never again', as
 });
 
 test('refusing the application mints nothing at all', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     let minted = 0;
     const refusing: AuthHost = {
@@ -310,7 +310,7 @@ test('refusing the application mints nothing at all', async () => {
 test('a session that cannot be SAVED is ended again rather than left open', async () => {
   // Otherwise a live session exists on the server that this machine can neither use nor revoke — the
   // half-completed state the plan round asked for a compensation for.
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const calls: string[] = [];
     const watching = (async (input: unknown, init: RequestInit = {}) => {
@@ -343,7 +343,7 @@ test('a session that cannot be SAVED is ended again rather than left open', asyn
 test('an account outside the company domain is told that, not told to retry', async () => {
   // Signing in again cannot fix being outside the allowed domain, and telling somebody to try would
   // waste their afternoon.
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const forbidding = (async (input: unknown) => {
       const url = String(input);
@@ -364,7 +364,7 @@ test('an account outside the company domain is told that, not told to retry', as
 });
 
 test('signing out clears the token, the file and the record', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const state = store();
     const h = host(dir, state);
@@ -381,7 +381,7 @@ test('signing out clears the token, the file and the record', async () => {
 });
 
 test('a server that is down cannot keep somebody signed in on this machine', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const state = store();
     await writeToken(dir, SERVER.url, 'server-token');
@@ -408,7 +408,7 @@ test('a renewal for an application nobody approved is REFUSED, not minted silent
   // skipped it entirely. A server that changed its advertised scope would have had a Microsoft
   // token minted for the new application and posted to it, with nobody ever seeing it. Caught on
   // the code round.
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     const state = store({
       [signedInKey(SERVER.id)]: { email: 'a@b.c', expiresUtc: '2026-09-06T13:00:00Z' } satisfies SignedIn,
@@ -439,7 +439,7 @@ test('a bearer token cannot travel over plain http, whatever the call', async ()
   // The check used to live only in the client-config call, so a server URL edited to plain http
   // after signing in would have had the catalog and usage calls carry the token in the clear. Two
   // reviewers found it; it now lives on the one road in.
-  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  const dir = ownedTemp('coai-auth');
   try {
     let sent = 0;
     const counting = (async () => {

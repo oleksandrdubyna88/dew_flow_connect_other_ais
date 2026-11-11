@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatStoreFile, Listing, QUARANTINE_DIR, RetireOutcome } from '../chatStoreFile';
@@ -20,6 +19,7 @@ import {
 } from '../chatStoreSweep';
 import { CONVERSATION_VERSION, ConversationRecord, KEEP_FOR_MS, besideMeta, recordName, sourceOfSession } from '../chatStore';
 import { ChatMessage } from '../chatPage';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The store's housekeeping half against a REAL directory: the survey, the heartbeat file, the marker,
@@ -36,7 +36,7 @@ import { ChatMessage } from '../chatPage';
 const said = (role: 'you' | 'model', text: string): ChatMessage => ({ role, text });
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-chat-keeper-'));
+  return ownedTemp('coai-chat-keeper');
 }
 
 function record(over: Partial<ConversationRecord> & { readonly id: string }): ConversationRecord {

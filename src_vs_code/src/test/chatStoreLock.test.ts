@@ -1,11 +1,11 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { Claim, HELD_PAUSE_MS, HELD_TRIES, LOCK_STALE_MS, LOCK_SUFFIX, claimConversation, lockName } from '../chatStoreLock';
 import { idOfMeta, isRecordName } from '../chatStore';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The claim that makes the store's compare-and-swap an actual swap, against a real directory.
@@ -25,7 +25,7 @@ const NOW = Date.UTC(2026, 8, 12, 12, 0, 0);
 const WAIT_MS = Array.from({ length: HELD_TRIES - 1 }, (_, at) => HELD_PAUSE_MS * (at + 1)).reduce((sum, ms) => sum + ms, 0);
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-chat-lock-'));
+  return ownedTemp('coai-chat-lock');
 }
 
 /** Run something with `console.error` captured, and hand back both what it returned and what it said. */

@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path, { join } from 'node:path';
 import { test } from 'node:test';
 import { notificationLine } from '../../out/notifications.js';
@@ -45,13 +44,13 @@ test('a server that dies mid-request rejects the request, rather than ending the
     'no request was told the server\'s stdin failed, so the reason a leg would print is lost');
 });
 
-test('a malformed line mentioning a refusal cannot throw past the leg\'s cleanup', async () => {
+test('a malformed line mentioning a refusal cannot throw past the leg\'s cleanup', async (t) => {
   // The leg picked "the first line that mentions a refusal" and handed it to the parser — which
   // answers `undefined` for a line it cannot read, and `notificationLine(undefined)` throws while
   // destructuring. The reader skips a malformed line, so this only bites when a malformed line comes
   // FIRST and a good refusal after it: the reader's own check passes, and the throw escaped
   // `theRecordCrosses` before `forget()` ran, leaving the temporary root behind. (CodeRabbit, #465.)
-  const root = mkdtempSync(join(tmpdir(), 'coai-seam-legs-'));
+  const root = owned.ownedDir(t, 'coai-seam-legs');
   try {
     const good = notificationLine({
       utc: '2026-09-22T12:00:00.000Z',

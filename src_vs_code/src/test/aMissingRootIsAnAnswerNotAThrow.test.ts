@@ -1,12 +1,12 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
 
 import { NOTHING_CHOSEN, useStorageSettings } from '../dataDir';
 import { makeDataDirectory, makeDataDirectorySync } from '../dataDirMaker';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * A named data root that is not there is an expected outcome of the one maker, so it is ANSWERED as a value — never
@@ -18,7 +18,7 @@ import { makeDataDirectory, makeDataDirectorySync } from '../dataDirMaker';
 let parent = '';
 
 beforeEach(() => {
-  parent = mkdtempSync(join(tmpdir(), 'coai-made-'));
+  parent = ownedTemp('coai-made');
 });
 
 afterEach(() => {

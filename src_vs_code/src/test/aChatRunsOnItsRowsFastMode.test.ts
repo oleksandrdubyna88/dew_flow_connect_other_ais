@@ -1,14 +1,14 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { readFileSync, rmSync, statSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { test } from 'node:test';
 import { chatFastSettingsFile } from '../chatFastSettings';
 import { CLAUDE_ARGS, claudeAdapter } from '../claudeAdapter';
 import { chatLaunchFor, launchSpecFor } from '../cliChatLaunch';
 import { codexAdapter } from '../codexAdapter';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * A chat runs on its row's fast mode (research/PLAN_fast_mode.md, Story C), by the rule a review launch follows: codex is told
@@ -34,7 +34,7 @@ test('a codex chat is told its row\'s tier — Off by default, On, or nothing As
 });
 
 test('a claude chat on an Opus model is told its state through the chat\'s own one-key file; another model, nothing', () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-chat-fast-'));
+  const home = ownedTemp('coai-chat-fast');
   try {
     const file = (on: boolean) => chatFastSettingsFile(on, home);
     const argv = (model: string, extra: Record<string, unknown>) =>
@@ -51,7 +51,7 @@ test('a claude chat on an Opus model is told its state through the chat\'s own o
 });
 
 test('the chat\'s file is written once, and only rewritten when it says something else', () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-chat-fast-'));
+  const home = ownedTemp('coai-chat-fast');
   try {
     const path = chatFastSettingsFile(true, home);
     const written = statSync(path).mtimeMs;

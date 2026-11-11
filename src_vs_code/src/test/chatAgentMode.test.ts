@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { ChatLaunch, NEW_CONVERSATION } from '../chatAdapter';
@@ -17,6 +16,8 @@ import {
 import { CONVERSATION_VERSION, recordFrom, sourceOfFile, sourceOfTerminal, type ConversationSource } from '../chatStore';
 import { chatCommandOf } from '../chatMessages';
 import { chatAgentToggleHtml } from '../chatAgentToggle';
+import { ownedTemp } from './ownedTemp';
+import { tempRoot } from './tempRoot';
 
 /**
  * Agent mode — issue #289. A person asked a chat to translate a FILE and the chat could not open one:
@@ -81,7 +82,7 @@ test('agent mode runs codex outside its sandbox, on a first turn and on a resume
 
 test('agent mode with a model still passes the model, for every runtime', () => {
   for (const runtime of CHAT_RUNTIMES) {
-    const spec = launchSpecFor(vendor(runtime), os.tmpdir(), { ...AGENT, model: 'm-1' }, '', 'linux', os.tmpdir());
+    const spec = launchSpecFor(vendor(runtime), tempRoot(), { ...AGENT, model: 'm-1' }, '', 'linux', tempRoot());
 
     assert.equal(spec.refusal, '', runtime);
     assert.equal(spec.args.includes('m-1'), true, `${runtime}: ${spec.args.join(' ')}`);
@@ -89,8 +90,8 @@ test('agent mode with a model still passes the model, for every runtime', () => 
 });
 
 test('agent mode runs in the conversation\'s workspace; text mode stays in the empty directory', () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-agent-ws-'));
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-agent-empty-'));
+  const workspace = ownedTemp('coai-agent-ws');
+  const empty = ownedTemp('coai-agent-empty');
   try {
     for (const runtime of CHAT_RUNTIMES) {
       assert.equal(launchSpecFor(vendor(runtime), empty, AGENT, '', 'linux', workspace).cwd, workspace, runtime);
@@ -103,15 +104,15 @@ test('agent mode runs in the conversation\'s workspace; text mode stays in the e
 });
 
 test('agent mode with no workspace is refused rather than let loose in the home directory', () => {
-  const spec = launchSpecFor(vendor('claude'), os.tmpdir(), AGENT, '', 'linux', '');
+  const spec = launchSpecFor(vendor('claude'), tempRoot(), AGENT, '', 'linux', '');
 
   assert.equal(spec.executable, '');
   assert.match(spec.refusal, /agent mode needs a workspace folder/i);
 });
 
 test('agent mode in a folder that no longer exists is refused, naming the folder', () => {
-  const gone = path.join(os.tmpdir(), 'coai-agent-deleted-folder-that-is-not-there');
-  const spec = launchSpecFor(vendor('codex'), os.tmpdir(), AGENT, '', 'linux', gone);
+  const gone = path.join(tempRoot(), 'coai-agent-deleted-folder-that-is-not-there');
+  const spec = launchSpecFor(vendor('codex'), tempRoot(), AGENT, '', 'linux', gone);
 
   assert.equal(spec.executable, '');
   assert.ok(spec.refusal.includes(gone), spec.refusal);
@@ -119,7 +120,7 @@ test('agent mode in a folder that no longer exists is refused, naming the folder
 
 test('a remote row is never launched in agent mode', () => {
   const remote: Vendor = { ...vendor('claude'), runtime: 'remote' };
-  const spec = launchSpecFor(remote, os.tmpdir(), AGENT, '', 'linux', os.tmpdir());
+  const spec = launchSpecFor(remote, tempRoot(), AGENT, '', 'linux', tempRoot());
 
   assert.equal(spec.executable, '');
   assert.notEqual(spec.refusal, '');
@@ -259,10 +260,10 @@ test('an agent launch tells cmd.exe not to look in the workspace for the program
   // working directory before the PATH — so a cloned repository with `node.cmd` in its root ran THAT
   // file, before the model had decided anything, the moment agent mode put the chat in the workspace.
   // With NoDefaultCurrentDirectoryInExePath=1 the same launch ran the real node. (Our own code review.)
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-agent-ws-'));
+  const workspace = ownedTemp('coai-agent-ws');
   try {
     for (const runtime of CHAT_RUNTIMES) {
-      const spec = launchSpecFor(vendor(runtime), os.tmpdir(), AGENT, 'C:/npm/x.cmd', 'win32', workspace);
+      const spec = launchSpecFor(vendor(runtime), tempRoot(), AGENT, 'C:/npm/x.cmd', 'win32', workspace);
       assert.equal(spec.env['NoDefaultCurrentDirectoryInExePath'], '1', runtime);
     }
   } finally {
@@ -271,15 +272,15 @@ test('an agent launch tells cmd.exe not to look in the workspace for the program
 });
 
 test('a text launch adds nothing to the environment, because it runs in an empty directory', () => {
-  assert.deepEqual(launchSpecFor(vendor('codex'), os.tmpdir(), NEW_CONVERSATION, '', 'win32').env, {});
+  assert.deepEqual(launchSpecFor(vendor('codex'), tempRoot(), NEW_CONVERSATION, '', 'win32').env, {});
 });
 
 test('a workspace that is a FILE is refused, not handed to the CLI as a directory', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-agent-file-'));
+  const dir = ownedTemp('coai-agent-file');
   const file = path.join(dir, 'not-a-folder.txt');
   fs.writeFileSync(file, 'x');
   try {
-    const spec = launchSpecFor(vendor('claude'), os.tmpdir(), AGENT, '', 'linux', file);
+    const spec = launchSpecFor(vendor('claude'), tempRoot(), AGENT, '', 'linux', file);
 
     assert.equal(spec.executable, '');
     assert.ok(spec.refusal.includes(file), spec.refusal);
@@ -293,6 +294,6 @@ test('a workspace that is a FILE is refused, not handed to the CLI as a director
 test('the launch and the box refuse in the same words, from one place', () => {
   const remote: Vendor = { ...vendor('claude'), runtime: 'remote' };
 
-  assert.equal(launchSpecFor(remote, os.tmpdir(), AGENT, '', 'linux', os.tmpdir()).refusal, agentRefusal(true, os.tmpdir()));
-  assert.equal(launchSpecFor(vendor('claude'), os.tmpdir(), AGENT, '', 'linux', '').refusal, agentRefusal(false, ''));
+  assert.equal(launchSpecFor(remote, tempRoot(), AGENT, '', 'linux', tempRoot()).refusal, agentRefusal(true, tempRoot()));
+  assert.equal(launchSpecFor(vendor('claude'), tempRoot(), AGENT, '', 'linux', '').refusal, agentRefusal(false, ''));
 });

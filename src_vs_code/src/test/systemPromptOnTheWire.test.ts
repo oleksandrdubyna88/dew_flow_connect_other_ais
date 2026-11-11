@@ -6,6 +6,7 @@ import type { Run } from '../roundsDbRead';
 import { DEFAULTS, envBlock } from '../settingsShape';
 import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
 import { vendorsEnv } from '../vendorsWire';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * A row's system prompt crosses to coai-mcp only when the installed binary lists `systemPrompt` in `--features`
@@ -36,10 +37,9 @@ test('the cache says what it last settled on, without spawning — what the sett
   const cache = new FeaturesCache();
   assert.deepEqual(cache.known(), [], 'nothing asked yet is nothing known');
   const run = (): Run => async () => ({ code: 0, output: '{"features":["systemPrompt"]}' });
-  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { writeFileSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');
-  const { tmpdir } = await import('node:os');
-  const dir = mkdtempSync(join(tmpdir(), 'coai-known-'));
+  const dir = ownedTemp('coai-known');
   try {
     writeFileSync(join(dir, 'coai-mcp'), 'one');
     await cache.of(join(dir, 'coai-mcp'), run);

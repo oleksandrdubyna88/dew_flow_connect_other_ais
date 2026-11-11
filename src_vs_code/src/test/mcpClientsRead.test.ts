@@ -1,10 +1,10 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { clientFilesFor, ClientReader } from '../mcpClientsRead';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * E4.5 of research/PLAN_one_model_catalog.md: whether each MCP client registers coai is READ from its real config file —
@@ -23,7 +23,7 @@ test('the files a client keeps its servers in, for this machine and this folder'
 });
 
 test('each file is read for coai alone; a missing file and an oversized one are said as they are', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'coai-clients-'));
+  const dir = ownedTemp('coai-clients');
   try {
     writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ mcpServers: { coai: {}, other: { env: { KEY: 'sekret' } } } }));
     mkdirSync(path.join(dir, '.vscode'));
@@ -40,7 +40,7 @@ test('each file is read for coai alone; a missing file and an oversized one are 
 });
 
 test('a file that has not changed is not read again', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'coai-clients-'));
+  const dir = ownedTemp('coai-clients');
   try {
     const file = path.join(dir, '.mcp.json');
     writeFileSync(file, JSON.stringify({ mcpServers: { coai: {} } }));

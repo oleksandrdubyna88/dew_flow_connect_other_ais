@@ -2,9 +2,9 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * Every release line's tag sits on a commit release-please can count from
@@ -44,7 +44,7 @@ function commit(dir: string, message: string, files: Record<string, string>): st
 
 /** A repository with one line, `pkg` released as `pkg-v1.0.0` on its release commit. */
 function released(): { dir: string; release: string } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'anchors-'));
+  const dir = ownedTemp('anchors');
   git(dir, 'init', '-q');
   commit(dir, 'feat: the first code', { 'pkg/a.ts': 'one' });
   const release = commit(dir, 'chore(main): release pkg 1.0.0', {
@@ -125,7 +125,7 @@ test('a version whose tag has not been cut yet passes — that is a merged relea
 });
 
 test('a configuration it cannot read is refused, not passed', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'anchors-'));
+  const dir = ownedTemp('anchors');
   cleaned(dir, () => {
     git(dir, 'init', '-q');
 
@@ -136,7 +136,7 @@ test('a configuration it cannot read is refused, not passed', () => {
 test('git failing is refused, never read as "not cut yet"', () => {
   // The code round: a git error swallowed into an empty SHA reads as an uncut tag, which PASSES — so a
   // broken checkout would wave the run through without looking at a single anchor.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'anchors-'));
+  const dir = ownedTemp('anchors');
   cleaned(dir, () => {
     fs.writeFileSync(path.join(dir, 'release-please-config.json'), JSON.stringify({ packages: { pkg: { component: 'pkg' } } }));
     fs.writeFileSync(path.join(dir, '.release-please-manifest.json'), JSON.stringify({ pkg: '1.0.0' }));

@@ -1,10 +1,10 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { insideReally } from '../claudeSessions';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * A path is judged by WHERE IT LEADS, not by how it is spelled.
@@ -38,7 +38,7 @@ import { insideReally } from '../claudeSessions';
 
 /** A workspace, something outside it, and a handle to take it all away again. */
 function aWorkspace(): { readonly root: string; readonly ws: string; readonly outside: string } {
-  const root = mkdtempSync(join(tmpdir(), 'coai-escape-'));
+  const root = ownedTemp('coai-escape');
   const ws = join(root, 'ws');
   const outside = join(root, 'outside');
   mkdirSync(ws, { recursive: true });

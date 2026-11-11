@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { AskedSet, askedAsText, lastAsked } from '../claudeQuestion';
@@ -14,6 +13,7 @@ import {
   waitingQuestion,
 } from '../claudeSessions';
 import { CLAUDE_PANEL_VIEW_TYPE, isOrdinaryEditorTab, sourceSession } from '../sessionKey';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * Taking the question Claude Code is asking, off its own session file.
@@ -206,7 +206,7 @@ test('the newest answered one is the one reported answered', () => {
 // ---------------------------------------------------------------------------------------------
 
 test('a folder Claude Code has never run in is a refusal that names where it looked', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  const home = ownedTemp('coai-home');
   try {
     const answer = await waitingQuestion(home, 'D:\\nowhere', true);
 
@@ -218,7 +218,7 @@ test('a folder Claude Code has never run in is a refusal that names where it loo
 });
 
 test('a real session file is found, read, and its question taken', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  const home = ownedTemp('coai-home');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -237,7 +237,7 @@ test('a real session file is found, read, and its question taken', async () => {
 });
 
 test('two sessions both waiting are refused by count, not resolved by mtime', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  const home = ownedTemp('coai-home');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -331,7 +331,7 @@ test('two files of the same NAME do not inherit the other one\'s conversation', 
 test('a folder with no session directory of its own is refused BY NAME', async () => {
   // Each refusal sentence is the only signal a person gets, and every one is reachable from an
   // ordinary state of the world. (CodeRabbit, PR #206.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  const home = ownedTemp('coai-home');
   try {
     mkdirSync(join(home, '.claude', 'projects'), { recursive: true });
 
@@ -349,7 +349,7 @@ test('a folder with no session directory of its own is refused BY NAME', async (
 });
 
 test('a session whose shape this build cannot read says the format changed', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  const home = ownedTemp('coai-home');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -374,7 +374,7 @@ test('a session whose shape this build cannot read says the format changed', asy
 });
 
 test('a folder Claude has run in but never asked anything in is nothing, not a failure', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  const home = ownedTemp('coai-home');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -389,7 +389,7 @@ test('a folder Claude has run in but never asked anything in is nothing, not a f
 });
 
 test('an answered session is reported answered, from a real directory', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  const home = ownedTemp('coai-home');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -527,7 +527,7 @@ test('Take the question does not report silence for sessions it never read', asy
   // The module's own rule, applied to the budget: reporting "nothing is waiting" about a folder that
   // was cut short is this module lying about the world. `waitingQuestion` is also the reader that
   // holds each file WHOLE in memory, so it needs the bound more than the Asked button does.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });

@@ -1,7 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { ownedTemp } from './ownedTemp';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import {
@@ -184,7 +184,7 @@ test('a write that landed reports success, and reports it as WRITTEN either way'
   // The defect both code reviewers found independently: the rename is atomic, the read-back after
   // it is not, so a read-back that fails used to be reported as a FAILED write — for a file that
   // had already been replaced. The person would then press the button again and undo it.
-  const path = join(tmpdir(), `coai-wslconfig-${process.pid}.test`);
+  const path = join(ownedTemp('coai-wslconfig'), 'wslconfig.test');
   const text = '[wsl2]\nnetworkingMode=mirrored\n';
   try {
     const outcome = await writeWslconfig(path, text);

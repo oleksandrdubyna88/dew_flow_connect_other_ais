@@ -2,9 +2,9 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * Markdown alone never opens a release — the operator's rule, 2026-09-26
@@ -21,7 +21,7 @@ const UNREADABLE = 2;
 interface Commit { sha: string; message: string; files: string[] }
 
 function check(title: string, files: string[], commits: Commit[] = []): { code: number; said: string } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docsonly-'));
+  const dir = ownedTemp('docsonly');
   try {
     const facts = path.join(dir, 'facts.json');
     fs.writeFileSync(facts, JSON.stringify({ title, files, commits }), 'utf8');
@@ -86,7 +86,7 @@ test('a Markdown-only COMMIT of a releasing type is refused even under a docs: t
 });
 
 test('facts it cannot read are refused, not passed', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docsonly-'));
+  const dir = ownedTemp('docsonly');
   try {
     const facts = path.join(dir, 'facts.json');
     fs.writeFileSync(facts, JSON.stringify({ title: 'feat: x' }), 'utf8');

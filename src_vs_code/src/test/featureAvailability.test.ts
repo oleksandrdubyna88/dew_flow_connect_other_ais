@@ -1,8 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { adapterFor, CHAT_RUNTIMES } from '../cliChatLaunch';
@@ -10,6 +9,7 @@ import { CONSULTING_RUNTIMES } from '../consultSettings';
 import { effortRefusal } from '../featureAvailability';
 import { CHAT, CONSULTING, EFFORT, THINKING } from '../featureAvailability.generated';
 import { RUNTIMES } from '../models';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * Which runtime serves which feature, and which efforts each accepts — one file both halves read
@@ -102,7 +102,7 @@ test('a probed runtime is judged against the levels its probe reported', () => {
 });
 
 function generate(doctored: unknown): { status: number | null; stderr: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'coai-availability-'));
+  const dir = ownedTemp('coai-availability');
   try {
     const seedPath = join(dir, 'seed.json');
     writeFileSync(seedPath, JSON.stringify(doctored), 'utf8');

@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatStoreFile } from '../chatStoreFile';
@@ -10,6 +9,7 @@ import { Housekeeping, startHousekeeping } from '../chatStoreHousekeeping';
 import { HOUSEKEEPING_DIR, SweepReport, heartbeatName } from '../chatStoreSweep';
 import { CONVERSATION_VERSION, ConversationRecord, KEEP_FOR_MS, recordName, sourceOfSession } from '../chatStore';
 import { ChatMessage } from '../chatPage';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The order housekeeping starts in, against a real directory: the heartbeat first, the sweep after
@@ -20,7 +20,7 @@ import { ChatMessage } from '../chatPage';
 const said = (role: 'you' | 'model', text: string): ChatMessage => ({ role, text });
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-chat-housekeeping-'));
+  return ownedTemp('coai-chat-housekeeping');
 }
 
 function record(over: Partial<ConversationRecord> & { readonly id: string }, now: number): ConversationRecord {

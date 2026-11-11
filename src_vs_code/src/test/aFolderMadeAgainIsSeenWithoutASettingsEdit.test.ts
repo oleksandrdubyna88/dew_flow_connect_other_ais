@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, test } from 'node:test';
 
@@ -13,6 +12,7 @@ import { type PathFinding, SETTING_PATH_MISSING, findingSubject } from '../pathF
 import { PathProbes, statProbe } from '../pathProbes';
 import { PathWatch, RECHECK_MS } from '../pathWatch';
 import { stat } from 'node:fs/promises';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * Recovery WITHOUT a settings edit (research/PLAN_paths_per_side.md E5.7, the risk consultation's item F): a person whose
@@ -60,7 +60,7 @@ interface Rig {
 /** The REAL disk under a temp folder, a named root that is not there, and a timer the test fires by hand. */
 function rig(): Rig {
   forgetFindingsBoard();
-  parent = mkdtempSync(join(tmpdir(), 'coai-recover-'));
+  parent = ownedTemp('coai-recover');
   const root = join(parent, 'named');
   useStorageSettings({ directory: root, side: '' }, NOTHING_CHOSEN);
   const timers: { work: () => void; ms: number }[] = [];

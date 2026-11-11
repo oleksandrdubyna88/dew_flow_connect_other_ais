@@ -2,7 +2,6 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -13,6 +12,7 @@ import { REMOVAL_REASONS, TREE_REASONS, TREE_STATES } from '../reviewTree';
 import { readTrees, readTreeAt, removeTree } from '../reviewTreeRead';
 import { mayRank } from '../bugzPick';
 import { EXITS, outcomeOf, readSummary } from '../bugsSend';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The REAL binary's answer, parsed by the REAL reader.
@@ -51,7 +51,7 @@ const MAKES_THE_DATABASE = ['--requeue-refused'];
 test('the real --bugs-json output parses, and says what the panel needs', { skip: built ? false : 'the server is not built' }, () => {
   // A data directory of its own: this asks the binary a question, and it must not be answered from
   // whatever database the person running the suite happens to have.
-  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-contract-'));
+  const data = ownedTemp('coai-contract');
   const answer = spawnSync(server(), ['--bugs-json'], {
     encoding: 'utf8',
     env: { ...process.env, COAI_DATA_DIR: data },
@@ -97,7 +97,7 @@ test('the real --bugs-json output parses, and says what the panel needs', { skip
  * cannot resolve and is never reached — the run ends before it would need to.</p>
  */
 test('the real --upload-pairs summary is the one the panel reads', { skip: built ? false : 'the server is not built' }, () => {
-  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-send-contract-'));
+  const data = ownedTemp('coai-send-contract');
   const answer = spawnSync(server(), ['--upload-pairs', '--server', 'https://bugs.invalid'], {
     encoding: 'utf8',
     // The key is never an argument, here least of all: this is the contract test for the path that
@@ -156,7 +156,7 @@ test('an unknown mode really does exit 64', { skip: built ? false : 'the server 
  */
 test('the real --pairs-json envelope is the one readPairs accepts',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-pairs-'));
+    const data = ownedTemp('coai-pairs');
     try {
       const answer = await readPairs(server(), 5, async (args) => {
         const ran = spawnSync(server(), args, {
@@ -189,7 +189,7 @@ test('the real --pairs-json envelope is the one readPairs accepts',
  */
 test('the real --real-method answer for a pair nobody has is a reason, not a failure',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-realmethod-'));
+    const data = ownedTemp('coai-realmethod');
     try {
       const read = await readRealMethod(server(), 1, async (args) => {
         const ran = spawnSync(server(), args, {
@@ -218,7 +218,7 @@ test('the real --real-method answer for a pair nobody has is a reason, not a fai
  */
 test('a request fault from the real binary is 65, and is not read as an old server',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-realmethod-65-'));
+    const data = ownedTemp('coai-realmethod-65');
     try {
       const ran = spawnSync(server(), ['--real-method'], {
         encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
@@ -300,7 +300,7 @@ test('both halves of the wire name the same sixteen fields', () => {
  */
 test('a seeded pair survives the real binary and the real reader, field by field',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-seeded-'));
+    const data = ownedTemp('coai-seeded');
     try {
       await seedOnePair(data);
 
@@ -350,7 +350,7 @@ test('a seeded pair survives the real binary and the real reader, field by field
  */
 test('a decision with words crosses the real writer and the real binary, and a refusal is not "too old"',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-decided-'));
+    const data = ownedTemp('coai-decided');
     try {
       await seedOnePair(data, { sent: false });
       const run = realRunIn(data);
@@ -451,8 +451,8 @@ async function seedOnePair(data: string, { sent = true }: { readonly sent?: bool
  */
 test('a seeded pair reads its real method back out of a real repository',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-real-data-'));
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-real-repo-'));
+    const data = ownedTemp('coai-real-data');
+    const repo = ownedTemp('coai-real-repo');
     const git = (...args: readonly string[]): string => {
       const ran = spawnSync('git', [...args], { cwd: repo, encoding: 'utf8', timeout: 60_000 });
       assert.equal(ran.status, 0, `git ${args.join(' ')}: ${ran.stderr}`);
@@ -567,7 +567,7 @@ function runIn(data: string): (args: readonly string[]) => Promise<{ code: numbe
  */
 test('the real --file-at answer for a pair nobody has is a reason, not a failure',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-fileat-'));
+    const data = ownedTemp('coai-fileat');
     try {
       const read = await readFileAt(server(), { findingId: 1, headSha: '', file: '' }, runIn(data));
 
@@ -582,7 +582,7 @@ test('the real --file-at answer for a pair nobody has is a reason, not a failure
 
 test('a missing --id on --file-at is 65 from the real binary, and is not read as an old server',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-fileat-65-'));
+    const data = ownedTemp('coai-fileat-65');
     try {
       const ran = spawnSync(server(), ['--file-at'], {
         encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
@@ -609,8 +609,8 @@ test('a missing --id on --file-at is 65 from the real binary, and is not read as
  */
 test('a seeded pair reads its file at its revision out of a real repository, and the reasons come off the real binary',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-fileat-data-'));
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-fileat-repo-'));
+    const data = ownedTemp('coai-fileat-data');
+    const repo = ownedTemp('coai-fileat-repo');
     const git = (...args: readonly string[]): string => {
       const ran = spawnSync('git', [...args], { cwd: repo, encoding: 'utf8', timeout: 60_000 });
       assert.equal(ran.status, 0, `git ${args.join(' ')}: ${ran.stderr}`);
@@ -761,7 +761,7 @@ function stripped(source: string): string {
  */
 test('the real --tree-at answer for a pair nobody has is a reason, not a failure',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-treeat-'));
+    const data = ownedTemp('coai-treeat');
     try {
       const read = await readTreeAt(server(), { findingId: 1, headSha: '', repoPath: '' }, runIn(data));
 
@@ -779,7 +779,7 @@ test('the real --tree-at answer for a pair nobody has is a reason, not a failure
 
 test('a missing --id on --tree-at is 65 from the real binary, and is not read as an old server',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-treeat-65-'));
+    const data = ownedTemp('coai-treeat-65');
     try {
       const { code } = await runIn(data)(['--tree-at']);
 
@@ -835,7 +835,7 @@ test('every reason a removal can answer is a reason this panel knows', () => {
 
 test('the real --trees answer on a machine holding none is a list, not a failure',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-trees-'));
+    const data = ownedTemp('coai-trees');
     try {
       const read = await readTrees(server(), runIn(data));
 
@@ -850,7 +850,7 @@ test('the real --trees answer on a machine holding none is a list, not a failure
 
 test('the real --tree-remove refuses a name it holds no record for, as data',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-treerm-'));
+    const data = ownedTemp('coai-treerm');
     try {
       const name = 'coai-review-00000000-000000000000';
       const read = await removeTree(server(), name, false, runIn(data));
@@ -865,7 +865,7 @@ test('the real --tree-remove refuses a name it holds no record for, as data',
 
 test('a missing --tree is 65 from the real binary, and is not read as an old server',
   { skip: built ? false : 'the server is not built' }, async () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-treerm-65-'));
+    const data = ownedTemp('coai-treerm-65');
     try {
       const { code } = await runIn(data)(['--tree-remove']);
 
