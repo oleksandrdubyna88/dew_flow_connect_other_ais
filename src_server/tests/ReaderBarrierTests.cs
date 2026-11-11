@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -20,7 +21,7 @@ namespace CoaiServer.Tests;
 /// </remarks>
 public sealed class ReaderBarrierTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-barrier-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-barrier-");
 
     private readonly List<Process> _started = [];
 
@@ -28,7 +29,6 @@ public sealed class ReaderBarrierTests : IDisposable
 
     public ReaderBarrierTests()
     {
-        Directory.CreateDirectory(_dir);
         File.WriteAllText(Path.Combine(_dir, "vendors.json"), """[{ "id": "codex", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""");
         New().MarkSignedIn(New().Read("codex", "a"));
     }
@@ -52,14 +52,7 @@ public sealed class ReaderBarrierTests : IDisposable
             process.Dispose();
         }
 
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a dying child still holds is the OS's to clean.
-        }
+        _dir.Dispose();
     }
 
     [Fact]

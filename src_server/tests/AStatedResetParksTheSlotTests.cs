@@ -1,5 +1,6 @@
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -24,11 +25,10 @@ public sealed class AStatedResetParksTheSlotTests : IDisposable
     /// <summary>Captured verbatim 2026-10-10 (research/RESULTS_vendor_quota_gauges.md §3.1), the error id redacted there.</summary>
     private const string Refusal = """AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429): Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 88h49m9s.","status":"RESOURCE_EXHAUSTED","error_code":429,"code_kind":"http","retryable":true,"error_id":"<redacted>"}""";
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-stated-reset-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-stated-reset-");
 
     public AStatedResetParksTheSlotTests()
     {
-        Directory.CreateDirectory(_dir);
         File.WriteAllText(
             Path.Combine(_dir, "vendors.json"),
             """[{ "id": "antigravity", "runtime": "antigravity", "models": ["gemini-3.8-flash-low"], "slots": ["a"] }]""");
@@ -36,17 +36,7 @@ public sealed class AStatedResetParksTheSlotTests : IDisposable
         registry.MarkSignedIn(registry.Read("antigravity", "a"));
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a stray handle still holds is the OS's to clean, not this test's to fail on.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public async Task TheVerbatimAgyRefusal_ParksTheSlotForTheStatedHours_AndTheNextJobLaunchesNothing()

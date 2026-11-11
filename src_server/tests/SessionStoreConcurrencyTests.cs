@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -29,7 +30,7 @@ public sealed class SessionStoreConcurrencyTests
     [Fact]
     public async Task ConcurrentIssueValidateSweepAndActive_LeaveEveryLiveTokenValid_AndActiveNeverThrows()
     {
-        var data = Directory.CreateTempSubdirectory("coai-stress-").FullName;
+        using var data = TempDir.For("coai-stress-");
         var store = new SessionStore(data, TimeSpan.FromDays(7));
         var now = DateTimeOffset.UtcNow;
         var live = new ConcurrentBag<string>();

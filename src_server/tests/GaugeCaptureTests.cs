@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -27,7 +28,7 @@ namespace CoaiServer.Tests;
 [Collection(ServerCollection.Name)]
 public sealed class GaugeCaptureTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "gauge-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("gauge-");
 
     private readonly List<string> _notes = [];
 
@@ -36,7 +37,6 @@ public sealed class GaugeCaptureTests : IDisposable
 
     public GaugeCaptureTests()
     {
-        Directory.CreateDirectory(_dir);
         File.WriteAllText(
             Path.Combine(_dir, "vendors.json"),
             """[{ "id": "codex", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""");
@@ -54,21 +54,11 @@ public sealed class GaugeCaptureTests : IDisposable
     public void TheGaugeFolder_IsInsideTheRunFolder()
     {
         CoaiMcp.Tests.RunTemp.Folder.Should().NotBeEmpty("this suite made a run folder before any test");
-        _dir.Should().StartWith(CoaiMcp.Tests.RunTemp.Folder + Path.DirectorySeparatorChar, "the run folder owns it and removes it with itself");
+        _dir.Path.Should().StartWith(CoaiMcp.Tests.RunTemp.Folder + Path.DirectorySeparatorChar, "the run folder owns it and removes it with itself");
         Path.GetFileName(_dir).Should().StartWith("gauge-");
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a stray handle still holds is the OS's to clean, not this test's to fail on.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public async Task AFixtureGaugeAnswer_IsCapturedAfterTheJob_StoredOnTheSlot_AndOnTheJobsLedgerLine()

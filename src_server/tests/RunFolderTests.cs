@@ -64,7 +64,7 @@ public sealed class RunFolderTests : IDisposable
     {
         RunTemp.Refusal().Should().BeNull("a run that reached a test passed the gate");
         RunTemp.IsActive.Should().BeTrue("Gate checked and passed this run");
-        Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Should().Be(RunTemp.Folder);
+        TempDir.Root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Should().Be(RunTemp.Folder);
         Path.GetDirectoryName(RunTemp.Folder).Should().Be(RunTemp.Real, "the run folder is INSIDE the machine's temp folder, never it");
         Path.GetFileName(RunTemp.Folder).Should().MatchRegex("^" + System.Text.RegularExpressions.Regex.Escape(Owned.NameBase) + "run-[A-Za-z0-9]{6}$");
         RunTempFolder.Variables.Select(Environment.GetEnvironmentVariable).Should().OnlyContain(value => value == RunTemp.Folder, "TEMP, TMP and TMPDIR all name the run folder");

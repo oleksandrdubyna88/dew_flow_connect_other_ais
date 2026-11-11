@@ -2,6 +2,7 @@ using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -24,11 +25,10 @@ public sealed class TheWholeUsageTravelsTests : IDisposable
         """{"type":"thread.started","thread_id":"t-1"}""" + "\n"
         + """{"type":"turn.completed","usage":{"input_tokens":14508,"cached_input_tokens":12544,"cache_write_input_tokens":0,"output_tokens":5,"reasoning_output_tokens":0}}""" + "\n";
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-usage-travels-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-usage-travels-");
 
     public TheWholeUsageTravelsTests()
     {
-        Directory.CreateDirectory(_dir);
         File.WriteAllText(
             Path.Combine(_dir, "vendors.json"),
             """[{ "id": "codex", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""");
@@ -36,17 +36,7 @@ public sealed class TheWholeUsageTravelsTests : IDisposable
         registry.MarkSignedIn(registry.Read("codex", "a"));
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a vendor helper still holds is the OS's to clean, not this test's to fail on.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public async Task TheServerLedger_KeepsCachedAndReasoningTokens()

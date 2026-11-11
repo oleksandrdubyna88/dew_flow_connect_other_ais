@@ -184,7 +184,7 @@ public sealed class ReviewLauncherTests
     public async Task AConfinedReviewerStillRunsAsItsOwnAccount()
     {
         var slot = SlotEnvironment.For(
-            "claude", Path.Combine(Path.GetTempPath(), "coai-slot-a"), token: "not-a-real-token");
+            "claude", Path.Combine(TempDir.Root, "coai-slot-a"), token: "not-a-real-token");
         var watching = new Watching(new ProcessResult(0, Envelope, string.Empty, TimedOut: false));
 
         await Run(watching, environment: slot);
@@ -242,25 +242,18 @@ public sealed class ReviewLauncherTests
     [Fact]
     public async Task ACodexJob_SwitchesOffTheSlotsOwnMcpServers()
     {
-        var slotDir = Directory.CreateTempSubdirectory("coai-slot-codex-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(slotDir, ".codex"));
-            await File.WriteAllTextAsync(
-                Path.Combine(slotDir, ".codex", "config.toml"), "[mcp_servers.from-slot]\ncommand = \"x\"\n",
-                TestContext.Current.CancellationToken);
-            var watching = new Watching(new ProcessResult(0, Envelope, string.Empty, TimedOut: false));
+        using var slotDir = TempDir.For("coai-slot-codex-");
+        Directory.CreateDirectory(Path.Combine(slotDir, ".codex"));
+        await File.WriteAllTextAsync(
+            Path.Combine(slotDir, ".codex", "config.toml"), "[mcp_servers.from-slot]\ncommand = \"x\"\n",
+            TestContext.Current.CancellationToken);
+        var watching = new Watching(new ProcessResult(0, Envelope, string.Empty, TimedOut: false));
 
-            await Run(watching, runtime: "codex", vendorId: "codex", model: "gpt-5",
-                environment: SlotEnvironment.For("codex", slotDir, token: "not-a-real-token"));
+        await Run(watching, runtime: "codex", vendorId: "codex", model: "gpt-5",
+            environment: SlotEnvironment.For("codex", slotDir, token: "not-a-real-token"));
 
-            watching.Request.Arguments.Should().Contain("mcp_servers.from-slot.enabled=false",
-                "the servers switched off are the ones the slot's own config.toml declares");
-        }
-        finally
-        {
-            Directory.Delete(slotDir, recursive: true);
-        }
+        watching.Request.Arguments.Should().Contain("mcp_servers.from-slot.enabled=false",
+            "the servers switched off are the ones the slot's own config.toml declares");
     }
 
     // ------------------------------------------------------------------------------------------
@@ -299,7 +292,7 @@ public sealed class ReviewLauncherTests
 
     private static Task<ReviewAttempt> RunAgy(IProcessLauncher launcher, TimeSpan? runBudget = null) =>
         Run(launcher, runtime: "antigravity", vendorId: "antigravity", model: "gemini-3.8-flash-low",
-            environment: SlotEnvironment.For("antigravity", Path.Combine(Path.GetTempPath(), "coai-slot-agy"), token: "not-a-real-token"),
+            environment: SlotEnvironment.For("antigravity", Path.Combine(TempDir.Root, "coai-slot-agy"), token: "not-a-real-token"),
             runBudget: runBudget);
 
     [Fact]

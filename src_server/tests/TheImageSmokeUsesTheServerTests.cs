@@ -23,7 +23,7 @@ namespace CoaiServer.Tests;
 [Collection(ServerCollection.Name)]
 public sealed class TheImageSmokeUsesTheServerTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-smoke-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = CoaiMcp.Tests.TempDir.For("coai-smoke-").Path;
 
     public TheImageSmokeUsesTheServerTests() => Directory.CreateDirectory(_dir);
 

@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -33,7 +34,7 @@ namespace CoaiServer.Tests;
 /// </remarks>
 public sealed class GaugeReaderCrashHarnessTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "coai-crash-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _root = TempDir.For("coai-crash-");
 
     private readonly List<ServerChild> _servers = [];
 
@@ -86,14 +87,7 @@ public sealed class GaugeReaderCrashHarnessTests : IDisposable
             EndQuietly(pid);
         }
 
-        try
-        {
-            Directory.Delete(_root, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a dying child still holds is the OS's to clean.
-        }
+        _root.Dispose();
     }
 
     [Fact]

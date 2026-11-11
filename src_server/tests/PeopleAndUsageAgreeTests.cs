@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Xunit;
@@ -110,7 +111,7 @@ public sealed class PeopleAndUsageAgreeTests
     [Fact]
     public async Task AnAdminRemovedByARestart_IsRefusedOnBothRoutes_WithTheRetainedSession()
     {
-        var data = Path.Combine(Path.GetTempPath(), "coai-server-tests", Guid.NewGuid().ToString("N"));
+        using var data = TempDir.For("coai-server-tests-");
         string retained;
         using (var before = new TeamServer(new Dictionary<string, string?> { ["Coai__DataDir"] = data }))
         {

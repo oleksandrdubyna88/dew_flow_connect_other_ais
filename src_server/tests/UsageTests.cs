@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CoaiMcp.Tests;
 using CoaiServer;
 using FluentAssertions;
 using Xunit;
@@ -278,11 +279,9 @@ public sealed class UsageTotalsTests
 
 public sealed class UsageReaderTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-usage-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-usage-");
 
-    public UsageReaderTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose() => _dir.Dispose();
 
     private static readonly UsageRange Everything =
         new(DateTimeOffset.MinValue, DateTimeOffset.MaxValue);
@@ -414,11 +413,9 @@ public sealed class UsageReaderTests : IDisposable
 /// </remarks>
 public sealed class LedgerRoundTripTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-roundtrip-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-roundtrip-");
 
-    public LedgerRoundTripTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public void EveryFieldTheWriterWritesIsAFieldTheReaderReads()

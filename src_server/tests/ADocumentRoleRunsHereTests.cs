@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -97,37 +98,29 @@ public sealed class ADocumentRoleRunsHereTests
     [Fact]
     public async Task ADocumentReviewIsClaimedRunAndAnswered()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "coai-document-job-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(dir, "vendors.json"),
-                """[{ "id": "codex", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""");
-            var registry = new SlotRegistry(dir, new JsonFileStore());
-            registry.MarkSignedIn(registry.Read("codex", "a"));
+        using var dir = TempDir.For("coai-document-job-");
+        File.WriteAllText(
+            Path.Combine(dir, "vendors.json"),
+            """[{ "id": "codex", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""");
+        var registry = new SlotRegistry(dir, new JsonFileStore());
+        registry.MarkSignedIn(registry.Read("codex", "a"));
 
-            var jobs = new JobStore();
-            var runner = new JobRunner(
-                jobs, new VendorCatalogHost(dir), registry,
-                new Answering("""{"findings":[],"notes":"it reads well"}"""), new UsageLedger(dir));
-            jobs.Submit(new JobRecord(
-                JobId.New(), "dev@example.com", "codex", "m", RoleCatalog.DocumentRole,
-                "## The document under review — notes.md\n\nWe shipped the thing.\n",
-                JobStatus.Queued, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(10),
-                TimeSpan.FromSeconds(60)));
+        var jobs = new JobStore();
+        var runner = new JobRunner(
+            jobs, new VendorCatalogHost(dir), registry,
+            new Answering("""{"findings":[],"notes":"it reads well"}"""), new UsageLedger(dir));
+        jobs.Submit(new JobRecord(
+            JobId.New(), "dev@example.com", "codex", "m", RoleCatalog.DocumentRole,
+            "## The document under review — notes.md\n\nWe shipped the thing.\n",
+            JobStatus.Queued, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(10),
+            TimeSpan.FromSeconds(60)));
 
-            (await runner.PumpAsync("codex", CancellationToken.None)).Should().BeTrue();
+        (await runner.PumpAsync("codex", CancellationToken.None)).Should().BeTrue();
 
-            var job = jobs.All().Single();
-            job.Status.Should().Be(JobStatus.Done);
-            job.Role.Should().Be(RoleCatalog.DocumentRole);
-            job.Answer.Should().Contain("notes", "the summary comes back in `notes`, raw as always");
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
+        var job = jobs.All().Single();
+        job.Status.Should().Be(JobStatus.Done);
+        job.Role.Should().Be(RoleCatalog.DocumentRole);
+        job.Answer.Should().Contain("notes", "the summary comes back in `notes`, raw as always");
     }
 
     private sealed class Answering(string raw) : IReviewLauncher
