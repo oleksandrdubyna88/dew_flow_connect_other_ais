@@ -1,5 +1,7 @@
 import { askedAsText, lastAsked } from './claudeQuestion';
-import { Waiting, WaitingSession, unrecognisedSaid, waitingIn } from './claudeSessions';
+import type { Waiting, WaitingSession } from './claudeSessions';
+import { waitingIn } from './claudeSessions';
+import { unrecognisedSaid } from './sessionPrompts';
 import type { RemoteAnswer } from './remoteRead';
 
 /** What the doors hand back: the question as text, or the sentence that says why there is none. Exactly one of the two is empty. */

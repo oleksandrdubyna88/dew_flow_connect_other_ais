@@ -1,5 +1,6 @@
-import { lastAsked } from './claudeQuestion';
-import { NOTHING_OF_YOURS, namedAmong, projectDirNames, promptsIn } from './claudeSessions';
+import { humanSaid, lastAsked } from './claudeQuestion';
+import { namedAmong, projectDirNames } from './claudeSessions';
+import { NOTHING_OF_YOURS, promptsIn } from './sessionPrompts';
 import { CredsName, credsSession } from './credsSession';
 import { oneAtATime } from './oneAtATime';
 import { RemoteCandidate, RemoteRead, TitledSession, UNREADABLE_SAID, Unreadable, readRemote } from './remoteFrame';
@@ -300,7 +301,7 @@ export function promptsSaid(answer: RemoteAnswer): { readonly asked: readonly st
   if (answer.kind === 'refused') {
     return { asked: [], refusal: answer.refusal };
   }
-  const asked = promptsIn(answer.lines);
+  const asked = promptsIn(answer.lines, humanSaid);
 
   return { asked, refusal: answer.note.length > 0 ? answer.note : asked.length > 0 ? '' : NOTHING_OF_YOURS };
 }

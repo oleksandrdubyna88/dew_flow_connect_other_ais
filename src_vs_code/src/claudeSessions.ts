@@ -5,8 +5,9 @@ import * as fs from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import * as readline from 'node:readline';
 import * as path from 'node:path';
-import { AskedSet, SessionNames, collectNames, humanSaid, lastAsked } from './claudeQuestion';
+import { AskedSet, SessionNames, collectNames, lastAsked } from './claudeQuestion';
 import { isSessionId } from './chatSource';
+import { MOST_PROMPTS, NOTHING_OF_YOURS, promptIn, unrecognisedSaid } from './sessionPrompts';
 
 /**
  * Where Claude Code keeps its sessions, and which of them is the one being looked at.
@@ -674,21 +675,6 @@ export function severalMatch(answers: readonly Found[]): boolean {
     || answers.filter((answer) => answer.kind === 'one').length > 1;
 }
 
-/**
- * The most turns that cross to a webview at once, and the most of each.
- *
- * <p>A day-long session holds hundreds of turns and some of them are whole files pasted in. All of
- * it in one `postMessage` is megabytes over a bridge that has to stay responsive, rendered into a
- * region 40vh tall. The EARLIEST are kept, because the question this button exists to answer is
- * *what was this window for* — and a turn that is cut says so where it is cut. (gemini, the plan
- * round, on a payload nobody had bounded.)</p>
- */
-export const MOST_PROMPTS = 200;
-export const MOST_PER_PROMPT = 8_000;
-
-/** Said when a session that can be read holds nothing the person wrote. */
-export const NOTHING_OF_YOURS = 'Nothing of yours is in that session yet.';
-
 /** What the person wrote in a session, or why there is nothing to show. */
 export type Asked =
   | { readonly kind: 'said'; readonly said: readonly string[] }
@@ -1102,27 +1088,6 @@ async function promptsOf(file: string): Promise<readonly string[]> {
 
   return said;
 }
-
-/** What the person said in ONE line, as it is shown: empty when nobody did, and cut at {@link MOST_PER_PROMPT} with a note. */
-function promptIn(line: string): string {
-  const spoken = humanSaid(line);
-
-  return spoken.length <= MOST_PER_PROMPT
-    ? spoken
-    : `${spoken.slice(0, MOST_PER_PROMPT)}\n\n… (cut here — the rest is in the session file)`;
-}
-
-/**
- * What the person wrote in lines already read (the tail of a remote session), EARLIEST first, at most {@link MOST_PROMPTS}, each cut
- * as {@link promptsOf} cuts it — one rule for the file on this computer and the lines that came over ssh.
- */
-export function promptsIn(lines: readonly string[]): readonly string[] {
-  return lines.map(promptIn).filter((prompt) => prompt.length > 0).slice(0, MOST_PROMPTS);
-}
-
-/** What is said when a question was found that this build cannot read, `where` being the file or the session it was in. One sentence for the local road and the remote one. */
-export const unrecognisedSaid = (where: string): string =>
-  `Claude Code asked something this build does not recognise, in ${where}. The session format has changed — this needs a new release.`;
 
 /**
  * The question waiting in this folder's sessions, or the reason there is none.
