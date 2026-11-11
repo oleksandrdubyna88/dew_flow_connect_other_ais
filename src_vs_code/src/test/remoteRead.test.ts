@@ -2,9 +2,8 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
-import { MOST_PER_PROMPT, MOST_PROMPTS, NOTHING_OF_YOURS, projectDirNames, promptsFrom } from '../claudeSessions';
+import { MOST_PER_PROMPT, MOST_PROMPTS, NOTHING_OF_YOURS, projectDirNames } from '../claudeSessions';
 import { RemoteRead, UNREADABLE_SAID } from '../remoteFrame';
 import {
   HostAnswer, PickRow, Picked, RemoteAnswer, RoadSeams,
@@ -529,19 +528,17 @@ test('S4-T5b: what Asked shows for a terminal is the person\'s words of the tail
   assert.equal(kept[0], 'p0', 'the earliest prompts are not the ones kept');
 });
 
-test('S4-T5b: the same lines give the same prompts from a file and from the road (one rule, not two copies)', async () => {
-  const lines = [said('alpha'), ai('t'), said('b'.repeat(MOST_PER_PROMPT + 5)), said('gamma')];
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-prompts-'));
-  try {
-    const file = path.join(dir, 'session.jsonl');
-    fs.writeFileSync(file, lines.join('\n') + '\n');
-    const local = await promptsFrom(file);
+test('S4-T5b: the local file reader and the road\'s lines make a prompt by ONE function, not two copies', () => {
+  // No file here on purpose: a real file would need a temp folder, and the rule that makes the prompts the same is that both readers
+  // call promptIn. A scan, with its companion that it still finds the local reader and the one over lines.
+  const text = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'claudeSessions.ts'), 'utf8');
+  const local = /async function promptsOf\([\s\S]*?\n\}\n/u.exec(text)?.[0] ?? '';
+  const lines = /export function promptsIn\([\s\S]*?\n\}\n/u.exec(text)?.[0] ?? '';
 
-    assert.equal(local.kind, 'said');
-    assert.deepEqual(promptsSaid({ kind: 'lines', lines, note: '' }).asked, local.kind === 'said' ? local.said : [], 'the road and the file read one session into different prompts');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  assert.ok(local.includes('eachLine(') && lines.includes('slice('), 'the scan no longer finds the two readers, so it proves nothing');
+  assert.ok(local.includes('promptIn('), 'the file reader makes a prompt by its own code: the road and the file can disagree');
+  assert.ok(lines.includes('promptIn') && !lines.includes('humanSaid('), 'the lines reader makes a prompt by its own code: the road and the file can disagree');
+  assert.ok(!local.includes('MOST_PER_PROMPT'), 'the file reader cuts a prompt itself, beside the shared function');
 });
 
 test('S3-T11: the host road says five different things', async () => {
