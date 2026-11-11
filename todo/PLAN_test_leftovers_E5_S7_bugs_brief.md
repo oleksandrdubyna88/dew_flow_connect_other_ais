@@ -66,8 +66,14 @@ Fields of the same shape made by `Directory.CreateTempSubdirectory("coai-<x>-").
 
 **D — a work folder with no remover today, no SQLite** (7): `TheArchiveCheckTests.cs:175`, `:277`, `:288`, `:307`, `:328`,
 `:348` (`var work = System.IO.Directory.CreateTempSubdirectory("archive-check-");`) and `ThePublishOutputCheckTests.cs:149`
-(`"publish-output-check-"`). → `using var work = TempDir.For("<same prefix>");` and every `work.FullName` in that method
-becomes `work.Path`. The folder is now removed when the method ends (it was left to the run folder before).
+(`"publish-output-check-"`). Two of them are `[Fact]` methods that use the folder only inside themselves —
+`TheArchiveCheckTests.cs:175` (`AFileThatIsNotAZipIsNotAPass`) and `:277` (`AZipThatIsNotThereOrNotAZipIsNotAPass`): →
+`using var work = TempDir.For("archive-check-");` and every `work.FullName` in that method becomes `work.Path`; the folder
+is now removed when the test ends (it was left to the run folder before). The other five are `private static` HELPERS that
+RETURN a path inside the folder to their caller — `:288` `ZipOf`, `:307` `FlatZip`, `:328` `Zip`, `:348` `Archive`, and
+`ThePublishOutputCheckTests.cs:149` `Output` (plan gate, finding 2): a `using` there would delete the folder before the caller
+reads it, so → `var work = TempDir.For("<same prefix>");` WITHOUT `using`, `work.FullName` → `work.Path`; the folder stays,
+as today, inside the run folder, which `RunTemp.EndOfRun` removes.
 
 **E — a path that is only named** (3): `TheArchiveCheckTests.cs:111` (`absent-<guid>.tar.gz`, must not exist),
 `ThePublishOutputCheckTests.cs:128` (`absent-<guid>`, must not exist), `WhatTheArgumentsMeanTests.cs:103`
@@ -78,7 +84,9 @@ bench proof (`TempDir.Root` returns `Path.GetTempPath()` unchanged, `Owned.cs:11
 variables).
 
 That is 26: A 10, B 4, C 1, D 7, E 3, F 1 — count them against the baseline's 26 `src_bugs/` entries before editing and stop if
-the list and the file disagree. Add `using CoaiMcp.Tests;` only where a file does not already see the namespace.
+the list and the file disagree. No file of this project but `RunFolderTests.cs` imports `CoaiMcp.Tests` and there is no global using: add `using CoaiMcp.Tests;`
+to each other file you change — EXCEPT `TheAuditTests.cs`, whose inventory row at line 191 must not move (plan gate, finding
+1): there write the type fully qualified, `CoaiMcp.Tests.TempDir.For("coai-audit-").Path;`, and add no line.
 
 ## 5. Steps — RED, GREEN, RED again
 
