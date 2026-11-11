@@ -3,7 +3,7 @@
 #
 # The container shape has update.sh next door; this is the one for a host that runs the
 # Native AOT binary under systemd. Both obey the same family rule
-# (.claude/rules/shared/common/development-workflow.md): an immutable version-addressed
+# (.agents/conventions/common/development-workflow.md): an immutable version-addressed
 # artefact, at least the last three retrievable, a rollback that BUILDS NOTHING and is one
 # command, and a look inside the artefact before it is trusted.
 #

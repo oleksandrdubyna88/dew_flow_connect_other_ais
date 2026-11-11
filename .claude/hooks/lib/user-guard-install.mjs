@@ -26,6 +26,38 @@ export function guardVersion(text) {
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const BACKUP_TAG = 'settings.json.bak-subagent-model-';
 
+/**
+ * The released guard: the `GUARD_VERSION` and the digest (`guardDigest`) of `settings/hooks/subagent-model.mjs` of
+ * the SAME commit. Both files are vendored byte-identically from one release, so a consumer's pair always matches;
+ * a guard edited and committed in some repository does not, and is not copied into ~/.claude, where it would run for
+ * every repository on the machine (the owner's go, 2026-11-11). A conventions test fails when this pair does not
+ * match the file, so no release can ship a stale one. This stops an unreviewed guard from leaving its repository; it
+ * is no sandbox: a repository with hostile hooks already runs code in its own sessions.
+ */
+export const RELEASED_GUARD = Object.freeze({
+  version: 3,
+  sha256: '13e13d5f6df35f4a18e8b3098afd4a80dc9308f82f8d734f23ccb943538aef12',
+});
+
+/** The digest of a guard's text with CRLF folded to LF, so a checkout that converts line endings still matches. */
+export const guardDigest = text => sha256(String(text).replaceAll('\r\n', '\n'));
+
+/**
+ * Why a guard's TEXT must not be copied into ~/.claude as the released guard; '' when it may be. A digest difference
+ * names both digests; a version-only difference names both versions (the code round, 2026-11-11).
+ */
+export function releasedTextRefusal(text, released = RELEASED_GUARD) {
+  const digest = guardDigest(text);
+  const version = guardVersion(text);
+  if (digest !== released.sha256) {
+    return `the project copy is not the released guard (sha256 ${digest.slice(0, 12)}, released ${released.sha256.slice(0, 12)})`;
+  }
+  if (version !== released.version) {
+    return `the project copy is not the released guard (version ${version}, released version ${released.version})`;
+  }
+  return '';
+}
+
 /** Where the hook and the settings live for a home. */
 export function targets(home) {
   const dir = path.resolve(home, '.claude');
@@ -134,12 +166,17 @@ export function drift(settings, hookPath, installedBytes, sourceBytes) {
   return [...out, ...registrationProblems(settings, hookPath)];
 }
 
-/** Temp file + rename; the temp file never outlives a failed write, and `mode` (when given) is kept. */
+/**
+ * Temp file + rename; the temp file never outlives a failed write, and `mode` (when given) is kept. The mode is SET
+ * with chmod before the rename: a create mode is cut by the umask, so 0644 under umask 0077 became 0600 and other
+ * users lost their read of settings.json (CodeRabbit on #148, 2026-11-10).
+ */
 function writeAtomic(dest, data, mode) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.tmp-${process.pid}`;
   try {
     fs.writeFileSync(tmp, data, mode === undefined ? undefined : { mode });
+    if (mode !== undefined) fs.chmodSync(tmp, mode);
     fs.renameSync(tmp, dest);
   } finally {
     fs.rmSync(tmp, { force: true });
@@ -195,9 +232,14 @@ const OPTOUT_TEXT = 'subagent-model guard was removed on purpose (install-user-h
  * Install the hook. `beforeWrite` is a test seam (runs after the merge is computed and the backup is
  * taken, before the final re-read) and is deliberately not reachable from the CLI.
  */
-/** Provenance of the installed copy: where it came from, which bytes, which version, who put it there. */
-function writeManifest(t, source, sourceBytes, by) {
-  const manifest = { source: path.resolve(source), sha256: sha256(sourceBytes), version: guardVersion(sourceBytes.toString('utf8')), installedAt: new Date().toISOString(), by };
+/**
+ * Provenance of the installed copy: where it came from, which bytes, which version, who put it there — and `previous`,
+ * the hash of the bytes it replaces (null on a first install), so an install cut short after this write and before the
+ * hook copy is not taken for a local edit.
+ */
+function writeManifest(t, source, sourceBytes, by, replaced) {
+  const manifest = { source: path.resolve(source), sha256: sha256(sourceBytes), previous: replaced === null ? null : sha256(replaced),
+    version: guardVersion(sourceBytes.toString('utf8')), installedAt: new Date().toISOString(), by };
   writeAtomic(t.manifest, serialise(manifest));
 }
 
@@ -224,12 +266,14 @@ export function repairRegistration({ home, beforeWrite = () => {} }) {
   const original = readOrNull(t.settings);
   const parsed = parseSettings(original);
   if (parsed.error) return unparsable(t.settings, parsed.error);
+  const target = settingsFileOf(t.settings);
+  if (target.refusal) return result(1, [target.refusal]);
   const merged = serialise(mergeEntry(parsed.settings, t.hook));
   if (original !== null && original.equals(Buffer.from(merged))) return result(0, ['already registered']);
-  const lines = original === null ? [] : [`backup ${writeBackup(t.settings, original)}`];
+  const lines = original === null ? [] : [`backup ${writeBackup(t.settings, original, modeOf(t.settings))}`];
   beforeWrite();
-  if (!sameBytes(readOrNull(t.settings), original)) return result(1, [...lines, CHANGED]);
-  writeAtomic(t.settings, merged);
+  if (changedUnderUs(t, original, target)) return result(1, [...lines, CHANGED]);
+  writeSettings(target.file, merged);
   return result(0, [...lines, `wrote ${t.settings} (hooks.PreToolUse: ${MATCHER})`]);
 }
 
@@ -251,26 +295,51 @@ function downgradeRefusal(t, sourceBytes, force) {
   return from > to ? `installed guard is version ${from}, newer than the source's ${to}; nothing changed — pass --force to replace it` : '';
 }
 
-export function install({ home, source, beforeWrite = () => {}, clearOptout = false, force = false, by = 'cli' }) {
+/**
+ * Refuses to replace an installed copy changed since its install, unless forced; '' when the install may go ahead.
+ * Changed means: a manifest exists, and the installed bytes match neither its hash nor the source. The second half
+ * keeps an install cut short after the new hook (before its manifest) from reading as a local edit. Reading only the
+ * version replaced a user's edited guard without a word (coai code gate, 2026-11-10). No manifest (an install from
+ * before manifests existed) cannot be judged and goes ahead as before.
+ */
+function changedRefusal(t, sourceBytes, force) {
+  const installed = readOrNull(t.hook);
+  const manifest = readManifest(t);
+  if (force || installed === null || manifest === null || installed.equals(sourceBytes)) return '';
+  return [manifest.sha256, manifest.previous].includes(sha256(installed)) ? ''
+    : `installed guard ${t.hook} was changed since it was installed (its sha256 differs from ${t.manifest}); nothing changed — pass --force to replace it`;
+}
+
+export function install({ home, source, beforeWrite = () => {}, clearOptout = false, force = false, by = 'cli', released = null }) {
   const t = targets(home);
   if (!fs.existsSync(source)) return result(1, [`source hook not found: ${source} — pass --source <file>`]);
   const original = readOrNull(t.settings);
   const parsed = parseSettings(original);
   if (parsed.error) return unparsable(t.settings, parsed.error);
+  const target = settingsFileOf(t.settings);
+  if (target.refusal) return result(1, [target.refusal]);
   const merged = mergeEntry(parsed.settings, t.hook);
   const sourceBytes = fs.readFileSync(source);
-  const refusal = downgradeRefusal(t, sourceBytes, force);
+  // The release check runs on THESE bytes, the ones written below: one read, so nothing can swap the file between a
+  // check and the copy (the code round, 2026-11-11). `released` is null only for an explicit --unreleased.
+  const unreleased = released ? releasedTextRefusal(sourceBytes.toString('utf8'), released) : '';
+  if (unreleased) return result(1, [unreleased]);
+  const refusal = downgradeRefusal(t, sourceBytes, force) || changedRefusal(t, sourceBytes, force);
   if (refusal) return result(1, [refusal]);
   const upToDate = original !== null && original.equals(Buffer.from(serialise(merged))) && sameBytes(readOrNull(t.hook), sourceBytes) && isRegistered(t);
   if (upToDate) return result(0, [...dropOptout(t, clearOptout), 'already installed']);
   const lines = [...dropOptout(t, clearOptout)];
-  if (original !== null) lines.push(`backup ${writeBackup(t.settings, original)}`);
+  if (original !== null) lines.push(`backup ${writeBackup(t.settings, original, modeOf(t.settings))}`);
   beforeWrite();
-  if (!sameBytes(readOrNull(t.settings), original)) return result(1, [...lines, CHANGED]);
-  writeAtomic(t.settings, serialise(merged));
-  // The copy comes AFTER the registration: a refusal above leaves no unregistered hook file behind.
+  if (changedUnderUs(t, original, target)) return result(1, [...lines, CHANGED]);
+  // Every refusal is above, so a refused install never writes the hook, the manifest or settings.json (the backup and
+  // the opt-out removal above are older behaviour). Order: the manifest (naming the bytes it replaces), the hook, then
+  // the registration. A stop after the manifest leaves the old bytes, which its `previous` vouches for; a stop after the
+  // hook leaves an unregistered file the host never runs, which the next session start registers. The old order could
+  // leave a registration of a missing script, run on every Agent call (2026-11-10).
+  writeManifest(t, source, sourceBytes, by, readOrNull(t.hook));
   writeAtomic(t.hook, sourceBytes);
-  writeManifest(t, source, sourceBytes, by);
+  writeSettings(target.file, serialise(merged));
   return result(0, [`wrote ${t.hook}`, ...lines, `wrote ${t.settings} (hooks.PreToolUse: ${MATCHER})`]);
 }
 
@@ -286,10 +355,14 @@ export function uninstall({ home, beforeWrite = () => {} }) {
   if (!present && !hookThere && !fs.existsSync(t.manifest)) return result(0, ['not installed', markOptout()]);
   const lines = [];
   if (present) {
-    lines.push(`backup ${writeBackup(t.settings, original)}`);
+    // The target only matters when settings.json is written, which needs our entry in it. A loop reads as no file,
+    // so it never gets here, and it does not stop the hook, manifest and marker steps below (CodeRabbit on #149).
+    const target = settingsFileOf(t.settings);
+    if (target.refusal) return result(1, [target.refusal]);
+    lines.push(`backup ${writeBackup(t.settings, original, modeOf(t.settings))}`);
     beforeWrite();
-    if (!sameBytes(readOrNull(t.settings), original)) return result(1, [CHANGED]);
-    writeAtomic(t.settings, serialise(removeEntry(parsed.settings, t.hook)));
+    if (changedUnderUs(t, original, target)) return result(1, [CHANGED]);
+    writeSettings(target.file, serialise(removeEntry(parsed.settings, t.hook)));
     lines.push(`removed the hook entry from ${t.settings}`);
   }
   if (hookThere) {
@@ -364,6 +437,124 @@ function writableReason(file) {
     return `is not writable (${e.code})`;
   }
 }
+
+/** The permission bits of an existing file (a symlink is followed); undefined when there is none. */
+const modeOf = file => (fs.existsSync(file) ? fs.statSync(file).mode & 0o777 : undefined);
+
+/**
+ * settings.json written where it really lives — a symlink (stow, chezmoi) is followed, never replaced by a plain
+ * file — and with its own mode (a 0600 file may hold tokens in `env`). `applyEffort` did both; install,
+ * repairRegistration and uninstall did neither until 2026-11-10 (CodeRabbit on creds #328).
+ */
+function writeSettings(file, data) {
+  writeAtomic(file, data, modeOf(file));
+}
+
+/**
+ * True when settings.json changed between the read and the write: its bytes, or WHICH file it is — a link pointed at
+ * another file with the same bytes passed the byte check, and the write went to the old file (CodeRabbit on coai
+ * #970, 2026-11-10).
+ */
+function changedUnderUs(t, original, target) {
+  return !sameBytes(readOrNull(t.settings), original) || settingsFileOf(t.settings).file !== target.file;
+}
+
+/** How many links a settings path may pass through before it is called a loop (the kernel's own ELOOP limit). */
+const MAX_LINKS = 40;
+
+/**
+ * The file a settings write goes to, found BEFORE anything is written: the real file when one exists; otherwise the
+ * last target of a chain of links that ends in a missing file (one link or several — CodeRabbit on #148 and coai
+ * #969, 2026-11-10: a single-level read replaced the middle link of a chain with a plain file); otherwise the path
+ * itself. More than 40 links is a `refusal` (a result, like the installer's other refusals — the code round), so
+ * the operation stops before its backup, manifest, hook or settings are touched.
+ */
+function settingsFileOf(settingsPath) {
+  const existing = effortTarget(settingsPath);
+  if (existing !== null) return { file: existing };
+  const last = lastLinkTarget(settingsPath);
+  if (last === TOO_MANY_LINKS) {
+    return { refusal: `${settingsPath} has more than ${MAX_LINKS} links (a loop, or a chain too long to open); nothing changed — point it at one file` };
+  }
+  if (last === MISSING_FOLDER) {
+    return { refusal: `${settingsPath} is a link whose target goes through a folder that does not exist and then ".."; nothing changed — point it at one file` };
+  }
+  return { file: last ?? settingsPath };
+}
+
+/** What `lastLinkTarget` answers when the chain does not end within `MAX_LINKS`. */
+const TOO_MANY_LINKS = Symbol('too many links');
+
+/** What `physicalTarget` answers for a `..` after a missing folder: the kernel fails there, so nothing is written. */
+const MISSING_FOLDER = Symbol('missing folder');
+
+/**
+ * The missing file a chain of links ends in, each hop read from its own folder; null when the path is no link;
+ * `TOO_MANY_LINKS` past the limit; `MISSING_FOLDER` when a hop's target takes `..` after a folder that does not exist.
+ * At most `MAX_LINKS` links are followed, as the kernel follows them.
+ */
+function lastLinkTarget(settingsPath) {
+  let current = settingsPath;
+  for (let hop = 0; hop <= MAX_LINKS; hop += 1) {
+    const stat = lstatOrNull(current);
+    if (stat === null || !stat.isSymbolicLink()) return hop === 0 ? null : current;
+    // From the link's REAL folder: a textual `..` after a symlinked parent names the wrong folder (CodeRabbit on creds
+    // #340, 2026-11-10). The link exists, so its folder does too.
+    current = physicalTarget(fs.realpathSync(path.dirname(current)), fs.readlinkSync(current));
+    if (current === MISSING_FOLDER) return MISSING_FOLDER;
+  }
+  return TOO_MANY_LINKS;
+}
+
+/**
+ * Where a link's `target` points, from the link's real folder, the way the kernel walks it: one component at a time,
+ * each folder made real before the next `..` is taken. `path.resolve` collapses `jump/..` as text, so with `jump` a
+ * link to another folder it named a file beside the link instead of beside jump's real place (CodeRabbit on creds
+ * #343, 2026-11-10). The root of an absolute target comes from `path.parse`, and `..` never goes above it. The last
+ * component is joined and not made real: a link there is the next hop of `lastLinkTarget`. A folder that does not
+ * exist is joined as text, since the write creates it; a `..` after one is `MISSING_FOLDER`: the kernel fails there,
+ * and a lexical answer past it could name an existing file. Other errors (a loop, no permission) are thrown, as the
+ * installer's other file operations throw them.
+ */
+function physicalTarget(realFolder, target) {
+  const root = path.parse(target).root;
+  const separators = process.platform === 'win32' ? /[\\/]+/ : /\/+/;
+  const parts = target.slice(root.length).split(separators).filter(part => part !== '' && part !== '.');
+  const leaf = parts.pop();
+  let current = root === '' ? realFolder : fs.realpathSync(root);
+  let missing = false;
+  for (const part of [...parts, ...(leaf === '..' ? ['..'] : [])]) {
+    if (part === '..') {
+      if (missing) return MISSING_FOLDER;
+      current = path.dirname(current);
+      continue;
+    }
+    const next = path.join(current, part);
+    const real = missing ? null : realOrNull(next);
+    missing = real === null;
+    current = real ?? next;
+  }
+  return leaf === undefined || leaf === '..' ? current : path.join(current, leaf);
+}
+
+/** The real path of `file`, or null when it or a folder above it does not exist. */
+const realOrNull = file => {
+  try {
+    return fs.realpathSync(file);
+  } catch (e) {
+    if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return null;
+    throw e;
+  }
+};
+
+const lstatOrNull = file => {
+  try {
+    return fs.lstatSync(file);
+  } catch (e) {
+    if (e.code === 'ENOENT') return null;
+    throw e;
+  }
+};
 
 /** Where to read and write: the symlink's target when settings.json is a link; null when there is no file. */
 function effortTarget(settingsPath) {
@@ -443,7 +634,12 @@ export function check({ home, source }) {
   const manifest = readManifest(t);
   if (manifest === null) return result(1, [...lines, 'provenance manifest missing or unreadable: ' + t.manifest, effort]);
   const shown = `provenance: ${JSON.stringify(manifest)}`;
-  if (installed !== null && manifest.sha256 !== sha256(installed)) lines.push('installed hook no longer matches the sha256 in its provenance manifest (edited after install)');
+  if (installed !== null && manifest.sha256 !== sha256(installed)) {
+    // The bytes the manifest says it replaced: an install stopped after its manifest, before the hook — not an edit.
+    lines.push(manifest.previous === sha256(installed)
+      ? 'the last install was cut short after its manifest (the hook still holds the bytes it replaced) — run --install to finish it'
+      : 'installed hook no longer matches the sha256 in its provenance manifest (edited after install)');
+  }
   return lines.length ? result(1, [shown, ...lines, effort]) : result(0, ['installed and current', shown, effort]);
 }
 

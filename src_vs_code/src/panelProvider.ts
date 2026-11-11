@@ -3118,7 +3118,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       side: this.sideKeyHere(),
       perSide: this.perSide(vscode.workspace.getConfiguration('coai')),
       // Injected, because both stamps it writes are persisted and then compared to each other —
-      // `.claude/rules/shared/common/utc-timestamps.md` rule 2. Raised on the code round.
+      // `.agents/conventions/common/utc-timestamps.md` rule 2. Raised on the code round.
       now: () => Date.now(),
       state: {
         get: <T,>(key: string) => this.context.globalState.get<T>(key),

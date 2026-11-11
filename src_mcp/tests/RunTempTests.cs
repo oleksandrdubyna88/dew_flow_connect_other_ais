@@ -428,11 +428,18 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     /// The pin of the limit (E5 S6, the parent's epoch 7, F31): on an ELEVATED Windows process a new file is owned by <c>BUILTIN\Administrators</c>, so the audit reads a real claim as a stranger's and does not see it. The plant above
     /// re-owns its claim on Windows and proves the ORDER; this one leaves the claim as the process made it and asserts that it stays unseen, beside the helper's own output (a folder and its claim) which is not the caller's either.
     /// When F31 changes the helper, the second half goes red, and that is its purpose. Skips, saying why, unless the process is on Windows and elevated.
+    /// <para><b>Elevation is not the condition; who owns a new file is.</b> mcp-v0.65.0's release ran this suite from Git Bash and the pin failed on both
+    /// Windows legs (run 42388147284): an elevated process started from Git Bash owns the files it makes, so the audit DID see the claim. ci.yml's pwsh
+    /// step passed it on the same commit. So the test first makes the helper's own folder and asks whose it is, and skips when it is the caller's: there
+    /// the limit this pins does not hold. The Git Bash step in ci.yml keeps that path run. The question is asked of the folder's owner SID directly
+    /// (<see cref="OwnedByTheCaller"/>), never through <c>Scope.IsMine</c>: the helper is what F31 may change, and a skip decided by it would hide that change.</para>
     /// </summary>
     [Fact]
     public void AnUntouchedClaim_StaysUnseen_OnAnElevatedWindowsRun()
     {
         Assert.SkipWhen(!OperatingSystem.IsWindows() || !IsElevatedOnWindows(), "pins the limit of an elevated Windows process only: elsewhere the process owns the files it makes");
+        var natural = _owned.Dir("s6-natural");
+        Assert.SkipWhen(OperatingSystem.IsWindows() && OwnedByTheCaller(natural), "this elevated process owns the files it makes (as one started from Git Bash does), so the limit this pins does not hold here");
         var root = _owned.Dir("s6-untouched");
         var env = AllThreeAt(root);
         env["COAI_S6_ORPHAN_CLAIM"] = "1";
@@ -444,7 +451,6 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
         result.TimedOut.Should().BeFalse(result.StdErr);
         result.ExitCode.Should().Be(0, "a real claim of an elevated run reads as a stranger's, so the audit does not see it: " + result.StdOut + result.StdErr);
         (result.StdOut + result.StdErr).Should().NotContain("this run left");
-        var natural = _owned.Dir("s6-natural");
         Scope.IsMine(natural).Should().BeFalse("the helper's own folder, inside the profile, is Administrators' on an elevated run");
         File.Exists(natural + ".owner").Should().BeTrue("IsMine answers false on a missing file too, so the claim must be there for the line below to mean anything");
         Scope.IsMine(natural + ".owner").Should().BeFalse("and so is its claim");
@@ -452,6 +458,13 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
 
     [SupportedOSPlatform("windows")]
     private static bool IsElevatedOnWindows() => new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+
+    /// <summary>The folder's owner SID is this process's user SID: read from the folder's security descriptor, independently of the helper under test.</summary>
+    [SupportedOSPlatform("windows")]
+    private static bool OwnedByTheCaller(string folder) =>
+        new DirectoryInfo(folder).GetAccessControl().GetOwner(typeof(SecurityIdentifier)) is SecurityIdentifier owner
+        && WindowsIdentity.GetCurrent().User is SecurityIdentifier me
+        && owner.Equals(me);
 
     private static string TestsExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "CoaiMcp.Tests.exe" : "CoaiMcp.Tests");
 

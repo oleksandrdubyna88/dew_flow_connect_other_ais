@@ -17,7 +17,11 @@
  * `subagent-model.optout` marker (written by `--uninstall`) both skip it. It never blocks the session:
  * any throw prints nothing, and the exit code is always 0. It speaks (one `systemMessage` line) only
  * when it installed, upgraded, refused, or found a NEWER installed copy (never downgraded; the line names
- * the `--force` command). It also refuses when git reports uncommitted changes to the project copy.</p>
+ * the `--force` command). It also refuses when git reports uncommitted changes to the project copy, when git cannot
+ * say (not on PATH, a timeout — only "not a git repository" means nothing to compare), and when the installed copy was
+ * changed since its install (the installer's manifest check). It copies only the RELEASED guard: a project copy whose
+ * sha256 or version differs from `RELEASED_GUARD` (the pair baked into this release) is refused, because the guard in
+ * ~/.claude runs for every repository (the owner's go, 2026-11-11).</p>
  *
  * <p><b>Effort.</b> Independently of the guard, every session start converges the existing
  * `~/.claude/settings.json` so `effortLevel` and `modelSettings.<model>.effortLevel` are all `high`
@@ -30,7 +34,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-import { applyEffort, guardVersion, install, isRegistered, registrationValid, repairRegistration, targets } from './lib/user-guard-install.mjs';
+import { RELEASED_GUARD, applyEffort, guardVersion, install, isRegistered, registrationValid, repairRegistration, targets } from './lib/user-guard-install.mjs';
 
 export { guardVersion };
 
@@ -73,15 +77,24 @@ const newerLine = (installed, source) =>
 const repairedLine = (installed, source) =>
   `subagent-model guard version ${installed} in ~/.claude (newer than this repository's ${source}) was not registered — registration repaired`;
 
-/** True when git reports uncommitted changes to the file; false when git is unavailable or it is not a repository. */
-function hasUncommittedChanges(file) {
+/**
+ * Why the project copy must not be installed because of its git state; '' when it may be. Only "not a git repository"
+ * means there is nothing to compare. Any other failure (no git on PATH, a timeout, another exit) refuses: reading it as
+ * "no changes" let a possibly edited copy into ~/.claude (coai code gate, 2026-11-10). LC_ALL=C keeps git's message
+ * in English, so the one accepted failure is recognised whatever the user's locale.
+ */
+function uncommittedRefusal(file) {
+  // Absolute: a relative pathspec is read from the `-C` folder, so it named a file that is not there (code round).
+  const absolute = path.resolve(file);
   try {
-    const out = execFileSync('git', ['-C', path.dirname(file), 'status', '--porcelain', '--', file], {
-      encoding: 'utf8', timeout: 2000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'],
+    const out = execFileSync('git', ['-C', path.dirname(absolute), 'status', '--porcelain', '--', absolute], {
+      encoding: 'utf8', timeout: 2000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, LC_ALL: 'C' },
     });
-    return out.trim() !== '';
-  } catch {
-    return false;
+    return out.trim() === '' ? '' : 'the project copy of the hook has uncommitted changes';
+  } catch (error) {
+    if (error?.status === 128 && /not a git repository/i.test(String(error.stderr ?? ''))) return '';
+    return `git could not tell whether the project copy has uncommitted changes (${error?.code ?? `exit ${error?.status}`})`;
   }
 }
 
@@ -98,18 +111,29 @@ function repairOnly(home, installed, source) {
     : { action: 'refused', line: refusal(lines.at(-1) ?? 'unknown reason') };
 }
 
-/** Install or upgrade the user-level guard when needed; returns what happened and the line to show. */
-export function ensureUserGuard({ home, source, env }) {
+/**
+ * Install or upgrade the user-level guard when needed; returns what happened and the line to show. Only the released
+ * guard is copied (`released`, the pair baked into this release; a parameter only so tests can name their own).
+ */
+export function ensureUserGuard({ home, source, env, released = RELEASED_GUARD }) {
   const t = targets(home);
   if (optedOut(env) || fs.existsSync(t.optout) || !fs.existsSync(source)) return skipped();
   if (isReferenceRepository(source)) return skipped('subagent-model guard self-install skipped: this is the conventions repository itself');
-  const to = versionOf(source);
+  // A project copy that cannot be read is a refusal line, never a throw (the plan round, 2026-11-11).
+  let to;
+  try {
+    to = versionOf(source);
+  } catch (error) {
+    return { action: 'refused', line: refusal(`the project copy of the hook could not be read (${error?.code ?? 'error'})`) };
+  }
   const step = plan(t, to);
   if (step.action === 'none') return { action: 'none', line: '' };
   if (step.action === 'newer') return { action: 'newer', line: newerLine(step.from, to) };
   if (step.action === 'repair-registration') return repairOnly(home, step.from, to);
-  if (hasUncommittedChanges(source)) return { action: 'refused', line: refusal('the project copy of the hook has uncommitted changes') };
-  const { code, lines } = install({ home, source, by: 'self-install' });
+  const dirty = uncommittedRefusal(source);
+  if (dirty) return { action: 'refused', line: refusal(dirty) };
+  // The release check is inside install, on the bytes it writes (one read).
+  const { code, lines } = install({ home, source, by: 'self-install', released });
   if (code !== 0) return { action: 'refused', line: refusal(lines.at(-1) ?? 'unknown reason') };
   return { action: step.action, line: successLine(step, to) };
 }

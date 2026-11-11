@@ -3,8 +3,8 @@
 # CodeRabbit for dew_flow_connect_other_ais — a Native-AOT .NET 10 MCP server (src_mcp), a VS Code
 # extension in TypeScript (src_vs_code) and a .NET 10 measurement bench (src_bench).
 #
-# The repository's own rules are the review standard: CLAUDE.md and .claude/rules/**. The shared
-# family rules are a git SUBMODULE at .claude/rules/shared and may not be checked out for the
+# The repository's own rules are the review standard: .agents/PROJECT.md and .agents/rules/**. The
+# shared family rules are a git SUBMODULE at .agents/conventions and may not be checked out for the
 # reviewer, so the ones that matter most are restated per path below.
 language: "en-US"
 
