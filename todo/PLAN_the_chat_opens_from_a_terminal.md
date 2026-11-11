@@ -1,8 +1,8 @@
 # PLAN — the chat opens from a terminal
 
-> Status: **stopped for re-review, 2026-11-11 — change 1.2 (the owner, after the first real-window check: the terminal door
-> takes the clipboard, not a VS Code selection). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
-> twice, 8 of 8 reviewers), PR #971 not merged and not merged until epoch 2 is approved; E2 and E3 not started. Plan gate round 1 `proceed` (codex, antigravity;
+> Status: **epoch 2 open, approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
+> selection; `autoSend` kept as on the other doors). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
+> twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3; E2 and E3 not started. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
 > read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
@@ -15,7 +15,7 @@ reading Claude's session files), [../research/PLAN_a_conversation_survives_a_rel
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-10 · by reviewers · state: stopped
+> Epoch 1 · approved 2026-11-10 · by reviewers · state: closed
 
 - 1.1 · 2026-11-10 · agent · build-order, merge-conditions — each epic's real-window checks run on a pre-release VSIX the owner installs, before its release is tagged
   (cadence consult ea91bb56, codex: a door whose prerequisites are unproven must not ship. No real VS Code can
@@ -63,6 +63,8 @@ Narrowed: yes — the door no longer copies a VS Code terminal selection for the
 | PR review: the `none` fallback apart from the door's refusal, "switch conversations" in the help, the ambiguous-name host case, 8fc00cba | pushed, unmerged (PR #971) | fits | kept |
 | change 1.2 and the stop, f540ed97 | pushed, unmerged (PR #971) | fits | kept — the change this re-review answers |
 
+> Epoch 2 · approved 2026-11-11 · by owner · state: open
+
 ## The symptom
 
 The owner, 2026-11-10: six or more Claude Code sessions now run as the **CLI** on two Linux VMs, several
@@ -94,7 +96,8 @@ second opinion they used several times an hour.
    drag already puts the text on the local clipboard; in a plain terminal the owner's right-click copies. The door
    runs no copy command and synthesises no keystroke. An empty or whitespace-only clipboard → *"Copy the text first,
    then press Ask other AI."*, nothing sent. Any other clipboard text may be sent — the door cannot tell a fresh copy from an old one,
-   and no guard pretends to; it follows the `autoSend` setting of the other doors. (Replaces 2026-11-10's "No
+   and no guard pretends to; it follows the `autoSend` setting of the other doors (the owner confirmed this when approving
+   epoch 2, 2026-11-11). (Replaces 2026-11-10's "No
    selection → 'Select text in the terminal first'".)
 4. **Back to source** brings that terminal forward (`terminal.show()`), on request only — nothing switches
    by itself.

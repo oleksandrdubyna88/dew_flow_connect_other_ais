@@ -625,7 +625,7 @@ Open, recorded here and NOT built (each would be a plan change):
    the terminal door (consult 5faf4657). It predates this plan and is not measured; it is not E1 work.
 6. **`autoSend` on a clipboard read** (epoch 2): with **Who presses send** set to send at once, an old clipboard text is
    sent to the vendor without a look at it. Decision 3 accepts this and the help says it; the owner confirms it when
-   approving epoch 2 (ledger entry 1.2 named it as assumed).
+   approving epoch 2 (ledger entry 1.2 named it as assumed). Confirmed by the owner, 2026-11-11.
 
 Carried to later epics (found while the S2 spec was written, 2026-11-10; not E1 work):
 
