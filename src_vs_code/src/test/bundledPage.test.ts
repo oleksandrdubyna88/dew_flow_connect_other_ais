@@ -576,6 +576,31 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
   assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 3', 'a re-read threw away the arrow they just pressed');
 });
 
+/** The declarations of the one rule of the page's stylesheet whose selector is exactly `selector`, or `''`. */
+function ruleOf(html: string, selector: string): string {
+  const escaped = selector.replace(/[.]/g, '\\.');
+
+  return new RegExp(`(?:^|[\\s}])${escaped} \\{([^}]*)\\}`, 'm').exec(html.split('<script')[0])?.[1] ?? '';
+}
+
+test('S4-T6b: the Asked text takes the room the open region has left, whatever height the note above it has', () => {
+  // The region is 40vh at most and clips what overflows. The head row, the cut note (one or two lines) and the text share it, so a text box
+  // with a FIXED height of 40vh less one row is too tall by the note's height: the region clips its last lines and its scrollbar cannot
+  // reach them. The region lays its children out as a column and the text box shrinks to what is left.
+  const { html } = runPage();
+  const region = ruleOf(html, '.asking') + ruleOf(html, '.asking.open');
+  const text = ruleOf(html, '.askedText');
+
+  assert.ok(text.length > 0, 'the page has no rule for the Asked text');
+  assert.doesNotMatch(text, /calc\([^)]*vh/, 'the Asked text has a height worked out by hand from the region\'s, which the cut note makes too tall');
+  assert.match(text, /flex:\s*1 1 auto/, 'the Asked text does not take the room the region has left');
+  assert.match(text, /min-height:\s*0/, 'the Asked text may not shrink below its content, so it still overflows the region');
+  assert.match(text, /overflow-y:\s*auto/, 'the Asked text does not scroll');
+  assert.match(region, /display:\s*flex/, 'the open region does not lay its children out as a flex box');
+  assert.match(region, /flex-direction:\s*column/, 'the open region does not stack the head, the note and the text');
+  assert.match(ruleOf(html, '.asking.open'), /max-height:\s*40vh/, 'the open region lost its height limit');
+});
+
 test('S4-T6: the shipped Asked box shows the prompts and the note about them together, and the note alone only when there are no prompts', () => {
   // A terminal's session is read by ssh and may be the last 4 MiB of it: the prompts are shown AND a line says the first ones are
   // not. The local road never sends both, so it never had a line above its prompts. A reason with NO prompts is still the box itself.

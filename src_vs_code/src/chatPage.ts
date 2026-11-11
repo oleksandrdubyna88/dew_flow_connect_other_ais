@@ -830,7 +830,7 @@ function chatStyle(
      buttons in the tab order and its text on a screen reader — folded away and still reachable, which
      is the worst of both. The visibility property animates discretely: visible the instant it opens, hidden only
      once the fold has finished, which is exactly the behaviour wanted. (CodeRabbit, PR #207.) */
-  .asking { flex: 0 0 auto; max-height: 0; opacity: 0; overflow: hidden; padding: 0 20px; visibility: hidden;
+  .asking { display: flex; flex-direction: column; flex: 0 0 auto; max-height: 0; opacity: 0; overflow: hidden; padding: 0 20px; visibility: hidden;
             transition: max-height .5s ease, opacity .5s ease, padding .5s ease, visibility .5s ease;
             border-bottom: 2px solid transparent; }
   /* ORANGE, and a colour no other line on this page wears. The panel border it used to use is the
@@ -863,7 +863,9 @@ function chatStyle(
   .askingHead button { min-width: 24px; padding: 2px 6px; font: inherit; }
   .askedAt { min-width: 4em; text-align: center; }
   .askedNote { font-style: italic; margin: 0 0 .4em; color: var(--vscode-descriptionForeground); }
-  .askedText { max-height: calc(40vh - 2.5em); overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; }
+  /* The region is a column: the head row and the cut note take what they need and the text takes what is left, so the text box always fits
+     in the 40vh whatever height the note has, and its scrollbar reaches its last line. */
+  .askedText { flex: 1 1 auto; min-height: 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; }
   h1 { font-size: 1.2em; margin: 0; }
   .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; overflow-wrap: anywhere; opacity: .85; }
   /* A reading measure. A line that spans a wide tab is a line whose side says nothing, and the
