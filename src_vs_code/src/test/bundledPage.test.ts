@@ -9,6 +9,7 @@ import {
   stub, type Stub,
 } from './roundsLogPageHarness';
 import { ownedTemp } from './ownedTemp';
+import { stylesheet, type Rule } from './cssRules';
 
 /**
  * The page is checked as it SHIPS — bundled and minified — not as it compiles.
@@ -576,20 +577,21 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
   assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 3', 'a re-read threw away the arrow they just pressed');
 });
 
-/** The declarations of the one rule of the page's stylesheet whose selector is exactly `selector`, or `''`. */
-function ruleOf(html: string, selector: string): string {
-  const escaped = selector.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
-
-  return new RegExp(`(?:^|[\\s}])${escaped} \\{([^}]*)\\}`, 'm').exec(html.split('<script')[0])?.[1] ?? '';
-}
+/** The declarations of every rule of a parsed stylesheet whose selector is exactly `selector`, joined; `''` when there is none. */
+const declared = (rules: readonly Rule[], selector: string): string =>
+  rules.filter((rule) => rule.selector.trim() === selector).map((rule) => rule.body).join(' ');
 
 test('S4-T6b: the Asked text takes the room the open region has left, whatever height the note above it has', () => {
   // The region is 40vh at most and clips what overflows. The head row, the cut note (one or two lines) and the text share it, so a text box
   // with a FIXED height of 40vh less one row is too tall by the note's height: the region clips its last lines and its scrollbar cannot
   // reach them. The region lays its children out as a column and the text box shrinks to what is left.
+  // A STYLESHEET question, read with the shared parser (`cssRules.ts`): the DOM shim has no cascade or layout, so there is no program to
+  // run (PROJECT.md's carve-out; todo/PLAN_one_reader_for_a_page_stylesheet.md, its boundary table). That the box scrolls to its last line
+  // in a real window is the owner's look with the pre-release VSIX.
   const { html } = runPage();
-  const region = ruleOf(html, '.asking') + ruleOf(html, '.asking.open');
-  const text = ruleOf(html, '.askedText');
+  const rules = stylesheet(html);
+  const region = `${declared(rules, '.asking')} ${declared(rules, '.asking.open')}`;
+  const text = declared(rules, '.askedText');
 
   assert.ok(text.length > 0, 'the page has no rule for the Asked text');
   assert.doesNotMatch(text, /calc\([^)]*vh/, 'the Asked text has a height worked out by hand from the region\'s, which the cut note makes too tall');
@@ -598,7 +600,7 @@ test('S4-T6b: the Asked text takes the room the open region has left, whatever h
   assert.match(text, /overflow-y:\s*auto/, 'the Asked text does not scroll');
   assert.match(region, /display:\s*flex/, 'the open region does not lay its children out as a flex box');
   assert.match(region, /flex-direction:\s*column/, 'the open region does not stack the head, the note and the text');
-  assert.match(ruleOf(html, '.asking.open'), /max-height:\s*40vh/, 'the open region lost its height limit');
+  assert.match(declared(rules, '.asking.open'), /max-height:\s*40vh/, 'the open region lost its height limit');
 });
 
 test('S4-T6: the shipped Asked box shows the prompts and the note about them together, and the note alone only when there are no prompts', () => {
