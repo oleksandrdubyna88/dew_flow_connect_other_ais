@@ -46,7 +46,7 @@ const FOLDER = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,254}$/u;
 export const isFolderName = (name: string): boolean => FOLDER.test(name);
 
 /** The most folders one `titles` call may name. */
-const FOLDERS_MAX = 3;
+export const FOLDERS_MAX = 3;
 
 /** Whether this is a tmux session name — C1's rule, called and not typed again (a host is only there to complete the name). */
 function isSessionName(session: string): boolean {
