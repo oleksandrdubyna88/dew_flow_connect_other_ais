@@ -206,9 +206,9 @@ jobs:
           fi
           node .github/scripts/suppressions-only-shrink.mjs ${ABSENT:+"$ABSENT"} \
             src_vs_code/eslint-suppressions.json "$RUNNER_TEMP/base-suppressions.json"
-      # The raw-temp baseline only shrinks (E5 S6; common/test-leftovers-baseline.md, The ratchet). Never the creation flag here. PR 945 is the one creation, recorded there.
+      # The raw-temp baseline only shrinks (E5 S6; common/test-leftovers-baseline.md, The ratchet). Never the creation flag here. PR 945 was the file's one creation and S7's first drain PR (the bench suite) removed its bypass.
       - name: The raw-temp baseline only shrinks
-        if: github.event_name == 'pull_request' && github.event.pull_request.number != 945
+        if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |

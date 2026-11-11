@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using Xunit;
 using FluentAssertions;
 using CoaiBench.Judging;
@@ -102,25 +103,18 @@ public sealed class JudgementSurvivesBeingInterruptedTests
         // The file is now rewritten after EVERY run, so there is a reader arriving mid-write where
         // there was none: the table verb, or a person watching a campaign. It is written beside
         // itself and moved over, so what a reader opens is always a whole file.
-        var dir = Directory.CreateTempSubdirectory("coai-save-").FullName;
+        using var dir = TempDir.For("coai-save-");
         var file = Path.Combine(dir, "deeper", "runs.json");
 
-        try
-        {
-            await RunStore.SaveAsync(file, [Run("codex"), Run("gemini")], CancellationToken.None);
+        await RunStore.SaveAsync(file, [Run("codex"), Run("gemini")], CancellationToken.None);
 
-            File.Exists(file + ".writing").Should().BeFalse("the temporary file is moved, not left behind");
-            (await RunStore.LoadAsync(file, CancellationToken.None)).Should().HaveCount(2);
+        File.Exists(file + ".writing").Should().BeFalse("the temporary file is moved, not left behind");
+        (await RunStore.LoadAsync(file, CancellationToken.None)).Should().HaveCount(2);
 
-            await RunStore.SaveAsync(file, [Run("local", Opus)], CancellationToken.None);
-            var reread = await RunStore.LoadAsync(file, CancellationToken.None);
+        await RunStore.SaveAsync(file, [Run("local", Opus)], CancellationToken.None);
+        var reread = await RunStore.LoadAsync(file, CancellationToken.None);
 
-            reread.Should().ContainSingle().Which.JudgedBy.Should().Be(Opus, "a save replaces the file whole");
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
+        reread.Should().ContainSingle().Which.JudgedBy.Should().Be(Opus, "a save replaces the file whole");
     }
 
     [Fact]

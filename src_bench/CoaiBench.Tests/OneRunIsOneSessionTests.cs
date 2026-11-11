@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using Xunit;
 using FluentAssertions;
 using CoaiBench.Cli;
@@ -17,18 +18,9 @@ namespace CoaiBench.Tests;
 /// </remarks>
 public sealed class OneRunIsOneSessionTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-campaign-").FullName;
+    private readonly TempDir _dir = TempDir.For("coai-campaign-");
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     private static readonly VendorConfig[] Configured =
     [

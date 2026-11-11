@@ -5967,6 +5967,8 @@ the line is in the failure output, no test body ran (the sentinel holds only `di
 server `src_server/tests/RunFolderTests.cs`; ingest `src_bugs/tests/RunFolderTests.cs`; bench `src_bench/CoaiBench.Tests/RunFolderTests.cs`. Each `RunFolderTests` holds the owner-form assertion, `TheEntryPoint_IsTheGatedOne`, and the child runs for a folder that cannot be made,
 a claim that cannot be written (a `DiscoverySentinel` theory proves discovery never ran) and each variable alone.
 
+**S7, the drain.** `raw-temp-baseline.json` is drained to zero one suite per pull request, the bench suite first (2026-11-11, `todo/PLAN_test_leftovers_E5_S7_bench_brief.md`); that pull request also removed the `number != 945` bypass from the standing shrink step, so that step now runs on every pull request. Each PR deletes a suite's entries together with their sites: the C# or Node guard is the RED/GREEN check (it fails when the entries go and the sites stay, and passes when the sites move to `TempDir`), and `--baseline-shrinks` is the ratchet. The last PR deletes the file and drops `--baseline` from every invocation in one commit. The inline exemption inventory stays. Count: bench 8 -> 0, the file 778 -> 770.
+
 ### RED on today's behaviour, then GREEN
 
 The scenarios were written first and run against the library moved with TODAY's behaviour (`Refusal()` null, the entry point not gated, `IsActive` always true, the seams accepted and ignored) — E2's method. mcp: 24 of 58 red; server, ingest, bench: 7 of 7 `RunFolderTests` red (the library referenced, `RunTempStart.cs` and `TestEntryPoint.cs` absent).

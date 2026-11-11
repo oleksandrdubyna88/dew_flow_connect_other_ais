@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using Xunit;
 using FluentAssertions;
 using CoaiBench.Running;
@@ -19,18 +20,9 @@ namespace CoaiBench.Tests;
 /// </remarks>
 public sealed class VendorsTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-vendors-").FullName;
+    private readonly TempDir _dir = TempDir.For("coai-vendors-");
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     /// <summary>The panel writes the vendor list as a JSON STRING inside the settings object.</summary>
     private string SettingsWith(string vendorsJson)

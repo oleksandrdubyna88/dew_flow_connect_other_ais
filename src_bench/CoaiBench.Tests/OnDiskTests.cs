@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using Xunit;
 using FluentAssertions;
 using CoaiBench.Running;
@@ -15,18 +16,9 @@ namespace CoaiBench.Tests;
 /// </remarks>
 public sealed class OnDiskTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-ondisk-").FullName;
+    private readonly TempDir _dir = TempDir.For("coai-ondisk-");
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     private const string Repo = "D:/repo";
     private const string Branch = "abc123";
