@@ -2,7 +2,10 @@
 
 > Status: **epoch 2 open, approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
 > selection; `autoSend` kept as on the other doors). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
-> twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3; E2 and E3 not started. Plan gate round 1 `proceed` (codex, antigravity;
+> twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3. E1 merged
+> (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
+> 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, nothing coded; E3
+> not started. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
 > read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
@@ -410,7 +413,7 @@ identity, a Claude tab never re-keys a terminal conversation, re-attach only wit
 only; **(d)** ssh command construction, quoting, cancellation and limits; **(e)** absent, ambiguous, unreadable and
 truncated session data are four different results.
 
-Cornerstones: 1 of 2 — E1.S2
+Cornerstones: 2 of 2 — E1.S2, E2.S2
 
 *Recommendation for the Opus story writer (not a mark).* One cornerstone in E1, one in E2, none in E3.
 **E1: the story that adds the `terminal` source and its key — area (b).** The record is on disk from the first
@@ -469,6 +472,12 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
   R6 and R7 are measured on a VM with the pre-release VSIX (entry 1.1) and recorded; then the release is cut and verified.
 - **Cornerstone areas.** (c) local against remote; (d) the ssh command; (e) the four results — (d) and (e) together
   are the recommended cornerstone.
+- **Stories.** [PLAN_the_chat_opens_from_a_terminal_E2.md](PLAN_the_chat_opens_from_a_terminal_E2.md) — five stories,
+  written by Opus 2026-11-11: E2.S1 which terminal reads a session (`credsSession`, `fromSession` derived from the source,
+  no local walk), E2.S2 the stdin script and its typed result, E2.S3 the ssh edge (argv, options, the child and its limits),
+  E2.S4 one road to the VM (the consent, the registry path, the fallback, the pick list), E2.S5 the doors (take and add from
+  a terminal, *Asked* through the reach, the help, `SECURITY.md`). **E2.S2 is the cornerstone** (areas (d) and (e), spec by
+  Fable); E2.S3 gets a Fable security judgement outside the quota.
 
 ### E3 — Polish (stage 3) · depends on E2
 
