@@ -33,11 +33,12 @@ export async function aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard(): P
     assert.equal(await clipboardNow(), probe, 'the door changed the clipboard');
 
     // Two presses at once share ONE latch, because the keyboard path writes a marker to the clipboard while it runs: exactly one
-    // is refused with the latch's sentence, and the other is the copied text. A door with a latch of its own would let both through.
+    // is refused with the latch's sentence, and the other is the copied text. A door with no latch, or a new latch for each call,
+    // would let both through; that the latch is the one the keyboard path holds is proved by the source scan S1r-T6.
     const both = await Promise.all([fromTheTerminal(), fromTheTerminal()]);
     const refused = both.filter((one) => one.failure === STILL_COPYING);
     const read = both.filter((one) => one.text === probe);
-    assert.equal(refused.length, 1, `two simultaneous presses: ${refused.length} were refused by the shared latch, not exactly one`);
+    assert.equal(refused.length, 1, `two simultaneous presses: ${refused.length} were refused by the latch, not exactly one`);
     assert.equal(read.length, 1, `two simultaneous presses: ${read.length} read the probe, not exactly one`);
     assert.equal(await clipboardNow(), probe, 'two simultaneous presses left the clipboard changed');
 

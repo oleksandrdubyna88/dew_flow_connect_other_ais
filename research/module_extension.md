@@ -13492,8 +13492,8 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
 - **`askFromTerminal(panels, extensionUri, terminal)`** (`chatCommand.ts`) in small helpers: not ready → `notReady`; no terminal →
   *There is no terminal here — open one, copy the text, then press Ask other AI.* (`no-terminal-here`); an empty read → the read's own sentence
   (`nothing-copied-for-terminal`: *Copy the text first, then press Ask other AI.* or the read failure); else `deliverPassage` with
-  `terminalMatch(panels.known(), terminal, terminal.name)`, `sendsImmediately(autoSend, false)` — the button and the chord both follow **Who presses
-  send** — `fromSession` false and `sourceOfTerminal(terminal.name)`. It never calls `matchedSource`, `snapshots` or `sourceSession`, so the
+  `terminalMatch(panels.known(), door.terminal, door.name)`, `sendsImmediately(autoSend, false)` — the button and the chord both follow **Who presses
+  send** — `fromSession` false and `sourceOfTerminal(door.name)`, where `door.name` is the name the guard read once. It never calls `matchedSource`, `snapshots` or `sourceSession`, so the
   file-text defect cannot happen on this door. The terminal is a parameter: `extension.ts` passes `vscode.window.activeTerminal` (a default
   parameter would count against `complexity` 4). A failure of the whole command is caught like `coai.takeTheQuestion`'s: console detail, a
   `terminal-door-failed` notice (*The copied text could not be sent to a chat.*).
