@@ -263,7 +263,7 @@ export function restoreConversation(
   // and doing that for every restored tab on every reload would be a directory walk per tab to
   // rediscover something already written down. (codex, the code round.)
   if (saved.fromSession && saved.source.kind === 'none') {
-    pinSession(entry, saved.title, true);
+    pinSession(entry, saved.title, true, saved.source);
   }
 
   // HANDED BACK, for the caller that has no panel of its own: the serializer is given one by VS Code

@@ -1,6 +1,7 @@
 import { ChatMessage } from './chatPage';
 import { isChatMessage } from './chatMessageShape';
 import { SavedTab } from './chatTabs';
+import { credsSession } from './credsSession';
 
 /**
  * What a stored conversation IS, and every rule over one that needs no disk.
@@ -294,15 +295,18 @@ type OriginRule =
   | 'must not'
   /** Either, and it is read as written: a migrated record recorded the door and never the session. */
   | 'as written'
-  /** Either on disk, and it is read as FALSE: no terminal conversation reads a Claude session in stage 1. */
-  | 'not yet';
+  /**
+   * Either on disk, and it is read as what the NAME says: a `Creds: <host> / <session>` name reads its session (on
+   * another machine), any other name does not.
+   */
+  | 'by name';
 
 /** Exhaustive: a fifth kind of source does not compile until it has a row here. */
 const ORIGIN: Readonly<Record<ConversationSource['kind'], OriginRule>> = {
   claude: 'must',
   file: 'must not',
   none: 'as written',
-  terminal: 'not yet',
+  terminal: 'by name',
 };
 
 /**
@@ -319,8 +323,9 @@ const ORIGIN: Readonly<Record<ConversationSource['kind'], OriginRule>> = {
  * which door a conversation came through and never recorded which session. So `none` permits either
  * answer, and a source that names an identity must agree with it.</p>
  *
- * <p>A terminal is the third case: either value is accepted on disk, so a record a later build wrote with `true` is not
- * dropped after a rollback — and it is read as `false` (`readsSession`).</p>
+ * <p>A terminal is the third case: either value is accepted on disk — a record an E1 build wrote says `false` for a
+ * `Creds:` name, and a record an E1 build reads after a rollback says `true` — and neither is dropped. What it READS as
+ * is derived from the name, never from the stored value (`readsSession`).</p>
  */
 function agreeOnOrigin(source: ConversationSource, fromSession: boolean): boolean {
   const rule = ORIGIN[source.kind];
@@ -330,11 +335,14 @@ function agreeOnOrigin(source: ConversationSource, fromSession: boolean): boolea
 
 /**
  * Whether a conversation of this source reads a Claude session back — what its thread's `fromSession` is.
- * A terminal never does in stage 1: `pinSession` and the Asked press walk the LOCAL home by title, and a terminal's
- * session is on another machine. Stage 2 changes the `terminal` row together with its guard.
+ *
+ * <p>A terminal's answer is DERIVED from its name, whatever was stored or passed: a `Creds:` name reads its session (on
+ * the VM it names), every other name does not. So an E1 `Creds:` conversation, saved with `false`, gains Asked when it is
+ * restored or reused. The walks of the LOCAL home are guarded separately (`walksLocalHome`): a terminal's session is not
+ * on this computer.</p>
  */
 export function readsSession(source: ConversationSource, fromSession: boolean): boolean {
-  return ORIGIN[source.kind] === 'not yet' ? false : fromSession;
+  return source.kind === 'terminal' ? credsSession(source.name).kind === 'session' : fromSession;
 }
 
 /**

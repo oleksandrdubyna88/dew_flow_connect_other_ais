@@ -198,7 +198,7 @@ function newConversation(
   pulse?.();
 
   // In the background, while this tab's name still matches the session it came from.
-  pinSession(entry, state.title, fromSession);
+  pinSession(entry, state.title, fromSession, state.source);
 
   return entry;
 }

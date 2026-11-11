@@ -484,7 +484,7 @@ test('a terminal name is one line', () => {
 });
 
 test('a terminal record and its index entry round trip, at the version every record has', () => {
-  const mine = record({ source: sourceOfTerminal(N), fromSession: false });
+  const mine = record({ source: sourceOfTerminal(N), fromSession: true });
 
   assert.deepEqual(recordFrom(JSON.parse(JSON.stringify(mine))), mine, 'a terminal conversation could not be read back');
   assert.deepEqual(metaFrom(JSON.parse(JSON.stringify(metaOf(mine)))), metaOf(mine));
@@ -526,23 +526,36 @@ test('a terminal record whose name the builder would refuse is dropped, not read
   }
 });
 
-test('a terminal record may say either thing about a session on disk, and reads as not from one', () => {
-  const mine = record({ source: sourceOfTerminal(N), fromSession: false });
+test('an E1 Creds record gains Asked when it is read, whatever it said', () => {
+  const named = 'Creds: ai1-dev2 / small-tasks';
+  const mine = record({ source: sourceOfTerminal(named), fromSession: false });
   const without = { ...mine } as Record<string, unknown>;
   delete without.fromSession;
 
-  assert.ok(recordFrom({ ...mine, fromSession: true }) !== undefined, 'a terminal record a later build wrote was dropped');
-  assert.equal(recordFrom({ ...mine, fromSession: true })?.fromSession, false, 'a terminal conversation came back offering to read a LOCAL Claude session');
-  assert.equal(recordFrom({ ...mine, fromSession: false })?.fromSession, false);
-  assert.equal(recordFrom(without)?.fromSession, false);
+  for (const said of [{ ...mine, fromSession: false }, { ...mine, fromSession: true }, without]) {
+    const read = recordFrom(said);
+
+    assert.ok(read !== undefined, 'a Creds terminal record was dropped');
+    assert.equal(read.fromSession, true, 'an E1 Creds conversation came back without Asked');
+  }
+  // Any other terminal name is read as not from a session, with either value, and is still read.
+  const plain = record({ source: sourceOfTerminal('bash'), fromSession: false });
+  assert.equal(recordFrom({ ...plain, fromSession: true })?.fromSession, false, 'a plain terminal conversation came back offering Asked');
+  assert.equal(recordFrom({ ...plain, fromSession: false })?.fromSession, false);
+  // A name that starts like a creds name and is not one reads no session either, and is still read.
+  const bad = record({ source: sourceOfTerminal('Creds: before x'), fromSession: false });
+  assert.equal(recordFrom({ ...bad, fromSession: true })?.fromSession, false, 'a malformed Creds name came back offering Asked');
   // Unchanged for the old kinds.
   assert.equal(recordFrom({ ...record(), fromSession: false }), undefined, 'a claude record that says it is not from a session was read');
   assert.equal(recordFrom({ ...record({ source: sourceOfFile('file:///a/b.md') }), fromSession: true }), undefined);
   assert.equal(recordFrom({ ...record({ source: { kind: 'none' } }), fromSession: true })?.fromSession, true);
 });
 
-test('no terminal conversation reads a local session; every other kind says what it was told', () => {
-  assert.equal(readsSession(sourceOfTerminal(N), true), false, 'a terminal conversation reads a LOCAL Claude session');
+test('a Creds terminal conversation reads its session, no other terminal does, every other kind says what it was told', () => {
+  assert.equal(readsSession(sourceOfTerminal('Creds: h / s'), false), true, 'a Creds terminal conversation does not offer Asked');
+  assert.equal(readsSession(sourceOfTerminal('Creds: h / s'), true), true);
+  assert.equal(readsSession(sourceOfTerminal('bash'), true), false, 'a plain terminal conversation offers Asked');
+  assert.equal(readsSession(sourceOfTerminal('Creds: before x'), true), false, 'a malformed Creds name offers Asked');
   assert.equal(readsSession({ kind: 'none' }, true), true);
   assert.equal(readsSession({ kind: 'none' }, false), false);
   assert.equal(readsSession(sourceOfSession('9f1c-uuid'), true), true);

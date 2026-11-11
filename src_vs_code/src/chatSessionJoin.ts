@@ -4,6 +4,7 @@ import { ChatEntry, ChatPanels } from './chatPanels';
 import { Thread, threads } from './chatThread';
 import { keepQueued } from './chatPersist';
 import { ConversationSource, sourceOfFile, sourceOfSession } from './chatStore';
+import { NO_LOCAL_SESSION, walksLocalHome } from './credsSession';
 import { ConversationIndex } from './chatStoreCache';
 import { GotoAsked, sessionSourceOf, tabKindOf } from './chatGoto';
 import { NAMES_ARE_CASE_BLIND, conversationWorkspace, everyFolder, fsPathOf, whereToLook } from './chatRoots';
@@ -71,8 +72,15 @@ export async function findSessionIn(title: string): Promise<readonly FoundIn[]> 
  * <p>The path a tab takes when it has no pin — because it was restored from a reload, or because the
  * background walk at open time found nothing yet. What it resolves it keeps, on the same terms
  * `pinSession` uses: exactly one session, across every root, with nothing else in doubt.</p>
+ *
+ * <p>Never for a terminal conversation: see the first statement.</p>
  */
 export async function resolveAndPin(entry: ChatEntry, mine: Thread): Promise<Asked> {
+  // A terminal's Claude session is on another machine: no walk of THIS home, by id or by name, can find it — it could only
+  // find a namesake. The refusal says why, and the remote road (a later story) takes the press before this line.
+  if (!walksLocalHome(mine.source, true)) {
+    return { kind: 'none', refusal: NO_LOCAL_SESSION };
+  }
   // THE ID FIRST. A conversation that was pinned once keeps `source: {kind:'claude', sessionId}`,
   // and that id is what the file is CALLED — so the answer is a directory entry rather than every
   // transcript in the folder read for its title. It is also the only path that survives a rename:
@@ -182,8 +190,9 @@ export function asAsked(found: Found): Asked {
  * session behind one. If it finds nothing, the button falls back to searching by name, which is
  * where it started.</p>
  */
-export function pinSession(entry: ChatEntry, title: string, fromSession: boolean): void {
-  if (!fromSession || title.length === 0) {
+export function pinSession(entry: ChatEntry, title: string, fromSession: boolean, source: ConversationSource): void {
+  // THE ONE GUARD, before any walk: a terminal conversation is never pinned to a session of the LOCAL home by its name.
+  if (!walksLocalHome(source, fromSession) || title.length === 0) {
     return;
   }
   void (async () => {

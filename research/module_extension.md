@@ -13414,11 +13414,11 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   `terminalMatch` (`terminalSource.ts`) never reads a name to match. The same object is the same conversation, also after a rename; a new
   terminal of the same name is a new conversation; two live terminals of one name are two conversations with equal sources. The title is
   `terminalLabel(name)`: a leading `Creds: ` dropped, at the start only and only when something is left.
-- **`fromSession` reads as `false` for every terminal source, on both roads into a thread** — the door (`newConversation`) and the disk
-  (`recordFrom`), through one rule, `readsSession` over the `ORIGIN` table typed by the kind. On disk either value is accepted (`agreeOnOrigin`),
-  so a record that E2 wrote with `true` is not dropped after a rollback — but it does not offer *Asked*, because the Asked press walks the LOCAL
-  home by title and `adoptFound` would replace the terminal source with a local session's (`pinSession` and `resolveAndPin`). E2 changes the one
-  row together with its guard. `pinSession` takes the decided flag, so no door can pin a terminal conversation.
+- **`fromSession` of a terminal source is derived from its NAME, on both roads into a thread** — the door (`newConversation`) and the disk
+  (`recordFrom`), through one rule, `readsSession`: a `Creds: <host> / <session>` name reads its session, any other name does not (E1 built
+  this as `false` for every terminal; E2.S1 replaced it — see *The chat reads the remote Claude session (E2)* below). On disk either value is
+  accepted (`agreeOnOrigin`, the `ORIGIN` row `by name`), so no record is dropped after a rollback or an upgrade. `pinSession` takes the decided flag
+  AND the source, so no door can pin a terminal conversation to a LOCAL session.
 - **Every switch over the source kind is exhaustive, in a form that passes `complexity` 4**: `namedBy` (behind `sameSource`), `noFolder` (behind
   `knownFolder`), `namedRoute` (behind `recordedRoute`) and `toRecorded` (behind `fromRecord`) each end in a `never`; `ORIGIN` is a table typed
   by the kind. `sameSource` stopped being a lint violation, so the complexity count of `src/chatStore.ts` fell from 4 to 3.
@@ -13520,3 +13520,27 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
 - **Tests**: `terminalDoorWiring.test.ts` (new; the manifest is parsed, and the door's code is scanned for the tab readers), `chatAgentMode.test.ts`,
   `chatDoors.test.ts`, `helpCoverage.test.ts`, the door census in `chatWiring.test.ts`. Host scenario S3-H1 (the skip-list default) in
   `terminalCaptureScenario.ts`; it runs only in CI's job `extension · a real editor`.
+
+## The chat reads the remote Claude session (E2)
+
+Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This section grows with each story of E2; S1 is which terminal reads a session.
+
+- **Which terminal reads a session, and no local walk for a terminal (E2.S1).** `credsSession(name)` in `src/credsSession.ts` (pure, no imports) reads the
+  terminal's FULL name with the plan's one pattern, `^Creds: ([A-Za-z0-9][A-Za-z0-9._-]*) / ([A-Za-z0-9][A-Za-z0-9_-]*)$`, and answers `session` (host and
+  tmux session), `other` (the name does not start with `Creds: ` — `bash`, `Creds run: x`, `creds: h / s`) or `malformed` (it starts with `Creds: ` and
+  fails). A leading `-` is refused by the pattern itself, so no ssh or tmux option can be injected by a name; a `.` is legal in a host and not in a session
+  (tmux changes it). The refusal of a `malformed` name names the part that failed, in one of three sentences — the shape (no ` / `, or more than one), the
+  host, the tmux session — quoting the part as it is, at most 80 characters, with `…` after a cut.
+- **The flag is derived, never stored.** `readsSession(source, fromSession)` (`chatStore.ts`) answers, for a `terminal` source, `credsSession(name).kind ===
+  'session'`, whatever `fromSession` was passed or written; the `terminal` row of `ORIGIN` is `by name` (either value is accepted on disk, neither is dropped).
+  So an E1 conversation of a `Creds:` terminal, saved with `fromSession: false`, gains *Asked* when it is restored or reused under E2 (parent change 1.1,
+  point 1); a record of any other terminal still reads `false`. `CONVERSATION_VERSION` does not move.
+- **Two guards, one seam.** `walksLocalHome(source, fromSession)` (`credsSession.ts`) is false for every `terminal` source and otherwise `fromSession`.
+  `pinSession(entry, title, fromSession, source)` asks it as its FIRST statement, before any walk (`chatCommand.ts` passes `state.source`,
+  `chatConversationRestore.ts` passes `saved.source`); `resolveAndPin` asks it first and answers `{ kind: 'none', refusal: NO_LOCAL_SESSION }`: *"This chat came
+  from a terminal: its Claude session is not on this computer, so it is not looked for here."* Until the remote road (E2.S4) takes the press first, that
+  sentence is what a `Creds:` chat shows when *Asked* is pressed; after it, this is the second line of defence. A namesake in the local home is never read
+  for a terminal.
+- **Tests**: `credsSession.test.ts` (new: S1-T1…T4 the pattern, `other`, the three sentences and 30+ hostile names; S1-T8 the seam and the first statement of
+  `pinSession`; S1-T9 `NO_LOCAL_SESSION` and the check in `resolveAndPin`), `chatStore.test.ts` (S1-T5, S1-T6, replacing E1's *no terminal reads a session*),
+  `chatSourceWiring.test.ts` (S1-T7, and the pin's two new call sites), `chatSweepWiring.test.ts`.
