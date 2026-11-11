@@ -63,9 +63,12 @@ const refuse = (refusal: string): RemoteAnswer => ({ kind: 'refused', refusal })
 /** The longest piece of a VM's text a sentence quotes, in characters. */
 const SHOWN_MAX = 80;
 
-/** Text from the VM for a sentence: control characters taken out, cut with `…`. */
+/** Text from the VM with its control and format characters (bidi marks, zero-width space) taken out: what a person reads is what is there. */
+const plainOf = (text: string): string => text.replace(/[\p{Cc}\p{Cf}]/gu, '');
+
+/** Text from the VM for a sentence: control and format characters taken out, cut with `…`. */
 function shown(text: string): string {
-  const plain = [...text.replace(/\p{Cc}/gu, '')];
+  const plain = [...plainOf(text)];
 
   return plain.length > SHOWN_MAX ? `${plain.slice(0, SHOWN_MAX).join('')}…` : plain.join('');
 }
@@ -206,7 +209,7 @@ function through<T extends { readonly kind: string }, A extends readonly unknown
   return (table[value.kind as T['kind']] as (value: T, ...args: A) => R)(value, ...args);
 }
 
-const labelOf = (name: string, id: string): string => (name.length > 0 ? name : id.slice(0, 8));
+const labelOf = (name: string, id: string): string => plainOf(name) || id.slice(0, 8);
 
 const timeOf = (seconds: number): string => (seconds > 0 ? new Date(seconds * 1000).toISOString() : 'time unknown');
 
@@ -214,11 +217,11 @@ const timeOf = (seconds: number): string => (seconds > 0 ? new Date(seconds * 10
 const newestFirst = (rows: readonly PickRow[]): readonly PickRow[] => [...rows].sort((a, b) => b.at - a.at);
 
 const candidateRow = (one: RemoteCandidate): PickRow => ({
-  sessionId: one.sessionId, label: labelOf(one.name, one.sessionId), description: one.cwd, detail: `tmux pane ${one.pane}`, at: 0, folders: projectDirNames(one.cwd),
+  sessionId: one.sessionId, label: labelOf(one.name, one.sessionId), description: plainOf(one.cwd), detail: `tmux pane ${plainOf(one.pane)}`, at: 0, folders: projectDirNames(one.cwd),
 });
 
 const titledRow = (one: TitledSession): PickRow => ({
-  sessionId: one.sessionId, label: labelOf(one.names.latest, one.sessionId), description: one.folder, detail: `${timeOf(one.mtime)} · ${one.sessionId}`, at: one.mtime, folders: [one.folder],
+  sessionId: one.sessionId, label: labelOf(one.names.latest, one.sessionId), description: plainOf(one.folder), detail: `${timeOf(one.mtime)} · ${one.sessionId}`, at: one.mtime, folders: [one.folder],
 });
 
 /** The registry road answers `done` and drops the pick; a file found by id is read only from a folder the pick came with (J9). */

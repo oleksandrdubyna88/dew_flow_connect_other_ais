@@ -689,3 +689,45 @@ test('S3-T15: more than three calls are never made in one press', async () => {
   assert.match(refusal(answer), /could not be settled in three reads/u);
   assert.equal(endless.w.picks.length, 0, 'a pick was asked for that could not be followed');
 });
+
+// Format characters from the VM, named by number: a repo test refuses one written into a source file.
+const RLO = String.fromCodePoint(0x202e);
+const ZWSP = String.fromCodePoint(0x200b);
+const hasFormat = (text: string): boolean => /[\p{Cc}\p{Cf}]/u.test(text);
+
+test('S3-T17: a working folder from the VM holds no format character in the refusal that names it', () => {
+  const paneCwd = `/home/git/${RLO}kb${ZWSP}`;
+  const step = nextStep({ kind: 'fallback', paneCwd, folders: [], skipped: 0, more: false }, undefined, { host: H, session: S });
+  assert.equal(step.kind, 'refused');
+  const sentence = step.kind === 'refused' ? step.refusal : '';
+  assert.ok(!sentence.includes(RLO), 'the refusal carries U+202E (right-to-left override)');
+  assert.ok(!sentence.includes(ZWSP), 'the refusal carries U+200B (zero-width space)');
+  assert.ok(sentence.includes('/home/git/kb'), `the folder is not named in the refusal: ${sentence}`);
+});
+
+test('S3-T18: a pick row shows no format character, and the id and the folders the pick is read by stay as they are', () => {
+  const dirty = `${RLO}kb${ZWSP}`;
+  const candidates = nextStep(
+    { kind: 'ambiguous', why: 'panes', candidates: [{ pane: '0.0', pid: 2000, sessionId: ID, name: dirty, cwd: `/home/git/${dirty}` }], unnamed: 0 }, undefined, { host: H, session: S },
+  );
+  assert.equal(candidates.kind, 'pick');
+  const [row] = candidates.kind === 'pick' ? candidates.rows : [];
+  assert.ok(row !== undefined);
+  assert.deepEqual([row.label, row.description], ['kb', '/home/git/kb'], 'a candidate row shows a format character');
+  assert.ok(!hasFormat(row.detail), 'the detail of a candidate row shows a format character');
+  assert.equal(row.sessionId, ID, 'the id of a candidate row was changed');
+  assert.deepEqual(row.folders, projectDirNames(`/home/git/${dirty}`), 'the folders of a candidate row were changed');
+
+  const names = { latest: dirty, former: [] };
+  const sessions = [ID, ID2].map((sessionId) => ({ sessionId, folder: `-home-git-${dirty}`, mtime: 100, names, skipped: false }));
+  const titled = nextStep({ kind: 'titles', sessions, scan: { why: 'all', tooLong: 0, more: false } }, undefined, { host: H, session: dirty });
+  assert.equal(titled.kind, 'pick');
+  const rows = titled.kind === 'pick' ? titled.rows : [];
+  assert.equal(rows.length, 2);
+  for (const one of rows) {
+    assert.deepEqual([one.label, one.description], ['kb', '-home-git-kb'], 'a titled row shows a format character');
+    assert.ok(!hasFormat(one.detail), 'the detail of a titled row shows a format character');
+  }
+  assert.deepEqual(rows.map((one) => one.sessionId).sort(), [ID, ID2].sort(), 'the id of a titled row was changed');
+  assert.deepEqual(rows.map((one) => one.folders), [[`-home-git-${dirty}`], [`-home-git-${dirty}`]], 'the folders of a titled row were changed');
+});
