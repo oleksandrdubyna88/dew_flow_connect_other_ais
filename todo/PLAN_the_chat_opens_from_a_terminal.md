@@ -77,7 +77,8 @@ Narrowed: yes — the door no longer copies a VS Code terminal selection for the
   master on a Linux or macOS extension host, or in a Remote window). That is an independent cause, so it would be a
   second change and a full stop: it is NOT taken. Win32-OpenSSH, the owner's extension host, has no released
   multiplexing; `SECURITY.md` names the residual in words. Question consultant a81ed863 (codex, antigravity): two
-  causes; take only the host-key option. The next accepted change stops the plan.)
+  causes; take only the host-key option. The owner agreed the same day: StrictHostKeyChecking=yes only, no full
+  stop. The next accepted change stops the plan.)
 
 ## The symptom
 
