@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, utimesSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { humanSaid } from '../claudeQuestion';
@@ -25,6 +24,7 @@ import {
   waitingQuestion,
 } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * What the PERSON wrote, read back off the session file.
@@ -116,7 +116,7 @@ test('a half-written line is skipped rather than throwing the whole read away', 
 });
 
 test('the TAB decides which session is read back', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -139,7 +139,7 @@ test('the TAB decides which session is read back', async () => {
 test('a tab whose title names no session reads nothing, rather than the newest', async () => {
   // The same rule the waiting question follows: delivering the wrong conversation silently is worse
   // than saying there is nothing here.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -163,7 +163,7 @@ test('a tab whose title names no session reads nothing, rather than the newest',
 });
 
 test('a folder Claude has never run in says so BY NAME, rather than throwing or going quiet', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const answer = await promptsInSession(home, 'D:\\work\\app', true, 'Anything');
 
@@ -178,7 +178,7 @@ test('two sessions sharing a title are REFUSED, never picked between', async () 
   // It picked the first the directory listed until the plan round said so, from two vendors at once.
   // The whole reason the title join exists is that handing over somebody else's conversation
   // silently is the worst thing this can do — and choosing between namesakes is that, with steps.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -195,7 +195,7 @@ test('two sessions sharing a title are REFUSED, never picked between', async () 
 });
 
 test('a session this tab owns but has never been spoken in is told apart from one that is missing', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -213,7 +213,7 @@ test('a session this tab owns but has never been spoken in is told apart from on
 test('what crosses to the page is bounded, in both directions', async () => {
   // A day-long session is hundreds of turns and some of them are whole files. All of it in one
   // postMessage is megabytes over a bridge that has to stay responsive. (gemini, the plan round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -347,7 +347,7 @@ test('a tab that found its file keeps reading it after Claude renames the conver
   // THE POINT OF PINNING. Claude Code refines a conversation's ai-title as it goes on and the tab
   // follows it, so the name captured when this chat opened stops matching hours later — which is
   // exactly the window the button exists for. A file does not move. (codex, the second code round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
 
   return (async () => {
     try {
@@ -377,7 +377,7 @@ test('a tab that found its file keeps reading it after Claude renames the conver
 });
 
 test('a pinned file that is gone says so, rather than looking like an empty conversation', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const gone = join(home, 'never-existed.jsonl');
 
@@ -391,7 +391,7 @@ test('a pinned file that is gone says so, rather than looking like an empty conv
 });
 
 test('a file that IS there but holds nothing of yours is told apart from one that is gone', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const file = join(home, 'empty.jsonl');
     writeFileSync(file, `${titled('Fresh')}\n`, 'utf8');
@@ -442,7 +442,7 @@ test('a window with NO FOLDER open looks where Claude Code actually ran — the 
   // see: the tab read "Подключение к sampleApp DB" and `workspaceFolders` was undefined, so the
   // search was scoped to a workspace that did not exist. Claude Code does not need a folder — a VS
   // Code terminal with none starts in the home directory, and the session is filed under it.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     // The project directory home itself would have: every separator becomes a dash.
     const dir = join(home, '.claude', 'projects', home.replace(/[\\/:]/g, '-'));
@@ -468,7 +468,7 @@ test('a window with NO FOLDER open looks where Claude Code actually ran — the 
 });
 
 test('a refusal names the directory it looked in, so a window can tell where it went wrong', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -506,7 +506,7 @@ test('a tab wearing a SHORTENED title still finds its session', () => {
 test('a shortened title that fits TWO sessions is still a refusal', async () => {
   // What keeps the prefix from becoming a licence to guess: the ambiguity rule does not care why two
   // names matched.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -522,7 +522,7 @@ test('a shortened title that fits TWO sessions is still a refusal', async () => 
 });
 
 test('the shortened title reaches the whole session, not just its name', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -606,7 +606,7 @@ const renamed = (name: string): string =>
   JSON.stringify({ type: 'custom-title', sessionId: 's', customTitle: name });
 
 test('a conversation renamed by hand is found under the name it now wears', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -629,7 +629,7 @@ test('a conversation renamed and then reverted is found under BOTH names', async
   // The three rows off the operator's own file, in their order. Whichever name is on the tab at the
   // moment the button is pressed, it is one of these two — and "the last title" answers neither
   // reliably, because the writer that re-asserts the old one runs on every turn.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -654,7 +654,7 @@ test('a conversation renamed and then reverted is found under BOTH names', async
 test('a session named only by hand — no ai-title anywhere in it — is found', async () => {
   // Four of the operator's 101 sessions are this, and they were invisible: `titleOf` answered with
   // an empty string and the refusal said no session was called that.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -674,7 +674,7 @@ test('a session CURRENTLY called this beats one that was once called this', asyn
   // The cost of matching every name a session ever had, and the rule that pays it: a conversation
   // the person has moved on from must not outrank the one they are looking at. Refusing both would
   // be worse — it would make a reused name permanently unanswerable.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -695,7 +695,7 @@ test('a session CURRENTLY called this beats one that was once called this', asyn
 test('two sessions that BOTH once wore this name are still a refusal, never a pick', async () => {
   // The rule this loosening could have broken. Neither wears it now, both wore it once, and there is
   // nothing to choose between them — so nothing is chosen.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -716,7 +716,7 @@ test('a stale title re-asserted over a rename leaves a refusal, never the wrong 
   // second tier while a namesake sits there too. What must NOT happen is a pick. The safe direction
   // is the one this module has always taken — and the session id and the picker are what recover
   // from it, which is stories A2 and B.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -738,7 +738,7 @@ test('a WHOLE name answers before a name that merely starts the same way', async
   // A truncated tab is a prefix of everything that begins with it, and one of those is the session
   // called exactly what the tab could show. Refusing that pair as ambiguous is an ambiguity nobody
   // has. (gemini, the code round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -764,7 +764,7 @@ test('a title row carrying nothing but spaces is not a name, and does not demote
   // conversation down into the earlier tier — where a namesake can reach it and the pair is refused.
   // (gemini, the code round.) The harm needs the namesake to be visible at all, which is why this
   // fixture has one.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -791,7 +791,7 @@ test('a title row carrying nothing but spaces is not a name, and does not demote
  */
 
 test('a conversation with a stored id finds its file though every title differs', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -812,7 +812,7 @@ test('a conversation with a stored id finds its file though every title differs'
 test('resolving by id reads no transcript at all', async () => {
   // The point of the id path is that it costs one look at the directory entry. A file whose contents
   // are not lines of JSON — and would produce nothing at all if they were read — still resolves.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -832,7 +832,7 @@ test('a stored id that does not look like one never becomes a path', async () =>
   // into a path. `..\outside.jsonl` joined to the project directory is a file OUTSIDE it, and an
   // access check would confirm it exists quite happily. (codex, the plan round, as a security
   // finding.) The shape is asked before the disk is touched, and containment after.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     const elsewhere = join(home, '.claude', 'projects', 'D--somebody-else');
@@ -867,7 +867,7 @@ test('an id whose file is gone says so, and the name is still there to fall back
   // The two halves of the fallback, as the host composes them: the id misses because the session was
   // deleted, and the tab's name still reaches the one session that answers to it. Without this, a
   // conversation whose id went stale would sit on the id's refusal for ever. (codex, the plan round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -907,7 +907,7 @@ const manySessions = (dir: string, howMany: number, named: (n: number) => string
 };
 
 test('a folder larger than the budget is read newest-first, and the cut is NAMED', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -926,7 +926,7 @@ test('a folder larger than the budget is read newest-first, and the cut is NAMED
 test('a match INSIDE the budget is still a match', async () => {
   // The cap must not turn into a refusal of everything. Newest first is what makes this safe: the
   // conversation somebody is looking at is the one that was written to most recently.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -941,7 +941,7 @@ test('a match INSIDE the budget is still a match', async () => {
 });
 
 test('a walk that runs out of TIME stops, and says that is why', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -973,7 +973,7 @@ test('a session file that LEADS outside the folder is refused, however it is spe
   // Lexical containment says nothing about a link. Anything on this machine can drop a file named
   // like a session id into the project directory pointing at something else, and both `resolve` and
   // `access` are perfectly happy with it. (codex, the plan round, as a security finding.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     const elsewhere = join(home, 'secrets');
@@ -1005,7 +1005,7 @@ test('a session file that LEADS outside the folder is refused, however it is spe
 test('a refusal about a stored id repeats neither the id nor a path built from it', async () => {
   // A refusal that echoes what it was given is a refusal somebody can probe with. (codex, the plan
   // round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -1026,7 +1026,7 @@ test('a session too big to read under the budget is SKIPPED and counted, never s
   // said nothing about how big one of them could be, so a single pathological session could overrun
   // the whole deadline inside one read — and the sentence at the end would have claimed the folder
   // held nothing by that name.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -1072,7 +1072,7 @@ test('a match found inside a CUT scan is answered but never called complete', as
   // in two of them, the first match would be adopted for ever and the namesake refusal defeated by
   // a budget nobody saw. The answer still comes back — the person gets their conversation — and the
   // caller is told it was not proved unique. (codex, the code round, twice.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -1100,7 +1100,7 @@ test('a session file that will not open is a FAILURE, not a session with nothing
   // became a stream in this story and silently lost it, which would have reported a locked or
   // unreadable session as one holding no question. A directory wearing a session's name is the
   // shape that reproduces it on every platform. (codex, the code round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -1119,7 +1119,7 @@ test('the waiting question’s deadline covers the READING, not only the choosin
   // The regression this story introduced and the round caught: the walk picked files under the
   // clock and a second loop read them with no clock in it, so the time limit bounded the choosing
   // and none of the work. (gemini, the code round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
@@ -1150,7 +1150,7 @@ test('a folder that would not LIST says so as a fact, not as an absence', async 
   // asking only "did it throw" would report "no session is called that" about a folder nobody could
   // read. A FILE where the project directory should be is the shape that reproduces it on every
   // platform — `readdir` answers ENOTDIR. (codex, the plan round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const root = join(home, '.claude', 'projects');
     mkdirSync(root, { recursive: true });
@@ -1167,7 +1167,7 @@ test('a folder that would not LIST says so as a fact, not as an absence', async 
 });
 
 test('a folder that answered and holds nothing of that name says THAT, as a fact', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', projectDirName('D:\\work\\app'));
     mkdirSync(dir, { recursive: true });
@@ -1186,7 +1186,7 @@ test('a walk cut short by its budget is carried as UNREADABLE, not as an absence
   // A cut folder was not finished, which is nearer to "it would not say" than to "nothing is called
   // that" — and *go to* must not offer to start a second conversation on the strength of sessions it
   // never opened.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', projectDirName('D:\\work\\app'));
     mkdirSync(dir, { recursive: true });
@@ -1243,7 +1243,7 @@ test('a folder spelled the OLD way is still found, because the rule is somebody 
   // version that spelled it the old way is looked for as well, rather than the person being told
   // their sessions do not exist. Exact first, old spelling second, and the case-blind pass after
   // both; two names derived from one path cannot collide.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const root = join(home, '.claude', 'projects');
     const oldWay = join(root, 'D--rsd-dew_flow_benchmark');
@@ -1298,7 +1298,7 @@ test('an EMPTY folder under the new name does not shadow the old one that holds 
   // An upgrade leaves the old folder where it was and Claude Code starts writing the new one, so both
   // exist and the preferred one can be empty. Answering with it would keep the very refusal this
   // change is about. (gemini and codex, the plan round, independently.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const root = join(home, '.claude', 'projects');
     mkdirSync(join(root, 'D--rsd-dew-flow-benchmark'), { recursive: true });
@@ -1322,7 +1322,7 @@ test('Take the question reads the same folder rule as the Asked button', async (
   // It asserts the QUESTION, not merely "did not fail". The first version wrote a title and accepted
   // anything but a failure — so a folder holding no question would have passed it, which is a fixture
   // the code rejects proving nothing. (codex, the code round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const dir = join(home, '.claude', 'projects', 'D--rsd-dew-flow-benchmark');
     mkdirSync(dir, { recursive: true });
@@ -1370,7 +1370,7 @@ test('a folder is this project’s because a transcript in it SAYS so, not becau
   // Taking the first candidate that holds any transcript hands over the other project's
   // conversations — the silent cross-project hand-over this module exists to refuse. (codex, the
   // code round.)
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const root = join(home, '.claude', 'projects');
 
@@ -1406,7 +1406,7 @@ ${said('your conversation')}
 test('an empty file, and a directory wearing the extension, are not sessions', async () => {
   // Two more shapes the "has a .jsonl in it" test accepted: a half-written file left by a killed run,
   // and a folder somebody called `archive.jsonl`. Neither names a cwd, so neither is evidence.
-  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  const home = ownedTemp('coai-asked');
   try {
     const root = join(home, '.claude', 'projects');
     const preferred = join(root, 'D--rsd-dew-flow-bench');

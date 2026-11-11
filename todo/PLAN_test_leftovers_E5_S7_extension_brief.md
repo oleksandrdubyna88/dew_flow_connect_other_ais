@@ -1,6 +1,6 @@
 # Build brief — coai E5 story S7, the fifth drain PR: the extension suite's `raw-temp` entries to zero
 
-> Status: **plan only, 2026-11-11, by Opus.** Scope: the 219 `raw-temp` baseline entries of `src_vs_code/src/test/` (71
+> Status: **built 2026-11-11, on branch feat/test-leftovers-e5-s7-extension.** Scope: the 219 `raw-temp` baseline entries of `src_vs_code/src/test/` (71
 > files). Tests only, plus one small test-support adapter. A Sonnet coder builds from this brief alone.
 
 The plan is [PLAN_test_leftovers_E5.md](PLAN_test_leftovers_E5.md) § *S7 — The drain* ("`fs.mkdtempSync(path.join(os.tmpdir(),

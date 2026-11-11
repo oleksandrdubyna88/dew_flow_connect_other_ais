@@ -2,9 +2,9 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The ratchet closes in both directions.
@@ -30,7 +30,7 @@ const REFUSED = 2;
 
 function compare(current: unknown, base: unknown, extra: string[] = []):
 { code: number; said: string } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'baselinegrows-'));
+  const dir = ownedTemp('baselinegrows');
   try {
     const now = path.join(dir, 'now.json');
     const before = path.join(dir, 'before.json');
@@ -95,7 +95,7 @@ test('a base with no baseline at all is a pass, not a crash', () => {
 });
 
 test('a file it cannot read is refused rather than waved through', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'baselinegrows-'));
+  const dir = ownedTemp('baselinegrows');
   try {
     const ran = spawnSync(process.execPath,
       [script, path.join(dir, 'missing.json'), path.join(dir, 'also-missing.json')],
@@ -189,7 +189,7 @@ test('a base file that EXISTS and is empty is refused, not treated as the first 
 });
 
 test('an absence the caller vouches for is still a pass', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'baselinegrows-'));
+  const dir = ownedTemp('baselinegrows');
   try {
     const now = path.join(dir, 'now.json');
     const before = path.join(dir, 'before.json');
@@ -221,7 +221,7 @@ test('a third path is refused rather than quietly ignored', () => {
   // called a bug that always evaluates false — by type, since the destructured values are strings.
   // It is right that the shape was wrong, and the honest condition is stronger than the one it
   // replaced: this takes exactly two paths, so a stray third was silently dropped before.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'baselinegrows-'));
+  const dir = ownedTemp('baselinegrows');
   try {
     const one = path.join(dir, 'a.json');
     fs.writeFileSync(one, JSON.stringify({ Server: ['0.28.0'] }), 'utf8');

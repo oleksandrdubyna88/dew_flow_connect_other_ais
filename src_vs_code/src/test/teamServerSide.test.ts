@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import * as assert from 'node:assert';
-import { mkdtempSync, existsSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { response } from './responseFixture';
@@ -22,6 +21,7 @@ import {
   writeToken,
 } from '../teamServerAuth';
 import { TeamServer, tokenFileName } from '../teamServers';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * A sign-in belongs to a SIDE of the machine, not to the machine.
@@ -81,7 +81,7 @@ function host(dir: string, state: StateStore, extra: Partial<AuthHost> = {}): Au
 }
 
 function temp(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-side-'));
+  return ownedTemp('coai-side');
 }
 
 // ---------------------------------------------------------------------------------------------

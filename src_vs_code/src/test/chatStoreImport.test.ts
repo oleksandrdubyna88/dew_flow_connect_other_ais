@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatStoreFile, QUARANTINE_DIR, SaveOutcome } from '../chatStoreFile';
@@ -27,6 +26,7 @@ import { ConversationRecord, besideMeta, fromLegacy, recordFrom, recordName, sai
 import { lockName } from '../chatStoreLock';
 import { ChatTabMemory, SavedTab, TAB_STORE_KEY, TAB_VERSION, TabStore } from '../chatTabs';
 import { ChatMessage } from '../chatPage';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The migration of the memento into the store — the one step of this feature that can destroy a
@@ -51,7 +51,7 @@ const AT = Date.UTC(2026, 8, 13, 12, 0, 0);
 const WORKSPACE = 'D:\\rsd\\coai';
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-chat-import-'));
+  return ownedTemp('coai-chat-import');
 }
 
 const said = (role: 'you' | 'model', text: string): ChatMessage => ({ role, text });

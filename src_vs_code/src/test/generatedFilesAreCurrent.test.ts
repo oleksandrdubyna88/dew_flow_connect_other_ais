@@ -1,10 +1,11 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { ownedTemp } from './ownedTemp';
+import { tempRoot } from './tempRoot';
 
 /**
  * Every generated file in this package still is what its generator produces.
@@ -64,7 +65,7 @@ test('--check writes nothing, so running the suite cannot repair the drift it is
   // stdout across two runs does not prove it, because a run that REPAIRED a stale file would print
   // the same happy line the second one does. So the file's own bytes are read before and after, over
   // a copy that is deliberately stale. (codex, this story's code round.)
-  const dir = mkdtempSync(join(tmpdir(), 'coai-generated-'));
+  const dir = ownedTemp('coai-generated');
   try {
     const target = join(dir, 'builtinRoles.generated.ts');
     writeFileSync(target, '// nothing like the real thing\n', 'utf8');
@@ -93,7 +94,7 @@ test('--check writes nothing, so running the suite cannot repair the drift it is
 test('--check on a file that is not there says so, rather than a stack trace', () => {
   const run = spawnSync(
     process.execPath,
-    [join(scriptsDir, SCRIPTS[0]), '--check', `--out=${join(tmpdir(), 'coai-no-such-file-9e1a.ts')}`],
+    [join(scriptsDir, SCRIPTS[0]), '--check', `--out=${join(tempRoot(), 'coai-no-such-file-9e1a.ts')}`],
     { encoding: 'utf8' },
   );
 
@@ -106,7 +107,7 @@ test('a seed that is not there is named, rather than thrown as a path', () => {
   // not what it was for, which is the half a person cannot work out. (local, C2's code round.)
   const run = spawnSync(
     process.execPath,
-    [join(scriptsDir, SCRIPTS[0]), `--seed=${join(tmpdir(), 'coai-no-such-seed-4c7b.json')}`],
+    [join(scriptsDir, SCRIPTS[0]), `--seed=${join(tempRoot(), 'coai-no-such-seed-4c7b.json')}`],
     { encoding: 'utf8' },
   );
 
@@ -139,7 +140,7 @@ for (const [what, role, expected] of [
   ],
 ] as const) {
   test(`the generator refuses ${what}`, () => {
-    const dir = mkdtempSync(join(tmpdir(), 'coai-seed-'));
+    const dir = ownedTemp('coai-seed');
     try {
       const seed = join(dir, 'builtin-roles.json');
       writeFileSync(

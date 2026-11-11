@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { FeaturesCache, hasFeature, modifiedMs, readBinaryFeatures } from '../binaryFeatures';
 import type { Run } from '../roundsDbRead';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * What the installed coai-mcp says it accepts (`--features`), read once per binary — so a catalog field or a flag is
@@ -50,10 +51,9 @@ test('the binary is asked with --features and nothing else', async () => {
 });
 
 test('the cache key changes when the binary file does, and a missing file is 0 rather than a throw', async () => {
-  const { mkdtempSync, writeFileSync, utimesSync, rmSync } = await import('node:fs');
+  const { writeFileSync, utimesSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');
-  const { tmpdir } = await import('node:os');
-  const dir = mkdtempSync(join(tmpdir(), 'coai-features-'));
+  const dir = ownedTemp('coai-features');
   try {
     const file = join(dir, 'coai-mcp');
     writeFileSync(file, 'one');
@@ -69,10 +69,9 @@ test('the cache key changes when the binary file does, and a missing file is 0 r
 });
 
 test('the binary is asked once per file, again after an update, and not at all when none is installed', async () => {
-  const { mkdtempSync, writeFileSync, utimesSync, rmSync } = await import('node:fs');
+  const { writeFileSync, utimesSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');
-  const { tmpdir } = await import('node:os');
-  const dir = mkdtempSync(join(tmpdir(), 'coai-features-cache-'));
+  const dir = ownedTemp('coai-features-cache');
   try {
     const file = join(dir, 'coai-mcp');
     writeFileSync(file, 'one');
@@ -99,10 +98,9 @@ test('the binary is asked once per file, again after an update, and not at all w
 });
 
 test('a failure that may pass is asked again; a clean list and an older binary (64) are kept', async () => {
-  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { writeFileSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');
-  const { tmpdir } = await import('node:os');
-  const dir = mkdtempSync(join(tmpdir(), 'coai-features-retry-'));
+  const dir = ownedTemp('coai-features-retry');
   try {
     const file = join(dir, 'coai-mcp');
     writeFileSync(file, 'one');
@@ -132,10 +130,9 @@ test('a failure that may pass is asked again; a clean list and an older binary (
 });
 
 test('an updated binary is not described by the old one\'s list, and each settled answer is announced', async () => {
-  const { mkdtempSync, writeFileSync, rmSync, utimesSync } = await import('node:fs');
+  const { writeFileSync, rmSync, utimesSync } = await import('node:fs');
   const { join } = await import('node:path');
-  const { tmpdir } = await import('node:os');
-  const dir = mkdtempSync(join(tmpdir(), 'coai-features-update-'));
+  const dir = ownedTemp('coai-features-update');
   try {
     const file = join(dir, 'coai-mcp');
     writeFileSync(file, 'one');

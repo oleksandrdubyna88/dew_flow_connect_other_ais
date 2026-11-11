@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatStoreFile } from '../chatStoreFile';
@@ -13,6 +12,7 @@ import {
   sourceOfSession,
   sourceOfTerminal,
 } from '../chatStore';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * Following a moved file, against a REAL temporary directory.
@@ -29,7 +29,7 @@ const WAS = 'file:///D:/rsd/one/main.ts';
 const NOW = 'file:///D:/rsd/two/main.ts';
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-chat-refile-'));
+  return ownedTemp('coai-chat-refile');
 }
 
 function record(over: Partial<ConversationRecord> = {}): ConversationRecord {

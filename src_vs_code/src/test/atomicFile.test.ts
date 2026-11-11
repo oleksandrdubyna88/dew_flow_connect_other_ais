@@ -2,11 +2,11 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { besideName, writeFileAtomically, writeFileAtomicallySync } from '../atomicFile';
 import { expectDataRoot, forgetFindingsBoard, publishFindings } from '../findingsBoard';
 import { familyOf } from '../pathFamily';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The write that a crash cannot leave half of.
@@ -23,7 +23,7 @@ import { familyOf } from '../pathFamily';
  */
 
 function tempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'coai-atomic-'));
+  return ownedTemp('coai-atomic');
 }
 
 test('a file written atomically is there, whole, with nothing left beside it', async () => {
@@ -204,7 +204,7 @@ test('many writes racing for one destination all succeed — Windows EPERM is re
  */
 
 test('bytes survive the round trip, and are not read as text on the way', async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-atomic-bytes-'));
+  const dir = ownedTemp('coai-atomic-bytes');
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'picture.png');
   // The first eight bytes of a real PNG, including the 0x89 that no UTF-8 encoding survives.
@@ -220,7 +220,7 @@ test('a write that fails leaves the file that was already there', async (t) => {
   // THE GUARANTEE THE PICTURE PATH NEEDED. Replacing an attachment used to delete first and write
   // second; this is the shape that makes deleting unnecessary, because the old bytes are still the
   // ones at that path until the new ones have fully landed.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-atomic-bytes-'));
+  const dir = ownedTemp('coai-atomic-bytes');
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'picture.png');
   const before = Buffer.from([1, 2, 3, 4]);

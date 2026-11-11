@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 
@@ -21,6 +20,7 @@ import {
 } from '../openAtRevision';
 import { revisionActions, RevisionRow, UNPROBED } from '../revisionActions';
 import { readable } from './readableHtml';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * Reaching the code, honestly about which revision — the host's decisions, as values.
@@ -208,7 +208,7 @@ test('a revision document is named by its file with the short sha, keeps its ext
 
 /** A workspace folder holding a checkout holding a file, and a checkout OUTSIDE the workspace beside it. */
 function scene(): { readonly folder: string; readonly repo: string; readonly elsewhere: string; readonly done: () => void } {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-current-'));
+  const root = ownedTemp('coai-current');
   const folder = path.join(root, 'workspace');
   const repo = path.join(folder, 'repo');
   const elsewhere = path.join(root, 'elsewhere');

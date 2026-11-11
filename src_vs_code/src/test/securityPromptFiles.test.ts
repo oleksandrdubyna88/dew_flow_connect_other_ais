@@ -1,17 +1,17 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { basename, join, matchesGlob, resolve } from 'node:path';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, matchesGlob, resolve } from 'node:path';
 import {
   SECURITY_PROMPT_MAX_BYTES, SECURITY_PROMPT_GLOB, SECURITY_PROMPT_WATCH, SecurityPromptTextCache, securityTextState, securityTextStates,
 } from '../securityPromptFiles';
 import { promptFile, promptsDir } from '../rolesPrompts';
+import { ownedTemp } from './ownedTemp';
 
 /** A data directory with these files written under prompts/, as raw bytes; the test removes it. */
 function withPromptFiles(files: Readonly<Record<string, Uint8Array>>): string {
-  const dataDir = mkdtempSync(join(tmpdir(), 'coai-security-prompts-'));
+  const dataDir = ownedTemp('coai-security-prompts');
   mkdirSync(promptsDir(dataDir), { recursive: true });
   for (const [id, bytes] of Object.entries(files)) writeFileSync(promptFile(dataDir, id)!, bytes);
   return dataDir;
@@ -109,7 +109,7 @@ test('the size limit is the one the shared file declares', () => {
 });
 
 test('the files on disk read as the same five states, and an id that may not become a path reads as none', async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), 'coai-security-prompts-'));
+  const dataDir = ownedTemp('coai-security-prompts');
   try {
     mkdirSync(promptsDir(dataDir), { recursive: true });
     const write = (id: string, text: string): void => writeFileSync(promptFile(dataDir, id)!, text, 'utf8');

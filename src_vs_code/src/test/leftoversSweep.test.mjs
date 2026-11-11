@@ -1,6 +1,5 @@
 import '../../scripts/inRunFolder.cjs';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -17,7 +16,7 @@ const { startOfRunSweep, loadOwned } = runner;
  * The extension runner's start-of-run sweep (E5 S2-B, `todo/PLAN_test_leftovers_E5_S2_spec.md` B.4 N-S1..N-S9, L5): the MOUNTED reference with this
  * repository's token bound LAST, behind the ONE switch `shared/leftovers-sweep.json`, over the REAL temp root, before the runner makes anything.
  *
- * The private roots here are made with `mkdtemp` under `os.tmpdir()` (this file is outside `src_mcp/tests/Leftovers`; S6's baseline carries it).
+ * The private roots here are owned folders of the wrap (`ownedDir`, claimed first), inside the run folder (this file is outside `src_mcp/tests/Leftovers`).
  * A dead owner is a pid the injected probe calls `dead`: never the real probe on an exited child's pid (Windows hands exited pids to the next process),
  * except N-S9, which exists to run the real wrapper and the real reference on a real Windows runner.
  */
@@ -32,7 +31,8 @@ const otherOwner = ownerToken === 'u1001' ? 'u1002' : 'u1001';
 const probe = (pid) => (pid === DEAD_PID ? { state: 'dead' } : mount.processProbe(pid));
 
 function privateRoot(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'leftovers-sweep-'));
+  const { owned } = ownedModule;
+  const root = owned.ownedDir(t, 'leftovers-sweep', { parent: fs.realpathSync.native(owned.tempRoot()) });
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }

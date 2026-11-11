@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, test } from 'node:test';
 
@@ -12,6 +11,7 @@ import { appendLine } from '../jsonlLedger';
 import type { FilePresence } from '../pathFamily';
 import { PathProbes, type ProbeOptions } from '../pathProbes';
 import { PathWatch } from '../pathWatch';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * A settings change must not switch the storage guard off (research/PLAN_paths_per_side.md E5.0/E5.7, the risk consultation
@@ -41,7 +41,7 @@ let parent = '';
 
 function rig(options: Partial<ProbeOptions> = {}): Rig {
   forgetFindingsBoard();
-  parent = mkdtempSync(join(tmpdir(), 'coai-refresh-'));
+  parent = ownedTemp('coai-refresh');
   const root = join(parent, 'named-but-missing');
   useStorageSettings({ directory: root, side: '' }, NOTHING_CHOSEN);
   const state: Rig = { root, watch: undefined as unknown as PathWatch, answer: 'absent' };

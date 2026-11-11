@@ -1,11 +1,11 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatTurnRecord } from '../chatUsage';
 import { CHAT_USAGE_FILE, chatUsagePath, flushChatUsage, readChatUsage, recordChatTurn } from '../chatUsageFile';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The chat ledger's file, against a real directory.
@@ -19,7 +19,7 @@ import { CHAT_USAGE_FILE, chatUsagePath, flushChatUsage, readChatUsage, recordCh
  */
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-chat-ledger-'));
+  return ownedTemp('coai-chat-ledger');
 }
 
 function record(over: Partial<ChatTurnRecord> = {}): ChatTurnRecord {

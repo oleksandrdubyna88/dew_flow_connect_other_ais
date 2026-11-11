@@ -2,10 +2,10 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * `.github/scripts/lib/resolved.mjs` — where `git` and `gh` are, for every script in that folder.
@@ -32,7 +32,7 @@ function resolveOn(pathVariable: string, name: string): { code: number; said: st
 }
 
 test('it answers the absolute path of a program on PATH', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'resolver-'));
+  const dir = ownedTemp('resolver');
   try {
     const program = path.join(dir, 'coai-probe' + (process.platform === 'win32' ? '.exe' : ''));
     fs.writeFileSync(program, '');
@@ -49,7 +49,7 @@ test('it answers the absolute path of a program on PATH', () => {
 test('a program that is not on PATH is refused by name, never spawned', () => {
   // The SAME fixture holds a real program, so the refusal is proved to come from looking in it rather
   // than from a PATH that could not be read at all. (The gate's code round.)
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'resolver-'));
+  const dir = ownedTemp('resolver');
   try {
     const present = path.join(dir, 'coai-probe' + (process.platform === 'win32' ? '.exe' : ''));
     fs.writeFileSync(present, '');

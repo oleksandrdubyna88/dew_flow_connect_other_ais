@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
@@ -10,6 +9,7 @@ import {
   consultantBody, featureBody, gateBody, prepareGate, questionBody, CONSULTANT_OUTPUT, CONSULTANT_SOURCE, FEATURE_OUTPUT, FEATURE_SOURCE,
   OUTPUT, QUESTION_OUTPUT, QUESTION_SOURCE,
 } from '../../scripts/prepare-gate.mjs';
+import { owned } from '../../scripts/owned.mjs';
 
 test('only leading metadata is removed and a later delimiter remains in the gate body', () => {
   const body = '<!-- coai-snippet v5 -->\n## Multi-model review gate (ConnectOtherAIs)\n\nFirst.\n---\nSecond.\n';
@@ -44,7 +44,7 @@ test('the ownership markers a rule carries are metadata too, and never reach the
 });
 
 test('the real pinned resolver rejects a dirty or wrong mount and leaves no stale build policy', async t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-pinned-gate-'));
+  const root = owned.ownedDir(t, 'coai-pinned-gate', { parent: fs.realpathSync.native(owned.tempRoot()) });
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
   const sourceMount = path.join(sourceRoot, '.agents/conventions');
@@ -120,7 +120,7 @@ async function exported(file, name) {
 }
 
 test('missing canonical checkout fails preparation and invalidates previous generated policy', t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-prepare-gate-'));
+  const root = owned.ownedDir(t, 'coai-prepare-gate', { parent: fs.realpathSync.native(owned.tempRoot()) });
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const output = path.join(root, OUTPUT);
   fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -177,7 +177,8 @@ test('a pinned mount without the feature rule fails naming it, and says to move 
  * predates that rule: nothing is dirty and nothing mismatches, the file is simply not there.
  */
 function pinnedMountWithout(t, file, id) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), `coai-gate-no-${path.parse(file).name}-`));
+  // The name is cut to the wrap's 31 characters: the prefix keeps the file's own name without its repeated `coai-`.
+  const root = owned.ownedDir(t, `gate-no-${path.parse(file).name.replace(/^coai-/, '')}`, { parent: fs.realpathSync.native(owned.tempRoot()) });
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
   const sourceMount = path.join(sourceRoot, '.agents/conventions');

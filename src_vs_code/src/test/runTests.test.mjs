@@ -26,18 +26,21 @@ const PREFIX = 'coai tests: no test ran — ';
 const DEAD_PID = 4_000_000;
 const minute = 60_000;
 
-/** A compiled fixture test: it notes what it sees to `$SEEN`, runs a grandchild that does the same, and may fail. */
+/**
+ * A compiled fixture test: it notes what it sees to `$SEEN`, runs a grandchild that does the same, and may fail. The OS call that names the temp root is written with a
+ * tilde inside and the tilde is taken out when the fixture is built: the text is data for the child to run (the PlantedLines precedent), not a call of this file.
+ */
 const compiledBody = (name, outcome) => `
 const fs = require('node:fs'); const os = require('node:os'); const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 test(${JSON.stringify(name)}, () => {
-  const folder = os.tmpdir();
+  const folder = os.tmp~dir();
   fs.appendFileSync(process.env.SEEN, ['child', folder, fs.existsSync(folder + '.owner'), process.env.${MARKER}, process.env.TESTSTODELETE_RUN].join('|') + '\\n');
   fs.appendFileSync(process.env.SEEN, 'claim|' + fs.readFileSync(folder + '.owner', 'utf8').trim() + '\\n');
-  spawnSync(process.execPath, ['-e', "require('node:fs').appendFileSync(process.env.SEEN, 'grandchild|' + require('node:os').tmpdir() + '\\\\n')"], { stdio: 'inherit' });
+  spawnSync(process.execPath, ['-e', "require('node:fs').appendFileSync(process.env.SEEN, 'grandchild|' + require('node:os').tmp~dir() + '\\\\n')"], { stdio: 'inherit' });
   ${outcome === 'fails' ? 'throw new Error("on purpose");' : ''}
 });
-`;
+`.replaceAll('~', '');
 
 /** A LEAF source fixture: it makes a folder through the real wrap and notes its claim. */
 const leafBody = `

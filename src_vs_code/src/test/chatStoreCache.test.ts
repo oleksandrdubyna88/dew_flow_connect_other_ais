@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ConversationIndex, mustReread } from '../chatStoreCache';
@@ -20,6 +19,7 @@ import {
   sourceOfTerminal,
 } from '../chatStore';
 import { ChatMessage } from '../chatPage';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * The index the picker draws from, against a REAL directory.
@@ -34,7 +34,7 @@ import { ChatMessage } from '../chatPage';
 const said = (role: 'you' | 'model', text: string): ChatMessage => ({ role, text });
 
 function home(): string {
-  return mkdtempSync(join(tmpdir(), 'coai-chat-index-'));
+  return ownedTemp('coai-chat-index');
 }
 
 function record(over: Partial<ConversationRecord> & { readonly id: string }): ConversationRecord {

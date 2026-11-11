@@ -6,6 +6,7 @@ import type { DbLog } from '../roundsDb';
 import { DEFAULT_LIMIT, readLog } from '../roundsDbRead';
 import { blindSpotsHtml } from '../roundsLog';
 import { logCommandOf, type RoundsLogHooks, workFor } from '../roundsLogMessages';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * *What it keeps missing*, over a period — the half the SERVER counts (operator, 2026-09-25).
@@ -140,12 +141,10 @@ test('the real server echoes the period it counted over, and the real reader car
     t.skip('the server is not built');
     return;
   }
-  const { mkdtempSync, rmSync } = await import('node:fs');
-  const { tmpdir } = await import('node:os');
-  const { join } = await import('node:path');
+  const { rmSync } = await import('node:fs');
   const { spawnSync } = await import('node:child_process');
   // A data directory of its own, so the answer never comes from the machine's own database.
-  const data = mkdtempSync(join(tmpdir(), 'coai-since-'));
+  const data = ownedTemp('coai-since');
   const run = async (args: readonly string[]) => {
     const ran = spawnSync(builtServer(), [...args], { encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000 });
     return { code: ran.status ?? 1, output: ran.stdout ?? '' };

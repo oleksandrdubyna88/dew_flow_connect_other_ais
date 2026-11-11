@@ -1,13 +1,14 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 
 import { readTailSince } from '../ledgerTail';
 import { roundsLoader } from '../roundCountsRead';
 import { parseUsageLine } from '../usage';
+import { ownedTemp } from './ownedTemp';
+import { tempRoot } from './tempRoot';
 
 /**
  * The ledger read for the Rounds block stops at the oldest window (story 2.2 of research/PLAN_every_round_is_counted.md):
@@ -22,7 +23,7 @@ function lineAt(ms: number, n: number): string {
 }
 
 function ledgerFile(lines: readonly string[]): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-tail-'));
+  const dir = ownedTemp('coai-tail');
   const file = path.join(dir, 'usage.jsonl');
   fs.writeFileSync(file, lines.map((one) => `${one}\n`).join(''));
 
@@ -57,7 +58,7 @@ test('a line torn across a chunk boundary is joined, not lost or misread', async
 });
 
 test('AnUnreadableLedger_IsAFailureThatSaysWhy_NeverNoLines — a ledger that exists and will not read is not "nothing spent"', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-tail-'));
+  const dir = ownedTemp('coai-tail');
 
   const tail = await readTailSince(dir, 0, parseUsageLine); // a directory where the file should be: it exists, it will not read
 
@@ -67,7 +68,7 @@ test('AnUnreadableLedger_IsAFailureThatSaysWhy_NeverNoLines — a ledger that ex
 });
 
 test('the loader hands the ledger\'s failure to the snapshot beside the counts', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-tail-'));
+  const dir = ownedTemp('coai-tail');
   const load = roundsLoader(() => 'coai-mcp', dir, async () => ({ code: 64, output: '' }));
 
   const loaded = await load(NOW);
@@ -78,7 +79,7 @@ test('the loader hands the ledger\'s failure to the snapshot beside the counts',
 });
 
 test('a ledger that does not exist is no lines; a torn last line costs itself alone', async () => {
-  const missing = await readTailSince(path.join(os.tmpdir(), 'no-such-dir-coai', 'usage.jsonl'), 0, parseUsageLine);
+  const missing = await readTailSince(path.join(tempRoot(), 'no-such-dir-coai', 'usage.jsonl'), 0, parseUsageLine);
   assert.deepEqual(missing.records, []);
   assert.equal(missing.failure, '', 'a ledger never written is nothing run yet, not a failure');
   const file = ledgerFile([lineAt(NOW - 1000, 1)]);

@@ -2,9 +2,9 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { ownedTemp } from './ownedTemp';
 
 /**
  * `draft-release.sh`, run for real against a `gh` that records what it was asked to do.
@@ -48,7 +48,7 @@ interface Run { code: number; calls: string[]; said: string }
  * @param state what `gh release view` should report: a draft, a published release, or nothing.
  */
 function draft(state: 'draft' | 'published' | 'absent', notes: string): Run {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'draftrelease-'));
+  const dir = ownedTemp('draftrelease');
   try {
     const log = path.join(dir, 'calls.txt');
     const notesFile = path.join(dir, 'notes.md');
@@ -216,7 +216,7 @@ test('the extractor and the drafter work as one chain, the way the job runs them
   { skip: needsShell }, () => {
     // Each half is proved on its own above. This is the seam: the file one writes is the file the
     // other reads, and what reaches `gh` is the prose from CHANGELOG.md rather than a sentence.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'draftchain-'));
+    const dir = ownedTemp('draftchain');
     try {
       const changelog = path.join(dir, 'CHANGELOG.md');
       const notes = path.join(dir, 'release-notes.md');
@@ -267,7 +267,7 @@ test('the extractor and the drafter work as one chain, the way the job runs them
 
 test('a notes path that is a directory is refused, not read', { skip: needsShell }, () => {
   // `[ -r ]` is true for a directory and for some broken symlinks. What the script needs is a FILE.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'draftrelease-'));
+  const dir = ownedTemp('draftrelease');
   try {
     const ran = spawnSync('bash', [script, 'mcp-v0.28.0', 'title', dir],
       { encoding: 'utf8', timeout: 60_000, killSignal: 'SIGKILL' });

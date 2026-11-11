@@ -1,7 +1,6 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import {
@@ -11,6 +10,7 @@ import {
   count,
   everySourceFile,
 } from '../../scripts/count-notifications.mjs';
+import { owned } from '../../scripts/owned.mjs';
 
 /**
  * The published count of places this extension speaks to a person cannot drift.
@@ -63,14 +63,14 @@ test('the count is internally consistent, which the hand-written one was not', (
   assert.ok(counted.sites > 0, 'a counter that finds nothing would pass every other assertion here');
 });
 
-test('the totals are what a person counting by hand would get', () => {
+test('the totals are what a person counting by hand would get', (t) => {
   // The three assertions this replaces restated the definitions: `sites` IS `direct + routed` and
   // `events` IS `sites - modal`, so asserting those equalities could not fail whatever the counter
   // did to the inputs. A shared aggregation error would have sailed through all three. (CodeRabbit.)
   //
   // So the numbers here are written by hand from a fixture small enough to count by eye: two direct
   // calls in one file, three routed calls in another, one of them a modal question.
-  const here = mkdtempSync(join(tmpdir(), 'coai-sites-'));
+  const here = owned.ownedDir(t, 'coai-sites', { parent: realpathSync.native(owned.tempRoot()) });
   try {
     writeFileSync(join(here, 'old.ts'), [
       'void vscode.window.showWarningMessage("one");',
@@ -100,13 +100,13 @@ test('the totals are what a person counting by hand would get', () => {
   }
 });
 
-test('a `code` belongs to a notice, and an object that merely has a `code` property does not', () => {
+test('a `code` belongs to a notice, and an object that merely has a `code` property does not', (t) => {
   // Two maps in this tree have a `code` key and nothing to do with notifications: TAB_NAMES in
   // `rolesPage.ts` holds 'Code review', and LANGUAGES in `settingsShape.ts` holds de/en/es/ru/uk.
   // The first pattern collected the one, the shape-constrained second collected the other five -
   // into a list the artefact calls the suppression key space. Anchoring on the `source` that always
   // precedes a notice's `code` tells them apart. (CodeRabbit found the second.)
-  const here = mkdtempSync(join(tmpdir(), 'coai-sites-'));
+  const here = owned.ownedDir(t, 'coai-sites', { parent: realpathSync.native(owned.tempRoot()) });
   try {
     writeFileSync(join(here, 'maps.ts'), [
       "const TAB_NAMES = { plan: 'Plan review', code: 'Code review' };",
@@ -329,9 +329,9 @@ test('the scan sees every extension the compiler ships, not only .ts', () => {
   assert.deepEqual([...SOURCE_EXTENSIONS], ['.ts', '.tsx', '.mts', '.cts']);
 });
 
-test('a file in one of those extensions is actually picked up, not merely listed in a constant', () => {
+test('a file in one of those extensions is actually picked up, not merely listed in a constant', (t) => {
   // The companion the previous test needs: a list of extensions nothing reads would pass it.
-  const here = mkdtempSync(join(tmpdir(), 'coai-sites-'));
+  const here = owned.ownedDir(t, 'coai-sites', { parent: realpathSync.native(owned.tempRoot()) });
   try {
     writeFileSync(join(here, 'panel.tsx'), 'void vscode.window.showWarningMessage("hi");\n');
     writeFileSync(join(here, 'types.d.ts'), 'declare const x: number;\n');
@@ -345,13 +345,13 @@ test('a file in one of those extensions is actually picked up, not merely listed
   }
 });
 
-test('the scan counts code and not prose, in both directions', () => {
+test('the scan counts code and not prose, in both directions', (t) => {
   // Found by making a comment that says `vscode.window.showErrorMessage` while fixing something
   // else: the population went up by one. The scan had always counted the words in docstrings, and
   // this file's subject matter is those very words. It is worse than a nuisance — a comment
   // mentioning `notify(` inflates `routed` and therefore the POPULATION, which is the number the
   // completeness promise is made over.
-  const here = mkdtempSync(join(tmpdir(), 'coai-sites-'));
+  const here = owned.ownedDir(t, 'coai-sites', { parent: realpathSync.native(owned.tempRoot()) });
   try {
     writeFileSync(
       join(here, 'talker.ts'),
