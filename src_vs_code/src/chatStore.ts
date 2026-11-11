@@ -297,7 +297,9 @@ type OriginRule =
   | 'as written'
   /**
    * Either on disk, and it is read as what the NAME says: a `Creds: <host> / <session>` name reads its session (on
-   * another machine), any other name does not.
+   * another machine), any other name does not. This row only tells `agreeOnOrigin` to accept either value; the terminal
+   * branch itself is held by `readsSession`, which reads the name (it needs the narrowed `source.name`, so it does not
+   * look the rule up here).
    */
   | 'by name';
 

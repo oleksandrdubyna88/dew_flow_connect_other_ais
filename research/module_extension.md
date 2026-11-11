@@ -13531,7 +13531,7 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This sectio
   fails). A leading `-` is refused by the pattern itself, so no ssh or tmux option can be injected by a name; a `.` is legal in a host and not in a session
   (tmux changes it). The refusal of a `malformed` name names the part that failed, in one of three sentences — the shape (no ` / `, or more than one), the
   host, the tmux session — quoting the part as it is, at most 80 characters, with `…` after a cut.
-- **The flag is derived, never stored.** `readsSession(source, fromSession)` (`chatStore.ts`) answers, for a `terminal` source, `credsSession(name).kind ===
+- **The flag is derived on read, whatever was stored** (`chatPersist.ts` still writes the thread's value). `readsSession(source, fromSession)` (`chatStore.ts`) answers, for a `terminal` source, `credsSession(name).kind ===
   'session'`, whatever `fromSession` was passed or written; the `terminal` row of `ORIGIN` is `by name` (either value is accepted on disk, neither is dropped).
   So an E1 conversation of a `Creds:` terminal, saved with `fromSession: false`, gains *Asked* when it is restored or reused under E2 (parent change 1.1,
   point 1); a record of any other terminal still reads `false`. `CONVERSATION_VERSION` does not move.
@@ -13542,5 +13542,5 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This sectio
   sentence is what a `Creds:` chat shows when *Asked* is pressed; after it, this is the second line of defence. A namesake in the local home is never read
   for a terminal.
 - **Tests**: `credsSession.test.ts` (new: S1-T1…T4 the pattern, `other`, the three sentences and 30+ hostile names; S1-T8 the seam and the first statement of
-  `pinSession`; S1-T9 `NO_LOCAL_SESSION` and the check in `resolveAndPin`), `chatStore.test.ts` (S1-T5, S1-T6, replacing E1's *no terminal reads a session*),
+  `pinSession`; S1-T9 `NO_LOCAL_SESSION` and the check in `resolveAndPin`), `chatStore.test.ts` (S1-T5, S1-T6, replacing E1's *no terminal reads a session*; and the round-trip fixture, `fromSession` false → true), `chatStoreRefile.test.ts` (its terminal fixture, false → true),
   `chatSourceWiring.test.ts` (S1-T7, and the pin's two new call sites), `chatSweepWiring.test.ts`.

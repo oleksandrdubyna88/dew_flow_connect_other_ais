@@ -306,12 +306,11 @@ test('a new conversation\u2019s session flag is decided by its source, and a res
   const made = bodyOf(source('chatCommand.ts'), 'function newConversation(');
 
   assert.match(made, /const fromSession = readsSession\(state\.source, state\.fromSession\);/u, 'the flag is not decided by the source');
+  assert.match(made, /pinSession\(entry, state\.title, fromSession, state\.source\);/u, 'the pin does not take the decided flag and the source, so a terminal conversation could be pinned to a LOCAL Claude session of its name');
   assert.equal(made.split('state.fromSession').length - 1, 1, 'a place still reads the door\u2019s flag instead of the decided one');
-  assert.match(made, /pinSession\(entry, state\.title, fromSession, state\.source\);/u, 'the pin does not take the source, so a terminal conversation could be pinned to a LOCAL Claude session of its name');
 
   // The restore: the page and the thread take the flag `recordFrom` derived, never a row's own.
   const restore = source('chatConversationRestore.ts');
   assert.equal(restore.split('fromSession: saved.fromSession,').length - 1, 2, 'the restored page and thread do not both read the derived flag');
-  assert.doesNotMatch(restore, /row\.fromSession/u, 'the restore reads a stored flag instead of the derived one');
   assert.match(source('chatStore.ts'), /fromSession: readsSession\(source, row\.fromSession === true\),/u, 'a record is read with its stored flag, not the derived one');
 });

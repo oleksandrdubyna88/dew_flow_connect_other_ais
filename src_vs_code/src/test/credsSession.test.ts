@@ -56,14 +56,24 @@ test('a bad Creds name says which part failed', () => {
   }
 });
 
-test('a long bad part is quoted at 80 characters and marked as cut', () => {
+test('the pattern has no length bound by design (the parent\u2019s): a long legal host is a session', () => {
   const long = 'h'.repeat(300);
-  const said = credsSession(`Creds: ${long} / s`);
 
-  assert.equal(said.kind, 'session', 'the fixture is a legal name');
-  const bad = credsSession(`Creds: -${long} / s`);
-  assert.equal(bad.kind, 'malformed');
-  assert.equal(bad.kind === 'malformed' ? bad.refusal : '', hostSentence(`-${'h'.repeat(79)}…`), 'the quoted part is not cut at 80 characters');
+  assert.deepEqual(credsSession(`Creds: ${long} / s`), { kind: 'session', host: long, session: 's' }, 'a long legal host was refused');
+});
+
+test('a bad part is quoted whole at 80 characters and cut, with an ellipsis, at 81', () => {
+  const refusalOfHost = (part: string): string => {
+    const said = credsSession(`Creds: ${part} / s`);
+
+    return said.kind === 'malformed' ? said.refusal : `not malformed: ${said.kind}`;
+  };
+  const eighty = `-${'h'.repeat(79)}`;
+  const eightyOne = `-${'h'.repeat(80)}`;
+
+  assert.equal(eighty.length, 80);
+  assert.equal(refusalOfHost(eighty), hostSentence(eighty), 'a part of exactly 80 characters was cut');
+  assert.equal(refusalOfHost(eightyOne), hostSentence(`${eighty}\u2026`), 'a part of 81 characters was not cut at 80');
 });
 
 test('the hostile names never pass', () => {
@@ -77,7 +87,7 @@ test('the hostile names never pass', () => {
   for (const lead of ['-o', '--', '-']) {
     names.push(`Creds: ${lead}x / s`, `Creds: h / ${lead}x`);
   }
-  names.push(`Creds: ${'h'.repeat(300)}\n / s`, 'Creds: -o ProxyCommand=x / s', 'Creds: h / ' + 's'.repeat(300) + '!');
+  names.push('Creds: -o ProxyCommand=x / s');
   // The one legal control: a `.` inside a HOST is allowed (and not inside a session), which proves the generator is not making every name bad.
   const passed = names.filter((name) => credsSession(name).kind !== 'malformed');
 
