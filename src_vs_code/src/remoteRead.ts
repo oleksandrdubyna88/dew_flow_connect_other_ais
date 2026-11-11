@@ -142,6 +142,17 @@ export function withAnswer(list: unknown, host: string, answer: 'yes' | 'no', no
   return [...kept.filter((row) => !dropped.has(row)), { host, answer, askedUtc: now }];
 }
 
+/**
+ * Whether the terminal's two overflow items are shown (the context key `coai.terminalReadsSession`): a name that starts with
+ * `Creds: ` and whose host is not answered "no". A name that is not well made is TRUE on purpose — its press says which part
+ * failed — and a name that does not start so is false. A damaged answer list reads as no answer, so the items stay.
+ */
+export function readsKey(name: string, list: unknown): boolean {
+  const creds = credsSession(name);
+
+  return creds.kind === 'malformed' || (creds.kind === 'session' && consentOf(list, creds.host) !== 'no');
+}
+
 const byHost = (a: HostAnswer, b: HostAnswer): number => Number(a.host > b.host) - Number(a.host < b.host);
 
 /** The remembered answers, by host name, for the panel's list; a damaged list is none. */

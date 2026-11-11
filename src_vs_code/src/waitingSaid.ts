@@ -1,5 +1,6 @@
-import { askedAsText } from './claudeQuestion';
-import type { Waiting } from './claudeSessions';
+import { askedAsText, lastAsked } from './claudeQuestion';
+import { Waiting, unrecognisedSaid, waitingIn } from './claudeSessions';
+import type { RemoteAnswer } from './remoteRead';
 
 /**
  * What the "take the question" doors say about what was found (E2.S4, contract C5).
@@ -43,4 +44,28 @@ export function waitingSaid(found: readonly Waiting[]): { text: string; refusal:
     text: '',
     refusal: failed?.kind === 'failed' ? failed.refusal : 'Claude Code has asked nothing in this folder yet.',
   };
+}
+
+/** The one session a terminal reads is named by what this says; the lines came over ssh, so there is no file of ours to point at. */
+const THE_SESSION = 'the Claude session of this terminal';
+
+/** What the lines of the one remote session hold, in the shape `waitingSaid` takes: a waiting question, one already answered, one this build cannot read, or nothing. */
+function waitingInLines(lines: readonly string[]): Waiting {
+  const asked = lastAsked(lines);
+  if (asked.kind === 'asked') {
+    return waitingIn([{ file: '', asked: asked.set }]);
+  }
+
+  return asked.kind === 'unreadable' ? { kind: 'failed', refusal: unrecognisedSaid(THE_SESSION) } : { kind: 'none' };
+}
+
+/**
+ * What a terminal door hands the person from the road's answer: the waiting question as text, or the sentence that says why not.
+ *
+ * <p>The identity of the session is already exact (it was read by its id), so nothing is looked for by name. Whether the tail was
+ * whole is not asked here: the road has already turned an unfinished read with no question into its own sentence, and a refusal
+ * of the road arrives as it is. The remaining words are `waitingSaid`'s, the same ones the local road says.</p>
+ */
+export function questionSaid(answer: RemoteAnswer): { text: string; refusal: string } {
+  return answer.kind === 'refused' ? { text: '', refusal: answer.refusal } : waitingSaid([waitingInLines(answer.lines)]);
 }

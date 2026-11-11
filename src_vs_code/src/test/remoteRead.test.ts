@@ -7,7 +7,7 @@ import { projectDirNames } from '../claudeSessions';
 import { RemoteRead, UNREADABLE_SAID } from '../remoteFrame';
 import {
   HostAnswer, PickRow, Picked, RemoteAnswer, RoadSeams,
-  answerFrom, answersOf, consentOf, nextStep, onePerTerminal, reachOf, remoteRoad, withAnswer, withoutHost,
+  answerFrom, answersOf, consentOf, nextStep, onePerTerminal, reachOf, readsKey, remoteRoad, withAnswer, withoutHost,
 } from '../remoteRead';
 import { RemoteCall, TAIL_MAX, operandsOf } from '../remoteScript';
 import { RemoteRun } from '../remoteSsh';
@@ -480,14 +480,33 @@ test('S3-T10b: the cut is read in remoteRead.ts only — no module that takes th
   const dir = path.join(__dirname, '..', '..', 'src');
   const files = fs.readdirSync(dir).filter((name) => name.endsWith('.ts'));
   const talksToTheRoad = (text: string): boolean => /from '\.\/(remoteFrame|remoteRead|remoteSessionHost)'/u.test(text);
-  const readers = files.filter((name) => talksToTheRoad(fs.readFileSync(path.join(dir, name), 'utf8')));
-  for (const wanted of ['remoteRead.ts', 'remoteSessionHost.ts']) {
+  // `waitingSaid.ts` is named, not found: the words of the doors must never read the cut, whatever they import (S4, the S3 review).
+  const named = ['waitingSaid.ts'];
+  const readers = files.filter((name) => named.includes(name) || talksToTheRoad(fs.readFileSync(path.join(dir, name), 'utf8')));
+  for (const wanted of ['remoteRead.ts', 'remoteSessionHost.ts', ...named]) {
     assert.ok(readers.includes(wanted), `the scan did not find ${wanted}, so it proves nothing`);
   }
   assert.ok(/\.cut\b/u.test(fs.readFileSync(path.join(dir, 'remoteRead.ts'), 'utf8')), 'remoteRead.ts does not read the cut, so the one place is not the one place');
   const stray = readers.filter((name) => name !== 'remoteRead.ts')
     .filter((name) => /\bcut\b/u.test(fs.readFileSync(path.join(dir, name), 'utf8')));
   assert.deepEqual(stray, [], 'a cut tail was reported as nothing asked: a module other than remoteRead.ts reads `cut`');
+});
+
+test('S4-T9: the context key follows the name and the answer', () => {
+  const ask: unknown = [];
+  const no = withAnswer([], H, 'no', NOW);
+  const yes = withAnswer([], H, 'yes', NOW);
+
+  assert.equal(readsKey(NAME, ask), true, 'a Creds terminal with no answer yet hides the items');
+  assert.equal(readsKey(NAME, yes), true, 'a host that said yes hides the items');
+  assert.equal(readsKey(NAME, no), false, 'a host that said no still shows the items');
+  assert.equal(readsKey('Creds: before x', ask), true, 'a bad creds name hides the items that explain it');
+  assert.equal(readsKey('Creds: h / s.x', no), true, 'a bad creds name was judged by an answer of some host');
+  for (const other of ['bash', 'pwsh', 'Creds run: x', 'Creds VPN: x', 'creds: h / s', '']) {
+    assert.equal(readsKey(other, yes), false, `the terminal “${other}” shows the items`);
+  }
+  assert.equal(readsKey(NAME, 'junk'), true, 'a damaged answer list hid the items instead of asking again');
+  assert.equal(readsKey(`Creds: other-host / ${S}`, no), true, 'the answer of one host was applied to another');
 });
 
 test('S3-T11: the host road says five different things', async () => {

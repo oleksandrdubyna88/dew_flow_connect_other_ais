@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { AskedSet, askedAsText } from '../claudeQuestion';
 import type { Waiting, WaitingSession } from '../claudeSessions';
 import { bodyOf, sourceOf } from './sourceReading';
-import { waitingSaid } from '../waitingSaid';
+import type { RemoteAnswer } from '../remoteRead';
+import { questionSaid, waitingSaid } from '../waitingSaid';
 
 /**
  * The words the "take the question" doors say, moved out of `chatCommand.ts` (E2.S4, contract C5).
@@ -71,5 +72,46 @@ test('S4-T1: the body of questionWaitingHere calls it, and holds none of the sen
   assert.ok(body.includes('waitingSaid('), 'questionWaitingHere no longer calls waitingSaid, so the two roads can drift apart');
   for (const sentence of ['More than one Claude Code session', 'has already been answered', 'asked nothing in this folder', 'it is not the one this tab']) {
     assert.ok(!body.includes(sentence), `questionWaitingHere still holds its own copy of “${sentence}…”`);
+  }
+});
+
+const asks = (id: string): string => JSON.stringify({
+  type: 'assistant',
+  sessionId: 's',
+  timestamp: '2026-11-11T09:00:00.000Z',
+  message: { content: [{ type: 'tool_use', id, name: 'AskUserQuestion', input: { questions: [{
+    header: 'Scope', question: 'How far should this go?', multiSelect: false, options: [{ label: 'All of it', description: 'every part' }],
+  }] } }] },
+});
+const answers = (id: string): string => JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'All of it' }] } });
+const said = (text: string): string => JSON.stringify({ type: 'user', message: { content: text }, origin: { kind: 'human' } });
+const lines = (...rows: readonly string[]): RemoteAnswer => ({ kind: 'lines', lines: rows, note: '' });
+
+test('S4-T4: lines with a waiting question are that question as text', () => {
+  const taken = questionSaid(lines(said('start'), asks('q1')));
+
+  assert.equal(taken.refusal, '');
+  assert.ok(taken.text.includes('How far should this go?') && taken.text.includes('All of it — every part'), 'the question and its option were not handed over');
+});
+
+test('S4-T4: lines with no question, a tail that was whole, say nothing was asked — in the local words', () => {
+  assert.deepEqual(questionSaid(lines(said('start'))), { text: '', refusal: NOTHING }, 'a session with no question was not "asked nothing"');
+  assert.deepEqual(questionSaid(lines()), { text: '', refusal: NOTHING }, 'an empty tail was not "asked nothing"');
+});
+
+test('S4-T4: a question that was answered, and one this build cannot read, each have their own sentence', () => {
+  assert.deepEqual(questionSaid(lines(asks('q1'), answers('q1'))), { text: '', refusal: ANSWERED }, 'an answered question was handed over or called nothing');
+  const strange = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'a', name: 'AskUserQuestion', input: { prompts: [] } }] } });
+  const unreadable = questionSaid(lines(strange));
+
+  assert.equal(unreadable.text, '');
+  assert.ok(unreadable.refusal.startsWith('Claude Code asked something this build does not recognise'), 'a question this build could not read was called silence: ' + unreadable.refusal);
+  assert.ok(unreadable.refusal.endsWith('this needs a new release.'), 'the unreadable sentence lost its second half');
+});
+
+test('S4-T4: a refusal of the road is handed on unchanged, the truncated sentence among them', () => {
+  const truncated = 'No question was found in the last 4 MiB of the session on “h” that were read; an older one may be beyond the cut.';
+  for (const refusal of [truncated, 'Reading the Claude session on “h” is turned off.', 'No session was chosen, so nothing was read.']) {
+    assert.deepEqual(questionSaid({ kind: 'refused', refusal }), { text: '', refusal }, 'a refusal of the road was changed on its way to the person');
   }
 });

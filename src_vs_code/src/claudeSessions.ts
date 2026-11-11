@@ -1102,6 +1102,10 @@ async function promptsOf(file: string): Promise<readonly string[]> {
   return said;
 }
 
+/** What is said when a question was found that this build cannot read, `where` being the file or the session it was in. One sentence for the local road and the remote one. */
+export const unrecognisedSaid = (where: string): string =>
+  `Claude Code asked something this build does not recognise, in ${where}. The session format has changed — this needs a new release.`;
+
 /**
  * The question waiting in this folder's sessions, or the reason there is none.
  *
@@ -1170,11 +1174,7 @@ export async function waitingQuestion(
     } else if (asked.kind === 'unreadable') {
       // A question this build could not read is NOT silence. If Anthropic moves a field, the command
       // must say that rather than report that Claude is asking nothing. (codex, the code round.)
-      return {
-        kind: 'failed',
-        refusal: `Claude Code asked something this build does not recognise, in ${file}.`
-          + ' The session format has changed — this needs a new release.',
-      };
+      return { kind: 'failed', refusal: unrecognisedSaid(file) };
     }
   }
   const answer = waitingIn(sessions, looking);
