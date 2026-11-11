@@ -143,7 +143,6 @@ export function capture(
   return new Promise((resolve) => {
     const child = launch(target, args, launchOptions(shell, env, options));
     const overCap = byteCap(options?.maxStdoutBytes);
-
     let output = '';
     let answered = false;
     const answer = (code: number, text: string, ended?: CaptureEnd): void => {
@@ -155,7 +154,6 @@ export function capture(
       clearInterval(watch);
       resolve(captured(code, text, ended, options === undefined ? undefined : child.stderrTail()));
     };
-
     const watch = polling(stop, () => {
       // The same teardown the cap performs, for the same reason: the tree has to go.
       child.kill();
@@ -179,6 +177,9 @@ export function capture(
     child.writeAndEnd(input);
 
     child.onStdout((chunk) => {
+      if (answered) {
+        return; // the cap (or the end) has answered: nothing more is kept, and nothing is killed twice
+      }
       output += chunk;
       if (overCap(chunk)) {
         child.kill();

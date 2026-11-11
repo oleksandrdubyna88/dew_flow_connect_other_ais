@@ -1,9 +1,10 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { readFileSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import test from 'node:test';
+import test, { mock } from 'node:test';
+import { ChildProcess } from 'node:child_process';
 import { setTimeout as after } from 'node:timers/promises';
 import { launch, system32 } from '../processLauncher';
 import { capture } from '../versionProbe';
@@ -120,9 +121,15 @@ test('S2-T22: a child past the limit is gone', async () => {
   const answer = await capture(NODE, writesItsPid, false, 1_000, undefined, undefined, '', { killTree: true });
 
   assert.equal(answer.ended, 'timeout');
-  const pid = Number(readFileSync(pidFile, 'utf8'));
-  assert.ok(pid > 0, 'the child did not write its pid');
+  let pid = 0;
   try {
+    // The read is inside the try, and bounded: a file that is not there yet must not skip the cleanup below.
+    const written = Date.now() + 5_000;
+    while (!existsSync(pidFile) && Date.now() < written) {
+      await after(50);
+    }
+    pid = Number(readFileSync(pidFile, 'utf8'));
+    assert.ok(pid > 0, 'the child did not write its pid');
     const deadline = Date.now() + 5_000;
     while (alive(pid) && Date.now() < deadline) {
       await after(50);
@@ -130,7 +137,29 @@ test('S2-T22: a child past the limit is gone', async () => {
     assert.equal(alive(pid), false, 'a timed-out ssh was left running');
   } finally {
     // Whatever the verdict, no child of this test outlives it (a break-it that removes the kill must not hang the run).
-    if (alive(pid)) {
+    if (pid > 0 && alive(pid)) {
+      process.kill(pid, 'SIGKILL');
+    }
+    rmSync(pidFile, { force: true });
+  }
+});
+
+test('S2-T8 companion: after the cap the child is killed ONCE, however many chunks still arrive', async () => {
+  const pidFile = join(runFolder(), `pid-${randomUUID()}`);
+  // A child that ignores SIGTERM and keeps writing 600-byte chunks: more chunks arrive after the cap has answered.
+  const stubborn = ['-e', 'require("node:fs").writeFileSync(process.argv[1], String(process.pid)); process.on("SIGTERM", () => {}); setInterval(() => process.stdout.write("é".repeat(300)), 30);', pidFile];
+  const kills = mock.method(ChildProcess.prototype, 'kill');
+  let pid = 0;
+  try {
+    const answer = await capture(NODE, stubborn, false, 5_000, undefined, undefined, '', { maxStdoutBytes: 400 });
+    assert.equal(answer.ended, 'capped');
+    await after(300);
+    pid = Number(readFileSync(pidFile, 'utf8'));
+
+    assert.equal(kills.mock.callCount(), 1, 'every further chunk after the cap killed the child again (on win32 with killTree: one more taskkill each)');
+  } finally {
+    kills.mock.restore();
+    if (pid > 0 && alive(pid)) {
       process.kill(pid, 'SIGKILL');
     }
     rmSync(pidFile, { force: true });

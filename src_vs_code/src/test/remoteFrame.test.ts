@@ -273,6 +273,12 @@ test('S2-T31: the title rows are read by the one rule', () => {
   assert.ok(counted.kind === 'titles' && counted.scan.why === 'count' && counted.scan.tooLong === 3 && counted.scan.more, 'the scan\'s own words');
   assert.ok(counted.kind === 'titles' && counted.sessions.length === 1);
 
+  // First and last row DIFFER, so a parser that reads only the first row (or reads the rows in the wrong order) cannot pass.
+  const differs = readRemote(ok(frame(`COAI-FOLDER ${F1} ok`, `COAI-SESSION ${ID} 5 9 rows`, ...data(ai('B'), custom(S), ai('A')), 'COAI-ROWS 0 0', 'COAI-SCAN 1 all')), titlesCall);
+  assert.ok(differs.kind === 'titles');
+  assert.deepEqual(differs.kind === 'titles' ? differs.sessions[0]?.names : undefined, { latest: 'A', former: ['B', S] },
+    'the latest name is the LAST row and the former names are the earlier ones, by collectNames (the first row was taken as the latest)');
+
   unreadable(readRemote(ok(frame('COAI-FOLDER -home-git-elsewhere ok', 'COAI-SCAN 0 all')), titlesCall), 'frame', 'a COAI-FOLDER that is not in the call');
   unreadable(readRemote(ok(frame(`COAI-FOLDER ${F1} ok`, `COAI-SESSION ${ID} 5 9 rows`, 'COAI-SCAN 1 all')), titlesCall), 'frame', 'a rows session with no COAI-ROWS');
   unreadable(readRemote(ok(frame(`COAI-FOLDER ${F1} ok`)), titlesCall), 'frame', 'no COAI-SCAN');

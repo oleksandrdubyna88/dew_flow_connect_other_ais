@@ -212,13 +212,16 @@ function logged(seams: RemoteSeams, line: string): void {
   }
 }
 
+/** A line of ssh's stderr is text from the VM: its control characters (an escape sequence, a bell) never reach the person or the log. */
+const withoutControls = (line: string): string => line.replace(/\p{Cc}/gu, '');
+
 /**
  * ssh's last line: the last one that is not empty, control characters taken out, at most 300 characters with `…` after a cut.
  * It is ssh's own sentence (`Permission denied (publickey).`): the remote script's stderr goes to `/dev/null`, so no transcript
  * text can be in it.
  */
 function lastLine(tail: string): string {
-  const lines = tail.split('\n').map((line) => line.replace(/\p{Cc}/gu, ''));
+  const lines = tail.split('\n').map(withoutControls);
   const last = [...lines].reverse().find((line) => line.trim().length > 0) ?? '';
 
   return last.length > ERROR_LINE_MAX ? `${last.slice(0, ERROR_LINE_MAX)}…` : last;
@@ -229,7 +232,7 @@ function lastLine(tail: string): string {
  * break as ` | `. Never stdout, never an operand, never a caught error.
  */
 function logLine(host: string, session: string, end: string, stderrTail: string): string {
-  const said = stderrTail.slice(-LOG_TAIL_MAX).trimEnd().split(/\r?\n/u).join(' | ');
+  const said = stderrTail.slice(-LOG_TAIL_MAX).trimEnd().split(/\r?\n/u).map(withoutControls).join(' | ');
 
   return `ConnectOtherAIs: remote read host=${host} session=${session} end=${end} stderr=${said}`;
 }

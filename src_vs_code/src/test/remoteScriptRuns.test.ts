@@ -6,7 +6,7 @@ import {
   chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { delimiter, join } from 'node:path';
-import test from 'node:test';
+import test, { TestContext } from 'node:test';
 import { projectDirNames } from '../claudeSessions';
 import { RemoteRead, readRemote } from '../remoteFrame';
 import { REMOTE_SCRIPT, REMOTE_TOOLS, RemoteCall, TAIL_MAX } from '../remoteScript';
@@ -62,14 +62,14 @@ const SHELLS: readonly Shell[] = ((): readonly Shell[] => {
 const NO_SH = 'no POSIX sh on this machine';
 
 /** One test for each shell that is there; with none, one skipped test that says why. */
-function shellTest(name: string, body: (shell: Shell) => Promise<void>): void {
+function shellTest(name: string, body: (shell: Shell, context: TestContext) => Promise<void>): void {
   if (SHELLS.length === 0) {
     test(name, { skip: NO_SH }, () => undefined);
 
     return;
   }
   for (const shell of SHELLS) {
-    test(`${name} [${shell.label}]`, () => body(shell));
+    test(`${name} [${shell.label}]`, (context) => body(shell, context));
   }
 }
 
@@ -397,13 +397,14 @@ shellTest('S2-T35: every arm comes out of the real script', async (shell) => {
 
     // titles: an ai-title, a custom-title, the ai-title again, and one raw line of 3000 bytes that holds "custom-title".
     const long = `{"type":"custom-title","customTitle":"${'x'.repeat(3000)}"}`;
-    const rows = [JSON.stringify({ type: 'ai-title', aiTitle: 'A' }), JSON.stringify({ type: 'custom-title', customTitle: S }), long, JSON.stringify({ type: 'ai-title', aiTitle: 'A' })];
+    // The first and the last row DIFFER (B … A), so the order of the rows is observed: the latest name is the last row.
+    const rows = [JSON.stringify({ type: 'ai-title', aiTitle: 'B' }), JSON.stringify({ type: 'custom-title', customTitle: S }), long, JSON.stringify({ type: 'ai-title', aiTitle: 'A' })];
     transcript(t, '-home-git-a', ID, `${rows.join('\n')}\n`);
     const titles = await read(shell, t, { kind: 'titles', session: S, folders: ['-home-git-a', '-home-git-b'] });
     assert.ok(titles.read.kind === 'titles', JSON.stringify(titles.read));
     if (titles.read.kind === 'titles') {
       assert.equal(titles.read.sessions.length, 1);
-      assert.deepEqual(titles.read.sessions[0]?.names, { latest: 'A', former: [S] });
+      assert.deepEqual(titles.read.sessions[0]?.names, { latest: 'A', former: ['B', S] }, 'the title rows were not read in order by the one rule');
       assert.equal(titles.read.scan.tooLong, 1);
       assert.equal(titles.read.scan.why, 'all');
     }
@@ -430,9 +431,11 @@ shellTest('S2-T35: every arm comes out of the real script', async (shell) => {
   });
 });
 
-shellTest('S2-T35: a registry file that cannot be opened is registry-denied', async (shell) => {
+shellTest('S2-T35: a registry file that cannot be opened is registry-denied', async (shell, context) => {
   if (typeof process.getuid === 'function' && process.getuid() === 0) {
-    return; // root reads a file of mode 000: there is nothing to observe
+    context.skip('root reads a file of mode 000: there is nothing to observe');
+
+    return;
   }
   await withTree(async (t) => {
     registryRoad(t);
@@ -614,8 +617,10 @@ shellTest('S2-T41: a name the script cannot frame is left out, not sent', async 
   });
 });
 
-shellTest('S2-T42: the start time in the frame is the process\'s own (Linux)', async (shell) => {
+shellTest('S2-T42: the start time in the frame is the process\'s own (Linux)', async (shell, context) => {
   if (process.platform !== 'linux') {
+    context.skip('field 22 of /proc/<pid>/stat exists on Linux only');
+
     return;
   }
   const stat = readFileSync('/proc/self/stat', 'utf8');
@@ -653,6 +658,7 @@ shellTest('S2-T43: the title scan stops at its bounds', async (shell) => {
     // A fake `date` that answers 100 and then 109: the second call is past the 8 s of the scan.
     rmSync(join(t.bin, 'date'));
     writeFileSync(join(t.bin, 'date'), `#!/bin/sh
+PATH=/usr/bin:/bin
 n=0
 [ -f "${t.fx}/date" ] && n=$(cat "${t.fx}/date")
 echo $((n + 1)) > "${t.fx}/date"
@@ -661,5 +667,6 @@ if [ "$n" -eq 0 ]; then echo 100; else echo 109; fi
     const time = await read(shell, t, call);
     assert.ok(time.read.kind === 'titles' && time.read.scan.why === 'time', `a clock 9 s on did not stop the scan: ${JSON.stringify(time.read).slice(0, 200)}`);
     assert.ok(time.read.kind === 'titles' && time.read.sessions.length < 250, 'the scan went on after its time ran out');
+    assert.ok(Number(readFileSync(join(t.fx, 'date'), 'utf8')) >= 2, 'the fake date did not count its calls: its counter must be read with a cat that is on its own PATH');
   });
 });

@@ -735,13 +735,14 @@ export function runRemote(host: string, session: string, operands: readonly stri
 | `ended: 'not-started'` | `refused`: *"ssh could not be started: <the last line of the stderr tail>"* |
 | `code === 255` | `refused`: *"ssh could not read from “<host>”: <the last line of the stderr tail>"*; with an empty tail *"ssh could not read from “<host>” (exit 255)."* |
 | any other `code` | `answered` with that `code` and the stdout. (`readRemote` makes a code that is not 0 `unreadable`.) |
+| `capture` or `exists` rejects or throws (a seam failed; added by the E2.S2 review) | `refused`: *"ssh could not be run, so the Claude session on “<host>” cannot be read."* — nothing of the caught error in it; the log line is `end=not-started` with an empty tail. S2-T20 holds the sentence |
 
    "The last line" = the last line that is not empty, control characters taken out, at most 300 characters, `…` after a
    cut. It is ssh's own sentence (`Permission denied (publickey).`, `Host key verification failed.`): the remote
    script's stderr goes to `/dev/null` (§ S2.3 rule 1), so no transcript text can be in it.
 5. **The log**: ONE line for each call that did not answer with code 0, through `seams.log`, built by
    `logLine(host, session, end, stderrTail)`: `ConnectOtherAIs: remote read host=<host> session=<session> end=<exit N |
-   timeout | capped | not-started | no-ssh> stderr=<the last 2000 characters of the tail, each line break as " | ">`.
+   timeout | capped | not-started | no-ssh> stderr=<the last 2000 characters of the tail, each line break as " | ", control characters taken out as in the last line>`.
    Never stdout, never an operand, never a caught error.
 
 **`capture`** (`versionProbe.ts:92`) gets an EIGHTH parameter, `options?: CaptureOptions`, and no other change of its

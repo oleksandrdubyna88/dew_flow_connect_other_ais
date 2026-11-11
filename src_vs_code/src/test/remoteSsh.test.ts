@@ -288,11 +288,23 @@ test('S2-T19: the tail in the log is the last 2000 characters, line breaks as " 
   assert.ok(said.split(' | ').join('\n').length <= 2000, `the tail is not cut at its last 2000 characters: ${said.length}`);
 });
 
+test('S2-T19: control characters of the stderr tail never reach the log line', async () => {
+  const spy = fake({ code: 255, output: '', stderrTail: 'Perm\u001b[31mission\u0007 denied\nsecond\u0000 line\n' });
+
+  await runRemote(H, S, [S], REMOTE_SCRIPT, REMOTE_LIMITS, spy.seams);
+
+  assert.equal(spy.logs.length, 1);
+  assert.ok(!/\p{Cc}/u.test(spy.logs[0] ?? ''), `a control character of the VM's text is in the log line: ${JSON.stringify(spy.logs[0])}`);
+  assert.ok(spy.logs[0]?.endsWith('stderr=Perm[31mission denied | second line'), spy.logs[0]);
+});
+
 test('S2-T20: runRemote never rejects, and a code that is not 0 or 255 is an answer', async () => {
   const rejecting = fake(() => Promise.reject(new Error('SECRET-FROM-CAPTURE')));
   const run = await runRemote(H, S, [S], REMOTE_SCRIPT, REMOTE_LIMITS, rejecting.seams);
-  assert.equal(run.kind, 'refused');
+  assert.equal(refusalOf(run), 'ssh could not be run, so the Claude session on “ai1-dev2” cannot be read.', 'the sentence of a seam that failed');
   assert.ok(!refusalOf(run).includes('SECRET'), 'a caught error reached the person');
+  assert.equal(rejecting.logs.length, 1, 'one log line for a seam that failed');
+  assert.ok(rejecting.logs[0]?.includes('end=not-started'));
   assert.ok(!rejecting.logs.join('').includes('SECRET'), 'a caught error reached the log');
 
   const noFile = fake(OK, { exists: () => Promise.reject(new Error('boom')) });

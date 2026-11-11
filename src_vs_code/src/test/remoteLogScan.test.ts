@@ -39,9 +39,9 @@ function argumentsFrom(text: string, open: number): string {
   return text.slice(open + 1);
 }
 
-/** Every `console.<name>(` and `notify(` call of a text whose arguments hold a banned word — each reported as the call's own text. Across lines. */
+/** Every `console.<name>(`, `notify(`, `logged(` and `seams.log(` call (the last two are the remote reader's own log road) of a text whose arguments hold a banned word — each reported as the call's own text. Across lines. */
 function logLeaks(text: string): readonly string[] {
-  const calls = [...text.matchAll(/\b(?:console\.[A-Za-z]+|notify)\(/gu)];
+  const calls = [...text.matchAll(/\b(?:console\.[A-Za-z]+|notify|logged|seams\.log)\(/gu)];
 
   return calls
     .map((call) => ({ call: call[0], args: argumentsFrom(text, (call.index ?? 0) + call[0].length - 1) }))
@@ -57,9 +57,12 @@ test('S2-T10: the scanner finds what it must, on samples', () => {
   });`).length, 1, 'a three-line notify with a caught error');
   assert.equal(logLeaks('console.error(`${operands}`);').length, 1, 'an operand in a template literal');
   assert.equal(logLeaks('console.warn(error.message);').length, 1, 'an error\'s message');
+  assert.equal(logLeaks('logged(seams, got.output);').length, 1, 'stdout through the remote reader\'s log road');
+  assert.equal(logLeaks('seams.log(`${operands}`);').length, 1, 'an operand through the log seam');
   assert.equal(logLeaks('console.error("a (b) c", folder);').length, 1, 'a banned word after a string that holds parentheses');
 
   assert.deepEqual(logLeaks('seams.log(logLine(host, session, end, stderrTail));'), [], 'the one log call of the remote reader');
+  assert.deepEqual(logLeaks('logged(seams, BAD_OPERAND_LOG);'), [], 'a fixed line through the log road');
   assert.deepEqual(logLeaks("console.error('coai.takeFromTerminal failed');"), [], 'a fixed line');
   assert.deepEqual(logLeaks('console.error(line);'), [], 'the log seam\'s default');
   assert.deepEqual(logLeaks('const tail = 1; call(tail);'), [], 'a banned word outside a console call or a notify');
