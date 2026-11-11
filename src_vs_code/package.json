@@ -271,6 +271,12 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.askFromTerminal",
+        "title": "Ask other AI",
+        "category": "ConnectOtherAIs",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "coai.takeTheQuestion",
         "title": "CoAI: take the question",
         "category": "ConnectOtherAIs"
@@ -1174,6 +1180,11 @@
     "menus": {
       "view/title": [
         {
+          "command": "coai.askFromTerminal",
+          "when": "view == terminal",
+          "group": "navigation@90"
+        },
+        {
           "command": "coai.help",
           "when": "view == coai.panel",
           "group": "navigation@0"
@@ -1236,6 +1247,10 @@
         {
           "command": "coai.backToSource",
           "when": "activeWebviewPanelId == 'coaiChat'"
+        },
+        {
+          "command": "coai.chatWithOtherAi",
+          "when": "!terminalFocus"
         }
       ],
       "webview/context": [
@@ -1295,18 +1310,23 @@
       {
         "command": "coai.chatWithOtherAi",
         "key": "ctrl+alt+a",
-        "when": "activeWebviewPanelId == 'claudeVSCodePanel'"
+        "when": "activeWebviewPanelId == 'claudeVSCodePanel' && !terminalFocus"
       },
       {
         "command": "coai.chatWithOtherAi",
         "key": "ctrl+alt+a",
-        "when": "editorTextFocus"
+        "when": "editorTextFocus && !terminalFocus"
+      },
+      {
+        "command": "coai.askFromTerminal",
+        "key": "ctrl+alt+a",
+        "when": "terminalFocus"
       },
       {
         "command": "coai.goToConversation",
         "key": "ctrl+alt+g",
         "mac": "cmd+alt+g",
-        "when": "activeWebviewPanelId == 'claudeVSCodePanel' || editorTextFocus"
+        "when": "(activeWebviewPanelId == 'claudeVSCodePanel' || editorTextFocus) && !terminalFocus"
       },
       {
         "command": "coai.backToSource",
@@ -1325,7 +1345,12 @@
         "mac": "cmd+delete",
         "when": "inQuickOpen && coai.conversationsPickerOpen"
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "terminal.integrated.commandsToSkipShell": [
+        "coai.askFromTerminal"
+      ]
+    }
   },
   "scripts": {
     "prepare:gate": "node scripts/prepare-gate.mjs && node scripts/generate-security-lane.mjs",

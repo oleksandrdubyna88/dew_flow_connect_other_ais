@@ -8,6 +8,7 @@ import type { ConversationSource } from './chatStore';
 import {
   BackTo,
   NOWHERE,
+  Recorded,
   backTo,
   bufferGone,
   fileFailed,
@@ -17,7 +18,9 @@ import {
   sessionFailed,
   tabNotActivated,
   tabReachable,
+  terminalRoad,
 } from './chatReturn';
+import type { LiveTerminal } from './terminalSource';
 import { notify } from './notify';
 
 /**
@@ -51,7 +54,7 @@ export async function backToSource(panels: ChatPanels, asked: unknown): Promise<
     return;
   }
   const tab = sourceTab(chat, thread.source);
-  await go(backTo({ liveTab: tab !== undefined, source: thread.source }), tab, thread.source);
+  await go(backTo({ liveTab: tab !== undefined, source: thread.source }), tab, thread.source, chat.key);
 }
 
 /**
@@ -105,36 +108,41 @@ function sourceTab(chat: AskedChat, source: ConversationSource): vscode.Tab | un
   return tab !== undefined && tabReachable(tab.group.viewColumn, tab.group.tabs.indexOf(tab)) ? tab : undefined;
 }
 
-async function go(answer: BackTo, tab: vscode.Tab | undefined, source: ConversationSource): Promise<void> {
+async function go(answer: BackTo, tab: vscode.Tab | undefined, source: ConversationSource, key: object): Promise<void> {
   if (answer.kind === 'tab') {
-    return tab === undefined ? refuse(NOWHERE) : toTabOrRecord(tab, source);
+    return tab === undefined ? refuse(NOWHERE) : toTabOrRecord(tab, source, key);
   }
 
-  return fromRecord(answer);
+  return fromRecord(answer, key);
 }
 
 /**
  * The tab, and — when it will not come forward — what the conversation recorded, before giving up. A
  * failed tab is not the end of the road while a session or a file is known. (codex, the code round.)
  */
-async function toTabOrRecord(tab: vscode.Tab, source: ConversationSource): Promise<void> {
+async function toTabOrRecord(tab: vscode.Tab, source: ConversationSource, key: object): Promise<void> {
   if (await toTab(tab)) {
     return;
   }
   const recorded = recordedRoute(source);
 
-  return recorded.kind === 'nowhere' ? refuse(tabNotActivated(tab.label)) : fromRecord(recorded);
+  return recorded.kind === 'nowhere' ? refuse(tabNotActivated(tab.label)) : fromRecord(recorded, key);
 }
 
-/** Everything but the live tab: what the conversation RECORDED. Exhaustive — a new arm fails to compile. */
-async function fromRecord(answer: Exclude<BackTo, { kind: 'tab' }>): Promise<void> {
+/** Everything but the live tab: what the conversation RECORDED. */
+async function fromRecord(answer: Recorded, key: object): Promise<void> {
+  return answer.kind === 'nowhere' ? refuse(NOWHERE) : toRecorded(answer, key);
+}
+
+/** Exhaustive — a new arm fails to compile. */
+async function toRecorded(answer: Exclude<Recorded, { kind: 'nowhere' }>, key: object): Promise<void> {
   switch (answer.kind) {
     case 'session':
       return toSession(answer.sessionId);
     case 'file':
       return toFile(answer.uri);
-    case 'nowhere':
-      return refuse(NOWHERE);
+    case 'terminal':
+      return toTerminal(key, answer.name);
     default:
       return unreachable(answer);
   }
@@ -142,6 +150,24 @@ async function fromRecord(answer: Exclude<BackTo, { kind: 'tab' }>): Promise<voi
 
 function unreachable(answer: never): void {
   refuse(`CoAI does not know how to go back to ${JSON.stringify(answer)}.`);
+}
+
+/** One terminal as the decision reads it. */
+const asLive = (one: vscode.Terminal): LiveTerminal => ({ key: one, name: one.name, exited: one.exitStatus !== undefined });
+
+/**
+ * The terminal, through VS Code's own `Terminal.show()` — no other extension is called. ONE read of the window's
+ * terminals decides and acts, so the two cannot see two lists.
+ */
+function toTerminal(key: object, name: string): void {
+  const all = vscode.window.terminals;
+  const road = terminalRoad(key, all.map(asLive), name);
+  if (road.kind === 'refuse') {
+    refuse(road.sentence);
+
+    return;
+  }
+  all.find((one) => one === road.key)?.show();
 }
 
 /**

@@ -8,9 +8,42 @@ import type { ChatAccess } from './chatAdapter';
  * no folder to act IN — the home directory is never a silent stand-in (gemini, the plan round).</p>
  */
 
-/** Whether this conversation may be put into agent mode at all. */
-export function agentOffered(remote: boolean, workspace: string): boolean {
-  return !remote && workspace.length > 0;
+/**
+ * The kinds of conversation source — the `kind` of a `ConversationSource` (`chatStore.ts`).
+ *
+ * <p>Spelled out here and not imported: `chatStore` reaches the chat page, and the page reaches this module through the launch,
+ * so an import of `chatStore` closes an import cycle (`importCycles.test.mjs`). The two lists cannot drift in the way that
+ * matters: a `ConversationSource` of a kind missing here is not assignable to {@link AgentSource}, so every caller fails to
+ * compile, and the table below must name every kind listed.</p>
+ */
+export type SourceKind = 'claude' | 'file' | 'terminal' | 'none';
+
+/** What agent mode reads of a conversation's source: its kind. A `ConversationSource` is one. */
+export interface AgentSource {
+  readonly kind: SourceKind;
+}
+
+/**
+ * Which kinds of source rule agent mode out. A terminal does: the session it came from may be on another machine, and agent
+ * mode acts on THIS one.
+ *
+ * <p>A record keyed by every kind, not a default: a fifth kind does not compile until a person has placed it here.</p>
+ */
+const RULED_OUT: Readonly<Record<SourceKind, boolean>> = {
+  claude: false,
+  file: false,
+  none: false,
+  terminal: true,
+};
+
+/** Whether the conversation's SOURCE rules agent mode out. */
+export function agentRuledOutBy(source: AgentSource): boolean {
+  return RULED_OUT[source.kind];
+}
+
+/** Whether this conversation may be put into agent mode at all. The source is REQUIRED, so the compiler lists every site that decides. */
+export function agentOffered(remote: boolean, workspace: string, source: AgentSource): boolean {
+  return !remote && workspace.length > 0 && !agentRuledOutBy(source);
 }
 
 /**
@@ -20,8 +53,8 @@ export function agentOffered(remote: boolean, workspace: string): boolean {
  * moves to a Team-server model comes out of agent mode rather than being refused the move (codex, the
  * plan round).</p>
  */
-export function accessOn(remote: boolean, asked: ChatAccess, workspace: string): ChatAccess {
-  return asked === 'agent' && agentOffered(remote, workspace) ? 'agent' : 'text';
+export function accessOn(remote: boolean, asked: ChatAccess, workspace: string, source: AgentSource): ChatAccess {
+  return asked === 'agent' && agentOffered(remote, workspace, source) ? 'agent' : 'text';
 }
 
 /** Why the box cannot be ticked here, or empty when it can. */
@@ -33,6 +66,20 @@ export function agentRefusal(remote: boolean, workspace: string): string {
   return workspace.length === 0
     ? 'Agent mode needs a workspace folder to work in, and this conversation has none. Open a folder and start the conversation from it.'
     : '';
+}
+
+/** What a person is told when a terminal conversation is asked for agent mode. */
+export const TERMINAL_NO_AGENT =
+  'Agent mode is not offered for a terminal conversation: the session it came from may be on another machine.';
+
+/**
+ * Why the box cannot be ticked on THIS conversation, or empty when it can.
+ *
+ * <p>{@link agentRefusal} keeps its two arguments: the launch (`cliChatLaunch.ts`) has no source to give, and a terminal
+ * conversation never reaches a launch in agent mode, because {@link accessOn} and the box refuse first.</p>
+ */
+export function agentRefusalFor(remote: boolean, workspace: string, source: AgentSource): string {
+  return agentRuledOutBy(source) ? TERMINAL_NO_AGENT : agentRefusal(remote, workspace);
 }
 
 /** Why a folder that was a conversation's workspace cannot be one now, or empty when it can. */

@@ -19,6 +19,7 @@ import { bindChatSide } from './chatConfig';
 import { registerConfigTransfer } from './configTransferCommands';
 import { ChatPanels } from './chatPanels';
 import {
+  askFromTerminal,
   chatWithOtherAi,
   chooseFromBug,
   noteChatDoor,
@@ -664,11 +665,28 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.
     vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
-      // RECORDED FIRST, in every one of these six. The count on the spending page is of how often
+      // RECORDED FIRST, in every one of these. The count on the spending page is of how often
       // the chat was reached for, so a door that then refuses — no CLI, nothing captured — is still
       // one of them. Nothing waits for the write.
       noteChatDoor('key');
       void chatWithOtherAi(chatPanels, context.extensionUri, args);
+    }),
+    // The terminal's own door: the icon in the terminal panel's title bar and Ctrl+Alt+A typed in a terminal. A terminal is
+    // not a tab, so it has its own command and never goes through the file door's tab match. RECORDED FIRST, like the rest.
+    // The rejection is caught for the same reason `coai.takeTheQuestion`'s is: a press that does nothing explains nothing.
+    vscode.commands.registerCommand('coai.askFromTerminal', () => {
+      noteChatDoor('terminal');
+      askFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal).catch((reason: unknown) => {
+        console.error('coai.askFromTerminal failed', reason);
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'askFromTerminal',
+          code: 'terminal-door-failed',
+          title: 'The copied text could not be sent to a chat.',
+          detail: asText(reason),
+        });
+      });
     }),
     // The two menu items, which differ from the chord in one way: each SAYS what it will do, so
     // neither reads `coai.chatAutoSend`. An item whose behaviour depends on a setting in another

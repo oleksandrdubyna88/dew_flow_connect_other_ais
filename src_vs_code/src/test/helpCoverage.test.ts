@@ -44,6 +44,67 @@ test('every language’s chat article names the header button, not just the arti
   }
 });
 
+test('every language’s chat article names the terminal door by its own English label', () => {
+  // The button's title is English in every language, as every control name in this catalogue is, so it is the one string all
+  // five can be asked for. `bodyFor` marks a missing translation, not one written before the door existed.
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} chat article is missing, so a reader of it gets English`);
+    assert.ok(
+      Object.values(body).join(' ').includes('**Ask other AI**'),
+      `the ${language} chat article never names Ask other AI, so a reader of it never learns that a terminal is a door`,
+    );
+  }
+});
+
+test('S1r-T7 every language’s chat article gives the terminal door’s new sentence and not the old', () => {
+  // The terminal door reads the clipboard (epoch 2, change 1.2). The sentence is English in every language, like the control
+  // names, so all five can be asked for it; the old sentences must be gone, or a reader is told to select text that is not read.
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} chat article is missing, so a reader of it gets English`);
+    const text = Object.values(body).join(' ');
+    assert.ok(
+      !text.includes('Select text in the terminal first') && !/no selection/iu.test(text),
+      `the ${language} chat article still tells a reader to select text in the terminal`,
+    );
+    assert.ok(
+      text.includes('Copy the text first, then press Ask other AI.'),
+      `the ${language} chat article does not give the sentence an empty clipboard shows`,
+    );
+  }
+});
+
+test('S1r-T8 no language’s chat article says the terminal door uses VS Code’s copy command', () => {
+  // Epoch 1's "what can go wrong" sentence outlived change 1.2 in all five languages: the door no longer runs a copy command,
+  // it only reads the clipboard. Each language's epoch-1 wording is named here, because a translation cannot be matched by
+  // one English phrase.
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+  const epochOne: Record<string, string> = {
+    en: 'it uses VS Code’s own copy command',
+    de: 'sie nutzt den eigenen Kopierbefehl von VS Code',
+    es: 'usa el propio comando de copia de VS Code',
+    ru: 'она использует собственную команду копирования VS Code',
+    uk: 'вони використовують власну команду копіювання VS Code',
+  };
+  assert.deepEqual(Object.keys(epochOne).sort(), [...HELP_LANGUAGES].sort(), 'a help language has no epoch-1 wording named here');
+
+  for (const language of HELP_LANGUAGES) {
+    const text = Object.values(bodyFor(article, language).body).join(' ');
+    assert.ok(
+      !text.includes(epochOne[language]),
+      `the ${language} chat article still says the terminal door uses VS Code’s copy command; since change 1.2 it only reads the clipboard`,
+    );
+  }
+});
+
 test('every language describes the sides seen and the path-fields switch, by the controls\' own English labels (paths per side E2.3)', () => {
   // The operator's ruling: the help is in FIVE languages. bodyFor marks a MISSING translation, not a stale one, so each
   // language is asked for the labels a person meets on Setup › This side — English in every language, as every control

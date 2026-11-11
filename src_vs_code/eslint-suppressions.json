@@ -243,7 +243,7 @@
   },
   "src/chatRegistry.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "src/chatRestore.ts": {
@@ -292,7 +292,7 @@
   },
   "src/chatStore.ts": {
     "complexity": {
-      "count": 4
+      "count": 3
     },
     "max-lines-per-function": {
       "count": 1
@@ -843,11 +843,6 @@
   "src/roundsLogPanel.ts": {
     "complexity": {
       "count": 2
-    }
-  },
-  "src/selectionCapture.ts": {
-    "complexity": {
-      "count": 1
     }
   },
   "src/serverSettingsFile.ts": {

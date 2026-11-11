@@ -5,7 +5,7 @@ import { cliFor, install } from './chatLaunch';
 import { vendorFor } from './chatConfig';
 import { ChatAccess } from './chatAdapter';
 import { isFolder } from './cliChatLaunch';
-import { TURN_AGENT_ON, accessNotice, agentFolderGone, agentQuestion, agentRefusal } from './chatAccessRules';
+import { TURN_AGENT_ON, accessNotice, agentFolderGone, agentQuestion, agentRefusalFor } from './chatAccessRules';
 import { notify, notifyAndAsk } from './notify';
 
 /**
@@ -66,7 +66,7 @@ function refusalFor(thread: Thread, wanted: ChatAccess): string {
   if (wanted !== 'agent') {
     return '';
   }
-  const refusal = agentRefusal(onATeamServer(thread), thread.workspace);
+  const refusal = agentRefusalFor(onATeamServer(thread), thread.workspace, thread.source);
 
   return refusal.length > 0 ? refusal : agentFolderGone(thread.workspace, isFolder(thread.workspace));
 }

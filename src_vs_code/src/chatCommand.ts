@@ -5,7 +5,7 @@ import { notify } from './notify';
 import {
   mainModel,
 } from './chatPresets';
-import { ConversationSource, sourceOfFile } from './chatStore';
+import { ConversationSource, isTerminalName, readsSession, sourceOfFile, sourceOfTab, sourceOfTerminal } from './chatStore';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { threads } from './chatThread';
 import { pulse } from './chatHost';
@@ -21,7 +21,8 @@ import {
 } from './chatRoots';
 import { agentOffered } from './chatAccessRules';
 import { Ready, chatCatalogFrom, chatRead, openingPrompt, readyToChat, roleOf, savedModels, savedPick, savedPrompts, taskOf } from './chatConfig';
-import { CANCELLED, fromTheEditor, matchedSource, passageFor } from './chatCapture';
+import { CANCELLED, fromTheEditor, fromTheTerminal, matchedSource, passageFor } from './chatCapture';
+import { terminalMatch } from './terminalSource';
 import { ChatSession } from './chatSession';
 import {
   chatProvidersFromPresets,
@@ -33,7 +34,7 @@ import { coaiDataDir } from './dataDir';
 import { Door, chatDoorRecord } from './chatDoors';
 import { recordChatDoor } from './chatDoorsFile';
 import { BugChat, BugChats } from './reviewChoose';
-import { chatSettingsFrom } from './chatSettings';
+import { chatSettingsFrom, sendsImmediately } from './chatSettings';
 import { CARRY_EVERYTHING } from './chatCarry';
 import { chatTextTone, chatUiScale, createChatPanel, pushChatDraft, setChatDraft } from './chatPanel';
 import {
@@ -70,8 +71,9 @@ function newConversation(
     readonly draft: string;
     readonly fromSession: boolean;
     /**
-     * What this conversation is opened FROM — a file's uri, or `none` for a Claude tab, whose id is
-     * not known yet and is written by {@link pinSession} when the background walk finds it.
+     * What this conversation is opened FROM — a file's uri, a terminal's full name for the terminal
+     * door, or `none` for a Claude tab, whose id is not known yet and is written by {@link pinSession}
+     * when the background walk finds it.
      */
     readonly source: ConversationSource;
   },
@@ -79,6 +81,8 @@ function newConversation(
   remote: ChatSession | undefined,
   extensionUri: vscode.Uri,
 ): ChatEntry {
+  // Decided by the SOURCE, whatever a door passes: a terminal conversation reads no local Claude session.
+  const fromSession = readsSession(state.source, state.fromSession);
   const first = started(ready.vendor, resolved, ready.modelId, remote);
   const session = first.session;
   // The saved lists, read here rather than passed in: every other setting this function needs it
@@ -101,7 +105,7 @@ function newConversation(
       modelPresets: savedModels(config),
       // Text, always, for a new conversation — and the box offered only where agent mode could run.
       access: 'text',
-      agentOffered: agentOffered(isRemote(ready.vendor), originOf(state.source).workspace),
+      agentOffered: agentOffered(isRemote(ready.vendor), originOf(state.source).workspace, state.source),
       // A conversation that has just opened has said nothing, so there is nothing to ask again.
       reask: '',
       // Nor anything to send again: nothing has failed yet, and the failure line is empty.
@@ -120,7 +124,7 @@ function newConversation(
       turn: 0,
       failure: '',
       draft: state.draft,
-      fromSession: state.fromSession,
+      fromSession,
       asked: [],
       carryFrom: CARRY_EVERYTHING,
       marks: {
@@ -160,7 +164,7 @@ function newConversation(
     chosenId: ready.providerId,
     presses: 0,
     ourDraft: state.draft,
-    fromSession: state.fromSession,
+    fromSession,
     carryFrom: CARRY_EVERYTHING,
     sessionFile: '',
     running: false,
@@ -194,7 +198,7 @@ function newConversation(
   pulse?.();
 
   // In the background, while this tab's name still matches the session it came from.
-  pinSession(entry, state.title, state.fromSession);
+  pinSession(entry, state.title, fromSession);
 
   return entry;
 }
@@ -261,7 +265,105 @@ export async function chatWithOtherAi(
     return;
   }
 
-  await deliverPassage(panels, extensionUri, ready, source, passage, plan.send, match !== undefined, uri);
+  await deliverPassage(panels, extensionUri, ready, source, passage, plan.send, match !== undefined, sourceOfTab(match !== undefined, uri));
+}
+
+/** Said when the button or the chord is used and the window has no terminal to read. */
+function terminalDoorNoTerminal(): void {
+  void notify({
+    as: 'warning',
+    class: 'refusal',
+    source: 'chat',
+    code: 'no-terminal-here',
+    title: 'There is no terminal here — open one, copy the text, then press Ask other AI.',
+  });
+}
+
+/** Said when the terminal's name is not an identity: a chat opened from it would be saved with no source. */
+function terminalDoorNameUnusable(): void {
+  void notify({
+    as: 'warning',
+    class: 'refusal',
+    source: 'chat',
+    code: 'terminal-name-unusable',
+    title: 'This terminal\u2019s name cannot name a conversation (it is empty, longer than 500 characters, or holds a control '
+      + 'character) — rename the terminal and press again.',
+  });
+}
+
+/**
+ * The terminal this door can open a chat from, with its name — or nothing, and the person is told why.
+ *
+ * <p>The name is judged by the store's own rule (`isTerminalName`) BEFORE anything is captured: a name that is not an identity
+ * builds the source `none`, and a chat with no source has no road back and no protection against a Claude tab taking it. It is
+ * read ONCE and handed back, because a program can retitle a terminal while the clipboard is read: the name that was
+ * judged is the name the conversation is matched and filed under.</p>
+ */
+function terminalDoorName(terminal: vscode.Terminal | undefined): { readonly terminal: vscode.Terminal; readonly name: string } | undefined {
+  if (terminal === undefined) {
+    terminalDoorNoTerminal();
+
+    return undefined;
+  }
+  const name = terminal.name;
+  if (!isTerminalName(name)) {
+    terminalDoorNameUnusable();
+
+    return undefined;
+  }
+
+  return { terminal, name };
+}
+
+/** Said when the clipboard held no text, could not be read, or another capture held the latch: the capture's own sentence, which says which. */
+function terminalDoorNothing(failure: string): void {
+  void notify({
+    as: 'warning',
+    class: 'refusal',
+    source: 'chat',
+    code: 'nothing-copied-for-terminal',
+    title: failure,
+  });
+}
+
+/**
+ * The terminal door: the text the person copied, read from the clipboard, as a new chat named after that terminal.
+ *
+ * <p>It never calls `matchedSource`, `snapshots` or `sourceSession`: a terminal is not a tab, and asking the tabs what the
+ * person meant is how the file door once took a file's text for a terminal's. The conversation is keyed by the terminal
+ * object itself (`terminalMatch`) and filed under the terminal's full name (`sourceOfTerminal`). The button and the chord
+ * both follow <b>Who presses send</b>, as the chord does everywhere else.</p>
+ *
+ * @param panels the registry of open conversations
+ * @param extensionUri where the extension lives
+ * @param terminal the terminal to read — the caller passes the window's active one, or nothing when there is none
+ */
+export async function askFromTerminal(
+  panels: ChatPanels,
+  extensionUri: vscode.Uri,
+  terminal: vscode.Terminal | undefined,
+): Promise<void> {
+  const ready = readyForChat();
+  if (!ready.ok) {
+    notReady(ready.refusal);
+
+    return;
+  }
+  const door = terminalDoorName(terminal);
+  if (door === undefined) {
+    return;
+  }
+  const passage = await fromTheTerminal();
+  // `terminalPassage` has already decided what white space means, so an empty text is the only "nothing" left.
+  if (passage.text.length === 0) {
+    terminalDoorNothing(passage.failure);
+
+    return;
+  }
+  const { autoSend } = chatSettingsFrom(chatRead(vscode.workspace.getConfiguration('coai')));
+  const match = terminalMatch(panels.known(), door.terminal, door.name);
+
+  await deliverPassage(panels, extensionUri, ready, match, passage, sendsImmediately(autoSend, false), false, sourceOfTerminal(door.name));
 }
 
 /**
@@ -276,12 +378,12 @@ async function deliverPassage(
   panels: ChatPanels,
   extensionUri: vscode.Uri,
   ready: Extract<Ready, { ok: true }>,
-  source: NonNullable<ReturnType<typeof sourceSession>>,
+  match: NonNullable<ReturnType<typeof sourceSession>>,
   passage: { readonly text: string },
   send: boolean,
   fromSession: boolean,
-  /** The active document's uri, carried from the one snapshot the match was made over. */
-  sourceUri: string,
+  /** What the conversation is opened FROM, built by the door. */
+  origin: ConversationSource,
   append = false,
 ): Promise<void> {
   const config = vscode.workspace.getConfiguration('coai');
@@ -324,16 +426,16 @@ async function deliverPassage(
   );
   // A factory, not a value: nothing is built — no process, no temp directory — for a tab that
   // already holds a conversation.
-  const opened = panels.open(source.key, source.label, () => newConversation(panels, ready, {
-    title: source.label,
+  const opened = panels.open(match.key, match.label, () => newConversation(panels, ready, {
+    title: match.label,
     passage: passage.text,
     draft: send ? '' : turn,
     // A session tab has a file behind it; a file does not. The button that reads one back is
     // offered only where there is something to read.
     fromSession,
-    // A FILE tab is identified by its document; a Claude tab has no id until its session is found,
-    // and `pinSession` writes that one when the walk lands.
-    source: fromSession ? { kind: 'none' } : sourceOfFile(sourceUri),
+    // The origin the door built: a file tab's is its document, a Claude tab's is `none` until
+    // `pinSession` writes its session when the walk lands.
+    source: origin,
   }, cli.resolved, remote.session, extensionUri));
 
   opened.entry.panel.reveal();
@@ -546,7 +648,7 @@ export async function takeTheQuestion(
   // NEVER sent by itself, whatever the auto-send setting says. A question taken off disk is one a
   // person is in the middle of answering; it goes into the composer so they can look at it, add
   // what they think, and press send themselves.
-  await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined, uri, append);
+  await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined, sourceOfTab(claude !== undefined, uri), append);
 }
 
 /** Each bug's conversation for this window — see {@link BugChats}. */
@@ -577,7 +679,7 @@ export async function chooseFromBug(panels: ChatPanels, extensionUri: vscode.Uri
     return;
   }
   const key = bugChats.keyFor(chat.key);
-  await deliverPassage(panels, extensionUri, ready, { kind: 'new', key, label: chat.label }, { text: chat.text }, false, false, fileUriOf(chat));
+  await deliverPassage(panels, extensionUri, ready, { kind: 'new', key, label: chat.label }, { text: chat.text }, false, false, sourceOfFile(fileUriOf(chat)));
   bugChats.remember(chat.key, panels);
 }
 
