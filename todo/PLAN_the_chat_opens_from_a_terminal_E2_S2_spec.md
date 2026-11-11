@@ -1,16 +1,19 @@
 # PLAN — E2.S2 spec: the remote reader's contract — the ssh argv, the stdin script and the typed result (CORNERSTONE)
 
-> Status: **plan only, nothing implemented yet, 2026-11-11 — written by Fable before its code; not reviewed yet (gate G6).**
+> Status: **plan only, nothing implemented yet, 2026-11-11 — written by Fable before its code; reviewed by Opus 2026-11-11
+> (gate G6), its findings fixed in this text; change 2.1 decided (§ S2.7).**
 > Cornerstone spec of story E2.S2 of [PLAN_the_chat_opens_from_a_terminal_E2.md](PLAN_the_chat_opens_from_a_terminal_E2.md)
 > (parent [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md), § *Stage 2*, § *Security*, ledger
 > entry 1.1). It holds the security judgement on the ssh edge (gate G2 + G4, § S2.6), which must stand before any S2 code.
 > Its own file, because the stories document goes whole to a review gate and must stay short. It keeps no change ledger: a
-> change is an entry in the parent (epoch 2, 0 changes today). It is promoted with the E2 document.
+> change is an entry in the parent (epoch 2, 1 change: 2.1; the next accepted change is a full stop). It is promoted with
+> the E2 document.
 >
 > Scope: `src_vs_code` only. NEW `src/remoteScript.ts`, `src/remoteFrame.ts`, `src/remoteSsh.ts`; `src/versionProbe.ts`
 > (`capture`, one options object); `src/processLauncher.ts` (one option, one exported function); tests;
 > `research/module_extension.md`, `research/module_tests.md`, `research/architecture.md`. Coder: Sonnet. Review: Opus.
-> Read at `b51dd174` (E2.S1 is committed as `09bd1faf` and `b51dd174`). All paths are under `src_vs_code/`, but
+> Read at `b51dd174` (E2.S1 is committed as `09bd1faf` and `b51dd174`); every file:line of § S2.0 re-checked at
+> `9f16332c` by the G6 review (no `src_vs_code` change between). All paths are under `src_vs_code/`, but
 > `research/`, `todo/`, `.github/`, `SECURITY.md` and `raw-temp-baseline.json`, which are from the repository root.
 
 ## Changes to § 4 (for gate G6)
@@ -28,18 +31,23 @@ The rows are X1…X10 (not G: the stories document uses G for its gates).
 | X6 | C2, scope | "`src/chatSource.ts` (EXPORT `SESSION_ID`, `:68`)" | Not needed. `isSessionId` is exported already (`src/chatSource.ts:79`). `chatSource.ts` leaves S2's scope | Reuse first | — |
 | X7 | C3, the runner | `runRemote(host, session, operands, script, limits?)` | One more trailing parameter: `seams?: RemoteSeams` (the capture, the file check, the log, the platform) | § 5's own tests need a fake capture (S2-T6, S2-T7) | S3 does not pass it |
 | X8 | C3, the capture | options object `{ cwd, maxStdoutBytes }` | `{ cwd, maxStdoutBytes, killTree }`; `Captured` gains `stderrTail` (only when the object is given); `CaptureEnd` gains `'capped'`. `LaunchOptions` gains `killTree`. `src/processLauncher.ts` joins S2's scope (also `system32()`) | `security.md`: a timeout kills the whole tree. Today a child with no shell gets `child.kill()` only (`processLauncher.ts:412-415`), and ssh with `ProxyJump` has a child | — |
-| X9 | C4 (S3 owns), from the judgement | — | TWO requests to S3, § S2.6 J8 and J9: (a) one more seam, the re-check just before each spawn; (b) for a `found` with `via: 'id'`, S3 checks `found.folder` against the folders it expects | The window between the press and the read; a file of the right id in a folder nobody asked for | S3 `remoteRoad`, `nextStep` |
+| X9 | C4 (S3 owns), from the judgement | — | TWO requests to S3, § S2.6 J8 and J9: (a) one more seam, the re-check just before each spawn; (b) for a `found` with `via: 'id'`, S3 checks `found.folder` against the folders it expects — so the picked id S3 keeps carries those folders with it | The window between the press and the read; a file of the right id in a folder nobody asked for | S3 `remoteRoad`, `nextStep`, the picked-id map |
 | X10 | S4, S2-T10 | "The doors' catches are scanned by S2-T10" | S2 writes the scanner and proves it on samples. S4 adds the companion: the scan FINDS the two terminal registrations and the Asked hook | A scan that matches nothing passes for ever (`testing.md`) | S4 |
 
 The parent's step 1 is also made exact (no contract moves): the stories document's example `tmux list-panes -s -t "=$1"`
 is NOT exact. Measured (§ S2.0, M-T1): without the colon, a name that is the START of another session's name reads that
 other session (`small` would read `small-tasks`). The script uses `-t "=$1:"`.
 
-## Plan change candidate 2.1 — in short (the full text is § S2.7)
+C3's "the parent's options, in the parent's order" stays true word for word: the parent's list now holds change 2.1
+(below), so `SSH_OPTIONS` is that list.
 
-The judgement needs two ssh options that are not in the parent's list: **`-o StrictHostKeyChecking=yes`** and
-**`-o ControlPath=none`**. They are NOT in the contract below. The caller records the change in the parent's ledger and gets
-it approved before S2 is coded. § S2.7 says what the spec does when one or both are refused.
+## Plan change 2.1 — decided (the full text is § S2.7)
+
+The judgement proposed two ssh options that were not in the parent's list. The caller decided, after question consultant
+`a81ed863` (two independent causes): **`-o StrictHostKeyChecking=yes` IS taken** as change 2.1 (parent ledger entry 2.1),
+after `-o LogLevel=ERROR` and before `--`. **`-o ControlPath=none` is NOT taken**: it would be a second change and a full
+stop. Its residual — connection sharing on a Linux or macOS extension host, or in a Remote window — is named in words in
+`SECURITY.md` by E2.S4 (§ S2.7 gives the words). Epoch 2 now has one change; any further ssh option is a full stop.
 
 ## S2.0 — What was read and what was measured
 
@@ -135,6 +143,9 @@ answers questions about a page; the quoted words below are as that tool gave the
     code in the three modules names `console`.
 14. **No hash test of the script.** The proof is behaviour (the `sh -s` tests). The spec gives the sha256 of the text
     so the coder and the reviewer can see that the constant IS the text below.
+15. **The shell language is POSIX; the tools are those of a Linux VM.** `ps --ppid` (procps), `head -c`, `stat -c %Y`,
+    `date +%s` and `/proc/<pid>/stat` are not POSIX. On a system without one of them the answer is the fallback (no
+    children found), `unreadable` (`registry-bad`, `tool`) or a time of `-` — never another session (§ S2.8, residual 8).
 
 ## S2.2 — The operands (C2a) and their quoting (`src/remoteScript.ts`)
 
@@ -516,6 +527,7 @@ printf 'COAI-END\n'
 |---|---|---|---|
 | the registry file | 64 KiB; one byte more is read so "too big" can be seen | `head -c 65537` | `REGISTRY_MAX + 1` |
 | the transcript tail | 4 MiB | `tail -c 4194304` | `TAIL_MAX` |
+| the process walk | 256 processes and depth 16 for a pane, so at most 512 `ps` calls a pane and 16 panes; a walk that takes longer than the 15 s kill stops at the next pane's `printf` (rule 8) | `-gt 256`; `-gt 16`; `-gt 48` words | — |
 | the folder listing | 2000 names | `-ge 2000` | — |
 | the title scan | 250 files; 8 s; a file over 64 MiB is `skipped` | `-ge 250`; `-ge 8`; `-gt 67108864` | `SCAN_BUDGET.most`; under `SCAN_BUDGET.withinMs`; `SCAN_BUDGET.mostBytes` |
 | the title rows of one file | a row over 1024 bytes is left out and counted; the first 24 different rows, then the last row again | the `awk` program | — |
@@ -658,11 +670,12 @@ holds data from the answer:
 ## S2.5 — The ssh edge (`src/remoteSsh.ts`, node only; `src/versionProbe.ts`; `src/processLauncher.ts`)
 
 ```ts
-/** The parent's options, in the parent's order. A change to this list is a plan change (§ S2.7). */
+/** The parent's options, in the parent's order, with change 2.1 last. A change to this list is a plan change (§ S2.7). */
 export const SSH_OPTIONS: readonly string[] = [
   '-T',
   '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', '-o', 'RequestTTY=no', '-o', 'RemoteCommand=none',
   '-o', 'ClearAllForwardings=yes', '-o', 'ForwardAgent=no', '-o', 'ForwardX11=no', '-o', 'LogLevel=ERROR',
+  '-o', 'StrictHostKeyChecking=yes',
 ];
 export function sshArgv(host: string, operands: readonly string[]): readonly string[];
 export function sshExecutable(platform?: Platform, env?: NodeJS.ProcessEnv): { readonly path: string; readonly cwd: string };
@@ -794,8 +807,9 @@ seen.
   trust this host key?" is answered NO, so with the default `StrictHostKeyChecking ask` an unknown key is a refusal.
 - **What `BatchMode=yes` does NOT stop.** (1) The person's own `StrictHostKeyChecking accept-new` or `no`: then an
   unknown key is ACCEPTED and written to `known_hosts`, by a call that a terminal's NAME started (M-G2 shows the
-  person's value stays). (2) With `no`, a CHANGED key is accepted also. This is the first half of plan change candidate
-  2.1.
+  person's value stays). (2) With `no`, a CHANGED key is accepted also. **Change 2.1 closes both**: we pass
+  `-o StrictHostKeyChecking=yes`, which stands before the config's value (M-G3 shows `stricthostkeychecking true` over
+  `accept-new`); the refusal itself against a real server is M-O3, not observed yet.
 - **What our options do NOT reach: the proxy leg.** A `ProxyJump` or a `ProxyCommand` is a second program that ssh
   starts with the person's configuration. It does not get our `-o` options. `ssh -W` (what `ProxyJump` runs) clears
   forwardings and opens no session by its own rule (`ssh(1)`, `-W`). It has no `BatchMode`, so it can try to ask. It
@@ -839,12 +853,19 @@ material.
     logged in, and stays for the `ControlPersist` time (for ever with `yes`), with an open connection to the VM. The
     15 s kill ends only the foreground half. This is *"a multiplexing master … that outlives the read"*, which § 1 of
     the stories document says must not ship.
-- **Decision.** `-o ControlPath=none` (no sharing: never a master, never a client of one). It is the second half of plan
-  change candidate 2.1. `ControlMaster=no` alone is not enough: it stops the master and still lets the call go through
-  a master that is there.
-- **Evidence.** M-G2, M-G3 (the `controlpath` line is gone on both builds); `ssh_config(5)`: `ControlPath` — *"none"*
-  turns connection sharing off.
-- **Not observed.** A process that stays, with and without the option (M-O2 in § S2.8).
+- **Proposed:** `-o ControlPath=none` (no sharing: never a master, never a client of one). `ControlMaster=no` alone is
+  not enough: it stops the master and still lets the call go through a master that is there.
+- **Decided (the caller, 2026-11-11, parent ledger entry 2.1): NOT taken.** It is a cause independent of the host-key
+  option, so it would be a second change of epoch 2 and a full stop. Connection sharing stays the person's own
+  configuration. On the owner's extension host (Windows, Win32-OpenSSH) there is no released multiplexing, so there the
+  call cannot become a master or share one. On a Linux or macOS extension host, or in a Remote window (the extension then
+  runs on the remote machine and uses its `ssh`), the two cases above can happen. That is a named residual (§ S2.8,
+  residual 9), and `SECURITY.md` says it in words (§ S2.7). The stories document's § 1 item *"something left running"*
+  then holds for a multiplexing master on Windows only.
+- **Evidence.** M-G2 (the three settings stay under the parent's options); M-G3 (the option would remove the
+  `controlpath` line on both builds); `ssh_config(5)`: `ControlPath` — *"none"* turns connection sharing off.
+- **Not observed.** A master that stays after a read on Linux (M-O2 in § S2.8 measures the residual, so its words can
+  be checked).
 
 **J5 — Forwarding, and the parent's option list.** *(question e)*
 
@@ -862,10 +883,11 @@ config that sets the opposite:
 | `LogLevel=ERROR` | refusals only | `loglevel ERROR` over `DEBUG` | refusals are errors and stay; the server's banner is not printed |
 | `--` before the host | the host is never an option; the words after it are the command | accepted by 10.2p1 and by Windows 9.5p2 | — |
 | no `-n` | the script must reach `sh -s` | — | S2-T1 |
+| `StrictHostKeyChecking=yes` (change 2.1) | no host key is accepted by this call | `stricthostkeychecking true` over `accept-new` (M-G3) | J2; the refusal itself is M-O3 |
 
-Two settings of the person's config are NOT pinned by the list, and an automatic call needs them pinned:
-`StrictHostKeyChecking` (J2) and `ControlPath` (J4). That is § S2.7. `Tunnel` is not pinned either: it needs root on
-both sides and is not a forwarding the list names; it is a residual (§ S2.8).
+Two settings of the person's config were NOT pinned by the parent's first list: `StrictHostKeyChecking` (J2) and
+`ControlPath` (J4). Change 2.1 pins the first; the second stays the person's (residual 9). That is § S2.7. `Tunnel` is
+not pinned either: it needs root on both sides and is not a forwarding the list names; it is a residual (§ S2.8).
 
 **J6 — Nothing left behind on the VM.** *(question d)*
 
@@ -883,7 +905,9 @@ both sides and is not a forwarding the list names; it is a residual (§ S2.8).
 
 **J7 — Nothing left behind on this machine.** One child for each call; the kill at 15 s or at 8 MiB takes the tree on
 win32 (X8); the stdout is in memory only and is dropped after the parse; nothing is written by the extension. ssh
-itself can write `known_hosts` (J2). On Windows no master can stay (J4: no multiplexing, no background mode).
+itself can write `known_hosts` only through `UpdateHostKeys`, for a host it already trusts (J2; change 2.1 stops a new
+host). On Windows no master can stay (J4: no multiplexing, no background mode). On a Linux or macOS extension host, or in
+a Remote window, a person's `ControlPersist` can keep one (J4, residual 9).
 
 **J8 — The window between the press and the read (a request to S3).** The consent question can stay open for minutes.
 So just before EACH spawn, S3's road asks a seam whether the terminal is still open and its name still gives the same
@@ -897,49 +921,48 @@ most 500 units by the parser). A VM that lies can put false text in the chat box
 for a `found` with `via: 'id'`, check `found.folder` — after a title pick it must be one of the folders of call (ii);
 after a pick from an ambiguity list it must be one of `projectDirNames(candidate.cwd)` — and refuse otherwise.
 
-## S2.7 — Plan change candidate 2.1
+## S2.7 — Plan change 2.1, as decided
 
-**The change.** The ssh argv gets two more options, after `-o LogLevel=ERROR` and before `--`:
+**The proposal** (this judgement): two more options after `-o LogLevel=ERROR` and before `--`,
+`-o StrictHostKeyChecking=yes -o ControlPath=none`.
+
+**The decision** (the caller, 2026-11-11, after question consultant `a81ed863`, codex and antigravity: *two independent
+causes*). The parent's ledger entry 2.1 holds it:
 
 ```
--o StrictHostKeyChecking=yes -o ControlPath=none
+- 2.1 · 2026-11-11 · agent · contract — the automatic ssh call pins StrictHostKeyChecking=yes, so a person's accept-new or no cannot make it accept a host key
 ```
 
-| Option | The failure it prevents | Evidence | Effect seen? |
-|---|---|---|---|
-| `-o StrictHostKeyChecking=yes` | A call that a terminal's NAME started accepts a host key nobody looked at, writes it to `known_hosts`, and then logs in there (the host learns the person's user name and public keys) and reads its answer as the session. It happens when the person's config says `accept-new` or `no` — a usual line under `Host *`. With `no`, a CHANGED key is accepted too. The consent question is then the only guard, and it shows a name | J2; M-G2 (the person's `accept-new` stays under the parent's options); M-G3 (`stricthostkeychecking true` on 10.2p1 and on Windows 9.5p2); `ssh_config(5)`: with `yes` ssh never adds a key and refuses a host whose key changed | at the configuration level only (M-G3) |
-| `-o ControlPath=none` | On Linux or macOS (and on Windows when multiplexing ships there), with `ControlMaster auto` and `ControlPersist` in the person's config, our call becomes a background master that outlives the read, or runs through the terminal's own connection | J4; M-G2 (the three settings stay); M-G3 (no `controlpath` line) | at the configuration level only (M-G3) |
+| Option | The failure it prevents | Evidence | Effect seen? | Decided |
+|---|---|---|---|---|
+| `-o StrictHostKeyChecking=yes` | A call that a terminal's NAME started accepts a host key nobody looked at, writes it to `known_hosts`, and then logs in there (the host learns the person's user name and public keys) and reads its answer as the session. It happens when the person's config says `accept-new` or `no` — a usual line under `Host *`. With `no`, a CHANGED key is accepted too. The consent question is then the only guard, and it shows a name | J2; M-G2 (the person's `accept-new` stays under the parent's first options); M-G3 (`stricthostkeychecking true` on 10.2p1 and on Windows 9.5p2); `ssh_config(5)`: with `yes` ssh never adds a key and refuses a host whose key changed | at the configuration level only (M-G3); the refusal is M-O3 | **TAKEN** — change 2.1, in `SSH_OPTIONS` (§ S2.5) |
+| `-o ControlPath=none` | On Linux or macOS, or in a Remote window (and on Windows when multiplexing ships there), with `ControlMaster auto` and `ControlPersist` in the person's config, our call becomes a background master that outlives the read, or runs through the terminal's own connection | J4; M-G2 (the three settings stay); M-G3 (no `controlpath` line) | at the configuration level only (M-G3) | **NOT taken** — an independent cause: a second change of epoch 2, so a full stop. Residual 9 (§ S2.8) |
 
 **What `StrictHostKeyChecking=yes` costs.** Nothing for a host the person's own ssh already trusts: a `Creds:` terminal
 is open, so its ssh wrote the key (with `ask`, `accept-new` and `no` alike). A host whose keys are never kept
 (`UserKnownHostsFile` set to nothing) cannot be read: the refusal ends with ssh's line *"No … host key is known for … and
-you have requested strict checking."* R6 shows it on the owner's hosts.
+you have requested strict checking."* (exit 255, the `code === 255` row of § S2.5). R6 shows it on the owner's hosts.
 
-**One cause or two.** The two options have one cause: *the parent's list pins what the person's ssh configuration may not
-change for an AUTOMATIC call, and the judgement found two settings it does not pin.* The stories document already names
-this entry (*"An ssh option added to the parent's list … is plan change 2.1"*). The count is the caller's and the
-owner's: if they read two causes, the second entry is a full stop. A ledger line for one cause:
+**What this spec does with the decision.**
 
-```
-  (proposed) 2.1 · 2026-11-11 · agent · contract — the ssh argv also pins StrictHostKeyChecking=yes and ControlPath=none: an automatic call makes no trust decision and shares no connection
-```
-
-**If the change is refused — what this spec then does.** The contract of § S2.5 stands as it is written (the parent's
-list). S2-T2 and S2-T21 keep their rows for the parent's options only. And the truth is written where a person reads it:
-
-- `StrictHostKeyChecking=yes` refused → `SECURITY.md` (S4) says: *"An unknown host key is refused, unless your own ssh
-  configuration accepts new keys (`StrictHostKeyChecking accept-new` or `no`). Then the read accepts it, as your
-  terminal does."*
-- `ControlPath=none` refused → `SECURITY.md` says: *"On Linux and macOS, when your ssh configuration shares connections
-  (`ControlMaster`, `ControlPersist`), the read can go through a shared connection or leave one open, as your
-  configuration says."* The "nothing left running" item of the stories document's § 1 then holds on Windows only, and
-  the owner accepts that in words.
-- Only one can be taken → take `StrictHostKeyChecking=yes`. It acts on the owner's platform today; `ControlPath=none`
-  acts on Linux and macOS, and on Windows only after multiplexing ships there.
-
-**If it is approved.** `SSH_OPTIONS` gets the four words in that place; S2-T1 expects them; S2-T2 and S2-T21 get one row
-each; M-O2 and M-O3 (§ S2.8) are owed before the words in `SECURITY.md` say more than "we pass". The coder adds them
-only when the brief the caller sends says so.
+- `SSH_OPTIONS` (§ S2.5) holds the two words `-o`, `StrictHostKeyChecking=yes` after `-o`, `LogLevel=ERROR`. It holds no
+  `ControlPath`, `ControlMaster` or `ControlPersist` word. S2-T1 pins the list, S2-T2 and S2-T21 hold the option, B34 is
+  its break-it.
+- M-O3 is owed before any document says more than "we pass `StrictHostKeyChecking=yes`".
+- **The words for `SECURITY.md`** (E2.S4 writes them in its paragraph on the ssh edge; "we pass" words, as `security.md`
+  asks for a delegated option):
+  - *"The read passes `-o StrictHostKeyChecking=yes`, before your own configuration. With it, ssh refuses a host whose key
+    is not already in your `known_hosts`, and a host whose key changed, whatever your configuration says
+    (`accept-new` or `no` included); the read then ends with ssh's own sentence. A host your terminal's ssh already
+    trusts is read as usual."*
+  - *"The read does not turn off ssh connection sharing. On Windows, the OpenSSH client that comes with Windows has no
+    released connection sharing, so a read cannot share a connection or leave one open. When the extension runs on Linux
+    or macOS — or on the remote machine of a Remote window — and your ssh configuration shares connections
+    (`ControlMaster`, `ControlPersist`), the read can go through a connection that is already open, or open one that
+    stays open for the `ControlPersist` time, as your configuration says."*
+- The stories document's § 1 item *"something left running"* holds for a multiplexing master on the owner's Windows
+  extension host only; elsewhere it is residual 9, said in the words above. Any further ssh option is a full stop, never
+  a coder's or a reviewer's edit.
 
 ## S2.8 — What S2 does not close
 
@@ -948,8 +971,8 @@ only when the brief the caller sends says so.
 | # | What | Who, where |
 |---|---|---|
 | M-O1 | A real call from Windows: the argv reaches `ssh.exe` unchanged, the script arrives, the frame comes back with `\n` line ends | the owner, R6 |
-| M-O2 | `ControlPath=none`: with `ControlMaster auto` and `ControlPersist 60` in a config, a call leaves no `ssh` process; without the option it does | anyone with a Linux machine that runs sshd (the VM itself can call `localhost`) |
-| M-O3 | `StrictHostKeyChecking=yes` with `BatchMode=yes`: a host that is not in `known_hosts` gives exit 255 and nothing is written, also when the config says `accept-new` | the same |
+| M-O2 | Residual 9, its size: with `ControlMaster auto` and `ControlPersist 60` in a config, a call with our argv leaves a background `ssh` master on Linux (the words of § S2.7 say "can"; this checks them). Not a merge condition | anyone with a Linux machine that runs sshd (the VM itself can call `localhost`) |
+| M-O3 | `StrictHostKeyChecking=yes` (change 2.1) with `BatchMode=yes`: a host that is not in `known_hosts` gives exit 255 and nothing is written, also when the config says `accept-new` | the same; or the owner by hand with the argv of S2-T1 to an alias whose key is not kept (R6) |
 | M-O4 | After a read killed at the limit: no `ssh` process on Windows, also with `ProxyJump`; none of the script's commands on the VM | the owner, R6 (§ 8 of the stories document) |
 | M-O5 | The `comm` of the Claude CLI on the VMs; `ps --ppid` there; the registry file's `procStart` there | the owner, R7 |
 | M-O6 | The VMs' tmux: `-t "=name:"` is exact (a session `small` beside `small-tasks`) | the owner, R7 |
@@ -968,6 +991,17 @@ only when the brief the caller sends says so.
    says so.
 6. `Tunnel`, `LocalCommand` and `UpdateHostKeys` stay the person's (J2, J5).
 7. The time bound of the title scan is 8 s on the VM's clock, checked between files.
+8. The tools are a Linux VM's (decision 15). On a VM without procps `ps --ppid` the walk finds no `claude` and the
+   answer is the fallback; without `head -c` the registry is `registry-bad`.
+9. **Connection sharing is the person's (change 2.1 took only the host-key option).** On a Linux or macOS extension
+   host, or in a Remote window, a person's `ControlMaster`/`ControlPersist` can make the call go through an open master,
+   or become a master that stays after the read (J4). Win32-OpenSSH, the owner's extension host, has no released
+   multiplexing. `SECURITY.md` names it in the words of § S2.7 (E2.S4). M-O2 measures it.
+10. tmux answers exit 1 for "no such session", for "no server running" and for a socket it cannot reach; the script
+    reads all three as `COAI-NO-SESSION` (`absent` `session`). The second is a true absence; the third (a socket in
+    another `TMUX_TMPDIR`, a socket with other rights) is a failure that reads as an absence. Telling them apart would
+    need tmux's stderr text matched in `sh` (decision 1 says no). S3's `absent` sentence says "no tmux session … that
+    ssh can see", not more.
 
 ## S2.9 — Scenarios
 
@@ -989,9 +1023,9 @@ answers `answer`, whose `exists` answers true, and whose `log` collects lines.
 
 | # | Name | Input → assertion | First RED |
 |---|---|---|---|
-| S2-T1 | the argv is the parent's, in its order | `sshArgv(H, [S])` deep-equals `[...SSH_OPTIONS, '--', H, 'sh', '-s', '--', "'small-tasks'"]`, and `SSH_OPTIONS` deep-equals the parent's list typed out ONCE in the test; no word is `-n`; the word before `H` is `--` | no module |
-| S2-T2 | every forwarding is off and no question is asked | each of `BatchMode=yes`, `RequestTTY=no`, `RemoteCommand=none`, `ClearAllForwardings=yes`, `ForwardAgent=no`, `ForwardX11=no` follows a `-o` and stands before `--`. The test's comment says this is PRESENCE; the effect is S2-T21 | no module |
-| S2-T3 | a bad host or operand throws before any spawn | hosts `-oProxyCommand=x`, `h;id`, `h\n`, `h\0`, `a b`, `user@h` and the empty string → `sshArgv` throws; operand lists `["a'b"]`, `['a b']`, `['a\nb']`, `['a\0b']`, `[S, 'id', 'x']`, `[S, 'titles', '..']` → throws; through `runRemote` each gives `refused` with the "cannot be given to ssh safely" sentence and the fake `capture` saw NO call. Companion: `runRemote(H, S, [S], …)` with the same fake DOES call it | no module |
+| S2-T1 | the argv is the parent's, in its order (change 2.1 included) | `sshArgv(H, [S])` deep-equals `[...SSH_OPTIONS, '--', H, 'sh', '-s', '--', "'small-tasks'"]`, and `SSH_OPTIONS` deep-equals the parent's list typed out ONCE in the test — its last two words are `-o`, `StrictHostKeyChecking=yes`; no word is `-n`; no word starts with `Control`; the word before `H` is `--` | no module |
+| S2-T2 | every forwarding is off, no question is asked and no host key is accepted | each of `BatchMode=yes`, `RequestTTY=no`, `RemoteCommand=none`, `ClearAllForwardings=yes`, `ForwardAgent=no`, `ForwardX11=no`, `StrictHostKeyChecking=yes` follows a `-o` and stands before `--`. The test's comment says this is PRESENCE; the effect on the configuration is S2-T21, the refusal is M-O3 | no module |
+| S2-T3 | a bad host or operand throws before any spawn | hosts `-oProxyCommand=x`, `h;id`, `h\n`, `h\0`, `a b`, `user@h` and the empty string → `sshArgv` throws; operand lists `["a'b"]`, `['a b']`, `['a\nb']`, `['a\0b']`, `[S, 'id', 'x']`, `[S, 'titles', '..']` → throws; through `runRemote` each gives `refused` with the "cannot be given to ssh safely" sentence and the fake `capture` saw NO call. `runRemote(H, S, ['other-session'], …)` (the operands name another session than the log label) → the same refusal, no call. Companion: `runRemote(H, S, [S], …)` with the same fake DOES call it | no module |
 | S2-T5 | on win32 the argv crosses unchanged (G0) | for the three forms with every legal first character and a 255-character folder: no word of `sshArgv(…)` holds a space, a tab or `"`; the words after `sh -s --` are `shQuoted` of the operands; `callOf` refuses a folder with a space, a tab or a `"`; the fake `capture` got `shell === false` | no module |
 | S2-T6 | the script travels on stdin and nothing else does | `runRemote(H, S, [S], REMOTE_SCRIPT, …)`: the fake `capture`'s `input` is `REMOTE_SCRIPT`; no argv word holds a line break or is longer than 300 characters | no module |
 | S2-T7 | a slow host is refused at the limit | fake answers `{ code: -1, output: '', ended: 'timeout', stderrTail: '' }`, `limits.ms` 15000 → `refused`, *"“ai1-dev2” did not answer over ssh within 15 s."*; the fake got `capMs` 15000 and `killTree: true`. The KILL itself is S2-T22 | no module |
@@ -999,15 +1033,19 @@ answers `answer`, whose `exists` answers true, and whose `log` collects lines.
 | S2-T18 | the ssh executable is one absolute path, and its folder is the child's | `sshExecutable('win32', { SystemRoot: 'D:\\W' })` → `D:\W\System32\OpenSSH\ssh.exe`, `cwd` `D:\W\System32\OpenSSH`; with `WINDIR` only; with neither → `C:\Windows\…`; `'linux'` and `'darwin'` → `/usr/bin/ssh`, `/usr/bin`. Through `runRemote`: the fake `capture` got that `path` as its target and that `cwd`; `exists` false → the "not found at" refusal with the path, on win32 with the "OpenSSH Client" sentence, and NO capture call | no module |
 | S2-T19 | one log line for a call that did not answer 0, and nothing of the conversation in it | a 255 → ONE line that holds `host=ai1-dev2`, `session=small-tasks`, `end=exit 255` and the stderr text; timeout, capped, not started, no ssh, exit 3 → one line each with its `end`; exit 0 → NO line. With operands `[S, 'titles', '-home-git-secret']` and stdout `TRANSCRIPT-MARK`: no line holds `-home-git-secret` or `TRANSCRIPT-MARK`. A bad operand → the fixed line, with no value in it | no module |
 | S2-T20 | `runRemote` never rejects, and a code that is not 0 or 255 is an answer | a fake `capture` that rejects, and an `exists` that rejects → `refused`, no throw. Exit 3 with stdout `x` → `answered`, code 3; `readRemote` of it → `unreadable` `exit` | no module |
-| S2-T21 | the options win over a person's config (the REAL `ssh -G`) | write the config of M-G1 in the run folder. `ssh -F <it> -G vmx` shows the forwards, `forwardagent yes`, `batchmode no`, the `remotecommand` (the fixture IS hostile). `ssh -F <it> -G` + `sshArgv('vmx', [S])` shows `batchmode yes`, `clearallforwardings yes`, no line that starts with `localforward`, `remoteforward` or `dynamicforward`, `forwardagent no`, `forwardx11 no`, `requesttty` `no` or `false`, no `remotecommand` line, `loglevel ERROR`, `connecttimeout 5`. The ssh is `sshExecutable().path`. No ssh there → skip with that reason; under `CI` on linux it must run | no module |
+| S2-T21 | the options win over a person's config (the REAL `ssh -G`) | write the config of M-G1 in the run folder. `ssh -F <it> -G vmx` shows the forwards, `forwardagent yes`, `batchmode no`, the `remotecommand` (the fixture IS hostile). `ssh -F <it> -G` + `sshArgv('vmx', [S])` shows `batchmode yes`, `clearallforwardings yes`, no line that starts with `localforward`, `remoteforward` or `dynamicforward`, `forwardagent no`, `forwardx11 no`, `requesttty` `no` or `false`, no `remotecommand` line, `loglevel ERROR`, `connecttimeout 5`, `stricthostkeychecking true` (the fixture says `accept-new`). The test asserts nothing about the `control…` lines: they stay the person's (residual 9), and its comment says so. The ssh is `sshExecutable().path`. No ssh there → skip with that reason; when `process.env.CI === 'true'` on linux the ssh MUST be found — the test fails, it does not skip (the ssh half of S2-T44) | no module |
 
-### S2.9.2 — `src/test/captureWidened.test.ts` (new; REAL children, as `captureStops.test.ts`) and `processLauncher.test.ts` (add)
+### S2.9.2 — `src/test/captureWidened.test.ts` (new; REAL children, as `captureStops.test.ts`)
+
+All four rows live in this ONE new file, the `launch` half of S2-T22 and S2-T23 included: commit 1 creates it with those
+two, commit 2 adds the rest. No existing test file is edited (`processLauncher.test.ts`, `captureStops.test.ts` and
+`roundsDbRead.test.ts` stay byte for byte; S2-T11, checklist 5).
 
 | # | Name | Input → assertion | First RED |
 |---|---|---|---|
 | S2-T8 | the cap counts bytes | a node child that writes 300 `é` and then waits; `maxStdoutBytes` 400 (300 characters, 600 bytes) → `ended: 'capped'`, `code` -1, `output` `''`; it answers well before the 60 s cap, so the child was killed. Companion: `maxStdoutBytes` 700 and a child that ends → code 0 and the 300 characters | `'capped'` is not a `CaptureEnd` (compile) |
 | S2-T11 | `capture` is widened, not changed | `capture.length` is 6 (the parameters before `input`); a call with NO eighth argument deep-equals `{ code: 0, output: 'x' }` — no `stderrTail` key; with `{}` the answer has `stderrTail`; with `{ cwd: <the run folder> }` a child that prints `process.cwd()` prints that folder. The existing `captureStops`, `roundsDbRead` and `processLauncher` tests are green with NO edit | the eighth parameter does not exist |
-| S2-T22 | a child past the limit is gone | a node child that never ends, `capMs` 150, `{ killTree: true }` → `ended: 'timeout'`, and the child is not alive after it (it wrote its pid to a file in the run folder first; `process.kill(pid, 0)` throws). In `processLauncher.test.ts`: `launch(NODE, […], { killTree: true })` and `kill()` → the exit event comes | `killTree` is not a `LaunchOptions` key |
+| S2-T22 | a child past the limit is gone | a node child that never ends, `capMs` 150, `{ killTree: true }` → `ended: 'timeout'`, and the child is not alive after it (it wrote its pid to a file in the run folder first; `process.kill(pid, 0)` throws). The `launch` half (in this file): `launch(NODE, […], { killTree: true })` and `kill()` → the exit event comes | `killTree` is not a `LaunchOptions` key |
 | S2-T23 | the system folder is one rule | `system32({ SystemRoot: 'D:\\W' })` → `D:\W\System32`; `WINDIR` only; neither → `C:\Windows\System32` | no export |
 
 ### S2.9.3 — `src/test/remoteScript.test.ts` (new; pure, and one real `sh -c`)
@@ -1029,7 +1067,7 @@ changes one thing of a fixture the parser accepts. `ID`, `ID2` are two UUIDs. `C
 | S2-T24 | a banner is not data, and no sentinel is not "absent" | a `motd` before the frame → the same arm as without it; a banner that HOLDS the line `COAI-BEGIN 1` → the frame starts at the last one; text after `COAI-END` is ignored. No sentinel → `unreadable` `no-sentinel` (never `absent`); `COAI-BEGIN 2` → `version`; no `COAI-END` → `cut`; a line `hello` inside → `frame`; an unknown marker → `frame`; a whole good frame with `code` 3 → `exit` | no module |
 | S2-T25 | a transcript line cannot end the transcript | a tail whose data lines are `:COAI-END`, `:COAI-BEGIN 1`, `::x`, `:COAI-FILE-END 9` → `found`, and `lines` are `COAI-END`, `COAI-BEGIN 1`, `:x`, `COAI-FILE-END 9` | no module |
 | S2-T26 | a cut tail drops its first part, and a tail cut inside a character is clean | sizes `TAIL_MAX + 1` and `TAIL_MAX + 1`, first data line `\ufffd\ufffdvet"}` → `cut` true, that line is not in `lines`; sizes `10`/`10` → `cut` false and the first line is kept; sizes `TAIL_MAX`/`TAIL_MAX + 5` (grew during the read) → `cut` true; empty data lines are left out | no module |
-| S2-T27 | a registry file that is not right is `unreadable`, each fault by its name | text over `REGISTRY_MAX` bytes (counted in bytes: 30000 `é`) → `registry-big`; `{not json` → `registry-bad`, and `JSON.stringify` of the result does not hold `not json`; `sessionId` `'x'`; `pid` that is another number; no `cwd`; a `cwd` with a line break → `registry-bad`; `procStart` `'41288'` with the marker's start `41289` → `registry-stale`; equal → `found`; no `procStart`, or start `-` → `found`; `COAI-REGISTRY <pid> denied` → `registry-denied`. A `name` with a control character → `found` with `name` `''` | no module |
+| S2-T27 | a registry file that is not right is `unreadable`, each fault by its name | text over `REGISTRY_MAX` bytes and under it in characters (33000 `é`: 66000 bytes, 33000 units) → `registry-big`; `{not json` → `registry-bad`, and `JSON.stringify` of the result does not hold `not json`; `sessionId` `'x'`; `pid` that is another number; no `cwd`; a `cwd` with a line break → `registry-bad`; `procStart` `'41288'` with the marker's start `41289` → `registry-stale`; equal → `found`; no `procStart`, or start `-` → `found`; `COAI-REGISTRY <pid> denied` → `registry-denied`. A `name` with a control character → `found` with `name` `''` | no module |
 | S2-T28 | the transcript is found by its id, once, in the session's folder | files 0 → `absent` `transcript`; 2 → `ambiguous` `transcripts` with no candidates; 1 with a folder that is not one of `projectDirNames(cwd)` → `unreadable` `folder`; each name that `projectDirNames('/home/git/knowledge_base')` gives (taken from the call, not typed) → `found`; a `COAI-TRANSCRIPT` id that is not the registry's → `id-mismatch`; registry valid and no `COAI-TRANSCRIPT` → `frame` | no module |
 | S2-T29 | a picked id: the six cases | `call = { kind: 'id', session: S, id: ID2 }`. (a) one pane, one `claude`, a valid registry of `ID` → `found` `via: 'registry'` of `ID`; (b) two panes, named candidates `ID` and `ID2`, the transcript of `ID2` → `found` `via: 'id'` with that candidate's `cwd` and `name`; (c) one pane, no `claude` → `found` `via: 'id'`, `cwd` `''`; (d) the file count 0 in (b) and in (c) → `gone` with `ID2` (never `absent`, never `fallback`); (e) two named candidates, none is `ID2` → `ambiguous` with both; (f) one named candidate that is not `ID2` and one `claude` with registry `none` → `found` `via: 'id'`. A `COAI-TRANSCRIPT` of another id → `frame` | no module |
 | S2-T30 | the fallback's first call | one pane, no `claude`, `COAI-CWD` `:/home/git/kb`, three folder lines, `COAI-FOLDERS-END 2 0` → `fallback` with that `paneCwd`, the three names, `skipped` 2, `more` false; `… 0 1` → `more` true; a folder line `a b` → `frame`; a `COAI-CWD` line that does not start with `/` → `frame`; one pane, one `claude`, registry `none` → `fallback` | no module |
@@ -1042,30 +1080,35 @@ changes one thing of a fixture the parser accepts. `ID`, `ID2` are two UUIDs. `C
 **The harness.** `tree()` makes, in the run folder: `home/.claude/sessions`, `home/.claude/projects`, `bin/`, `fx/`.
 `bin/` holds a fake `tmux` and a fake `ps` (below) and a link to the real file of each other name of `REMOTE_TOOLS`,
 plus `stat`. `run(shell, operands, opts)` = `spawn(shell, ['-s', '--', ...operands], { env: { HOME: <home>, PATH: <bin>
-} })` — the environment holds NOTHING else — with `REMOTE_SCRIPT` written to stdin. Each test runs for every shell that
+} })` — the environment holds NOTHING else — with `REMOTE_SCRIPT` written to stdin. `shell` is an ABSOLUTE path, found
+once on the test's own `PATH`: node looks a bare command up on the `PATH` of `env`, and that is `bin/`, which holds no
+`sh`. Each test runs for every shell that
 is there: `sh`, and `bash --posix` (it reads a script byte by byte, `dash` in blocks: M-S3). The operands are given
 WITHOUT quotes (no login shell is in the way here). No `sh` → skip with that reason. **S2-T44**: when
-`process.env.CI === 'true'` and the platform is `linux`, `sh` and `ssh` MUST be found — the test fails, it does not skip.
+`process.env.CI === 'true'` and the platform is `linux`, `sh` MUST be found — the test fails, it does not skip. (The ssh
+half is S2-T21's, in commit 6: this file is commit 5 and cannot import `sshExecutable` yet.)
 
 The fakes are `sh` scripts. They set their own `PATH=/usr/bin:/bin` first (the script under test sees only `bin/`). Each
 appends one line to `fx/log`: its name, its pid, its arguments, and what its stdin is (`readlink /proc/$$/fd/0`). When `fx/eat`
 exists they then read ALL their stdin (`cat >/dev/null`). `tmux list-panes -s -t "=<name>:" -F …` prints `fx/<name>.panes`
 or exits 1; **for any target that is not exactly `=<name>:` it exits 2** (the fake holds the form that M-T1 and M-T2
 measured). `tmux display-message -p -t %<n> …` prints `fx/<n>.cwd`. `ps -o comm= -p <pid>` and `ps -o pid= --ppid <pid>`
-read `fx/ps.txt` (lines `pid ppid comm`). Fake pids are over 99000000, so no `/proc/<pid>` exists for them.
+read `fx/ps.txt` (lines `pid ppid comm`); when `fx/slow` exists the fake `ps` first sleeps 0.1 s, so a test that counts
+calls after a closed reader does not depend on the machine's speed. Fake pids are over 99000000, so no `/proc/<pid>`
+exists for them.
 
 | # | Name | Setup → assertion | First RED |
 |---|---|---|---|
 | S2-T34 | the registry path, end to end, through the real parser | one pane, `bash` → `claude`, a registry file of `ID`, a transcript of 4 lines in the folder `projectDirNames` gives for the registry's `cwd`; one of the lines is `COAI-BEGIN 1` and the last has no line end → `readRemote({code, stdout}, CALL)` is `found`, `via: 'registry'`, the 4 lines exactly, `cut` false. Exit code 0. `fx/log` holds exactly: 1 `tmux`, 3 `ps` | no module |
 | S2-T12 | an empty glob does not eat the script, and no tool reads it | NO `~/.claude/projects` folder at all, `fx/eat` set, one pane with no `claude` → the frame is whole (`COAI-BEGIN 1` … `COAI-END`), the arm is `fallback` with no folders; with `id ID` → `gone`. EVERY line of `fx/log` says `stdin=/dev/null` (Linux; elsewhere this one assertion is left out, and the test says so) | no module |
 | S2-T13 | a `claude` with a child is one candidate | one pane; `claude` (pid A) with a `node` child and a `claude` grandchild → ONE `COAI-CLAUDE` line, pid A; `fx/log` has no `ps` call that asks for the children of A. Two sibling `claude` → `ambiguous` `processes` with what could be named. The pane's own process is `claude` → one candidate, that pid | no module |
-| S2-T14 | several panes are a list, never a pick (change 1.1 point 2) | two panes in one window; two windows; one pane with two `claude` → `ambiguous` with every candidate that has a registry file; NO `COAI-TRANSCRIPT`, `COAI-CWD` or `COAI-FOLDERS` line is printed. Two panes with no `claude` → `ambiguous`, none. The companion: the same registry and transcript with ONE pane → `found` | no module |
+| S2-T14 | several panes are a list, never a pick (change 1.1 point 2) | two panes in one window; two windows; one pane with two `claude` → `ambiguous` with every candidate that has a registry file; NO `COAI-TRANSCRIPT`, `COAI-CWD` or `COAI-FOLDERS` line is printed. Two panes where ONE runs `claude` with a valid registry and a transcript → `ambiguous` `panes` with that one candidate, and no `COAI-TRANSCRIPT` line (the fixture B19 needs). Two panes with no `claude` → `ambiguous`, none. The companion: the same registry and transcript with ONE pane → `found` | no module |
 | S2-T15 | nothing is left behind | `fx/eat` set; the test writes the script and does NOT close stdin → `COAI-END` comes within 5 s (no command waits for input); then stdin is closed → the `sh` process ends within 5 s with code 0, and no fake is alive (each `fx/log` line holds the fake's pid; `process.kill(pid, 0)` throws for each) | no module |
 | S2-T35 | every arm comes out of the real script | one fixture for each, through `readRemote`: `fallback` (a pane, no `claude`, three folders and one named `has space` → `skipped` 1); `titles` (two folders; one file with an ai-title, a custom-title, the ai-title again, and one raw line of 3000 bytes that holds `"custom-title"` → the names, `tooLong` 1); `gone`; `absent` `session` (no such tmux session); `absent` `transcript`; `ambiguous` `transcripts` (one id in two folders); `unreadable` `registry-denied` (mode 000; left out when the test runs as root); `unreadable` `too-many` (a chain of 20 processes) | no module |
 | S2-T36 | the session name is exact | fixtures `small.panes` and `small-tasks.panes` with different panes → the call for `small` lists `small`'s pane. Every `tmux list-panes` line of `fx/log` has `-t =<name>:` with the colon. NOT covered: a real tmux (M-T1, M-T2 here; M-O6 on the VMs) | no module |
 | S2-T37 | the script only reads | a listing of the whole `home` tree (path, size, mtime, mode) before and after one run of each of the three forms is identical; the run folder has no new entry outside `fx/log` | no module |
-| S2-T38 | a tool that is not there is said | for EACH name of `REMOTE_TOOLS` (taken from the constant) and for each of the three forms: the link is taken out of `bin/` → `unreadable` `tool` — never `absent`, `fallback` or a `titles` with no rows. Companion: with all of them there → `found`, `gone` and a `titles` with its rows | no module |
-| S2-T39 | a reader that is gone stops the script | a 12-pane fixture; the test reads the first line and destroys its end of stdout → the process ends within 5 s; `fx/log` holds fewer than 6 `ps` lines (a whole run holds 24). The same when the shell was started with `SIGPIPE` ignored (`sh -c "trap '' PIPE; exec sh -s -- many"`) | no module |
+| S2-T38 | a tool that is not there is said | for EACH name of `REMOTE_TOOLS` (taken from the constant) and each form that runs it: the link is taken out of `bin/` → `unreadable` `tool` — never `absent`, `fallback` or a `titles` with no rows. The nine names of the first `for tool in` line are checked by every form; `tmux` and `ps` by the `session` and `id` forms only (the `titles` form never runs them, so without them it still answers its rows — the test asserts that too). Companion: with all of them there → `found`, `gone` and a `titles` with its rows | no module |
+| S2-T39 | a reader that is gone stops the script | a 12-pane fixture, `fx/slow` set; the test reads the first line and destroys its end of stdout → the process ends within 5 s; `fx/log` holds fewer than 6 `ps` lines (a whole run holds 24). The same when the shell was started with `SIGPIPE` ignored (`sh -c "trap '' PIPE; exec <the shell's absolute path> -s -- many"` — absolute, because the `PATH` is `bin/` and holds no `sh`) | no module |
 | S2-T40 | a tail over 4 MiB is cut, and says so | a transcript of 5 MiB of JSON lines with multi-byte text → `found`, `cut` true; every line of `lines` parses as JSON; `Buffer.byteLength` of the joined lines is at most `TAIL_MAX`; the last line is the file's last line | no module |
 | S2-T41 | a name the script cannot frame is left out, not sent | a project folder whose name holds a line break and one whose name holds a space → both counted in `skipped`, the frame is whole. A transcript in a folder named `-home-git-my proj` (the registry's `cwd` is `/home/git/my proj`) → `found` on the registry path, `folder` exactly that name | no module |
 | S2-T42 | the start time in the frame is the process's own (Linux) | the fixture's `claude` pid is the TEST's own pid, and its registry's `procStart` is field 22 of `/proc/self/stat` read by the test → `found`; with `procStart` + 1 → `unreadable` `registry-stale` | no module |
@@ -1094,7 +1137,7 @@ S2-T25, S2-T26; the registry file S2-T27, S2-T42; the transcript by id S2-T28; t
 | B5 | `shQuoted` puts the word in double quotes | S2-T4 — red naming `$(id)` (the command does not parse); S2-T5 — a word holds `"` |
 | B6 | the folder rule allows a space | S2-T16; S2-T5 — `this operand would be re-quoted on its way to ssh.exe` |
 | B7 | the folder rule's first class allows `.` | S2-T16 — `..` was accepted; S2-T3 |
-| B8 | `sshArgv` does not ask `callOf` | S2-T3 — the fake `capture` WAS called for `[S, 'id', 'x']` |
+| B8 | `sshArgv` does not ask `callOf`; then `runRemote` does not compare `operands[0]` with `session` | S2-T3 — the fake `capture` WAS called for `[S, 'id', 'x']`; then for `['other-session']` |
 | B9 | `runRemote` puts the script in the argv | S2-T6 |
 | B10 | `runRemote` maps code 255 to `answered` | S2-T9 — `a refused key read as an empty session` |
 | B11 | `runRemote` passes no `killTree`; then `capture` on its timeout answers without `child.kill()` | S2-T7; S2-T22 — `a timed-out ssh was left running` |
@@ -1105,7 +1148,7 @@ S2-T25, S2-T26; the registry file S2-T27, S2-T42; the transcript by id S2-T28; t
 | B16 | the call line of the script without ` </dev/null` | S2-T12 — a tool call whose stdin is not `/dev/null` (and under `bash` the frame has no `COAI-END`: `the rest of the script was read as data`); S2-T15 — the test's own timeout, naming `tmux`; S2-T17 |
 | B17 | `coai_walk` enters a `claude` (the `return 0` after its `printf` taken out) | S2-T13 — `one Claude CLI was read as two sessions` |
 | B18 | the panes line reads `-t "=$session"` (no colon) | S2-T36 — the fake tmux exits 2: `the session name was not exact`. Then `display-message` in place of `list-panes -s`: S2-T14 — `a two-pane session was read without a choice` |
-| B19 | `exact` is 1 for any pane count | S2-T14 — a `COAI-TRANSCRIPT` line for a two-pane session |
+| B19 | `exact` is 1 for any pane count | S2-T14 — a `COAI-TRANSCRIPT` line for the two-pane session with one `claude` |
 | B20 | `coai_transcript` without the `-f` test of each match | S2-T12 — `gone` became a failure (`COAI-BAD transcript`) with no projects folder |
 | B21 | the first `for tool in …` check taken out | S2-T38 — with no `grep` the `titles` form answers a `titles` with no rows: `a missing tool was read as no session` |
 | B22 | `\|\| return 0` taken off the `COAI-PANE` line | S2-T39, the `SIGPIPE`-ignored half — all 24 `ps` calls ran |
@@ -1120,19 +1163,26 @@ S2-T25, S2-T26; the registry file S2-T27, S2-T42; the transcript by id S2-T28; t
 | B31 | the parser answers `found` for the first of two candidates | S2-T32, S2-T14 — `a two-pane session was read without a choice` |
 | B32 | the parser builds the names with its own JSON read in place of `collectNames` (the `latest` is then the first row) | S2-T31 |
 | B33 | `readRemote` ignores `run.code` | S2-T20, S2-T24 |
+| B34 | `-o`, `StrictHostKeyChecking=yes` taken out of `SSH_OPTIONS` (change 2.1) | S2-T1 — the list; S2-T2 — `an unknown host key would be accepted by a call a terminal's name started`; S2-T21 — `stricthostkeychecking accept-new` |
 
 ## S2.11 — The brief: order, files, commands
 
 One coder, on `feat/chat-from-a-terminal-e2`, on top of `b51dd174` or later. Each commit is green on its own (`npm run
-compile` exit 0, the whole suite, lint). Stage by path. **No ssh option is added to `SSH_OPTIONS` unless the brief the
-caller sends with this spec says that plan change 2.1 is approved, and with which words.**
+compile` exit 0, the whole suite, lint). Stage by path. **`SSH_OPTIONS` is exactly the list of § S2.5: the parent's
+options and change 2.1's two words `-o`, `StrictHostKeyChecking=yes` last. `ControlPath=none` was NOT taken. No other
+option, ever, from the coder: a further ssh option is a plan change and a full stop.**
+
+**Sizes (the 800-line limit, `eslint.config.mjs:113`, holds for `src/**` and not for `src/test/**`).** Expected:
+`remoteScript.ts` ≈ 420 lines (293 of them the script), `remoteFrame.ts` ≈ 500, `remoteSsh.ts` ≈ 220. If
+`remoteFrame.ts` would pass 700 lines, stop and tell the caller; do not add a file the spec does not name.
 
 0. **Step 0, no commit.** Check that the text of § S2.3 is the text you will send: copy the block to a file, and
    `sha256sum` it — it must be `1c3b25f9…ecad07` (293 lines, the last line ends with LF).
 1. **`feat(launcher): a caller may ask for the tree kill, and the system folder is one rule`** — `processLauncher.ts`
-   (`LaunchOptions.killTree`, `system32`, `TASKKILL` from it); S2-T23 and the `launch` half of S2-T22.
+   (`LaunchOptions.killTree`, `system32`, `TASKKILL` from it); NEW `captureWidened.test.ts` with S2-T23 and the `launch`
+   half of S2-T22.
 2. **`feat(capture): one options object — the working folder, a byte cap, the stderr tail`** — `versionProbe.ts`;
-   `captureWidened.test.ts` (S2-T8, S2-T11, S2-T22).
+   `captureWidened.test.ts` gets S2-T8, S2-T11 and the `capture` half of S2-T22.
 3. **`feat(remote): the operands and the script that is sent`** — `remoteScript.ts`; `remoteScript.test.ts` (S2-T4,
    S2-T16, S2-T17). Then `node -e` prints the sha256 of the compiled `REMOTE_SCRIPT`: it must be the hash of step 0.
    Put the command and its output in the summary.
@@ -1140,7 +1190,8 @@ caller sends with this spec says that plan change 2.1 is approved, and with whic
 5. **`test(remote): the script, run by a real sh`** — `remoteScriptRuns.test.ts` (S2-T12…T15, S2-T34…T44). A red here
    that needs a change of the script text is NOT fixed in silence: say it in the summary with the new hash; the caller
    updates § S2.3.
-6. **`feat(remote): the ssh edge`** — `remoteSsh.ts`; `remoteSsh.test.ts` (S2-T1…T3, T5…T7, T9, T18…T21).
+6. **`feat(remote): the ssh edge`** — `remoteSsh.ts`; `remoteSsh.test.ts` (S2-T1…T3, T5…T7, T9, T18…T21; S2-T21 holds
+   the ssh half of S2-T44).
 7. **`test(remote): no log line carries the conversation`** — `remoteLogScan.test.ts` (S2-T10).
 8. **`docs(research): the remote reader's contract`** — § S2.12.
 
@@ -1170,14 +1221,16 @@ node scripts/count-notifications.mjs --write                   # expect NO chang
   what each option asks for, with the table of J5 and the date and versions of M-G2; the executable and the child's
   folder and why (J1); the Windows argv (no space, tab or `"` in any word); the limits and the tree kill; the log rule.
   The script — its three forms, its rules 1–13, the bounds table. The frame and the decision table of § S2.4. Every
-  sentence about an ssh option says "we pass", and names M-O1…M-O7 as not observed yet.
+  sentence about an ssh option says "we pass", and names M-O1…M-O7 as not observed yet. Change 2.1
+  (`StrictHostKeyChecking=yes`) and residual 9 (connection sharing is the person's; not on Windows) in the words of § S2.7.
 - `research/architecture.md`: the new OUTWARD edge — the extension host → the system `ssh` → a VM the person agreed to,
   read-only (the edges section and the cross-cutting security part).
 - `research/module_tests.md`, the row *Chat with other AI — THE REMOTE SESSION (E2)*: S2's tests by file. **Not
   covered**, with the reason: a real ssh call and a real sshd (R6; M-O1…M-O4); the real `comm`, `ps` and registry on the
   VMs (R7; M-O5); a real tmux (M-O6); the 64 MiB bound of the title scan by a real file; what `ssh.exe` does with a
   `ControlPath` in a config.
-- `SECURITY.md` is S4's. S4 takes § S2.6 and § S2.7 as its source, in "we pass" words.
+- `SECURITY.md` is S4's. S4 takes § S2.6 and § S2.7 as its source, in "we pass" words — the two paragraphs of § S2.7
+  among them.
 
 ## S2.13 — What the Opus reviewer checks
 
@@ -1185,8 +1238,9 @@ node scripts/count-notifications.mjs --write                   # expect NO chang
    this spec. The script was run by `sh -s` in CI: the job's log shows S2-T12…T15 and S2-T34…T44 run, not skipped.
 2. The last two lines of the script are the call with `</dev/null 2>/dev/null` and the `COAI-END` line. No command in
    the function names a data file as an argument except the two after `--`.
-3. `SSH_OPTIONS` is the parent's list, word for word and in its order — or it holds the approved 2.1 words, and the
-   parent's ledger has the entry. No other option anywhere (`grep -n "'-o'" src/remoteSsh.ts`).
+3. `SSH_OPTIONS` is the parent's list, word for word and in its order, with change 2.1's `-o`,
+   `StrictHostKeyChecking=yes` last (parent ledger entry 2.1). No `ControlPath` and no other option anywhere
+   (`grep -n "'-o'" src/remoteSsh.ts`).
 4. S2 added no `spawn`, `exec` or `execFile` call (`git diff` of `src/` shows none; `processLauncher.ts` keeps its two
    `spawn` sites). `remoteSsh.ts` reaches a process only through `capture`, with `shell` false; the executable is never a
    bare name.
@@ -1214,11 +1268,12 @@ node scripts/count-notifications.mjs --write                   # expect NO chang
 
 ## Definition of Done — E2.S2
 
-- [ ] The security judgement (§ S2.6) and plan change candidate 2.1 (§ S2.7) were read by the caller BEFORE any S2 code;
-      2.1 is recorded and approved in the parent, or refused, and the brief says which.
+- [x] The security judgement (§ S2.6) and the proposal of § S2.7 were read by the caller BEFORE any S2 code; 2.1 is
+      recorded in the parent (`StrictHostKeyChecking=yes` taken; `ControlPath=none` not taken, residual 9), and this spec
+      and its brief say so.
 - [ ] This spec was reviewed by Opus (gate G6) and "Changes to § 4" is in the stories document and in the S3 and S4
       briefs, in one commit.
-- [ ] S2-T1…T44 green; each first RED and each break-it B1…B33 observed with its message; all in the summary.
+- [ ] S2-T1…T44 green; each first RED and each break-it B1…B34 observed with its message; all in the summary.
 - [ ] `npm run compile` exit 0; the whole suite green on CI with the `sh -s`, `sh -c` and `ssh -G` tests RUN (S2-T44);
       `npm run lint` green; no suppression count grew.
 - [ ] The sha256 of `REMOTE_SCRIPT` is the one in § S2.3 (or the spec holds the new one, with the reason).

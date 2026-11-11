@@ -4,13 +4,15 @@
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics`, its § *Stage 2*, its
 > § *Security* and its ledger entry 1.1). Written by Opus when the epic started, on `feat/chat-from-a-terminal-e2` from
 > `main` `45b070a2`. A stories document keeps no change ledger: a change to this epic is an entry in the parent (epoch 2,
-> 0 changes today; the next one is 2.1, and a second one is a full stop).
+> 1 change: 2.1, the ssh call pins `StrictHostKeyChecking=yes`; the next accepted change is a full stop). Gate G6 done
+> 2026-11-11: Opus reviewed the S2 spec and its changes X1–X10 are in § 4, S3 and S4 below.
 >
 > Scope: `src_vs_code` only, plus `SECURITY.md`, `research/` and the help. Four stories (the gate's order: an epic has 3–4
 > stories). **Cornerstone: E2.S2** — the remote reader's contract: the ssh argv, the stdin script and the typed result,
 > areas (d) and (e). Fable writes its scenarios and brief, INCLUDING the security judgement on the ssh edge (which stays
-> outside the quota, `subagent-models.md`, the security row), in `todo/PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md`
-> (not written yet). The parent's ledger line reads `Cornerstones: 2 of 2 — E1.S2, E2.S2`.
+> outside the quota, `subagent-models.md`, the security row), in
+> [PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md](PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md) (written by
+> Fable, reviewed by Opus, 2026-11-11). The parent's ledger line reads `Cornerstones: 2 of 2 — E1.S2, E2.S2`.
 
 ## 1. Goal, before any solution
 
@@ -41,7 +43,10 @@ The silent failures this epic must not ship:
 - **An outward call nobody agreed to** — an ssh call to a host the person has not said yes to, or one that forwards a port,
   an agent or X11.
 - **The conversation in a log** — stdout is the transcript; it must never reach a log line or the disk.
-- **Something left running** — an ssh child, a multiplexing master or a remote command that outlives the read.
+- **Something left running** — an ssh child, a multiplexing master or a remote command that outlives the read. (A master
+  that a person's own `ControlMaster`/`ControlPersist` makes is the named residual of change 2.1: on a Linux or macOS
+  extension host, or in a Remote window, it can happen and `SECURITY.md` says so; the owner's Windows host has no
+  released multiplexing. S2 spec § S2.7, residual 9.)
 
 ## 2. What exists — verified at `45b070a2`, 2026-11-11
 
@@ -63,7 +68,7 @@ this commit.
 | The page draws Asked only when `fromSession`; a refusal shows only when there are NO prompts | `src/chatPage.ts:1181`, `:1675`; the `asked` message `:2121-2134` |
 | The pure line rules E2 reuses | `src/claudeQuestion.ts:110` `collectNames`, `:291` `lastAsked`, `:327` `humanSaid`, `:356` `titleFrom`, `:379` `customTitleFrom`, `:454` `askedAsText` |
 | The pure session rules E2 reuses (`claudeSessions.ts` is 1191 lines) | `src/claudeSessions.ts:72` `projectDirNames`, `:333` `namedAmong`, `:400` `SCAN_BUDGET`, `:512` `waitingIn`, `:686` `MOST_PROMPTS`, `:687` `MOST_PER_PROMPT`; `Asked` `:690`, `Found` `:717` |
-| The session-id shape (private today) and its reader | `src/chatSource.ts:68` `SESSION_ID`, `:56` `sessionIdOf` |
+| The session-id shape (private) and its exported rule and reader | `src/chatSource.ts:68` `SESSION_ID`, `:79` `isSessionId`, `:56` `sessionIdOf` |
 | The one spawn site: `spawn(target, [...args], { shell, windowsHide: true, cwd?, env? })` — `shell` false unless asked, NO `windowsVerbatimArguments`, so on win32 node quotes each argument by the C runtime rules (an argument with no space, tab or `"` is passed as it is) | `src/processLauncher.ts:141-160` `launch`; `:125` `workingDirectory` (no `cwd` and no shell → the extension host's own); `:34` `STDERR_TAIL_MAX`, `:110` `stderrTail` |
 | The capture over it: stdin, a timeout that kills the tree — seven POSITIONAL parameters, no stdout cap, no stderr in the result | `src/versionProbe.ts:92-120` `capture`, `:69` `CaptureEnd`, `:72` `Captured`; `:196` `resolvedExecutable` |
 | A one-at-a-time latch | `src/oneAtATime.ts:32` `oneAtATime` |
@@ -91,12 +96,13 @@ this commit.
 - **Every test file** starts with `import '../../scripts/inRunFolder.cjs';`.
 - **Pure first, with seams.** Unit tests cannot load a module that imports `vscode`. So every decision AND every
   orchestration that a test must see lives in a pure module and takes its effects as parameters: `credsSession.ts`,
-  `remoteScript.ts`, `remoteSsh.ts` (node only), `remoteRead.ts`, `waitingSaid.ts`. ONE new host module is allowed in E2,
+  `remoteScript.ts`, `remoteFrame.ts`, `remoteSsh.ts` (node only), `remoteRead.ts`, `waitingSaid.ts`. ONE new host module is allowed in E2,
   `src/remoteSessionHost.ts` (S3); it only supplies the `vscode` seams, and it gets its row in `sonar.coverage.exclusions`
   in `sonarcloud.yml` in the same commit (`sonarExclusions.test.ts` holds the list exact). Other host code goes into the
   host files that exist (`chatCommand.ts`, `chatHooks.ts`, `chatSessionJoin.ts`, `extension.ts`).
 - **Reuse first.** No second copy of a rule: `projectDirNames`, `namedAmong`, `lastAsked`, `humanSaid`, `collectNames`,
-  `waitingIn`, `SESSION_ID`, `oneAtATime` and the sentence mapping are CALLED, never re-typed (in TypeScript or in `sh`).
+  `waitingIn`, `isSessionId`, `credsSession`, `isTerminalName`, `oneAtATime` and the sentence mapping are CALLED, never
+  re-typed (in TypeScript or in `sh`).
   The ssh child goes through `launch` (the one spawn site), by WIDENING `capture`, never by a second launcher.
 - **Lint.** A new function keeps `complexity` ≤ 4 and ≤ 50 lines; no suppression count grows (CI step *Lint suppressions
   only shrink*). Split, do not suppress.
@@ -125,7 +131,8 @@ From the worktree root: `node .agents/conventions/tools/plan-lifecycle.mjs` befo
 ## 4. Shared contracts — fixed here so S1, S3 and S4 can be briefed while Fable writes S2's spec
 
 S2's spec may refine C2 and C3. **Gate G6:** Opus reviews that spec, and any change it makes to C2 or C3 is written into
-this section AND into the briefs of S3 and S4 in the same commit, before S3 or S4 is coded.
+this section AND into the briefs of S3 and S4 in the same commit, before S3 or S4 is coded. **Done 2026-11-11:** C2, C2a,
+C3 and C4 below hold the spec's changes X1–X10 (S2 spec, *Changes to § 4*); the spec's § S2.2–§ S2.5 are the exact text.
 
 - **C1 — which terminal reads a session (S1 owns).** NEW pure `src/credsSession.ts` (no imports):
   `credsSession(name: string): CredsName` with
@@ -133,36 +140,71 @@ this section AND into the briefs of S3 and S4 in the same commit, before S3 or S
   The pattern is the parent's, exactly: `^Creds: ([A-Za-z0-9][A-Za-z0-9._-]*) / ([A-Za-z0-9][A-Za-z0-9_-]*)$`. `other` =
   the name does not start with `Creds: ` (so `Creds run: x` and `Creds VPN: x` are `other`). `malformed` = it starts with
   `Creds: ` and fails; the refusal names the part that failed. `readsSession` (`chatStore.ts:336`) reads it.
-- **C2 — the script and its parsed result (S2 owns; Fable).** NEW pure `src/remoteScript.ts`: `REMOTE_SCRIPT: string` (the
-  POSIX `sh` text sent on stdin — the text under test IS the text sent); the operands of each call (C2a); and
-  `readRemote(stdout: string, ...): RemoteRead`, the parser. `RemoteRead` is one union with an arm per outcome: `found`
-  (session id, `cwd`, name, the tail's lines, and `cut: boolean`), `fallback` (the pane's `cwd` and the folder names, or the
-  title rows), `gone` (a picked id whose file is not there), `absent`, `ambiguous` (with the candidates, possibly none) and
-  `unreadable`. **There is no `truncated` arm**: the parser reports `found{cut}` only, and what a cut MEANS is decided once,
-  by the purpose, in C4. No arm is an optional field to interpret.
-  - **C2a — the operands.** The registry path keeps the parent's form: `sh -s -- <session>`. The spec fixes the operands of
-    a call that carries a picked session id, and of the fallback's calls (ii) (the candidate folder names) and (iii) (the
-    id). Every operand has a validation rule, and **every rule's alphabet has no space, no tab, no quote and no shell
-    character** — so on win32 node passes each argv word to `ssh.exe` unchanged (`processLauncher.ts:149-154`: no shell,
-    no `windowsVerbatimArguments`; the C runtime rules quote only a word with a space, a tab or `"`), `ssh.exe` joins the
-    remote words with spaces, and no quoting has to cross the Windows boundary. The parent's single quotes are for the
-    REMOTE login shell only.
+- **C2 — the script and its parsed result (S2 owns; Fable).** Two NEW pure modules (X1: one file would pass the 800-line
+  limit). `src/remoteScript.ts`: `REMOTE_SCRIPT: string` (the POSIX `sh` text sent on stdin — the text under test IS the
+  text sent), its constants (`REMOTE_PROTOCOL`, `TAIL_MAX`, `REGISTRY_MAX`, `REMOTE_TOOLS`), the operands (C2a) and their
+  quoting `shQuoted`. `src/remoteFrame.ts`: the parser `readRemote(run: { code: number; stdout: string }, call:
+  RemoteCall): RemoteRead` (X2: the caller passes the `answered` run and the SAME `call` it built the operands from; an
+  exit code that is not 0 is `unreadable` here, so the caller never reads `code`), and `UNREADABLE_SAID`. `RemoteRead` is
+  one union with an arm per outcome (X3, X4):
+  - `found` — `via: 'registry' | 'id'`, `sessionId`, `cwd`, `name`, `folder` (the project folder the file is in), the
+    tail's `lines`, and `cut: boolean`;
+  - `fallback` — the pane's `paneCwd`, the `folders`, `skipped` (names the script could not send) and `more` (over 2000);
+  - `titles` — the `sessions` (`TitledSession`: `sessionId`, `folder`, `mtime`, `names` by `collectNames`, `skipped`) and
+    `scan: { why: 'all' | 'count' | 'time'; tooLong; more }`;
+  - `gone` — a picked id whose file is not there (only from an `id` call);
+  - `absent` — `what: 'session' | 'transcript'`;
+  - `ambiguous` — `why: 'panes' | 'processes' | 'transcripts'`, the named `candidates` (pane, pid, `sessionId`, `name`,
+    `cwd`), possibly none, and `unnamed` (the candidates that could not be named);
+  - `unreadable` — `why`, a closed list (`Unreadable`), with one clause each in `UNREADABLE_SAID`.
+  **There is no `truncated` arm**: the parser reports `found{cut}` only, and what a cut MEANS is decided once, by the
+  purpose, in C4. No arm is an optional field to interpret. `readRemote` never throws, and no arm holds an error's
+  message.
+  - **C2a — the operands (X5).** `RemoteCall` = `{ kind: 'session'; session }` | `{ kind: 'id'; session; id }` |
+    `{ kind: 'titles'; session; folders }`; `operandsOf(call)` (throws for a call its own grammar refuses) and
+    `callOf(operands)` (THE grammar; `sshArgv` asks it). The forms: `<session>` (the registry path, and the fallback's
+    call (i)); `<session> id <uuid>` (a press with a picked id AND the fallback's call (iii) — the same form);
+    `<session> titles <folder>…` (1 to 3 different folders, the fallback's call (ii)). The rules: the session by
+    `credsSession` (C1), the id by `isSessionId` (`chatSource.ts:79`, already exported — X6), the folder by
+    `/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,254}$/` (no `/`, no `.` first; `-` first is legal, `/home/x` → `-home-x`).
+    **Every rule's alphabet has no space, no tab, no quote and no shell character** — so on win32 node passes each argv
+    word to `ssh.exe` unchanged (`processLauncher.ts:149-154`: no shell, no `windowsVerbatimArguments`; the C runtime
+    rules quote only a word with a space, a tab or `"`), `ssh.exe` joins the remote words with spaces, and no quoting has
+    to cross the Windows boundary. The single quotes of `shQuoted` are for the REMOTE login shell only. A folder name
+    outside the folder rule (a letter outside ASCII, a space) cannot be asked for by the title fallback; the registry
+    path still reads it.
 - **C3 — the ssh edge (S2 owns; Fable, with the security judgement).** NEW `src/remoteSsh.ts` (node only, no `vscode`):
-  `sshArgv(host: string, operands: readonly string[]): readonly string[]` (the parent's options, in the parent's order, the
-  host after `--`) and `runRemote(host: string, session: string, operands: readonly string[], script: string, limits?:
-  RemoteLimits): Promise<RemoteRun>` — `session` is its own argument because it is the LOG LABEL; the operands (folder
-  names among them) never reach a log. `RemoteRun = { kind: 'answered'; code: number; stdout: string } | { kind: 'refused';
-  refusal: string }` — `refused` covers a timeout at 15 s, stdout over 8 MiB (counted in BYTES, `Buffer.byteLength`), a
-  child that did not start, an operand that failed validation, and an ssh exit 255. It never rejects. Its log line (host,
-  session, exit code, the stderr tail) is written here and only here. It goes through `capture`, widened by ONE options
-  object `{ cwd, maxStdoutBytes }` (no more positional parameters), with `shell: false`.
+  `SSH_OPTIONS` = the parent's options, in the parent's order, which since change 2.1 end with `-o
+  StrictHostKeyChecking=yes` (no `ControlPath` or other option: residual of 2.1, § 10); `sshArgv(host: string, operands:
+  readonly string[]): readonly string[]` = `[...SSH_OPTIONS, '--', host, 'sh', '-s', '--', ...operands.map(shQuoted)]`,
+  throwing (a fixed word, never the value) when the host fails C1's host class or `callOf(operands)` refuses;
+  `sshExecutable(platform?, env?)` = ONE absolute path per platform and the child's folder (win32
+  `<SystemRoot>\System32\OpenSSH\ssh.exe` and its folder; else `/usr/bin/ssh`, `/usr/bin`), never the `PATH`; and
+  `runRemote(host: string, session: string, operands: readonly string[], script: string, limits?: RemoteLimits, seams?:
+  RemoteSeams): Promise<RemoteRun>` — `session` is its own argument because it is the LOG LABEL (`operands[0]` must equal
+  it); the operands (folder names among them) never reach a log. `seams` (X7: the capture, the file check, the log, the
+  platform, the environment) is for S2's own tests; **S3 does not pass it**. `RemoteRun = { kind: 'answered'; code:
+  number; stdout: string } | { kind: 'refused'; refusal: string }` — `refused` covers an operand that failed validation,
+  no ssh at the fixed path, a timeout at 15 s, stdout over 8 MiB (counted in BYTES, `Buffer.byteLength`), a child that
+  did not start, and an ssh exit 255; any other exit code is `answered`. It never rejects. Its log line (host, session,
+  the end, the stderr tail — built by one `logLine` of four parameters) is written here and only here. It goes through
+  `capture` (`versionProbe.ts:92`), widened by ONE options object as its eighth parameter (X8): `{ cwd, maxStdoutBytes,
+  killTree }` (no more positional parameters; a call without it answers what it answers today), with `shell: false`;
+  `Captured` gains `stderrTail` (only when the object is given) and `CaptureEnd` gains `'capped'`. `LaunchOptions` gains
+  `killTree` (on win32 the kill of the ssh child is `taskkill /t /f`, so a `ProxyJump` child goes with it), and
+  `processLauncher.ts` exports `system32(env)` (the one rule `TASKKILL` and `sshExecutable` share) — so
+  `src/processLauncher.ts` is in S2's scope.
 - **C4 — one road to the VM (S3 owns).** Pure `src/remoteRead.ts` holds the road as a function of seams (the prompt, the
   answer store, `runRemote`, the pick list, the progress line): `remoteRoad(seams, terminalName, purpose: 'question' |
   'prompts', picked?: string): Promise<RemoteAnswer>`, and `answerFrom(found, purpose): RemoteAnswer` — the ONE place that
   decides what a cut tail means for that purpose. `RemoteAnswer = { kind: 'lines'; lines: readonly string[]; note: string }
   | { kind: 'refused'; refusal: string }` (`note` is the cut note for *Asked*, `''` otherwise). The host module only wires
   the `vscode` seams: `readRemoteSession(terminal, purpose)`. Nothing else in the extension spawns ssh or reads
-  `globalState` for the consent.
+  `globalState` for the consent. From the S2 spec (X2, X3, X5, X9): every call is built as a `RemoteCall` and sent as
+  `operandsOf(call)`; an `answered` run goes to `readRemote(run, call)` with that same `call`; the road has one more seam,
+  **the re-check just before EACH spawn** (the terminal is still open and its name still gives the same host and
+  session); and the picked id it keeps carries **the folders a `found` with `via: 'id'` may come from**, which the road
+  checks against `found.folder`.
 - **C5 — the words (S4 owns).** The `Waiting` → sentence mapping of `questionWaitingHere` (`chatCommand.ts:562-591`) moves,
   unchanged in its words, to one exported pure function `waitingSaid(found: readonly Waiting[]): { text: string; refusal:
   string }` in a NEW pure module `src/waitingSaid.ts` (not into `claudeSessions.ts`, which is 1191 lines). The local path
@@ -246,10 +288,10 @@ and the typed result, areas (d) and (e)"*.
 - **Goal.** `sshArgv` and `runRemote` (C3) are the one road to `ssh`; `REMOTE_SCRIPT` (POSIX `sh`, read on stdin by `sh -s`)
   does the five steps of the parent's § *What the script does*, read-only, leaving nothing behind; and `readRemote` turns its
   stdout into a `RemoteRead` (C2) that never makes a guess and never mistakes a failure for an absence.
-- **Scope.** NEW `src/remoteScript.ts` and `src/remoteSsh.ts`; `src/versionProbe.ts` (`capture` widened by an options
-  object); `src/chatSource.ts` (EXPORT `SESSION_ID`, `:68`, so the extension checks the UUID shape with the one rule); tests,
-  including the script run by a real `sh -s` and operands through a real `sh -c`. Not in scope: the consent, the pick list
-  and the meaning of a cut (S3), the doors (S4).
+- **Scope.** NEW `src/remoteScript.ts`, `src/remoteFrame.ts` and `src/remoteSsh.ts`; `src/versionProbe.ts` (`capture`
+  widened by an options object); `src/processLauncher.ts` (`LaunchOptions.killTree`, `system32`); tests, including the
+  script run by a real `sh -s` and operands through a real `sh -c`. `src/chatSource.ts` is NOT in scope: `isSessionId`
+  is exported already (`:79`, X6). Not in scope: the consent, the pick list and the meaning of a cut (S3), the doors (S4).
 - **Gate G2 + G4 — the security judgement, BEFORE any S2 code.** The spec's security part decides and writes down:
   1. **Which `ssh` runs, from which folder.** A bare `ssh` on win32 is searched in the CURRENT FOLDER first by the spawn
      layer, then on the PATH, and with no `cwd` the child inherits the extension host's folder (`processLauncher.ts:125`).
@@ -273,6 +315,13 @@ and the typed result, areas (d) and (e)"*.
   7. **The window between press and read** (a rename, a close): what is re-checked just before the spawn.
   **An ssh option added to the parent's list (for example `-o ControlPath=none`) is plan change 2.1.** The spec reports it;
   the caller records it in the parent's ledger and gets it approved BEFORE S2 is coded. The coder never adds an option.
+  **Answered by the spec (§ S2.6, J1–J9), 2026-11-11:** (1) one absolute `ssh` per platform, its own folder as the
+  child's; (2) the person's alias is the authority, and change 2.1 pins `StrictHostKeyChecking=yes`; (3) the person's
+  keys, nothing handled; (4) Win32-OpenSSH has no released multiplexing; `ControlPath=none` was proposed and NOT taken
+  (an independent cause, a second change), so connection sharing elsewhere is a residual (§ 10); (5) the parent's list is
+  enough for forwarding; (6) one function called with `</dev/null 2>/dev/null`, every step bounded, NO `trap` (it would do
+  nothing without a terminal; spec decision 5); (7) S3 re-checks before each spawn (J8). Change 2.1 is recorded in the
+  parent; any further option is a full stop.
 - **Areas the spec must cover.**
   1. **The argv (C3).** The parent's options in the parent's order; **no `-n`** (it would give `sh -s` an empty stdin);
      `--` right before the host; `sh`, `-s`, `--` after it; each operand single-quoted for the REMOTE login shell (ssh joins
@@ -281,8 +330,8 @@ and the typed result, areas (d) and (e)"*.
      the door. **Windows (G0):** the validation alphabets have no space, no tab, no quote and no shell character, so the
      argv node hands `ssh.exe` is byte for byte the argv built (`launch` spawns with `shell: false` and no
      `windowsVerbatimArguments`, `processLauncher.ts:149-154`).
-  2. **The child (C3).** Through `capture` (`versionProbe.ts:92`), WIDENED by one options object `{ cwd, maxStdoutBytes }`
-     with `shell: false` — never more positional parameters, never a copy. The cap counts BYTES (`Buffer.byteLength` of each
+  2. **The child (C3).** Through `capture` (`versionProbe.ts:92`), WIDENED by one options object `{ cwd, maxStdoutBytes,
+     killTree }` with `shell: false` — never more positional parameters, never a copy. The cap counts BYTES (`Buffer.byteLength` of each
      chunk) and kills the tree when passed (a new `CaptureEnd` value, for example `'capped'`); the result carries the stderr
      tail (`ProcessHandle.stderrTail`, `processLauncher.ts:110`). Every existing caller of `capture` keeps its contract and
      its tests. The script goes on stdin (`input`). Limits: kill at 15 s, stdout at most 8 MiB (`RemoteLimits` lets tests
@@ -295,12 +344,15 @@ and the typed result, areas (d) and (e)"*.
      CONTAINS the sentinel; no sentinel at all (unreadable, not absent). Sections the parser can tell apart whatever bytes
      the transcript holds: the transcript goes LAST, after a header that gives its byte count and whether it was cut — a
      transcript line that holds `COAI-BEGIN` or a section marker must not end it. UTF-8: a tail cut inside a character.
+     (The spec's answer, decision 2: every data line starts with `:` and every frame line with `COAI-`, so no data byte
+     can end a section; the two sizes before and after the read say whether it was cut.)
   5. **The panes — parent change 1.1, point 2.** A tmux session with SEVERAL PANES (in one window or in several windows) or
      with SEVERAL `claude` processes is ambiguity: `ambiguous` with every candidate the script could name (its pane, its
      `claude` pid, its registry `sessionId`, `name` and `cwd` when they could be read) — a list for S3's QuickPick — or with
      NO candidates when none can be named. **Never a pick**, not even "the active pane". So step 1 cannot be
      `display-message` alone, which answers the ACTIVE pane only and hides the others: the script lists every pane of the
-     session (for example `tmux list-panes -s -t "=$1" -F '#{pane_pid}'`), `=` forcing the exact session. One pane with one
+     session (`tmux list-panes -s -t "=$1:" -F …`), `=` forcing the exact session — WITH the colon: without it a name
+     that is the start of another session's name reads that other session (spec M-T1; § 10 judgement 6). One pane with one
      `claude` is the only shape that goes on to step 3 by itself. A session that does not exist is `absent`.
   6. **The process walk.** `ps -o pid=,comm= --ppid …`, walked to every descendant, bounded (depth and count), digits-only
      pids. **A branch counts its TOP-MOST `claude` match only**: a `claude` with a `claude` or `node` child below it is ONE
@@ -321,7 +373,8 @@ and the typed result, areas (d) and (e)"*.
      file) → that id's tail by id, as in area 8, instead of the fallback listing. That id's file not there → `gone`, never
      `absent` and never a fallback in the same call.
   10. **The fallback, at most three calls.** (i) no live `claude` or no registry file, and no picked id → the pane's
-      `#{pane_current_path}` and the folder names in `~/.claude/projects` (a NUL-separated list); (ii) the title rows of the
+      `#{pane_current_path}` and the folder names in `~/.claude/projects` (the spec: one `:`-prefixed name a line, names
+      outside the folder rule counted in `skipped`, at most 2000); (ii) the title rows of the
       candidate folders only (`projectDirNames` computed locally), newest first, inside `SCAN_BUDGET`, with `grep -F -e
       '"custom-title"' -e '"ai-title"'`; a title-row line is BOUNDED, because a prompt that quotes the word
       `"custom-title"` is a long line that must not fill the cap; (iii) the chosen file's tail, by id, as in area 8. The rows
@@ -348,7 +401,7 @@ and the typed result, areas (d) and (e)"*.
 | S2-T7 | a slow host is killed at the limit | a fake child that never closes, `limits.ms` 50 → `refused` with the timeout sentence; `kill` called once | stop waiting without `kill` → `a timed-out ssh was left running` |
 | S2-T8 | the cap counts bytes | a fake child writing a multi-byte text whose `.length` is under the cap and whose `Buffer.byteLength` is over it → `refused` with the capped sentence; `kill` called; stdout NOT in the result | count `.length` → `8 MiB of characters is not 8 MiB` |
 | S2-T9 | ssh's own failure is not "no session" | exit 255 with stderr `Permission denied (publickey).` → `refused`, its refusal ends with that line | map 255 to `answered` → `a refused key read as an empty session` |
-| S2-T10 | no stdout and no operand in any log (a structural scan of `remoteSsh.ts`, `remoteRead.ts`, `remoteSessionHost.ts`, the door catches in `extension.ts` and the Asked hook in `chatHooks.ts`) | no `console.*` or `notify(` argument names `stdout`, `run.stdout`, `lines`, `tail`, `operands`, a value derived from them, or a caught error's `message`/`asText(reason)` in a terminal door's catch; companion: the one log call with `stderrTail` and the session label IS found | log `run.stdout` → red naming the file and line; put `asText(reason)` back in a terminal door's catch → red |
+| S2-T10 | no stdout and no operand in any log (a structural scan of every `src/remote*.ts` — so S3's `remoteRead.ts` and `remoteSessionHost.ts` from the day they exist; the door catches in `extension.ts` and the Asked hook in `chatHooks.ts` are S4-T11, X10) | no `console.*` or `notify(` argument names `stdout`, `run.stdout`, `lines`, `tail`, `operands`, a value derived from them, or a caught error's `message`/`asText(reason)` in a terminal door's catch; companion: the one log call with `stderrTail` and the session label IS found | log `run.stdout` → red naming the file and line; put `asText(reason)` back in a terminal door's catch → red |
 | S2-T11 | `capture` is widened, not changed | the existing `versionProbe` and `roundsDbRead` tests green with no edit; a call with the options object passes `cwd` and `shell: false` to `launch` (asserted both) and stops at `maxStdoutBytes`; a call without it behaves as before | a positional parameter added → red naming the signature |
 | S2-T12 | an empty glob does not eat the script (real `sh -s`) | a temporary `HOME` with no `~/.claude/projects` at all and a fake tool that would read stdin → the script still prints its sentinel and its closing marker, and the result is `absent` or `fallback`, never `unreadable` for a cut script | call the function without `</dev/null` → `the rest of the script was read as data` |
 | S2-T13 | a `claude` with a child is one candidate (real `sh -s`, fake `ps`) | one pane, a `claude` pid with a `node` child and a `claude` grandchild → ONE candidate, the top-most pid; two sibling `claude` processes → `ambiguous` with two | count every match → `one Claude CLI was read as two sessions` |
@@ -364,8 +417,9 @@ and the typed result, areas (d) and (e)"*.
   architecture.md`: the new OUTWARD edge — the extension host → the local `ssh` → a VM the person agreed to, read-only (the
   edges section and the cross-cutting security part). `research/module_tests.md`: S2's tests and **not covered**: the real
   ssh against a real host and the real `comm` (R6, R7).
-- **Done when.** Gate G2 + G4 written in the spec BEFORE the code, and any added option recorded and approved as 2.1; the
-  spec reviewed by Opus and § 4 updated (gate G6); the spec's tests and break-its, S2-T1…T15 among them; `npm run compile`
+- **Done when.** Gate G2 + G4 written in the spec BEFORE the code, and the added option recorded as 2.1 (done
+  2026-11-11); the spec reviewed by Opus and § 4 updated (gate G6, done 2026-11-11); the spec's tests S2-T1…T44 and
+  break-its B1…B34, S2-T1…T15 among them; `npm run compile`
   exit 0; the whole suite green on CI with the `sh -s` and `sh -c` tests RUN (not skipped); lint suppressions unchanged.
 - **Size (Opus's estimate, the spec decides).** About 1000 lines (≈ 340 script, argv, runner and parser, ≈ 660 tests and
   fakes).
@@ -384,9 +438,22 @@ and the typed result, areas (d) and (e)"*.
        `consentOf(list: unknown, host): 'yes' | 'no' | 'ask'` (a list that is not an array of valid rows reads as empty —
        ask again, never "yes"); `withAnswer(list, host, answer, now): readonly HostAnswer[]` (a new array; the host's old row
        replaced; at 100 rows the OLDEST `askedUtc` is dropped, so that host is simply asked again); host compared exactly.
-     - **The identity.** `nextStep(read: RemoteRead, picked: string | undefined): Step`, where a `Step` is `done` (a
-       `found`), `fallback-titles` (call ii, with the folders = `projectDirNames(paneCwd)` ∩ the listed folders),
-       `fallback-tail` (call iii, with the id), `pick` (a QuickPick of candidates, newest first) or `refused` (a sentence).
+     - **The identity.** `nextStep(read: RemoteRead, picked: Picked | undefined): Step`, by the arm (C2, X3), where a
+       `Step` is `done`, `fallback-titles`, `fallback-tail`, `pick` (a QuickPick, newest first) or `refused` (a
+       sentence). Every call is a `RemoteCall` sent as `operandsOf(call)`, and its answer is `readRemote(run, call)`:
+       - `found` `via: 'registry'` → `done`, and the picked id is dropped; `found` `via: 'id'` → `done` only when
+         `found.folder` is one of `picked.folders` (J9, X9b), else `refused` with the folder sentence below;
+       - `fallback` → `fallback-titles`: call (ii), `{ kind: 'titles', session, folders }` with the folders =
+         `projectDirNames(paneCwd)` ∩ `read.folders` (at most 3, in `projectDirNames` order); none → `refused` naming
+         host, session and folder — and when `read.skipped > 0` or `read.more`, the sentence says that some folders could
+         not be listed;
+       - `titles` → `namedAmong(read.sessions, (s) => s.names, session)`: one → `fallback-tail` (call (iii), `{ kind:
+         'id', … }`, with `picked = { id, folders: [that session's folder] }`); several → `pick` of them; none →
+         `refused` naming host and session — and when `scan.why` is not `all`, `scan.more` is true or a session was
+         `skipped`, the sentence says that not every session was read (a cut scan is never "no session");
+       - `ambiguous` with candidates → `pick` (a pick from it sets `picked = { id, folders: projectDirNames(candidate.cwd)
+         }` and sends call (iii)); with none → `refused` naming host and session;
+       - `gone`, `absent` (`what`), `unreadable` (one sentence with `UNREADABLE_SAID[why]`) → `refused`.
        Never more than three calls in one press.
      - **The meaning of a cut** — `answerFrom(found, purpose)`, the ONE place it is decided (S4 does not decide it again):
        for `'question'`, a cut tail is handed over as it is and S4's `waitingSaid` path turns "nothing asked" into the
@@ -394,20 +461,32 @@ and the typed result, areas (d) and (e)"*.
        in the last 4 MiB of the session on “<host>” that were read; an older one may be beyond the cut."* when the cut tail
        holds no `AskUserQuestion`, and `lines` otherwise); for `'prompts'`, `lines` with `note` *"Only the last 4 MiB of
        this session were read, so its first prompts are not shown."* when cut, `''` when not.
-     - **The picked id** (G5, Opus 9). After a pick, the next press of that terminal sends the id; its tail is read (S2
-       area 9). The id is dropped ONLY on: a registry success (S2 area 9's first case), `gone` (its file is not there), or
-       the terminal's close. It is NEVER dropped on an ssh refusal, a timeout, a cap, an unreadable answer or a cancel.
+     - **The picked id** (G5, Opus 9). `Picked = { id: string; folders: readonly string[] }` — the id and the folders a
+       `found` with `via: 'id'` may come from (X9b). After a pick, the next press of that terminal sends the id; its tail
+       is read (S2 area 9). The id is dropped ONLY on: a registry success (a `found` with `via: 'registry'`, S2 area 9's
+       first case), `gone` (its file is not there), or the terminal's close. It is NEVER dropped on an ssh refusal, a
+       timeout, a cap, an unreadable answer, a folder refusal or a cancel.
        On `gone`: the press answers its own sentence — *"The session you chose for this terminal (<name or id>) is no longer
        on “<host>”. Press again to look for it."* — and drops the id; the NEXT press runs discovery again from the start,
        inside the three-call bound.
      - **The road.** `remoteRoad(seams, terminalName, purpose, picked)`: `credsSession` (a `malformed` name → its refusal;
        `other` → *"This is not a creds terminal, so it has no Claude session to read."*) → `consentOf` (`ask` → the prompt
-       seam; Escape writes NOTHING and refuses this press) → `runRemote` (S2), under the progress seam → `readRemote` (S2)
-       → `nextStep`, repeated within the bound → `answerFrom`.
+       seam; Escape writes NOTHING and refuses this press) → **the re-check seam, just before EACH spawn** (X9a, J8: the
+       terminal is still open and its LIVE name still gives the same host and session; else no spawn) → `runRemote(host,
+       session, operandsOf(call), REMOTE_SCRIPT)` (S2; no `limits`, no `seams`), under the progress seam →
+       `readRemote(run, call)` (S2) for an `answered` run → `nextStep`, repeated within the bound → `answerFrom`. S3
+       never reads `run.code`.
      - **The words** of a refused press that are this story's: the host answered "no" — *"Reading the Claude session on
        “<host>” is turned off. Only the text you copied can be sent; turn it on in **CoAI: hosts read over ssh**."*; a pick
        cancelled — *"No session was chosen, so nothing was read."*; a second press while a read runs — *"The Claude session
-       of this terminal is still being read — the second press was ignored."*.
+       of this terminal is still being read — the second press was ignored."*; the re-check fails — *"The terminal’s name
+       changed, or it was closed, so nothing was read. Press again."*; a `found` by id in a folder not expected — *"The
+       session file chosen for this terminal is not in a folder of that session on “<host>”, so it was not read."*; an
+       `absent` `session` — it says no tmux session of that name *that ssh can see* on the host (S2 spec residual 10:
+       tmux's exit 1 also covers a socket ssh cannot reach).
+     - **S2-T10 scans every `src/remote*.ts`**, so `remoteRead.ts` and `remoteSessionHost.ts` are scanned from the day they
+       exist: no `console.*` or `notify(` argument of theirs may name stdout, lines, operands, folders, `cwd`, names, rows,
+       the script or a caught error (the spec's banned list, § S2.9.6).
   2. NEW `src/remoteSessionHost.ts` (host; its row in `sonarcloud.yml`) — the seams only:
      - `readRemoteSession(terminal, purpose)`: the LIVE `terminal.name`; the answers in `context.globalState` key
        `coai.terminalHosts`; the prompt — a modal `showWarningMessage` *"Read the Claude session on “<host>” over ssh?"* with
@@ -417,8 +496,11 @@ and the typed result, areas (d) and (e)"*.
        preselected; ONE candidate is still a list when it came from an ambiguity.
      - **One read per terminal at a time** (Opus 10): a `WeakMap<vscode.Terminal, latch>` of `oneAtATime` latches
        (`oneAtATime.ts:32`), refusing with the sentence above — so a double press starts ONE ssh child and ONE consent modal.
-     - **The picked id:** `const picked = new WeakMap<vscode.Terminal, string>()`, read and written only as `remoteRoad`
+     - **The picked id:** `const picked = new WeakMap<vscode.Terminal, Picked>()`, read and written only as `remoteRoad`
        says; deleted on `onDidCloseTerminal` too.
+     - **The re-check seam** (X9a): answers the terminal's LIVE `name`, or `undefined` when it is no longer in
+       `window.terminals` or has exited. The decision — `credsSession` of that name still gives the press's host and
+       session — is `remoteRoad`'s (pure, S3-T13).
      - **The reach of a conversation** (for *Asked*, S4): `terminalOf(thread, panels)` — the live keyed terminal when it is
        still in `window.terminals` and has not exited; else `oneLiveNamed` (`terminalSource.ts:87`) over the live terminals
        with the RECORDED name: one → that terminal; none → *"The terminal “<name>” is not open — open it to read its Claude
@@ -440,14 +522,16 @@ and the typed result, areas (d) and (e)"*.
 | S3-T2 | the list is capped at 100, oldest out | 100 rows, one more host → 100 rows; the oldest `askedUtc` is gone; the new one is there; the input array is unchanged | push without the cap → 101 |
 | S3-T3 | no ssh before a "yes" | `ask` + **Not this host** → `no` written, the refusal sentence, 0 runs; `ask` + Escape → nothing written, 0 runs; `no` → 0 runs and no prompt; `ask` + **Read** → `yes` written, then 1 run | run before the prompt → `ssh was spawned for a host nobody agreed to` |
 | S3-T4 | the registry path is ONE call | a `found` on the first call → `lines`, exactly 1 run | always run the fallback → 3 runs |
-| S3-T5 | the fallback is at most three calls and picks only one exact title | `fallback` → titles call with the folders ∩; one title row naming the session → tail call → `lines`; 3 runs; two rows of that name → `pick`, no third call before the choice | choose the first of two → `two sessions of one name and one was taken` |
+| S3-T5 | the fallback is at most three calls and picks only one exact title | `fallback` → a `titles` call (`operandsOf` of the `titles` kind) with the folders ∩; a `titles` answer with one session naming the session → an `id` call → `found` `via: 'id'` in that session's folder → `lines`; 3 runs; two sessions of that name → `pick`, no third call before the choice; none, with `scan.why` `count` → the refusal says not every session was read, and with `all` it does not | choose the first of two → `two sessions of one name and one was taken`; drop the scan clause → `a cut title scan was reported as no session` |
 | S3-T6 | an ambiguity is a list, even of one (change 1.1 point 2, host side) | an `ambiguous` read with two candidates → `pick` with both rows, none preselected; with one candidate → still `pick`; with none → a refusal naming host and session; cancel → the cancel sentence, 0 more runs | take the only candidate without asking → `a two-pane session was read without a choice` |
-| S3-T7 | a picked id is sent, and kept or dropped by the parent's rule only | after a pick, the next press sends that id; a registry success drops it; a `gone` drops it; a refusal, a timeout, a cap, an `unreadable` and a cancel each KEEP it | drop it on a timeout → `a slow host made the person choose again` |
+| S3-T7 | a picked id is sent, and kept or dropped by the parent's rule only | after a pick, the next press sends that id (an `id` call); a `found` `via: 'registry'` drops it; a `gone` drops it; a refusal, a timeout, a cap, an `unreadable`, a folder refusal and a cancel each KEEP it | drop it on a timeout → `a slow host made the person choose again` |
 | S3-T8 | a picked file gone between the pick and the next press (G5) | press 1 picks id A; press 2 → the script answers `gone` → its own sentence naming A and the host, A dropped, no fallback call in that press; press 3 → discovery from the start (registry path, then the fallback), within 3 runs | treat `gone` as `absent` → `a vanished pick was reported as no session`; keep A → `press 3 asked for a file that is gone` |
 | S3-T9 | the reach takes the host from a LIVE terminal | `reachOf`: a restored thread (key `{}`) with source `Creds: h / s` and one live terminal of that name → host `h`; none → the "not open" sentence, 0 runs; two → the "N terminals" sentence, 0 runs; a renamed live keyed terminal → its new name is used | read the host from the recorded name → `a closed terminal's VM was read` |
 | S3-T10 | a cut is decided once, by the purpose | `answerFrom(found{cut:true, no question}, 'question')` → the truncated sentence; with the question in the tail → `lines`; `found{cut:false, no question}` → `lines` (S4 then says "asked nothing"); `'prompts'` with `cut:true` → `lines` with the cut note, `cut:false` → no note. Companion (source check): `waitingSaid.ts` and the doors never read `cut` | ignore `cut` → `a cut tail was reported as nothing asked` |
 | S3-T11 | the host road says five different things (Opus 5) | `absent`, `unreadable`, `ambiguous` with no candidates, a truncated `'question'` answer and an ssh `refused` → five refusals, all different, each naming the host | map `unreadable` to absent's sentence → `an unreadable session was reported as no session` |
 | S3-T12 | a double press starts one child and one question (Opus 10) | two presses on one terminal at once (`Promise.all`) under one latch → the fake prompt was shown ONCE, the fake `runRemote` ran ONCE, the second press answers the "still being read" sentence; two terminals at once → two runs | one latch for the whole window, or none → `a double press asked twice and spawned two ssh` |
+| S3-T13 | the terminal is re-checked just before EACH spawn (X9a, J8) | the re-check seam answers a renamed name (`Creds: h2 / s`), `Creds: h / s2`, or `undefined` (closed) after the consent → the "name changed, or it was closed" sentence and 0 runs; it changes between call (i) and call (ii) → 1 run, then that sentence; the same name → the runs go on | call `runRemote` without asking the seam → `ssh was called for a terminal whose name changed` |
+| S3-T14 | a file found by a picked id is in a folder of that session, or it is refused (X9b, J9) | after a title pick of a session in folder `F1`, a `found` `via: 'id'` with `folder` `F2` → the folder sentence, the id KEPT; with `F1` → `lines`; after a pick from an ambiguity list with `cwd` `/home/git/kb`, a `folder` outside `projectDirNames('/home/git/kb')` (taken from the call) → refused, inside → `lines` | skip the check → `a file in a folder nobody asked for was read as this session` |
 
 - **Host scenario S3-H1** (new `src/test/host/terminalHostsScenario.ts`, registered in `scenarios.ts`): through the REAL
   `globalState`: write `no` for host `h`; with a terminal `Creds: h / s` active, `readRemoteSession` answers the "turned
@@ -457,10 +541,11 @@ and the typed result, areas (d) and (e)"*.
   identity order, the pick list, the picked id's life and `gone`, the meaning of a cut, one read per terminal, the reach.
   `research/module_tests.md`: S3's tests and S3-H1; **not covered**: the modal's wording on screen and the real QuickPick —
   R7.
-- **Done when.** S3-T1…T12 green, each break-it seen red; S3-H1 green in CI's `extension · a real editor` job on the head
+- **Done when.** S3-T1…T14 green, each break-it seen red; S2-T10 green over `remoteRead.ts` and `remoteSessionHost.ts`;
+  S3-H1 green in CI's `extension · a real editor` job on the head
   commit, read from that job; `sonarExclusions.test.ts` green with the new host module listed; `notification-sites.json`
   regenerated; the whole suite and lint green.
-- **Size.** About 600 lines (≈ 220 code, ≈ 380 tests).
+- **Size.** About 680 lines (≈ 250 code, ≈ 430 tests; G6 added the re-check, the folder check and two scenarios).
 
 ### E2.S4 — The doors: take and add from a terminal, *Asked* through the reach, the words, the help
 
@@ -514,7 +599,13 @@ and the typed result, areas (d) and (e)"*.
      no forwarding; argv only, validated operands with no space, quote or shell character, single-quoted for the remote
      shell, the script on stdin; 15 s, 8 MiB; nothing left running; the transcript in memory only, never logged or written
      (the extracted question and the prompts shown are saved with the conversation, like every passage); what S2's security
-     judgement decided about the executable, its folder and multiplexing.
+     judgement decided about the executable, its folder and multiplexing. Every sentence about an ssh option says what we
+     PASS, not what it achieves (`security.md`; M-O1…M-O7 are not observed yet). It holds the two paragraphs of the S2
+     spec's § S2.7 as written there: change 2.1 (*"The read passes `-o StrictHostKeyChecking=yes` …"*) and **the residual
+     of change 2.1** (*"The read does not turn off ssh connection sharing. On Windows … When the extension runs on Linux
+     or macOS — or on the remote machine of a Remote window — and your ssh configuration shares connections
+     (`ControlMaster`, `ControlPersist`), the read can go through a connection that is already open, or open one that
+     stays open for the `ControlPersist` time, as your configuration says."*).
 - **Scenarios.**
 
 | # | Name (file) | Assertion | Break-it → the RED it must show |
@@ -529,14 +620,16 @@ and the typed result, areas (d) and (e)"*.
 | S4-T8 | every terminal door records itself first (`chatWiring.test.ts`, with the widened `doorCommands`) | the census finds `coai.takeFromTerminal` and `coai.addFromTerminal` and their `noteChatDoor` comes first; companion: `coai.askFromTerminal` is still found | do not widen `doorCommands` → `the number of recorders and the number of doors … have drifted apart` |
 | S4-T9 | the context key follows the name and the answer (`remoteRead.test.ts`) | `readsKey('Creds: h / s', ask)` true; `(…, no)` false; `('Creds: before x', …)` true; `('bash', …)` false | make a `malformed` name false → `a bad creds name hides the items that explain it` |
 | S4-T10 | every language names the items (`helpCoverage.test.ts`) | each of the five articles, not a fallback, contains `**CoAI: hosts read over ssh**` and the remote paragraph; the help census passes for the three new titles | leave `helpDe.ts` as it is → `the de chat article never says the session is read over ssh` |
+| S4-T11 | the doors' catches and the Asked hook carry no error message and no stdout — S2-T10's scanner reaches them (X10; `remoteLogScan.test.ts`, extended) | the scanner `logLeaks` of S2-T10 is run over the bodies of the `coai.takeFromTerminal` and `coai.addFromTerminal` registrations in `extension.ts` and over the terminal branch of `onShowAsked` in `chatHooks.ts` → no finding. **Companion:** the scan FINDS those two registrations and that branch (by their command ids and by `readRemoteSession(`), and in each it finds at least one `console.`/`notify(` call — so it is not matching nothing | put `asText(reason)` back in a terminal door's catch → red naming the file and line; rename a command id → the companion is red |
 
-  The doors' catches are scanned by S2-T10 (no error message, no stdout).
+  The doors' catches are scanned by S4-T11, with S2-T10's scanner (no error message, no stdout).
 - **Docs.** `research/module_extension.md` (E2 section): the doors, the context key, *Asked* through the reach, the page
   note, the door count, the fixed catch. `research/module_tests.md`: the E2 row completed; the doors row (`:300`) notes that
   take/add from a terminal count as `take`/`add`; **not covered**: the items' visibility in a real window and the real VM —
   R7. `research/architecture.md`: the `chat` module's new dependency on the remote reader (one line in the module map).
-- **Done when.** S4-T1…T10 green, each break-it seen red; the door census and the help census green;
-  `notification-sites.json` regenerated; `SECURITY.md` has the section; the whole suite and lint green.
+- **Done when.** S4-T1…T11 green, each break-it seen red; the door census and the help census green;
+  `notification-sites.json` regenerated; `SECURITY.md` has the section, with change 2.1 and its residual in the words of
+  the S2 spec's § S2.7; the whole suite and lint green.
 - **Size.** About 540 lines (≈ 160 code and manifest, ≈ 70 help in five languages, ≈ 40 `SECURITY.md` and docs, ≈ 270
   tests).
 
@@ -546,9 +639,11 @@ and the typed result, areas (d) and (e)"*.
 2. **Gate G2 + G4 — the security judgement, before any S2 code.** The S2 spec's security part (§ 5, E2.S2) decides the ssh
    executable and its folder, the host configuration it accepts, multiplexing (after checking Win32-OpenSSH), and that the
    remote script leaves nothing behind. If it adds an ssh option to the parent's list, the caller records plan change 2.1
-   in the parent and gets it approved BEFORE S2 is coded. The coder never adds an option.
+   in the parent and gets it approved BEFORE S2 is coded. The coder never adds an option. **Done 2026-11-11:** change 2.1
+   recorded (`StrictHostKeyChecking=yes`; `ControlPath=none` not taken).
 3. **Gate G6 — the spec review.** Opus reviews the S2 spec. Any change it makes to C2 or C3 goes into § 4 and into the briefs
-   of S3 and S4 in the same commit, before S3 or S4 is coded.
+   of S3 and S4 in the same commit, before S3 or S4 is coded. **Done 2026-11-11** (X1–X10 in § 4, S3 and S4). The order of
+   the stories does not change; S2's own commit order is the spec's § S2.11 (eight commits).
 4. **S2** — from the Fable spec; Sonnet codes; Opus reviews; Sonnet fixes.
 5. **S3**, then **S4** — spec here (as updated by G6); Sonnet codes; Opus reviews; Sonnet fixes. S4 starts with its move
    commit (`waitingSaid.ts`).
@@ -575,8 +670,10 @@ and the typed result, areas (d) and (e)"*.
 | An E1 `Creds:` conversation restored under E2 gains *Asked* (change 1.1 point 1) | S1, S3 | S1-T6, S1-T7, S3-T9 |
 | Absent, ambiguous, unreadable, truncated: four sentences, each with a test; the ssh failure a fifth | S2, S3, S4 | the S2 spec; S3-T10, S3-T11; S4-T4 |
 | The picked id: kept, dropped, and a file gone after the pick | S2, S3 | the S2 spec (area 9); S3-T7, S3-T8 |
-| No log line carries stdout | S2 | S2-T10 |
-| The 15 s kill and the 8 MiB cap | S2 | S2-T7, S2-T8 |
+| No log line carries stdout | S2, S4 | S2-T10, S2-T19; S4-T11 |
+| The 15 s kill and the 8 MiB cap | S2 | S2-T7, S2-T8, S2-T22 |
+| The automatic call accepts no host key (change 2.1) | S2 | S2-T1, S2-T2, S2-T21 (B34); the refusal itself M-O3 |
+| The terminal re-checked before each spawn; a file by a picked id only from an expected folder | S3 | S3-T13, S3-T14 |
 
 ## 8. Where each proof runs
 
@@ -596,6 +693,7 @@ and the typed result, areas (d) and (e)"*.
     the fallback list works when two sessions share a name. Also seen in R7, and recorded with it: the two items appear in
     a `Creds:` terminal's overflow and not in a plain one; the consent question appears once per host; a two-pane tmux
     session gives a list; the `comm` of the Claude CLI process on the VMs (S2 area 6).
+  - What R6 and R7 observe for the S2 spec (its M-O1…M-O7, listed in § 10) is recorded with them.
 
 ## 9. Growth and security
 
@@ -608,7 +706,9 @@ and the typed result, areas (d) and (e)"*.
 - **Security.** One new outward edge: the extension host's local `ssh`, read-only, to a host the person agreed to, as the
   user their own `~/.ssh/config` logs in as. Its argv, its options, its executable and its folder are E2.S2's, under
   Fable's security judgement (gate G2 + G4). The name of a terminal chooses the host and is not proof — hence the consent.
-  No secret is handled. The transcript stays in memory. `SECURITY.md` gets its section in S4.
+  Change 2.1: the call passes `StrictHostKeyChecking=yes`, so a person's `accept-new` or `no` cannot make it accept a
+  host key. Not pinned: connection sharing (the residual of 2.1, § 10). No secret is handled. The transcript stays in
+  memory. `SECURITY.md` gets its section in S4.
 
 ## 10. What E2 does not do, and open points
 
@@ -630,14 +730,34 @@ Judgements this document made inside the parent's text (no plan change, said so 
 5. **The parent's single quotes and Windows.** The parent says every operand is validated and single-quoted. The operand
    alphabets hold no space, no quote and no shell character, so node passes each word to `ssh.exe` unchanged and the single
    quotes are seen only by the remote login shell (C2a, S2-T5).
+6. **The parent's step 1, made exact** (the S2 spec, G6). The parent writes `tmux display-message -p -t "=$1:"`; the
+   script lists every pane with `tmux list-panes -s -t "=$1:"` (judgement 1), and keeps the colon: measured (spec M-T1,
+   M-T2), without it a name that is the start of another session's name reads that other session, and
+   `display-message` answers exit 0 with no output for a missing session (M-T3). No contract moves.
 
 Open, for the people named:
 
-1. **Multiplexing and any added ssh option** (S2's security judgement, gate G2 + G4): an extra option is plan change 2.1,
-   recorded by the caller and approved before S2 is coded; a second change after it is a full stop.
+1. **Multiplexing and any added ssh option — settled 2026-11-11 by change 2.1.** The call passes
+   `StrictHostKeyChecking=yes`. `ControlPath=none` was proposed by the security judgement and NOT taken: it is an
+   independent cause, so it would be a second change of epoch 2 and a full stop. **The residual, named:** on a Linux or
+   macOS extension host, or in a Remote window, a person's `ControlMaster`/`ControlPersist` can make the read go through
+   an open connection, or become a master that stays after the read. Win32-OpenSSH, the owner's extension host, has no
+   released multiplexing (S2 spec J4). `SECURITY.md` says so in words (S4, item 9). A further ssh option is a full stop.
 2. **The `comm` of the Claude CLI** on the VMs is not measured (S2 area 6, R7).
-3. **The extension host on another machine.** In a Remote window the extension host is remote, and so is its `ssh`. The
-   owner's windows are local Windows windows; not measured, not built for.
+3. **The extension host on another machine.** In a Remote window the extension host is remote, and so is its `ssh`
+   (`/usr/bin/ssh` there, by `sshExecutable`), and the residual above applies. The owner's windows are local Windows
+   windows; not measured, not built for.
+4. **Owed measurements (the S2 spec § S2.8).** Until each is observed, the documents say "we pass", not "it protects".
+
+   | # | What | When, who |
+   |---|---|---|
+   | M-O1 | A real call from Windows: the argv reaches `ssh.exe` unchanged, the script arrives, the frame comes back with `\n` line ends | R6, the owner |
+   | M-O2 | The residual's size: a person's `ControlMaster auto` + `ControlPersist 60` leaves a background master on Linux | anyone with sshd on Linux; not a merge condition |
+   | M-O3 | Change 2.1: a host not in `known_hosts` gives exit 255 and nothing is written, also with `accept-new` in the config | R6 by hand (the argv of S2-T1, an alias whose key is not kept), or anyone with sshd |
+   | M-O4 | After a read killed at the limit: no `ssh` process on Windows, also with `ProxyJump`; none of the script's commands on the VM | R6, the owner |
+   | M-O5 | The `comm` of the Claude CLI on the VMs; `ps --ppid` there; the registry file's `procStart` there | R7, the owner |
+   | M-O6 | The VMs' tmux: `-t "=name:"` is exact (`small` beside `small-tasks`) | R7, the owner |
+   | M-O7 | Whether the registry's `cwd` follows a `cd` inside a session (if it does, the folder check refuses a good session) | R7, the owner |
 
 ## 11. Definition of Done — epic E2
 
@@ -649,13 +769,16 @@ Open, for the people named:
 - [ ] The terminal door still only READS the clipboard (change 1.2): E2 adds no copy command and no borrow, and E1's
       terminal-read tests (S1r-T1…T7, S1r-H1) are green with no edit.
 - [ ] Absent, ambiguous, unreadable and truncated each give their own sentence, each with a test; an ssh failure gives its
-      own (S3-T11); no log line carries stdout, an operand or a caught error's message (S2-T10).
-- [ ] No ssh option beyond the parent's list, unless recorded and approved as plan change 2.1 before S2 was coded.
+      own (S3-T11); no log line carries stdout, an operand or a caught error's message (S2-T10, S4-T11).
+- [ ] Change 2.1 holds: the ssh argv is the parent's list with `-o StrictHostKeyChecking=yes` after `-o LogLevel=ERROR`
+      and before `--` (S2-T1, S2-T2, S2-T21, B34), and no other option — no `ControlPath` (not taken).
 - [ ] `npm run compile` exit 0; `npm test` green on CI with the `sh -s` tests RUN; `npm run lint` green; no suppression count
       grew; `sonarExclusions.test.ts` green with `remoteSessionHost.ts` listed.
 - [ ] `notification-sites.json` regenerated; the door census and the help census green.
 - [ ] S3-H1 green in CI's `extension · a real editor` job on the head commit, read from that job, named in the pull request.
-- [ ] `SECURITY.md` has the paragraph on the ssh edge; `research/module_extension.md` (the E2 section),
+- [ ] `SECURITY.md` has the paragraph on the ssh edge, in "we pass" words, with change 2.1 and its residual named
+      (connection sharing on a Linux or macOS extension host or in a Remote window; none on Win32-OpenSSH);
+      M-O1…M-O7 observed in R6/R7 or still named as owed; `research/module_extension.md` (the E2 section),
       `research/module_tests.md` (the E2 row) and `research/architecture.md` (the new outward edge) updated; the help in
       five languages.
 - [ ] The pull request merged; **R6 and R7 measured on a VM with the pre-release VSIX of the merged head, before the tag**,
