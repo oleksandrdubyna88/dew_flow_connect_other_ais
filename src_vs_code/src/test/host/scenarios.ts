@@ -5,10 +5,12 @@ import * as vscode from 'vscode';
 
 import { REVISION_SCHEME, RevisionDocuments, showCurrentFile } from '../../revisionOpen';
 import { ChatPanels } from '../../chatPanels';
+import { backToSource } from '../../chatReturnCommand';
 import { conversationHooks } from '../../chatHooks';
 import { signatureOf } from '../../renderAnswer';
 import { threads, type Thread } from '../../chatThread';
-import { backToSource } from '../../chatReturnCommand';
+import { until, registeredChat } from './hostHelpers';
+import { aClaudeLookingTabDoesNotTakeATerminalChat, backToATerminalInARealEditor } from './terminalReturnScenario';
 import { aRevisionInARealEditor } from './revisionScenario';
 import { aBugzCollectIsRefusedInARealEditor } from './bugzCollectScenario';
 import { theDefaultPhrasesInARealEditor } from './defaultPhrasesScenario';
@@ -16,6 +18,7 @@ import { theMigrationKeysAreKnownInARealEditor } from './migrationKeysScenario';
 import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingNamedDataRootStaysAbsent } from './missingDataRootScenario';
 import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathSaidOnceScenario';
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
+import { aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
 
 /**
@@ -162,24 +165,6 @@ async function pressingCopiesNothing(act: () => void, mustNotBe: string): Promis
   // alone instead of going to look at the guard.
   return 'could not be measured here: something outside this run wrote to the clipboard in all three '
     + `attempts (${interference}). Another test:host, or a clipboard manager. Run it alone.`;
-}
-
-/**
- * Wait for something to become true, or say what did not happen.
- *
- * <p>Bounded, and the sentence is the caller's: a scenario that hangs until the launcher's own
- * ten-minute budget expires reports "the extension host did not finish", which names the harness
- * rather than the defect.</p>
- */
-async function until(ready: () => boolean, whatDidNotHappen: string, ms = 15_000): Promise<void> {
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    if (ready()) {
-      return;
-    }
-    await new Promise((wake) => setTimeout(wake, 100));
-  }
-  assert.fail(`${whatDidNotHappen} (waited ${Math.round(ms / 1000)}s)`);
 }
 
 /**
@@ -886,6 +871,18 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
+    // E1.S2. The way back for a chat opened from a terminal: its own terminal, then the ONE of its name, never a guess.
+    // What it drives is in `terminalReturnScenario.ts`.
+    name: 'back to where a chat came from brings its terminal forward: its own, then by name, and never a guess',
+    run: backToATerminalInARealEditor,
+  },
+  {
+    // E1.S2. A tab that looks like Claude Code's and is named like a terminal conversation does not take it. What it drives
+    // is in `terminalReturnScenario.ts`.
+    name: 'a tab that looks like Claude\u2019s and is named like a terminal conversation does not take it',
+    run: aClaudeLookingTabDoesNotTakeATerminalChat,
+  },
+  {
     // E5.1's code round, finding 6: a stranded Bugz pick, and none, written to the real settings and refused by the
     // collect's own decision, which starts nothing. What it does and does not drive is in `bugzCollectScenario.ts`.
     name: 'a Bugz collect with a stranded pick, or none, read from the real settings, is refused and starts nothing',
@@ -929,6 +926,19 @@ const SCENARIOS: readonly Scenario[] = [
     name: 'a path still missing is said once per window run, however many settings changes follow',
     run: aStillMissingPathIsSaidOnceAcrossSettingsChanges,
   },
+  {
+    // S1r-H1 of the E1 stories document (the chat opens from a terminal): a terminal press takes what the person copied, through the
+    // real clipboard. What it drives is in `terminalCaptureScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
+    name: 'a terminal press takes the text the person copied, leaves the clipboard as it is, and an empty clipboard says so',
+    run: aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard,
+  },
+  {
+    // S3-H1 of the E1 stories document (the chat opens from a terminal): the host reports `coai.askFromTerminal` in the default of
+    // `terminal.integrated.commandsToSkipShell`, so Ctrl+Alt+A in a terminal reaches the extension and not the shell.
+    // What it reads is in `terminalCaptureScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
+    name: 'the skip list of the terminal holds the terminal door by default, so its chord is not sent to the shell',
+    run: theSkipListDefaultHoldsTheTerminalDoor,
+  },
 ];
 
 /**
@@ -946,23 +956,6 @@ const MISSING_ROOT_SCENARIOS: readonly Scenario[] = [
 /** The scenarios this launch runs: the ordinary list, or the missing-root launch's own. */
 function scenariosForThisLaunch(): readonly Scenario[] {
   return process.env[MISSING_ROOT_LAUNCH] === '1' ? MISSING_ROOT_SCENARIOS : SCENARIOS;
-}
-
-/**
- * A chat registered under `key` the way a real one is, carrying only what the way back reads: its store
- * id and its source. Cast for the reason `conversationHolding` gives — and if the command ever reads a
- * third field, it throws here rather than passing.
- */
-function registeredChat(panels: ChatPanels, key: object, saveId: string, source: Thread['source'], active = false): object {
-  const id = {};
-  threads.set(id, { saveId, source } as unknown as Thread);
-  panels.open(key, saveId, () => ({
-    id,
-    panel: { reveal() {}, dispose() {}, post() {}, isActive: () => active },
-    session: { dispose() {} },
-  }));
-
-  return id;
 }
 
 /**

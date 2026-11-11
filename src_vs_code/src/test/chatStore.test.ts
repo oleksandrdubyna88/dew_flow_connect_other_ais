@@ -4,7 +4,9 @@ import { test } from 'node:test';
 import {
   CONVERSATION_VERSION,
   ConversationRecord,
+  ConversationSource,
   KEEP_FOR_MS,
+  TERMINAL_NAME_MAX,
   besideMeta,
   expired,
   fromLegacy,
@@ -17,10 +19,13 @@ import {
   recordFrom,
   recordName,
   metaFrom,
+  readsSession,
   saidIn,
   sameSource,
   sourceOfFile,
   sourceOfSession,
+  sourceOfTab,
+  sourceOfTerminal,
 } from '../chatStore';
 import { ChatMessage } from '../chatPage';
 import { SavedTab } from '../chatTabs';
@@ -437,4 +442,124 @@ test('two copies of a conversation are compared by their words, in order, and a 
   assert.equal(isPrefixOf([], two), true, 'nothing is the beginning of everything');
   assert.equal(isPrefixOf(['why', 'BECAUSE'], four), false, 'a different word in the same place matched');
   assert.equal(isPrefixOf(undefined, four), false, 'a copy nobody could read was called the beginning of something');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The terminal source (E1.S2): a terminal is a conversation source, by its FULL name.
+// ---------------------------------------------------------------------------------------------
+
+const N = 'Creds: ai1-dev2 / small-tasks';
+
+test('the store\u2019s version did not move', () => {
+  assert.equal(
+    CONVERSATION_VERSION,
+    1,
+    'moving the version hides EVERY conversation from 0.85.0 after a downgrade, not only the ones from a terminal',
+  );
+});
+
+test('a terminal source is its FULL name, and an empty name is no source', () => {
+  assert.deepEqual(sourceOfTerminal(N), { kind: 'terminal', name: N }, 'the prefix was cut from the identity');
+  assert.deepEqual(sourceOfTerminal(''), { kind: 'none' }, 'a terminal conversation has no source to go back to');
+});
+
+test('a terminal name is at most 500 UTF-16 units, read from the one constant', () => {
+  const two = '\u{10348}';
+  assert.equal(two.length, 2, 'the fixture is not one character of two units');
+
+  assert.deepEqual(sourceOfTerminal('x'.repeat(TERMINAL_NAME_MAX)), { kind: 'terminal', name: 'x'.repeat(TERMINAL_NAME_MAX) });
+  assert.deepEqual(sourceOfTerminal('x'.repeat(TERMINAL_NAME_MAX + 1)), { kind: 'none' }, 'a name of 501 units became an identity');
+  assert.equal(sourceOfTerminal(two.repeat(250)).kind, 'terminal', 'a name of exactly 500 units was refused');
+  assert.equal(sourceOfTerminal(`${two.repeat(250)}x`).kind, 'none', 'the unit is not the UTF-16 unit');
+  assert.equal(sourceOfTerminal(two.repeat(250) + 'x'.repeat(250)).kind, 'none', '500 characters of 750 units were accepted');
+});
+
+test('a terminal name is one line', () => {
+  for (const name of ['a\nb', 'a\rb', 'a\tb', 'a\u0000b', 'a\u001bb', 'a\u007fb', 'a\u0085b', 'a\u{2028}b', 'a\u{2029}b']) {
+    assert.deepEqual(sourceOfTerminal(name), { kind: 'none' }, `a name carrying ${JSON.stringify(name)} became a durable identity`);
+  }
+  for (const name of [N, ' ', 'имя / 名前 – “x”', 'a\u00a0b']) {
+    assert.deepEqual(sourceOfTerminal(name), { kind: 'terminal', name }, `an honest name ${JSON.stringify(name)} was refused`);
+  }
+});
+
+test('a terminal record and its index entry round trip, at the version every record has', () => {
+  const mine = record({ source: sourceOfTerminal(N), fromSession: false });
+
+  assert.deepEqual(recordFrom(JSON.parse(JSON.stringify(mine))), mine, 'a terminal conversation could not be read back');
+  assert.deepEqual(metaFrom(JSON.parse(JSON.stringify(metaOf(mine)))), metaOf(mine));
+  assert.equal(mine.version, 1);
+  assert.equal(JSON.stringify(mine.source), '{"kind":"terminal","name":"Creds: ai1-dev2 / small-tasks"}');
+});
+
+test('every kind of source the type names is read back', () => {
+  // Typed by the kind: a fifth kind does not compile here until it has a sample.
+  const SAMPLE: { readonly [K in ConversationSource['kind']]: Extract<ConversationSource, { kind: K }> } = {
+    claude: { kind: 'claude', sessionId: '9f1c-uuid' },
+    file: { kind: 'file', uri: 'file:///a/README.md' },
+    terminal: { kind: 'terminal', name: N },
+    none: { kind: 'none' },
+  };
+
+  for (const source of Object.values<ConversationSource>(SAMPLE)) {
+    const read = recordFrom(JSON.parse(JSON.stringify(record({ source, fromSession: source.kind === 'claude' }))));
+
+    assert.deepEqual(read?.source, source, `a source of kind ${source.kind} was not read back`);
+  }
+});
+
+test('a terminal record whose name the builder would refuse is dropped, not read as sourceless', () => {
+  const mine = record({ source: sourceOfTerminal(N), fromSession: false });
+  const refused: readonly unknown[] = [
+    { kind: 'terminal' },
+    { kind: 'terminal', name: '' },
+    { kind: 'terminal', name: 5 },
+    { kind: 'terminal', name: 'a\nb' },
+    { kind: 'terminal', name: 'x'.repeat(501) },
+  ];
+
+  assert.ok(recordFrom(JSON.parse(JSON.stringify(mine))) !== undefined, 'the fixture itself is not a readable record');
+  for (const source of refused) {
+    const label = JSON.stringify(source).slice(0, 60);
+    assert.equal(recordFrom({ ...mine, source }), undefined, `a damaged terminal record was read as a conversation from nowhere: ${label}`);
+    assert.equal(metaFrom({ ...metaOf(mine), source }), undefined, `a damaged terminal index entry was read: ${label}`);
+  }
+});
+
+test('a terminal record may say either thing about a session on disk, and reads as not from one', () => {
+  const mine = record({ source: sourceOfTerminal(N), fromSession: false });
+  const without = { ...mine } as Record<string, unknown>;
+  delete without.fromSession;
+
+  assert.ok(recordFrom({ ...mine, fromSession: true }) !== undefined, 'a terminal record a later build wrote was dropped');
+  assert.equal(recordFrom({ ...mine, fromSession: true })?.fromSession, false, 'a terminal conversation came back offering to read a LOCAL Claude session');
+  assert.equal(recordFrom({ ...mine, fromSession: false })?.fromSession, false);
+  assert.equal(recordFrom(without)?.fromSession, false);
+  // Unchanged for the old kinds.
+  assert.equal(recordFrom({ ...record(), fromSession: false }), undefined, 'a claude record that says it is not from a session was read');
+  assert.equal(recordFrom({ ...record({ source: sourceOfFile('file:///a/b.md') }), fromSession: true }), undefined);
+  assert.equal(recordFrom({ ...record({ source: { kind: 'none' } }), fromSession: true })?.fromSession, true);
+});
+
+test('no terminal conversation reads a local session; every other kind says what it was told', () => {
+  assert.equal(readsSession(sourceOfTerminal(N), true), false, 'a terminal conversation reads a LOCAL Claude session');
+  assert.equal(readsSession({ kind: 'none' }, true), true);
+  assert.equal(readsSession({ kind: 'none' }, false), false);
+  assert.equal(readsSession(sourceOfSession('9f1c-uuid'), true), true);
+  assert.equal(readsSession(sourceOfFile('file:///a/b.md'), false), false);
+});
+
+test('two terminal sources are one source only when the names are the same string', () => {
+  assert.equal(sameSource(sourceOfTerminal(N), sourceOfTerminal(N)), true);
+  assert.equal(sameSource(sourceOfTerminal('Creds: A / s'), sourceOfTerminal('Creds: a / s')), false, 'a case-blind compare');
+  assert.equal(sameSource(sourceOfTerminal(N), sourceOfTerminal(`${N} `)), false, 'a trimmed compare');
+  assert.equal(sameSource(sourceOfTerminal('file:///a/README.md'), sourceOfFile('file:///a/README.md')), false);
+  assert.equal(sameSource(sourceOfTerminal('9f1c-uuid'), sourceOfSession('9f1c-uuid')), false);
+  assert.equal(sameSource(sourceOfTerminal(N), { kind: 'none' }), false);
+});
+
+test('a tab door\u2019s origin: a Claude tab names no source yet, a file tab names its document', () => {
+  assert.deepEqual(sourceOfTab(true, 'file:///x'), { kind: 'none' });
+  assert.deepEqual(sourceOfTab(false, 'file:///x'), sourceOfFile('file:///x'), 'a file tab\u2019s document was not its source');
+  assert.deepEqual(sourceOfTab(false, ''), { kind: 'none' });
 });

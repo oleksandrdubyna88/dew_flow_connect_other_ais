@@ -107,7 +107,7 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
     attached: thread?.attached ?? '',
     spend: spendLabel(spendSoFar(thread?.spend ?? [])),
     access: thread.access,
-    agentOffered: agentOffered(onATeamServer(thread), thread.workspace),
+    agentOffered: agentOffered(onATeamServer(thread), thread.workspace, thread.source),
   });
   // The one place the transcript reaches a page is the one place it is written down — but only when
   // there is something new to write. `show` runs on every state push: a turn starting, a queue

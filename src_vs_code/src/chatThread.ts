@@ -1,6 +1,7 @@
 import { ChatMemory, ChatProvider } from './chatModels';
 import { ChatHome } from './cliChatLaunch';
 import type { ChatAccess } from './chatAdapter';
+import type { ChatPanels } from './chatPanels';
 import { ChatMessage } from './chatPage';
 import { ChatModelChoice } from './chatContracts';
 import { ChatSession, TurnResult } from './chatSession';
@@ -277,8 +278,9 @@ export interface Thread extends ChatMemory {
    * WHAT THIS CONVERSATION WAS OPENED FROM — the identity that outlives the window.
    *
    * <p>The live key is the tab object, which dies with the window; this is the durable half, and it
-   * is what *go to* will match a tab against. A file's uri, a Claude session's id, or `none` for a
-   * conversation restored from a record written before story C1 — and `none` matches no tab at all,
+   * is what *go to* will match a tab against. A file's uri, a Claude session's id, a terminal's FULL name
+   * (never matched to a tab — a name compares equal and finds one live terminal, nothing more), or `none` for
+   * a conversation restored from a record written before story C1 — and `none` matches no tab at all,
    * deliberately, because a title is never a key.</p>
    */
   source: ConversationSource;
@@ -333,6 +335,14 @@ export interface Thread extends ChatMemory {
 }
 
 export const threads = new WeakMap<object, Thread>();
+
+/** The conversation registered under this key, or nothing for a key that holds none — the registry's entry, then its thread. */
+export function threadUnder(panels: Pick<ChatPanels, 'get'>, key: object): Thread | undefined {
+  const entry = panels.get(key);
+
+  // `threads` is filled in chatCommand.ts (a new conversation) and chatConversationRestore.ts (a restored one); the rule sees one file (S4158).
+  return entry === undefined ? undefined : threads.get(entry.id); // NOSONAR
+}
 
 /**
  * Whether the next turn carries the row's system prompt (PLAN_one_model_catalog.md E4.6c): when the session sending it has

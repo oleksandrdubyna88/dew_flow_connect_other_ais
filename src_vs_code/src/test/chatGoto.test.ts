@@ -1,7 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ConversationMeta, sourceOfFile, sourceOfSession } from '../chatStore';
+import { ConversationMeta, sourceOfFile, sourceOfSession, sourceOfTerminal } from '../chatStore';
 import { IndexState } from '../chatStoreCache';
 import { Goto, GotoAsked, UNNAMED_TAB, bindable, goto, rootOfTab } from '../chatGoto';
 
@@ -528,4 +528,29 @@ test('an incomplete walk never opens a conversation on the strength of a name', 
   const partial = goto(asked({ tab, ambiguous: true, severalSessions: true, walkFailed: true, source: { kind: 'none' }, inRoot: [mine] }));
   assert.equal(kindOf(partial), 'pick',
     'a conversation was opened on a name while part of the search had not been done');
+});
+
+// ---------------------------------------------------------------------------------------------
+// A terminal conversation in go-to (E1.S2): it is never bound to a tab, and may be OPENED by name.
+// ---------------------------------------------------------------------------------------------
+
+test('a terminal conversation is never bound to a tab', () => {
+  // The name EQUALS the tab's uri string: a compare that ignored the kind would bind it.
+  const mine = 'D:\\rsd\\one';
+  const record = { source: sourceOfTerminal(HERE), workspace: mine } as Parameters<typeof bindable>[0];
+
+  assert.equal(bindable(record, sourceOfFile(HERE), mine, true), false, 'a terminal conversation was bound to a file tab');
+  assert.equal(bindable(record, { kind: 'none' }, mine, true), false, 'a terminal conversation was bound to a tab of no source');
+  assert.equal(bindable(record, sourceOfSession('9f1c-uuid'), mine, true), false, 'a terminal conversation was bound to a Claude tab');
+});
+
+test('an ambiguous Claude tab named like a terminal conversation may OPEN it by name, and nothing more', () => {
+  const t = meta({ id: 'term', title: 'main', source: sourceOfTerminal('main') });
+  const tab = { kind: 'claude' as const, label: 'main', path: '' };
+
+  assert.deepEqual(goto(asked({ tab, ambiguous: true, source: { kind: 'none' }, inRoot: [t] })), { kind: 'reopen', meta: t });
+  const record = { source: t.source, workspace: t.workspace } as Parameters<typeof bindable>[0];
+  assert.equal(bindable(record, { kind: 'none' }, t.workspace, true), false, 'what was opened by a name was bound to the tab');
+  // A terminal in the editor area is a tab of kind `other`: it gets the whole list.
+  assert.deepEqual(goto(asked({ tab: { kind: 'other', label: 'x', path: '' } })), { kind: 'everything' });
 });

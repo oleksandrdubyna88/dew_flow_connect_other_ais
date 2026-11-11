@@ -887,6 +887,40 @@ test('a file this build cannot read at an id is INCOMPATIBLE — refused untouch
   }
 });
 
+/** The kind a build that came later might write. This build knows no such kind, so it must keep what carries one. */
+const UNKNOWN_KIND = 'a-kind-from-a-newer-build';
+
+test('a record whose source kind this build does not know is kept, hidden and never overwritten', async () => {
+  // The downgrade case for a NEW kind of source: an older build meets a record a newer one wrote.
+  // Measured on 0.85.0 with the kind `terminal` (research/module_extension.md, the rollback table):
+  // the record is refused at the source reader, so every road that would change it answers
+  // `incompatible` or `kept`, and both files stay as they were. The mechanism, on the real store.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const old = AT - 200 * 24 * 60 * 60 * 1000;
+    const foreign = record({ updatedAt: old, createdAt: old - 1_000, fromSession: false });
+    const source = { kind: UNKNOWN_KIND, name: 'x' };
+    writeFileSync(join(dir, recordName('a1')), JSON.stringify({ ...foreign, source }), 'utf8');
+    writeFileSync(join(dir, besideMeta('a1')), JSON.stringify({ ...metaOf(foreign), source }), 'utf8');
+    const before = [readFileSync(join(dir, recordName('a1'))), readFileSync(join(dir, besideMeta('a1')))];
+
+    const { value: read } = await capturing(() => store.read('a1'));
+    assert.equal(read.kind, 'incompatible', 'a record of an unknown source kind was read');
+    assert.deepEqual(await rows(store), [], 'the listing showed a conversation this build cannot read');
+    assert.equal(await store.entry('a1'), undefined, 'the index entry of an unknown source kind was read');
+    const { value: saved } = await capturing(() => store.save(record({ id: 'a1' }), 0));
+    assert.equal(saved.kind, 'incompatible', 'a record this build cannot read was overwritten');
+    const { value: retired } = await capturing(() => store.retireIfExpired('a1', foreign.rev, AT));
+    assert.deepEqual(retired, { kind: 'kept', why: 'incompatible' }, 'the sweep took a record it could not read');
+
+    assert.deepEqual(readFileSync(join(dir, recordName('a1'))), before[0], 'the record file was changed');
+    assert.deepEqual(readFileSync(join(dir, besideMeta('a1'))), before[1], 'the metadata file was changed');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a save with a baseline above zero over an ABSENT record is refused — it was deleted under you', async () => {
   // codex: window A reads rev 4, window B deletes the conversation, A saves with baseline 4. Absence
   // read as rev 0 let the save proceed and the deleted conversation came back. Only baseline zero may

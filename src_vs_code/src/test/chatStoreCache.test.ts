@@ -17,6 +17,7 @@ import {
   recordName,
   sourceOfFile,
   sourceOfSession,
+  sourceOfTerminal,
 } from '../chatStore';
 import { ChatMessage } from '../chatPage';
 
@@ -174,6 +175,26 @@ test('a lookup by source finds a Claude session by its id and a document by its 
     assert.deepEqual(ids(w.index.bySource(sourceOfFile('file:///work/notes.md'))), ['b2']);
     assert.deepEqual(ids(w.index.bySource(sourceOfSession('other'))), []);
     assert.deepEqual(ids(w.index.bySource({ kind: 'none' })), [], 'a record with no source was matched — every migrated conversation would match every tab');
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+test('go-to\u2019s candidates never mix a terminal with a file of the same string', async () => {
+  // A terminal's NAME can be spelled like a document's uri. Several terminal conversations of one name
+  // are legal (two terminals of one name); neither kind may find the other.
+  const w = world();
+  try {
+    const U = 'file:///work/same.md';
+    const now = Date.now();
+    await w.store.save(record({ id: 'f', source: sourceOfFile(U), updatedAt: now - 3_000 }), 0);
+    await w.store.save(record({ id: 't1', source: sourceOfTerminal(U), updatedAt: now - 2_000 }), 0);
+    await w.store.save(record({ id: 't2', source: sourceOfTerminal(U), updatedAt: now - 1_000 }), 0);
+    await w.index.refresh();
+
+    assert.deepEqual(ids(w.index.bySource(sourceOfFile(U))), ['f'], 'a terminal conversation was found as a file');
+    assert.deepEqual(ids(w.index.bySource(sourceOfTerminal(U))), ['t2', 't1'], 'the terminal conversations were not found, newest first');
+    assert.deepEqual(ids(w.index.bySource({ kind: 'none' })), []);
   } finally {
     rmSync(w.dir, { recursive: true, force: true });
   }

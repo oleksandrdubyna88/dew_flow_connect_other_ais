@@ -1,8 +1,8 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { sourceOfFile, sourceOfSession } from '../chatStore';
-import { Moved, filedUnder, followable, movedTo, prepareMoves, rootOf, sessionIdOf } from '../chatSource';
+import { sourceOfFile, sourceOfSession, sourceOfTerminal } from '../chatStore';
+import { Moved, filedUnder, followable, knownFolder, movedTo, prepareMoves, rootOf, sessionIdOf } from '../chatSource';
 
 /**
  * Which root a conversation is filed under, and what a rename moves — decided without a host.
@@ -153,4 +153,29 @@ test('a rename on a case-sensitive filesystem does not move a differently-spelle
     'a rename was applied to a file that only differs in case, on a filesystem where that is a different file');
   // On a case-blind filesystem it IS the same file, and the rename must reach it.
   assert.equal(movedTo(asUri('/work/App/old.ts'), prepareMoves(renames, true), asUri, asPath), asUri('/work/app/new.ts'));
+});
+
+// ---------------------------------------------------------------------------------------------
+// A terminal as a source (E1.S2): it names no folder, and no rename moves it.
+// ---------------------------------------------------------------------------------------------
+
+test('a terminal names no folder, so its conversation is filed under the fallback root', () => {
+  const called: string[] = [];
+  const spy = (uri: string): string => {
+    called.push(uri);
+
+    return uri;
+  };
+
+  // The name LOOKS like a file; it is not one, and `fsPath` must not be asked about it.
+  assert.equal(knownFolder(sourceOfTerminal('file:///D:/rsd/one/a.md'), spy), '', 'a terminal\u2019s name was read as a path');
+  assert.deepEqual(called, [], 'the host was asked to spell a terminal\u2019s name as a path');
+  assert.equal(filedUnder('', ['D:\\rsd\\one'], 'D:\\rsd\\zero', true), 'D:\\rsd\\zero');
+  // The positive: a file DOES go through `fsPath`, once.
+  assert.equal(knownFolder(sourceOfFile('file:///D:/rsd/one/a.md'), spy), 'file:///D:/rsd/one/a.md');
+  assert.deepEqual(called, ['file:///D:/rsd/one/a.md']);
+});
+
+test('a rename never follows a terminal conversation, even one named like a file', () => {
+  assert.equal(followable(sourceOfTerminal('file:///D:/rsd/one/a.md')), false);
 });

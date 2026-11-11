@@ -612,6 +612,8 @@ a tab that is still open is brought forward with the editor's own recipe (the on
 itself the check — a rejection, whether the extension is missing or no longer knows the session, is a
 refusal naming the session. Nothing else in this extension depends on Claude Code being installed.
 
+A terminal comes forward through VS Code's own `Terminal.show()` (the E1 terminal road of the same command, `chatReturnCommand.ts`); no other extension is called for it.
+
 ### And a ledger of its own, because it now spends on its own (2026-09-10)
 
 Spending an edge means accounting for it. `usage.jsonl` is written by `coai-mcp` and only READ by the

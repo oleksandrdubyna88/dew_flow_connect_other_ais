@@ -188,7 +188,7 @@ export async function reopened(thread: Thread): Promise<string> {
 
   // The access it was left in — unless the row it reopens on can no longer have agent mode, in which
   // case it reopens answering from text (issue #289).
-  const access = accessOn(isRemote(ready.vendor), thread.access, thread.workspace);
+  const access = accessOn(isRemote(ready.vendor), thread.access, thread.workspace, thread.source);
   const opened = started(ready.vendor, cli.resolved, ready.modelId, remote.session, access, thread.workspace);
   // Same shape as the switch, and the same reason for guarding it: the replacement is installed on
   // the next lines, so a disposal that threw would leave the thread holding the old session while
