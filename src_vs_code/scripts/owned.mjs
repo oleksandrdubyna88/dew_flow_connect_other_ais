@@ -59,6 +59,8 @@ export class RunFolderRefused extends Error {
 const firstLine = (text) => String(text).split('\n')[0].trimEnd();
 const RECORD = 'TESTSTODELETE_RUN';
 const MISMATCH = { 'mismatch-temp': 'TEMP', 'mismatch-tmp': 'TMP', 'mismatch-tmpdir': 'TMPDIR' };
+/** The three temp variables the gate points at the run folder, read-only — the proof file iterates them (E5 S7). */
+export const TEMP_VARIABLES = Object.freeze(Object.values(MISMATCH));
 
 /** A scope the reference accepts (`after`) whose close is SYNCHRONOUS, so it can run from an `exit` listener. Last registered first; a failing step is one stderr line. */
 function exitScope() {

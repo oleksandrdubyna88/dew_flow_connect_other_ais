@@ -10,16 +10,6 @@
     {"root":"scripts/","proof":"scripts/runFolder.test.mjs","guard":"node"}
   ],
   "entries": [
-    {"file":"scripts/lib/kimi.test.mjs","sha256":"c62fe14f87d37e362fa454157c680893ded6ade3b61414332826b718234fdbae","line":105},
-    {"file":"scripts/lib/kimi.test.mjs","sha256":"c62fe14f87d37e362fa454157c680893ded6ade3b61414332826b718234fdbae","line":287},
-    {"file":"scripts/lib/old-coai-leftovers.test.mjs","sha256":"29879c7f0bfab532a1d72f84b2fd418dacdba0eee613b854dba6714891e9edb6","line":39},
-    {"file":"scripts/lib/old-coai-leftovers.test.mjs","sha256":"eca694e7bf0e4fafbebf58b163daeec2665e1779caabc94e1379898360ff53c4","line":642},
-    {"file":"scripts/lib/transcript-sanitise.test.mjs","sha256":"8da2ae7bb2d51d530064ae7f231c9baeaeddc7c757f9fec4c5d05f9b3462bfa0","line":22},
-    {"file":"scripts/run-lib-tests.test.mjs","sha256":"cedc14468b7a51edbcbcd59195f407249f3129d9ac87f9733c4c1c0e23a349c5","line":46},
-    {"file":"scripts/runFolder.test.mjs","sha256":"9237e630f78e72c8149a487fef4bf19f60ed084c5830b0d4d92bd84fc3a99e69","line":30},
-    {"file":"scripts/runFolder.test.mjs","sha256":"702d3a888c18839919f543552559db9496fe527719215a8685180e0a7fb4aa08","line":31},
-    {"file":"scripts/runFolder.test.mjs","sha256":"d095439b3e083dbf3ae435ae3db574215c37d74a77fcbcfd7d2be0af75a26f7d","line":32},
-    {"file":"scripts/runFolder.test.mjs","sha256":"8102f6b427dff05dacd1fe66df72ae011e532451ede69e2358c707271c1bdbb0","line":33},
     {"file":"src_bugs/tests/BothHalvesTests.cs","sha256":"3a47bf7cbaa72fab2670ce561e2fe19588735c2ccdb8e195984742d2cd8c34d3","line":33},
     {"file":"src_bugs/tests/BugsServer.cs","sha256":"861b77ac7d525957150cfc0e54abddd4abd9217ab6908b6a220603c7bd12ff1c","line":61},
     {"file":"src_bugs/tests/RunFolderTests.cs","sha256":"26743bfd29e30a2aa7cfedfb70e65453ceace8eb6a7d044dd88a3f18aa83d60b","line":67},

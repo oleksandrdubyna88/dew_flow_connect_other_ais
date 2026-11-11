@@ -1,12 +1,11 @@
 import '../src_vs_code/scripts/inRunFolder.cjs';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { owned } from '../src_vs_code/scripts/owned.mjs';
+import { owned, TEMP_VARIABLES } from '../src_vs_code/scripts/owned.mjs';
 
 // testsToDelete-baseline-proof: scripts/
 /**
@@ -27,10 +26,9 @@ const PREFIX = 'coai tests: no test ran — ';
 test('P-T TEMP names the run folder', () => {
   const folder = process.env[MARKER];
   assert.ok(folder, `${MARKER} is set: the runner made the run folder`);
-  assert.equal(process.env.TEMP, folder);
-  assert.equal(process.env.TMP, folder);
-  assert.equal(process.env.TMPDIR, folder);
-  assert.equal(os.tmpdir(), folder);
+  assert.equal(TEMP_VARIABLES.length, 3, 'the gate holds three temp variables: an emptied list cannot pass vacuously');
+  for (const name of TEMP_VARIABLES) assert.equal(process.env[name], folder, `${name} names the run folder`);
+  assert.equal(owned.tempRoot(), folder);
   assert.deepEqual(owned.classifyName(path.basename(folder)), { form: 'owner', owner: owned.thisOwnerToken(), token: 'coai' });
   assert.ok(path.basename(folder).startsWith(owned.ownedPrefix('run')));
   const claim = owned.parseOwner(fs.readFileSync(`${folder}.owner`, 'utf8').trim());
