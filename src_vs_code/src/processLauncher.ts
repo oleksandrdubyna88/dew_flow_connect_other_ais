@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { win32 } from 'node:path';
 
 /**
  * The one place this extension starts a process it controls.
@@ -56,6 +56,15 @@ export interface LaunchOptions {
    * no `APPDATA`. On Windows that is not a wrong answer, it is a process that never starts.</p>
    */
   readonly env?: Readonly<Record<string, string>>;
+  /**
+   * Kill the child's WHOLE tree, with no shell in the way (E2.S2, X8).
+   *
+   * <p>Without a shell, a kill is `child.kill()` only. A child that starts children of its own — `ssh` with a
+   * `ProxyJump` or a `ProxyCommand` — would leave them running after a timeout, so a caller that launches one asks
+   * for the tree. On win32 the kill is then `taskkill /pid <pid> /t /f` and `child.kill()`; off win32 nothing changes
+   * (`SIGTERM` to the child), as for a shell.</p>
+   */
+  readonly killTree?: boolean;
 }
 
 /**
@@ -156,7 +165,12 @@ export function launch(target: string, args: readonly string[], options: LaunchO
     failure = reason instanceof Error ? reason.message : String(reason);
   }
 
-  return child === undefined ? failedHandle(failure) : liveHandle(child, shell);
+  return child === undefined ? failedHandle(failure) : liveHandle(child, killsTree(shell, options));
+}
+
+/** Whether a kill must take the whole tree: a shell is always in the way, and a caller may ask for it with none. */
+function killsTree(shell: boolean, options: LaunchOptions): boolean {
+  return shell || options.killTree === true;
 }
 
 /**
@@ -462,8 +476,15 @@ function spawnTaskkill(pid: number): string {
  * custom child environment would otherwise point the tree kill at a path that does not exist, and
  * the failure would be silent apart from a line in the stderr tail. (gemini, the second code round.)</p>
  */
-const TASKKILL = join(
-  process.env['SystemRoot'] ?? process.env['WINDIR'] ?? 'C:\\Windows',
-  'System32',
-  'taskkill.exe',
-);
+const TASKKILL = win32.join(system32(), 'taskkill.exe');
+
+/**
+ * The Windows system folder, by the ONE rule: `SystemRoot`, then `WINDIR`, then `C:\Windows`.
+ *
+ * <p>Exported because two absolute paths are built from it — `taskkill.exe` here and the system `ssh.exe` of the remote
+ * reader (`remoteSsh.ts`) — and a rule written twice is how they would stop agreeing. A Windows path is always built with
+ * `win32`, whatever machine runs the code. (E2.S2.)</p>
+ */
+export function system32(env: NodeJS.ProcessEnv = process.env): string {
+  return win32.join(env['SystemRoot'] ?? env['WINDIR'] ?? 'C:\\Windows', 'System32');
+}
