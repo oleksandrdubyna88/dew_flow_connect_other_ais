@@ -1,7 +1,8 @@
 # PLAN — the chat opens from a terminal
 
-> Status: **in progress, 2026-11-10 — E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate round 1 `proceed`, 8 of 8
-> reviewers), not merged; E2 and E3 not started. Plan gate round 1 `proceed` (codex, antigravity;
+> Status: **stopped for re-review, 2026-11-11 — change 1.2 (the owner, after the first real-window check: the terminal door
+> takes the clipboard, not a VS Code selection). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
+> twice, 8 of 8 reviewers), PR #971 not merged and not merged until epoch 2 is approved; E2 and E3 not started. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
 > read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
@@ -14,7 +15,7 @@ reading Claude's session files), [../research/PLAN_a_conversation_survives_a_rel
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-10 · by reviewers · state: open
+> Epoch 1 · approved 2026-11-10 · by reviewers · state: stopped
 
 - 1.1 · 2026-11-10 · agent · build-order, merge-conditions — each epic's real-window checks run on a pre-release VSIX the owner installs, before its release is tagged
   (cadence consult ea91bb56, codex: a door whose prerequisites are unproven must not ship. No real VS Code can
@@ -25,6 +26,14 @@ reading Claude's session files), [../research/PLAN_a_conversation_survives_a_rel
   an E1 `Creds:` conversation restored under E2 gains *Asked* (its `fromSession` is derived again from the
   source on restore and reuse), and a tmux session with several panes or several `claude` descendants is
   ambiguity, so it gives a list or a refusal, never a pick.)
+- 1.2 · 2026-11-11 · owner · approach, contract, dod — the terminal door takes the text from the clipboard; the person copies it, the door runs no copy command
+  (Real-window check on the pre-release VSIX 0.85.901, 2026-11-11: in a `Creds:` tmux terminal running the Claude
+  CLI, a mouse drag is Claude's own selection ("copied 180 chars to tmux buffer"), which already lands on the
+  local clipboard; VS Code's terminal has no selection, so `copySelection` found nothing and the door said "Select
+  text in the terminal first." next to VS Code's "The terminal has no selection to copy". Shift+drag gave the same.
+  The owner: "leave the copying to the person — in a plain terminal a right-click copies; just take it from the
+  clipboard." Assumed, to be confirmed in the re-review: the door keeps the `autoSend` setting of the other doors.
+  This second change stopped the plan.)
 
 ## The symptom
 
