@@ -22,7 +22,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
     private const string Context = "I tried a fixed wait; the options are a ladder or a breaker.";
 
     private readonly ProcessLauncher _real = new();
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-qservice-").FullName;
+    private readonly string _data = TempDir.For("coai-qservice-").Path;
     private TempGitRepo _repo = null!;
 
     public async ValueTask InitializeAsync()
@@ -264,7 +264,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
     public async Task APathThatIsNoRepository_IsRefusedBeforeAnythingIsWritten()
     {
         var service = Service();
-        var nowhere = Directory.CreateTempSubdirectory("coai-qservice-nowhere-").FullName;
+        var nowhere = TempDir.For("coai-qservice-nowhere-").Path;
         try
         {
             var reply = await AskAsync(service, Question, Context, nowhere);
@@ -283,7 +283,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
     [Fact]
     public async Task ADiskRowOverARootThatIsNoGitCheckout_IsAnsweredWithTheNoteInTheReply()
     {
-        var plain = Directory.CreateTempSubdirectory("coai-qservice-plain-").FullName;
+        var plain = TempDir.For("coai-qservice-plain-").Path;
         try
         {
             var scripted = new ScriptedLauncher(_real, Answers);

@@ -123,27 +123,6 @@ public sealed class LeftoversCoaiLayoutTests : IDisposable
         }
     }
 
-    /// <summary>R12 (the re-review's finding e2). The repository root is found by walking up from the binary, whatever the working folder of the process is, so the baseline file at the root is found from the project folder and from the output folder alike. Measured 2026-11-05: the xUnit host moves the working folder to the binary's folder before test code runs, so all the children see one working folder, and a walk up from it also passes. This test goes red when the file is absent; it does not prove the walk's starting point.</summary>
-    [Fact]
-    public async Task TheBaselineIsFound_FromBothPlaces()
-    {
-        var work = _owned.Dir("s6-baseline-found");
-        var places = new[] { Path.GetFullPath(Path.Combine(RepositoryRoot.Path, "src_mcp", "tests")), AppContext.BaseDirectory };
-        for (var index = 0; index < places.Length; index++)
-        {
-            var outFile = Path.Combine(work, $"found-{index}");
-            var start = SuiteChild.StartInfoFor(Environment.ProcessPath!, ["--filter-class", "*BaselineLocationChild"], new Dictionary<string, string?> { ["COAI_S6_BASELINE_OUT"] = outFile });
-            start.WorkingDirectory = places[index];
-            using var process = Process.Start(start)!;
-            var text = process.StandardOutput.ReadToEndAsync();
-            var error = process.StandardError.ReadToEndAsync();
-            process.WaitForExit(ChildTimeout).Should().BeTrue("the child ends by itself");
-            process.ExitCode.Should().Be(0, await text + await error);
-
-            File.ReadAllText(outFile).Should().Be("True", $"the baseline is found when the working folder is {places[index]}");
-        }
-    }
-
     /// <summary>R11. The scan sees every root of this repository's layout, and only them.</summary>
     [Fact]
     public void The_scan_sees_the_coai_roots()

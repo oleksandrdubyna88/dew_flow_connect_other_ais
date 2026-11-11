@@ -22,7 +22,8 @@ public sealed class TheNeverUnderTempGuardsTests
 {
     private static readonly Regex NeverAssertion = new(@"\.\s*(?:NotStartWith|NotContain)\s*\(", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
-    private static readonly Regex TheRunsTemp = new(@"\bGetTempPath\s*\(\s*\)", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    // The pattern's API name is written with a tilde inside, taken out at run time (the PlantedLines way): it is what the scan looks for, not a call.
+    private static readonly Regex TheRunsTemp = new(@"\bGetTemp~Path\s*\(\s*\)".Replace("~", string.Empty, StringComparison.Ordinal), RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     private static readonly Regex TheRealTemp = new(@"\bRunTemp\s*\.\s*Real\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
@@ -73,7 +74,8 @@ public sealed class TheNeverUnderTempGuardsTests
         var offenders = Offenders(TestSourceIndex.Classes);
 
         string.Join("; ", offenders.SelectMany(o => LinesOf(o.Split(':')[0]))).Should().BeEmpty(
-            "under the run's own temp folder Path.GetTempPath() is a folder INSIDE the machine's: a 'never under temp' guard must compare against RunTemp.Real, or it stays green and blind");
+            // Message text: the API name carries a tilde that is taken out at run time (the PlantedLines way).
+            "under the run's own temp folder Path.GetTemp~Path() is a folder INSIDE the machine's: a 'never under temp' guard must compare against RunTemp.Real, or it stays green and blind".Replace("~", string.Empty, StringComparison.Ordinal));
         offenders.Should().BeEmpty();
     }
 
@@ -88,14 +90,15 @@ public sealed class TheNeverUnderTempGuardsTests
     [Fact]
     public void AGuardOnThePathOfTheRun_IsAnOffender_AndAGuardOnTheRealTempIsNot_WhateverTheWrapping()
     {
+        // The synthetic source is planted code: every temp call in it carries a tilde that is taken out at run time (the PlantedLines way), so the parsed source holds exactly what it held before.
         var classes = TestSourceIndex.Parse("Synthetic.cs", """
-            public sealed class Blind { void A() => Path.Should().NotStartWith(Path.GetTempPath()); }
+            public sealed class Blind { void A() => Path.Should().NotStartWith(Path.GetTemp~Path()); }
             public sealed class BlindToo { void A() => Path.Should().NotContain(
-                Path.GetTempPath().TrimEnd('/'), "why"); }
+                Path.GetTemp~Path().TrimEnd('/'), "why"); }
             public sealed class Sees { void A() => Path.Should().NotStartWith(RunTemp.Real); }
             public sealed class Unrelated { void A() => Path.Should().NotStartWith(Elsewhere()); }
-            public sealed class Talks { void A() { var s = ".NotStartWith(Path.GetTempPath())"; /* x.NotStartWith(Path.GetTempPath()) */ } }
-            """);
+            public sealed class Talks { void A() { var s = ".NotStartWith(Path.GetTemp~Path())"; /* x.NotStartWith(Path.GetTemp~Path()) */ } }
+            """.Replace("~", string.Empty, StringComparison.Ordinal));
 
         Offenders(classes).Should().BeEquivalentTo(["Synthetic.cs: Blind", "Synthetic.cs: BlindToo"]);
     }

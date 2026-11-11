@@ -22,8 +22,8 @@ public sealed class TheServerAnswersInitializeAtOnceTests : IDisposable
     /// <summary>Far longer than the answer may take, so a server that waits for it cannot pass by luck.</summary>
     private const int SlowMs = 20_000;
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-init-").FullName;
-    private readonly string _bin = Directory.CreateTempSubdirectory("coai-init-bin-").FullName;
+    private readonly string _data = TempDir.For("coai-init-").Path;
+    private readonly string _bin = TempDir.For("coai-init-bin-").Path;
 
     public void Dispose()
     {

@@ -29,7 +29,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("coai-local-first-").FullName;
+    private readonly string _root = TempDir.For("coai-local-first-").Path;
 
     public void Dispose()
     {

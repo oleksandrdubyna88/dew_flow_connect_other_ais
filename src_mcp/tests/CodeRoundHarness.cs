@@ -52,8 +52,8 @@ internal sealed class CodeRoundHarness : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        Repo = Directory.CreateTempSubdirectory("coai-panel-repo-").FullName;
-        Data = Directory.CreateTempSubdirectory("coai-panel-data-").FullName;
+        Repo = TempDir.For("coai-panel-repo-").Path;
+        Data = TempDir.For("coai-panel-data-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(Repo, "app.cs"), "v1\n");
         await Git("add", ".");

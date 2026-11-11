@@ -53,7 +53,7 @@ public sealed class AnUnmeasuredVibeIsWarnedAboutNotRefusedTests
         var service = new PanelService(
             new PanelSettings
             {
-                DataDir = Path.Combine(Path.GetTempPath(), $"coai-vibewarn-{Guid.NewGuid():N}"),
+                DataDir = Path.Combine(TempDir.Root, $"coai-vibewarn-{Guid.NewGuid():N}"),
                 Providers = PanelSettings.ParseVendors("""[{"id":"vibe","runtime":"vibe","model":"glm-5-3"},{"id":"codex","runtime":"codex"}]"""),
             },
             VaultKeys.None("no vault"), default, new RecordingLauncher(stdOut: "vibe 3.0.0\n"), Serilog.Core.Logger.None, Noticing.None);

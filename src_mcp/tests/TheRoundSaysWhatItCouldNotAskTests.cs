@@ -19,7 +19,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
 {
     private const string TeamServer = "https://coai.example.com";
 
-    private readonly string _dataDir = Directory.CreateTempSubdirectory("coai-couldnotask-").FullName;
+    private readonly string _dataDir = TempDir.For("coai-couldnotask-").Path;
 
     public void Dispose()
     {
@@ -44,7 +44,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
 
     private static string Scratch()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"coai-couldnotask-{Guid.NewGuid():N}");
+        var path = Path.Combine(TempDir.Root, $"coai-couldnotask-{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
 
         return path;

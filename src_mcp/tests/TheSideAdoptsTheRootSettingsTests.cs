@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheSideAdoptsTheRootSettingsTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("coai-adopt-").FullName;
+    private readonly string _root = TempDir.For("coai-adopt-").Path;
 
     public void Dispose()
     {

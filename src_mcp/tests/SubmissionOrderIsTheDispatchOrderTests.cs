@@ -26,7 +26,7 @@ namespace CoaiMcp.Tests;
 public sealed class SubmissionOrderIsTheDispatchOrderTests : IDisposable
 {
     private readonly ReviewerExecutor _executor = new(new ProcessLauncher());
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-order-").FullName;
+    private readonly string _dir = TempDir.For("coai-order-").Path;
 
     /// <summary>Swept whether the assertions pass or throw — xUnit's own teardown.</summary>
     public void Dispose()

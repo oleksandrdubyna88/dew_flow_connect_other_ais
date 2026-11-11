@@ -29,7 +29,7 @@ public sealed class TheSizingIsConcurrentAndBoundedTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-sizing-").FullName;
+        _repo = TempDir.For("coai-sizing-").Path;
         await Run("init", "-b", "main");
         await Write("app.cs", "v1\n");
         await Commit("base");

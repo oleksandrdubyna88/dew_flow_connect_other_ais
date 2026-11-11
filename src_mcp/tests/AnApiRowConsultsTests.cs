@@ -39,7 +39,7 @@ public sealed class AnApiRowConsultsTests
     [Fact]
     public void AStuckTurn_IsOneCompletionThroughTheShim_WithItsPromptInAFile()
     {
-        var output = Directory.CreateTempSubdirectory("coai-api-consult-").FullName;
+        var output = TempDir.For("coai-api-consult-").Path;
         try
         {
             var invocation = ConsultantResolution.For(Row)!.Build(new ConsultantLaunch(

@@ -408,7 +408,7 @@ public sealed class StdInBytesTests
     [Fact]
     public async Task ThePromptArrivesWithNoByteOrderMarkInFrontOfIt()
     {
-        var file = Path.Combine(Directory.CreateTempSubdirectory("coai-bom-").FullName, "stdin.bin");
+        var file = Path.Combine(TempDir.For("coai-bom-").Path, "stdin.bin");
         Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_STDIN_BYTES", file);
         try

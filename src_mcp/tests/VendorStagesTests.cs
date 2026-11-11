@@ -23,7 +23,7 @@ namespace CoaiMcp.Tests;
 public sealed class VendorStagesTests
 {
     private static PanelService Service(params ProviderSettings[] providers) =>
-        Service(Path.Combine(Path.GetTempPath(), $"coai-stages-{Guid.NewGuid():N}"), providers);
+        Service(Path.Combine(TempDir.Root, $"coai-stages-{Guid.NewGuid():N}"), providers);
 
     /// <summary>Two services over one data directory is how a second round reads the first's session.</summary>
     private static PanelService Service(string dataDir, params ProviderSettings[] providers) =>
@@ -40,7 +40,7 @@ public sealed class VendorStagesTests
 
     private static string Scratch()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"coai-stages-wt-{Guid.NewGuid():N}");
+        var path = Path.Combine(TempDir.Root, $"coai-stages-wt-{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
 
         return path;
@@ -118,7 +118,7 @@ public sealed class VendorStagesTests
         // round has nobody. Driven through the real tools with a scripted CLI, because reaching the
         // code stage means a plan round that actually PROCEEDED.
         using var repo = await Repository();
-        var data = Path.Combine(Path.GetTempPath(), $"coai-stages-{Guid.NewGuid():N}");
+        var data = Path.Combine(TempDir.Root, $"coai-stages-{Guid.NewGuid():N}");
         var fake = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
         Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
         Environment.SetEnvironmentVariable("FAKECLI_STDOUT", CleanAnswer);

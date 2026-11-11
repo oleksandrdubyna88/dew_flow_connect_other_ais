@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheConsultLedgerKeepsEveryUsageFieldTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-consult-ledger-").FullName;
+    private readonly string _data = TempDir.For("coai-consult-ledger-").Path;
 
     public void Dispose()
     {

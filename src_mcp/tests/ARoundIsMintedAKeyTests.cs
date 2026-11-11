@@ -46,8 +46,8 @@ public sealed class ARoundIsMintedAKeyTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-key-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-key-data-").FullName;
+        _repo = TempDir.For("coai-key-repo-").Path;
+        _data = TempDir.For("coai-key-data-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
         await Git("add", ".");

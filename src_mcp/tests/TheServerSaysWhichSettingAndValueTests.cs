@@ -20,10 +20,10 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheServerSaysWhichSettingAndValueTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-problems-data-").FullName;
-    private readonly string _projects = Directory.CreateTempSubdirectory("coai-problems-projects-").FullName;
-    private readonly string _profile = Directory.CreateTempSubdirectory("coai-problems-profile-").FullName;
-    private readonly string _system = Directory.CreateTempSubdirectory("coai-problems-system-").FullName;
+    private readonly string _data = TempDir.For("coai-problems-data-").Path;
+    private readonly string _projects = TempDir.For("coai-problems-projects-").Path;
+    private readonly string _profile = TempDir.For("coai-problems-profile-").Path;
+    private readonly string _system = TempDir.For("coai-problems-system-").Path;
 
     private SystemPlaces Places => new(_profile, [_system]);
 

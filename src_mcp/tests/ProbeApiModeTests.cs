@@ -21,7 +21,7 @@ public sealed class ProbeApiModeTests : IDisposable
     private const string Key = "sk-vault-0123456789abcdefghijklmnopqrstuv";
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-probe-api-").FullName;
+    private readonly string _dir = TempDir.For("coai-probe-api-").Path;
     private readonly List<string> _stderr = [];
     private readonly StringWriter _stdout = new();
 

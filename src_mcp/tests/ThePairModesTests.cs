@@ -27,7 +27,7 @@ namespace CoaiMcp.Tests;
 public sealed class ThePairModesTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-pairmode-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-pairmode-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly string? _was = Environment.GetEnvironmentVariable("COAI_DATA_DIR");
 
     private static readonly SessionState Session =

@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class PanelServiceHostTests : IDisposable
 {
-    private readonly string _dataDir = Directory.CreateTempSubdirectory("coai-host-").FullName;
+    private readonly string _dataDir = TempDir.For("coai-host-").Path;
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     private string SettingsPath => Path.Combine(_dataDir, SettingsFile.Name);

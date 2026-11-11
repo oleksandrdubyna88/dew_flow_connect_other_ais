@@ -28,7 +28,7 @@ public sealed class RoundCountsCliScenarioTests : IDisposable
 {
     private static readonly DateTime Now = new(2026, 10, 10, 12, 0, 0, DateTimeKind.Utc);
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-counts-cli-").FullName;
+    private readonly string _data = TempDir.For("coai-counts-cli-").Path;
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     public void Dispose()

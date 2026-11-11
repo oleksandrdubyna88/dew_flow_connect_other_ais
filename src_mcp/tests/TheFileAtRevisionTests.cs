@@ -28,7 +28,7 @@ namespace CoaiMcp.Tests;
 public sealed class TheFileAtRevisionTests : IAsyncLifetime
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-fileat-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-fileat-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly string? _was = Environment.GetEnvironmentVariable("COAI_DATA_DIR");
     private readonly ProcessLauncher _launcher = new();
     private TempGitRepo _git = null!;
@@ -313,7 +313,7 @@ public sealed class TheFileAtRevisionTests : IAsyncLifetime
     [Fact]
     public async Task ACheckoutThatIsGone_SaysSo()
     {
-        var id = Seed(await _git.HeadAsync(), repoPath: Path.Combine(Path.GetTempPath(), $"gone-{Guid.NewGuid():N}"));
+        var id = Seed(await _git.HeadAsync(), repoPath: Path.Combine(TempDir.Root, $"gone-{Guid.NewGuid():N}"));
 
         var file = await AnswerAsync(id);
 

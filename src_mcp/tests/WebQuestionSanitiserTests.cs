@@ -116,7 +116,7 @@ public sealed class WebQuestionSanitiserTests
     [InlineData("Running ./scripts/run-tests.mjs fails on Windows — why?")]
     [InlineData("Is src/Server/PanelService.cs too long at 1884 lines?")]
     [InlineData("Where should appsettings.json live for a worker service?")]
-    [InlineData("Can WebFetch open file:///tmp/x?")]
+    [InlineData("Can WebFetch open file:///fake/x?")]
     public void APathShape_IsRefused(string question) =>
         RefusedAs(question, "path").Cure.Should().Contain("describe");
 

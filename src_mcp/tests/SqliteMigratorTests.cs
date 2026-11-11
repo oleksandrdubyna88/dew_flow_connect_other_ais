@@ -18,7 +18,7 @@ namespace CoaiMcp.Tests;
 public sealed class SqliteMigratorTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-migrator-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-migrator-" + Guid.NewGuid().ToString("N")[..8]);
 
     private static readonly string[] Three =
     [

@@ -35,9 +35,9 @@ public sealed class QuestionRowLookupScenarioTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-qlookup-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-qlookup-data-").FullName;
-        _record = Directory.CreateTempSubdirectory("coai-qlookup-argv-").FullName;
+        _repo = TempDir.For("coai-qlookup-repo-").Path;
+        _data = TempDir.For("coai-qlookup-data-").Path;
+        _record = TempDir.For("coai-qlookup-argv-").Path;
         await Git("init", "-b", "main");
         await Git("config", "user.email", "t@example.com");
         await Git("config", "user.name", "t");

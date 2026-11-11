@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class RepoPathsTests : IDisposable
 {
-    private readonly string _tree = Directory.CreateTempSubdirectory("coai-repopaths-").FullName;
+    private readonly string _tree = TempDir.For("coai-repopaths-").Path;
 
     [Fact]
     public void ARootHoldingBothHalves_IsFound_FromDeepBelowIt()

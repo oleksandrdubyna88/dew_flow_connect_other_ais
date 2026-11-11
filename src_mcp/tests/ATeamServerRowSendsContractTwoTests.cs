@@ -27,7 +27,7 @@ public sealed class ATeamServerRowSendsContractTwoTests
 
     private static ReviewerInvocation Built(ReviewerSettings settings)
     {
-        var dir = Directory.CreateTempSubdirectory("coai-c2-").FullName;
+        var dir = TempDir.For("coai-c2-").Path;
 
         return new RemoteRuntime("srv-claude", "https://coai.example", "claude")
             .Build(RoleCatalog.ArchitectureRole, "review this", dir, Path.Combine(dir, "schema.json"), dir, settings);

@@ -18,7 +18,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class HeartbeatStaleAfterIsPublishedTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-stale-after-").FullName;
+    private readonly string _data = TempDir.For("coai-stale-after-").Path;
 
     public void Dispose()
     {

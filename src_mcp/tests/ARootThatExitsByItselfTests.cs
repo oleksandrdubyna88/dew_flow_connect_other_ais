@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class ARootThatExitsByItselfTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-reader-quit-").FullName;
+    private readonly string _dir = TempDir.For("coai-reader-quit-").Path;
 
     /// <summary>An hour: the listing leg's first tick never comes, so nothing is seen before the root exits.</summary>
     private static readonly TimeSpan NoListing = TimeSpan.FromHours(1);

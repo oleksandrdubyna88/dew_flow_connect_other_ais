@@ -17,7 +17,7 @@ public sealed class ContextAssemblerTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-ctx-").FullName;
+        _repo = TempDir.For("coai-ctx-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
         await File.WriteAllTextAsync(Path.Combine(_repo, ".gitignore"), "ignored/\n");

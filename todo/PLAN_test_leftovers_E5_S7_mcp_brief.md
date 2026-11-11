@@ -1,6 +1,6 @@
 # Build brief — coai E5 story S7, the sixth and last drain PR: the coai-mcp suite's `raw-temp` entries to zero, and S7-d — the baseline file deleted
 
-> Status: **plan only, 2026-11-12, by Opus.** Scope: the 458 `raw-temp` baseline entries of `src_mcp/tests/` (253 files) —
+> Status: **built 2026-11-12, on branch feat/test-leftovers-e5-s7-mcp-a.** Scope: the 458 `raw-temp` baseline entries of `src_mcp/tests/` (253 files) —
 > the last suite — and S7-d: the baseline file deleted and `--baseline` dropped from every invocation, in the same commit.
 > Tests and their wiring only. Sonnet coders build from this brief alone.
 

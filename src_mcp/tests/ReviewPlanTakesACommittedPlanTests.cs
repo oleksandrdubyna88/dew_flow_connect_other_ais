@@ -69,7 +69,7 @@ public sealed class ReviewPlanTakesACommittedPlanTests : FakeCliRoundTests
 
     private async Task<(JsonElement Answer, string[] Prompts)> RoundAsync(PanelService service, string branch, PlanInput input)
     {
-        var record = Directory.CreateTempSubdirectory("coai-committed-").FullName;
+        var record = TempDir.For("coai-committed-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {

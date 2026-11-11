@@ -26,9 +26,9 @@ public sealed class ConsultantModesCliScenarioTests : IDisposable
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-modes-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-modes-temp-").FullName;
-    private readonly string _record = Directory.CreateTempSubdirectory("coai-modes-argv-").FullName;
+    private readonly string _data = TempDir.For("coai-modes-data-").Path;
+    private readonly string _temp = TempDir.For("coai-modes-temp-").Path;
+    private readonly string _record = TempDir.For("coai-modes-argv-").Path;
 
     public void Dispose()
     {

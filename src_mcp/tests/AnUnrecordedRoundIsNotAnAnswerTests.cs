@@ -42,8 +42,8 @@ public sealed class AnUnrecordedRoundIsNotAnAnswerTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-unrecorded-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-unrecorded-data-").FullName;
+        _repo = TempDir.For("coai-unrecorded-repo-").Path;
+        _data = TempDir.For("coai-unrecorded-data-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
         await Git("add", ".");

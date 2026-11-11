@@ -15,7 +15,7 @@ public sealed class ConsultantsSurveyClaimTests : IDisposable
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
     private static readonly DateTime Now = new(2026, 10, 6, 12, 1, 0, DateTimeKind.Utc);
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-claim-").FullName;
+    private readonly string _data = TempDir.For("coai-claim-").Path;
 
     private string Health => Path.Combine(_data, "consultations", "health");
 

@@ -42,7 +42,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
 {
     private static readonly TimeSpan LongEnough = TimeSpan.FromSeconds(10);
 
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-refusals-").FullName;
+    private readonly string _dir = TempDir.For("coai-refusals-").Path;
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 

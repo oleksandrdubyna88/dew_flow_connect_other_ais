@@ -33,7 +33,7 @@ public sealed class RoundCountsTests : IDisposable
     private const string FlashMedium = "gemini-3.8-flash-medium";
     private const string OldLuna = "gpt-5.6-luna";
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-counts-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(TempDir.Root, "coai-counts-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     public void Dispose()

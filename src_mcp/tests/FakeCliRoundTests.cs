@@ -32,8 +32,8 @@ public abstract class FakeCliRoundTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-round-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-round-data-").FullName;
+        _repo = TempDir.For("coai-round-repo-").Path;
+        _data = TempDir.For("coai-round-data-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
         await Git("add", ".");

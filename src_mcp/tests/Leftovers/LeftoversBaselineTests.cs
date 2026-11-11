@@ -209,12 +209,11 @@ public sealed class LeftoversBaselineTests : IDisposable
     }
 
     [Fact]
-    public void The_baseline_file_exists_and_is_a_regular_file()
+    public void The_drained_baseline_file_stays_gone()
     {
-        var file = new FileInfo(Path.Combine(RepositoryRoot.Path, "raw-temp-baseline.json"));
+        var path = Path.Combine(RepositoryRoot.Path, "raw-temp-baseline.json");
 
-        file.Exists.Should().BeTrue("the one baseline stands at the repository root");
-        file.Attributes.HasFlag(FileAttributes.ReparsePoint).Should().BeFalse("never a link");
+        (File.Exists(path) || Directory.Exists(path) || new FileInfo(path).LinkTarget is not null).Should().BeFalse("a repository with none ships none: the baseline was drained to zero and deleted (E5 S7-d), and the ratchet refuses a re-creation");
     }
 
     /// <summary>

@@ -124,5 +124,5 @@ public sealed class GitModulesTests
 
     [Fact]
     public void ARepositoryThatDeclaresNothing_HasNoMounts() =>
-        GitModules.In(Directory.CreateTempSubdirectory("coai-gitmodules-").FullName).Should().BeEmpty();
+        GitModules.In(TempDir.For("coai-gitmodules-").Path).Should().BeEmpty();
 }

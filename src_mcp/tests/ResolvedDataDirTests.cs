@@ -33,7 +33,7 @@ public sealed class ResolvedDataDirTests
     {
         // Read back from the function that computes it, never guessed: the side is applied, the
         // path is made full, and the value is what every other caller of the resolver gets.
-        var root = Path.Combine(Path.GetTempPath(), "coai-resolved-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(TempDir.Root, "coai-resolved-" + Guid.NewGuid().ToString("N"));
 
         var resolved = PanelSettings.DataDirectoryFor(Env(root, "alpha"));
 
@@ -83,7 +83,7 @@ public sealed class ResolvedDataDirTests
     [Fact]
     public void TwoResolutionsOfOneConfiguration_AreEqual()
     {
-        var root = Path.Combine(Path.GetTempPath(), "coai-resolved-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(TempDir.Root, "coai-resolved-" + Guid.NewGuid().ToString("N"));
 
         PanelSettings.DataDirectoryFor(Env(root, "alpha"))
             .Should().Be(PanelSettings.DataDirectoryFor(Env(root, "alpha")),

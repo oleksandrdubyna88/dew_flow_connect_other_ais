@@ -140,7 +140,7 @@ public class TheConsultantIsHeldToTheSameStandardTests
     [Fact]
     public void TheProductionPathCarriesTheShippedInstruction()
     {
-        var dataDir = Path.Combine(Path.GetTempPath(), $"consultprompt-{Guid.NewGuid():N}");
+        var dataDir = Path.Combine(TempDir.Root, $"consultprompt-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dataDir);
         try
         {

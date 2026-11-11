@@ -11,14 +11,17 @@ namespace CoaiMcp.Tests.Leftovers;
 /// </summary>
 public sealed class TheHelpersTestsMakeNothingOutsideAnOwnedScopeTests
 {
-    /// <summary>The temp APIs, each spelled in two pieces so this file does not match its own patterns.</summary>
+    /// <summary>The temp APIs. Each name is written with a tilde inside and the tilde is taken out when the test runs (the <c>PlantedLines</c> way),
+    /// so this file does not match its own patterns and the guards, which join split literals, do not see a temp API either.</summary>
     private static readonly Regex[] TempApis =
     [
-        Api("GetTemp" + "Path"),
-        Api("Create" + "TempSubdirectory"),
-        Api("GetTemp" + "FileName"),
+        Api(Planted("GetTemp~Path")),
+        Api(Planted("Create~TempSubdirectory")),
+        Api(Planted("GetTemp~FileName")),
         new Regex(@"GetEnvironmentVariable\(\s*""(TEMP|TMP|TMPDIR)""", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1)),
     ];
+
+    private static string Planted(string text) => text.Replace("~", string.Empty, StringComparison.Ordinal);
 
     private static Regex Api(string name) => new(@"\b" + name + @"\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
@@ -45,12 +48,13 @@ public sealed class TheHelpersTestsMakeNothingOutsideAnOwnedScopeTests
     [Fact]
     public void TheScan_SeesEachTempApi_AndPassesAnOwnedScope()
     {
+        // Planted lines: each temp spelling is written with a tilde inside, taken out at run time (the PlantedLines way).
         Offenders(new Dictionary<string, string>
         {
-            ["a.cs"] = "var p = System.IO.Path." + "GetTemp" + "Path();",
-            ["b.cs"] = "Directory." + "Create" + "TempSubdirectory(\"x\");",
-            ["c.cs"] = "Path." + "GetTemp" + "FileName();",
-            ["d.cs"] = "Environment.GetEnvironmentVariable(\"TMP" + "DIR\");",
+            ["a.cs"] = Planted("var p = System.IO.Path.GetTemp~Path();"),
+            ["b.cs"] = Planted("Directory.Create~TempSubdirectory(\"x\");"),
+            ["c.cs"] = Planted("Path.GetTemp~FileName();"),
+            ["d.cs"] = Planted("Environment.GetEnvironmentVariable(\"TMP~DIR\");"),
             ["e.cs"] = "using var scope = DarwinLayout.FreshOwnedScope();",
         }).Should().Equal("a.cs:1", "b.cs:1", "c.cs:1", "d.cs:1");
     }

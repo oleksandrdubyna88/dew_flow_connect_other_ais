@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class SettingsAreLiveTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-live-").FullName;
+    private readonly string _dir = TempDir.For("coai-live-").Path;
 
     public void Dispose()
     {

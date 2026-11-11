@@ -33,7 +33,7 @@ internal sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> 
 public sealed class RemoteProbeTests : IDisposable
 {
     private readonly string _dataDir =
-        Path.Combine(Path.GetTempPath(), "coai-probe-" + Guid.NewGuid().ToString("N"));
+        Path.Combine(TempDir.Root, "coai-probe-" + Guid.NewGuid().ToString("N"));
 
     private const string Server = "https://coai.example.com";
 

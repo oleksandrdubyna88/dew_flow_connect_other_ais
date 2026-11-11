@@ -66,7 +66,7 @@ public sealed class TheVaultIsFoundWhereCredsForDevsInstallsItTests : IDisposabl
     [Fact]
     public async Task Nowhere_at_all_is_still_named_and_says_where_it_looked()
     {
-        var elsewhere = Path.Combine(Path.GetTempPath(), "coai-no-such-dir", "creds.exe");
+        var elsewhere = Path.Combine(TempDir.Root, "coai-no-such-dir", "creds.exe");
         var vault = new KeyVault(new ProcessLauncher(), "creds-binary-that-is-not-on-path", [elsewhere]);
 
         var keys = await vault.ReadFromConfigurationAsync(VaultConfiguration.Holding("cfg-live-abc"), TestContext.Current.CancellationToken);

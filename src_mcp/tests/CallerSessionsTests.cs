@@ -16,7 +16,7 @@ public sealed class CallerSessionsTests
 {
     private static CallerSessions InATempDir(out string dir)
     {
-        dir = Path.Combine(Path.GetTempPath(), "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
+        dir = Path.Combine(TempDir.Root, "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
         return new CallerSessions(dir);
     }
 
@@ -47,7 +47,7 @@ public sealed class CallerSessionsTests
         // Two MCP clients on this machine means two servers sharing one data directory — the
         // ordinary case, not an exotic one. A read followed by a write lets both of them see an
         // unclaimed caller and both issue the order. Raised by codex in this change's plan round.
-        var dir = Path.Combine(Path.GetTempPath(), "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
+        var dir = Path.Combine(TempDir.Root, "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
         var now = DateTime.UtcNow;
         var servers = Enumerable.Range(0, 8).Select(_ => new CallerSessions(dir)).ToList();
 
@@ -64,7 +64,7 @@ public sealed class CallerSessionsTests
         // delete-then-create lets the second process remove the file the first has just written, and
         // both return true. This is the same test as the one above with a stale file in place — it
         // failed at 4 of 8 against the delete-then-create shape.
-        var dir = Path.Combine(Path.GetTempPath(), "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
+        var dir = Path.Combine(TempDir.Root, "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
         var now = DateTime.UtcNow;
         new CallerSessions(dir).TryClaimSplitOrder("session-a", now - CallerSessions.Remembers - TimeSpan.FromHours(1));
         var servers = Enumerable.Range(0, 8).Select(_ => new CallerSessions(dir)).ToList();
@@ -103,7 +103,7 @@ public sealed class CallerSessionsTests
     {
         // Fail OPEN, and say so. Failing closed would silently turn the whole feature off — a
         // duplicate costs one repeated instruction, the silence costs every instruction.
-        var file = Path.Combine(Path.GetTempPath(), "coai-callers-file-" + Guid.NewGuid().ToString("N")[..8]);
+        var file = Path.Combine(TempDir.Root, "coai-callers-file-" + Guid.NewGuid().ToString("N")[..8]);
         File.WriteAllText(file, "not a directory");
         var warnings = new List<string>();
 
@@ -120,7 +120,7 @@ public sealed class CallerSessionsTests
     {
         // The server restarts between rounds — an MCP client reconnecting respawns it — so a memory
         // held in a field would forget exactly when the epics start coming back.
-        var dir = Path.Combine(Path.GetTempPath(), "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
+        var dir = Path.Combine(TempDir.Root, "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
         new CallerSessions(dir).TryClaimSplitOrder("session-a", DateTime.UtcNow).Should().BeTrue();
 
         new CallerSessions(dir).SplitAlreadyOrdered("session-a", DateTime.UtcNow).Should().BeTrue();

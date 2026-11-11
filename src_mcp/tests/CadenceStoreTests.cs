@@ -22,7 +22,7 @@ public sealed class CadenceStoreTests : IDisposable
     private const string Repo = "d:/work/repo/.git";
     private const string Plan = "todo/PLAN_x.md";
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-cadence-").FullName;
+    private readonly string _data = CoaiMcp.Tests.TempDir.For("coai-cadence-").Path;
     private readonly ProcessLauncher _launcher = new();
 
     public void Dispose()
@@ -158,7 +158,7 @@ public sealed class CadenceStoreTests : IDisposable
         await using var repo = await TempGitRepo.InitAsync(_launcher);
         await repo.WriteAsync("a.txt", "a");
         await repo.CommitAsync("base");
-        var linked = Path.Combine(Path.GetTempPath(), "coai-cadence-wt-" + Guid.NewGuid().ToString("N")[..8]);
+        var linked = Path.Combine(CoaiMcp.Tests.TempDir.Root, "coai-cadence-wt-" + Guid.NewGuid().ToString("N")[..8]);
         // testsToDelete-exempt: raw-worktree — `linked` is directly in the run folder, the temp root of this process
         await repo.GitAsync("worktree", "add", "-b", "second", linked);
         try
@@ -181,7 +181,7 @@ public sealed class CadenceStoreTests : IDisposable
     [Fact]
     public async Task ADirectoryThatIsNoRepository_HasTheFallbackIdentityOfItsPath()
     {
-        var plain = Directory.CreateTempSubdirectory("coai-cadence-plain-").FullName;
+        var plain = CoaiMcp.Tests.TempDir.For("coai-cadence-plain-").Path;
         try
         {
             var identity = await new ContextAssembler(_launcher).CommonDirAsync(plain, TestContext.Current.CancellationToken);

@@ -60,7 +60,7 @@ public sealed class ARowIsOnlyGivenAPromptItCanReadTests : IDisposable
                 Prompts: [.. Lenses.Select(id => new PromptEntry(id, id, "What the brief says."))]),
         ]);
 
-    private static string Scratch() => Directory.CreateTempSubdirectory("coai-prompt-cap-scratch-").FullName;
+    private static string Scratch() => TempDir.For("coai-prompt-cap-scratch-").Path;
 
     /// <summary>A plan round's roster for one role, over a context of the given size — the one <c>BuildWork</c> every plan test here shares.</summary>
     private static RoundWork PlanRoster(PanelService service, int contextBytes) =>

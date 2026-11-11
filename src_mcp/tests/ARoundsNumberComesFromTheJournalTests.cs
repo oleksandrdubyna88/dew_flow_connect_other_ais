@@ -62,8 +62,8 @@ public sealed class ARoundsNumberComesFromTheJournalTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-journal-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-journal-data-").FullName;
+        _repo = TempDir.For("coai-journal-repo-").Path;
+        _data = TempDir.For("coai-journal-data-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
         await Git("add", ".");

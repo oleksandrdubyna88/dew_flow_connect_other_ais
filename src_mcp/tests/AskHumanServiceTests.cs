@@ -22,7 +22,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     private const string Question = "Which retry shape fits a flaky vendor?";
 
     private readonly ProcessLauncher _real = new();
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-askhuman-").FullName;
+    private readonly string _data = TempDir.For("coai-askhuman-").Path;
     private TempGitRepo _repo = null!;
     private string _caller = string.Empty;
 
@@ -608,7 +608,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     [Fact]
     public async Task ARiskCardsDiskAnswer_CarriesTheNoteThatItsRootWasNotWatched()
     {
-        var plain = Directory.CreateTempSubdirectory("coai-askhuman-plain-").FullName;
+        var plain = TempDir.For("coai-askhuman-plain-").Path;
         try
         {
             var diskRow = new QuestionRow("astra-disk", "codex", "codex", "gpt-6-astra", string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true);

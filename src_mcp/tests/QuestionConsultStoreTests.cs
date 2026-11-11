@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class QuestionConsultStoreTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-qstore-").FullName;
+    private readonly string _data = TempDir.For("coai-qstore-").Path;
     private readonly List<QuestionConsultRecord> _projected = [];
     private readonly QuestionConsultStore _store;
 

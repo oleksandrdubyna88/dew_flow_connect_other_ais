@@ -50,7 +50,7 @@ public sealed class AVibeRowReviewsInTheRoundsSnapshotTests : IAsyncLifetime
         new(new PanelSettings
         {
             ConsultantHomesRoot = homes,
-            DataDir = Path.Combine(Path.GetTempPath(), $"coai-vibesnap-data-{Guid.NewGuid():N}"),
+            DataDir = Path.Combine(TempDir.Root, $"coai-vibesnap-data-{Guid.NewGuid():N}"),
             CodeWorkspace = workspace,
             Providers =
                 [

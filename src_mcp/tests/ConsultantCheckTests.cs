@@ -31,9 +31,9 @@ public sealed class ConsultantCheckTests : IDisposable
 
     private const string Session = "67289235-65f7-40b5-9532-e63515d90f30";
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-checktest-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-checktest-temp-").FullName;
-    private readonly string _record = Directory.CreateTempSubdirectory("coai-checktest-argv-").FullName;
+    private readonly string _data = TempDir.For("coai-checktest-data-").Path;
+    private readonly string _temp = TempDir.For("coai-checktest-temp-").Path;
+    private readonly string _record = TempDir.For("coai-checktest-argv-").Path;
     private readonly List<string> _warned = [];
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");

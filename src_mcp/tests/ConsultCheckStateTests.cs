@@ -18,7 +18,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ConsultCheckStateTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-checkstate-").FullName;
+    private readonly string _data = TempDir.For("coai-checkstate-").Path;
 
     public void Dispose()
     {
@@ -57,7 +57,7 @@ public sealed class ConsultCheckStateTests : IDisposable
         ConsultCheckState.Settled(answered, lockHeld: true).Should().Be(answered);
     }
 
-    private const string CanaryPath = "C:/tmp/coai-check-1/outside/canary.txt";
+    private const string CanaryPath = "C:/fake/coai-check-1/outside/canary.txt";
 
     private static string Canary(IReadOnlyList<string> said, params DeniedAction[] denied) =>
         ConsultantCheck.Canary(said, "heron-7", denied, CanaryPath);
@@ -77,11 +77,11 @@ public sealed class ConsultCheckStateTests : IDisposable
     public void ADenialCountsAsTheCanarysOnlyWhenItsInputNamesTheCanary()
     {
         Canary(["canary: CANNOT"], new DeniedAction("Read", CanaryPath)).Should().Be(CanaryReadings.DeniedByCli);
-        Canary(["canary: CANNOT"], new DeniedAction("Read", @"C:\tmp\coai-check-1\outside\canary.txt")).Should().Be(
+        Canary(["canary: CANNOT"], new DeniedAction("Read", @"C:\fake\coai-check-1\outside\canary.txt")).Should().Be(
             CanaryReadings.DeniedByCli, "a separator is not a different path");
-        Canary(["canary: CANNOT"], new DeniedAction("Glob", "C:/tmp/coai-check-1/outside/**")).Should().Be(
+        Canary(["canary: CANNOT"], new DeniedAction("Glob", "C:/fake/coai-check-1/outside/**")).Should().Be(
             CanaryReadings.DeniedByCli, "a refused search of the canary's directory is a refused read of it");
-        Canary(["canary: CANNOT"], new DeniedAction("Glob", "C:/tmp/coai-check-1/repo/**")).Should().Be(
+        Canary(["canary: CANNOT"], new DeniedAction("Glob", "C:/fake/coai-check-1/repo/**")).Should().Be(
             CanaryReadings.NotAttempted, "a refusal of something else proves nothing about the canary");
     }
 

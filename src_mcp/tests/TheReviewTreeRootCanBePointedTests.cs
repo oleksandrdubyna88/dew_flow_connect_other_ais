@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheReviewTreeRootCanBePointedTests
 {
-    private static readonly string Pointed = Path.Combine(Path.GetTempPath(), "coai-review-root-test");
+    private static readonly string Pointed = Path.Combine(TempDir.Root, "coai-review-root-test");
 
     private static Func<string, string?> Env(string? value) =>
         name => name == ReviewTreeRoot.RootVariable ? value : null;

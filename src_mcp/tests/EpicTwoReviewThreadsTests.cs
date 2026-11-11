@@ -27,7 +27,7 @@ public sealed class EpicTwoReviewThreadsTests
 
     private static (ReviewerInvocation Invocation, string File) WithAPromptFile()
     {
-        var file = Path.Combine(Directory.CreateTempSubdirectory("coai-consult-file-").FullName, "turn.prompt");
+        var file = Path.Combine(TempDir.For("coai-consult-file-").Path, "turn.prompt");
         File.WriteAllText(file, "the consultation's prompt");
         var invocation = new AntigravityConsultant(new AntigravityRuntime()).Build(new ConsultantLaunch(
             TempDir.Root, "where is the sweep invoked?", string.Empty, TempDir.Root,

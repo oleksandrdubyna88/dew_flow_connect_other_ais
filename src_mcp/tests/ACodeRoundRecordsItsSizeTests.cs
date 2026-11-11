@@ -65,8 +65,8 @@ public sealed class ACodeRoundRecordsItsSizeTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-size-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-size-data-").FullName;
+        _repo = TempDir.For("coai-size-repo-").Path;
+        _data = TempDir.For("coai-size-data-").Path;
         await Git("init", "-b", "main");
         await Write("app.cs", "v1\n");
         await Git("add", ".");
@@ -486,7 +486,7 @@ public sealed class ACodeRoundRecordsItsSizeTests : IAsyncLifetime
 
     private async Task TheBranchMovesASubmodule()
     {
-        var sub = Directory.CreateTempSubdirectory("coai-size-sub-").FullName;
+        var sub = TempDir.For("coai-size-sub-").Path;
         _scratch.Add(sub);
         await GitIn(sub, "init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(sub, "lib.cs"), "one\n", Ct);
@@ -523,7 +523,7 @@ public sealed class ACodeRoundRecordsItsSizeTests : IAsyncLifetime
     private async Task<(string Verdict, string Findings, RoundRecord Latest)> RunTheFirstRound(
         string branch, string answer, IProcessLauncher? launcher = null)
     {
-        var data = Directory.CreateTempSubdirectory("coai-size-run-").FullName;
+        var data = TempDir.For("coai-size-run-").Path;
         _scratch.Add(data);
         var service = Service(launcher, data);
         await service.OpenAsync(_repo, branch);

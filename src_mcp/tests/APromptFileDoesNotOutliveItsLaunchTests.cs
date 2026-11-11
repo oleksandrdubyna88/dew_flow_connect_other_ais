@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class APromptFileDoesNotOutliveItsLaunchTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-prompt-life-").FullName;
+    private readonly string _dir = TempDir.For("coai-prompt-life-").Path;
     private readonly ReviewerExecutor _executor = new(new ProcessLauncher());
 
     public static TheoryData<string, string[], int> Endings => new()

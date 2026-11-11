@@ -25,7 +25,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class EngineLeaseTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-lease-").FullName;
+    private readonly string _dir = TempDir.For("coai-lease-").Path;
     private readonly string _previous = EngineLease.Directory;
 
     public EngineLeaseTests() => EngineLease.Directory = _dir;

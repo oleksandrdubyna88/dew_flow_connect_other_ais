@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class AntigravityReadOnlyTests : IDisposable
 {
-    private readonly string _base = Directory.CreateTempSubdirectory("coai-agyro-").FullName;
+    private readonly string _base = TempDir.For("coai-agyro-").Path;
 
     private static HookHandler Handler => OperatingSystem.IsWindows()
         ? new HookHandler(@"C:\tools\coai mcp\coai-mcp.exe", [])

@@ -41,7 +41,7 @@ public sealed class KimiPersonsConfigTests
     [Fact]
     public void AMissingFile_IsNotSignedIn()
     {
-        var read = KimiPersonsConfig.ReadFile(Path.Combine(Path.GetTempPath(), "kimi-nowhere", "config.toml"));
+        var read = KimiPersonsConfig.ReadFile(Path.Combine(TempDir.Root, "kimi-nowhere", "config.toml"));
 
         read.Should().BeOfType<SlotRead.Refused>().Which.Reason.Should().Contain("not signed in to Kimi Code").And.Contain("kimi login");
     }

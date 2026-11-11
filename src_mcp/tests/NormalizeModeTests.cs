@@ -109,8 +109,8 @@ public sealed class NormalizeModeTests
     [Fact]
     public void AMissingRequestFileIs66_NotACrash() =>
         Program.NormalizeJson(
-                ["--normalize", "--in", Path.Combine(Path.GetTempPath(), $"absent-{Guid.NewGuid():N}.json"),
-                 "--out", Path.Combine(Path.GetTempPath(), $"out-{Guid.NewGuid():N}.json")])
+                ["--normalize", "--in", Path.Combine(TempDir.Root, $"absent-{Guid.NewGuid():N}.json"),
+                 "--out", Path.Combine(TempDir.Root, $"out-{Guid.NewGuid():N}.json")])
             .Should().Be(66);
 
     /// <summary>End to end through the files, which is the only shape the collector will ever use.</summary>
@@ -123,7 +123,7 @@ public sealed class NormalizeModeTests
     [Fact]
     public void TheModeReadsARequestFileAndWritesAnAnswerFile()
     {
-        var dir = Directory.CreateTempSubdirectory("coai-normalize-");
+        var dir = new DirectoryInfo(TempDir.For("coai-normalize-").Path);
         try
         {
             var input = Path.Combine(dir.FullName, "asks.json");

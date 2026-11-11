@@ -60,7 +60,7 @@ const commit = (root) => {
 };
 
 test('N1 the shipped guard is clean on this tree', () => {
-  const result = runGuard(repo, ['--baseline', ...COMMON]);
+  const result = runGuard(repo, COMMON);
   assert.equal(result.status, 0, `the guard answered ${result.status}:\n${said(result)}`);
 });
 

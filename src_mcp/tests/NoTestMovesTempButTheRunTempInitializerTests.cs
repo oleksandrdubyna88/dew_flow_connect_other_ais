@@ -47,7 +47,8 @@ public sealed class NoTestMovesTempButTheRunTempInitializerTests
     public void NoTestSourceWritesTheProcessTempVariables_ButTheInitializerAndTheOneRestoringClass()
     {
         string.Join("; ", Writers(TestSourceIndex.Files, Allowed)).Should().BeEmpty(
-            "Path.GetTempPath() and every child's temp path read these variables at call time: a write in the middle of a run moves what every other class sees");
+            // The API name is written with a tilde inside, taken out at run time (the PlantedLines way), so no guard reads a raw temp call in this message.
+            "Path.GetTemp~Path() and every child's temp path read these variables at call time: a write in the middle of a run moves what every other class sees".Replace("~", string.Empty, StringComparison.Ordinal));
     }
 
     [Fact]

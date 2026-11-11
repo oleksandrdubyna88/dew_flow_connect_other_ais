@@ -101,8 +101,8 @@ public sealed class KimiAcpProfileTests
     [Fact]
     public void TheAgentIsStartedInTheBuiltEnvironment_AndTheLaunchControlsOwnCheckAdmitsIt()
     {
-        var root = Path.Combine(Path.GetTempPath(), "profile-owned");
-        var bin = Path.Combine(Path.GetTempPath(), "profile-bin");
+        var root = Path.Combine(TempDir.Root, "profile-owned");
+        var bin = Path.Combine(TempDir.Root, "profile-bin");
         var ask = AskOn(root, bin);
 
         var request = _profile.AgentRequest(ask);
@@ -118,7 +118,7 @@ public sealed class KimiAcpProfileTests
     [Fact]
     public void ARequestThatWasNotBuilt_IsRefusedByTheSameCheck()
     {
-        var ask = AskOn(Path.Combine(Path.GetTempPath(), "profile-owned"), Path.Combine(Path.GetTempPath(), "profile-bin"));
+        var ask = AskOn(Path.Combine(TempDir.Root, "profile-owned"), Path.Combine(TempDir.Root, "profile-bin"));
         var inherited = _profile.AgentRequest(ask) with { InheritsEnvironment = true };
 
         _profile.AgentRefusal(inherited, ask).Should().Contain("was not built with coai's own environment");

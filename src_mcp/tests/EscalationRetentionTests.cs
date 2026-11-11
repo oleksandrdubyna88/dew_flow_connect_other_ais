@@ -16,7 +16,7 @@ public sealed class EscalationRetentionTests : IDisposable
     private static readonly TimeSpan Past = EscalationRetention.Retention + TimeSpan.FromHours(1);
     private static readonly TimeSpan Recent = EscalationRetention.Retention - TimeSpan.FromHours(1);
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-esc-ret-").FullName;
+    private readonly string _data = TempDir.For("coai-esc-ret-").Path;
     private readonly Escalations _escalations;
     private readonly HashSet<string> _held = [];
 

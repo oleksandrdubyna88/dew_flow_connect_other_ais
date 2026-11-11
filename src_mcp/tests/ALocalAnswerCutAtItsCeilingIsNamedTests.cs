@@ -22,8 +22,8 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class ALocalAnswerCutAtItsCeilingIsNamedTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-localcut-").FullName;
-    private readonly string _leases = Directory.CreateTempSubdirectory("coai-localcut-leases-").FullName;
+    private readonly string _dir = TempDir.For("coai-localcut-").Path;
+    private readonly string _leases = TempDir.For("coai-localcut-leases-").Path;
     private readonly string _previousLeases = EngineLease.Directory;
     private readonly ApiEndpointStub _engine = ApiEndpointStub.Start();
 

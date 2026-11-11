@@ -74,7 +74,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
     [Fact]
     public async Task TheConsultantIsHandedTheWorkingTreeTheSERVERCollected()
     {
-        var recorded = Directory.CreateTempSubdirectory("coai-consult-argv-").FullName;
+        var recorded = TempDir.For("coai-consult-argv-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", recorded);
         try
         {
@@ -105,7 +105,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
         var first = await Consult(service, "the count is 3 and should be 4");
         var id = first.GetProperty("consultationId").GetString()!;
 
-        var recorded = Directory.CreateTempSubdirectory("coai-consult-resume-").FullName;
+        var recorded = TempDir.For("coai-consult-resume-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", recorded);
         try
         {
@@ -435,7 +435,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
     [Fact]
     public async Task APathOutsideAnyCheckout_IsRefusedInGitsWords()
     {
-        var elsewhere = Directory.CreateTempSubdirectory("coai-not-a-repo-").FullName;
+        var elsewhere = TempDir.For("coai-not-a-repo-").Path;
         try
         {
             var reply = JsonDocument.Parse(
@@ -683,7 +683,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
                 [CallerIdentity.Claude] = new("claude", Runtime: "claude", ExecutablePath: FakeCliExe),
                 [CallerIdentity.Codex] = new("codex", Runtime: "codex", ExecutablePath: FakeCliExe),
             });
-        var recorded = Directory.CreateTempSubdirectory("coai-consult-moved-").FullName;
+        var recorded = TempDir.For("coai-consult-moved-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", recorded);
         try
         {

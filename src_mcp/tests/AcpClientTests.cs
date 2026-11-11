@@ -172,7 +172,7 @@ public sealed class AcpClientTests
     {
         using var agent = new FakeAcpAgent(
         [
-            FakeAcpAgent.Request("fs/write_text_file", $$"""{"sessionId":"fake-session","path":{{FakeAcpAgent.Quote(Path.Combine(Path.GetTempPath(), "coai-acp-should-not-exist.txt"))}},"content":"x"}"""),
+            FakeAcpAgent.Request("fs/write_text_file", $$"""{"sessionId":"fake-session","path":{{FakeAcpAgent.Quote(Path.Combine(TempDir.Root, "coai-acp-should-not-exist.txt"))}},"content":"x"}"""),
             FakeAcpAgent.Request("terminal/create", """{"sessionId":"fake-session","command":"echo"}"""),
             FakeAcpAgent.Chunk("x"),
         ]);
@@ -186,7 +186,7 @@ public sealed class AcpClientTests
             reply.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32601, $"{method} was not offered in initialize");
         }
 
-        File.Exists(Path.Combine(Path.GetTempPath(), "coai-acp-should-not-exist.txt")).Should().BeFalse();
+        File.Exists(Path.Combine(TempDir.Root, "coai-acp-should-not-exist.txt")).Should().BeFalse();
     }
 
     [Fact]
@@ -504,7 +504,7 @@ public sealed class AcpClientTests
     [Fact]
     public async Task AHandlerThatThrows_AnswersTheRequestWithAnError_AndThePumpGoesOn()
     {
-        using var agent = new FakeAcpAgent([FakeAcpAgent.Read(Path.Combine(Path.GetTempPath(), "any.txt")), FakeAcpAgent.Chunk("after")]);
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Read(Path.Combine(TempDir.Root, "any.txt")), FakeAcpAgent.Chunk("after")]);
 
         var outcome = await new AcpClient(agent.Profile(), new ThrowingBoundary()).AskAsync(agent.Ask(deadline: TimeSpan.FromSeconds(30)));
 

@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class RuleFilesTests : IDisposable
 {
-    private readonly string _repo = Directory.CreateTempSubdirectory("coai-rules-").FullName;
+    private readonly string _repo = TempDir.For("coai-rules-").Path;
 
     public void Dispose()
     {

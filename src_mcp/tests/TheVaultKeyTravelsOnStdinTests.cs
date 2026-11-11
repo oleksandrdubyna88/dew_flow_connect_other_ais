@@ -25,7 +25,7 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
 
     private const string OldHelp = "creds — …\n  creds config <key>                 print one config file (for an app at startup)\n";
 
-    private readonly string _records = Path.Combine(Path.GetTempPath(), "coai-vault-stdin-" + Guid.NewGuid().ToString("N"));
+    private readonly string _records = Path.Combine(TempDir.Root, "coai-vault-stdin-" + Guid.NewGuid().ToString("N"));
 
     private static string FakeCliExe => Path.Combine(
         AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");

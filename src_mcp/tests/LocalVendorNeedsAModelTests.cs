@@ -25,7 +25,7 @@ public sealed class LocalVendorNeedsAModelTests
 {
     private static PanelService ServiceWith(ProviderSettings vendor) =>
         new(
-            new PanelSettings { Providers = [vendor], DataDir = Directory.CreateTempSubdirectory("coai-local-").FullName },
+            new PanelSettings { Providers = [vendor], DataDir = TempDir.For("coai-local-").Path },
             VaultKeys.None("no vault in tests"),
             default,
             new ProcessLauncher(),

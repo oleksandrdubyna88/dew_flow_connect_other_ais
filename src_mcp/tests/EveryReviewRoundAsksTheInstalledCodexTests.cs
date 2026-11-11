@@ -44,9 +44,9 @@ public sealed class EveryReviewRoundAsksTheInstalledCodexTests : IAsyncLifetime
         ["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_OUTFILE_TEXT", "FAKECLI_RECORD_DIR", "FAKECLI_VERSION_STDOUT"];
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly string _repo = Directory.CreateTempSubdirectory("coai-tierprobe-repo-").FullName;
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-tierprobe-data-").FullName;
-    private readonly string _record = Directory.CreateTempSubdirectory("coai-tierprobe-record-").FullName;
+    private readonly string _repo = TempDir.For("coai-tierprobe-repo-").Path;
+    private readonly string _data = TempDir.For("coai-tierprobe-data-").Path;
+    private readonly string _record = TempDir.For("coai-tierprobe-record-").Path;
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 

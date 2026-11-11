@@ -25,7 +25,7 @@ public sealed class TheRoundsNumstatsAreCountedTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-numstat-").FullName;
+        _repo = TempDir.For("coai-numstat-").Path;
         await Git("init", "-b", "main");
         await Write("app.cs", "v1\n");
         await Write(".gitignore", "ignored/\n");

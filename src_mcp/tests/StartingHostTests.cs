@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class StartingHostTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-starting-").FullName;
+    private readonly string _data = TempDir.For("coai-starting-").Path;
 
     public void Dispose()
     {

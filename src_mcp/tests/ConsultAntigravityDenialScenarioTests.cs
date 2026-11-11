@@ -79,7 +79,7 @@ public sealed class ConsultAntigravityDenialScenarioTests : ConsultScenarioBase
     /// </summary>
     private Steering Steer(string followUpStdout, string? firstStdout = null, string? firstStderr = null, string followUpStderr = "agy: continuing the conversation")
     {
-        var recorded = Directory.CreateTempSubdirectory("coai-consult-agy-argv-").FullName;
+        var recorded = TempDir.For("coai-consult-agy-argv-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_STDOUT", firstStdout ?? Fixture("consult-denied.ndjson"));
         Environment.SetEnvironmentVariable("FAKECLI_STDERR", firstStderr ?? Fixture("consult-denied.stderr.txt").Trim());
         Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", null);

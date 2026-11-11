@@ -49,7 +49,7 @@ public sealed class ConsultLookupScenarioTests : ConsultScenarioBase
 
     private Steering Steer(string first, string second, string sideEffect = "")
     {
-        _record = Directory.CreateTempSubdirectory("coai-clookup-argv-").FullName;
+        _record = TempDir.For("coai-clookup-argv-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_TURN_MARKER", AntigravityFollowUps.LookupTurnMarker.Replace("{0}", "{n}", StringComparison.Ordinal));
         Environment.SetEnvironmentVariable("FAKECLI_TURN1_STDOUT", first);
         Environment.SetEnvironmentVariable("FAKECLI_TURN2_STDOUT", second);

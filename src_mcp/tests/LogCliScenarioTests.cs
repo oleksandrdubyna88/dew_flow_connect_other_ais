@@ -24,7 +24,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class LogCliScenarioTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-logcli-").FullName;
+    private readonly string _data = TempDir.For("coai-logcli-").Path;
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     public void Dispose()

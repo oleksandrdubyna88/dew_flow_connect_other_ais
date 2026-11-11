@@ -15,7 +15,7 @@ public sealed class McpContractTests : IDisposable
 {
     private static string ServerExe => ServerBinary.Path;
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-contract-").FullName;
+    private readonly string _data = TempDir.For("coai-contract-").Path;
 
     public void Dispose()
     {
@@ -678,7 +678,7 @@ public sealed class McpContractTests : IDisposable
     /// <summary>A checkout with a plan and two commits — the base, and the head the checkout holds.</summary>
     private async Task<(string Repo, string Base, string Head)> AFeatureRepository()
     {
-        var repo = Directory.CreateTempSubdirectory("coai-contract-feature-").FullName;
+        var repo = TempDir.For("coai-contract-feature-").Path;
         _repos.Add(repo);
         Directory.CreateDirectory(Path.Combine(repo, "todo"));
         await File.WriteAllTextAsync(Path.Combine(repo, "todo", "PLAN_x.md"), "# PLAN — x\n\nTwo epics.\n");
@@ -749,7 +749,7 @@ public sealed class McpContractTests : IDisposable
     /// <summary>A real git checkout with one commit — `open` resolves a SHA before it does anything.</summary>
     private async Task<string> ARepository()
     {
-        var repo = Directory.CreateTempSubdirectory("coai-contract-repo-").FullName;
+        var repo = TempDir.For("coai-contract-repo-").Path;
         await File.WriteAllTextAsync(Path.Combine(repo, "app.cs"), "v1\n");
         foreach (var args in (string[][])[["init", "-b", "main"], ["add", "."], ["commit", "-m", "base"]])
         {

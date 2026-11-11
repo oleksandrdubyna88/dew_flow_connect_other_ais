@@ -76,7 +76,7 @@ public sealed class BackfillAuthorsExitCodesTests
     [Fact]
     public async Task ADryRunOnAMissingStore_IsExit0WithoutMakingTheDirectory()
     {
-        var path = Path.Combine(Path.GetTempPath(), "backfill-missing-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(TempDir.Root, "backfill-missing-" + Guid.NewGuid().ToString("N"));
         var output = new StringWriter();
 
         var code = await BackfillAuthorsMode.RunAsync(["--backfill-authors", "--dry-run"], name => name == "COAI_DATA_DIR" ? path : null, output, _ => { }, TimeProvider.System);
@@ -126,7 +126,7 @@ public sealed class BackfillAuthorsExitCodesTests
     [Fact]
     public void ANamedDataFolderThatIsMissing_Is74_ByTheWriterModesRefusal()
     {
-        var missing = Path.Combine(Path.GetTempPath(), "backfill-gone-" + Guid.NewGuid().ToString("N"));
+        var missing = Path.Combine(TempDir.Root, "backfill-gone-" + Guid.NewGuid().ToString("N"));
 
         var run = Run(missing);
 

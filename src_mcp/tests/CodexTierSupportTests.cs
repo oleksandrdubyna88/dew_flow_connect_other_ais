@@ -24,7 +24,7 @@ public sealed class CodexTierSupportTests : IDisposable
     private static readonly string[] Steering =
         ["FAKECLI_MODE", "FAKECLI_VERSION_STDOUT", "FAKECLI_VERSION_EXIT", "FAKECLI_VERSION_SLEEP_MS", "FAKECLI_VERSION_COUNT", "FAKECLI_VERSION_PID"];
 
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-codextier-").FullName;
+    private readonly string _dir = TempDir.For("coai-codextier-").Path;
 
     public CodexTierSupportTests() => Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
 

@@ -35,7 +35,7 @@ namespace CoaiMcp.Tests;
 public sealed class TheRealMethodTests : IAsyncLifetime
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-realmethod-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-realmethod-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly string? _was = Environment.GetEnvironmentVariable("COAI_DATA_DIR");
     private readonly ProcessLauncher _launcher = new();
     private TempGitRepo _git = null!;
@@ -416,7 +416,7 @@ public sealed class TheRealMethodTests : IAsyncLifetime
     {
         var broken = await _git.HeadAsync();
         var fix = await FixAsync();
-        var id = Seed(broken, fix, repoPath: Path.Combine(Path.GetTempPath(), $"gone-{Guid.NewGuid():N}"));
+        var id = Seed(broken, fix, repoPath: Path.Combine(TempDir.Root, $"gone-{Guid.NewGuid():N}"));
 
         var real = await AnswerAsync(id);
 

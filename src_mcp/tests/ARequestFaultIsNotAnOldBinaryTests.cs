@@ -35,7 +35,7 @@ namespace CoaiMcp.Tests;
 public sealed class ARequestFaultIsNotAnOldBinaryTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-exit-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-exit-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly string? _was = Environment.GetEnvironmentVariable("COAI_DATA_DIR");
 
     public ARequestFaultIsNotAnOldBinaryTests()

@@ -31,7 +31,7 @@ internal sealed class TempGitRepo : IAsyncDisposable
     /// <summary>An empty repository on a branch called <c>main</c>, SHA-1 unless <paramref name="objectFormat"/> says <c>sha256</c>.</summary>
     public static async Task<TempGitRepo> InitAsync(IProcessLauncher launcher, string prefix = "coai-git-", string objectFormat = "sha1")
     {
-        var repo = new TempGitRepo(launcher, Directory.CreateTempSubdirectory(prefix).FullName);
+        var repo = new TempGitRepo(launcher, TempDir.For(prefix).Path);
         await repo.GitAsync("init", "-b", "main", $"--object-format={objectFormat}");
 
         return repo;

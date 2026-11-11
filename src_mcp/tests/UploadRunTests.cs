@@ -31,7 +31,7 @@ namespace CoaiMcp.Tests;
 public sealed class UploadRunTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-upload-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-upload-" + Guid.NewGuid().ToString("N")[..8]);
 
     private static readonly Uri Server = new("https://bugs.example");
 
