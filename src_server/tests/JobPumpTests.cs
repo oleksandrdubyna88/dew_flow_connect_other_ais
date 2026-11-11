@@ -1,5 +1,6 @@
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using CoaiServer;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -33,11 +34,10 @@ public sealed class JobPumpTests : IDisposable
 
     private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(50);
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-pump-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-pump-");
 
     public JobPumpTests()
     {
-        Directory.CreateDirectory(_dir);
         File.WriteAllText(
             Path.Combine(_dir, "vendors.json"),
             """
@@ -54,15 +54,7 @@ public sealed class JobPumpTests : IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public async Task AThrowBeforeTheClaimStillAnswersTheStartSignal()

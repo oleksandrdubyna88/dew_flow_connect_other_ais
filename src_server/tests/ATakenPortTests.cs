@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -22,7 +23,7 @@ namespace CoaiServer.Tests;
 /// </remarks>
 public sealed class ATakenPortTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-server-port-").FullName;
+    private readonly TempDir _dir = TempDir.For("coai-server-port-");
 
     [Fact]
     public async Task APortSomebodyHolds_EndsTheServerWithTempfailAndOneLine_NotACrash()
@@ -102,15 +103,5 @@ public sealed class ATakenPortTests : IDisposable
         return (process.ExitCode, await stdout + await stderr);
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (IOException)
-        {
-            // A log file still being released by the exiting process; the temp root is swept anyway.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 }

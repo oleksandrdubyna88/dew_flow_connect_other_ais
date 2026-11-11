@@ -1,6 +1,6 @@
 # Build brief — coai E5 story S7, the fourth drain PR: the Team server suite's `raw-temp` entries to zero
 
-> Status: **plan only, 2026-11-11, by Opus.** Scope: the 57 `raw-temp` baseline entries of `src_server/tests/`. Tests
+> Status: **built 2026-11-11, on branch feat/test-leftovers-e5-s7-server.** Scope: the 57 `raw-temp` baseline entries of `src_server/tests/`. Tests
 > only. A Sonnet coder builds from this brief alone.
 
 The plan is [PLAN_test_leftovers_E5.md](PLAN_test_leftovers_E5.md) § *S7 — The drain*; the earlier drain PRs are #977

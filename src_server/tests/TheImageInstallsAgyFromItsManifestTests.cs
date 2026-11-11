@@ -31,9 +31,7 @@ public sealed class TheImageInstallsAgyFromItsManifestTests : IDisposable
 
     private const string Refused = "did not answer with a release manifest";
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-install-agy-" + Guid.NewGuid().ToString("N"));
-
-    public TheImageInstallsAgyFromItsManifestTests() => Directory.CreateDirectory(_dir);
+    private readonly TempDir _dir = TempDir.For("coai-install-agy-");
 
     private string Home => Path.Combine(_dir, "home");
 
@@ -41,17 +39,7 @@ public sealed class TheImageInstallsAgyFromItsManifestTests : IDisposable
 
     private string Manifests => Path.Combine(_dir, "manifests");
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a stray handle still holds is the OS's to clean.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public void AManifestWhoseHashMatches_InstallsAgy_AndItRuns()

@@ -1,4 +1,5 @@
 using System.Text;
+using CoaiMcp.Tests;
 using CoaiServer;
 using FluentAssertions;
 using Xunit;
@@ -11,12 +12,10 @@ namespace CoaiServer.Tests;
 /// </summary>
 public sealed class VendorCatalogTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(
-        Path.GetTempPath(), "coai-catalog-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For(
+        "coai-catalog-");
 
-    public VendorCatalogTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose() => _dir.Dispose();
 
     private string Path_ => System.IO.Path.Combine(_dir, "vendors.json");
 

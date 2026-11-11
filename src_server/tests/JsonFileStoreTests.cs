@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -32,7 +33,8 @@ public sealed class JsonFileStoreTests
     public void AWiderReadShare_WouldNotLetTheReplaceThrough_WhichIsWhyTheStampIsNonFatalInstead()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows refuses to replace a file somebody holds open; Linux lets the rename through");
-        var path = Path.Combine(Directory.CreateTempSubdirectory("coai-store-").FullName, "record.json");
+        using var dir = TempDir.For("coai-store-");
+        var path = dir.At("record.json");
         var store = new JsonFileStore();
         store.Write(path, Record("before"), ServerJsonContext.Default.SessionRecord);
 
@@ -47,7 +49,8 @@ public sealed class JsonFileStoreTests
     [Fact]
     public void AFileReadThroughTheStore_RoundTrips()
     {
-        var path = Path.Combine(Directory.CreateTempSubdirectory("coai-store-").FullName, "record.json");
+        using var dir = TempDir.For("coai-store-");
+        var path = dir.At("record.json");
         var store = new JsonFileStore();
         store.Write(path, Record("A Developer"), ServerJsonContext.Default.SessionRecord);
 
@@ -60,7 +63,7 @@ public sealed class JsonFileStoreTests
         var reported = new List<string>();
         var store = new JsonFileStore((message, _) => reported.Add(message));
 
-        store.Read(Path.Combine(Path.GetTempPath(), "coai-store-never", "absent.json"), ServerJsonContext.Default.SessionRecord)
+        store.Read(Path.Combine(TempDir.Root, "coai-store-never", "absent.json"), ServerJsonContext.Default.SessionRecord)
             .Should().BeNull();
         reported.Should().BeEmpty("absent and unreadable are different facts, and only the second is a finding");
     }
@@ -80,7 +83,7 @@ public sealed class SessionSweeperTests
     [Fact]
     public async Task TheSweeper_RemovesAnExpiredSession_OnItsOwnClock()
     {
-        var data = Directory.CreateTempSubdirectory("coai-sweeper-").FullName;
+        using var data = TempDir.For("coai-sweeper-");
         var store = new SessionStore(data, TimeSpan.FromDays(7));
         var now = DateTimeOffset.UtcNow;
         var (live, _) = store.Issue($"new@{TeamServer.Domain}", "", now);

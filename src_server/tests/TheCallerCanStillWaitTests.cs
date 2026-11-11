@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -147,18 +148,10 @@ public sealed class TheCallerCanStillWaitTests
     /// <summary>A data directory for the shim's token and its launch files, gone with the test.</summary>
     private sealed class Scratch : IDisposable
     {
-        public string Dir { get; } = Directory.CreateTempSubdirectory("coai-still-wait-").FullName;
+        private readonly TempDir _dir = TempDir.For("coai-still-wait-");
 
-        public void Dispose()
-        {
-            try
-            {
-                Directory.Delete(Dir, recursive: true);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A temp directory something still holds is the OS's to clean.
-            }
-        }
+        public string Dir => _dir.Path;
+
+        public void Dispose() => _dir.Dispose();
     }
 }

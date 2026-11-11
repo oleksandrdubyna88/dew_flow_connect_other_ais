@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using CoaiMcp.Tests;
 using CoaiServer;
 using FluentAssertions;
 using Xunit;
@@ -10,11 +11,9 @@ namespace CoaiServer.Tests;
 /// </summary>
 public sealed class SlotRegistryTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-slots-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-slots-");
 
-    public SlotRegistryTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose() => _dir.Dispose();
 
     private SlotRegistry New() => new(_dir, new JsonFileStore());
 

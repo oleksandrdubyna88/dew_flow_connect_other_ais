@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using CoaiServer;
 using FluentAssertions;
 using Xunit;
@@ -118,21 +119,14 @@ public sealed partial class UsageLedgerFixtureTests
     [MemberData(nameof(Fixtures))]
     public void EveryLine_ReadsThroughTheServersOwnReader(string file)
     {
-        var dataDir = Directory.CreateTempSubdirectory("coai-usage-fixture-").FullName;
-        try
-        {
-            File.Copy(Path.Combine(Folder, file), Path.Combine(dataDir, "usage.jsonl"));
+        using var dataDir = TempDir.For("coai-usage-fixture-");
+        File.Copy(Path.Combine(Folder, file), Path.Combine(dataDir, "usage.jsonl"));
 
-            var scan = new UsageReader(dataDir).Read(TheDay);
+        var scan = new UsageReader(dataDir).Read(TheDay);
 
-            scan.Unreadable.Should().Be(0, $"{file} is a line the deployed server wrote; the reader must take it");
-            scan.Lines.Should().ContainSingle().Which.Should().Match<UsageLine>(read =>
-                read.Email == Placeholder && read.Kind == JobKind.Review && read.Outcome == OutcomeOf(file));
-        }
-        finally
-        {
-            Directory.Delete(dataDir, recursive: true);
-        }
+        scan.Unreadable.Should().Be(0, $"{file} is a line the deployed server wrote; the reader must take it");
+        scan.Lines.Should().ContainSingle().Which.Should().Match<UsageLine>(read =>
+            read.Email == Placeholder && read.Kind == JobKind.Review && read.Outcome == OutcomeOf(file));
     }
 
     [Fact]
@@ -152,23 +146,16 @@ public sealed partial class UsageLedgerFixtureTests
         deployed.GetProperty("tokensOut").GetInt64().Should().Be(0);
         deployed.TryGetProperty("usageNote", out _).Should().BeFalse("the deployed server wrote no usage note");
 
-        var dataDir = Directory.CreateTempSubdirectory("coai-usage-withdrawn-").FullName;
-        try
-        {
-            var (job, written) = await WithdrawnJob.RunAsync(dataDir);
+        using var dataDir = TempDir.For("coai-usage-withdrawn-");
+        var (job, written) = await WithdrawnJob.RunAsync(dataDir);
 
-            job.EndCause.Should().Be(EndCauses.Withdrawn, "the store that fired the token says why, at the transition");
-            written.GetProperty("outcome").GetString().Should().Be(nameof(FailureKind.Cancelled), "a withdrawal is not the vendor's slowness");
-            written.GetProperty("endCause").GetString().Should().Be(EndCauses.Withdrawn);
-            written.GetProperty("usageNote").GetString().Should().Be(CostText.UsageNotCaptured, "a killed launch's usage is unknown, never a free 0/0");
-            written.GetProperty("seconds").GetDouble().Should().BeLessThan(10);
-            written.EnumerateObject().Select(property => property.Name)
-                .Should().Contain(deployed.EnumerateObject().Select(property => property.Name), "the same ledger shape, widened — never a second one");
-        }
-        finally
-        {
-            Directory.Delete(dataDir, recursive: true);
-        }
+        job.EndCause.Should().Be(EndCauses.Withdrawn, "the store that fired the token says why, at the transition");
+        written.GetProperty("outcome").GetString().Should().Be(nameof(FailureKind.Cancelled), "a withdrawal is not the vendor's slowness");
+        written.GetProperty("endCause").GetString().Should().Be(EndCauses.Withdrawn);
+        written.GetProperty("usageNote").GetString().Should().Be(CostText.UsageNotCaptured, "a killed launch's usage is unknown, never a free 0/0");
+        written.GetProperty("seconds").GetDouble().Should().BeLessThan(10);
+        written.EnumerateObject().Select(property => property.Name)
+            .Should().Contain(deployed.EnumerateObject().Select(property => property.Name), "the same ledger shape, widened — never a second one");
     }
 
     /// <summary>The planted cases the E1 code round named, each refused by the rule that names its shape.</summary>

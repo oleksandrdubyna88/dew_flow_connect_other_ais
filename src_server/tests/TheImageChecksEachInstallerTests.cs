@@ -27,21 +27,9 @@ public sealed class TheImageChecksEachInstallerTests : IDisposable
         "https://claude.ai/install.sh",
     ];
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-install-cli-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-install-cli-");
 
-    public TheImageChecksEachInstallerTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a stray handle still holds is the OS's to clean.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     [Fact]
     public void NoInstallerIsPipedIntoAShell_EachGoesThroughTheCheckedScript()
@@ -61,7 +49,9 @@ public sealed class TheImageChecksEachInstallerTests : IDisposable
         // agy: from its release manifest, checked and hashed — never the antigravity.google page, which answered HTML
         // on GitHub's runners (release run 38075423539).
         dockerfile.Should().Contain("COPY src_server/install-agy.sh", "the image must carry the script it runs");
-        dockerfile.Should().MatchRegex(@"RUN sh /tmp/install-agy\.sh\s*\\?\s*&&\s*""\$HOME/\.local/bin/agy"" --version",
+        var copiedTo = System.Text.RegularExpressions.Regex.Match(dockerfile, @"COPY src_server/install-agy\.sh (\S+)").Groups[1].Value;
+        copiedTo.Should().NotBeEmpty("the image copies the installer it runs");
+        dockerfile.Should().MatchRegex($@"RUN sh {System.Text.RegularExpressions.Regex.Escape(copiedTo)}\s*\\?\s*&&\s*""\$HOME/\.local/bin/agy"" --version",
             "agy is installed from its manifest and must start in the build, like the other two");
         dockerfile.Should().NotContain("https://antigravity.google",
             "that page is what answered HTML on a GitHub runner; the manifest is the installer's own source");

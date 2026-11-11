@@ -1,5 +1,6 @@
 // mirrored from dew_flow_creds_for_devs src_minimalapi_server/tests/VaultServer.cs @ 2026-09-05
 using System.Net.Http.Headers;
+using CoaiMcp.Tests;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -31,7 +32,7 @@ internal sealed class TeamServer : WebApplicationFactory<Program>
 
     public TeamServer(IDictionary<string, string?>? overrides = null)
     {
-        DataDir = Path.Combine(Path.GetTempPath(), "coai-server-tests", Guid.NewGuid().ToString("N"));
+        DataDir = TempDir.For("coai-server-tests-").Path;
         Directory.CreateDirectory(DataDir);
 
         var settings = new Dictionary<string, string?>

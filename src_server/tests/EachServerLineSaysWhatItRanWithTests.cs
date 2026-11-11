@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -29,21 +30,9 @@ public sealed class EachServerLineSaysWhatItRanWithTests : IDisposable
 {
     private const string Release = "codex-cli 0.160.0";
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-server-ran-with-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-server-ran-with-");
 
-    public EachServerLineSaysWhatItRanWithTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a vendor helper still holds is the OS's to clean, not this test's to fail on.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     private SlotRegistry Slots() => new(_dir, new JsonFileStore());
 

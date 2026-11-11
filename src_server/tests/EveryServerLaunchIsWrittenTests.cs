@@ -2,6 +2,7 @@ using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -23,21 +24,9 @@ namespace CoaiServer.Tests;
 /// </remarks>
 public sealed class EveryServerLaunchIsWrittenTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-every-server-launch-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-every-server-launch-");
 
-    public EveryServerLaunchIsWrittenTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a vendor helper still holds is the OS's to clean, not this test's to fail on.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     private void Vendor(string json, string vendor, params string[] slots)
     {

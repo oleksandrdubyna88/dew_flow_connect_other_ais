@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -33,21 +34,9 @@ public sealed class TheServerRecordsTheRoundTests : IDisposable
 
     private const string Vendors = """[{ "id": "codex", "runtime": "codex", "models": ["gpt-5.6-luna"], "slots": ["a", "b"] }]""";
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-server-round-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-server-round-");
 
-    public TheServerRecordsTheRoundTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a vendor helper still holds is the OS's to clean, not this test's to fail on.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     // ---------- the value matrix, through the real endpoint ----------
 

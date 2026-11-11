@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -31,27 +32,16 @@ public sealed class NoStartWithoutBudgetTests : IDisposable
     /// <summary>The shipped numbers: 5 s off the stated budget, 10 s for a launch to start.</summary>
     private static readonly ClientBudgetPolicy Policy = ClientBudgetPolicy.Default;
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-no-budget-" + Guid.NewGuid().ToString("N"));
+    private readonly TempDir _dir = TempDir.For("coai-no-budget-");
 
     public NoStartWithoutBudgetTests()
     {
-        Directory.CreateDirectory(_dir);
         File.WriteAllText(Path.Combine(_dir, "vendors.json"), """[{ "id": "codex", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""");
         var registry = new SlotRegistry(_dir, new JsonFileStore());
         registry.MarkSignedIn(registry.Read("codex", "a"));
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A temp directory a vendor helper still holds is the OS's to clean, not this test's to fail on.
-        }
-    }
+    public void Dispose() => _dir.Dispose();
 
     // ---------- the refusal, through the real runner ----------
 
