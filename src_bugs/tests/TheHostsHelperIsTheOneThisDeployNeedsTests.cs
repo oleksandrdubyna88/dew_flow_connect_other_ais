@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -33,7 +34,7 @@ public sealed class TheHostsHelperIsTheOneThisDeployNeedsTests : IDisposable
     /// <summary>The check, by the path the deploy names it by.</summary>
     private const string Check = "deploy/bugs/helper-protocol.sh";
 
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-helper-protocol-").FullName;
+    private readonly string _dir = TempDir.For("coai-helper-protocol-").Path;
 
     public void Dispose() => Scratch.Delete(_dir);
 

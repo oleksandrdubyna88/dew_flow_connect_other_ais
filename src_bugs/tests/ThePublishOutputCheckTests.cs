@@ -1,3 +1,4 @@
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -125,7 +126,7 @@ public sealed class ThePublishOutputCheckTests
     [Fact]
     public void ADirectoryThatIsNotThereIsNotAPass()
     {
-        var absent = Path.Combine(Path.GetTempPath(), $"absent-{Guid.NewGuid():N}");
+        var absent = Path.Combine(TempDir.Root, $"absent-{Guid.NewGuid():N}");
 
         var (code, _) = Check(absent, WhatTheMcpJobWants);
 
@@ -146,8 +147,8 @@ public sealed class ThePublishOutputCheckTests
     /// <summary>A directory of empty files, the way `dotnet publish` leaves one.</summary>
     private static string Output(params string[] names)
     {
-        var work = Directory.CreateTempSubdirectory("publish-output-check-");
-        var output = Directory.CreateDirectory(Path.Combine(work.FullName, "out"));
+        var work = TempDir.For("publish-output-check-");
+        var output = Directory.CreateDirectory(Path.Combine(work.Path, "out"));
         foreach (var name in names)
         {
             File.WriteAllText(Path.Combine(output.FullName, name), string.Empty);

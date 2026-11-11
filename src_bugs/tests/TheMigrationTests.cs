@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using CoaiMcp.Storage;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Xunit;
@@ -21,7 +22,7 @@ namespace CoaiBugs.Tests;
 public sealed class TheMigrationTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-migrate-" + Guid.NewGuid().ToString("N")[..8]);
+        TempDir.For("coai-migrate-").Path;
 
     private const string TheOldBuildsKeyValue = "deadbeefcafef00d";
 

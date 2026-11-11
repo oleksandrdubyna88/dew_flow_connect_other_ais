@@ -5,6 +5,7 @@ using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Server;
 using CoaiMcp.Store;
+using CoaiMcp.Tests;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Xunit;
@@ -30,7 +31,7 @@ namespace CoaiBugs.Tests;
 public sealed class BothHalvesTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-both-" + Guid.NewGuid().ToString("N")[..8]);
+        TempDir.For("coai-both-").Path;
 
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
