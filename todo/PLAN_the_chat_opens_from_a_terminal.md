@@ -472,12 +472,12 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
   R6 and R7 are measured on a VM with the pre-release VSIX (entry 1.1) and recorded; then the release is cut and verified.
 - **Cornerstone areas.** (c) local against remote; (d) the ssh command; (e) the four results — (d) and (e) together
   are the recommended cornerstone.
-- **Stories.** [PLAN_the_chat_opens_from_a_terminal_E2.md](PLAN_the_chat_opens_from_a_terminal_E2.md) — five stories,
+- **Stories.** [PLAN_the_chat_opens_from_a_terminal_E2.md](PLAN_the_chat_opens_from_a_terminal_E2.md) — four stories,
   written by Opus 2026-11-11: E2.S1 which terminal reads a session (`credsSession`, `fromSession` derived from the source,
-  no local walk), E2.S2 the stdin script and its typed result, E2.S3 the ssh edge (argv, options, the child and its limits),
-  E2.S4 one road to the VM (the consent, the registry path, the fallback, the pick list), E2.S5 the doors (take and add from
-  a terminal, *Asked* through the reach, the help, `SECURITY.md`). **E2.S2 is the cornerstone** (areas (d) and (e), spec by
-  Fable); E2.S3 gets a Fable security judgement outside the quota.
+  no local walk), E2.S2 the remote reader's contract (the ssh argv, the stdin script and the typed result), E2.S3 one road
+  to the VM (the consent, the registry path, the fallback, the pick list), E2.S4 the doors (take and add from a terminal,
+  *Asked* through the reach, the help, `SECURITY.md`). **E2.S2 is the cornerstone** (areas (d) and (e), spec by Fable); its
+  spec includes the security judgement on the ssh edge, outside the quota.
 
 ### E3 — Polish (stage 3) · depends on E2
 
