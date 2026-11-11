@@ -39,10 +39,15 @@ export const HOSTS_MAX = 100;
 /** What the road is read for: the waiting question, or the prompts a person wrote (the Asked note). */
 export type Purpose = 'question' | 'prompts';
 
-/** The id the person picked for a terminal, and the folders a `found` with `via: 'id'` may come from (X9b). */
+/**
+ * The id the person picked for a terminal, and the folders a `found` with `via: 'id'` may come from (X9b). It carries the host and the
+ * tmux session it was picked for: a terminal renamed to another `Creds: <host> / <session>` does not send it to the new host.
+ */
 export interface Picked {
   readonly id: string;
   readonly folders: readonly string[];
+  readonly host: string;
+  readonly session: string;
 }
 
 export type RemoteAnswer =
@@ -233,7 +238,7 @@ function titlesStep(read: Extract<RemoteRead, { readonly kind: 'titles' }>, cont
   const named = namedAmong(read.sessions, (one) => one.names, context.session);
   const [only] = named;
   if (named.length === 1 && only !== undefined) {
-    return { kind: 'fallback-tail', picked: { id: only.sessionId, folders: [only.folder] } };
+    return { kind: 'fallback-tail', picked: { id: only.sessionId, folders: [only.folder], host: context.host, session: context.session } };
   }
 
   return named.length > 1
@@ -366,7 +371,7 @@ async function chosen(trip: Trip, rows: readonly PickRow[]): Promise<RemoteAnswe
   const sessionId = await trip.seams.pick(rows);
   const row = rows.find((one) => one.sessionId === sessionId);
 
-  return row === undefined ? refuse(SAID.cancelled) : leg(remember(trip, { id: row.sessionId, folders: row.folders }), idCall(trip, row.sessionId));
+  return row === undefined ? refuse(SAID.cancelled) : leg(remember(trip, { id: row.sessionId, folders: row.folders, host: trip.host, session: trip.session }), idCall(trip, row.sessionId));
 }
 
 const FOLLOW: Table<Step, readonly [Trip], Promise<RemoteAnswer>> = {
@@ -399,13 +404,17 @@ async function leg(trip: Trip, call: RemoteCall): Promise<RemoteAnswer> {
 const notSession = (name: Exclude<CredsName, { readonly kind: 'session' }>): string =>
   (name.kind === 'malformed' ? name.refusal : SAID.notCreds);
 
+/** The kept id, only when it was picked for THIS host and session. Another one is not sent and not dropped: it stays for the terminal it belongs to. */
+const pickedFor = (picked: Picked | undefined, where: Where): Picked | undefined =>
+  (picked?.host === where.host && picked.session === where.session ? picked : undefined);
+
 /** The first call of a press: the registry path, or — when this terminal kept an id — that id. */
 const firstCall = (trip: Trip): RemoteCall => (trip.picked === undefined ? { kind: 'session', session: trip.session } : idCall(trip, trip.picked.id));
 
 /**
  * The road from a terminal's name to the lines of its remote session, or the sentence that says why not.
  *
- * <p>`picked` is the id this terminal kept from an earlier press: the first call sends it. It is changed ONLY through
+ * <p>`picked` is the id this terminal kept from an earlier press, for the host and session it was picked for: the first call sends it. It is changed ONLY through
  * `seams.keep` — set on a pick, dropped on a registry success and on `gone`, kept through everything else.</p>
  */
 export async function remoteRoad(seams: RoadSeams, terminalName: string, purpose: Purpose, picked?: Picked): Promise<RemoteAnswer> {
@@ -417,7 +426,7 @@ export async function remoteRoad(seams: RoadSeams, terminalName: string, purpose
   if (refusal !== undefined) {
     return refuse(refusal);
   }
-  const trip: Trip = { seams, host: name.host, session: name.session, purpose, picked, calls: 0 };
+  const trip: Trip = { seams, host: name.host, session: name.session, purpose, picked: pickedFor(picked, name), calls: 0 };
 
   return leg(trip, firstCall(trip));
 }

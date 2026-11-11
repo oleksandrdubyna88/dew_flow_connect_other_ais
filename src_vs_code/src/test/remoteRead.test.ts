@@ -298,12 +298,13 @@ test('S3-T5b: the folders of the fallback are the pane\'s own, in order, at most
   assert.deepEqual(both.w.runs[1], [S, 'titles', ...wanted], 'the folders were not the pane\'s own, in projectDirNames order');
 
   const miss = (skipped: number, more: boolean): World => world({ script: sequence(answered(fallbackFrame(KB, ['-z-other'], skipped, more))) });
-  const plain = refusal(await remoteRoad(miss(0, false).seams, NAME, 'prompts'));
+  const none = miss(0, false);
+  const plain = refusal(await remoteRoad(none.seams, NAME, 'prompts'));
+  assert.equal(none.w.runs.length, 1, 'a call was made for a folder the VM does not have');
   assert.ok(plain.includes(H) && plain.includes(S) && plain.includes(KB), 'the refusal does not name host, session and folder');
   assert.ok(!/could not be listed/u.test(plain));
   assert.match(refusal(await remoteRoad(miss(2, false).seams, NAME, 'prompts')), /could not be listed/u);
   assert.match(refusal(await remoteRoad(miss(0, true).seams, NAME, 'prompts')), /could not be listed/u);
-  assert.equal(miss(0, false).w.runs.length, 0);
 });
 
 test('S3-T6: an ambiguity is a list, even of one', async () => {
@@ -339,13 +340,13 @@ test('S3-T6b: a pick list is newest first', async () => {
 });
 
 test('S3-T7: a picked id is sent, and kept or dropped by the parent\'s rule only', async () => {
-  const picked: Picked = { id: ID2, folders: ['-home-git-b'] };
+  const picked: Picked = { id: ID2, folders: ['-home-git-b'], host: H, session: S };
 
   // A pick from an ambiguity sets it; the call that follows asks for it.
   const first = world({ script: sequence(answered(twoPanes()), refusedRun('“h” did not answer over ssh within 15 s.')), choose: (rows) => rows.find((row) => row.sessionId === ID2)?.sessionId });
   const slow = await remoteRoad(first.seams, NAME, 'prompts');
   assert.equal(slow.kind, 'refused');
-  assert.deepEqual(first.w.kept, [{ id: ID2, folders: projectDirNames('/home/git/b') }], 'a slow host made the person choose again');
+  assert.deepEqual(first.w.kept, [{ id: ID2, folders: projectDirNames('/home/git/b'), host: H, session: S }], 'a slow host made the person choose again');
   assert.deepEqual(first.w.runs[1], [S, 'id', ID2]);
 
   // The next press sends it, on its FIRST call.
@@ -378,6 +379,21 @@ test('S3-T7: a picked id is sent, and kept or dropped by the parent\'s rule only
   const gone = world({ script: () => answered(goneFrame(ID2)) });
   await remoteRoad(gone.seams, NAME, 'prompts', picked);
   assert.deepEqual(gone.w.kept, [undefined], 'a vanished file did not drop the picked id');
+});
+
+test('S3-T16: a picked id is not sent to another host or session after a rename', async () => {
+  const picked: Picked = { id: ID2, folders: ['-home-git-b'], host: H, session: S };
+  for (const renamed of ['Creds: h2 / s', `Creds: ${H} / s2`]) {
+    const one = world({ list: [...yesFor('h2'), ...yesFor(H)], live: () => renamed, script: () => answered(registryFrame()) });
+    const got = await remoteRoad(one.seams, renamed, 'prompts', picked);
+    assert.equal(got.kind, 'lines');
+    assert.notDeepEqual(one.w.runs[0]?.slice(1), ['id', ID2], `a picked id of another host was sent to this one (${renamed})`);
+    assert.equal(one.w.runs[0]?.length, 1, `the first call of a renamed terminal is not the registry path (${renamed})`);
+    assert.ok(!one.w.kept.includes(undefined), 'a registry success of ANOTHER host dropped the id that was picked for this one');
+  }
+  const same = world({ script: () => answered(idFrame(ID2, '-home-git-b')) });
+  await remoteRoad(same.seams, NAME, 'prompts', picked);
+  assert.deepEqual(same.w.runs[0], [S, 'id', ID2], 'the id of the same host and session was not sent');
 });
 
 test('S3-T8: a picked file gone between the pick and the next press', async () => {
@@ -563,7 +579,7 @@ test('S3-T14: a file found by a picked id is in a folder of that session, or it 
   const wrong = titles('-home-git-a');
   const refusedFolder = await remoteRoad(wrong.seams, NAME, 'prompts');
   assert.equal(refusal(refusedFolder), folderSentence, 'a file in a folder nobody asked for was read as this session');
-  assert.deepEqual(wrong.w.kept, [{ id: ID, folders: [KB_FOLDER] }], 'the folder refusal dropped or lost the id');
+  assert.deepEqual(wrong.w.kept, [{ id: ID, folders: [KB_FOLDER], host: H, session: S }], 'the folder refusal dropped or lost the id');
   assert.equal((await remoteRoad(titles(KB_FOLDER).seams, NAME, 'prompts')).kind, 'lines');
 
   // After a pick from an ambiguity list with cwd /home/git/kb: the folders are projectDirNames of that cwd.
@@ -574,7 +590,7 @@ test('S3-T14: a file found by a picked id is in a folder of that session, or it 
   ), choose: () => ID });
   const bad = ambiguous('-home-git-elsewhere');
   assert.equal(refusal(await remoteRoad(bad.seams, NAME, 'prompts')), folderSentence, 'a file in a folder nobody asked for was read as this session');
-  assert.deepEqual(bad.w.kept, [{ id: ID, folders: projectDirNames(kb) }]);
+  assert.deepEqual(bad.w.kept, [{ id: ID, folders: projectDirNames(kb), host: H, session: S }]);
   for (const folder of projectDirNames(kb)) {
     assert.equal((await remoteRoad(ambiguous(folder).seams, NAME, 'prompts')).kind, 'lines', `the spelling ${folder} of the folder was refused`);
   }

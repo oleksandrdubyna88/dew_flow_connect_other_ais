@@ -11,8 +11,9 @@ import { runRemote } from './remoteSsh';
  * `remoteRead.ts`'s (pure, tested by its own unit tests); this file only supplies the editor — the modal question, the
  * progress line, the pick list, the answers in `globalState` — and holds the two per-terminal maps.
  *
- * <p>Nothing else in the extension spawns ssh or reads the consent. No `console` and no `notify` here: a sentence reaches the
- * door that asked as a value, and the door says it.</p>
+ * <p>Nothing else in the extension spawns ssh or reads the consent. No `console` call here. The three messages this file raises
+ * (the consent question, the same question from the hosts list, and "no host has been asked yet") go through the one door, `notifyAndAsk`
+ * and `notify`, with fixed text and a host name; every sentence of the road itself reaches the door that asked as a value, and that door says it.</p>
  *
  * <p>Unit tests cannot load this module (it imports `vscode`); `terminalHostsScenario.ts` runs it in a real editor, in CI.</p>
  */
@@ -81,6 +82,8 @@ export interface RemoteSessions {
   readonly read: (terminal: vscode.Terminal, purpose: Purpose) => Promise<RemoteAnswer>;
   /** The terminal is closed: its picked id goes. */
   readonly forget: (terminal: vscode.Terminal) => void;
+  /** The picked id this terminal keeps, if any. */
+  readonly pickedOf: (terminal: vscode.Terminal) => Picked | undefined;
   /** The answers, in `globalState`. */
   readonly answers: AnswerStore;
   /** *CoAI: hosts read over ssh*: list the remembered hosts, change one answer or forget it. */
@@ -175,6 +178,9 @@ export function remoteSessionsOf(state: vscode.Memento, run: RoadSeams['run'] = 
   return {
     read: (terminal, purpose) => latch(terminal, () => remoteRoad(seamsOf(terminal), terminal.name, purpose, picked.get(terminal))),
     forget: (terminal) => { picked.delete(terminal); },
+    pickedOf(terminal) {
+      return picked.get(terminal);
+    },
     answers,
     changeHosts: () => changeHostsOf(answers),
   };
@@ -182,9 +188,12 @@ export function remoteSessionsOf(state: vscode.Memento, run: RoadSeams['run'] = 
 
 let bound: RemoteSessions | undefined;
 
+/** The ssh call of the bound road: `runRemote`, until the test door replaces it. */
+let boundRun: RoadSeams['run'] = runRemote;
+
 /** Activation: the one road of this window, its terminal listener and the panel's command. */
 export function bindRemoteSessions(context: vscode.ExtensionContext): RemoteSessions {
-  const sessions = remoteSessionsOf(context.globalState);
+  const sessions = remoteSessionsOf(context.globalState, (host, session, operands, script) => boundRun(host, session, operands, script));
   bound = sessions;
   context.subscriptions.push(
     vscode.window.onDidCloseTerminal((closed) => { sessions.forget(closed); }),
@@ -193,6 +202,25 @@ export function bindRemoteSessions(context: vscode.ExtensionContext): RemoteSess
 
   return sessions;
 }
+
+/**
+ * What a host scenario may reach of the BOUND road (S3-H1). The extension hands it out only when it runs in test mode
+ * (`ExtensionMode.Test`): in production the field is absent, so no other extension can write a consent or replace the ssh call.
+ */
+export interface RemoteSessionsTestDoor {
+  /** Replace the bound road's ssh call; `undefined` puts `runRemote` back. */
+  readonly replaceRun: (run: RoadSeams['run'] | undefined) => void;
+  readonly read: RemoteSessions['read'];
+  readonly pickedOf: RemoteSessions['pickedOf'];
+  readonly answers: AnswerStore;
+}
+
+export const testDoorOf = (sessions: RemoteSessions): RemoteSessionsTestDoor => ({
+  replaceRun: (run) => { boundRun = run ?? runRemote; },
+  read: sessions.read,
+  pickedOf: sessions.pickedOf,
+  answers: sessions.answers,
+});
 
 /** The ONE entry the doors and *Asked* call: read this terminal's remote Claude session for this purpose. */
 export function readRemoteSession(terminal: vscode.Terminal, purpose: Purpose): Promise<RemoteAnswer> {
