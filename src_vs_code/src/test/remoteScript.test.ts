@@ -52,7 +52,9 @@ function printedByShell(words: readonly string[]): string {
 
 const HOSTILE: readonly string[] = [
   '$(id)', '`id`', ';', '|', '&', '*', '~', ' ', '\t', '"', "'", '\\', '--', '-', '$HOME', '${HOME}', '$((1+1))', '!', '#', '(', ')',
-  '{a,b}', '<x', '>x', "it's", "'; id; '", '"; id; "', 'a b  c', '*/*', '', 'é', '‮',
+  '{a,b}', '<x', '>x', "it's", "'; id; '", '"; id; "', 'a b  c', '*/*', '', 'é',
+  // RIGHT-TO-LEFT OVERRIDE, built from its number: a literal one is the Trojan Source shape (src_bugs scans for it).
+  String.fromCodePoint(0x202e),
 ];
 
 test('S2-T4: every operand reaches the remote shell as ONE literal word (a real sh -c)', (context) => {
