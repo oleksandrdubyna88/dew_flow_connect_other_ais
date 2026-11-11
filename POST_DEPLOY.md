@@ -19,7 +19,22 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-11 · mcp **0.65.1** and extension **0.85.0** (released; `mcp-v0.65.0` was tagged and NOT
+Last verified: 2026-11-11 · extension **0.86.0** (released: `extension-v0.86.0` on 45b070a2, release run 43041879294,
+its `extension` job green with "Publish to the Marketplace"; every other job skipped, as on an extension-only tag) · mcp
+**0.65.1** unchanged · the box served server **0.15.0** at the time of the check: the 0.16.0 tag and release exist, its
+deploy belongs to another session and had not run yet. Run locally:
+`MCP_VERSION=0.65.1 SERVER_VERSION=0.16.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.86.0`. The
+first run, minutes after the publish, printed `PASS 1`, `FAIL 2 — marketplace serves 0.85.0`, `PASS 6`, `PASS 9` and
+`FAIL 10 — 200 {"ok":true,"version":"0.15.0"}`. Item 2 was re-run each minute and printed `PASS 2` after 15 minutes, the
+Marketplace's own delay; item 10 is the server deploy above, not this release. The released vsix
+(`connect-other-ais-0.86.0.vsix`, sha256 `21fc9a51a45ff5ea7599498ba7d92241f24769906d6e1659203f714cc4db5dca`) was opened:
+`package.json` says 0.86.0 and contributes `coai.askFromTerminal`; the bundled `dist/extension.js` holds "Copy the text
+first, then press Ask other AI" and "it only reads the clipboard", and neither the epoch-1 help sentence nor
+`workbench.action.terminal.copySelection`. In this release: #971 (E1 of the terminal door — *Ask other AI* from a
+terminal). The owner's real-window checks R1, R2, R3, R4, R5 and R9 passed on the pre-release VSIX 0.85.902 before the
+tag. Manual items 3, 4, 5, 7, 8, 11 and 12 were not run.
+
+Previously verified: 2026-11-11 · mcp **0.65.1** and extension **0.85.0** (released; `mcp-v0.65.0` was tagged and NOT
 published — its draft stays, the tag never moved) · server **0.15.0** deployed (run 43000555462) — the box serves 0.15.0
 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them: `PASS 1 — all six RIDs present`, `PASS 2 —
 marketplace serves 0.85.0`, `PASS 6` — client-config answered 200 and the catalog answered 401 without a session, the
