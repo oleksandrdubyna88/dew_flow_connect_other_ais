@@ -37,13 +37,13 @@ product's read-only-aware deleter) can be the remover here. The entries leave th
 - A `using` only where the folder's every user ends inside that scope; a helper or property that hands the folder out
   keeps it without `using` (it stays in the run folder, as today).
 - Add `using CoaiMcp.Tests;` to a file only if it does not see the namespace — except
-  `TheImageSmokeUsesTheServerTests.cs`, which takes the fully qualified `CoaiMcp.Tests.TempDir` (§ 2.2).
+  `TheImageSmokeUsesTheServerTests.cs`, which takes the fully qualified `CoaiMcp.Tests.TempDir` (§ 2, item 2) — see its exact edit in shape A1.
 
 ## 4. The sites — shapes
 
 **A1 — a fixture field of a named path that the fixture creates itself** (`Directory.CreateDirectory(_dir)` in the
 constructor or an init) **and removes in `Dispose`** (a `Directory.Delete` there): → `private readonly TempDir _dir =
-TempDir.For("<prefix>");`, the `CreateDirectory` line stays or goes as § 2.2 allows (it is a no-op on an existing folder),
+TempDir.For("<prefix>");`, the `CreateDirectory` line stays or goes as § 2, item 2 allows (it is a no-op on an existing folder),
 and the `Directory.Delete(...)` statement (with its `try`/`catch` if it only guards that delete) becomes `_dir.Dispose()`.
 Uses of `_dir` as a `string` compile through `TempDir`'s implicit conversion; use `_dir.Path` where they do not.
 Candidates (check each): `AMalformedTokenIsAnUnknownExpiryTests.cs:13`, `AStatedResetParksTheSlotTests.cs:27`,
@@ -52,7 +52,7 @@ Candidates (check each): `AMalformedTokenIsAnUnknownExpiryTests.cs:13`, `AStated
 `HowAJobEndedIsSaidTests.cs:32`, `JobPumpTests.cs:36`, `NoStartWithoutBudgetTests.cs:34`, `ReaderBarrierTests.cs:23`,
 `ReviewEndpointTests.cs:501`, `SlotRegistryTests.cs:13`, `TheCanaryFallbackRunsTests.cs:52`, `TheCanaryIsACanaryTests.cs:21`,
 `TheImageChecksEachInstallerTests.cs:30`, `TheImageInstallsAgyFromItsManifestTests.cs:34`,
-`TheImageSmokeUsesTheServerTests.cs:26`, `TheServerRecordsTheRoundTests.cs:36`, `TheWholeUsageTravelsTests.cs:27`,
+`TheImageSmokeUsesTheServerTests.cs:26` (EXACT edit, plan gate: its inventory row at line 104 must not move — change line 26 ONLY, to `private readonly string _dir = CoaiMcp.Tests.TempDir.For("coai-smoke-").Path;`; the constructor at :28 and the `Dispose` at :32-40 with its `Directory.Delete` stay exactly as they are, so not one line above 104 is added or removed), `TheServerRecordsTheRoundTests.cs:36`, `TheWholeUsageTravelsTests.cs:27`,
 `UsageTests.cs:281`, `UsageTests.cs:417`, `VendorCatalogTests.cs:14-15` (the expression spans two lines: keep two lines),
 and the fixture property `TheCallerCanStillWaitTests.cs:150` (`Dir { get; } = …`, removed by its class's `Dispose`).
 
