@@ -13544,3 +13544,80 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This sectio
 - **Tests**: `credsSession.test.ts` (new: S1-T1…T4 the pattern, `other`, the three sentences and 30+ hostile names; S1-T8 the seam and the first statement of
   `pinSession`; S1-T9 `NO_LOCAL_SESSION` and the check in `resolveAndPin`), `chatStore.test.ts` (S1-T5, S1-T6, replacing E1's *no terminal reads a session*; and the round-trip fixture, `fromSession` false → true), `chatStoreRefile.test.ts` (its terminal fixture, false → true),
   `chatSourceWiring.test.ts` (S1-T7, and the pin's two new call sites), `chatSweepWiring.test.ts`.
+
+### The remote reader's contract: the script, the frame and the ssh edge (E2.S2)
+
+Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md` (Fable, reviewed by Opus). Four new modules and two widened ones; none imports `vscode`. Everything an
+ssh option does below is said as "we pass": the effect on the configuration ssh would use was seen (S2-T21, M-G2, M-G3), the effect against a real server was not
+(M-O1…M-O7, below).
+
+- **What is asked (`src/remoteScript.ts`).** `RemoteCall` has three kinds, and `operandsOf(call)` / `callOf(operands)` are THE grammar: `<session>` (the registry path,
+  and the fallback's first call), `<session> id <uuid>` (a press with a picked id, and the fallback's third call — the same form) and `<session> titles <folder>…`
+  (one to three different folders). The session is checked by `credsSession` (C1's rule, called), the id by `isSessionId`, the folder by `isFolderName`
+  (`^[A-Za-z0-9_-][A-Za-z0-9._-]{0,254}$`, written once). No alphabet holds a space, a tab, a quote or a shell character, so on win32 node passes each word to
+  `ssh.exe` as it is; the single quotes of `shQuoted` (`'` becomes `'\''`; a NUL, CR or LF throws) are for the REMOTE login shell only, and a real `sh -c` test
+  holds them (S2-T4).
+- **The script (`REMOTE_SCRIPT`).** 293 lines, sha256 `1c3b25f9325f79cab47c84513fd126cac79f89105b016163bd75233686ecad07`, sent on stdin to `sh -s`. It REPORTS facts; the parser decides.
+  Its rules: (1) it is one function, `coai_main`, read to its end and only then called with `</dev/null 2>/dev/null`; the last line prints `COAI-END` — a script cut
+  on the way does nothing, and no tool can read the rest of the script; (2) every data line starts with `:` and every other line of the frame starts with `COAI-`;
+  (3) a data file is opened by redirection, never as an argument (`ls -t --` and `stat -c %Y --` are the two commands that take a path, and both after `--`);
+  (4) `set -f` for the whole function, the two globs between `set +f` and `set -f`, every match tested with `-f` or `-d`; (5) the process walk takes a `claude`
+  (`comm` exactly) and does not enter it, bounded at 256 processes and depth 16; (6) the panes by `tmux list-panes -s -t "=<name>:"` — **the colon is needed**
+  (M-T1: without it a name that starts another session's name reads that session); (7) the script's one decision is which file it reads next; (8) a closed stdout ends
+  the script at its next step (`|| return 0` on ten `printf` lines); (9) nothing is matched in `sh` but shapes; (10) read-only, nothing left (no write, `cd`, `&`,
+  here-document, `eval`, backtick or `trap`); (11) `LC_ALL=C`, `HOME` must start with `/`; (12) a tool that is not there is SAID (`COAI-BAD tool`) — `sed cut head tail wc
+  grep awk ls date` first, `tmux ps` before the panes — never read as "nothing found" (M-S7).
+- **The bounds** (each number in the script equals a TypeScript constant, held by S2-T17): the registry file 64 KiB (`head -c 65537`, `REGISTRY_MAX + 1`), the transcript tail
+  4 MiB (`tail -c 4194304`, `TAIL_MAX`), the folder listing 2000 names, the title scan 250 files / 8 s / a file over 64 MiB is `skipped` (`SCAN_BUDGET.most`, under
+  `SCAN_BUDGET.withinMs`, `SCAN_BUDGET.mostBytes`), a title row over 1024 bytes is left out and counted, the first 24 different rows and then the last row again
+  (`collectNames` reads the LAST row as the latest name). The largest answers (a `found` about 4.3 MiB, a `titles` at most 6.4 MiB) are under the 8 MiB cap.
+- **The frame and the decision (`src/remoteFrame.ts`, pure).** `readRemote(run, call)` splits stdout at `\n`; the frame starts at the LAST `COAI-BEGIN 1` and ends at the
+  FIRST `COAI-END` after it; before and after are ignored (a banner may hold the sentinel). Inside, `COAI-` lines are markers (a table typed by the marker says the words,
+  the data lines and the calls each may appear in), `:` lines are data, any other line is `frame`. The decision, in order: an exit code that is not 0 → `unreadable` `exit`; no
+  sentinel → `no-sentinel` (never `absent`), another `COAI-BEGIN n` → `version`, no `COAI-END` → `cut`; a `COAI-BAD <what>` → that word, a `COAI-OVER` → `too-many`;
+  `COAI-NO-SESSION` → `absent` `session`; one pane and one `claude` with a registry that is denied or not valid → `unreadable` with the fault (`registry-denied`, `-big` over
+  64 KiB by `Buffer.byteLength`, `-bad`, `-stale` when `procStart` and the frame's start time are both digits and differ); a valid registry → the transcript of ITS id (else
+  `id-mismatch`), 0 files `absent` `transcript`, 2 or more `ambiguous` `transcripts`, 1 in a folder that is not one of `projectDirNames(cwd)` → `unreadable` `folder`, else
+  `found` `via: 'registry'`; one pane and no `claude` (or one with no registry file) → `fallback` for a session call, the picked id's file for an id call (`gone` when there is none,
+  `found` `via: 'id'`); several panes or several `claude` → `ambiguous` with the NAMED candidates and the count of the unnamed — never a `found`, except that an `id` call is
+  settled by its pick when the pick is a named candidate, an unnamed candidate may be it, or none is named. `found.cut` is a fact (a size over `TAIL_MAX`, the larger of the two
+  sizes read; the first line of a cut tail is dropped); what it means is S3's. `readRemote` never throws, no arm holds an error's message, and `UNREADABLE_SAID` has one clause
+  for each fault, none holding data from the answer. A `titles` answer reads each session's rows through `collectNames`.
+- **The ssh edge (`src/remoteSsh.ts`, node only).** `SSH_OPTIONS` = `-T` and `-o` `BatchMode=yes`, `ConnectTimeout=5`, `RequestTTY=no`, `RemoteCommand=none`,
+  `ClearAllForwardings=yes`, `ForwardAgent=no`, `ForwardX11=no`, `LogLevel=ERROR`, and — change 2.1 of the parent — `StrictHostKeyChecking=yes`, last. We pass them before the
+  person's configuration, and for each setting ssh keeps the first value it gets: `ssh -G` against a hostile configuration (M-G1, tested by S2-T21 on this machine's OpenSSH
+  10.2p1; Windows 9.5p2 gave the same values for the parent's options, M-G2/M-G3) printed our values, no forward line, no `remotecommand`, `stricthostkeychecking true` over the
+  person's `accept-new`. `sshArgv(host, operands)` = `[...SSH_OPTIONS, '--', host, 'sh', '-s', '--', ...operands.map(shQuoted)]`; it throws (a fixed text) when the host fails
+  C1's host class or `callOf` refuses. No `-n` (the remote `sh -s` would read an empty stdin). `--` stands right before the host so it is never read as an option.
+  **No `ControlPath`, `ControlMaster` or `ControlPersist` option**: connection sharing stays the person's own (residual 9, below). A further ssh option is a plan change and a full stop.
+- **Which ssh, from which folder.** `sshExecutable(platform, env)` is ONE absolute path: win32 `<SystemRoot>\System32\OpenSSH\ssh.exe` (`system32(env)` of `processLauncher.ts`:
+  `SystemRoot`, then `WINDIR`, then `C:\Windows`; `TASKKILL` is built from the same function), else `/usr/bin/ssh`; the child's working folder is the folder of that executable.
+  Never the `PATH`: with `shell: false` the spawn layer looks for a bare name in the current folder first (the extension host's, which can be the opened workspace). The cost: a person
+  whose terminal uses another ssh gets the system one here; the call ends with exit 255 and ssh's own line, never a wrong answer. A machine with no `/usr/bin/ssh` gets the
+  "not found" refusal.
+- **The call (`runRemote(host, session, operands, script, limits?, seams?)`).** Never rejects and never throws. A host, session or operand that fails its rule, or `operands[0]` that
+  is not the session → `refused` with *"This terminal’s name cannot be given to ssh safely, so nothing was read."*; no file at the executable → *"ssh was not found at “<path>”, …"*
+  (and on win32 *"Install the Windows optional feature “OpenSSH Client”."*); then ONE `capture` (`shell` false, the script as `input`, `{ cwd, maxStdoutBytes: 8 MiB, killTree: true }`,
+  15 s): a timeout, `capped`, `not-started` and exit 255 are `refused` with their sentences (ssh's own last line, at most 300 characters, control characters taken out); any other
+  code is `answered` and `readRemote` makes a code that is not 0 `unreadable`. ONE log line for each call that did not answer 0, by `logLine(host, session, end, stderrTail)`: host,
+  session, how it ended, the last 2000 characters of ssh's stderr — never stdout, never an operand, never a caught error. The remote script's own stderr goes to `/dev/null`, so no
+  transcript text can be in ssh's.
+- **`capture` and `launch`, widened (X8).** `capture` gets an EIGHTH parameter, `CaptureOptions { cwd, maxStdoutBytes, killTree }`: the stdout cap counts BYTES (`Buffer.byteLength`)
+  and answers `ended: 'capped'` with no output; `stderrTail` is in the answer only when the options object is given, so the ten callers of today get exactly the object they got.
+  `LaunchOptions.killTree` makes the kill of a child with no shell take the tree on win32 (`taskkill /t /f`, then `child.kill()`), so a `ProxyJump` or `ProxyCommand` child goes with ssh;
+  off win32 nothing changes.
+- **Plan change 2.1 and residual 9, in words.** The read passes `-o StrictHostKeyChecking=yes`, before the person's configuration. With it, ssh refuses a host whose key is not already in
+  the person's `known_hosts`, and a host whose key changed, whatever the configuration says (`accept-new` or `no` included); the read then ends with ssh's own sentence. A host the
+  terminal's ssh already trusts is read as usual. **The read does not turn off ssh connection sharing.** On Windows, the OpenSSH client that comes with Windows has no released connection
+  sharing, so a read cannot share a connection or leave one open. When the extension runs on Linux or macOS — or on the remote machine of a Remote window — and the person's ssh
+  configuration shares connections (`ControlMaster`, `ControlPersist`), the read can go through a connection that is already open, or open one that stays open for the `ControlPersist` time.
+- **Not observed — owed, and who can observe it.** M-O1 a real call from Windows (the argv reaches `ssh.exe` unchanged, the frame comes back with `\n`) — the owner, R6; M-O2 residual 9's size
+  on a Linux machine that runs sshd; M-O3 `StrictHostKeyChecking=yes` with `BatchMode=yes` against a host not in `known_hosts` (exit 255, nothing written, also when the configuration says
+  `accept-new`); M-O4 after a read killed at the limit, no `ssh` process on Windows (also with `ProxyJump`) and none of the script's commands on the VM; M-O5 the `comm` of the Claude CLI
+  on the VMs, `ps --ppid` there and the registry file's `procStart`; M-O6 `-t "=name:"` is exact on the VMs' tmux; M-O7 whether the registry's `cwd` follows a `cd` inside a session (if it does,
+  the folder check refuses a good session). Other residuals: a tmux server that does not answer keeps the remote `tmux` call; `procStart` is checked only when both sides have it; the proxy leg
+  runs with the person's configuration; the title fallback cannot ask for a folder whose name has a letter outside ASCII; more than 24 different title rows in one file (`scan.more`); `Tunnel`,
+  `LocalCommand` and `UpdateHostKeys` stay the person's; the title scan's 8 s is the VM's clock; the tools are a Linux VM's; tmux's exit 1 for "no such session", "no server running" and an
+  unreachable socket all read as `absent` `session`.
+- **Tests**: `remoteScript.test.ts` (S2-T4 a real `sh -c`, S2-T16, S2-T17), `remoteFrame.test.ts` (S2-T24…T33), `remoteScriptRuns.test.ts` (S2-T12…T15, S2-T34…T44: the REAL script by `sh -s`
+  and `bash --posix` against a temporary HOME), `remoteSsh.test.ts` (S2-T1…T3, T5…T7, T9, T18…T21), `remoteLogScan.test.ts` (S2-T10), `captureWidened.test.ts` (S2-T8, S2-T11, S2-T22, S2-T23).

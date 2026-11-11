@@ -614,6 +614,26 @@ refusal naming the session. Nothing else in this extension depends on Claude Cod
 
 A terminal comes forward through VS Code's own `Terminal.show()` (the E1 terminal road of the same command, `chatReturnCommand.ts`); no other extension is called for it.
 
+### And one arrow OUT of the machine: the extension host → the system `ssh` → a VM the person agreed to (2026-11-11, E2.S2 of [../todo/PLAN_the_chat_opens_from_a_terminal_E2.md](../todo/PLAN_the_chat_opens_from_a_terminal_E2.md))
+
+*Asked* in a `Creds: <host> / <session>` terminal reads the Claude session that runs in that terminal's tmux session — on another machine. The extension reaches it by `ssh`: one call, `sh -s` on the VM,
+the script on stdin, and a typed answer parsed here (`remoteScript.ts` the script and the operands, `remoteFrame.ts` the parser, `remoteSsh.ts` the call; the three import no `vscode`). It is the first edge of this
+extension that crosses to another machine, so its shape is fixed by what can go wrong on it:
+
+- **Read-only, and bounded.** The script reads a registry file, a transcript tail (4 MiB) and a few title rows; it writes nothing, starts nothing in the background and leaves nothing (the fixed text, one function
+  read whole and called last, is a scan target of its own test). Every step has a bound, and a closed stdout ends it.
+- **Which program runs.** The one `spawn` site stays `launch`: the call goes through `capture`, widened by one options object (`cwd`, a byte cap on stdout, the tree kill), with `shell` false. The executable is ONE absolute path for
+  each platform (`<SystemRoot>\System32\OpenSSH\ssh.exe`, else `/usr/bin/ssh`), never the `PATH` and never the current folder, and the child's working folder is that executable's folder — the extension host's own folder
+  can be the opened workspace.
+- **Which host, which options.** The host is the alias in the live terminal's name, valid by one rule (`credsSession`), checked again at the one road in. The person's own `~/.ssh/config` is the authority for that alias; our options
+  (`BatchMode`, no forwarding, no terminal, no `RemoteCommand`, and — plan change 2.1 — `StrictHostKeyChecking=yes`) stand first, and for each setting ssh keeps the first value it gets. We pass them; the effect on the
+  configuration was seen, the refusal against a real server is owed (M-O3). Connection sharing is not pinned: it stays the person's (residual 9 of the spec), and Windows' OpenSSH has none released.
+- **What comes back is input from another machine.** It is parsed by a strict frame (a data line starts with `:`, so no byte of a transcript can end a section), never run, never used as a local path, never logged and never
+  part of an error's text. The log of a call holds the host, the session, how it ended and ssh's own stderr tail — nothing else.
+- **A consent stands before the first call** (S3), and the road re-checks the terminal just before each spawn.
+
+Details: `module_extension.md`, *The remote reader's contract: the script, the frame and the ssh edge (E2.S2)*.
+
 ### And a ledger of its own, because it now spends on its own (2026-09-10)
 
 Spending an edge means accounting for it. `usage.jsonl` is written by `coai-mcp` and only READ by the
@@ -1623,6 +1643,7 @@ Plan and verification (V1 trial package, V2 on a SAC machine, V3 after the first
   `src_vs_code/`; central package versions; net10.0; `TreatWarningsAsErrors`.
 - **Tests are MTP executables** (xUnit v3); `dotnet test` aborts here by design of the toolchain.
 - **Logging** per the shared Serilog rule; stdio hosts log console to stderr.
+- **The extension's one outward `ssh` call** (E2.S2, 2026-11-11) reads a Claude session on a VM the person agreed to: read-only, bounded, started through `launch` with `shell` false from ONE absolute executable path, the host checked twice by one rule, the options we pass (including `StrictHostKeyChecking=yes`) first on the command line, what comes back parsed by a strict frame and never run, and a log line that carries the host, the session, how the call ended and ssh's own stderr tail — never stdout, an operand or a caught error. Connection sharing is the person's own configuration (residual 9). See *And one arrow OUT of the machine* above and `module_extension.md`, *The remote reader's contract*.
 - **Conventions** are the `dew_flow_conventions` submodule at `.agents/conventions`;
   `.claude/settings.json` is a byte-identical copy of its reference.
   AGENTS directs both agents to the shared ENTRY and `.agents/PROJECT.md`; CLAUDE imports
