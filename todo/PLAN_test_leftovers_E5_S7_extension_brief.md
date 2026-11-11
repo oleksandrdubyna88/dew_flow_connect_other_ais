@@ -27,8 +27,10 @@ Every folder a site makes moves to the wrap the suite already uses (`scripts/own
    the scope and its proof unchanged.
 2. The shipped Node guard with `--baseline` is clean (it judges this `node` scope); `--baseline-shrinks --base origin/main`
    passes; the C# guard class stays green; no new `testsToDelete-exempt` marker; `shared/leftovers-exemptions.json`
-   unchanged — it is keyed by LINE, so any file holding an inventory row keeps its line count above that row (list the
-   rows in `src_vs_code/` first: `node -e` over `shared/leftovers-exemptions.json`'s `rows`).
+   unchanged — it is keyed by LINE. Measured at `9c9f0929`: ONE row lies in this scope, `src_vs_code/src/test/leftoversSweep.test.mjs:58`
+   (`legacy-name`). If that file has a site, every edit above line 58 keeps the exact line count (no import removed or added
+   above it unless another line is added or removed to match, as #979 did in `old-coai-leftovers.test.mjs`); re-list the
+   rows at step 0 in case `main` moved (`node -e` over the file's `rows`), and run `testLeftovers.test.mjs` after the edits.
 3. No folder is made at module load. Every test keeps its name and assertions; the extension suite's counts are unchanged.
 4. No raw temp call is MOVED into a file the guard does not read: `ownedTemp.ts` (below) makes folders only through
    `owned.ownedDir` (owner form, claimed first) and reads the root only through `owned.tempRoot()`.
@@ -107,7 +109,7 @@ package has it, and `npx tsc --noEmit -p .` if `npm test` does not type-check.
 0. **Before.** `npm test`: record total/pass/fail/skipped. The Node guard `--baseline` clean.
 1. **RED.** Delete only the 219 `src_vs_code/` entries; change no site. The Node guard fails (exit 1) with exactly 219
    `raw-temp` findings under `src_vs_code/src/test/` — this list, with the real lines, is the work list.
-2. **GREEN.** Add the adapter; rewrite every site. `npm test` equals step 0's counts; the Node guard clean; `--baseline-shrinks
+2. **GREEN.** Add the adapter; rewrite every site. `npm test` equals step 0's counts PLUS the one new contract test of step 3 (`ownedTemp.test.ts`, written in this step so it can be seen red in step 3); the Node guard clean; `--baseline-shrinks
    --base origin/main` only shrinks; `node .agents/conventions/tools/plan-lifecycle.mjs` clean; `testLeftovers.test.mjs`
    green (the inventory's line keys held).
 3. **RED again.** (a) Put one shape-M line back → exactly one finding; restore. (b) In `ownedTemp.ts`, replace the
