@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/bugs-v0.5.0...bugs-v0.6.0) (2026-11-07)
+
+
+### Features
+
+* **tests:** E5 producer — owner-form run folders, the sweep, the Node wrap, and the guards and audit that keep them (S3, S2-B, S4, S5, S6) ([#945](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/945)) ([825504e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/825504ebda8f1fa9ddf497d2fa2df35271a4d702))
+
 ## [0.5.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/bugs-v0.4.0...bugs-v0.5.0) (2026-11-07)
 
 
