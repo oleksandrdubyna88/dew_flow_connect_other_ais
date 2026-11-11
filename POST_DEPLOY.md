@@ -19,6 +19,27 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
+Last verified: 2026-11-11 · mcp **0.65.1** and extension **0.85.0** (released; `mcp-v0.65.0` was tagged and NOT
+published — its draft stays, the tag never moved) · server **0.15.0** deployed (run 43000555462) — the box serves 0.15.0
+· automated items 1, 2, 6, 9 and 10 PASS as the checker printed them: `PASS 1 — all six RIDs present`, `PASS 2 —
+marketplace serves 0.85.0`, `PASS 6` — client-config answered 200 and the catalog answered 401 without a session, the
+expected answer, `PASS 9 — all six RIDs present`, `PASS 10 — 200 {"ok":true,"version":"0.15.0"}`; the checker ended
+"every automated item passed". Run locally:
+`MCP_VERSION=0.65.1 SERVER_VERSION=0.15.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.85.0`. Manual
+items **7 and 11 observed** on the deploy's own canary — one real review per configured vendor: `codex: done`,
+`antigravity: done`, `claude: done`. **Item 3 happened on the box, and the canary caught it.** Two earlier 0.15.0 deploys
+were stopped and rolled back by the host itself, so the box kept serving 0.14.1: run 42371199645 (2026-11-07) at the
+preflight, because the canary's session token had expired (HTTP 401); runs 42680645389 and 42682410067 (2026-11-09) at
+the canary, `claude: failed — the vendor exited 1 without saying why`. The cause of the second: the server's claude slot
+(`/opt/coai/data/accounts/claude/a`) had lost its sign-in — `OAuth session expired and could not be refreshed`, its
+refresh token expired 2026-11-06 — while codex and antigravity still answered. A sign-in under `/root/.claude` did not
+help, because the server runs each slot with its own `HOME` and `CLAUDE_CONFIG_DIR`. The fix: a `claude setup-token`
+token (one year) in the slot's `claude.token`, which `SlotEnvironment` hands over as `CLAUDE_CODE_OAUTH_TOKEN`; tested
+with the slot's own environment before the deploy. Two follow-ups seen on the way, not fixed here: the canary's "exited 1
+without saying why" is the claude CLI writing its error to stdout, which the job runner does not read; and the
+workflow's last step says "Nothing was rolled back, because nothing changed" after the host DID roll back. Manual items
+4, 5, 8 and 12 were not run.
+
 Last verified: 2026-10-19 · mcp **0.61.0** and extension **0.81.0** (released; the panel's Update installed them, and
 every running `coai-mcp` reports `coai-mcp 0.61.0`) · server **0.14.0** deployed (run 39262211638) — the box serves
 0.14.0 · automated items 1, 2, 7, 9 and 10 (the checker prints the row labelled 7 as 6 — it numbers rows by position)
