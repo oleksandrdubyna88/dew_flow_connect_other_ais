@@ -1,6 +1,6 @@
 # Build brief — coai E5 story S7, the second drain PR: the `scripts/` suite's `raw-temp` entries to zero
 
-> Status: **plan only, 2026-11-11, by Opus.** Scope: the 10 `raw-temp` baseline entries of `scripts/` and one read-only
+> Status: **built 2026-11-11, on branch feat/test-leftovers-e5-s7-scripts.** Scope: the 10 `raw-temp` baseline entries of `scripts/` and one read-only
 > export of the Node helper. A Sonnet coder builds from this brief alone.
 
 The plan is [PLAN_test_leftovers_E5.md](PLAN_test_leftovers_E5.md) § *S7 — The drain*; the first drain PR was #977

@@ -1,6 +1,5 @@
 import '../src_vs_code/scripts/inRunFolder.cjs';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -43,9 +42,7 @@ const ownerToken = mount.thisOwnerToken();
 const probe = (pid) => (pid === DEAD_PID ? { state: 'dead' } : mount.processProbe(pid));
 
 function privateRoot(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'run-lib-tests-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  return root;
+  return ownedModule.owned.ownedDir(t, 'run-lib-tests', { parent: fs.realpathSync.native(ownedModule.owned.tempRoot()) });
 }
 
 function plantDeadOwnersFolder(root) {

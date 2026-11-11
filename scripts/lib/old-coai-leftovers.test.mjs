@@ -5,7 +5,6 @@ import '../../src_vs_code/scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -13,6 +12,7 @@ import { listOldLeftovers, removePicked } from './old-coai-leftovers.mjs';
 import { moveToQuarantine as referenceMoveToQuarantine } from '../../.agents/conventions/tools/lib/leftovers-sweep.mjs';
 import * as lib from './old-coai-leftovers.mjs';
 import { processProbe, thisOwner } from '../../.agents/conventions/tools/lib/owned.mjs';
+import { owned as wrap } from '../../src_vs_code/scripts/owned.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(here, '..', 'old-coai-leftovers.mjs');
@@ -35,10 +35,10 @@ const probe = (pid) => (pid === 99999 ? { state: 'dead' } : pid === 88888 ? { st
 /** A legacy record is `unknown` for every Linux reader (it carries no pid namespace, rule §3); the seam reaches the other platforms' verdicts. */
 const world = { probe, claimPlatform: 'win32' };
 
-function privateRoot(t, prefix = 'old-coai-leftovers-') {
-  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  return root;
+function privateRoot(t, what = 'old-coai-leftovers') {
+  // An owned folder of the wrap, inside the run folder, removed with its claim by `t`; the realpath is what a child process sees.
+  const parent = fs.realpathSync.native(wrap.tempRoot());
+  return fs.realpathSync.native(wrap.ownedDir(t, what, { parent }));
 }
 
 /** A directory `name` holding a `sentinel.txt`, last write `minutesAgo` before `now`. */
@@ -262,7 +262,7 @@ function runCli(args, options = {}) {
 
 test('S10 the CLI: list writes the listing, remove refuses a usage error with the legal forms, exit codes 0/1/2', (t) => {
   const root = s1Root(t);
-  const file = path.join(privateRoot(t, 'old-coai-listing-'), 'listing.json');
+  const file = path.join(privateRoot(t, 'old-coai-listing'), 'listing.json');
 
   const listed = runCli(['list', '--tmp', root, '--out', file]);
 
@@ -322,7 +322,7 @@ test('S12 a taken draw draws a new name, and the move lands on the draw after th
 test('S13 remove uses the listing\'s temp root, and refuses a --tmp that is another root', (t) => {
   const rootA = privateRoot(t);
   const rootB = privateRoot(t);
-  const elsewhere = privateRoot(t, 'old-coai-cwd-');
+  const elsewhere = privateRoot(t, 'old-coai-cwd');
   make(rootA, 'coai-panel-a', 60);
   make(rootB, 'coai-panel-a', 60, 'root B\'s own');
   const file = path.join(elsewhere, 'listing.json');
@@ -456,7 +456,7 @@ test('S16 the quarantined object is re-checked after the move by identity AND la
 });
 
 test('S17 [S2-A Opus 1] a name that is not ONE path segment is refused before any path is built: the victim outside the root survives', (t) => {
-  const outer = privateRoot(t, 'old-coai-escape-');
+  const outer = privateRoot(t, 'old-coai-escape');
   const root = path.join(outer, 'tmp');
   fs.mkdirSync(root);
   const victim = make(outer, 'victim', 60, 'the victim\'s bytes'); // a sibling of the temp root, found by `coai-x/../../victim` below it
@@ -572,7 +572,7 @@ test('S23 [S2-A gate 6/9] each pick\'s result is reported as soon as it is decid
 
 test('S24 [S2-A gate 3] list shows the listing first and writes --out after; a write failure exits 2 with the listing already shown', (t) => {
   const root = s1Root(t);
-  const nowhere = path.join(privateRoot(t, 'old-coai-out-'), 'no', 'such', 'folder', 'listing.json');
+  const nowhere = path.join(privateRoot(t, 'old-coai-out'), 'no', 'such', 'folder', 'listing.json');
 
   const result = runCli(['list', '--tmp', root, '--out', nowhere]);
 
@@ -637,9 +637,10 @@ test('S27 [S2-A code2 2] a claim that cannot be read is `unreadable`, refuses th
 });
 
 test('S28 [S2-A code2 4/8] list says which temp root it is scanning before it scans', (t) => {
-  const missing = path.join(privateRoot(t, 'old-coai-start-'), 'no-such-root');
+  const root = privateRoot(t, 'old-coai-start');
+  const missing = path.join(root, 'no-such-root');
 
-  const result = runCli(['list', '--tmp', missing, '--out', path.join(os.tmpdir(), 'never-written-listing.json')]);
+  const result = runCli(['list', '--tmp', missing, '--out', path.join(root, 'never-written-listing.json')]);
 
   assert.equal(result.status, 2, 'a root that cannot be read is exit 2');
   assert.ok(result.stdout.split('\n').includes(`scanning ${missing}`), 'the start line named the root before the scan failed');
@@ -648,7 +649,7 @@ test('S28 [S2-A code2 4/8] list says which temp root it is scanning before it sc
 test('S29 [S2-A code2 5] --tmp and the listing\'s root are compared by realpath; when they differ both are shown as given', (t) => {
   const rootA = privateRoot(t);
   const rootB = privateRoot(t);
-  const elsewhere = privateRoot(t, 'old-coai-cwd-');
+  const elsewhere = privateRoot(t, 'old-coai-cwd');
   make(rootA, 'coai-panel-a', 60);
   const file = path.join(elsewhere, 'listing.json');
   assert.equal(runCli(['list', '--tmp', rootA, '--out', file]).status, 0);
@@ -684,7 +685,7 @@ test('S30 [S2-A code2 6] a folder whose name is not one segment on THIS system i
 
   assert.deepEqual(listing.entries.map((e) => e.name), ['coai-panel-a'], 'it is not offered');
   assert.deepEqual(listing.refused, [{ name: 'coai-a\\b', check: 'bad-name' }], 'but it is reported');
-  const file = path.join(privateRoot(t, 'old-coai-listing-'), 'listing.json');
+  const file = path.join(privateRoot(t, 'old-coai-listing'), 'listing.json');
   const shown = runCli(['list', '--tmp', root, '--out', file]);
   assert.match(shown.stdout, /^refused\tcoai-a\\b\tbad-name/m);
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).entries.map((e) => e.name), ['coai-panel-a']);
@@ -753,7 +754,7 @@ test('S33 [S2-A code3 3] every pick is checked against the listing BEFORE any re
 
 test('S34 [S2-A code4 8] a relative tmp is resolved ONCE at the start: the scan and the recorded root are the same absolute folder, whatever the working directory does after', (t) => {
   const root = privateRoot(t);
-  const elsewhere = privateRoot(t, 'old-coai-cwd-');
+  const elsewhere = privateRoot(t, 'old-coai-cwd');
   make(root, 'coai-panel-a', 60);
   const here0 = process.cwd();
   t.after(() => process.chdir(here0));
@@ -796,7 +797,7 @@ test('S36 [S2-A code5 3] a name holding `:` or NUL is not one path segment: `C:f
   assert.equal(lib.isOneSegment('coai-panel-a'), true, 'and a real name is still one');
   if (!posix) return; // [S2-A CodeRabbit 6] `coai-a:b` cannot be a directory name on Windows: the fixture below is POSIX-only, the loop above runs everywhere
 
-  const outer = privateRoot(t, 'old-coai-colon-');
+  const outer = privateRoot(t, 'old-coai-colon');
   const root = path.join(outer, 'tmp');
   fs.mkdirSync(root);
   const victim = make(root, 'coai-a:b', 60, 'a name with a colon'); // a legal POSIX name, a different place on Windows
