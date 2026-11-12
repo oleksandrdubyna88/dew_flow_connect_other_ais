@@ -5,7 +5,7 @@
 > twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3. E1 merged
 > (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
 > 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, plan gate `proceed`,
-> E2.S1–S4 coded and tested (PR #982, coai code gate `proceed`; R6, R7 and M-O1…M-O7 owed before the tag); change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`) — the next change stops the plan. E3
+> E2.S1–S4 coded and tested, merged (#982, e060d77e; coai code gate `proceed`); R6 and R7 passed on VSIX 0.86.901 (2026-11-12), released from release PR #986 as extension 0.87.0; change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`) — the next change stops the plan. E3
 > not started. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
@@ -388,7 +388,9 @@ All paths under `src_vs_code/`.
 | R5 | Back to source shows the right terminal, in the panel and in the editor area. | E1 |
 |  | 2026-11-11, VSIX 0.85.902 (a2d7d416): PASSED — the owner's report. |  |
 | R6 | One ssh call from Windows: time to the first answer (target under 4 s); the owner's real `Host` blocks with `LocalForward`. | E2 |
+|  | 2026-11-12, VSIX 0.86.901 (abf58a7b): PASSED — the owner's report. M-O1 (a real call from Windows comes back) is seen in this pass. |  |
 | R7 | The registry path finds the right session on each of the three users; the fallback list works when two sessions share a name. | E2 |
+|  | 2026-11-12, VSIX 0.86.901 (abf58a7b): PASSED — the owner's report. Not reported, so still owed (none is a release condition): M-O2…M-O7 of the S2 spec and the look of a long prompt in *Asked*. The VSIX's extension code is the merged head's: from abf58a7b to e060d77e only tests changed under `src_vs_code`. |  |
 | R8 | After a VS Code reload, creds reopens its terminals and the conversations re-attach. | E3 |
 | R9 | With a terminal focused, the command palette no longer lists `coai.chatWithOtherAi` (its `!terminalFocus` entry). If it IS listed: with a Claude tab as the active editor, running it must not interrupt the terminal's program (see *What this plan does NOT do*). | E1 |
 |  | 2026-11-11, VSIX 0.85.902 (a2d7d416): PASSED — the owner's report. The VSIX's extension code is the merged head's: from a2d7d416 to the head only the conventions pin, two `.claude/hooks` files and `POST_DEPLOY.md` changed (a merge of `main`). |  |
