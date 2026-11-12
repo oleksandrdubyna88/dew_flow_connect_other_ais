@@ -217,7 +217,7 @@ test('a terminal conversation is saved, listed and read back', async () => {
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
-    const mine = record({ source: sourceOfTerminal(TERMINAL), fromSession: false });
+    const mine = record({ source: sourceOfTerminal(TERMINAL), fromSession: true });
 
     const saved = await store.save(mine, 0);
     assert.equal(saved.kind, 'ok', `a terminal conversation was not saved: ${JSON.stringify(saved)}`);

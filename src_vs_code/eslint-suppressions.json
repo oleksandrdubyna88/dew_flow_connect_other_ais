@@ -110,7 +110,7 @@
   },
   "src/chatCommand.ts": {
     "complexity": {
-      "count": 6
+      "count": 5
     },
     "max-lines-per-function": {
       "count": 3

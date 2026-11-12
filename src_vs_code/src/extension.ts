@@ -22,7 +22,9 @@ import {
   askFromTerminal,
   chatWithOtherAi,
   chooseFromBug,
+  addFromTerminal,
   noteChatDoor,
+  takeFromTerminal,
   takeTheQuestion,
 } from './chatCommand';
 import { followRenames } from './chatFollow';
@@ -73,6 +75,7 @@ import { readLog, serverRun, serverRunAt } from './roundsDbRead';
 import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { sideHereOf, sidesIn, stampThisSide, type SeenSide } from './sidesSeen';
+import { bindRemoteSessions, testDoorOf, type RemoteSessionsTestDoor } from './remoteSessionHost';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -97,6 +100,11 @@ import { askPerson } from './personWait';
 export interface CoaiExports {
   /** The sides this profile has been used on, as Setup › This side lists them. */
   readonly sidesSeen: () => readonly SeenSide[];
+  /**
+   * The BOUND road to a terminal's remote Claude session, for a host scenario (S3-H1). Present ONLY when the extension runs in test mode: in production
+   * it is absent, so no other extension can write a consent into this profile or replace the ssh call. `remoteExportGuard.test.ts` holds that.
+   */
+  readonly remoteSessions?: RemoteSessionsTestDoor;
 }
 
 /**
@@ -135,6 +143,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   bindCommands(context);
   // The chat reads this side's catalog rows (E4.6a).
   bindChatSide(context);
+  // The road to a `Creds: <host> / <session>` terminal's Claude session (E2.S3): the consent, the picked ids, the hosts command.
+  const remote = bindRemoteSessions(context);
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
   // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
   noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));
@@ -742,6 +752,36 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
         });
       });
     }),
+    // The same two verbs for a `Creds: <host> / <session>` terminal: the question is read off the Claude session on that machine over ssh
+    // (the road of `remoteSessionHost`), and the items sit in the terminal panel's overflow while the terminal reads a session. Each
+    // records its door FIRST. THE CATCH LOGS A FIXED SENTENCE and passes no error and no message on: a V8 `JSON.parse` error quotes its
+    // input, and here the input is the transcript.
+    vscode.commands.registerCommand('coai.takeFromTerminal', () => {
+      noteChatDoor('take');
+      takeFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal, false).catch(() => {
+        console.error('coai.takeFromTerminal failed');
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'takeFromTerminal',
+          code: 'question-not-taken-from-terminal',
+          title: 'The question could not be taken from the terminal.',
+        });
+      });
+    }),
+    vscode.commands.registerCommand('coai.addFromTerminal', () => {
+      noteChatDoor('add');
+      addFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal).catch(() => {
+        console.error('coai.addFromTerminal failed');
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'addFromTerminal',
+          code: 'question-not-added-from-terminal',
+          title: 'The question could not be added from the terminal.',
+        });
+      });
+    }),
     // The list of conversations — open and closed, this folder or every folder. It opens no chat by
     // itself: what it opens is a choice, and the choice may be to reveal a tab that is already there.
     // It is a DOOR all the same, because *Opened* counts the chat being reached for and this is one
@@ -845,7 +885,10 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
 
   void offerUpdate(context);
 
-  return { sidesSeen: () => sidesIn(context.globalState, Date.now()) };
+  return {
+    sidesSeen: () => sidesIn(context.globalState, Date.now()),
+    ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote) } : {}),
+  };
 }
 
 export async function deactivate(): Promise<void> {

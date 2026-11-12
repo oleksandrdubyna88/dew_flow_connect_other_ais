@@ -2,7 +2,11 @@
 
 > Status: **epoch 2 open, approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
 > selection; `autoSend` kept as on the other doors). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
-> twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3; E2 and E3 not started. Plan gate round 1 `proceed` (codex, antigravity;
+> twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3. E1 merged
+> (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
+> 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, plan gate `proceed`,
+> E2.S1–S4 coded and tested (PR #982, coai code gate `proceed`; R6, R7 and M-O1…M-O7 owed before the tag); change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`) — the next change stops the plan. E3
+> not started. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
 > read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
@@ -64,6 +68,17 @@ Narrowed: yes — the door no longer copies a VS Code terminal selection for the
 | change 1.2 and the stop, f540ed97 | pushed, unmerged (PR #971) | fits | kept — the change this re-review answers |
 
 > Epoch 2 · approved 2026-11-11 · by owner · state: open
+
+- 2.1 · 2026-11-11 · agent · contract — the automatic ssh call pins StrictHostKeyChecking=yes, so a person's accept-new or no cannot make it accept a host key
+  (Fable's security judgement in the E2.S2 spec: under `BatchMode=yes` an unknown or changed host key is refused only
+  when the person's config keeps the default `ask`; with `accept-new` or `no`, a call started only because a terminal
+  has a certain name would accept and save the key. The option goes after `LogLevel=ERROR`, before `--`. The same
+  judgement also proposed `ControlPath=none` (a person's `ControlMaster`/`ControlPersist` can make the call a persisting
+  master on a Linux or macOS extension host, or in a Remote window). That is an independent cause, so it would be a
+  second change and a full stop: it is NOT taken. Win32-OpenSSH, the owner's extension host, has no released
+  multiplexing; `SECURITY.md` names the residual in words. Question consultant a81ed863 (codex, antigravity): two
+  causes; take only the host-key option. The owner agreed the same day: StrictHostKeyChecking=yes only, no full
+  stop. The next accepted change stops the plan.)
 
 ## The symptom
 
@@ -227,9 +242,10 @@ All paths under `src_vs_code/`.
   side the terminals run on), argv only, no shell, and **no `-n`** (it would give the remote `sh -s` an empty
   stdin — plan round 1): `-T -o BatchMode=yes -o ConnectTimeout=5 -o
   RequestTTY=no -o RemoteCommand=none -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o
-  LogLevel=ERROR -- <host> sh -s -- <session>`. The script travels on **stdin**, so the remote login shell
+  LogLevel=ERROR -o StrictHostKeyChecking=yes -- <host> sh -s -- <session>`. The script travels on **stdin**, so the remote login shell
   does not matter. `ClearAllForwardings` and `RemoteCommand=none` matter: the owner's `Host` blocks carry a
-  `LocalForward` the open terminal already holds, and a `RemoteCommand` would run tmux.
+  `LocalForward` the open terminal already holds, and a `RemoteCommand` would run tmux. `StrictHostKeyChecking=yes`
+  (change 2.1): a host key not already in `known_hosts` is a refusal, whatever the person's config says.
 - **What the script does** (POSIX `sh`, prints a `COAI-BEGIN` sentinel first so login banners are ignored):
   1. `tmux display-message -p -t "=$1:" '#{pane_pid}'` — `=` forces an exact session match.
   2. the `claude` process among that pane's descendants (`ps -o pid=,comm= --ppid …`, walked);
@@ -301,7 +317,11 @@ All paths under `src_vs_code/`.
 - The only new outward edge is a **read-only** ssh from the extension host to a host the person agreed to
   once (above), as the user the person's own `~/.ssh/config` logs in as. The terminal name chooses the host,
   and a name is not proof, which is why the consent exists. No secret is handled: ssh uses the
-  person's keys and agent; `BatchMode=yes` means a password prompt is a refusal, never a hang.
+  person's keys and agent; `BatchMode=yes` means a password prompt is a refusal, never a hang, and
+  `StrictHostKeyChecking=yes` (change 2.1) means an unknown or changed host key is a refusal, never an accept.
+  Not pinned, on purpose: connection sharing. On a Linux or macOS extension host, or in a Remote window, a person's
+  `ControlMaster`/`ControlPersist` can make the call a persisting master; `SECURITY.md` says so (Win32-OpenSSH has
+  no released multiplexing).
 - Remote command construction: argv only (`shell: false`), the host after `--`, the script on stdin, every
   operand validated (the regexes above) and single-quoted; a NUL or newline in an operand throws.
 - The transcript text is held in memory only, never written to disk or logged.
@@ -410,7 +430,7 @@ identity, a Claude tab never re-keys a terminal conversation, re-attach only wit
 only; **(d)** ssh command construction, quoting, cancellation and limits; **(e)** absent, ambiguous, unreadable and
 truncated session data are four different results.
 
-Cornerstones: 1 of 2 — E1.S2
+Cornerstones: 2 of 2 — E1.S2, E2.S2
 
 *Recommendation for the Opus story writer (not a mark).* One cornerstone in E1, one in E2, none in E3.
 **E1: the story that adds the `terminal` source and its key — area (b).** The record is on disk from the first
@@ -469,6 +489,12 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
   R6 and R7 are measured on a VM with the pre-release VSIX (entry 1.1) and recorded; then the release is cut and verified.
 - **Cornerstone areas.** (c) local against remote; (d) the ssh command; (e) the four results — (d) and (e) together
   are the recommended cornerstone.
+- **Stories.** [PLAN_the_chat_opens_from_a_terminal_E2.md](PLAN_the_chat_opens_from_a_terminal_E2.md) — four stories,
+  written by Opus 2026-11-11: E2.S1 which terminal reads a session (`credsSession`, `fromSession` derived from the source,
+  no local walk), E2.S2 the remote reader's contract (the ssh argv, the stdin script and the typed result), E2.S3 one road
+  to the VM (the consent, the registry path, the fallback, the pick list), E2.S4 the doors (take and add from a terminal,
+  *Asked* through the reach, the help, `SECURITY.md`). **E2.S2 is the cornerstone** (areas (d) and (e), spec by Fable); its
+  spec includes the security judgement on the ssh edge, outside the quota.
 
 ### E3 — Polish (stage 3) · depends on E2
 

@@ -2,7 +2,7 @@ import { access } from 'node:fs/promises';
 import { delimiter, isAbsolute, join } from 'node:path';
 import { needsShell, parseCliVersion, shimCommandLine, unquoted, versionProbeCandidates } from './cliVersions';
 import { hostPlatform, Platform } from './hostSide';
-import { launch } from './processLauncher';
+import { launch, LaunchOptions } from './processLauncher';
 
 /**
  * Asking a binary what version it is, for anything on this machine that answers `--version`.
@@ -65,14 +65,34 @@ function run(target: string, args: readonly string[], shell: boolean): Promise<s
 /** How often a cancellable read asks whether it has been given up on. */
 const STOP_POLL_MS = 200;
 
-/** Why a capture answered `code: -1` — absent when it did not (a real exit) or when the cause is not known. */
-export type CaptureEnd = 'timeout' | 'not-started' | 'stopped';
+/**
+ * Why a capture answered `code: -1` — absent when it did not (a real exit) or when the cause is not known.
+ * `capped` is a child that wrote more than `CaptureOptions.maxStdoutBytes` and was killed for it.
+ */
+export type CaptureEnd = 'timeout' | 'not-started' | 'stopped' | 'capped';
 
-/** What a capture answers: the exit code and what the child printed, and — for a `-1` — why there is no exit code. */
+/**
+ * What a call may ask of `capture` beyond the seven positional parameters — ONE object, so the next ask is not a ninth
+ * positional (E2.S2, X8). The remote reader is the one caller that passes it.
+ */
+export interface CaptureOptions {
+  /** The child's working directory (`launch` decides what an absent one means). */
+  readonly cwd?: string;
+  /** Kill the child and answer `capped` when its stdout passes this many BYTES (`Buffer.byteLength`, never `.length`). */
+  readonly maxStdoutBytes?: number;
+  /** Kill the whole tree of the child, with no shell in the way (`LaunchOptions.killTree`). */
+  readonly killTree?: boolean;
+}
+
+/**
+ * What a capture answers: the exit code and what the child printed, and — for a `-1` — why there is no exit code.
+ * `stderrTail` is there ONLY when the call passed a `CaptureOptions`, so every caller of today gets the object it got before.
+ */
 export interface Captured {
   readonly code: number;
   readonly output: string;
   readonly ended?: CaptureEnd;
+  readonly stderrTail?: string;
 }
 
 /**
@@ -117,10 +137,12 @@ export function capture(
   env?: Readonly<Record<string, string>>,
   /** What the child reads on stdin — a model check's row (`--check-model`, PLAN_one_model_catalog.md E3.3); empty for every probe. */
   input = '',
+  /** The working folder, a byte cap on stdout and the tree kill — and, when it is given, the stderr tail in the answer (E2.S2). */
+  options?: CaptureOptions,
 ): Promise<Captured> {
   return new Promise((resolve) => {
-    const child = launch(target, args, env === undefined ? { shell } : { shell, env });
-
+    const child = launch(target, args, launchOptions(shell, env, options));
+    const overCap = byteCap(options?.maxStdoutBytes);
     let output = '';
     let answered = false;
     const answer = (code: number, text: string, ended?: CaptureEnd): void => {
@@ -130,18 +152,13 @@ export function capture(
       answered = true;
       clearTimeout(timer);
       clearInterval(watch);
-      resolve(ended === undefined ? { code, output: text } : { code, output: text, ended });
+      resolve(captured(code, text, ended, options === undefined ? undefined : child.stderrTail()));
     };
-
-    // `undefined` rather than an interval that asks a question nobody wants answered: a probe with
-    // no way to be cancelled must not pay for a timer every 200 ms for its whole life.
-    const watch = stop === undefined ? undefined : setInterval(() => {
-      if (stop()) {
-        // The same teardown the cap performs, for the same reason: the tree has to go.
-        child.kill();
-        answer(-1, '', 'stopped');
-      }
-    }, STOP_POLL_MS);
+    const watch = polling(stop, () => {
+      // The same teardown the cap performs, for the same reason: the tree has to go.
+      child.kill();
+      answer(-1, '', 'stopped');
+    });
 
     const timer = setTimeout(() => {
       // `child.kill()` reaches `cmd.exe` and NOT what the shim started under it, so a shell probe
@@ -160,11 +177,66 @@ export function capture(
     child.writeAndEnd(input);
 
     child.onStdout((chunk) => {
+      if (answered) {
+        return; // the cap (or the end) has answered: nothing more is kept, and nothing is killed twice
+      }
       output += chunk;
+      if (overCap(chunk)) {
+        child.kill();
+        answer(-1, '', 'capped');
+      }
     });
     child.onError(() => answer(-1, '', 'not-started'));
     child.onExit((code) => answer(code, output));
   });
+}
+
+/**
+ * Asks `stop` every `STOP_POLL_MS` and calls `onStop` when it says yes; no timer at all when there is no `stop`.
+ *
+ * <p>`undefined` rather than an interval that asks a question nobody wants answered: a probe with no way to be cancelled
+ * must not pay for a timer every 200 ms for its whole life.</p>
+ */
+function polling(stop: (() => boolean) | undefined, onStop: () => void): ReturnType<typeof setInterval> | undefined {
+  return stop === undefined ? undefined : setInterval(() => {
+    if (stop()) {
+      onStop();
+    }
+  }, STOP_POLL_MS);
+}
+
+/** The entries of an object that have a value: an absent option is a MISSING key, as it was before the options object. */
+function present<T extends object>(entries: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  return Object.fromEntries(Object.entries(entries).filter(([, value]) => value !== undefined)) as { [K in keyof T]?: Exclude<T[K], undefined> };
+}
+
+/** What `launch` is asked: the shell and the environment as before, and each option only when it was given. */
+function launchOptions(shell: boolean, env: Readonly<Record<string, string>> | undefined, options: CaptureOptions = {}): LaunchOptions {
+  return { shell, ...present({ env, cwd: options.cwd, killTree: options.killTree }) };
+}
+
+/**
+ * A counter of stdout BYTES that answers whether the cap is passed; with no cap it never says so.
+ *
+ * <p>Bytes, not `chunk.length`: the stream is decoded as UTF-8 before it gets here, so a string of 8 MiB of characters can
+ * be 24 MiB of bytes, and a cap that counts characters is three times too big for Cyrillic or Chinese text.</p>
+ */
+function byteCap(limit: number | undefined): (chunk: string) => boolean {
+  let seen = 0;
+
+  return (chunk) => {
+    if (limit === undefined) {
+      return false;
+    }
+    seen += Buffer.byteLength(chunk);
+
+    return seen > limit;
+  };
+}
+
+/** The answer object: the keys `ended` and `stderrTail` are there only when they have a value, so an old caller sees the old shape. */
+function captured(code: number, output: string, ended: CaptureEnd | undefined, stderrTail: string | undefined): Captured {
+  return { code, output, ...present({ ended, stderrTail }) };
 }
 
 /**

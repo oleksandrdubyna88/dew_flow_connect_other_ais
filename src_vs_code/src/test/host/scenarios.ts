@@ -19,6 +19,8 @@ import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingName
 import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathSaidOnceScenario';
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
 import { aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
+import { aPressOnACredsTerminalReachesTheBoundRoadOnce, theTerminalItemsFollowTheActiveTerminalAndTheAnswer } from './terminalDoorsScenario';
+import { theConsentOfAHostIsKeptInTheRealGlobalState } from './terminalHostsScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
 
 /**
@@ -938,6 +940,25 @@ const SCENARIOS: readonly Scenario[] = [
     // What it reads is in `terminalCaptureScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
     name: 'the skip list of the terminal holds the terminal door by default, so its chord is not sent to the shell',
     run: theSkipListDefaultHoldsTheTerminalDoor,
+  },
+  {
+    // S3-H1 of the E2 stories document (the chat reads the remote Claude session): the per-host consent through the real `globalState` —
+    // a remembered "no" stops a press with its own sentence and no ssh, a "yes" reaches the run seam. What it drives is in
+    // `terminalHostsScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
+    name: 'the consent of a host is kept in globalState: a "no" refuses a terminal press before any ssh, and a "yes" reaches the run seam',
+    run: theConsentOfAHostIsKeptInTheRealGlobalState,
+  },
+  {
+    // S4-H1 of the E2 stories document: the context key `coai.terminalReadsSession` of the bound wiring follows the active terminal and the host's
+    // answer in the real globalState. What it drives is in `terminalDoorsScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
+    name: 'the terminal items follow the active terminal and the host answer: shown for a Creds terminal that is not answered no, hidden for any other',
+    run: theTerminalItemsFollowTheActiveTerminalAndTheAnswer,
+  },
+  {
+    // S4-H1 of the E2 stories document, the press: *CoAI: take the question* on a Creds terminal reaches the BOUND road exactly once,
+    // and its refusal is said as a notice (or the chat's own readiness stops it first, and the road is not reached).
+    name: 'a press of take the question on a Creds terminal reaches the bound road once, and says the road\'s refusal',
+    run: aPressOnACredsTerminalReachesTheBoundRoadOnce,
   },
 ];
 

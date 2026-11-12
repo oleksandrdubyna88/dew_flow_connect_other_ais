@@ -145,3 +145,75 @@ test('a terminal whose name cannot name a conversation is refused BEFORE the cli
   assert.ok(!command.includes('terminal.name'), 'the command reads the terminal\u2019s name itself, so it can differ from the one the guard judged');
   assert.ok(command.indexOf('terminalDoorName(') < command.indexOf('fromTheTerminal('), 'the name is checked after the clipboard was read');
 });
+
+// ───────────────── E2.S4: take and add the question from a terminal, and Asked for its conversation ─────────────────
+
+const TAKE = 'coai.takeFromTerminal';
+const ADD = 'coai.addFromTerminal';
+const READS = 'view == terminal && coai.terminalReadsSession';
+
+const takeBody = (): string => bodyOf(sourceOf('chatCommand.ts'), 'export async function takeFromTerminal(');
+const addBody = (): string => bodyOf(sourceOf('chatCommand.ts'), 'export async function addFromTerminal(');
+
+test('S4-T2: the take and add doors read the VM, and never the local home or the tabs', () => {
+  const chat = sourceOf('chatCommand.ts');
+  const doors = [takeBody(), addBody()].join('\n');
+
+  // The scans' own proof: the doors are found and are the remote road's, and the local door still reads the tabs and the home.
+  assert.ok(takeBody().includes('readRemoteSession('), 'the derivation no longer finds the road in takeFromTerminal');
+  assert.ok(bodyOf(chat, 'export async function takeTheQuestion(').includes('matchedSource('), 'takeTheQuestion no longer calls matchedSource, so this scan guards a function that moved');
+  for (const call of ['matchedSource(', 'snapshots(', 'sourceSession(', 'questionWaitingHere(', 'waitingQuestion(', 'os.homedir(']) {
+    assert.ok(!doors.includes(call), `a terminal door calls ${call}…) — the local home or the tabs can be read for a terminal again`);
+  }
+  assert.ok(takeBody().indexOf('terminalDoorName(') < takeBody().indexOf('readRemoteSession('), 'the name is judged after the road was called');
+  assert.ok(addBody().includes('takeFromTerminal('), 'addFromTerminal is not the same door with append');
+});
+
+test('S4-T3: a question taken from a terminal is never sent by itself, and is filed as a terminal session', () => {
+  assert.ok(!takeBody().includes('sendsImmediately('), 'a remote question was sent without the person: it follows the auto-send setting');
+  assert.ok(!takeBody().includes('autoSend'), 'a remote question was sent without the person: it reads the auto-send setting');
+  const call = /deliverPassage\(\s*panels,\s*extensionUri,\s*ready,[^;]*?\{ text[^}]*\},\s*(\w[\w()., ]*?),\s*(\w+),\s*sourceOfTerminal\(/u.exec(takeBody());
+
+  assert.ok(call !== null, 'takeFromTerminal no longer hands the passage to deliverPassage with a terminal source');
+  assert.equal(call[1], 'false', 'a remote question was sent without the person: the send argument is not the literal false');
+  assert.equal(call[2], 'true', 'the conversation does not read its session: fromSession is not true');
+  assert.ok(/append\s*\)/u.test(takeBody()) && /takeFromTerminal\([^)]*true\)/u.test(addBody()), 'add does not append');
+});
+
+test('S4-T5: Asked for a terminal conversation goes the remote road, and the others keep theirs', () => {
+  const text = sourceOf('chatHooks.ts');
+  const hook = /onShowAsked:[\s\S]*?onStop:/u.exec(text)?.[0] ?? '';
+  const terminal = bodyOf(text, 'async function askedFromTerminal(');
+
+  assert.ok(hook.length > 0, 'onShowAsked is no longer where this test reads it');
+  // The companions: the local road is still there, for every other source.
+  assert.ok(hook.includes('resolveAndPin(') && hook.includes('promptsFrom('), 'the local Asked road is gone — this test guards a function that moved');
+  const first = hook.indexOf("kind === 'terminal'");
+  assert.ok(first >= 0, 'onShowAsked never looks at the source, so a terminal takes the local road');
+  assert.ok(first < hook.indexOf('resolveAndPin(') && first < hook.indexOf('promptsFrom('), 'the source is judged after the local road was chosen');
+  assert.ok(hook.includes('askedFromTerminal('), 'a terminal conversation does not reach the remote road');
+  assert.ok(terminal.includes('terminalOf(') && terminal.includes("readRemoteSession("), 'the terminal branch does not reach through the terminal');
+  assert.ok(/readRemoteSession\([^)]*'prompts'\)/u.test(terminal), 'Asked reads the session for another purpose than the prompts');
+  assert.ok(!terminal.includes('sessionFile'), 'the terminal branch writes or reads a LOCAL session file path');
+  assert.ok(terminal.includes('console.error('), 'the terminal branch has no fixed log line for a failure');
+});
+
+test('S4-T7: the two items sit in the terminal panel overflow, only when the terminal reads a session, and not in the palette', () => {
+  const rows = MANIFEST.contributes.menus['view/title'] ?? [];
+  const palette = MANIFEST.contributes.menus['commandPalette'] ?? [];
+
+  for (const [command, group, title] of [[TAKE, 'coai@1', 'CoAI: take the question'], [ADD, 'coai@2', 'CoAI: add the question']] as const) {
+    const mine = rows.filter((row) => row.command === command);
+    assert.equal(mine.length, 1, `${command} has ${mine.length} view/title rows, not one`);
+    assert.equal(mine[0]?.when, READS, `${command} is offered in a terminal that does not read a session`);
+    assert.equal(mine[0]?.group, group, `${command} is not in the group ${group}, so it is not where the overflow orders it`);
+    assert.ok(!(mine[0]?.group ?? '').startsWith('navigation'), `${command} is in the navigation group, so it is a button and not in the overflow`);
+    const declared = MANIFEST.contributes.commands.filter((row) => row.command === command);
+    assert.equal(declared.length, 1, `${command} is declared ${declared.length} times`);
+    assert.equal(declared[0]?.title, title);
+    assert.equal(declared[0]?.category, 'ConnectOtherAIs');
+    assert.equal(palette.filter((row) => row.command === command && row.when === 'false').length, 1, `${command} is in the palette, where no terminal is meant`);
+  }
+  // The proof that this reads the right rows: the E1 button is still there, and it IS in navigation.
+  assert.equal(rows.find((row) => row.command === DOOR)?.group, 'navigation@90');
+});

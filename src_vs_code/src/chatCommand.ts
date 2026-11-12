@@ -43,11 +43,12 @@ import {
   serviceLines,
 } from './chatPrompt';
 import { sourceSession } from './sessionKey';
-import { askedAsText } from './claudeQuestion';
 import {
   waitingQuestion,
 } from './claudeSessions';
 import { triggerPlan } from './chatTrigger';
+import { questionSaid, waitingSaid } from './waitingSaid';
+import { readRemoteSession } from './remoteSessionHost';
 
 /**
  * The one command the person actually presses.
@@ -198,7 +199,7 @@ function newConversation(
   pulse?.();
 
   // In the background, while this tab's name still matches the session it came from.
-  pinSession(entry, state.title, fromSession);
+  pinSession(entry, state.title, fromSession, state.source);
 
   return entry;
 }
@@ -559,36 +560,8 @@ async function questionWaitingHere(looking: string): Promise<{ text: string; ref
     { location: vscode.ProgressLocation.Window, title: 'Reading Claude Code\u2019s sessions\u2026' },
     async () => Promise.all(folders.map((folder) => waitingQuestion(os.homedir(), folder, caseBlind, looking))),
   );
-  const waiting = found.flatMap((one) => (one.kind === 'one' ? [one.session] : []));
-  if (waiting.length > 1 || found.some((one) => one.kind === 'several')) {
-    return {
-      text: '',
-      refusal: 'More than one Claude Code session here is waiting for an answer.'
-        + ' Close the ones you do not mean, and press it again.',
-    };
-  }
-  if (waiting.length === 1) {
-    return { text: askedAsText(waiting[0]!.asked), refusal: '' };
-  }
-  const elsewhere = found.find((one) => one.kind === 'elsewhere');
-  if (elsewhere !== undefined) {
-    return {
-      text: '',
-      refusal: 'A Claude Code session here is waiting for an answer, but it is not the one this tab'
-        + ' is showing. Open that conversation and press it there.',
-    };
-  }
-  if (found.some((one) => one.kind === 'answered')) {
-    // A DIFFERENT SENTENCE from "nothing was asked". Handing a second model a question that is
-    // already settled is the worst outcome this command has.
-    return { text: '', refusal: 'The last question in this session has already been answered — there is nothing waiting.' };
-  }
-  const failed = found.find((one) => one.kind === 'failed');
 
-  return {
-    text: '',
-    refusal: failed?.kind === 'failed' ? failed.refusal : 'Claude Code has asked nothing in this folder yet.',
-  };
+  return waitingSaid(found);
 }
 
 /**
@@ -649,6 +622,58 @@ export async function takeTheQuestion(
   // person is in the middle of answering; it goes into the composer so they can look at it, add
   // what they think, and press send themselves.
   await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined, sourceOfTab(claude !== undefined, uri), append);
+}
+
+/**
+ * Take the question Claude Code is asking in a `Creds: <host> / <session>` terminal, read off the session on that machine over ssh,
+ * and put it in the chat of that terminal (E2.S4). `append` is the *add* verb: it joins what the composer holds.
+ *
+ * <p>The road is S3's: the consent, the registry path, the list when two sessions could be meant. This door only turns what it
+ * hands back into the passage. It never calls `matchedSource`, `snapshots`, `sourceSession`, `questionWaitingHere` or
+ * `waitingQuestion` — the local home is not where this session is — and it does not decide what an unfinished read means:
+ * the road already did. And NEVER sent by itself, whatever the auto-send setting says: a question taken off a session is one
+ * a person is in the middle of answering, as with `takeTheQuestion`.</p>
+ */
+export async function takeFromTerminal(
+  panels: ChatPanels,
+  extensionUri: vscode.Uri,
+  terminal: vscode.Terminal | undefined,
+  append: boolean,
+): Promise<void> {
+  const ready = readyForChat();
+  if (!ready.ok) {
+    notReady(ready.refusal);
+
+    return;
+  }
+  const door = terminalDoorName(terminal);
+  if (door === undefined) {
+    return;
+  }
+  const question = questionSaid(await readRemoteSession(door.terminal, 'question'));
+  if (question.text.length === 0) {
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'chat',
+      code: 'no-question-from-terminal',
+      title: question.refusal,
+    });
+
+    return;
+  }
+  const text = question.text;
+
+  await deliverPassage(panels, extensionUri, ready, terminalMatch(panels.known(), door.terminal, door.name), { text }, false, true, sourceOfTerminal(door.name), append);
+}
+
+/** The same door, the other verb: the question is ADDED to what the composer already holds. */
+export async function addFromTerminal(
+  panels: ChatPanels,
+  extensionUri: vscode.Uri,
+  terminal: vscode.Terminal | undefined,
+): Promise<void> {
+  await takeFromTerminal(panels, extensionUri, terminal, true);
 }
 
 /** Each bug's conversation for this window — see {@link BugChats}. */

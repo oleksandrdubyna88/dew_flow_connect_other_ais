@@ -13414,11 +13414,11 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
   `terminalMatch` (`terminalSource.ts`) never reads a name to match. The same object is the same conversation, also after a rename; a new
   terminal of the same name is a new conversation; two live terminals of one name are two conversations with equal sources. The title is
   `terminalLabel(name)`: a leading `Creds: ` dropped, at the start only and only when something is left.
-- **`fromSession` reads as `false` for every terminal source, on both roads into a thread** — the door (`newConversation`) and the disk
-  (`recordFrom`), through one rule, `readsSession` over the `ORIGIN` table typed by the kind. On disk either value is accepted (`agreeOnOrigin`),
-  so a record that E2 wrote with `true` is not dropped after a rollback — but it does not offer *Asked*, because the Asked press walks the LOCAL
-  home by title and `adoptFound` would replace the terminal source with a local session's (`pinSession` and `resolveAndPin`). E2 changes the one
-  row together with its guard. `pinSession` takes the decided flag, so no door can pin a terminal conversation.
+- **`fromSession` of a terminal source is derived from its NAME, on both roads into a thread** — the door (`newConversation`) and the disk
+  (`recordFrom`), through one rule, `readsSession`: a `Creds: <host> / <session>` name reads its session, any other name does not (E1 built
+  this as `false` for every terminal; E2.S1 replaced it — see *The chat reads the remote Claude session (E2)* below). On disk either value is
+  accepted (`agreeOnOrigin`, the `ORIGIN` row `by name`), so no record is dropped after a rollback or an upgrade. `pinSession` takes the decided flag
+  AND the source, so no door can pin a terminal conversation to a LOCAL session.
 - **Every switch over the source kind is exhaustive, in a form that passes `complexity` 4**: `namedBy` (behind `sameSource`), `noFolder` (behind
   `knownFolder`), `namedRoute` (behind `recordedRoute`) and `toRecorded` (behind `fromRecord`) each end in a `never`; `ORIGIN` is a table typed
   by the kind. `sameSource` stopped being a lint violation, so the complexity count of `src/chatStore.ts` fell from 4 to 3.
@@ -13520,3 +13520,178 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
 - **Tests**: `terminalDoorWiring.test.ts` (new; the manifest is parsed, and the door's code is scanned for the tab readers), `chatAgentMode.test.ts`,
   `chatDoors.test.ts`, `helpCoverage.test.ts`, the door census in `chatWiring.test.ts`. Host scenario S3-H1 (the skip-list default) in
   `terminalCaptureScenario.ts`; it runs only in CI's job `extension · a real editor`.
+
+## The chat reads the remote Claude session (E2)
+
+Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This section grows with each story of E2; S1 is which terminal reads a session.
+
+- **Which terminal reads a session, and no local walk for a terminal (E2.S1).** `credsSession(name)` in `src/credsSession.ts` (pure, no imports) reads the
+  terminal's FULL name with the plan's one pattern, `^Creds: ([A-Za-z0-9][A-Za-z0-9._-]*) / ([A-Za-z0-9][A-Za-z0-9_-]*)$`, and answers `session` (host and
+  tmux session), `other` (the name does not start with `Creds: ` — `bash`, `Creds run: x`, `creds: h / s`) or `malformed` (it starts with `Creds: ` and
+  fails). A leading `-` is refused by the pattern itself, so no ssh or tmux option can be injected by a name; a `.` is legal in a host and not in a session
+  (tmux changes it). The refusal of a `malformed` name names the part that failed, in one of three sentences — the shape (no ` / `, or more than one), the
+  host, the tmux session — quoting the part as it is, at most 80 characters, with `…` after a cut.
+- **The flag is derived on read, whatever was stored** (`chatPersist.ts` still writes the thread's value). `readsSession(source, fromSession)` (`chatStore.ts`) answers, for a `terminal` source, `credsSession(name).kind ===
+  'session'`, whatever `fromSession` was passed or written; the `terminal` row of `ORIGIN` is `by name` (either value is accepted on disk, neither is dropped).
+  So an E1 conversation of a `Creds:` terminal, saved with `fromSession: false`, gains *Asked* when it is restored or reused under E2 (parent change 1.1,
+  point 1); a record of any other terminal still reads `false`. `CONVERSATION_VERSION` does not move.
+- **Two guards, one seam.** `walksLocalHome(source, fromSession)` (`credsSession.ts`) is false for every `terminal` source and otherwise `fromSession`.
+  `pinSession(entry, title, fromSession, source)` asks it as its FIRST statement, before any walk (`chatCommand.ts` passes `state.source`,
+  `chatConversationRestore.ts` passes `saved.source`); `resolveAndPin` asks it first and answers `{ kind: 'none', refusal: NO_LOCAL_SESSION }`: *"This chat came
+  from a terminal: its Claude session is not on this computer, so it is not looked for here."* Until the remote road (E2.S4) takes the press first, that
+  sentence is what a `Creds:` chat shows when *Asked* is pressed; after it, this is the second line of defence. A namesake in the local home is never read
+  for a terminal.
+- **Tests**: `credsSession.test.ts` (new: S1-T1…T4 the pattern, `other`, the three sentences and 30+ hostile names; S1-T8 the seam and the first statement of
+  `pinSession`; S1-T9 `NO_LOCAL_SESSION` and the check in `resolveAndPin`), `chatStore.test.ts` (S1-T5, S1-T6, replacing E1's *no terminal reads a session*; and the round-trip fixture, `fromSession` false → true), `chatStoreRefile.test.ts` (its terminal fixture, false → true),
+  `chatSourceWiring.test.ts` (S1-T7, and the pin's two new call sites), `chatSweepWiring.test.ts`.
+
+### The remote reader's contract: the script, the frame and the ssh edge (E2.S2)
+
+Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md` (Fable, reviewed by Opus). Four new modules and two widened ones; none imports `vscode`. Everything an
+ssh option does below is said as "we pass": the effect on the configuration ssh would use was seen (S2-T21, M-G2, M-G3), the effect against a real server was not
+(M-O1…M-O7, below).
+
+- **What is asked (`src/remoteScript.ts`).** `RemoteCall` has three kinds, and `operandsOf(call)` / `callOf(operands)` are THE grammar: `<session>` (the registry path,
+  and the fallback's first call), `<session> id <uuid>` (a press with a picked id, and the fallback's third call — the same form) and `<session> titles <folder>…`
+  (one to three different folders). The session is checked by `credsSession` (C1's rule, called), the id by `isSessionId`, the folder by `isFolderName`
+  (`^[A-Za-z0-9_-][A-Za-z0-9._-]{0,254}$`, written once). No alphabet holds a space, a tab, a quote or a shell character, so on win32 node passes each word to
+  `ssh.exe` as it is; the single quotes of `shQuoted` (`'` becomes `'\''`; a NUL, CR or LF throws) are for the REMOTE login shell only, and a real `sh -c` test
+  holds them (S2-T4).
+- **The script (`REMOTE_SCRIPT`).** 293 lines, sha256 `1c3b25f9325f79cab47c84513fd126cac79f89105b016163bd75233686ecad07`, sent on stdin to `sh -s`. It REPORTS facts; the parser decides.
+  Its rules: (1) it is one function, `coai_main`, read to its end and only then called with `</dev/null 2>/dev/null`; the last line prints `COAI-END` — a script cut
+  on the way does nothing, and no tool can read the rest of the script; (2) every data line starts with `:` and every other line of the frame starts with `COAI-`;
+  (3) a data file is opened by redirection, never as an argument (`ls -t --` and `stat -c %Y --` are the two commands that take a path, and both after `--`);
+  (4) `set -f` for the whole function, the two globs between `set +f` and `set -f`, every match tested with `-f` or `-d`; (5) the process walk takes a `claude`
+  (`comm` exactly) and does not enter it, bounded at 256 processes and depth 16; (6) the panes by `tmux list-panes -s -t "=<name>:"` — **the colon is needed**
+  (M-T1: without it a name that starts another session's name reads that session); (7) the script's one decision is which file it reads next; (8) a closed stdout ends
+  the script at its next step (`|| return 0` on ten `printf` lines); (9) nothing is matched in `sh` but shapes; (10) read-only, nothing left (no write, `cd`, `&`,
+  here-document, `eval`, backtick or `trap`); (11) `LC_ALL=C`, `HOME` must start with `/`; (12) a tool that is not there is SAID (`COAI-BAD tool`) — `sed cut head tail wc
+  grep awk ls date` first, `tmux ps` before the panes — never read as "nothing found" (M-S7).
+- **The bounds** (each number in the script equals a TypeScript constant, held by S2-T17): the registry file 64 KiB (`head -c 65537`, `REGISTRY_MAX + 1`), the transcript tail
+  4 MiB (`tail -c 4194304`, `TAIL_MAX`), the folder listing 2000 names, the title scan 250 files / 8 s / a file over 64 MiB is `skipped` (`SCAN_BUDGET.most`, under
+  `SCAN_BUDGET.withinMs`, `SCAN_BUDGET.mostBytes`), a title row over 1024 bytes is left out and counted, the first 24 different rows and then the last row again
+  (`collectNames` reads the LAST row as the latest name). The largest answers (a `found` about 4.3 MiB, a `titles` at most 6.4 MiB) are under the 8 MiB cap.
+- **The frame and the decision (`src/remoteFrame.ts`, pure).** `readRemote(run, call)` splits stdout at `\n`; the frame starts at the LAST `COAI-BEGIN 1` and ends at the
+  FIRST `COAI-END` after it; before and after are ignored (a banner may hold the sentinel). Inside, `COAI-` lines are markers (a table typed by the marker says the words,
+  the data lines and the calls each may appear in), `:` lines are data, any other line is `frame`. The decision, in order: an exit code that is not 0 → `unreadable` `exit`; no
+  sentinel → `no-sentinel` (never `absent`), another `COAI-BEGIN n` → `version`, no `COAI-END` → `cut`; a `COAI-BAD <what>` → that word, a `COAI-OVER` → `too-many`;
+  `COAI-NO-SESSION` → `absent` `session`; one pane and one `claude` with a registry that is denied or not valid → `unreadable` with the fault (`registry-denied`, `-big` over
+  64 KiB by `Buffer.byteLength`, `-bad`, `-stale` when `procStart` and the frame's start time are both digits and differ); a valid registry → the transcript of ITS id (else
+  `id-mismatch`), 0 files `absent` `transcript`, 2 or more `ambiguous` `transcripts`, 1 in a folder that is not one of `projectDirNames(cwd)` → `unreadable` `folder`, else
+  `found` `via: 'registry'`; one pane and no `claude` (or one with no registry file) → `fallback` for a session call, the picked id's file for an id call (`gone` when there is none,
+  `found` `via: 'id'`); several panes or several `claude` → `ambiguous` with the NAMED candidates and the count of the unnamed — never a `found`, except that an `id` call is
+  settled by its pick when the pick is a named candidate, an unnamed candidate may be it, or none is named. `found.cut` is a fact (a size over `TAIL_MAX`, the larger of the two
+  sizes read; the first line of a cut tail is dropped); what it means is S3's. `readRemote` never throws, no arm holds an error's message, and `UNREADABLE_SAID` has one clause
+  for each fault, none holding data from the answer. A `titles` answer reads each session's rows through `collectNames`.
+- **The ssh edge (`src/remoteSsh.ts`, node only).** `SSH_OPTIONS` = `-T` and `-o` `BatchMode=yes`, `ConnectTimeout=5`, `RequestTTY=no`, `RemoteCommand=none`,
+  `ClearAllForwardings=yes`, `ForwardAgent=no`, `ForwardX11=no`, `LogLevel=ERROR`, and — change 2.1 of the parent — `StrictHostKeyChecking=yes`, last. We pass them before the
+  person's configuration, and for each setting ssh keeps the first value it gets: `ssh -G` against a hostile configuration (M-G1, tested by S2-T21 on this machine's OpenSSH
+  10.2p1; Windows 9.5p2 gave the same values for the parent's options, M-G2/M-G3) printed our values, no forward line, no `remotecommand`, `stricthostkeychecking true` over the
+  person's `accept-new`. `sshArgv(host, operands)` = `[...SSH_OPTIONS, '--', host, 'sh', '-s', '--', ...operands.map(shQuoted)]`; it throws (a fixed text) when the host fails
+  C1's host class or `callOf` refuses. No `-n` (the remote `sh -s` would read an empty stdin). `--` stands right before the host so it is never read as an option.
+  **No `ControlPath`, `ControlMaster` or `ControlPersist` option**: connection sharing stays the person's own (residual 9, below). A further ssh option is a plan change and a full stop.
+- **Which ssh, from which folder.** `sshExecutable(platform, env)` is ONE absolute path: win32 `<SystemRoot>\System32\OpenSSH\ssh.exe` (`system32(env)` of `processLauncher.ts`:
+  `SystemRoot`, then `WINDIR`, then `C:\Windows`; `TASKKILL` is built from the same function), else `/usr/bin/ssh`; the child's working folder is the folder of that executable.
+  Never the `PATH`: with `shell: false` the spawn layer looks for a bare name in the current folder first (the extension host's, which can be the opened workspace). The cost: a person
+  whose terminal uses another ssh gets the system one here; the call ends with exit 255 and ssh's own line, never a wrong answer. A machine with no `/usr/bin/ssh` gets the
+  "not found" refusal.
+- **The call (`runRemote(host, session, operands, script, limits?, seams?)`).** Never rejects and never throws. A host, session or operand that fails its rule, or `operands[0]` that
+  is not the session → `refused` with *"This terminal’s name cannot be given to ssh safely, so nothing was read."*; no file at the executable → *"ssh was not found at “<path>”, …"*
+  (and on win32 *"Install the Windows optional feature “OpenSSH Client”."*); then ONE `capture` (`shell` false, the script as `input`, `{ cwd, maxStdoutBytes: 8 MiB, killTree: true }`,
+  15 s): a timeout, `capped`, `not-started` and exit 255 are `refused` with their sentences (ssh's own last line, at most 300 characters, control AND format characters taken out — a bidi override or a zero-width space cannot spoof the line, S2-T9b; the log line gets the same strip); any other
+  code is `answered` and `readRemote` makes a code that is not 0 `unreadable`. ONE log line for each call that did not answer 0, by `logLine(host, session, end, stderrTail)`: host,
+  session, how it ended, the last 2000 characters of ssh's stderr — never stdout, never an operand, never a caught error. The remote script's own stderr goes to `/dev/null`, so no
+  transcript text can be in ssh's.
+- **`capture` and `launch`, widened (X8).** `capture` gets an EIGHTH parameter, `CaptureOptions { cwd, maxStdoutBytes, killTree }`: the stdout cap counts BYTES (`Buffer.byteLength`)
+  and answers `ended: 'capped'` with no output; `stderrTail` is in the answer only when the options object is given, so the ten callers of today get exactly the object they got.
+  `LaunchOptions.killTree` makes the kill of a child with no shell take the tree on win32 (`taskkill /t /f`, then `child.kill()`), so a `ProxyJump` or `ProxyCommand` child goes with ssh;
+  off win32 nothing changes.
+- **Plan change 2.1 and residual 9, in words.** The read passes `-o StrictHostKeyChecking=yes`, before the person's configuration. With it, ssh refuses a host whose key is not already in
+  the person's `known_hosts`, and a host whose key changed, whatever the configuration says (`accept-new` or `no` included); the read then ends with ssh's own sentence. A host the
+  terminal's ssh already trusts is read as usual. **The read does not turn off ssh connection sharing.** On Windows, the OpenSSH client that comes with Windows has no released connection
+  sharing, so a read cannot share a connection or leave one open. When the extension runs on Linux or macOS — or on the remote machine of a Remote window — and the person's ssh
+  configuration shares connections (`ControlMaster`, `ControlPersist`), the read can go through a connection that is already open, or open one that stays open for the `ControlPersist` time.
+- **Not observed — owed, and who can observe it.** M-O1 a real call from Windows (the argv reaches `ssh.exe` unchanged, the frame comes back with `\n`) — the owner, R6; M-O2 residual 9's size
+  on a Linux machine that runs sshd; M-O3 `StrictHostKeyChecking=yes` with `BatchMode=yes` against a host not in `known_hosts` (exit 255, nothing written, also when the configuration says
+  `accept-new`); M-O4 after a read killed at the limit, no `ssh` process on Windows (also with `ProxyJump`) and none of the script's commands on the VM; M-O5 the `comm` of the Claude CLI
+  on the VMs, `ps --ppid` there and the registry file's `procStart`; M-O6 `-t "=name:"` is exact on the VMs' tmux; M-O7 whether the registry's `cwd` follows a `cd` inside a session (if it does,
+  the folder check refuses a good session). Other residuals: a tmux server that does not answer keeps the remote `tmux` call; `procStart` is checked only when both sides have it; the proxy leg
+  runs with the person's configuration; the title fallback cannot ask for a folder whose name has a letter outside ASCII; more than 24 different title rows in one file (`scan.more`); `Tunnel`,
+  `LocalCommand` and `UpdateHostKeys` stay the person's; the title scan's 8 s is the VM's clock; the tools are a Linux VM's; tmux's exit 1 for "no such session", "no server running" and an
+  unreachable socket all read as `absent` `session`.
+- **Tests**: `remoteScript.test.ts` (S2-T4 a real `sh -c`, S2-T16, S2-T17), `remoteFrame.test.ts` (S2-T24…T33), `remoteScriptRuns.test.ts` (S2-T12…T15, S2-T34…T44: the REAL script by `sh -s`
+  and `bash --posix` against a temporary HOME), `remoteSsh.test.ts` (S2-T1…T3, T5…T7, T9, T18…T21), `remoteLogScan.test.ts` (S2-T10), `captureWidened.test.ts` (S2-T8, S2-T11, S2-T22, S2-T23).
+
+### One road to the VM: the consent, the registry path, the fallback and the pick list (E2.S3)
+
+Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4) and § 5 *E2.S3*. Two new modules: `src/remoteRead.ts` (pure — it imports no `vscode`, and `sonarExclusions.test.ts` holds it out of the host
+list) and `src/remoteSessionHost.ts` (host: only the `vscode` seams; it is listed in `sonar.coverage.exclusions`). `remoteScript.ts` exports `FOLDERS_MAX` so the road does not type the bound again. Nothing here is
+reached by a door yet: the two doors and *Asked* are E2.S4's, and they call `readRemoteSession(terminal, purpose)`.
+
+- **The consent.** The first read for a host asks once, in a modal (*"Read the Claude session on “<host>” over ssh?"*, **Read** / **Not this host**, through `notifyAndAsk`, so the question and its answer are in the ledger).
+  The answer is a row `{ host, answer, askedUtc }` in `globalState` key `coai.terminalHosts`, at most 100 rows, one per host (compared exactly, so `H` is not `h`). `withAnswer` returns a NEW list: the host's old row is
+  replaced, and at the cap the row with the OLDEST `askedUtc` goes (that host is simply asked again). A list that is not an array of whole rows reads as empty — `ask`, never `yes`. Escape writes nothing and refuses
+  that press. A remembered "no" refuses with its own sentence and starts no ssh and no prompt. *CoAI: hosts read over ssh* (`coai.terminalHosts`; the panel's title bar overflow, group `remote@1`, and the palette) lists the
+  remembered hosts, asks again for the one chosen (**Read**, **Not this host**, **Forget**) and writes the new answer or removes the row. No webview page changes.
+- **The order of the road** (`remoteRoad(seams, terminalName, purpose, picked?)`): `credsSession` (a malformed name gets its own refusal, a name that is not a creds name its own) → the consent → **the re-check, just
+  before EACH spawn** (the terminal is still in `window.terminals`, its process has not ended, and its LIVE name still gives the same host and session; else no spawn) → `runRemote` under the progress line
+  (*"Reading the Claude session on “<host>”…"*, `ProgressLocation.Window`) → `readRemote(run, call)` over the SAME call that made the operands → `nextStep`. The road never reads `run.code`.
+- **The identity** (`nextStep`, a table with one entry for each arm of `RemoteRead`, so a new arm is a compile error). `found` by the registry is `done` and drops the picked id. `found` by an id is `done` only when its
+  `folder` is one of the folders the pick came with (a title pick: that session's folder; an ambiguity pick: `projectDirNames` of the candidate's `cwd`), else the folder sentence, and the id is KEPT. `fallback` →
+  the titles call over `projectDirNames(paneCwd)` ∩ the VM's folders (at most `FOLDERS_MAX`, in `projectDirNames` order); none → a refusal that names host, session and the pane's folder (control characters taken out, at most 80
+  characters), and says that some folders could not be listed when the VM said so. `titles` → `namedAmong`: one session → the id call (that session becomes the pick); several → a list; none → a refusal, and when the scan was
+  not `all`, had `more`, or skipped a session, it says that not every session was read (a cut scan is never "no session"). `ambiguous` with candidates → a list, EVEN OF ONE; with none → a refusal. `gone`, `absent`
+  and `unreadable` are refusals. **At most three calls in one press**: before a spawn or a list that would need a fourth the press ends with its own sentence and asks for nothing.
+- **The pick list.** One row for each candidate, newest first (a stable sort by the file's time; candidates of the same pane list keep the VM's order), `canPickMany: false`, nothing preselected; a cancel is
+  *"No session was chosen, so nothing was read."* and spawns nothing more. The host draws it with `askPerson(() => showQuickPick(…))`.
+- **The picked id** lives in a `WeakMap<Terminal, Picked>` of the host module; `Picked = { id, folders }`. The next press of that terminal sends it as its FIRST call. It is dropped ONLY on a registry success, on `gone`
+  (its file is not there: its own sentence, naming the id and the host, and the NEXT press discovers again from the start) and with the terminal (`onDidCloseTerminal`). It is never dropped by an ssh refusal, a timeout, a cap,
+  an unreadable answer, a folder refusal, a re-check refusal or a cancel.
+- **The meaning of a cut** is decided in ONE place, `answerFrom(found, purpose, host)`: for `'question'` a cut tail that holds no `AskUserQuestion` (by `lastAsked`) is a refusal (*"No question was found in the last 4 MiB of the
+  session on “<host>” that were read; an older one may be beyond the cut."*), else the lines as they are; for `'prompts'` the lines with a note when cut, *"Only the last 4 MiB of this session were read, so its first prompts
+  are not shown."*, and `''` when not. A scan test says no other module that takes the road's answer reads `cut`.
+- **One read per terminal at a time**: `onePerTerminal` is a `WeakMap` of `oneAtATime` latches; a second press answers *"The Claude session of this terminal is still being read — the second press was ignored."* and starts neither
+  an ssh child nor a modal.
+- **Five different sentences** for absent, unreadable, an ambiguity with no candidate, a cut question and an ssh refusal, each naming the host; the "absent session" one says no tmux session of that name *that ssh can see*
+  (tmux's exit 1 also covers a socket ssh cannot reach).
+- **The reach** (for *Asked*, E2.S4): `reachOf(live, keyed, recordedName)` takes the live terminal the conversation is keyed by while it is open — under its NEW name if it was renamed — else the ONE live terminal with the
+  recorded name; none is *"The terminal “<name>” is not open — open it to read its Claude session."*, several *"<N> terminals are called “<name>” — open the one you mean and press again."*. The host is always read from a
+  LIVE terminal's name, never from the record. `terminalOf(id, panels)` in the host module only reads `window.terminals`.
+- **No log carries the session.** `remoteRead.ts` and `remoteSessionHost.ts` have no `console` call; a sentence names a host, a tmux session, an id the person chose, the pane's folder and a fixed clause of
+  `UNREADABLE_SAID`, never stdout. `remoteLogScan.test.ts` (S2-T10) scans both files from the day they exist.
+- **Not covered:** the modal's wording on screen and the real QuickPick (R7); that a real ssh call, in a real window, goes through this road (R6, R7).
+- **Deviations from the stories document's C4 (E2.S3, recorded here; C4 is not edited).** (1) `nextStep(read, picked, where)` takes a third argument `{ host, session }` and `answerFrom(found, purpose, host)` a third `host`, because the sentences name them. (2) Three sentences are the coder's own wording, as the brief names none: the Escape answer (*"…was closed without an answer, so nothing was read."*), the fourth-call refusal (*"…could not be settled in three reads…"*) and the notice of an empty hosts list. (3) The "turned off" sentence has no `**` around the command name (a toast does not render it). (4) `Picked` carries `host` and `session` beside `id` and `folders`: a terminal renamed to another `Creds: <host> / <session>` neither sends the id to the new host nor drops it (the drop rule is unchanged). (5) `CoaiExports.remoteSessions` is a TEST-ONLY door, present only when `context.extensionMode === ExtensionMode.Test` (it can write a consent and replace the ssh call, so a production export would let another extension do both); `remoteExportGuard.test.ts` holds it. (6) `terminalOf(id, panels)` takes the conversation's entry id.
+- **Tests**: `remoteRead.test.ts` (S3-T1…T16, with the real parser over frames typed out as `remoteFrame.test.ts` types them), `src/test/host/terminalHostsScenario.ts` (S3-H1, CI only).
+
+### The doors: take and add from a terminal, *Asked* through the reach, the words, the help (E2.S4)
+
+Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4, C5 as revised by gate G6) and § 5 *E2.S4*. This is what a person presses; the road under it is E2.S3's.
+
+- **The words moved first (C5).** The `Waiting` → sentence mapping of `questionWaitingHere` is the pure `waitingSaid(found)` in `src/waitingSaid.ts`, moved word for word in its own commit (`waitingSaid.test.ts`, S4-T1: every sentence is
+  typed in the test, so a changed word fails by name). The local road (a tab, over the window's folders) and the remote road (a terminal) both call it, so one situation has one sentence. The same file holds `questionSaid(answer)`:
+  the road's answer turned into the passage — `lines` through `lastAsked` → `waitingIn` over the ONE session (nothing is looked for by name: the identity is already exact) → `waitingSaid`; a `refused` answer is handed on unchanged.
+  A session whose question this build cannot read says `unrecognisedSaid` (one sentence, now shared with the local reader: *"…in the Claude session of this terminal"* instead of a file path, because there is no file of ours).
+  The module never reads `cut`: what a cut tail means is decided once, in `answerFrom` (S3-T10), and S3-T10b names `waitingSaid.ts` in its scan so this stays held whatever the module imports.
+- **The two doors** (`takeFromTerminal(panels, extensionUri, terminal, append = false)` and `addFromTerminal`, in `chatCommand.ts`): `readyForChat()` → `terminalDoorName(terminal)` (E1's guard, the name is read once) →
+  `readRemoteSession(terminal, 'question')` → `questionSaid` → a warning with code `no-question-from-terminal` and the sentence as its title, or `deliverPassage(…, send = false, fromSession = true, sourceOfTerminal(name), append)`.
+  **Never sent by itself**, whatever the auto-send setting says (the door does not read it). They never call `matchedSource`, `snapshots`, `sourceSession`, `questionWaitingHere`, `waitingQuestion` or `os.homedir()` — the local home
+  is not where this session is (`terminalDoorWiring.test.ts` S4-T2, with a companion that `takeTheQuestion` still calls `matchedSource(`). E1's door (`askFromTerminal`) is untouched: it only READS the clipboard; there is no copy command and no borrow.
+- **The manifest.** `coai.takeFromTerminal` / `coai.addFromTerminal` (*CoAI: take the question* / *CoAI: add the question*), hidden from the palette (`when: "false"`), two `view/title` rows `view == terminal && coai.terminalReadsSession`,
+  groups `coai@1` / `coai@2` (not `navigation`, so they sit in the overflow, not as buttons; S4-T7). The context key `coai.terminalReadsSession` is `readsKey(name, answers)` of `remoteRead.ts` (pure, S4-T9): true for a name that starts
+  with `Creds: ` and whose host is not answered "no"; a `malformed` name is TRUE on purpose (its press names the part that failed); `bash`, `Creds run: x`, `creds: h / s` are false; a damaged answer list reads as no answer. It is set
+  at activation, on `onDidChangeActiveTerminal` and whenever an answer is written (the road's first-read answer and *CoAI: hosts read over ssh* both go through `AnswerStore.write`) — all in `bindRemoteSessions`, not in `extension.ts`.
+- **The registrations** (`extension.ts`): each `noteChatDoor('take')` / `noteChatDoor('add')` FIRST (they take a question, so the spending page's *Asked* counts them); `doorCommands()` of `chatWiring.test.ts` now also reads the
+  `view/title` rows whose `when` names `view == terminal`, so the census finds the two doors and the E1 button (S4-T8). **Their catch logs a FIXED sentence and passes no error on**: `console.error('coai.takeFromTerminal failed')` and a
+  `notify` with a fixed title and no `detail` — a V8 `JSON.parse` error quotes its input, and the input is the transcript. S2-T10's scanner (`logLeaks`) is run over both registrations and over the *Asked* branch (S4-T11), with companions that
+  it finds them and a `console.`/`notify(` call in each. A new `notify` site: `notification-sites.json` regenerated (177 sites). **The refusal sentence is kept in the notifications ledger**: `takeFromTerminal` passes the road's refusal as the notice's `title`, and `notify` writes the title to the ledger. That sentence can name the remote pane's working folder (`SAID.noFolder`, control characters taken out, at most 80 characters) or a session id the person chose (`SAID.gone`), which are text from the VM; nothing else of the VM reaches a notice. S4-T11 scans the bodies of both doors (no stdout, lines, operand or error in a `notify` argument), with the companion that the notice still carries `question.refusal`.
+- **Asked through the reach** (`chatHooks.ts`). For a thread whose source is a terminal, `onShowAsked` checks the source BEFORE `resolveAndPin(` and `promptsFrom(` and calls `askedFromTerminal(id, panels)`: `terminalOf(id, panels)` (the
+  conversation's live terminal, S3) → `readRemoteSession(terminal, 'prompts')` → `promptsSaid(answer)` of `remoteRead.ts`. `promptsSaid` runs the lines through `promptsIn` of `sessionPrompts.ts` — ONE rule with the local file reader
+  (`promptsOf` now calls the same `promptIn`): the earliest first, at most `MOST_PROMPTS`, each cut at `MOST_PER_PROMPT` with the same note. The answer's `note` goes in the message's `refusal` beside the prompts; a tail with no prompt
+  and no note says `NOTHING_OF_YOURS` (the local sentence, now a constant), and a PART of a session with no prompt gives its note alone — it never claims that nothing was written. `mine.sessionFile` stays `''` for a terminal (it is a
+  local path). A throw is logged as the fixed line *"Asked from a terminal failed"* and shown as *"The Claude session of this terminal could not be read."*. Every other source keeps the old two lines exactly.
+- **The page note** (`chatPage.ts`): a hidden `#askedNote` line above `#askedText`. With prompts AND a refusal the box shows the prompt and the refusal as a line above it (`textContent`, never markup); with no refusal the line is empty
+  and hidden; with no prompts the refusal is the box itself and the line stays hidden (it would say it twice). The local road never sends both, so its page is as it was. Tested by RUNNING the shipped bundle (`bundledPage.test.ts`, S4-T6).
+- **File size.** `claudeSessions.ts` is over the 800-line limit (1191 lines before E2), so what E2 added to it lives in a NEW pure module, `src/sessionPrompts.ts`: `promptIn`, `promptsIn`, `unrecognisedSaid`, `NOTHING_OF_YOURS`, and the two constants `MOST_PROMPTS` / `MOST_PER_PROMPT` (moved with them so the module needs nothing from `claudeSessions.ts`). `promptsOf`, `promptsFrom` and `waitingQuestion` import them; so do `remoteRead.ts` and `waitingSaid.ts`. `claudeSessions.ts` is now 1174 lines, under its pre-E2 size. `promptsIn` stops reading once it holds `MOST_PROMPTS` prompts (a tail of 100000 lines is not parsed past the 200 that are shown); it takes the function that says what a line holds, so `sessionPrompts.test.ts` counts the lines parsed.
+- **Not covered:** the items' visibility in a real window and a real VM (R7); a real ssh call (R6); the page note on screen; the question INTO A CHAT from a real press (it needs a chat model and a CLI in the host). The context-key wiring and the press up to the road's refusal are S4-H1 (`terminalDoorsScenario.ts`, CI only; `module_tests.md`). The test door gained `readsKey()`, the last value the wiring gave the key.
+- **Tests**: `waitingSaid.test.ts` (S4-T1, S4-T4), `terminalDoorWiring.test.ts` (S4-T2, T3, T5, T7), `bundledPage.test.ts` (S4-T6), `chatWiring.test.ts` (S4-T8), `remoteRead.test.ts` (S4-T9, S4-T5b: the road's lines and a file give the same prompts),
+  `helpCoverage.test.ts` (S4-T10), `remoteLogScan.test.ts` (S4-T11).

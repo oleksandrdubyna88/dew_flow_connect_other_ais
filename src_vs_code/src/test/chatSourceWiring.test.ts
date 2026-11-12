@@ -83,7 +83,7 @@ test('the pin writes the session id AND the folder it was found in, and saves fo
   // Guarded on `fromSession`, or the record would state its origin two ways and `agreeOnOrigin`
   // would refuse to read it back — the conversation would save and then be unopenable.
   const walk = bodyOf(join, 'export function pinSession(');
-  assert.match(walk, /if \(!fromSession \|\| title\.length === 0\) \{/u, 'a session source can be written onto a tab that has no session');
+  assert.match(walk, /if \(!walksLocalHome\(source, fromSession\) \|\| title\.length === 0\) \{/u, 'a session source can be written onto a tab that has no session');
   assert.match(walk, /adoptFound\(entry, mine,/u, 'the walk keeps its own copy of what a pin writes');
   // Exactly two callers and the definition. A third way to adopt a session is a writer nobody
   // checked against the store's origin pair.
@@ -238,7 +238,7 @@ test('a restored conversation that lost its session source pins again — the se
 
   assert.match(restore, /if \(saved\.fromSession && saved\.source\.kind === 'none'\) \{/u,
     'a conversation whose source write was lost never pins again, so it stays unmatchable for ever');
-  assert.match(restore.slice(0, restore.indexOf('return entry;')), /pinSession\(entry, saved\.title, true\);/u,
+  assert.match(restore.slice(0, restore.indexOf('return entry;')), /pinSession\(entry, saved\.title, true, saved\.source\);/u,
     'the restore path does not pin');
 });
 
@@ -302,10 +302,15 @@ test('every tab match goes through the one filtered road', () => {
   assert.doesNotMatch(join, /panels\.known\(\)/u, 'the session join reads the unfiltered list of panels');
 });
 
-test('a new conversation\u2019s session flag is decided by its source', () => {
+test('a new conversation\u2019s session flag is decided by its source, and a restored one takes the derived flag', () => {
   const made = bodyOf(source('chatCommand.ts'), 'function newConversation(');
 
   assert.match(made, /const fromSession = readsSession\(state\.source, state\.fromSession\);/u, 'the flag is not decided by the source');
+  assert.match(made, /pinSession\(entry, state\.title, fromSession, state\.source\);/u, 'the pin does not take the decided flag and the source, so a terminal conversation could be pinned to a LOCAL Claude session of its name');
   assert.equal(made.split('state.fromSession').length - 1, 1, 'a place still reads the door\u2019s flag instead of the decided one');
-  assert.match(made, /pinSession\(entry, state\.title, fromSession\);/u, 'a terminal conversation could be pinned to a LOCAL Claude session of its name');
+
+  // The restore: the page and the thread take the flag `recordFrom` derived, never a row's own.
+  const restore = source('chatConversationRestore.ts');
+  assert.equal(restore.split('fromSession: saved.fromSession,').length - 1, 2, 'the restored page and thread do not both read the derived flag');
+  assert.match(source('chatStore.ts'), /fromSession: readsSession\(source, row\.fromSession === true\),/u, 'a record is read with its stored flag, not the derived one');
 });

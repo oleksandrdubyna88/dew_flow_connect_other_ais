@@ -81,6 +81,25 @@ test('S1r-T7 every language’s chat article gives the terminal door’s new sen
   }
 });
 
+test('S4-T10 every language’s chat article names the two terminal items, the hosts command and the remote paragraph', () => {
+  // The titles are English in every language, like every control name here, so all five can be asked for them. The paragraph is
+  // the one that says a `Creds: <host> / <session>` terminal reads its session over ssh; the census also holds `coai.terminalHosts` to an
+  // article now (it was SELF_EVIDENT until this story), so that command has to be named in the article of the chat.
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} chat article is missing, so a reader of it gets English`);
+    const text = Object.values(body).join(' ');
+    assert.ok(text.includes('**CoAI: hosts read over ssh**'), `the ${language} chat article never says the session is read over ssh, or where the answer is changed`);
+    assert.ok(text.includes('`Creds: <host> / <session>`'), `the ${language} chat article does not name the terminal whose session is read`);
+    assert.ok(text.includes('**CoAI: add the question**') && text.includes('**CoAI: take the question**'), `the ${language} chat article does not name both items`);
+    assert.ok(/\bssh\b/u.test(text) && text.includes('tmux'), `the ${language} chat article does not say what is read, or how`);
+  }
+  assert.ok(!Object.keys(SELF_EVIDENT).includes('coai.terminalHosts'), 'coai.terminalHosts is SELF_EVIDENT again: its help is in the chat article');
+});
+
 test('S1r-T8 no language’s chat article says the terminal door uses VS Code’s copy command', () => {
   // Epoch 1's "what can go wrong" sentence outlived change 1.2 in all five languages: the door no longer runs a copy command,
   // it only reads the clipboard. Each language's epoch-1 wording is named here, because a translation cannot be matched by

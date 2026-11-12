@@ -287,6 +287,21 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.takeFromTerminal",
+        "title": "CoAI: take the question",
+        "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.addFromTerminal",
+        "title": "CoAI: add the question",
+        "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.terminalHosts",
+        "title": "CoAI: hosts read over ssh",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.chatNow",
         "title": "CoAI: default",
         "category": "ConnectOtherAIs"
@@ -1185,6 +1200,16 @@
           "group": "navigation@90"
         },
         {
+          "command": "coai.takeFromTerminal",
+          "when": "view == terminal && coai.terminalReadsSession",
+          "group": "coai@1"
+        },
+        {
+          "command": "coai.addFromTerminal",
+          "when": "view == terminal && coai.terminalReadsSession",
+          "group": "coai@2"
+        },
+        {
           "command": "coai.help",
           "when": "view == coai.panel",
           "group": "navigation@0"
@@ -1233,6 +1258,11 @@
           "command": "coai.importConfig",
           "when": "view == coai.panel",
           "group": "config@2"
+        },
+        {
+          "command": "coai.terminalHosts",
+          "when": "view == coai.panel",
+          "group": "remote@1"
         }
       ],
       "commandPalette": [
@@ -1242,6 +1272,14 @@
         },
         {
           "command": "coai.forgetPickedConversation",
+          "when": "false"
+        },
+        {
+          "command": "coai.takeFromTerminal",
+          "when": "false"
+        },
+        {
+          "command": "coai.addFromTerminal",
           "when": "false"
         },
         {

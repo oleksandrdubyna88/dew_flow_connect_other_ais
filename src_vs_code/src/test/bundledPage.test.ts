@@ -9,6 +9,7 @@ import {
   stub, type Stub,
 } from './roundsLogPageHarness';
 import { ownedTemp } from './ownedTemp';
+import { stylesheet, type Rule } from './cssRules';
 
 /**
  * The page is checked as it SHIPS — bundled and minified — not as it compiles.
@@ -574,6 +575,56 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
   press('askedNext');
   push({ type: 'asked', at: 2, asked: ['make the task text green', 'and now the arrows', 'and one more'], refusal: '' });
   assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 3', 'a re-read threw away the arrow they just pressed');
+});
+
+/** The declarations of every rule of a parsed stylesheet whose selector is exactly `selector`, joined; `''` when there is none. */
+const declared = (rules: readonly Rule[], selector: string): string =>
+  rules.filter((rule) => rule.selector.trim() === selector).map((rule) => rule.body).join(' ');
+
+test('S4-T6b: the Asked text takes the room the open region has left, whatever height the note above it has', () => {
+  // The region is 40vh at most and clips what overflows. The head row, the cut note (one or two lines) and the text share it, so a text box
+  // with a FIXED height of 40vh less one row is too tall by the note's height: the region clips its last lines and its scrollbar cannot
+  // reach them. The region lays its children out as a column and the text box shrinks to what is left.
+  // A STYLESHEET question, read with the shared parser (`cssRules.ts`): the DOM shim has no cascade or layout, so there is no program to
+  // run (PROJECT.md's carve-out; todo/PLAN_one_reader_for_a_page_stylesheet.md, its boundary table). That the box scrolls to its last line
+  // in a real window is the owner's look with the pre-release VSIX.
+  const { html } = runPage();
+  const rules = stylesheet(html);
+  const region = `${declared(rules, '.asking')} ${declared(rules, '.asking.open')}`;
+  const text = declared(rules, '.askedText');
+
+  assert.ok(text.length > 0, 'the page has no rule for the Asked text');
+  assert.doesNotMatch(text, /calc\([^)]*vh/, 'the Asked text has a height worked out by hand from the region\'s, which the cut note makes too tall');
+  assert.match(text, /flex:\s*1 1 auto/, 'the Asked text does not take the room the region has left');
+  assert.match(text, /min-height:\s*0/, 'the Asked text may not shrink below its content, so it still overflows the region');
+  assert.match(text, /overflow-y:\s*auto/, 'the Asked text does not scroll');
+  assert.match(region, /display:\s*flex/, 'the open region does not lay its children out as a flex box');
+  assert.match(region, /flex-direction:\s*column/, 'the open region does not stack the head, the note and the text');
+  assert.match(declared(rules, '.asking.open'), /max-height:\s*40vh/, 'the open region lost its height limit');
+});
+
+test('S4-T6: the shipped Asked box shows the prompts and the note about them together, and the note alone only when there are no prompts', () => {
+  // A terminal's session is read by ssh and may be the last 4 MiB of it: the prompts are shown AND a line says the first ones are
+  // not. The local road never sends both, so it never had a line above its prompts. A reason with NO prompts is still the box itself.
+  const { nodes, press, push } = runPage();
+  const NOTE = 'Only the last 4 MiB of this session were read, so its first prompts are not shown.';
+  press('asked');
+
+  push({ type: 'asked', at: 1, asked: ['the first prompt', 'the second prompt'], refusal: NOTE });
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'the first prompt', 'the prompts were replaced by the note');
+  assert.strictEqual(nodes['askedNote']?.['textContent'], NOTE, 'the cut note is not shown beside the prompts');
+  assert.strictEqual(nodes['askedNote']?.['hidden'], false, 'the note line is in the page but hidden');
+  assert.strictEqual(nodes['askedNote']?.['innerHTML'], '', 'the note was written into the page as markup');
+
+  push({ type: 'asked', at: 2, asked: ['the first prompt', 'the second prompt'], refusal: '' });
+  assert.strictEqual(nodes['askedNote']?.['textContent'], '', 'an old note stayed above prompts that were read whole');
+  assert.strictEqual(nodes['askedNote']?.['hidden'], true, 'an empty note line was left showing');
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'the first prompt');
+
+  push({ type: 'asked', at: 3, asked: [], refusal: 'Nothing of yours is in that session yet.' });
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'Nothing of yours is in that session yet.', 'a reason with no prompts is not the box');
+  assert.strictEqual(nodes['askedNote']?.['textContent'], '', 'the reason was shown twice');
+  assert.strictEqual(nodes['askedNote']?.['hidden'], true);
 });
 
 test('an answer from an earlier press cannot replace the one just asked for', () => {

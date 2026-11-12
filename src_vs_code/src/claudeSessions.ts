@@ -5,8 +5,9 @@ import * as fs from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import * as readline from 'node:readline';
 import * as path from 'node:path';
-import { AskedSet, SessionNames, collectNames, humanSaid, lastAsked } from './claudeQuestion';
+import { AskedSet, SessionNames, collectNames, lastAsked } from './claudeQuestion';
 import { isSessionId } from './chatSource';
+import { MOST_PROMPTS, NOTHING_OF_YOURS, promptIn, unrecognisedSaid } from './sessionPrompts';
 
 /**
  * Where Claude Code keeps its sessions, and which of them is the one being looked at.
@@ -674,18 +675,6 @@ export function severalMatch(answers: readonly Found[]): boolean {
     || answers.filter((answer) => answer.kind === 'one').length > 1;
 }
 
-/**
- * The most turns that cross to a webview at once, and the most of each.
- *
- * <p>A day-long session holds hundreds of turns and some of them are whole files pasted in. All of
- * it in one `postMessage` is megabytes over a bridge that has to stay responsive, rendered into a
- * region 40vh tall. The EARLIEST are kept, because the question this button exists to answer is
- * *what was this window for* — and a turn that is cut says so where it is cut. (gemini, the plan
- * round, on a payload nobody had bounded.)</p>
- */
-export const MOST_PROMPTS = 200;
-export const MOST_PER_PROMPT = 8_000;
-
 /** What the person wrote in a session, or why there is nothing to show. */
 export type Asked =
   | { readonly kind: 'said'; readonly said: readonly string[] }
@@ -933,7 +922,7 @@ export async function promptsFrom(file: string): Promise<Asked> {
     // Told apart from a file that is gone: an empty read of a file that IS there means the person
     // has not written in it yet, and a read of one that is not means the tab has outlived it.
     return await readable(file)
-      ? { kind: 'none', refusal: 'Nothing of yours is in that session yet.' }
+      ? { kind: 'none', refusal: NOTHING_OF_YOURS }
       : { kind: 'none', refusal: 'That session file is no longer on disk.' };
   }
 
@@ -1089,11 +1078,9 @@ export async function namesOf(file: string): Promise<SessionNames> {
 async function promptsOf(file: string): Promise<readonly string[]> {
   const said: string[] = [];
   await eachLine(file, (line) => {
-    const spoken = humanSaid(line);
-    if (spoken.length > 0) {
-      said.push(spoken.length <= MOST_PER_PROMPT
-        ? spoken
-        : `${spoken.slice(0, MOST_PER_PROMPT)}\n\n… (cut here — the rest is in the session file)`);
+    const prompt = promptIn(line);
+    if (prompt.length > 0) {
+      said.push(prompt);
     }
 
     return said.length < MOST_PROMPTS;
@@ -1170,11 +1157,7 @@ export async function waitingQuestion(
     } else if (asked.kind === 'unreadable') {
       // A question this build could not read is NOT silence. If Anthropic moves a field, the command
       // must say that rather than report that Claude is asking nothing. (codex, the code round.)
-      return {
-        kind: 'failed',
-        refusal: `Claude Code asked something this build does not recognise, in ${file}.`
-          + ' The session format has changed — this needs a new release.',
-      };
+      return { kind: 'failed', refusal: unrecognisedSaid(file) };
     }
   }
   const answer = waitingIn(sessions, looking);

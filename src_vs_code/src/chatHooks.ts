@@ -22,6 +22,8 @@ import { coaiDataDir } from './dataDir';
 import { writeFileAtomically } from './atomicFile';
 import { pictureDir } from './pictureStore';
 import { insideReally, promptsFrom } from './claudeSessions';
+import { promptsSaid } from './remoteRead';
+import { readRemoteSession, terminalOf } from './remoteSessionHost';
 import { createChatPanel, pushChatCopied, pushChatDraft, setChatDraft } from './chatPanel';
 import { notify } from './notify';
 import { retire } from './retireSession';
@@ -82,7 +84,7 @@ function writeInstruction(
   // swapped where it stands, or at our service lines when somebody edited it; else a whole opening
   // turn — around the captured passage when the box is ours, around the person's own text when a
   // prompt button adopts it. What the person wrote below our lines, or as the adopted material, is kept
-  // byte for byte; the one cut is at a WHOLE line of ours (the material note or the fence), which a
+  // byte for byte; the one place the text is split is at a WHOLE line of ours (the material note or the fence), which a
   // paste carries only when it is itself a turn of ours.
   const next = instructedBox(
     { draft, ours: thread.ourDraft, passage: thread.passage },
@@ -159,6 +161,29 @@ function instructionOf(thread: Thread, config: vscode.WorkspaceConfiguration): s
     thread.role,
     taskOf(config, thread.promptId, chatSettingsFrom(chatRead(config)).prompt),
   );
+}
+
+/** Shown when the road to a terminal's session threw. Fixed: an error's message can quote what was read, and what was read is the transcript. */
+const TERMINAL_ASKED_FAILED = 'The Claude session of this terminal could not be read.';
+
+/**
+ * What *Asked* shows for the conversation of a terminal (E2.S4): the prompts in the Claude session on its machine, read over ssh by
+ * the road of `remoteSessionHost`, through the terminal the conversation reaches — or the sentence that says why not. A failure is
+ * logged as a fixed line and shown as a fixed sentence, never with the error.
+ */
+async function askedFromTerminal(id: object, panels: ChatPanels): Promise<{ readonly asked: readonly string[]; readonly refusal: string }> {
+  try {
+    const reach = terminalOf(id, panels);
+    if (reach.kind === 'refused') {
+      return { asked: [], refusal: reach.refusal };
+    }
+
+    return promptsSaid(await readRemoteSession(reach.terminal, 'prompts'));
+  } catch {
+    console.error('Asked from a terminal failed');
+
+    return { asked: [], refusal: TERMINAL_ASKED_FAILED };
+  }
 }
 
 /**
@@ -385,6 +410,11 @@ export function conversationHooks(panels: ChatPanels): Parameters<typeof createC
         const at = (asking.get(id) ?? 0) + 1;
         asking.set(id, at);
         void (async () => {
+          if (mine.source.kind === 'terminal') {
+            found.panel.post({ type: 'asked', at, ...await askedFromTerminal(id, panels) });
+
+            return;
+          }
           // THE FILE FIRST, when this tab has one. It was resolved as the tab opened, while its name
           // still matched — and a name is what goes stale here, never a path.
           //

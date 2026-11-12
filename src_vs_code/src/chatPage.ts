@@ -830,7 +830,7 @@ function chatStyle(
      buttons in the tab order and its text on a screen reader — folded away and still reachable, which
      is the worst of both. The visibility property animates discretely: visible the instant it opens, hidden only
      once the fold has finished, which is exactly the behaviour wanted. (CodeRabbit, PR #207.) */
-  .asking { flex: 0 0 auto; max-height: 0; opacity: 0; overflow: hidden; padding: 0 20px; visibility: hidden;
+  .asking { display: flex; flex-direction: column; flex: 0 0 auto; max-height: 0; opacity: 0; overflow: hidden; padding: 0 20px; visibility: hidden;
             transition: max-height .5s ease, opacity .5s ease, padding .5s ease, visibility .5s ease;
             border-bottom: 2px solid transparent; }
   /* ORANGE, and a colour no other line on this page wears. The panel border it used to use is the
@@ -862,7 +862,10 @@ function chatStyle(
   .cutSaid { margin: 4px 0 0; font-size: .85em; opacity: .75; color: var(--coai-cut); }
   .askingHead button { min-width: 24px; padding: 2px 6px; font: inherit; }
   .askedAt { min-width: 4em; text-align: center; }
-  .askedText { max-height: calc(40vh - 2.5em); overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; }
+  .askedNote { font-style: italic; margin: 0 0 .4em; color: var(--vscode-descriptionForeground); }
+  /* The region is a column: the head row and the cut note take what they need and the text takes what is left, so the text box always fits
+     in the 40vh whatever height the note has, and its scrollbar reaches its last line. */
+  .askedText { flex: 1 1 auto; min-height: 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; }
   h1 { font-size: 1.2em; margin: 0; }
   .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; overflow-wrap: anywhere; opacity: .85; }
   /* A reading measure. A line that spans a wide tab is a line whose side says nothing, and the
@@ -1186,6 +1189,7 @@ ${state.fromSession ? `<section id="asking" class="asking" aria-live="polite" ar
   <span id="askedAt" class="askedAt"></span>
   <button type="button" id="askedNext" aria-label="The next one">&rsaquo;</button>
 </div>
+<div id="askedNote" class="askedNote" hidden></div>
 <div id="askedText" class="askedText"></div>
 </section>` : ''}
 <main id="scroll">
@@ -1667,6 +1671,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     const back = document.getElementById('askedBack');
     const next = document.getElementById('askedNext');
     const head = document.getElementById('askingHead');
+    const note = document.getElementById('askedNote');
     // ONE turn needs no arrows, and none needs no row at all. Disabled is not absent: on the
     // operator's own screenshot the two of them sat above a reason as a pair of empty boxes, which
     // reads as something broken rather than as the answer it was.
@@ -1674,6 +1679,8 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     if (count === 0) {
       box.textContent = askedWhy.length > 0 ? askedWhy : 'Reading the session…';
       at.textContent = '';
+      // The reason is the box itself here; a second line for it would say it twice.
+      if (note) { note.textContent = ''; note.hidden = true; }
       if (back) { back.disabled = true; }
       if (next) { next.disabled = true; }
 
@@ -1682,6 +1689,9 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     if (askedAt >= count) { askedAt = count - 1; }
     if (askedAt < 0) { askedAt = 0; }
     box.textContent = asked[askedAt];
+    // A line ABOVE the prompts when the host sent both: a session read by ssh may be only its last part, and the prompts alone would
+    // look like all of it. The local road sends no reason beside prompts, so for it this line stays empty and hidden.
+    if (note) { note.textContent = askedWhy; note.hidden = askedWhy.length === 0; }
     at.textContent = (askedAt + 1) + ' / ' + count;
     if (back) { back.disabled = askedAt === 0; }
     if (next) { next.disabled = askedAt >= count - 1; }

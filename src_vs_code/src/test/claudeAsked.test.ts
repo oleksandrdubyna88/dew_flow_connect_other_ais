@@ -4,11 +4,10 @@ import { mkdirSync, rmSync, symlinkSync, writeFileSync, utimesSync } from 'node:
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { humanSaid } from '../claudeQuestion';
+import { MOST_PER_PROMPT, MOST_PROMPTS } from '../sessionPrompts';
 import {
   Asked,
   Found,
-  MOST_PER_PROMPT,
-  MOST_PROMPTS,
   foldersToSearch,
   namesTheSame,
   oneAnswerFrom,

@@ -56,7 +56,7 @@ test('the chat pulses the heartbeat at every place the set of open conversations
   assert.match(after('thread.saveId = randomUUID();', 4_000, persist), /pulse\?\.\(\);/u, 'a conversation re-minted under a new id is announced under the old');
   // The pin takes the ENTRY rather than its id since story C1: it writes the conversation's source
   // when the session is found, and writing needs the entry the note would go to.
-  const pinned = command.indexOf('pinSession(entry, state.title, fromSession)');
+  const pinned = command.indexOf('pinSession(entry, state.title, fromSession, state.source)');
   assert.notEqual(pinned, -1, 'the pin after a new conversation is gone from chatCommand.ts');
   assert.match(command.slice(pinned - 400, pinned), /pulse\?\.\(\);/u, 'a newly opened conversation is not announced');
   // The registry readers moved to `chatRegistry.ts` when the command file was split; what they must
