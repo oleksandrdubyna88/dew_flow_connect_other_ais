@@ -19,7 +19,23 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-11 · extension **0.86.0** (released: `extension-v0.86.0` on 45b070a2, release run 43041879294,
+Last verified: 2026-11-12 · server **0.16.0** deployed (run 43032711575) — the box served 0.15.0 before the deploy and
+serves 0.16.0 after it · mcp **0.65.1** unchanged · extension **0.87.0** as the target, released by another session (its
+record is that session's). Before the deploy, both host credentials were tested on the box in one call: the canary token
+was accepted by https://coai.remsoft.dev, and `claude -p` with the claude slot's own environment and `claude.token`
+answered `OK`. The deploy's canary ran one real review per configured vendor: `codex: done`, `antigravity: done`,
+`claude: done`; the rollback step was skipped. Run locally:
+`MCP_VERSION=0.65.1 SERVER_VERSION=0.16.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.87.0`. The
+first run, minutes after the extension's publish, printed `FAIL 2 — marketplace serves 0.86.0` (the Marketplace's own
+delay; it served 0.87.0 at 17:34 UTC) and every other automated item PASS. The second run, 17:35 UTC, printed `PASS 1 —
+all six RIDs present`, `PASS 2 — marketplace serves 0.87.0`, `PASS 6` — client-config 200 and the catalog 401 without a
+session, the expected answer, `PASS 9 — all six RIDs present` and `PASS 10 — 200 {"ok":true,"version":"0.16.0"}`, and
+ended "every automated item passed". Manual items **7 and 11 observed** on the deploy's canary above; manual items 3, 4,
+5, 8 and 12 were not run. In this release: #945 only (test infrastructure). Beside it, not an item of this file: the
+ingest server **bugs 0.6.0** was deployed the same day (run 43269085878) — the host's canary said the service answers
+`/health` and opens its database, `live: 0.6.0`, and https://bugs.remsoft.dev answered `/health`.
+
+Previously verified: 2026-11-11 · extension **0.86.0** (released: `extension-v0.86.0` on 45b070a2, release run 43041879294,
 its `extension` job green with "Publish to the Marketplace"; every other job skipped, as on an extension-only tag) · mcp
 **0.65.1** unchanged · the box served server **0.15.0** at the time of the check: the 0.16.0 tag and release exist, its
 deploy belongs to another session and had not run yet. Run locally:
