@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.87.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.86.0...extension-v0.87.0) (2026-11-12)
+
+
+### Features
+
+* **chat:** the chat reads the remote Claude session — E2, a Creds terminal takes the question and Asked over one read-only ssh call ([#982](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/982)) ([e060d77](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e060d77e54c0483798ab79dcba77b1cee9a0a4e0))
+
 ## [0.86.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.85.0...extension-v0.86.0) (2026-11-11)
 
 
