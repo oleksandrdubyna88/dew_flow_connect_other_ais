@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 public sealed class TheSendsThemselvesTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-sends-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-sends-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
     private readonly ManualClock _clock = new(new DateTimeOffset(2026, 9, 17, 9, 0, 0, TimeSpan.Zero));
 

@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class HumanDecisionTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-decision-").FullName;
+    private readonly string _data = TempDir.For("coai-decision-").Path;
 
     public void Dispose()
     {

@@ -30,7 +30,7 @@ public sealed class CollectRunTests : IAsyncLifetime
     /// <summary>A clock a test controls, per `.agents/conventions/common/utc-timestamps.md`.</summary>
     private static readonly TimeProvider Clock =
         new FixedClock(new DateTimeOffset(2026, 9, 15, 12, 0, 0, TimeSpan.Zero));
-    private readonly string _data = Path.Combine(Path.GetTempPath(), "coai-run-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _data = Path.Combine(TempDir.Root, "coai-run-" + Guid.NewGuid().ToString("N")[..8]);
     private string _repo = string.Empty;
 
     private const string Racy = """
@@ -68,7 +68,7 @@ public sealed class CollectRunTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-runrepo-").FullName;
+        _repo = TempDir.For("coai-runrepo-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "Totals.cs"), Racy);
         await Commit("the defect");

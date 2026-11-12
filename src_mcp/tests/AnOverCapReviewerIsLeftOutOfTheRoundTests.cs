@@ -50,7 +50,7 @@ public sealed class AnOverCapReviewerIsLeftOutOfTheRoundTests : FakeCliRoundTest
     /// <summary>One plan round, and the argv of every launch FakeCli recorded for it.</summary>
     private async Task<(JsonElement Answer, string[][] Launches)> PlanRoundRecording(PanelService service, string branch = "feature")
     {
-        var record = Directory.CreateTempSubdirectory("coai-prompt-cap-record-").FullName;
+        var record = TempDir.For("coai-prompt-cap-record-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
@@ -108,7 +108,7 @@ public sealed class AnOverCapReviewerIsLeftOutOfTheRoundTests : FakeCliRoundTest
         var service = Rows(Codex(capKib: 1), Gemini(capKib: 1));
         await service.OpenAsync(_repo, Branch);
         var recorded = (await RoundsRecorded(service)).Count;
-        var launches = Directory.CreateTempSubdirectory("coai-prompt-cap-record-").FullName;
+        var launches = TempDir.For("coai-prompt-cap-record-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", launches);
         try
         {

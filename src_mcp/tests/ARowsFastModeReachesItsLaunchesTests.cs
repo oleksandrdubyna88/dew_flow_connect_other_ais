@@ -36,7 +36,7 @@ public sealed class ARowsFastModeReachesItsLaunchesTests
         var service = new PanelService(
             new PanelSettings
             {
-                DataDir = Path.Combine(Path.GetTempPath(), $"coai-fastroster-{Guid.NewGuid():N}"),
+                DataDir = Path.Combine(TempDir.Root, $"coai-fastroster-{Guid.NewGuid():N}"),
                 Providers = [new("codex") { Enabled = true, Runtime = "codex", Fast = FastMode.On }],
             },
             VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
@@ -62,7 +62,7 @@ public sealed class ARowsFastModeReachesItsLaunchesTests
         var service = new PanelService(
             new PanelSettings
             {
-                DataDir = Path.Combine(Path.GetTempPath(), $"coai-fastreport-{Guid.NewGuid():N}"),
+                DataDir = Path.Combine(TempDir.Root, $"coai-fastreport-{Guid.NewGuid():N}"),
                 Providers = PanelSettings.ParseVendors(
                     """[{"id":"codex","runtime":"codex","fast":"on"},{"id":"claude","runtime":"claude","model":"opus"},{"id":"antigravity","runtime":"antigravity","fast":"on"},{"id":"or","runtime":"codex","baseUrl":"https://or.example/v1","fast":"on"}]"""),
             },

@@ -17,9 +17,9 @@ public sealed class AFastModeRowIsCheckedTests : IDisposable
 {
     private static readonly string[] Steering = ["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_OUTFILE_TEXT", "FAKECLI_RECORD_DIR"];
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-fastcheck-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-fastcheck-temp-").FullName;
-    private readonly string _record = Directory.CreateTempSubdirectory("coai-fastcheck-argv-").FullName;
+    private readonly string _data = TempDir.For("coai-fastcheck-data-").Path;
+    private readonly string _temp = TempDir.For("coai-fastcheck-temp-").Path;
+    private readonly string _record = TempDir.For("coai-fastcheck-argv-").Path;
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 

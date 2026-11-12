@@ -15,7 +15,7 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
 {
     private static readonly TimeSpan Past = EscalationRetention.Retention + TimeSpan.FromHours(1);
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-idle-").FullName;
+    private readonly string _data = TempDir.For("coai-idle-").Path;
 
     public void Dispose()
     {

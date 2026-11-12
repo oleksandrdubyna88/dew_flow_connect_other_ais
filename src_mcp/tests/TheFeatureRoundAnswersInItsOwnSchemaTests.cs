@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheFeatureRoundAnswersInItsOwnSchemaTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-feature-schema-").FullName;
+    private readonly string _data = TempDir.For("coai-feature-schema-").Path;
 
     public void Dispose()
     {
@@ -53,7 +53,7 @@ public sealed class TheFeatureRoundAnswersInItsOwnSchemaTests : IDisposable
     private static IReadOnlyList<string> Launch(PanelService service, Stage stage)
     {
         var roles = service.Settings.Rounds.RolesForRound(stage, 1);
-        var work = service.Roster.BuildWork(roles, Path.GetTempPath(), "## the context", 1, stage, readsCheckout: false, codexTiers: CodexTiers.None);
+        var work = service.Roster.BuildWork(roles, TempDir.Root, "## the context", 1, stage, readsCheckout: false, codexTiers: CodexTiers.None);
 
         return [.. work.Reviewers.Select(w => string.Join('\n', [.. w.Invocation.Request.Arguments, w.Invocation.Request.StdIn]))];
     }

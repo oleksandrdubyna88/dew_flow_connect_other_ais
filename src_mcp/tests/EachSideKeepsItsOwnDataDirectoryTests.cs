@@ -27,7 +27,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("coai-side-").FullName;
+    private readonly string _root = TempDir.For("coai-side-").Path;
 
     public void Dispose()
     {

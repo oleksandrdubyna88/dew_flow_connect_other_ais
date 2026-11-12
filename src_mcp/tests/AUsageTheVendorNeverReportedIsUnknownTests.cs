@@ -31,7 +31,7 @@ public sealed class AUsageTheVendorNeverReportedIsUnknownTests : IDisposable
     private static readonly TokenPrice Grok = new(new TokenRates(2.00, 0.50, 6.00), 0, TokenRates.None);
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-usage-unknown-").FullName;
+    private readonly string _dir = TempDir.For("coai-usage-unknown-").Path;
 
     /// <summary>Holds the stub's answer past the shim's deadline; released on dispose, so the stub's thread never outlives the test.</summary>
     private readonly ManualResetEventSlim _hold = new(initialState: false);

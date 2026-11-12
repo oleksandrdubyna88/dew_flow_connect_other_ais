@@ -76,8 +76,8 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-consult-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-consult-data-").FullName;
+        _repo = TempDir.For("coai-consult-repo-").Path;
+        _data = TempDir.For("coai-consult-data-").Path;
         await Git("init", "-b", "main");
         await Git("config", "user.email", "t@example.com");
         await Git("config", "user.name", "t");

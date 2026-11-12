@@ -59,8 +59,8 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-doc-e2e-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-doc-e2e-data-").FullName;
+        _repo = TempDir.For("coai-doc-e2e-repo-").Path;
+        _data = TempDir.For("coai-doc-e2e-data-").Path;
 
         Directory.CreateDirectory(Path.Combine(_data, "prompts"));
         await File.WriteAllTextAsync(Path.Combine(_data, "prompts", "spec-general.md"), TheText);
@@ -219,7 +219,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
     public async Task ADocumentRound_IsGivenTheRulesItIsJudgedAgainst()
     {
         WriteFamilyRules();
-        var record = Directory.CreateTempSubdirectory("coai-doc-rules-").FullName;
+        var record = TempDir.For("coai-doc-rules-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {

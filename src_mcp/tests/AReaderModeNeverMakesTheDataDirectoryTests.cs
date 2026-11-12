@@ -24,7 +24,7 @@ namespace CoaiMcp.Tests;
 [Collection("console-out")]
 public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
 {
-    private readonly string _parent = Directory.CreateTempSubdirectory("coai-reader-").FullName;
+    private readonly string _parent = TempDir.For("coai-reader-").Path;
     private readonly string? _dirWas = Environment.GetEnvironmentVariable("COAI_DATA_DIR");
     private readonly string? _sideWas = Environment.GetEnvironmentVariable("COAI_DATA_SIDE");
 

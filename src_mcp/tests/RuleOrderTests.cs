@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class RuleOrderTests : IDisposable
 {
-    private readonly string _repo = Directory.CreateTempSubdirectory("coai-order-").FullName;
+    private readonly string _repo = TempDir.For("coai-order-").Path;
 
     public void Dispose()
     {

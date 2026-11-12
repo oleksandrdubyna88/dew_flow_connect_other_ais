@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 public sealed class RemoteCancellationTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-cancel-" + Guid.NewGuid().ToString("N"));
+        Path.Combine(TempDir.Root, "coai-cancel-" + Guid.NewGuid().ToString("N"));
 
     private string JobFile => Path.Combine(_dir, "a.job");
 

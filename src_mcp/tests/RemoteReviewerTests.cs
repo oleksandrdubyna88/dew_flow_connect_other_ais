@@ -63,13 +63,13 @@ public sealed class TeamServerAuthTests
     [Fact]
     public void AnAbsentTokenIsEmptyRatherThanAnException() =>
         // "Not signed in" is an ordinary state with its own exit code, not a fault.
-        TeamServerAuth.ReadToken(Path.Combine(Path.GetTempPath(), "coai-no-such-" + Guid.NewGuid()))
+        TeamServerAuth.ReadToken(Path.Combine(TempDir.Root, "coai-no-such-" + Guid.NewGuid()))
             .Should().BeEmpty();
 
     [Fact]
     public void ATokenSurvivesAWriteAndARead()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "coai-token-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(TempDir.Root, "coai-token-" + Guid.NewGuid().ToString("N"));
         try
         {
             var path = TeamServerAuth.TokenPath(dir, "https://coai.example.com/");
@@ -149,7 +149,7 @@ public sealed class RemoteAskTests
     [Fact]
     public void ATokenWrittenOwnerOnlyReportsNothingToWorryAbout()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "coai-mode-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(TempDir.Root, "coai-mode-" + Guid.NewGuid().ToString("N"));
         try
         {
             var path = TeamServerAuth.TokenPath(dir, "https://s");
@@ -170,7 +170,7 @@ public sealed class RemoteAskTests
     public void AFileThatCannotBeInspectedIsNotClaimedToBeSafe() =>
         // "Cannot be read" must never render as "owner-only" — that is the answer that would print
         // reassurance over an exposed token.
-        TeamServerAuth.IsOwnerOnly(Path.Combine(Path.GetTempPath(), "coai-none-" + Guid.NewGuid()))
+        TeamServerAuth.IsOwnerOnly(Path.Combine(TempDir.Root, "coai-none-" + Guid.NewGuid()))
             .Should().Be(OperatingSystem.IsWindows());
 
     [Fact]
@@ -252,7 +252,7 @@ public sealed class RemoteRuntimeTests
 {
     private static ReviewerInvocation Build(string dataDir)
     {
-        var output = Path.Combine(Path.GetTempPath(), "coai-remote-" + Guid.NewGuid().ToString("N"));
+        var output = Path.Combine(TempDir.Root, "coai-remote-" + Guid.NewGuid().ToString("N"));
 
         return new RemoteRuntime("codex", "https://coai.example.com/").Build(
             RoleCatalog.ArchitectureRole,
@@ -283,7 +283,7 @@ public sealed class RemoteRuntimeTests
         // history and its vault key. But the SERVER only knows `codex`. Sending the row id would be
         // refused by every server, and the probe would report a vendor the server "does not offer",
         // which reads exactly like a typo.
-        var output = Path.Combine(Path.GetTempPath(), "coai-remote-" + Guid.NewGuid().ToString("N"));
+        var output = Path.Combine(TempDir.Root, "coai-remote-" + Guid.NewGuid().ToString("N"));
         var invocation = new RemoteRuntime("remsoft-dev-codex", "https://coai.example.com", "codex").Build(
             RoleCatalog.ArchitectureRole, "review this", output, Path.Combine(output, "s.json"), output,
             new ReviewerSettings("remsoft-dev-codex") { Model = "m", DataDir = "/data" });
@@ -383,7 +383,7 @@ public sealed class RemoteRuntimeTests
     [Fact]
     public async Task AClaimSurvivesSoAKilledShimCanStillBeCancelled()
     {
-        var file = Path.Combine(Path.GetTempPath(), "coai-claim-" + Guid.NewGuid().ToString("N") + ".job");
+        var file = Path.Combine(TempDir.Root, "coai-claim-" + Guid.NewGuid().ToString("N") + ".job");
         try
         {
             RemoteRuntime.Claim(file, "https://coai.example.com/", "123-abc", "/data/servers/abc.token")
@@ -411,14 +411,14 @@ public sealed class RemoteRuntimeTests
         // Losing the claim costs a cancellation, not a review — so it must not throw. But a silent
         // loss means somebody is later billed for work nobody can explain.
         var impossible = Path.Combine(
-            Path.GetTempPath(), "coai-no-such-dir-" + Guid.NewGuid().ToString("N"), "nested", "x.job");
+            TempDir.Root, "coai-no-such-dir-" + Guid.NewGuid().ToString("N"), "nested", "x.job");
 
         RemoteRuntime.Claim(impossible, "https://s", "1", "/t").Should().NotBeEmpty();
     }
 
     [Fact]
     public async Task NoClaimIsEmptyRatherThanAnException() =>
-        (await RemoteRuntime.ReadClaimAsync(Path.Combine(Path.GetTempPath(), "coai-none-" + Guid.NewGuid()), TestContext.Current.CancellationToken))
+        (await RemoteRuntime.ReadClaimAsync(Path.Combine(TempDir.Root, "coai-none-" + Guid.NewGuid()), TestContext.Current.CancellationToken))
             .Should().Be(RemoteRuntime.RemoteClaim.None);
 
     [Theory]
@@ -446,7 +446,7 @@ public sealed class RemoteRuntimeTests
     [Fact]
     public void ForgettingAClaimThatIsNotThereIsNotAnError()
     {
-        var forget = () => RemoteRuntime.Forget(Path.Combine(Path.GetTempPath(), "coai-none-" + Guid.NewGuid()));
+        var forget = () => RemoteRuntime.Forget(Path.Combine(TempDir.Root, "coai-none-" + Guid.NewGuid()));
 
         forget.Should().NotThrow();
     }

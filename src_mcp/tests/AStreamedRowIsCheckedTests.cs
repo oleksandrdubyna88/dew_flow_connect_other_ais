@@ -23,8 +23,8 @@ public sealed class AStreamedRowIsCheckedTests : IDisposable
     private const string Key = "sk-check-0123456789abcdefghijklmnopqrstuv";
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-streamcheck-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-streamcheck-temp-").FullName;
+    private readonly string _data = TempDir.For("coai-streamcheck-data-").Path;
+    private readonly string _temp = TempDir.For("coai-streamcheck-temp-").Path;
 
     public void Dispose()
     {

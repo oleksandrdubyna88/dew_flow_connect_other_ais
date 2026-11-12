@@ -18,7 +18,7 @@ public sealed class APollWaitsOutABusyFileTests : IDisposable
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-busy-").FullName;
+    private readonly string _dir = TempDir.For("coai-busy-").Path;
 
     public void Dispose()
     {

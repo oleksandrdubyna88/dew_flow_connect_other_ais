@@ -12,10 +12,10 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class QuestionConsultSettingsTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-qsettings-data-").FullName;
-    private readonly string _projects = Directory.CreateTempSubdirectory("coai-qsettings-projects-").FullName;
-    private readonly string _profile = Directory.CreateTempSubdirectory("coai-qsettings-profile-").FullName;
-    private readonly string _system = Directory.CreateTempSubdirectory("coai-qsettings-system-").FullName;
+    private readonly string _data = TempDir.For("coai-qsettings-data-").Path;
+    private readonly string _projects = TempDir.For("coai-qsettings-projects-").Path;
+    private readonly string _profile = TempDir.For("coai-qsettings-profile-").Path;
+    private readonly string _system = TempDir.For("coai-qsettings-system-").Path;
 
     private SystemPlaces Places => new(_profile, [_system]);
 
@@ -187,7 +187,7 @@ public sealed class QuestionConsultSettingsTests : IDisposable
     /// <summary>A nested layout under one temp folder: <c>home/me</c> is the profile, <c>local/coai</c> the data, <c>win/sys</c> a system directory.</summary>
     private sealed class Layout : IDisposable
     {
-        public string Base { get; } = Directory.CreateTempSubdirectory("coai-qroots-").FullName;
+        public string Base { get; } = TempDir.For("coai-qroots-").Path;
 
         public string Home => Path.Combine(Base, "home");
 

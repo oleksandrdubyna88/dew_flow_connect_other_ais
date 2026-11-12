@@ -19,8 +19,8 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ALocalLaunchCarriesThePanelsEffortTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-localeffort-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-localeffort-temp-").FullName;
+    private readonly string _data = TempDir.For("coai-localeffort-data-").Path;
+    private readonly string _temp = TempDir.For("coai-localeffort-temp-").Path;
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 

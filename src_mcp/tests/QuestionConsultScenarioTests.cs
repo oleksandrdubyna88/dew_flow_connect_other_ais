@@ -41,9 +41,9 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-qscenario-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-qscenario-data-").FullName;
-        _record = Directory.CreateTempSubdirectory("coai-qscenario-argv-").FullName;
+        _repo = TempDir.For("coai-qscenario-repo-").Path;
+        _data = TempDir.For("coai-qscenario-data-").Path;
+        _record = TempDir.For("coai-qscenario-argv-").Path;
         await Git("init", "-b", "main");
         await Git("config", "user.email", "t@example.com");
         await Git("config", "user.name", "t");

@@ -25,7 +25,7 @@ namespace CoaiMcp.Tests;
 [Collection("console-out")]
 public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
 {
-    private readonly string _parent = Directory.CreateTempSubdirectory("coai-writer-").FullName;
+    private readonly string _parent = TempDir.For("coai-writer-").Path;
     private readonly string? _dirWas = Environment.GetEnvironmentVariable("COAI_DATA_DIR");
     private readonly string? _sideWas = Environment.GetEnvironmentVariable("COAI_DATA_SIDE");
     private readonly string? _keyWas = Environment.GetEnvironmentVariable("COAI_BUGS_KEY");

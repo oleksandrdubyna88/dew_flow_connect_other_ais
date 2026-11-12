@@ -28,7 +28,7 @@ public sealed class SubmissionOrderTests : IDisposable
     private static PanelService Service(params string[] vendors) =>
         new(new PanelSettings
         {
-            DataDir = Path.Combine(Path.GetTempPath(), $"coai-order-{Guid.NewGuid():N}"),
+            DataDir = Path.Combine(TempDir.Root, $"coai-order-{Guid.NewGuid():N}"),
             CodeWorkspace = "none",
             Providers = [.. vendors.Select(v =>
                 new ProviderSettings(v) { Enabled = true, Runtime = "local", Model = "m" })],
@@ -43,7 +43,7 @@ public sealed class SubmissionOrderTests : IDisposable
     /// folders in the temp directory on every run — found on the code round. `IDisposable` on the
     /// class is xUnit's own teardown, so the sweep happens whether the assertions pass or throw.
     /// </remarks>
-    private readonly string _root = Directory.CreateTempSubdirectory("coai-order-").FullName;
+    private readonly string _root = TempDir.For("coai-order-").Path;
 
     public void Dispose()
     {

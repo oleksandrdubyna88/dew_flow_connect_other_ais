@@ -42,7 +42,7 @@ public sealed class ContextAssemblerRenameTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-rename-").FullName;
+        _repo = TempDir.For("coai-rename-").Path;
         await Git("init", "-b", "main");
         Directory.CreateDirectory(Path.Combine(_repo, "src"));
 

@@ -387,7 +387,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
     public async Task APlanRound_IsGivenTheRulesItIsJudgedAgainst()
     {
         WriteFamilyRules();
-        var record = Directory.CreateTempSubdirectory("coai-plan-rules-").FullName;
+        var record = TempDir.For("coai-plan-rules-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
@@ -425,7 +425,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
     public async Task APlanRoundWhoseTierIsOnlyPartlyHere_SaysSoToTheReviewer()
     {
         WriteFamilyRules();
-        var record = Directory.CreateTempSubdirectory("coai-plan-partial-").FullName;
+        var record = TempDir.For("coai-plan-partial-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
@@ -449,7 +449,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task APlanRoundWithNoneOfItsTier_TellsTheReviewerNotToReadItAsCompliance()
     {
-        var record = Directory.CreateTempSubdirectory("coai-plan-none-").FullName;
+        var record = TempDir.For("coai-plan-none-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
@@ -512,7 +512,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
         await _h.Git("add", ".");
         await _h.Git("commit", "-m", "the family rules");
 
-        var record = Directory.CreateTempSubdirectory("coai-code-rules-").FullName;
+        var record = TempDir.For("coai-code-rules-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {

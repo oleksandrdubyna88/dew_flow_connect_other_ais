@@ -38,7 +38,7 @@ public sealed class GateHistoryQueryTests : IAsyncLifetime
         """;
 
     private readonly IProcessLauncher _launcher = new ProcessLauncher();
-    private readonly string _dataDir = Path.Combine(Path.GetTempPath(), "coai-history-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dataDir = Path.Combine(TempDir.Root, "coai-history-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
     private TempGitRepo _repo = null!;
     private string _base = string.Empty;
@@ -342,7 +342,7 @@ public sealed class GateHistoryQueryTests : IAsyncLifetime
         var head = await CommitOnMainAsync("work");
         SeedRound("here#feat/e1", EpicBranch, "CodeReview", 1, _t0.AddMinutes(1), Unreachable('9'), ("Here", "this repository"));
         SeedConsultation("c1", EpicBranch, Unreachable('7'), _t0.AddMinutes(2), "Why does the handle stick?", "Because the pool holds it.");
-        var links = Directory.CreateTempSubdirectory("coai-history-link-").FullName;
+        var links = TempDir.For("coai-history-link-").Path;
         var linked = Path.Combine(links, "repo");
         try
         {

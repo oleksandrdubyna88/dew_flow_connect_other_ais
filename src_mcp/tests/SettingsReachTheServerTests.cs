@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class SettingsReachTheServerTests : IDisposable
 {
-    private readonly string _dataDir = Directory.CreateTempSubdirectory("coai-reach-").FullName;
+    private readonly string _dataDir = TempDir.For("coai-reach-").Path;
 
     public void Dispose() => Directory.Delete(_dataDir, recursive: true);
 

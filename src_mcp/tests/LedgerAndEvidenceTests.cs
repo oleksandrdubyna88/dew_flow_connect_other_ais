@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class LedgerAndEvidenceTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-ledger-").FullName;
+    private readonly string _dir = TempDir.For("coai-ledger-").Path;
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 

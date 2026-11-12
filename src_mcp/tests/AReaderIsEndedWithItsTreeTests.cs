@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-reader-tree-").FullName;
+    private readonly string _dir = TempDir.For("coai-reader-tree-").Path;
 
     /// <summary>A one-line answer, as a stdio server writes it — and the predicate that spots it.</summary>
     private const string Answer = """{"id":2,"result":{"ok":true}}""";

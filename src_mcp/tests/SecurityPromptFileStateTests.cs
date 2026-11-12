@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class SecurityPromptFileStateTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-security-text-").FullName;
+    private readonly string _data = TempDir.For("coai-security-text-").Path;
 
     public void Dispose() => Directory.Delete(_data, true);
 

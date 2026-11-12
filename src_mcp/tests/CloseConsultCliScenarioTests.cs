@@ -29,8 +29,8 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class CloseConsultCliScenarioTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-close-cli-").FullName;
-    private readonly string _repo = Directory.CreateTempSubdirectory("coai-close-repo-").FullName;
+    private readonly string _data = TempDir.For("coai-close-cli-").Path;
+    private readonly string _repo = TempDir.For("coai-close-repo-").Path;
 
     public void Dispose()
     {
@@ -174,7 +174,7 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
     public void AConsultationFromAnotherCheckoutIsRefused_RatherThanClosedUnderTheWrongLock()
     {
         var id = Recorded();
-        var elsewhere = Directory.CreateTempSubdirectory("coai-close-other-").FullName;
+        var elsewhere = TempDir.For("coai-close-other-").Path;
         try
         {
             var (code, said) = Run("--close-consult", "--repo", elsewhere, "--id", id, "--outcome", "solved");
@@ -214,7 +214,7 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
     public void AndItDoesNotWaitOnTheOtherCheckoutsLockToSayNo()
     {
         var id = Recorded();
-        var elsewhere = Directory.CreateTempSubdirectory("coai-close-other-").FullName;
+        var elsewhere = TempDir.For("coai-close-other-").Path;
         // HELD, the way a consultation running there holds it — a FileShare.None handle in the data
         // directory, which is exactly what RepositoryLock opens.
         var theirs = RepositoryLock.PathFor(_data, elsewhere);
@@ -256,7 +256,7 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
     public void TheLockFileItLeavesBehindIsTheConsultationsOwn()
     {
         var id = Recorded();
-        var elsewhere = Directory.CreateTempSubdirectory("coai-close-other-").FullName;
+        var elsewhere = TempDir.For("coai-close-other-").Path;
         try
         {
             var ours = RepositoryLock.PathFor(_data, _repo);

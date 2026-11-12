@@ -36,8 +36,8 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-cause-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-cause-data-").FullName;
+        _repo = TempDir.For("coai-cause-repo-").Path;
+        _data = TempDir.For("coai-cause-data-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
         await Git("add", ".");

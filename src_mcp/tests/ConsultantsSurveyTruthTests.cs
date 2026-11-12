@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ConsultantsSurveyTruthTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-survey-truth-").FullName;
+    private readonly string _data = TempDir.For("coai-survey-truth-").Path;
 
     public void Dispose()
     {

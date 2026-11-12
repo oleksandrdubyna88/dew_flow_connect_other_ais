@@ -123,9 +123,9 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-feature-e2e-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-feature-e2e-data-").FullName;
-        _record = Directory.CreateTempSubdirectory("coai-feature-e2e-record-").FullName;
+        _repo = TempDir.For("coai-feature-e2e-repo-").Path;
+        _data = TempDir.For("coai-feature-e2e-data-").Path;
+        _record = TempDir.For("coai-feature-e2e-record-").Path;
 
         await Git("init", "-b", "main");
         Write(PlanPath, PlanText);

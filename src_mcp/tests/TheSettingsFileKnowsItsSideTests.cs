@@ -32,7 +32,7 @@ public sealed class TheSettingsFileKnowsItsSideTests
     [Fact]
     public void TwoSidesOfOneRoot_KeepTheirOwnSettingsFile()
     {
-        var root = Path.Combine(Path.GetTempPath(), "coai-side-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(TempDir.Root, "coai-side-" + Guid.NewGuid().ToString("N"));
 
         var a = SettingsFile.PathFor(SettingsFile.DataDirFrom(Env(root, "alpha")).Path);
         var b = SettingsFile.PathFor(SettingsFile.DataDirFrom(Env(root, "beta")).Path);
@@ -51,7 +51,7 @@ public sealed class TheSettingsFileKnowsItsSideTests
         // The partition is OPT-IN, and this is the half that says so. Moving the data of somebody
         // who set COAI_DATA_DIR last year and never heard of a side would be the surprise
         // `PanelSettings` spends a paragraph refusing.
-        var root = Path.Combine(Path.GetTempPath(), "coai-side-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(TempDir.Root, "coai-side-" + Guid.NewGuid().ToString("N"));
 
         SettingsFile.DataDirFrom(Env(root, null)).Path.Should().Be(Path.GetFullPath(root));
         SettingsFile.DataDirFrom(Env(root, "   ")).Path.Should().Be(Path.GetFullPath(root));
@@ -74,7 +74,7 @@ public sealed class TheSettingsFileKnowsItsSideTests
         // A side that was ASKED FOR and refused must never fall back to the shared root: that is the
         // partition inverted, reached by a typo, and reported nowhere. `PanelSettings` throws; this
         // returned the root and let the server start.
-        var root = Path.Combine(Path.GetTempPath(), "coai-side-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(TempDir.Root, "coai-side-" + Guid.NewGuid().ToString("N"));
 
         var refused = () => SettingsFile.DataDirFrom(Env(root, "wsl/node1"));
 
@@ -96,7 +96,7 @@ public sealed class TheSettingsFileKnowsItsSideTests
         // `CoaiLogging` opens the file with `shared: false`, so two machines on one NAS with the same
         // pid in the same second target one file neither will share. Attribution then rests on
         // nothing. (The consultation, 2026-09-18.)
-        var root = Path.Combine(Path.GetTempPath(), "coai-side-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(TempDir.Root, "coai-side-" + Guid.NewGuid().ToString("N"));
 
         var a = CoaiLogPath.RootFor(SettingsFile.DataDirFrom(Env(root, "alpha")).Path);
         var b = CoaiLogPath.RootFor(SettingsFile.DataDirFrom(Env(root, "beta")).Path);
@@ -119,7 +119,7 @@ public sealed class TheSettingsFileKnowsItsSideTests
         // punctuated / UPPER-CASE (lowered) / dot / dot-dot / with a separator (refused) for the
         // side. The last three are the interesting ones — they are the inputs on which the two could
         // disagree by one THROWING and the other answering.
-        var root = Path.Combine(Path.GetTempPath(), "coai-side-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(TempDir.Root, "coai-side-" + Guid.NewGuid().ToString("N"));
         string?[] dirs = [null, "", "   ", root, root + Path.DirectorySeparatorChar, "relative-dir"];
         string?[] sides = [null, "", "  ", "alpha", "a_b-1", "  alpha  ", "WSL", ".", "..", "wsl/node1", "wsl\\node1"];
 

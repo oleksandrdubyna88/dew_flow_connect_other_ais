@@ -77,8 +77,8 @@ public sealed class APrivateKeyBlockIsNeverServedTests : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         _repo = await TempGitRepo.InitAsync(_launcher, "coai-pem-repo-");
-        _data = Directory.CreateTempSubdirectory("coai-pem-data-").FullName;
-        _record = Directory.CreateTempSubdirectory("coai-pem-record-").FullName;
+        _data = TempDir.For("coai-pem-data-").Path;
+        _record = TempDir.For("coai-pem-record-").Path;
         await Write(PlanPath, PlanText);
         await Write("src/Shop.cs", Shop("var total = n;"));
         await Write("config/service-account.json", ServiceAccount(Escaped(string.Empty, 2)));

@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 public sealed class SecurityLaneRoundTests : IAsyncLifetime
 {
     private readonly ProcessLauncher _real = new();
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-security-test-").FullName;
+    private readonly string _data = TempDir.For("coai-security-test-").Path;
     private TempGitRepo _repo = null!;
     private static string Exe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
     private static readonly FileDiff[] Files = [new("Query.cs", "@@ -1 +1 @@\n-old\n+database.Query(value);")];

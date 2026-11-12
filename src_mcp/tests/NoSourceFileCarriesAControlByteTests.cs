@@ -108,7 +108,7 @@ public sealed class NoSourceFileCarriesAControlByteTests
         // this would still have passed. It drives the REAL walk over a tree it plants now: the file
         // has to be found by `FilesUnder` and refused by `ForbiddenBytesIn`, which are the two
         // halves the theory above is made of.
-        var root = Directory.CreateTempSubdirectory("coai-control-byte-").FullName;
+        var root = TempDir.For("coai-control-byte-").Path;
         try
         {
             var clean = Path.Combine(root, "Ordinary.cs");

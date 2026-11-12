@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheOutlineModeTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-outline-").FullName;
+    private readonly string _dir = TempDir.For("coai-outline-").Path;
 
     public void Dispose()
     {

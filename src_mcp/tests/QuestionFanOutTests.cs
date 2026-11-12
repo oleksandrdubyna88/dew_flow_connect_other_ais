@@ -26,7 +26,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
     private const string Context = "I tried a fixed 15 s wait; it burns the budget. The options are a backoff ladder or a breaker that opens after three failures.";
 
     private readonly ProcessLauncher _real = new();
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-qfanout-").FullName;
+    private readonly string _data = TempDir.For("coai-qfanout-").Path;
     private TempGitRepo _repo = null!;
     private TempGitRepo _projects = null!;
     private string _head = string.Empty;
@@ -506,7 +506,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
     [Fact]
     public async Task ADiskRootThatIsNoGitCheckout_IsSaidOnTheRow_AsNotWatched()
     {
-        var plain = Directory.CreateTempSubdirectory("coai-qfanout-plain-").FullName;
+        var plain = TempDir.For("coai-qfanout-plain-").Path;
         try
         {
             File.WriteAllText(Path.Combine(plain, "Retry.cs"), "public static class Retry { }\n");

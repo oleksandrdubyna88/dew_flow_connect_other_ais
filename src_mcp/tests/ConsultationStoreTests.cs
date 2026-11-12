@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 /// <summary>The consultation file: written before the launch, swept when its server is gone.</summary>
 public sealed class ConsultationStoreTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-consult-store-").FullName;
+    private readonly string _data = TempDir.For("coai-consult-store-").Path;
     private readonly ConsultationStore _store;
 
     public ConsultationStoreTests() => _store = new ConsultationStore(_data);
@@ -138,7 +138,7 @@ public sealed class ConsultationStoreTests : IDisposable
     [Fact]
     public async Task ASweepLeavesAnAskingRecordAlone_WhileItsRepositoryLockIsHeld()
     {
-        var repo = Directory.CreateTempSubdirectory("coai-held-").FullName;
+        var repo = TempDir.For("coai-held-").Path;
         try
         {
             var record = Record(handle: "0198-bbbb") with { RepoPath = repo };
@@ -376,7 +376,7 @@ public sealed class ConsultationStoreTests : IDisposable
 /// <summary>The per-caller call cap — and what it does when it cannot write its own counter.</summary>
 public sealed class ConsultCallCounterTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-consult-count-").FullName;
+    private readonly string _data = TempDir.For("coai-consult-count-").Path;
 
     public void Dispose()
     {
@@ -464,7 +464,7 @@ public sealed class SameCheckoutTests
     [Fact]
     public void TheSamePathSpelledTheSameWay_IsTheSameCheckout()
     {
-        var path = Path.Combine(Path.GetTempPath(), "coai-one-checkout");
+        var path = Path.Combine(TempDir.Root, "coai-one-checkout");
 
         ConsultationService.SamePath(path, path + Path.DirectorySeparatorChar, RealPath.Lstat)
             .Should().BeTrue("a trailing separator is not a different directory");
@@ -537,8 +537,8 @@ public sealed class SameCheckoutTests
     [Fact]
     public void TwoDifferentCheckouts_AreNotTheSameOne()
     {
-        var one = Path.Combine(Path.GetTempPath(), "coai-checkout-one");
-        var other = Path.Combine(Path.GetTempPath(), "coai-checkout-two");
+        var one = Path.Combine(TempDir.Root, "coai-checkout-one");
+        var other = Path.Combine(TempDir.Root, "coai-checkout-two");
 
         ConsultationService.SamePath(one, other, RealPath.Lstat).Should().BeFalse();
         ConsultationService.RepoIdentity(one, RealPath.Lstat).Should().NotBe(ConsultationService.RepoIdentity(other, RealPath.Lstat));
@@ -554,7 +554,7 @@ public sealed class SameCheckoutTests
     [Fact]
     public void APathThisMachineCannotResolve_IsNotAMatch_AndDoesNotThrow()
     {
-        var here = Path.Combine(Path.GetTempPath(), "coai-checkout-here");
+        var here = Path.Combine(TempDir.Root, "coai-checkout-here");
 
         ConsultationService.SamePath(here, "\0not-a-path", RealPath.Lstat).Should().BeFalse();
         ConsultationService.SamePath(here, string.Empty, RealPath.Lstat).Should().BeFalse();

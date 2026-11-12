@@ -119,7 +119,7 @@ public sealed class ConsultKindsScenarioTests : ConsultScenarioBase
     public async Task EachKind_IsAskedWithItsOwnPrompt(string kind, string epics, string heard)
     {
         using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
-        var recorded = Directory.CreateTempSubdirectory("coai-consult-kind-").FullName;
+        var recorded = TempDir.For("coai-consult-kind-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", recorded);
         try
         {

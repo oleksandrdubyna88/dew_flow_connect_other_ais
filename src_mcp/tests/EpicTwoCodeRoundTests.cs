@@ -61,7 +61,7 @@ public sealed class EpicTwoCodeRoundTests
     [Fact]
     public async Task AnUnreadableSystemPromptFile_IsCalledThat()
     {
-        var dir = Directory.CreateTempSubdirectory("coai-c2-ask-").FullName;
+        var dir = TempDir.For("coai-c2-ask-").Path;
         var prompt = Path.Combine(dir, "p.prompt");
         await File.WriteAllTextAsync(prompt, "review this");
         var token = Path.Combine(dir, "t.token");

@@ -23,7 +23,7 @@ public sealed class ApiShimScenarioTests : IDisposable
     private const string Key = "sk-scenario-0123456789abcdefghijklmnopqrstuv";
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-api-shim-").FullName;
+    private readonly string _dir = TempDir.For("coai-api-shim-").Path;
 
     public void Dispose()
     {

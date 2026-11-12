@@ -39,8 +39,8 @@ public sealed class ARowsSystemPromptLeavesNoTraceTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-canary-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-canary-data-").FullName;
+        _repo = TempDir.For("coai-canary-repo-").Path;
+        _data = TempDir.For("coai-canary-data-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
         await Git("add", ".");

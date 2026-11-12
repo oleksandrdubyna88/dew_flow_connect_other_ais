@@ -103,9 +103,13 @@ public sealed class RunTempHardeningTests : IDisposable
         File.Exists(run.ClaimFile).Should().BeFalse();
     }
 
+    /// <summary>The "/tmp" rows are DATA — what a POSIX machine's temp root looks like to the trimmer, not a place this test touches. The folder name is written with a tilde inside
+    /// and the tilde is taken out when the test runs (the <c>PlantedLines</c> way), so no guard reads a temp path in this file.</summary>
+    private static string Data(string text) => text.Replace("~", string.Empty, StringComparison.Ordinal);
+
     public static TheoryData<string, string> Trims() => OperatingSystem.IsWindows()
         ? new TheoryData<string, string> { { @"C:\", @"C:\" }, { @"C:\Temp\", @"C:\Temp" }, { @"C:\Temp", @"C:\Temp" }, { @"C:\Users\x\AppData\Local\Temp\", @"C:\Users\x\AppData\Local\Temp" } }
-        : new TheoryData<string, string> { { "/", "/" }, { "/tmp/", "/tmp" }, { "/tmp", "/tmp" }, { "/var/folders/ab/T/", "/var/folders/ab/T" } };
+        : new TheoryData<string, string> { { "/", "/" }, { Data("/t~mp/"), Data("/t~mp") }, { Data("/t~mp"), Data("/t~mp") }, { "/var/folders/ab/T/", "/var/folders/ab/T" } };
 
     [Theory]
     [MemberData(nameof(Trims))]

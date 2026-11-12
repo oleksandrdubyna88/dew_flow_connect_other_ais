@@ -20,7 +20,7 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-invariant-").FullName;
+        _repo = CoaiMcp.Tests.TempDir.For("coai-invariant-").Path;
         _invariant = new FilesystemInvariant(_launcher);
         await Git("init", "-b", "main");
         await Git("config", "user.email", "t@example.com");
@@ -186,7 +186,7 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
         // `config` and the hooks live in the COMMON git directory, which a linked worktree only points
         // at — and this feature is being built in exactly such a worktree. Watching only the
         // worktree's own directory left a shared hook invisible to both snapshots.
-        var linked = Path.Combine(Path.GetTempPath(), "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
+        var linked = Path.Combine(CoaiMcp.Tests.TempDir.Root, "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
         // testsToDelete-exempt: raw-worktree — `linked` is directly in the run folder, the temp root of this process
         await Git("worktree", "add", "--detach", linked);
         try
@@ -217,7 +217,7 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
     /// <summary>Snapshots a linked worktree across what somebody ELSE did in the main checkout.</summary>
     private async Task<IReadOnlyList<TreeChange>> AcrossLinkedAsync(Func<Task> whatASiblingDid)
     {
-        var linked = Path.Combine(Path.GetTempPath(), "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
+        var linked = Path.Combine(CoaiMcp.Tests.TempDir.Root, "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
         // testsToDelete-exempt: raw-worktree — `linked` is directly in the run folder, the temp root of this process
         await Git("worktree", "add", "--detach", linked);
         try
@@ -414,7 +414,7 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
     {
         // A linked worktree's OWN config is not read by git status, so a malformed one does not stop the
         // snapshot — and `git config --list` refuses it, which is where the byte fallback is the answer.
-        var linked = Path.Combine(Path.GetTempPath(), "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
+        var linked = Path.Combine(CoaiMcp.Tests.TempDir.Root, "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
         // testsToDelete-exempt: raw-worktree — `linked` is directly in the run folder, the temp root of this process
         await Git("worktree", "add", "--detach", linked);
         try
@@ -530,7 +530,7 @@ public sealed class WorkingTreeDiffTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-worktree-").FullName;
+        _repo = CoaiMcp.Tests.TempDir.For("coai-worktree-").Path;
         _context = new ContextAssembler(_launcher);
         await Git("init", "-b", "main");
         await Git("config", "user.email", "t@example.com");
@@ -597,7 +597,7 @@ public sealed class WorkingTreeDiffTests : IAsyncLifetime
     [Fact]
     public async Task AnUntrackedLinkIsNamed_AndItsTargetIsNeverRead()
     {
-        var outside = Path.Combine(Path.GetTempPath(), "coai-secret-" + Guid.NewGuid().ToString("N") + ".txt");
+        var outside = Path.Combine(CoaiMcp.Tests.TempDir.Root, "coai-secret-" + Guid.NewGuid().ToString("N") + ".txt");
         await File.WriteAllTextAsync(outside, "SECRET-OUTSIDE-THE-TREE\n", TestContext.Current.CancellationToken);
         try
         {
@@ -694,7 +694,7 @@ public sealed class WorkingTreeDiffTests : IAsyncLifetime
     [Fact]
     public async Task APathThatIsNoCheckout_IsRefusedInGitsOwnWords()
     {
-        var elsewhere = Directory.CreateTempSubdirectory("coai-not-a-repo-").FullName;
+        var elsewhere = CoaiMcp.Tests.TempDir.For("coai-not-a-repo-").Path;
         try
         {
             var (top, refusal) = await _context.TopLevelAsync(elsewhere, TestContext.Current.CancellationToken);

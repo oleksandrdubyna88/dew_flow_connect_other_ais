@@ -47,7 +47,7 @@ public sealed class FeatureOutlineBuilderTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-feature-outline-").FullName;
+        _repo = TempDir.For("coai-feature-outline-").Path;
         await Git("init", "-b", "main");
         Write("src/Shop.cs", ShopAtBase);
         Write("src/Old.cs", "public static class Old\n{\n" + string.Concat(Enumerable.Range(0, LinesEnoughToBeARename).Select(i => $"    public static int F{i}() => {i};\n")) + "}\n");

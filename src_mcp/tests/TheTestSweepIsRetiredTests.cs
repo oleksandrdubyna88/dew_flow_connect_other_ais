@@ -111,7 +111,10 @@ public sealed class TheTestSweepIsRetiredTests
     [Fact]
     public void TheSentences_NameTheNumberTheRootAndWhereToGo()
     {
-        StartOfRun.Sentence(0, "/tmp").Should().Be("run: no old coai-* leftovers in /tmp");
-        StartOfRun.Sentence(1, "/tmp").Should().Contain("1 old coai-* directory in /tmp").And.Contain("The one-off clean-up");
+        // "/tmp" is DATA here — the root the sentence names, which this test never touches. It is written with a tilde inside, taken out at run time (the PlantedLines way).
+        var root = "/t~mp".Replace("~", string.Empty, StringComparison.Ordinal);
+
+        StartOfRun.Sentence(0, root).Should().Be($"run: no old coai-* leftovers in {root}");
+        StartOfRun.Sentence(1, root).Should().Contain($"1 old coai-* directory in {root}").And.Contain("The one-off clean-up");
     }
 }

@@ -206,7 +206,7 @@ jobs:
           fi
           node .github/scripts/suppressions-only-shrink.mjs ${ABSENT:+"$ABSENT"} \
             src_vs_code/eslint-suppressions.json "$RUNNER_TEMP/base-suppressions.json"
-      # The raw-temp baseline only shrinks (E5 S6; common/test-leftovers-baseline.md, The ratchet). Never the creation flag here. PR 945 was the file's one creation and S7's first drain PR (the bench suite) removed its bypass.
+      # The raw-temp baseline only shrinks (E5 S6; common/test-leftovers-baseline.md, The ratchet). Never the creation flag here. PR 945 was the file's one creation and S7's first drain PR (the bench suite) removed its bypass. The file was drained to zero and deleted by S7-d (E5 S7, the coai-mcp suite's drain PR): this step now answers "absent now — drained" and still refuses a re-creation.
       - name: The raw-temp baseline only shrinks
         if: github.event_name == 'pull_request'
         env:

@@ -127,7 +127,7 @@ public class FoundByTheGateTests
 
     private static ReviewerInvocation Build(string baseUrl)
     {
-        var dir = Directory.CreateTempSubdirectory("coai-endpointtest-").FullName;
+        var dir = TempDir.For("coai-endpointtest-").Path;
         try
         {
             return new LocalRuntime("local", baseUrl).Build(
@@ -165,7 +165,7 @@ public class FoundByTheGateTests
         //
         // RED: the request was built and POSTed; the shim came back 70 after a connection failure
         //      instead of 65 before spending anything.
-        var dir = Directory.CreateTempSubdirectory("coai-schematest-").FullName;
+        var dir = TempDir.For("coai-schematest-").Path;
         try
         {
             var promptFile = Path.Combine(dir, "p.txt");
@@ -209,7 +209,7 @@ public class FoundByTheGateTests
         //
         // RED: System.ArgumentOutOfRangeException : The value needs to translate in milliseconds to
         //      -1 (signifying an infinite timeout), 0, or a positive integer … (Parameter 'delay')
-        var dir = Directory.CreateTempSubdirectory("coai-escalationtest-").FullName;
+        var dir = TempDir.For("coai-escalationtest-").Path;
         try
         {
             var escalations = new Escalations(dir, TimeSpan.FromMilliseconds(5));

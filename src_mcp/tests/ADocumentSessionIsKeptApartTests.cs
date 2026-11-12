@@ -99,7 +99,7 @@ public sealed class ADocumentSessionIsKeptApartTests
     [Fact]
     public void ACaseDifferentSibling_IsNotInsideWhereTheDiskSaysItIsNot()
     {
-        var inside = DocumentId.Of("/tmp/repo", "/tmp/Repo/secrets.md");
+        var inside = DocumentId.Of("/fake/repo", "/fake/Repo/secrets.md");
 
         if (OperatingSystem.IsWindows())
         {
@@ -107,7 +107,7 @@ public sealed class ADocumentSessionIsKeptApartTests
         }
         else
         {
-            inside.Should().BeEmpty("/tmp/Repo and /tmp/repo are two directories on this filesystem");
+            inside.Should().BeEmpty("/fake/Repo and /fake/repo are two directories on this filesystem");
         }
     }
 

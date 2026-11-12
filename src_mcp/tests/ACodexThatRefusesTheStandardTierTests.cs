@@ -86,7 +86,7 @@ public sealed class ACodexThatRefusesTheStandardTierTests
         var service = new PanelService(
             new PanelSettings
             {
-                DataDir = Path.Combine(Path.GetTempPath(), $"coai-tierreport-{Guid.NewGuid():N}"),
+                DataDir = Path.Combine(TempDir.Root, $"coai-tierreport-{Guid.NewGuid():N}"),
                 Providers = PanelSettings.ParseVendors("""[{"id":"codex","runtime":"codex"},{"id":"fastcodex","runtime":"codex","fast":"on"}]"""),
             },
             VaultKeys.None("no vault"), default, new RecordingLauncher(stdOut: printed), Serilog.Core.Logger.None, Noticing.None);

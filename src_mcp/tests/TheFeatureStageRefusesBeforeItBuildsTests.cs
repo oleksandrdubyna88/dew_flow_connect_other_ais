@@ -42,8 +42,8 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-feature-refusals-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-feature-refusals-data-").FullName;
+        _repo = TempDir.For("coai-feature-refusals-").Path;
+        _data = TempDir.For("coai-feature-refusals-data-").Path;
         await Git("init", "-b", "main");
         Write(PlanPath, "# PLAN — x\n\nThree epics.\n");
         Write("src/A.cs", "public sealed class A { }\n");
@@ -93,7 +93,7 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
     /// <summary>The repository, reached through a directory link made for this test.</summary>
     private async Task<string> LinkedRepoAsync()
     {
-        _links = Directory.CreateTempSubdirectory("coai-feature-refusals-link-").FullName;
+        _links = TempDir.For("coai-feature-refusals-link-").Path;
         var linked = Path.Combine(_links, "repo");
         await DirectoryLink.MakeAsync(_launcher, linked, _repo);
 
@@ -161,7 +161,7 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
     [Fact]
     public async Task APlanOutsideTheRepository_IsRefused()
     {
-        var outside = Path.Combine(Path.GetTempPath(), $"coai-not-in-repo-{Guid.NewGuid():N}.md");
+        var outside = Path.Combine(TempDir.Root, $"coai-not-in-repo-{Guid.NewGuid():N}.md");
         await File.WriteAllTextAsync(outside, "# PLAN — elsewhere\n");
         try
         {

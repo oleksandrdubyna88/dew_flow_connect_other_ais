@@ -20,7 +20,7 @@ public sealed class AStreamedAskTests : IDisposable
     private const string Key = "sk-live-0123456789abcdefghijklmnopqrstuv";
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-ask-stream-").FullName;
+    private readonly string _dir = TempDir.For("coai-ask-stream-").Path;
     private readonly List<string> _stderr = [];
     private readonly StringWriter _stdout = new();
 

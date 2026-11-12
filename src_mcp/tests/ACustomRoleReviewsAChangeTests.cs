@@ -54,8 +54,8 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-customrole-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-customrole-data-").FullName;
+        _repo = TempDir.For("coai-customrole-repo-").Path;
+        _data = TempDir.For("coai-customrole-data-").Path;
 
         Directory.CreateDirectory(Path.Combine(_data, "prompts"));
         await File.WriteAllTextAsync(Path.Combine(_data, "prompts", "req-general.md"), TheText);

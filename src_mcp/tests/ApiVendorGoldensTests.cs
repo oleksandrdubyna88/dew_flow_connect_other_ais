@@ -36,7 +36,7 @@ public sealed class ApiVendorGoldensTests : IDisposable
         "You are the feature reviewer.\nReview this plan — it has \"quotes\", `ticks`, a <tag> & an apostrophe's, and a café.\n\n```diff\n+    var value = Compute(1);\n```\n";
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-api-golden-").FullName;
+    private readonly string _dir = TempDir.For("coai-api-golden-").Path;
     private readonly List<string> _stderr = [];
     private readonly StringWriter _stdout = new();
 

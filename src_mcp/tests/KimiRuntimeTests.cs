@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class KimiRuntimeTests : IDisposable
 {
-    private static readonly string ShimExe = Path.Combine(Path.GetTempPath(), "coai", "coai-mcp.exe");
+    private static readonly string ShimExe = Path.Combine(TempDir.Root, "coai", "coai-mcp.exe");
 
     private readonly TempDir _dir = TempDir.For("kimi-runtime-");
 

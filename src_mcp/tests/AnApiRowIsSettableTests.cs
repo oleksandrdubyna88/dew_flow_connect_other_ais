@@ -24,7 +24,7 @@ public sealed class AnApiRowIsSettableTests : IDisposable
     private const string Key = "sk-settable-0123456789abcdefghijklmnopqrstuv";
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-api-row-").FullName;
+    private readonly string _dir = TempDir.For("coai-api-row-").Path;
 
     public void Dispose()
     {
@@ -351,6 +351,6 @@ public sealed class AnApiRowIsSettableTests : IDisposable
 
     private static RoundWork Work(PanelService service) =>
         service.Roster.BuildWork(
-            [RoleCatalog.FeatureRole], Directory.CreateTempSubdirectory("coai-api-row-work-").FullName, "ctx",
+            [RoleCatalog.FeatureRole], TempDir.For("coai-api-row-work-").Path, "ctx",
             round: 1, stage: Stage.FeatureReview, readsCheckout: false, codexTiers: CodexTiers.None);
 }

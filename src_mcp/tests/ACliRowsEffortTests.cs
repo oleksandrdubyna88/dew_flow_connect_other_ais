@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 public sealed class ACliRowsEffortTests
 {
     private static PanelService Service(params ProviderSettings[] providers) => new(
-        new PanelSettings { DataDir = Path.Combine(Path.GetTempPath(), $"coai-clieffort-{Guid.NewGuid():N}"), Providers = providers },
+        new PanelSettings { DataDir = Path.Combine(TempDir.Root, $"coai-clieffort-{Guid.NewGuid():N}"), Providers = providers },
         VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
     private static IReadOnlyList<ReviewerWork> Work(PanelService service) =>

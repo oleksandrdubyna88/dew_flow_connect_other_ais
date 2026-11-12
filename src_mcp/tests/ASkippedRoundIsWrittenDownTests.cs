@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ASkippedRoundIsWrittenDownTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), $"coai-note-{Guid.NewGuid():N}");
+    private readonly string _dir = Path.Combine(TempDir.Root, $"coai-note-{Guid.NewGuid():N}");
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     private static readonly SessionState Session =

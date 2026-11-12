@@ -25,7 +25,7 @@ public sealed class ApiRuntimeTests
         new("grok") { Model = "grok-4", ApiKey = Key, Dialect = dialect, ReasoningEffort = effort, Timeout = TimeSpan.FromMinutes(5) };
 
     private static ReviewerInvocation Build(ReviewerSettings settings, string baseUrl = "https://api.x.ai/v1") =>
-        new ApiRuntime("grok", baseUrl).Build(RoleCatalog.ArchitectureRole, "the prompt", "/tmp/wt", "/tmp/schema.json", TempDir.Root, settings);
+        new ApiRuntime("grok", baseUrl).Build(RoleCatalog.ArchitectureRole, "the prompt", "/fake/wt", "/fake/schema.json", TempDir.Root, settings);
 
     [Fact]
     public void ItLaunchesThisBinaryInAskApiMode_ForItsOwnVendor()

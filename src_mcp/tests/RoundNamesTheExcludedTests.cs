@@ -67,7 +67,7 @@ public class RoundNamesTheExcludedTests
         new(
             new PanelSettings
             {
-                DataDir = Path.Combine(Path.GetTempPath(), $"coai-excl-{Guid.NewGuid():N}"),
+                DataDir = Path.Combine(TempDir.Root, $"coai-excl-{Guid.NewGuid():N}"),
                 Providers = [.. providers],
             },
             VaultKeys.None("no vault"),
@@ -129,7 +129,7 @@ public class RoundNamesTheExcludedTests
         // The two lists are derived from ONE predicate, and this is what says so. Two predicates
         // that agree today is how the three copies of the runtime decision got away with it twice.
         var service = With(Local(), Remote());
-        var worktree = Path.Combine(Path.GetTempPath(), $"coai-wt-{Guid.NewGuid():N}");
+        var worktree = Path.Combine(TempDir.Root, $"coai-wt-{Guid.NewGuid():N}");
         Directory.CreateDirectory(worktree);
 
         var asked = service.Roster.BuildWork([RoleCatalog.PlanRole], worktree, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false, codexTiers: CodexTiers.None).Reviewers

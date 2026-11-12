@@ -37,7 +37,7 @@ public sealed class ContextAssemblerPathspecMagicTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-pathspec-").FullName;
+        _repo = TempDir.For("coai-pathspec-").Path;
         await Git("init", "-b", "main");
 
         var before = await Commit(

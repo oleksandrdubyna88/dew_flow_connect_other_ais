@@ -27,7 +27,7 @@ public sealed class ALaunchRecordIsWholeOrAbsentTests : IDisposable
     private static readonly string[] Steering = ["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_RECORD_DIR", "FAKECLI_RECORD_GATE"];
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-record-").FullName;
+    private readonly string _dir = TempDir.For("coai-record-").Path;
     private readonly string _record;
     private readonly string _gate;
 

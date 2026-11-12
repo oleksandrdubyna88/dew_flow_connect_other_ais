@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class ASecurityPreviewDatabaseKeepsBothStepsTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-preview-fork-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(TempDir.Root, "coai-preview-fork-" + Guid.NewGuid().ToString("N")[..8]);
 
     public void Dispose()
     {

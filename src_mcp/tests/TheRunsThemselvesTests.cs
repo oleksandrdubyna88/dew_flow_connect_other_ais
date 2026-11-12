@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 public sealed class TheRunsThemselvesTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-runs-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-runs-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     /// <summary>A clock the test moves by hand — the heartbeat is the thing being tested.</summary>

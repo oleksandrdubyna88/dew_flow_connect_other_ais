@@ -45,7 +45,7 @@ public sealed class AVibeHomesNeverLiveUnderTempTests : IDisposable
             Environment.SetEnvironmentVariable(name, folder);
         }
 
-        Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar).Should().Be(folder, "the fixture really moved TEMP");
+        TempDir.Root.TrimEnd(Path.DirectorySeparatorChar).Should().Be(folder, "the fixture really moved TEMP");
 
         return folder;
     }

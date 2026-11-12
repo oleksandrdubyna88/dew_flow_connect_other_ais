@@ -23,7 +23,7 @@ public sealed class TheAllRolesOffRefusalTests
     private static PanelService Service(RoleCatalog catalog) =>
         new(new PanelSettings
         {
-            DataDir = Directory.CreateTempSubdirectory("coai-refusal-").FullName,
+            DataDir = TempDir.For("coai-refusal-").Path,
             Rounds = new PanelConfig(
                     catalog.Roles.ToDictionary(r => r.Id, r => new RoleGate(1, 5, Enabled: false)),
                     StagePolicy.Human)
@@ -93,7 +93,7 @@ public sealed class TheAllRolesOffRefusalTests
         service.NoRolesRefusal(Stage.PlanReview).Should().Contain("Plan review")
             .And.Contain("plan-review role", "the sentence says which stage has nothing in it");
 
-        var answer = await service.ReviewPlanAsync(Directory.CreateTempSubdirectory("coai-noplan-").FullName, "main", "a plan");
+        var answer = await service.ReviewPlanAsync(TempDir.For("coai-noplan-").Path, "main", "a plan");
         JsonDocument.Parse(answer).RootElement.GetProperty("error").GetString()
             .Should().Contain("Plan review", "refused before anything is opened or launched");
     }

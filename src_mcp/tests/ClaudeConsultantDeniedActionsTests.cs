@@ -32,7 +32,7 @@ public sealed class ClaudeConsultantDeniedActionsTests
             {"type":"result","subtype":"success","is_error":false,"result":"marker: wren\ncanary: CANNOT",
              "session_id":"67289235-65f7-40b5-9532-e63515d90f30",
              "permission_denials":[
-               {"tool_name":"Read","tool_use_id":"toolu_01","tool_input":{"file_path":"C:/tmp/coai-check-1/outside/canary.txt"}},
+               {"tool_name":"Read","tool_use_id":"toolu_01","tool_input":{"file_path":"C:/fake/coai-check-1/outside/canary.txt"}},
                {"tool_name":"Glob","tool_use_id":"toolu_02","tool_input":{"pattern":"**/*"}}]}
             """;
 
@@ -45,15 +45,15 @@ public sealed class ClaudeConsultantDeniedActionsTests
     {
         const string envelope = """
             {"type":"result","result":"CANNOT","session_id":"x","permission_denials":[
-              {"tool_name":"Read","tool_input":{"file_path":"C:/tmp/coai-check-1/outside/canary.txt"}},
-              {"tool_name":"Glob","tool_input":{"pattern":"**/*.md","path":"C:/tmp/coai-check-1/outside"}},
+              {"tool_name":"Read","tool_input":{"file_path":"C:/fake/coai-check-1/outside/canary.txt"}},
+              {"tool_name":"Glob","tool_input":{"pattern":"**/*.md","path":"C:/fake/coai-check-1/outside"}},
               {"tool_name":"Grep","tool_input":{"pattern":"heron"}},
               {"tool_name":"WebFetch","tool_input":{"url":"https://example.invalid"}}]}
             """;
 
         ((IConsultantRuntime)new ClaudeConsultant(new ClaudeRuntime())).Denials(Launched(envelope)).Should().Equal(
-            new DeniedAction("Read", "C:/tmp/coai-check-1/outside/canary.txt"),
-            new DeniedAction("Glob", "C:/tmp/coai-check-1/outside"),
+            new DeniedAction("Read", "C:/fake/coai-check-1/outside/canary.txt"),
+            new DeniedAction("Glob", "C:/fake/coai-check-1/outside"),
             new DeniedAction("Grep", "heron"),
             new DeniedAction("WebFetch", string.Empty));
     }

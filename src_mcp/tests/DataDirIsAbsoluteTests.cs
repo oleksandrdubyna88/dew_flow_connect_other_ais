@@ -50,7 +50,7 @@ public sealed class DataDirIsAbsoluteTests
     [Fact]
     public void AnAbsoluteOne_IsLeftExactlyAsItIs()
     {
-        var absolute = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "coai-data"));
+        var absolute = Path.GetFullPath(Path.Combine(TempDir.Root, "coai-data"));
 
         From(absolute).DataDir.Should().Be(absolute);
     }

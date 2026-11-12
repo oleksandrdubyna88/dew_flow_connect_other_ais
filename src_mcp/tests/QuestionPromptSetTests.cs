@@ -13,7 +13,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class QuestionPromptSetTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-qprompts-").FullName;
+    private readonly string _data = TempDir.For("coai-qprompts-").Path;
 
     public void Dispose()
     {

@@ -23,7 +23,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheReviewersModelIsStepTwentyTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-step20-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(TempDir.Root, "coai-step20-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     public void Dispose()

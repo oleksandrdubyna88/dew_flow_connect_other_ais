@@ -99,7 +99,7 @@ public sealed class KimiShimHoldTests : IDisposable
     {
         Directory.CreateDirectory(Persons);
         Directory.CreateDirectory(Path.Combine(Owned, "home"));
-        var places = KimiPlaces.ForShim(Owned, Path.GetTempPath());
+        var places = KimiPlaces.ForShim(Owned, TempDir.Root);
         Junctions.Make(HostKind.Windows, places.Link, Persons).Should().BeEmpty("the owned home's sign-in link is made first");
 
         return places;

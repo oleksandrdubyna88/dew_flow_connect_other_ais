@@ -25,7 +25,7 @@ public sealed class ThePersonAsksForASecondFeatureRoundTests : IDisposable
 {
     private const string Plan = "todo/PLAN_feature_review.md";
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-persons-request-").FullName;
+    private readonly string _data = TempDir.For("coai-persons-request-").Path;
 
     public void Dispose()
     {

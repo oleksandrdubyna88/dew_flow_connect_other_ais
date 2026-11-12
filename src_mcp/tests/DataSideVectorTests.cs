@@ -63,7 +63,7 @@ public sealed class DataSideVectorTests : IDisposable
     }
 
     /// <summary>A real directory, because the notes ask the filesystem and these vectors say what it answers.</summary>
-    private readonly string _root = Directory.CreateTempSubdirectory("coai-vectors-").FullName;
+    private readonly string _root = TempDir.For("coai-vectors-").Path;
 
     private Func<string, string?> Env(Vector vector) =>
         name => name switch
@@ -194,7 +194,7 @@ public sealed class DataSideVectorTests : IDisposable
         // the point of this test: a directory that already ends in a separator. The constructor is
         // private since the code round; the factory is internal and visible here.
         var withSeparator = ServiceDefaults.ResolvedDataDir.For(
-            Path.Combine(Path.GetTempPath(), "coai-notices") + Path.DirectorySeparatorChar);
+            Path.Combine(TempDir.Root, "coai-notices") + Path.DirectorySeparatorChar);
 
         ServerNotices.PathFor(withSeparator)
             .Should().NotContain(new string(Path.DirectorySeparatorChar, 2),

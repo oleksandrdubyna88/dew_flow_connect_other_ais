@@ -124,7 +124,7 @@ public sealed class SecurityLaneBoundaryTests
     [Fact]
     public void Damaged_security_evidence_is_named_without_losing_the_finding()
     {
-        var data = Directory.CreateTempSubdirectory("coai-security-store-").FullName;
+        var data = TempDir.For("coai-security-store-").Path;
         try
         {
             using (var db = Store.RoundsDb.Open(data, Serilog.Core.Logger.None)!)

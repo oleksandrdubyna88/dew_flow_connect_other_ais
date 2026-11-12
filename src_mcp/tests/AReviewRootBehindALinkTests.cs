@@ -152,7 +152,7 @@ public sealed class AReviewRootBehindALinkTests : IAsyncLifetime
 
     private string Temp(string prefix)
     {
-        var path = Directory.CreateTempSubdirectory(prefix).FullName;
+        var path = TempDir.For(prefix).Path;
         _temps.Add(path);
 
         return path;

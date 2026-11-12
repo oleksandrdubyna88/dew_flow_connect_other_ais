@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class AScratchSweepRunsOnTheConsultationBeatTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-sweeper-").FullName;
+    private readonly string _dir = TempDir.For("coai-sweeper-").Path;
     private readonly ProcessLauncher _launcher = new();
 
     public void Dispose()
@@ -52,7 +52,7 @@ public sealed class AScratchSweepRunsOnTheConsultationBeatTests : IDisposable
     public async Task AnOldAnswersDirectory_HoldingASnapshot_IsGoneAfterOneBeat_WithNoRoundBuilt()
     {
         // In the REAL temp root, under the product's own prefix: that is what the product's sweep walks.
-        var scratch = Directory.CreateTempSubdirectory("coai-answers-snapshot-").FullName;
+        var scratch = TempDir.For("coai-answers-snapshot-").Path;
         await using var repo = await TempGitRepo.InitAsync(_launcher, "coai-snap-repo-");
         await repo.WriteAsync("a.txt", "a consult's tree");
         await repo.CommitAsync("base");
@@ -86,7 +86,7 @@ public sealed class AScratchSweepRunsOnTheConsultationBeatTests : IDisposable
     /// </summary>
     private static string StrandedQuestionScratch(TimeSpan age)
     {
-        var scratch = Directory.CreateTempSubdirectory(QuestionRowLaunch.ScratchPrefix).FullName;
+        var scratch = TempDir.For(QuestionRowLaunch.ScratchPrefix).Path;
         var copy = Directory.CreateDirectory(Path.Combine(scratch, "0", "repo-a")).FullName;
         File.WriteAllText(Path.Combine(copy, "a.txt"), "a copy a row was reading");
         File.WriteAllText(Path.Combine(scratch, FirstEntry), "an entry that sorts before the lock file");

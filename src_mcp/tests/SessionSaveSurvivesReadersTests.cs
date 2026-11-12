@@ -32,7 +32,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class SessionSaveSurvivesReadersTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-readers-").FullName;
+    private readonly string _dir = TempDir.For("coai-readers-").Path;
 
     public void Dispose()
     {

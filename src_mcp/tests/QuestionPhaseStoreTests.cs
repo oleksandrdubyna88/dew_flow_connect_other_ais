@@ -12,7 +12,7 @@ public sealed class QuestionPhaseStoreTests : IDisposable
 {
     private static readonly DateTime Now = new(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-qphase-").FullName;
+    private readonly string _data = TempDir.For("coai-qphase-").Path;
 
     private QuestionPhaseStore Store => new(_data);
 
