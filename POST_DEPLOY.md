@@ -19,7 +19,21 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-11 · extension **0.86.0** (released: `extension-v0.86.0` on 45b070a2, release run 43041879294,
+Last verified: 2026-11-12 · extension **0.87.0** (released: `extension-v0.87.0` on 4efa0a90, release run 43268314149,
+its `extension` job green with "Publish to the Marketplace" at 17:23 UTC; every other job skipped, as on an
+extension-only tag) · mcp **0.65.1** unchanged · server **0.16.0** served by the box. Run locally:
+`MCP_VERSION=0.65.1 SERVER_VERSION=0.16.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.87.0`. The
+first run, minutes after the publish, printed `PASS 1`, `FAIL 2 — marketplace serves 0.86.0`, `PASS 6`, `PASS 9` and
+`PASS 10`. The check was re-run each minute and printed every automated item PASS at 17:34:45 UTC, about 11 minutes
+after the publish (the Marketplace's own delay). The released vsix (`connect-other-ais-0.87.0.vsix`, sha256
+`c6fdbfd7f502d433112346fbf8153a40ae911239ada0bdb50d2e5a91913531ea`) was opened: `package.json` says 0.87.0 and
+contributes `coai.takeFromTerminal`, `coai.addFromTerminal` and `coai.askFromTerminal`; the bundled `dist/extension.js`
+holds `StrictHostKeyChecking=yes`, `BatchMode=yes`, `ClearAllForwardings=yes` and the `coai.terminalHosts` key. In this
+release: #982 (E2 of the terminal door — a `Creds:` terminal reads its Claude session over one read-only ssh call). The
+owner's real-window checks R6 and R7 passed on the pre-release VSIX 0.86.901 (abf58a7b) before the tag; its extension
+code is the merged head's. Manual items 3, 4, 5, 7, 8, 11 and 12 were not run.
+
+Previously verified: 2026-11-11 · extension **0.86.0** (released: `extension-v0.86.0` on 45b070a2, release run 43041879294,
 its `extension` job green with "Publish to the Marketplace"; every other job skipped, as on an extension-only tag) · mcp
 **0.65.1** unchanged · the box served server **0.15.0** at the time of the check: the 0.16.0 tag and release exist, its
 deploy belongs to another session and had not run yet. Run locally:
