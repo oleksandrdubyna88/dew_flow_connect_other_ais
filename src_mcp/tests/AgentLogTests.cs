@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class AgentLogTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-log-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(TempDir.Root, "coai-log-" + Guid.NewGuid().ToString("N")[..8]);
 
     private static readonly DateTime Opened = DateTime.Parse("2026-09-05T13:00:00Z").ToUniversalTime();
     private static readonly DateTime PlanRound = DateTime.Parse("2026-09-05T13:39:00Z").ToUniversalTime();

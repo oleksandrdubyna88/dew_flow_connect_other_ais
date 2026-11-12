@@ -48,8 +48,8 @@ public sealed class AFeatureRoundIsSkippedNotRefusedTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-feature-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-feature-data-").FullName;
+        _repo = TempDir.For("coai-feature-repo-").Path;
+        _data = TempDir.For("coai-feature-data-").Path;
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
         await Git("add", ".");

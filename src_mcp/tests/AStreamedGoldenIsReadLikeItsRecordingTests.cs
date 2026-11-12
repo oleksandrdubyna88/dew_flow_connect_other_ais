@@ -25,7 +25,7 @@ public sealed class AStreamedGoldenIsReadLikeItsRecordingTests : IDisposable
     private const string Key = "sk-live-0123456789abcdefghijklmnopqrstuv";
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-stream-parity-").FullName;
+    private readonly string _dir = TempDir.For("coai-stream-parity-").Path;
 
     public void Dispose()
     {

@@ -67,7 +67,7 @@ public class CodeWorkspaceTests
     {
         var settings = new PanelSettings
         {
-            DataDir = dataDir.Length > 0 ? dataDir : Path.Combine(Path.GetTempPath(), $"coai-ws-{Guid.NewGuid():N}"),
+            DataDir = dataDir.Length > 0 ? dataDir : Path.Combine(TempDir.Root, $"coai-ws-{Guid.NewGuid():N}"),
             CodeWorkspace = workspace,
             Providers = [new ProviderSettings(runtime) { Enabled = true, Runtime = runtime, Model = "m" }],
         };
@@ -77,7 +77,7 @@ public class CodeWorkspaceTests
 
     private static string Worktree()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"coai-wt-{Guid.NewGuid():N}");
+        var path = Path.Combine(TempDir.Root, $"coai-wt-{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
         return path;
     }
@@ -148,7 +148,7 @@ public class CodeWorkspaceTests
         // have the checkout read-only and the diff below." Composing the true sentence underneath it
         // hands the model two opposite instructions in one prompt — raised by gemini at the plan gate
         // and again at the code gate. Editing the shipped files cannot reach a person's own copy.
-        var dataDir = Path.Combine(Path.GetTempPath(), $"coai-override-{Guid.NewGuid():N}");
+        var dataDir = Path.Combine(TempDir.Root, $"coai-override-{Guid.NewGuid():N}");
         Directory.CreateDirectory(Path.Combine(dataDir, "prompts"));
         File.WriteAllText(
             Path.Combine(dataDir, "prompts", "architecture.md"),

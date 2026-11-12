@@ -29,7 +29,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class SessionStoreConcurrencyTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-sessions-").FullName;
+    private readonly string _dir = TempDir.For("coai-sessions-").Path;
 
     public void Dispose()
     {

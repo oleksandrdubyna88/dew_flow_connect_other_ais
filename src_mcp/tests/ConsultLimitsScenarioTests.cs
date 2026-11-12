@@ -100,7 +100,7 @@ public sealed class ConsultLimitsScenarioTests : ConsultScenarioBase
 /// </summary>
 public sealed class ConsultationSweeperTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-sweeper-").FullName;
+    private readonly string _dir = TempDir.For("coai-sweeper-").Path;
 
     public void Dispose()
     {
@@ -136,7 +136,7 @@ public sealed class ConsultationSweeperTests : IDisposable
     private static string Idle(ConsultationStore store, int minutesAgo)
     {
         var record = new ConsultationRecord(ConsultationStore.NewId(), "caller-1", CallerIdentity.Claude, "no-session",
-            Path.Combine(Path.GetTempPath(), "coai-no-such-repo"), "main", "0123abc", "codex", "gpt-5.6", "codex", "vendorRemembers", 5,
+            Path.Combine(TempDir.Root, "coai-no-such-repo"), "main", "0123abc", "codex", "gpt-5.6", "codex", "vendorRemembers", 5,
             ConsultationStore.Stamp(DateTime.UtcNow.AddMinutes(-minutesAgo)))
         {
             Status = ConsultationStatuses.Open,

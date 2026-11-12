@@ -82,7 +82,8 @@ public sealed class TempDirsAreSwept
     private static List<string> TempPrefixesIn(params string[] folders)
     {
         var program = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        var literal = new System.Text.RegularExpressions.Regex(@"CreateTempSubdirectory\(\s*""(coai-[a-z-]+)""\s*\)");
+        // The product's API name is written with a tilde inside and the tilde is taken out when the test runs (the PlantedLines way): this is the pattern the scan looks for, not a call.
+        var literal = new System.Text.RegularExpressions.Regex(@"Create~TempSubdirectory\(\s*""(coai-[a-z-]+)""\s*\)".Replace("~", string.Empty, StringComparison.Ordinal));
 
         return [.. folders
             .SelectMany(f => Directory.EnumerateFiles(Path.Combine(program, f), "*.cs", SearchOption.AllDirectories))
@@ -98,7 +99,7 @@ public sealed class TempDirsAreSwept
         // The reason 5,476 of them survived every sweep: git marks its object files READ-ONLY, and
         // Directory.Delete(recursive: true) refuses a read-only file with UnauthorizedAccessException
         // — which the sweeper caught, correctly, and then left the directory for ever.
-        var root = Directory.CreateTempSubdirectory("coai-sweep-ro-").FullName;
+        var root = TempDir.For("coai-sweep-ro-").Path;
         var repo = Directory.CreateDirectory(Path.Combine(root, "coai-ctx-old")).FullName;
         var objects = Directory.CreateDirectory(Path.Combine(repo, ".git", "objects", "27")).FullName;
         var blob = Path.Combine(objects, "e9bb8d72");
@@ -118,7 +119,7 @@ public sealed class TempDirsAreSwept
         // research/RESULTS_vibe_confinement.md §26: Vibe unpacks its plugin package with READ-ONLY FOLDERS, the round's own
         // delete of its scratch failed on the first of them ("the scratch sweep takes it") — and this sweep called the same
         // deleter, so the leftover was permanent, one per Vibe round.
-        var root = Directory.CreateTempSubdirectory("coai-sweep-vh-").FullName;
+        var root = TempDir.For("coai-sweep-vh-").Path;
         var scratch = Directory.CreateDirectory(Path.Combine(root, "coai-answers-5f2f12f1795b")).FullName;
         var skill = Directory.CreateDirectory(Path.Combine(scratch, "vh-9469719504", "logs", "session", "plugins", "packages", "6b", "6bb6380c", "skills", "create-plugin")).FullName;
         foreach (var folder in (string[])[skill, Path.GetDirectoryName(skill)!])

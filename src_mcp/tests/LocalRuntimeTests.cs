@@ -32,8 +32,8 @@ public class LocalRuntimeTests
     {
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
 
-        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "the prompt", "/tmp/wt",
-            "/tmp/schema.json", "/tmp/out", Settings());
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "the prompt", "/fake/wt",
+            "/fake/schema.json", TempDir.Root, Settings());
 
         invocation.Request.Arguments.Should().Contain("--ask-local");
         // The FILE NAME, not the whole path. Asserting a substring of the path made this fail in a
@@ -72,8 +72,8 @@ public class LocalRuntimeTests
     {
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
 
-        var arguments = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
-            "/tmp/out", Settings()).Request.Arguments.ToList();
+        var arguments = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/fake/wt", "/fake/s.json",
+            TempDir.Root, Settings()).Request.Arguments.ToList();
 
         var askLocal = arguments.IndexOf("--ask-local");
         askLocal.Should().BeGreaterThan(-1);
@@ -88,8 +88,8 @@ public class LocalRuntimeTests
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
         var settings = new ReviewerSettings("local") { ExecutablePath = "/opt/coai/coai-mcp" };
 
-        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
-            "/tmp/out", settings);
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/fake/wt", "/fake/s.json",
+            TempDir.Root, settings);
 
         invocation.Request.Executable.Should().Be("/opt/coai/coai-mcp");
         invocation.Request.Arguments.First().Should().Be("--ask-local");
@@ -100,8 +100,8 @@ public class LocalRuntimeTests
     {
         var runtime = new LocalRuntime("local", "http://box:8000/v1");
 
-        var invocation = runtime.Build(RoleCatalog.SecurityRole, "p", "/tmp/wt",
-            "/tmp/schema.json", "/tmp/out", Settings("mixtral:latest"));
+        var invocation = runtime.Build(RoleCatalog.SecurityRole, "p", "/fake/wt",
+            "/fake/schema.json", TempDir.Root, Settings("mixtral:latest"));
 
         invocation.Request.Arguments.Should().ContainInOrder("--endpoint", "http://box:8000/v1");
         invocation.Request.Arguments.Should().ContainInOrder("--model", "mixtral:latest");
@@ -115,7 +115,7 @@ public class LocalRuntimeTests
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
 
         var invocation = runtime.Build(RoleCatalog.PlanRole, "a prompt\nwith \"quotes\" and `ticks`",
-            "/tmp/wt", "/tmp/schema.json", "/tmp/out", Settings());
+            "/fake/wt", "/fake/schema.json", TempDir.Root, Settings());
 
         var promptFlag = invocation.Request.Arguments.ToList().IndexOf("--prompt-file");
         promptFlag.Should().BeGreaterThan(-1, "the prompt is passed as a path, never inline");
@@ -127,8 +127,8 @@ public class LocalRuntimeTests
     public void TheAnswerIsReadFromTheNamedFile()
     {
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
-        var invocation = runtime.Build(RoleCatalog.UxDxRole, "p", "/tmp/wt",
-            "/tmp/schema.json", TempDir.Root, Settings());
+        var invocation = runtime.Build(RoleCatalog.UxDxRole, "p", "/fake/wt",
+            "/fake/schema.json", TempDir.Root, Settings());
 
         invocation.OutputFile.Should().NotBeEmpty("the shim writes where the executor already looks");
         File.WriteAllText(invocation.OutputFile, """{"findings":[]}""");
@@ -148,8 +148,8 @@ public class LocalRuntimeTests
         // only port Ollama is ever on unless somebody moved it.
         var runtime = new LocalRuntime("local", "");
 
-        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
-            "/tmp/out", Settings());
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/fake/wt", "/fake/s.json",
+            TempDir.Root, Settings());
 
         invocation.Request.Arguments.Should().ContainInOrder("--endpoint", "http://127.0.0.1:11434/v1");
     }
@@ -161,8 +161,8 @@ public class LocalRuntimeTests
         // `usage: {prompt_tokens, completion_tokens, total_tokens}`. So a local round is counted like
         // any other, and the spending chart shows tokens rather than a dash.
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
-        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
-            "/tmp/out", Settings());
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/fake/wt", "/fake/s.json",
+            TempDir.Root, Settings());
 
         var usage = runtime.ReadUsage(invocation, new Runners.Processes.ProcessResult(
             0, """{"tokensIn":188,"tokensOut":42}""", "", false));
@@ -178,8 +178,8 @@ public class LocalRuntimeTests
         // product can see. Reporting 0 would read as free, and free and unpriced are different
         // facts — the same rule the spending chart already follows for codex and antigravity.
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
-        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
-            "/tmp/out", Settings());
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/fake/wt", "/fake/s.json",
+            TempDir.Root, Settings());
 
         runtime.ReadUsage(invocation, new Runners.Processes.ProcessResult(
             0, """{"tokensIn":1,"tokensOut":1}""", "", false)).CostUsd.Should().BeNull();
@@ -309,8 +309,8 @@ public class LocalRuntimeTests
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
         var settings = new ReviewerSettings("local") { Timeout = TimeSpan.FromMinutes(7) };
 
-        var arguments = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
-            "/tmp/out", settings).Request.Arguments.ToList();
+        var arguments = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/fake/wt", "/fake/s.json",
+            TempDir.Root, settings).Request.Arguments.ToList();
 
         // 410, not 420: the margin is the point. The shim must reach its own deadline BEFORE
         // the executor kills it, or it never gets to say why it gave up.

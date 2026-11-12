@@ -555,7 +555,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
     [Fact]
     public async Task ACheckoutThatIsGone_IsSaidAsRepoPathMissing()
     {
-        var gone = Path.Combine(Path.GetTempPath(), $"coai-never-{Guid.NewGuid():N}");
+        var gone = Path.Combine(CoaiMcp.Tests.TempDir.Root, $"coai-never-{Guid.NewGuid():N}");
 
         var refused = await Trees().PrepareAsync(
             7, new TreePlace(gone, _sha), TestContext.Current.CancellationToken);
@@ -636,7 +636,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
 
     private string Temp(string prefix)
     {
-        var path = Directory.CreateTempSubdirectory(prefix).FullName;
+        var path = CoaiMcp.Tests.TempDir.For(prefix).Path;
         _temps.Add(path);
 
         return path;

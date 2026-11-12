@@ -46,9 +46,9 @@ public sealed class QuestionRowOnAgyScenarioTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-qagy-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-qagy-data-").FullName;
-        _record = Directory.CreateTempSubdirectory("coai-qagy-argv-").FullName;
+        _repo = TempDir.For("coai-qagy-repo-").Path;
+        _data = TempDir.For("coai-qagy-data-").Path;
+        _record = TempDir.For("coai-qagy-argv-").Path;
         await Git("init", "-b", "main");
         await Git("config", "user.email", "t@example.com");
         await Git("config", "user.name", "t");

@@ -53,7 +53,7 @@ public sealed class ARowsOwnTimeoutTests
         var service = new PanelService(
             new PanelSettings
             {
-                DataDir = Path.Combine(Path.GetTempPath(), $"coai-row-timeout-{Guid.NewGuid():N}"),
+                DataDir = Path.Combine(TempDir.Root, $"coai-row-timeout-{Guid.NewGuid():N}"),
                 ReviewerTimeout = TimeSpan.FromMinutes(10),
                 Providers = [new ProviderSettings("codex") { Enabled = true, Runtime = "codex", TimeoutMinutes = 3 }],
             },

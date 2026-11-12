@@ -34,7 +34,7 @@ public sealed class TheWriterDrainsBeforeTheProcessLeavesTests : IDisposable
 {
     private static readonly TimeSpan Generous = TimeSpan.FromSeconds(30);
 
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-drain-").FullName;
+    private readonly string _dir = TempDir.For("coai-drain-").Path;
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 

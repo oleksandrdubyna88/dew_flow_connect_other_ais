@@ -45,7 +45,7 @@ public sealed class ApiConsultantTests : IAsyncLifetime
         new("grok-openrouter", "api", "https://openrouter.ai/api/v1", KeyName: "openrouter");
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-apiq-").FullName;
+    private readonly string _data = TempDir.For("coai-apiq-").Path;
     private TempGitRepo _git = null!;
     private string _head = string.Empty;
 

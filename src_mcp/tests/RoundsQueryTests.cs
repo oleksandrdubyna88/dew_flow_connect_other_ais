@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class RoundsQueryTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-q-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(TempDir.Root, "coai-q-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     private static readonly SessionState Session =

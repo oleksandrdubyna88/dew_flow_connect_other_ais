@@ -89,7 +89,7 @@ public sealed class GitHistoryReadsByEntryTests : IAsyncLifetime
     {
         // The shape of macOS's /var → /private/var, made on every platform (a junction on Windows, a symlink elsewhere): git
         // answers the real path, and a comparison with the spelling the caller used is a claim about link-free paths.
-        var holder = Directory.CreateTempSubdirectory("coai-link-holder-").FullName;
+        var holder = TempDir.For("coai-link-holder-").Path;
         var link = Path.Combine(holder, "repo-link");
         await DirectoryLink.MakeAsync(_launcher, link, _repo.Path);
         try

@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public class ScratchDirsTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("coai-sweeptest-").FullName;
+    private readonly string _root = TempDir.For("coai-sweeptest-").Path;
 
     [Fact]
     public void EveryKindOfScratchDirectoryIsSwept_NotOnlyTheAnswers()

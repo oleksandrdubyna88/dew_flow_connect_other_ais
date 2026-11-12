@@ -266,8 +266,8 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     {
         // The key was RepositoryIdentity.Normalised, which lower-cases: on a case-sensitive file system /work/App (a checkout) and
         // /work/app (a plain folder) shared one cache entry and the first answer won.
-        var app = Path.Combine(Path.GetTempPath(), "work", "App");
-        var lower = Path.Combine(Path.GetTempPath(), "work", "app");
+        var app = Path.Combine(TempDir.Root, "work", "App");
+        var lower = Path.Combine(TempDir.Root, "work", "app");
 
         CheckoutRoots.CacheKey(app, caseSensitive: true).Should().NotBe(CheckoutRoots.CacheKey(lower, caseSensitive: true), "two directories that differ by case are two directories here");
         CheckoutRoots.CacheKey(app, caseSensitive: false).Should().Be(CheckoutRoots.CacheKey(lower, caseSensitive: false), "and on a case-insensitive file system they are one");
@@ -406,7 +406,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     // ---- the automount test runs on the NORMALISED directory, not only on the raw text (third security finding) ------
 
     /// <summary>Paths whose raw first segment is not an automount root but whose normalised directory is <c>/net/host</c>.</summary>
-    private static readonly string[] DotSegmentsIntoNet = ["/./net/host/a.cs", "/tmp/../net/host/a.cs", "/net/../net/host/a.cs"];
+    private static readonly string[] DotSegmentsIntoNet = ["/./net/host/a.cs", "/fake/../net/host/a.cs", "/net/../net/host/a.cs"];
 
     /// <summary>
     /// POSIX rules on any host: the local-path rule of the POSIX arm, and a normaliser that answers what POSIX <c>GetFullPath</c> +
@@ -434,11 +434,11 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     public void A_dot_segment_path_that_normalises_to_a_local_directory_is_still_asked_about()
     {
         var probes = new Probes();
-        var rules = PosixRules(new Dictionary<string, string> { ["/tmp/./repo/../repo/a.cs"] = "/tmp/repo" });
+        var rules = PosixRules(new Dictionary<string, string> { ["/fake/./repo/../repo/a.cs"] = "/fake/repo" });
 
-        new CheckoutRoots(probes.Seam, rules).Resolve("/tmp/./repo/../repo/a.cs");
+        new CheckoutRoots(probes.Seam, rules).Resolve("/fake/./repo/../repo/a.cs");
 
-        probes.Touched.Should().Equal(["/tmp/repo"], "the normalised directory, and only it, reaches the probe");
+        probes.Touched.Should().Equal(["/fake/repo"], "the normalised directory, and only it, reaches the probe");
     }
 
     [Fact]

@@ -20,8 +20,8 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-repo-").FullName;
-        _storage = Directory.CreateTempSubdirectory("coai-wt-storage-").FullName;
+        _repo = CoaiMcp.Tests.TempDir.For("coai-repo-").Path;
+        _storage = CoaiMcp.Tests.TempDir.For("coai-wt-storage-").Path;
         _manager = new WorktreeManager(_launcher, _storage);
         await Git(_repo, "init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "a.txt"), "v1");
@@ -114,7 +114,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     [Fact]
     public async Task HumanWorktree_IsNeverRemoved()
     {
-        var humanPath = Path.Combine(Directory.CreateTempSubdirectory("human-wt-").FullName, "mine");
+        var humanPath = Path.Combine(CoaiMcp.Tests.TempDir.For("human-wt-").Path, "mine");
         // testsToDelete-exempt: raw-worktree — inside `human-wt-`, this test's own temp folder under the run folder
         await Git(_repo, "worktree", "add", "--detach", humanPath);
 
@@ -485,9 +485,9 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     [Fact]
     public async Task ARootReachedThroughALink_StillKnowsItsOwnTrees()
     {
-        var real = Directory.CreateTempSubdirectory("coai-wt-real-").FullName;
+        var real = CoaiMcp.Tests.TempDir.For("coai-wt-real-").Path;
         _temps.Add(real);
-        var link = Path.Combine(Directory.CreateTempSubdirectory("coai-wt-link-").FullName, "to-real");
+        var link = Path.Combine(CoaiMcp.Tests.TempDir.For("coai-wt-link-").Path, "to-real");
         _temps.Add(Path.GetDirectoryName(link)!);
         if (!TryLink(link, real) && !await TryJunctionAsync(link, real))
         {
@@ -514,9 +514,9 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     [Fact]
     public async Task ARootReachedThroughALinkToALink_StillKnowsItsOwnTrees()
     {
-        var real = Directory.CreateTempSubdirectory("coai-wt-real-").FullName;
+        var real = CoaiMcp.Tests.TempDir.For("coai-wt-real-").Path;
         _temps.Add(real);
-        var links = Directory.CreateTempSubdirectory("coai-wt-links-").FullName;
+        var links = CoaiMcp.Tests.TempDir.For("coai-wt-links-").Path;
         _temps.Add(links);
         var first = Path.Combine(links, "first");
         var second = Path.Combine(links, "second");
@@ -643,7 +643,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     /// <summary>An upstream repository, added to <c>_repo</c> as a submodule at <paramref name="path"/>.</summary>
     private async Task<string> AddSubmoduleAsync(string path, string content)
     {
-        var upstream = Directory.CreateTempSubdirectory("coai-sub-").FullName;
+        var upstream = CoaiMcp.Tests.TempDir.For("coai-sub-").Path;
         _temps.Add(upstream);
         await Git(upstream, "init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(upstream, "rules.md"), content);

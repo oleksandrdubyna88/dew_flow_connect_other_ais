@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 public sealed class ThePairsThemselvesTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-pairs-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-pairs-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     private static readonly SessionState Session =

@@ -1,6 +1,6 @@
 # PLAN — Test leftovers, E5: coai's run folder takes the owner form, both test sweeps judge by owner, and the product's `coai-*` directories stay untouched
 
-> Status: S7 started 2026-11-11 — its first drain PR (the bench suite, and the 945 bypass removed) is built from todo/PLAN_test_leftovers_E5_S7_bench_brief.md. Its second drain PR (the `scripts/` suite, 10 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_scripts_brief.md. Its third drain PR (the `src_bugs/` ingest suite, 26 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_bugs_brief.md. Its fourth drain PR (the `src_server/` Team server suite, 57 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_server_brief.md. Its fifth drain PR (the `src_vs_code/src/test/` extension suite, 219 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_extension_brief.md. **epoch 7 approved by the owner, 2026-11-05 (`Narrowed: yes`, entry 6.2). What is left of S6 is the parent's § *Epoch 7* item 5.** S6 is built to `3fcba8a0`, but for those items.
+> Status: S7 started 2026-11-11 — its first drain PR (the bench suite, and the 945 bypass removed) is built from todo/PLAN_test_leftovers_E5_S7_bench_brief.md. Its second drain PR (the `scripts/` suite, 10 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_scripts_brief.md. Its third drain PR (the `src_bugs/` ingest suite, 26 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_bugs_brief.md. Its fourth drain PR (the `src_server/` Team server suite, 57 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_server_brief.md. Its fifth drain PR (the `src_vs_code/src/test/` extension suite, 219 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_extension_brief.md. Its sixth and last drain PR (the `src_mcp/tests/` coai-mcp suite, 458 -> 0) is built from todo/PLAN_test_leftovers_E5_S7_mcp_brief.md, and with it S7-d (the baseline file deleted, `--baseline` dropped): **S7 DONE with this PR: the six suites are drained, and S7-d is done.** **epoch 7 approved by the owner, 2026-11-05 (`Narrowed: yes`, entry 6.2). What is left of S6 is the parent's § *Epoch 7* item 5.** S6 is built to `3fcba8a0`, but for those items.
 >
 > Was: **revised 2026-11-05 at the parent's epoch-6 re-review (entries 5.2 and 5.3 of the parent's ledger, both found
 > writing the S6 build brief; entry 5.1, the Windows sweep mutex, is built on #945 and unchanged); epoch 6 was approved by
@@ -1967,7 +1967,7 @@ legacy fixtures above. The parent's build order says the same ("the series' line
       `mktemp`, RED observed (D8 (p)); the shrink check against the creation commit green at the PR's last head (D8 (q)); the pin at
       `bd795847` (#947) and F24's second check before the baseline is created. The boxes above that say "only the authorised
       `raw-temp` baseline left" and "every must-not-copy row RED-GREEN-RED" are read with D8 (b) as reworded and row 2's note.
-- [ ] S7: the baseline drained to zero and deleted.
+- [x] S7: the baseline drained to zero and deleted.
 - [ ] `research/module_tests.md` describes the run folder in its owner form, the sweep in two languages, the one-off
       clean-up, the residual risk, the two guards and the baseline's drain.
 - [ ] When the last story merges, this document's status becomes `E5 shipped, <date>; promotes with its parent` —

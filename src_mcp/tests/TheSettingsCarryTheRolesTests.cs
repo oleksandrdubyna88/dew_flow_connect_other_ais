@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheSettingsCarryTheRolesTests : IDisposable
 {
-    private readonly string _dataDir = Directory.CreateTempSubdirectory("coai-roles-settings-").FullName;
+    private readonly string _dataDir = TempDir.For("coai-roles-settings-").Path;
 
     public void Dispose()
     {
@@ -373,7 +373,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
 
     private static string Scratch()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"coai-rolesettings-{Guid.NewGuid():N}");
+        var path = Path.Combine(TempDir.Root, $"coai-rolesettings-{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
 
         return path;

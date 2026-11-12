@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests.Leftovers;
 
 /// <summary>
 /// The C# guard over THIS repository (E5 S6, <c>todo/PLAN_test_leftovers_E5_S6_brief.md</c> § 7.1). The template's file of this name holds one assertion; this one is coai's own (plan D2): after the guard, the
-/// repository's ONE <c>raw-temp</c> baseline (<see cref="LeftoversBaseline"/>), the token rows and the expected-exemption inventory (<see cref="LeftoversInventory"/>). It needs <c>node</c> and the mounted conventions;
+/// scan's own findings (no baseline: the <c>raw-temp</c> baseline was drained and deleted by E5 S7-d, so any raw temp call outside the helpers is red), the token rows and the expected-exemption inventory (<see cref="LeftoversInventory"/>). It needs <c>node</c> and the mounted conventions;
 /// a missing one is red with the guard's own sentence. It never skips.
 /// </summary>
 public sealed class LeftoversRepositoryGuardTests
@@ -34,7 +34,7 @@ public sealed class LeftoversRepositoryGuardTests
 
         // One scope: every failure is reported, so a mount that is not initialised shows the token sentence (with its cure) beside the classifier's, not only the first of them.
         using var scope = new AssertionScope();
-        var left = LeftoversBaseline.Apply(report, root, root);
+        var left = report.Findings;
         left.Should().BeEmpty(Environment.NewLine + string.Join(Environment.NewLine, left.Select(f => f.ToString())));
         LeftoversGuard.RegisteredTokenFindings(root, OwnedToken.RepoToken, OwnedToken.RepoRow).Should().BeEmpty();
         LeftoversGuard.ConstantFindings(root, OwnedToken.RepoToken).Should().BeEmpty();

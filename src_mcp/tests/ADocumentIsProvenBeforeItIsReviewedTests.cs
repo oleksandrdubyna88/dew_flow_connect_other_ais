@@ -26,14 +26,14 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
     /// link in with the entry seam compares the path the resolver asks about with the path it wrote, as text, so the two have to be the
     /// spelling the resolver emits — resolved, native separators.
     /// </summary>
-    private readonly string _repo = Resolved(Directory.CreateTempSubdirectory("coai-doc-repo-").FullName);
+    private readonly string _repo = Resolved(TempDir.For("coai-doc-repo-").Path);
 
     /// <summary>
     /// Somewhere that is not the repository, and is this test's own: the documents the refusals point at live here, never at a fixed name in the machine's
     /// shared temp folder, where a second run (or a person) using the same name changes the result (C10 of
     /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).
     /// </summary>
-    private readonly string _elsewhere = Directory.CreateTempSubdirectory("doc-elsewhere-").FullName;
+    private readonly string _elsewhere = TempDir.For("doc-elsewhere-").Path;
 
     public void Dispose()
     {
@@ -340,8 +340,8 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         // without a privilege it does not have — and the point is what the RESOLVER returns, which
         // a seam says exactly. `said` is the spelling the caller holds, `real` is what every
         // component under it resolves to: the shape of `/var/folders/…` → `/private/var/folders/…`.
-        var real = Directory.CreateTempSubdirectory("coai-checkout-resolved-").FullName;
-        var said = Directory.CreateTempSubdirectory("coai-checkout-said-").FullName;
+        var real = TempDir.For("coai-checkout-resolved-").Path;
+        var said = TempDir.For("coai-checkout-said-").Path;
 
         Entry Link(string p) =>
             string.Equals(

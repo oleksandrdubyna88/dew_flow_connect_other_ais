@@ -25,7 +25,7 @@ public sealed class ACodexConsultationAsksTheInstalledCodexTests : ConsultScenar
     public async Task EveryTurn_TellsTheCodexConsultantOnlyWhatItsReleaseTakes(string release, string[] sent)
     {
         using var caller = CallingAs("CLAUDE_CODE_SESSION_ID");
-        var recorded = Directory.CreateTempSubdirectory("coai-consult-tier-").FullName;
+        var recorded = TempDir.For("coai-consult-tier-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", recorded);
         Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", $"codex-cli {release}\n");
         try

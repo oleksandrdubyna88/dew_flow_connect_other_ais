@@ -71,8 +71,8 @@ public sealed class EndToEndTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-e2e-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-e2e-data-").FullName;
+        _repo = TempDir.For("coai-e2e-repo-").Path;
+        _data = TempDir.For("coai-e2e-data-").Path;
         _worktreeRoot = Path.Combine(_data, "worktrees");
         await Git("init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");

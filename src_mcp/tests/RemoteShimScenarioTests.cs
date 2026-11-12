@@ -48,8 +48,8 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
 
     public ValueTask InitializeAsync()
     {
-        _dataDir = Directory.CreateTempSubdirectory("coai-shim-data-").FullName;
-        _outputDir = Directory.CreateTempSubdirectory("coai-shim-out-").FullName;
+        _dataDir = TempDir.For("coai-shim-data-").Path;
+        _outputDir = TempDir.For("coai-shim-out-").Path;
 
         // A started stub on a port nobody else holds. Asking the OS for a free port does not
         // reserve it, and losing that race failed a release leg - see LoopbackStub.

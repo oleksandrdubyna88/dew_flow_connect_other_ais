@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 /// <summary>What story 2's plan round found — the four that were true.</summary>
 public sealed class ConsultStoryTwoGateTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-s2-gate-").FullName;
+    private readonly string _data = TempDir.For("coai-s2-gate-").Path;
 
     public void Dispose()
     {
@@ -84,7 +84,7 @@ public sealed class ConsultStoryTwoGateTests : IDisposable
 /// <summary>What story 2's SECOND code round found.</summary>
 public sealed class ConsultStoryTwoSecondRoundTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-s2b-").FullName;
+    private readonly string _data = TempDir.For("coai-s2b-").Path;
 
     public void Dispose()
     {

@@ -10,8 +10,8 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class ConsultCheckSweepTests : IDisposable
 {
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-checksweep-temp-").FullName;
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-checksweep-data-").FullName;
+    private readonly string _temp = TempDir.For("coai-checksweep-temp-").Path;
+    private readonly string _data = TempDir.For("coai-checksweep-data-").Path;
 
     public void Dispose()
     {

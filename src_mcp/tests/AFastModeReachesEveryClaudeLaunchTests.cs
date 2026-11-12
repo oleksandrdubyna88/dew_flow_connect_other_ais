@@ -17,7 +17,7 @@ public sealed class AFastModeReachesEveryClaudeLaunchTests : IDisposable
 {
     private const string Repo = "D:/rsd/some-checkout";
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-fast-claude-").FullName;
+    private readonly string _data = TempDir.For("coai-fast-claude-").Path;
 
     public void Dispose()
     {
@@ -93,7 +93,7 @@ public sealed class AFastModeReachesEveryClaudeLaunchTests : IDisposable
     {
         // The code round (two reviewers): question rows build their launches in parallel, and a temp name shared by every
         // thread of the process made one launch fail on the other's move.
-        var data = Directory.CreateTempSubdirectory("coai-fast-parallel-").FullName;
+        var data = TempDir.For("coai-fast-parallel-").Path;
         try
         {
             var launches = Enumerable.Range(0, 32).Select(_ => Task.Run(() =>

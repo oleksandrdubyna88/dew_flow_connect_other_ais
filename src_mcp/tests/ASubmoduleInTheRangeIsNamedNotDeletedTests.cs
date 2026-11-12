@@ -148,7 +148,7 @@ public sealed class ASubmoduleInTheRangeIsNamedNotDeletedTests : IAsyncLifetime
 
     private string Temp(string prefix)
     {
-        var dir = Directory.CreateTempSubdirectory(prefix).FullName;
+        var dir = TempDir.For(prefix).Path;
         _dirs.Add(dir);
 
         return dir;

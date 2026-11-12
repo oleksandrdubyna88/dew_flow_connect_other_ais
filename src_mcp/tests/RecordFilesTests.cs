@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class RecordFilesTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-recordfiles-").FullName;
+    private readonly string _dir = TempDir.For("coai-recordfiles-").Path;
 
     public void Dispose()
     {

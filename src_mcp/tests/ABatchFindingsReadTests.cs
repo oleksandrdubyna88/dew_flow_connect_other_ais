@@ -24,7 +24,7 @@ namespace CoaiMcp.Tests;
 [Collection("console-out")]
 public sealed class ABatchFindingsReadTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-many-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(TempDir.Root, "coai-many-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     private static SessionState Session(string id) =>

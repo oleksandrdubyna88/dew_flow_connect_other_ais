@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class ARuntimeNamesThePromptFileItWroteTests : IDisposable
 {
-    private readonly string _out = Directory.CreateTempSubdirectory("coai-prompt-named-").FullName;
+    private readonly string _out = TempDir.For("coai-prompt-named-").Path;
 
     public static TheoryData<string> FileRuntimes => ["api", "local", "remote"];
 

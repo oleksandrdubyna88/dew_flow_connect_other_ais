@@ -136,7 +136,7 @@ public sealed class AReviewerStartsNoMcpServersTests
     [Fact]
     public void TheCodexConfigIsTheOneTheLaunchWillRead_HomeIncluded()
     {
-        var home = Directory.CreateTempSubdirectory("coai-codex-home-").FullName;
+        var home = TempDir.For("coai-codex-home-").Path;
         try
         {
             Directory.CreateDirectory(Path.Combine(home, ".codex"));

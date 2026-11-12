@@ -29,7 +29,7 @@ namespace CoaiMcp.Tests;
 public sealed class WhatIsStoredIsAnonymousTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-stored-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-stored-" + Guid.NewGuid().ToString("N")[..8]);
 
     private static readonly SessionState Session =
         new("s1", "D:/repo", "feat/x", new PanelConfig()) { Stage = Stage.CodeReview };

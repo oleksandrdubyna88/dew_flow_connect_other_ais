@@ -44,7 +44,7 @@ public sealed class EveryAdapterRecordsWhatItLaunchedTests : IDisposable
     /// — which is what a draft release is for. A fresh temp directory per class, swept in
     /// <c>Dispose</c>, is what the neighbouring suites already do.</para>
     /// </remarks>
-    private readonly string _root = Directory.CreateTempSubdirectory("coai-adapters-").FullName;
+    private readonly string _root = TempDir.For("coai-adapters-").Path;
 
     public void Dispose()
     {

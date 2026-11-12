@@ -29,7 +29,7 @@ public sealed class AskHumanScenarioTests : IAsyncLifetime
     private const string Advice = "A circuit breaker: open after three failures, half-open after a minute.";
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-askscenario-data-").FullName;
+    private readonly string _data = TempDir.For("coai-askscenario-data-").Path;
     private TempGitRepo _repo = null!;
     private IDisposable _steering = FakeCliSteering.Unwritten;
 

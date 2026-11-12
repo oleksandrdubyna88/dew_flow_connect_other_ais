@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheAnswerBelongsToTheCurrentHoldTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-current-answer-").FullName;
+    private readonly string _data = TempDir.For("coai-current-answer-").Path;
 
     public void Dispose()
     {

@@ -59,7 +59,7 @@ public sealed class VendorProbeTests : IDisposable
     [Fact]
     public async Task AnExecutableThatIsNotThere_IsNotFound_AndSaysWhereToGetIt()
     {
-        var health = await Probe(Vendor("codex"), exe: Path.Combine(Path.GetTempPath(), "no-such-cli-xyz"));
+        var health = await Probe(Vendor("codex"), exe: Path.Combine(TempDir.Root, "no-such-cli-xyz"));
 
         health.CliFound.Should().BeFalse();
         health.Note.Should().Contain("was not found on this machine");

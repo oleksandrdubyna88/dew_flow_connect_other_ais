@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// <remarks>PLAN_the_consultant_works_on_every_vendor.md, E2.2, E2.3 and E2.5.</remarks>
 public sealed class ConsultHealthAndGiveBackTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-consult-health-").FullName;
+    private readonly string _data = TempDir.For("coai-consult-health-").Path;
 
     public void Dispose()
     {

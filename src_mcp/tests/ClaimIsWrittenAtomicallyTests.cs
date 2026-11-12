@@ -23,7 +23,7 @@ namespace CoaiMcp.Tests;
 public sealed class ClaimIsWrittenAtomicallyTests
 {
     private static string TempFile() =>
-        Path.Combine(Path.GetTempPath(), $"coai-claim-{Guid.NewGuid():N}.json");
+        Path.Combine(TempDir.Root, $"coai-claim-{Guid.NewGuid():N}.json");
 
     /// <summary>
     /// The write leaves nothing beside the claim, whatever happened.
@@ -36,7 +36,7 @@ public sealed class ClaimIsWrittenAtomicallyTests
     [Fact]
     public async Task TheWriteLeavesNoTemporaryFileBehind()
     {
-        var dir = Path.Combine(Path.GetTempPath(), $"coai-claimdir-{Guid.NewGuid():N}");
+        var dir = Path.Combine(TempDir.Root, $"coai-claimdir-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
         var jobFile = Path.Combine(dir, "job.json");
 
@@ -68,7 +68,7 @@ public sealed class ClaimIsWrittenAtomicallyTests
     [Fact]
     public void WithTheSiblingsPathBlocked_NoClaimIsPublished()
     {
-        var dir = Path.Combine(Path.GetTempPath(), $"coai-blocked-{Guid.NewGuid():N}");
+        var dir = Path.Combine(TempDir.Root, $"coai-blocked-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
         var jobFile = Path.Combine(dir, "job.json");
         // A directory cannot be opened for writing, so the sibling write is refused.
@@ -184,7 +184,7 @@ public sealed class ClaimIsWrittenAtomicallyTests
     [Fact]
     public void ADestinationThatCannotBeReplaced_IsReportedRatherThanThrown_AndLeavesNoSibling()
     {
-        var dir = Path.Combine(Path.GetTempPath(), $"coai-locked-{Guid.NewGuid():N}");
+        var dir = Path.Combine(TempDir.Root, $"coai-locked-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
         var jobFile = Path.Combine(dir, "job.json");
         Directory.CreateDirectory(jobFile);
@@ -200,7 +200,7 @@ public sealed class ClaimIsWrittenAtomicallyTests
     [Fact]
     public void AClaimIntoAMissingDirectory_ReportsWhyRatherThanThrowing()
     {
-        var nowhere = Path.Combine(Path.GetTempPath(), $"coai-absent-{Guid.NewGuid():N}", "deeper", "job.json");
+        var nowhere = Path.Combine(TempDir.Root, $"coai-absent-{Guid.NewGuid():N}", "deeper", "job.json");
 
         RemoteRuntime.Claim(nowhere, "https://coai.example.com", "job-1", "t.json")
             .Should().NotBeEmpty("losing the claim costs a cancellation, so it is returned rather than swallowed");

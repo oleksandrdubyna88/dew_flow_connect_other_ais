@@ -25,7 +25,7 @@ public sealed class CadenceGateTests : IDisposable
     private const string RepoId = "d:/work/repo/.git";
     private const string Plan = "todo/PLAN_x.md";
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-gate-").FullName;
+    private readonly string _data = TempDir.For("coai-gate-").Path;
 
     public void Dispose()
     {
@@ -205,8 +205,8 @@ public sealed class CadenceGateTests : IDisposable
 [Collection("fakecli-env")]
 public sealed class ConsultPreflightTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-preflight-").FullName;
-    private readonly string _repo = Directory.CreateTempSubdirectory("coai-preflight-repo-").FullName;
+    private readonly string _data = TempDir.For("coai-preflight-").Path;
+    private readonly string _repo = TempDir.For("coai-preflight-repo-").Path;
 
     /// <summary>A real checkout: the vendor-row refusals come after the tool has resolved the repository.</summary>
     public ConsultPreflightTests() =>

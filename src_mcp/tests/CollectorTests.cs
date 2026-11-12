@@ -305,7 +305,7 @@ public sealed class CollectorTests : IAsyncLifetime
     public async Task APathThatIsNotARepository_IsSkipped()
     {
         var outcome = await _collector.CollectAsync(new Candidate(
-            Path.Combine(Path.GetTempPath(), $"not-a-repo-{Guid.NewGuid():N}"),
+            Path.Combine(TempDir.Root, $"not-a-repo-{Guid.NewGuid():N}"),
             "main",
             "0123456789abcdef0123456789abcdef01234567",
             "Totals.cs",

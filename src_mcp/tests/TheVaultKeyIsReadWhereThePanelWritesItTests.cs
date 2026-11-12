@@ -26,7 +26,7 @@ public sealed partial class TheVaultKeyIsReadWhereThePanelWritesItTests : IDispo
 {
     private const string VendorKey = "sk-or-0123456789abcdefghijklmnopqrstuv";
 
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-vault-key-").FullName;
+    private readonly string _dir = TempDir.For("coai-vault-key-").Path;
 
     public void Dispose()
     {

@@ -145,16 +145,3 @@ public sealed class SiblingChild
         }
     }
 }
-
-/// <summary>Writes whether the repository's baseline file is found from the repository root as this child sees it (E5 S6, R12): the working folder of the child is the test's choice.</summary>
-public sealed class BaselineLocationChild
-{
-    [Fact]
-    public void WritesWhetherTheBaselineIsFound()
-    {
-        var outFile = Environment.GetEnvironmentVariable("COAI_S6_BASELINE_OUT");
-        Assert.SkipWhen(string.IsNullOrEmpty(outFile), "child-only: TheBaselineIsFound_FromBothPlaces starts the suite on this class with COAI_S6_BASELINE_OUT set");
-
-        File.WriteAllText(outFile!, File.Exists(Path.Combine(RepositoryRoot.Path, "raw-temp-baseline.json")).ToString());
-    }
-}

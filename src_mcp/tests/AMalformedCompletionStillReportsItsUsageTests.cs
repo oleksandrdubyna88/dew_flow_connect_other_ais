@@ -25,7 +25,7 @@ public sealed class AMalformedCompletionStillReportsItsUsageTests : IDisposable
     private const string Usage = "\"usage\":{\"prompt_tokens\":1200,\"completion_tokens\":80}";
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-malformed-").FullName;
+    private readonly string _dir = TempDir.For("coai-malformed-").Path;
 
     public void Dispose()
     {

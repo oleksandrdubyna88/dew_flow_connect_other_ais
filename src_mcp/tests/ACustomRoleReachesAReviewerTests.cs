@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ACustomRoleReachesAReviewerTests : IDisposable
 {
-    private readonly string _dataDir = Directory.CreateTempSubdirectory("coai-customrole-").FullName;
+    private readonly string _dataDir = TempDir.For("coai-customrole-").Path;
 
     public void Dispose()
     {
@@ -62,7 +62,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
 
     private static string Scratch()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"coai-custom-{Guid.NewGuid():N}");
+        var path = Path.Combine(TempDir.Root, $"coai-custom-{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
         return path;
     }

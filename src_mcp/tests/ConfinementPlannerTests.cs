@@ -235,14 +235,14 @@ public sealed class ConfinementPlannerTests
 
     // ---------- the adapters compose the plan and nothing of their own ----------
 
-    private static readonly string Scratch = Path.Combine(Path.GetTempPath(), "coai-scratch-" + Guid.NewGuid().ToString("N"));
+    private static readonly string Scratch = Path.Combine(TempDir.Root, "coai-scratch-" + Guid.NewGuid().ToString("N"));
 
-    private static readonly string Answers = Path.Combine(Path.GetTempPath(), "coai-answers-" + Guid.NewGuid().ToString("N"));
+    private static readonly string Answers = Path.Combine(TempDir.Root, "coai-answers-" + Guid.NewGuid().ToString("N"));
 
     private const string Repo = "D:/rsd/some-checkout";
 
     /// <summary>The row's own folder and its copy of the roots — what the row launch makes for a runtime that asks (S3); ignored by the rest.</summary>
-    private static readonly string RowFolder = Path.Combine(Path.GetTempPath(), "coai-question-" + Guid.NewGuid().ToString("N"));
+    private static readonly string RowFolder = Path.Combine(TempDir.Root, "coai-question-" + Guid.NewGuid().ToString("N"));
 
     private static readonly string RowTree = Path.Combine(RowFolder, "tree");
 

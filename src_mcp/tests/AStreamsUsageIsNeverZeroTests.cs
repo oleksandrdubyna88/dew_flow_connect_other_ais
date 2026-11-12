@@ -25,7 +25,7 @@ public sealed class AStreamsUsageIsNeverZeroTests : IDisposable
     private static readonly TokenPrice Grok = new(new TokenRates(2.00, 0.50, 6.00), 0, TokenRates.None);
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-stream-usage-").FullName;
+    private readonly string _dir = TempDir.For("coai-stream-usage-").Path;
 
     public void Dispose()
     {

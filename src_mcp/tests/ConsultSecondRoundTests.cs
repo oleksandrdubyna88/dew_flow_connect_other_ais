@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 /// that does not exist yet, and the one race the pid check does not cover.</summary>
 public sealed class ConsultSecondRoundTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-consult-round2-").FullName;
+    private readonly string _data = TempDir.For("coai-consult-round2-").Path;
 
     public void Dispose()
     {
@@ -96,7 +96,7 @@ public sealed class ConsultSecondRoundTests : IDisposable
     {
         // The snapshot's own failure would reach the client as an exception rather than a sentence —
         // and it would be OUR failure, on a check that exists to report somebody else's.
-        var repo = Directory.CreateTempSubdirectory("coai-hooks-").FullName;
+        var repo = TempDir.For("coai-hooks-").Path;
         try
         {
             // A REAL repository, and that is the whole correction. The fabricated `.git` this used to

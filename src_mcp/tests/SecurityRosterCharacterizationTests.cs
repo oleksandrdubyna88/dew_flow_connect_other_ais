@@ -23,7 +23,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class SecurityRosterCharacterizationTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-security-roster-").FullName;
+    private readonly string _data = TempDir.For("coai-security-roster-").Path;
 
     public void Dispose() => Directory.Delete(_data, true);
 

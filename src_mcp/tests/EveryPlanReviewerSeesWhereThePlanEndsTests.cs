@@ -68,7 +68,7 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
 
     private async Task<(JsonElement Answer, string[] Prompts)> RoundRecordingPrompts(PanelService service, string plan)
     {
-        var record = Directory.CreateTempSubdirectory("coai-plan-end-").FullName;
+        var record = TempDir.For("coai-plan-end-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {

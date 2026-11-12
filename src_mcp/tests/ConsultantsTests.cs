@@ -15,7 +15,7 @@ public sealed class ConsultantsTests : IDisposable
 {
     private const string Repo = "D:/rsd/some-checkout";
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-consultants-").FullName;
+    private readonly string _data = TempDir.For("coai-consultants-").Path;
 
     /// <summary>
     /// Where the answer is told to land — a REAL directory, because the local engine creates it.
@@ -320,7 +320,7 @@ public sealed class ConsultantsTests : IDisposable
 /// <summary>Which vendor rows can consult now that the other three adapters exist.</summary>
 public sealed class ConsultantResolutionAfterStoryTwoTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-resolve-").FullName;
+    private readonly string _data = TempDir.For("coai-resolve-").Path;
 
     public void Dispose()
     {

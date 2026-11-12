@@ -26,7 +26,7 @@ namespace CoaiMcp.Tests;
 public sealed class SecurityEvidenceOnAnOlderDatabaseTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "coai-sec-old-" + Guid.NewGuid().ToString("N")[..8]);
+        Path.Combine(TempDir.Root, "coai-sec-old-" + Guid.NewGuid().ToString("N")[..8]);
 
     private static readonly SessionState Session =
         new("s1", "D:/repo", "feat/x", new PanelConfig()) { Stage = Stage.CodeReview };

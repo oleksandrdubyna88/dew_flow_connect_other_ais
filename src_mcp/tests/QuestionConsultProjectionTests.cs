@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class QuestionConsultProjectionTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-qproj-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(TempDir.Root, "coai-qproj-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     public void Dispose()

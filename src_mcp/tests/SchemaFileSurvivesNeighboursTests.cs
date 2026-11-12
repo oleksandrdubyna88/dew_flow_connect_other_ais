@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class SchemaFileSurvivesNeighboursTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-schema-").FullName;
+    private readonly string _dir = TempDir.For("coai-schema-").Path;
 
     public void Dispose()
     {

@@ -24,7 +24,7 @@ public sealed class WorkspaceLookupTests : IAsyncLifetime
 
     public ValueTask InitializeAsync()
     {
-        _base = Directory.CreateTempSubdirectory("coai-lookup-").FullName;
+        _base = TempDir.For("coai-lookup-").Path;
         _root = Directory.CreateDirectory(Path.Combine(_base, "root")).FullName;
         _outside = Directory.CreateDirectory(Path.Combine(_base, "outside")).FullName;
         Write("projA/README.md", "hello\n");

@@ -26,7 +26,7 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
 
     private static PanelService Service(params ProviderSettings[] providers) =>
         new(
-            new PanelSettings { DataDir = Path.GetTempPath(), Providers = providers },
+            new PanelSettings { DataDir = TempDir.Root, Providers = providers },
             VaultKeys.None("no vault"),
             default,
             new Runners.Processes.ProcessLauncher(),

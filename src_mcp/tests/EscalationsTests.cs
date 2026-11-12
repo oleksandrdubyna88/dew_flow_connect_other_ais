@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class EscalationsTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-esc-").FullName;
+    private readonly string _data = TempDir.For("coai-esc-").Path;
     private readonly Escalations _escalations;
 
     public EscalationsTests() => _escalations = new Escalations(_data, pollInterval: TimeSpan.FromMilliseconds(20));
@@ -191,7 +191,7 @@ public sealed class EscalationsTests : IDisposable
     [Fact]
     public void ANotice_IsWritten_EvenWhenNobodyHasEverBeenAskedBefore()
     {
-        var fresh = Path.Combine(Directory.CreateTempSubdirectory("coai-esc-fresh-").FullName, "never-used");
+        var fresh = Path.Combine(TempDir.For("coai-esc-fresh-").Path, "never-used");
         var escalations = new Escalations(fresh);
 
         escalations.Notify(Question("qFirst"));

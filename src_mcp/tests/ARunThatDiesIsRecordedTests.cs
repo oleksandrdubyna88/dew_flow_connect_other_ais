@@ -25,7 +25,7 @@ public sealed class ARunThatDiesIsRecordedTests : IDisposable
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-deaths-").FullName;
+    private readonly string _data = TempDir.For("coai-deaths-").Path;
 
     /// <summary>What every child said on stderr — which road a signalled stop took is only visible there.</summary>
     private readonly System.Collections.Concurrent.ConcurrentQueue<string> _said = new();

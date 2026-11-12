@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class DashOIsNotAlwaysAPathTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-dasho-").FullName;
+    private readonly string _dir = TempDir.For("coai-dasho-").Path;
     private readonly ProcessLauncher _launcher = new();
 
     public DashOIsNotAlwaysAPathTests()

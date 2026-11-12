@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 public sealed class TheStatusReportsOnlyTheGatesAnswerTests : IAsyncLifetime
 {
     private readonly ProcessLauncher _launcher = new();
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-status-answer-").FullName;
+    private readonly string _data = TempDir.For("coai-status-answer-").Path;
     private TempGitRepo _repo = null!;
 
     public async ValueTask InitializeAsync()

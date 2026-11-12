@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 public sealed class ProcessTrackingTests : IDisposable
 {
     private readonly string _dir = Path.Combine(
-        Path.GetTempPath(), $"coai-tracking-{Guid.NewGuid():N}");
+        TempDir.Root, $"coai-tracking-{Guid.NewGuid():N}");
 
     public void Dispose()
     {

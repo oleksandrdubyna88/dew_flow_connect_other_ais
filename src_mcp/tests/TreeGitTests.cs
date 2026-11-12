@@ -120,7 +120,7 @@ public sealed class TreeGitTests : IAsyncLifetime
 
     private string Temp(string prefix)
     {
-        var path = Directory.CreateTempSubdirectory(prefix).FullName;
+        var path = CoaiMcp.Tests.TempDir.For(prefix).Path;
         _temps.Add(path);
 
         return path;

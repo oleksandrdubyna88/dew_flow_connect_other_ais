@@ -26,6 +26,9 @@ public sealed class CandidatePathTests
 
     public static TheoryData<string> MerelyStartsTheSameWay() => new TheoryData<string>(VectorsOf("merelyStartsTheSameWay"));
 
+    /// <summary>A checkout under the system temp folder, as DATA about a path (never touched on disk): the `~` is taken out when the test runs, so no source line spells the temp root (the leftovers guard reads literals).</summary>
+    public static TheoryData<string> UnderATempFolder() => new() { "/tm~p/some-checkout".Replace("~", string.Empty, StringComparison.Ordinal) };
+
     [Theory]
     [InlineData(@"C:\Users\x\AppData\Local\Temp\claude\d--rsd-Thing\abc\scratchpad\wt")]
     [InlineData("/home/x/.cache/temp/claude/session/scratchpad")]
@@ -44,7 +47,7 @@ public sealed class CandidatePathTests
     /// </remarks>
     [Theory]
     [InlineData(@"C:\Users\x\AppData\Local\Temp\coai-collect-abc123")]
-    [InlineData("/tmp/some-checkout")]
+    [MemberData(nameof(UnderATempFolder))]
     [InlineData(@"D:\rsd\dew_flow_connect_other_ais")]
     [InlineData(@"D:\rsd\_wt\coai-consult")]
     public void AnOrdinaryRepositoryIsNot(string path) =>

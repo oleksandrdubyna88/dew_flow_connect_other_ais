@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class LoggingTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("coai-logs-").FullName;
+    private readonly string _root = TempDir.For("coai-logs-").Path;
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 

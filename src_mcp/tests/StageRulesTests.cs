@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class StageRulesTests : IDisposable
 {
-    private readonly string _repo = Directory.CreateTempSubdirectory("coai-stage-").FullName;
+    private readonly string _repo = TempDir.For("coai-stage-").Path;
 
     public void Dispose()
     {

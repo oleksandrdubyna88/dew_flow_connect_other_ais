@@ -29,7 +29,7 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
     private static readonly TokenPrice Grok = new(new TokenRates(2.00, 0.50, 6.00), 200_000, new TokenRates(4.00, 1.00, 12.00));
 
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-api-priced-").FullName;
+    private readonly string _dir = TempDir.For("coai-api-priced-").Path;
 
     public void Dispose()
     {
@@ -250,7 +250,7 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
         var service = Service(new VaultKeys(
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["qwen"] = Key }, string.Empty),
             ",\"price\":{\"in\":2,\"cached\":0.25,\"out\":6}");
-        var scratch = Directory.CreateTempSubdirectory("coai-api-roster-").FullName;
+        var scratch = TempDir.For("coai-api-roster-").Path;
 
         var work = service.Roster.BuildWork(
             [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
@@ -272,7 +272,7 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
     {
         var service = Service(new VaultKeys(
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["qwen"] = Key }, string.Empty));
-        var scratch = Directory.CreateTempSubdirectory("coai-api-conv-").FullName;
+        var scratch = TempDir.For("coai-api-conv-").Path;
 
         var reviewer = service.Roster.BuildWork(
             [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers.Single();
@@ -302,7 +302,7 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
     {
         var service = Service(new VaultKeys(
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["qwen"] = Key }, string.Empty), ",\"feature\":true");
-        var scratch = Directory.CreateTempSubdirectory("coai-api-cap-").FullName;
+        var scratch = TempDir.For("coai-api-cap-").Path;
 
         var feature = service.Roster.BuildWork(
             [RoleCatalog.FeatureRole], scratch, "ctx", round: 1, stage: Stage.FeatureReview, readsCheckout: false, codexTiers: CodexTiers.None).Reviewers.Single();

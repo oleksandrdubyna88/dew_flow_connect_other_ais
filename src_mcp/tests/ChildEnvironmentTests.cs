@@ -114,8 +114,8 @@ public sealed class ChildEnvironmentTests
     [Fact]
     public void EveryPlannedLaunch_AsksForTheMinimalEnvironment_AndEveryShippedOneStillInherits()
     {
-        var scratch = Directory.CreateTempSubdirectory("coai-env-scratch-").FullName;
-        var answers = Directory.CreateTempSubdirectory("coai-env-answers-").FullName;
+        var scratch = TempDir.For("coai-env-scratch-").Path;
+        var answers = TempDir.For("coai-env-answers-").Path;
         try
         {
             foreach (var (runtime, consultant, grant) in Launchable())

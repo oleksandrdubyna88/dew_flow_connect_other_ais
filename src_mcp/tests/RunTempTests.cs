@@ -36,7 +36,7 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     private readonly TempSeenByAClassFixture _fixture;
     private readonly OwnedScope _owned = DarwinLayout.FreshOwnedScope();
 
-    static RunTempTests() => TempSeenByTheStaticConstructor = Path.GetTempPath();
+    static RunTempTests() => TempSeenByTheStaticConstructor = TempDir.Root;
 
     public RunTempTests(TempSeenByAClassFixture fixture) => _fixture = fixture;
 
@@ -45,11 +45,11 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     /// <summary>What a class fixture saw when it was built: before the first test of the class.</summary>
     public sealed class TempSeenByAClassFixture
     {
-        public string Temp { get; } = Path.GetTempPath();
+        public string Temp { get; } = TempDir.Root;
     }
 
     /// <summary>A <c>MemberData</c> is read when the tests are DISCOVERED — before any fixture is built.</summary>
-    public static TheoryData<string> TempSeenAtDiscovery() => new() { Path.GetTempPath() };
+    public static TheoryData<string> TempSeenAtDiscovery() => new() { TempDir.Root };
 
     private static string Trimmed(string path) => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
@@ -65,7 +65,7 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     {
         RunTemp.Refusal().Should().BeNull("a run that reached a test passed the gate");
         RunTemp.IsActive.Should().BeTrue("Gate checked and passed this run");
-        Trimmed(Path.GetTempPath()).Should().Be(RunTemp.Folder, "the run's temp folder is where every test's temp path points");
+        Trimmed(TempDir.Root).Should().Be(RunTemp.Folder, "the run's temp folder is where every test's temp path points");
         Path.GetDirectoryName(RunTemp.Folder).Should().Be(RunTemp.Real, "the run folder is INSIDE the machine's temp folder, never it");
         Path.GetFileName(RunTemp.Folder).Should().MatchRegex(RunLeaf.ToString(), "the owner form: the name base of this owner and repository, run-, six characters");
         RunTempFolder.Variables.Select(Environment.GetEnvironmentVariable).Should().OnlyContain(value => value == RunTemp.Folder, "TEMP, TMP and TMPDIR all name the run folder");

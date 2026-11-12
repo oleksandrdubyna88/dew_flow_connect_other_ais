@@ -32,7 +32,7 @@ public sealed class AConsultantRunsWithItsRowsOptionsTests
         // The local shim's build WRITES its prompt file into the answers directory, so the directory is the test's own:
         // a fixed "D:/answers" failed the win-arm64 release leg of mcp 0.52.1 (no D: drive there) and left prompt files
         // on every machine that had one.
-        var answers = Directory.CreateTempSubdirectory("coai-localconsultant-").FullName;
+        var answers = TempDir.For("coai-localconsultant-").Path;
         try
         {
             var arguments = ConsultantResolution.For(row.Identity())!

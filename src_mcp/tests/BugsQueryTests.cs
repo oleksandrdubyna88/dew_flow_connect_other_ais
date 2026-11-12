@@ -37,7 +37,7 @@ public sealed class ConsoleOutCollection;
 [Collection("console-out")]
 public sealed class BugsQueryTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-bugs-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(TempDir.Root, "coai-bugs-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
     private static readonly SessionState Session =

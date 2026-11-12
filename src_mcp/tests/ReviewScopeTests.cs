@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ReviewScopeTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-scope-").FullName;
+    private readonly string _data = TempDir.For("coai-scope-").Path;
 
     public void Dispose()
     {

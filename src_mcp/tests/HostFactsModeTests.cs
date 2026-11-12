@@ -16,7 +16,7 @@ public sealed class HostFactsModeTests : IDisposable
     private const string NoSuchMode =
         "coai-mcp --host-facts is not a mode — N-V6 has no product reading to set beside the facts script's own (DN10: two readings)";
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-host-facts-").FullName;
+    private readonly string _data = TempDir.For("coai-host-facts-").Path;
     private readonly string? _dirWas = Environment.GetEnvironmentVariable("COAI_DATA_DIR");
     private readonly string? _sideWas = Environment.GetEnvironmentVariable("COAI_DATA_SIDE");
 

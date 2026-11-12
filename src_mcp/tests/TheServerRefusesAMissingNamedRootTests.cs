@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheServerRefusesAMissingNamedRootTests : IDisposable
 {
-    private readonly string _parent = Directory.CreateTempSubdirectory("coai-serve-missing-").FullName;
+    private readonly string _parent = TempDir.For("coai-serve-missing-").Path;
 
     private string Missing => Path.Combine(_parent, "named-but-missing");
 
