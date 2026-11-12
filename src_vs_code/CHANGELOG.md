@@ -1,5 +1,15 @@
 # Changelog
 
+## Extension 0.87.0 — 2026-11-12
+
+**Added: a `Creds:` terminal reads its Claude session on the other machine.** In a terminal called `Creds: <host> / <session>`, the overflow menu (the three dots) of the terminal panel has **CoAI: take the question** and **CoAI: add the question**. They read the Claude session that runs in tmux session `<session>` on `<host>` over ONE ssh call, and put the question that waits there in the chat of that terminal. **Asked** in a chat from such a terminal shows what you wrote in that remote session. Every other terminal stays as in 0.86.0: it gives only what you copied.
+
+**The read only reads.** The ssh call sends a short script on standard input and writes nothing on the other machine. It uses your own ssh settings and keys, never asks for a password, opens no forward, and accepts no host key it does not already know: a host that is not in your `known_hosts` is refused and nothing is added. A read stops after 15 seconds. The first time for each host you are asked once, and your answer is kept; **CoAI: hosts read over ssh** in the ConnectOtherAIs panel (the menu in its title bar) changes it. When two sessions could be meant, you choose from a list — nothing is chosen for you. `SECURITY.md` describes the ssh edge, and what an ssh connection you already share means for it.
+
+**Rollback:** 0.86.0 reads the same conversations. It ignores the host answers, and a `Creds:` chat goes back to what you copied.
+
+**The MCP server to pair it with is `coai-mcp` 0.65.1**, unchanged.
+
 ## Extension 0.86.0 — 2026-11-11
 
 **Added: *Ask other AI* from a terminal.** A terminal is now a door to *Chat with other AIs*: press the icon in the title bar of the terminal panel, or `Ctrl+Alt+A` while the terminal has focus, and a coai chat opens with the text you copied. Copy first — in Claude Code's view a mouse selection is already copied; in another terminal, copy as you usually do there. The door reads your clipboard and nothing else: it runs no copy command, sends no key to the program in the terminal, and leaves the clipboard as it is. With an empty or white-space-only clipboard it says "Copy the text first, then press Ask other AI." and sends nothing. The chord is in the shell skip list (`terminal.integrated.commandsToSkipShell`) by default, so the shell does not get the key.

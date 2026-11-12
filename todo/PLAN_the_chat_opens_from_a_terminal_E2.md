@@ -1,8 +1,8 @@
 # PLAN — E2 stories: the remote Claude session, read over ssh
 
 > Status: **coded and tested on `feat/chat-from-a-terminal-e2` (PR #982), 2026-11-11; plan gate `proceed`, its findings
-> folded in; coai code gate `proceed`. Owed before the tag: the owner's R6 and R7 (and M-O1…M-O7) on a pre-release VSIX,
-> then the merge and the extension release.** Epic E2 of
+> folded in; coai code gate `proceed`. Merged (#982, e060d77e); the owner's R6 and R7 passed on VSIX 0.86.901 (2026-11-12);
+> released from release PR #986 as extension 0.87.0. M-O2…M-O7 not reported yet, still owed.** Epic E2 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics`, its § *Stage 2*, its
 > § *Security* and its ledger entry 1.1). Written by Opus when the epic started, on `feat/chat-from-a-terminal-e2` from
 > `main` `45b070a2`. A stories document keeps no change ledger: a change to this epic is an entry in the parent (epoch 2,
