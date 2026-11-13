@@ -151,10 +151,11 @@ public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRun
     /// </summary>
     /// <remarks>
     /// agy 1.5.8 launched with <c>--json-schema</c> runs a second, "reminder" turn, and <c>response</c>
-    /// concatenates every turn's text — two copies of the JSON locally, four on the Team server (measured
-    /// 2026-11-13). <c>structured_output</c> is the single object the CLI validated against the schema. It is
-    /// absent on older agy and on launches without a schema (the consultant), where <c>response</c> is still
-    /// the answer; anything that is not an object there is treated as absent.
+    /// concatenates every turn's text — two copies of the JSON in each of 4 local runs (gemini-4-hydrogen-low ×2,
+    /// gemini-3.8-flash-low ×2), four copies in the one Team server canary review of gemini-4-hydrogen-low
+    /// (measured 2026-11-13). <c>structured_output</c> is the single object the CLI validated against the
+    /// schema. It is absent on older agy and on launches without a schema (the consultant), where
+    /// <c>response</c> is still the answer; anything that is not an object there is treated as absent.
     /// </remarks>
     public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result) =>
         Result(result.StdOut) is { } r ? StructuredOutput(r) ?? Response(r) : null;

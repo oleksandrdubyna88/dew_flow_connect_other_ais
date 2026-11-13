@@ -13,10 +13,11 @@ namespace CoaiMcp.Tests;
 /// <remarks>
 /// <para>Measured 2026-11-13 on agy 1.5.8: a launch with <c>--json-schema</c> runs a second "reminder" turn
 /// (<c>num_turns: 2</c>), and <c>response</c> concatenates each turn's text — two copies of the schema's JSON
-/// locally, four on the Team server. Read as one document that is a JSON object followed by more JSON, and the
-/// parser either refuses it or reads the wrong copy. <c>structured_output</c> is the single object the CLI
-/// validated against the schema. It is absent on older agy and on launches without a schema (the consultant),
-/// where <c>response</c> is still the answer.</para>
+/// in each of 4 local runs (gemini-4-hydrogen-low ×2, gemini-3.8-flash-low ×2), four copies in the one Team
+/// server canary review of gemini-4-hydrogen-low. Read as one document that is a JSON object followed by more
+/// JSON, and the parser either refuses it or reads the wrong copy. <c>structured_output</c> is the single
+/// object the CLI validated against the schema. It is absent on older agy and on launches without a schema
+/// (the consultant), where <c>response</c> is still the answer.</para>
 /// <para>Pure string inputs: nothing here touches the disk or starts a process.</para>
 /// </remarks>
 public sealed class AntigravityStructuredOutputTests
