@@ -38,7 +38,7 @@ jobs:
           npm ci --ignore-scripts --prefix .agents/conventions
           node .agents/conventions/tools/rules.mjs check --repo .
 
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
 
@@ -305,7 +305,7 @@ jobs:
 
       # E5 S4 (must-not-copy #12, the plan's P12): the Node run folder on macOS, where `os.tmpdir()` is /var/folders/… and a link into /private/var. W10 (owned.test.mjs) makes the
       # run folder under it and asserts the wrap's `isMine` both ways; the proofs and the runner's refusals run here for the first time. Seconds, not minutes; no `npm ci`.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       # E5 S6: the Node guard (testLeftovers.test.mjs) reads workflows and needs `yaml`, which the mount carries after this `npm ci`; the C# guard needs only node and the mount.
@@ -317,7 +317,7 @@ jobs:
       - name: The scripts' run folder and its refusals (macOS)
         run: node scripts/run-lib-tests.mjs scripts/runFolder.test.mjs
 
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
 
@@ -430,7 +430,7 @@ jobs:
       - name: Conventions submodule
         run: git submodule update --init --depth 1 .agents/conventions
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       # E5 S6: the Node guard reads workflows and needs `yaml`, which the mount carries after this `npm ci` (the C# guard needs only node and the mount).
@@ -452,7 +452,7 @@ jobs:
       - name: The scripts' run folder and its refusals
         run: node scripts/run-lib-tests.mjs scripts/runFolder.test.mjs
 
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
 
