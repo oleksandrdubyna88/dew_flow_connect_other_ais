@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.16.0...server-v0.16.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **server:** a Team-server agy job's answer is the CLI's structured_output, once ([#991](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/991)) ([fac6ea1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fac6ea146d61d820b627895b0a26b90a820e3f7a))
+
 ## [0.16.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.15.0...server-v0.16.0) (2026-11-11)
 
 
