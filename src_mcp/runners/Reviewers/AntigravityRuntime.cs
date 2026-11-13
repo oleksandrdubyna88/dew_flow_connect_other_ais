@@ -144,11 +144,27 @@ public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRun
     private string Executable(ReviewerSettings settings) =>
         settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable;
 
-    /// <summary>The answer is the `result` event's response — already the schema's JSON.</summary>
+    /// <summary>
+    /// The answer is the schema's JSON: the CLI's own <c>structured_output</c> object when it has one,
+    /// otherwise the <c>result</c> event's <c>response</c>.
+    /// </summary>
+    /// <remarks>
+    /// agy 1.5.8 launched with <c>--json-schema</c> runs a second, "reminder" turn, and <c>response</c>
+    /// concatenates every turn's text — two copies of the JSON locally, four on the Team server (measured
+    /// 2026-11-13). <c>structured_output</c> is the single object the CLI validated against the schema. It is
+    /// absent on older agy and on launches without a schema (the consultant), where <c>response</c> is still
+    /// the answer; anything that is not an object there is treated as absent.
+    /// </remarks>
     public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result) =>
-        Result(result.StdOut) is { } r && r.TryGetProperty("response", out var response)
-            ? response.GetString()
+        Result(result.StdOut) is { } r ? StructuredOutput(r) ?? Response(r) : null;
+
+    private static string? StructuredOutput(JsonElement result) =>
+        result.TryGetProperty("structured_output", out var output) && output.ValueKind == JsonValueKind.Object
+            ? output.GetRawText()
             : null;
+
+    private static string? Response(JsonElement result) =>
+        result.TryGetProperty("response", out var response) ? response.GetString() : null;
 
     /// <summary>
     /// Usage off the same envelope. <c>thinking_tokens</c> sits INSIDE <c>output_tokens</c> and
