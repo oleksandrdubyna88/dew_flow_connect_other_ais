@@ -6,7 +6,8 @@
 > (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
 > 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, plan gate `proceed`,
 > E2.S1–S4 coded and tested, merged (#982, e060d77e; coai code gate `proceed`); R6 and R7 passed on VSIX 0.86.901 (2026-11-12), released from release PR #986 as extension 0.87.0; change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`); change 2.2 stopped the plan before any E3 code. E3
-> stories written by Opus 2026-11-12 on `feat/chat-from-a-terminal-e3`; no E3 code until the re-review resumes the plan. Plan gate round 1 `proceed` (codex, antigravity;
+> stories written by Opus 2026-11-12 on `feat/chat-from-a-terminal-e3`; no E3 code until the re-review resumes the plan. The
+> re-review's revision of the whole plan is written (2026-11-13, the baseline of epoch 3); its plan gate is owed. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
 > read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
@@ -89,6 +90,20 @@ Narrowed: yes — the door no longer copies a VS Code terminal selection for the
   Ctrl+Alt+G is NOT a change (consult 719f7038): the Definition of Done already says the old chords never fire in
   a terminal, and R10 needs it. This second change stopped the plan for re-review. Nothing of E3 is built.)
 
+### Re-review for epoch 3
+
+Narrowed: no — no epic, story, DoD item, merge condition or release leaves the plan; review_feature moves before E3's tag, and a workspace or folder skip list gets one notice where E3's first draft gave none
+
+| Work | Where | Verdict | Action |
+|---|---|---|---|
+| E1 merged, 0851f074 | main (#971) | — | — |
+| release extension 0.86.0, 45b070a2 | main (#978) | — | — |
+| E2 merged, e060d77e | main (#982) | — | — |
+| release extension 0.87.0, 4efa0a90 | main (#986) | — | — |
+| the 0.87.0 post-deploy record and the macOS CI todo, e3a9fb2b | pushed, unmerged (`feat/chat-from-a-terminal-e3`) — not this plan's work | — | — |
+| E3 stories document, 7ef05a24 | pushed, unmerged (`feat/chat-from-a-terminal-e3`) | — | — |
+| change 2.2 and the stop, b638aed0 | pushed, unmerged (`feat/chat-from-a-terminal-e3`) | — | — |
+
 ## The symptom
 
 The owner, 2026-11-10: six or more Claude Code sessions now run as the **CLI** on two Linux VMs, several
@@ -166,7 +181,30 @@ All paths under `src_vs_code/`.
   (`chatCommand.ts:275`) derives it from a boolean and a uri.
 - **Back to source** (`src/chatReturnCommand.ts`, decision `src/chatReturn.ts:20` `BackTo`, `:40`
   `recordedRoute`) and **go to** (`src/chatGoto.ts`) know only tabs; `chatGoto.ts:44` and `:235` state that a
-  terminal cannot own a conversation. This plan reverses that statement.
+  terminal cannot own a conversation. This plan reverses that statement. (E1 rewrote both. At `4efa0a90` the
+  `TabKind` comment, `chatGoto.ts:44-48`, says a terminal CAN own a conversation and go-to does not start from one
+  "before stage 3"; `:239-240` says a terminal in the editor area gets the whole list. E3 rewrites them again.)
+
+**Re-verified for the re-review, 2026-11-13, at `b638aed0`** (its code is the same as `4efa0a90`, extension 0.87.0) —
+what stage 3 touches and the text above did not name:
+
+- **Go-to is more than `chatGoto.ts`.** Its host is `src/chatGotoCommand.ts` (one press at a time `:67`, `arrive`
+  `:88`, `startingFor` `:229`, `bindingTo` `:261`); its question is built from the tabs in `src/chatSessionJoin.ts:257`
+  `askedForGoto`; its one re-key road is `src/chatRegistry.ts:104` `revealBound` (with `tabStillOpen` `:122`); the
+  picker title of a narrowed go-to is `src/conversationChoice.ts:87` `narrowedTitle`.
+- **Several conversations of one source.** `chatGoto.ts:314` calls them *"impossible by construction"*. For a
+  `terminal` source they are the normal case: before E3, a press of the door after each reload adds one more record
+  of the same name.
+- **The road back's chord.** `coai.backToSource` is bound to Ctrl+Alt+G with `when: activeWebviewPanelId ==
+  'coaiChat'` and no `!terminalFocus` (`package.json:1370-1373`); `research/module_extension.md:10319` says the two
+  Ctrl+Alt+G `when`s never overlap. That stops being true when Ctrl+Alt+G is bound under `terminalFocus`.
+- **The serializer waits.** `restoreAfterReload` waits up to 5 s for the store's migration
+  (`src/chatRestorePanel.ts:87`, `MIGRATION_WAIT_MS` at `src/chatRestore.ts:56`) before the conversation is
+  registered. A terminal can open inside that wait and find no conversation yet.
+- **Take and add match by the terminal object only.** `takeFromTerminal` (`src/chatCommand.ts:637`; *add* calls it)
+  calls `terminalMatch` at `:667` with no re-attach before it, so after a reload it starts a second conversation.
+- **Terminal liveness is read in two copies.** `src/chatReturnCommand.ts:156` `asLive` and
+  `src/remoteSessionHost.ts:281` each map `window.terminals` with `exitStatus !== undefined`. E3 makes them one.
 - **Agent mode** is offered by `agentOffered(remote, workspace)` (`src/chatAccessRules.ts:12`), called at
   `chatCommand.ts:104`, `chatShow.ts:110`, `chatConversationRestore.ts:51`. A terminal conversation is filed
   under the first workspace root, so it would be offered agent mode in a folder that has nothing to do with
@@ -292,12 +330,45 @@ All paths under `src_vs_code/`.
 
 - **Re-attach after a reload**, only for names that pass the strict `credsSession` pattern of stage 2: pure `reattachPlan(orphans, liveNames, name)` binds only
   when exactly one live terminal and exactly one orphaned conversation carry the name, re-checked just before
-  `panels.rekey` *(consultants)*. Runs on `onDidOpenTerminal` (creds may reopen terminals late), after the
-  serializer restores, and at the start of the door.
+  `panels.rekey` *(consultants)*.
+  - **An orphan** is an OPEN chat panel whose durable source is `terminal` and whose key is not a terminal of the
+    window (`window.terminals`). Conversations stored on disk and not open are never orphans. Re-attach never moves
+    a conversation from one live terminal to another.
+  - **Triggers.** `onDidOpenTerminal` (creds may reopen terminals late); after the serializer restores a
+    conversation (the serializer first waits up to 5 s for the migration, so a terminal can open before its
+    conversation exists); and at the start of the terminal door, of *take the question* and of *add the question*
+    (re-review, consult 82282f3e: without it, take and add start a second conversation). Go-to from a terminal does
+    not run re-attach: it keeps its own path, where the person chooses from a list.
+  - **Staggered arrivals** (re-review, consult 82282f3e). The triggers see the window one event at a time, so the
+    name can be one-to-one at one event and not at the next. Case A: orphan A is restored, terminal T1 opens and A
+    binds to it, then a second terminal T2 of the same name opens. Case B: terminal T is open, and two conversations
+    of its name are restored one after the other; the first binds by arrival order. The rule: **a bind that
+    re-attach makes is provisional until the person first uses that conversation from its terminal** — the door,
+    *take* or *add* finds it on that terminal, or go-to from that terminal shows it. While a bind is provisional,
+    each trigger counts its conversation as a conversation of the name and its terminal as a terminal of the name.
+    When the name is no longer one live terminal and one conversation, the provisional bind is undone: the
+    conversation goes back to a key of its own, its tab stays open, and the name binds again only when a trigger
+    sees one of each. So in case A and in case B nothing stays bound, and nothing is guessed. A bind that was used
+    is final: a namesake that opens later gets its own conversation, as in E1. The provisional marks are in memory
+    only, one per bound terminal, dropped with the terminal.
+  - **Who brings creds terminals back after a reload** — VS Code's own terminal revival, creds, or both — is not
+    known until R8 measures it. Until then, two terminals of one name are ambiguity and never a bind. R8 is not
+    waived.
 - **Go to from a terminal:** `TabKind` gains `'terminal'`; Ctrl+Alt+G on `terminalFocus` (added to the skip
-  list); an overflow item.
-- **Skip-shell health:** if the person's own `commandsToSkipShell` hides the default, one notification with an
-  *Add* button that appends the ids to the user setting; pressing it is the consent; the answer is remembered.
+  list); an overflow item. It reads the active terminal, as the door does, never the tabs. Two live terminals of one
+  name, or several stored conversations of one terminal name, give a list, never a pick; go-to never moves a
+  conversation from one live terminal onto its namesake. `coai.backToSource`'s Ctrl+Alt+G gains `&& !terminalFocus`
+  (`package.json:1370-1373`), so the old chords never fire in a terminal (DoD item 2, R10). This is not a plan
+  change (consult 719f7038): the DoD already says it.
+- **Skip-shell health**, by the settings layer that hides the default:
+  - **The person's user-level list** lacks the ids: one notification with an *Add* button that appends the missing
+    ids to the USER setting; pressing it is the consent; the answer is remembered.
+  - **A workspace or folder list** hides the default (an *Add* to the user setting cannot fix it: that layer wins):
+    ONE notification with NO button. It names the settings level to fix — the workspace settings or the folder
+    settings — and is shown once. The extension never writes workspace or folder settings (the owner, 2026-11-13; it
+    keeps the scope, so it is not a narrowing).
+  - **Anything else** — no user, workspace or folder value, or a user value that is not a list of strings — gets no
+    notification and no write (*What this plan does NOT do*).
 
 ## What this plan does NOT do
 
@@ -320,6 +391,23 @@ All paths under `src_vs_code/`.
   closed and focus went back to the terminal, which is an interrupt for the program there (found by the E1 review;
   it predates this plan). The terminal door is the cure for the person; a fix for the old command is a decision
   for the owner after R9.
+- No re-attach of a conversation that is restored after its terminal's bind was used (for example a restore retried
+  by a press): it stays on a key of its own, and the person reaches it with go-to (re-review).
+- No trigger when a terminal closes: with two terminals of one name, closing one re-attaches nothing until a terminal
+  opens or the door, *take* or *add* is pressed (E3 § 10, O7).
+- No write to workspace or folder settings: a workspace or folder list that hides the default gets one notification
+  with no button that names where to add the ids, and the person adds them there.
+- No invented default: when no user, workspace or folder value is set and the default itself lacks the ids (for
+  example, another extension's default for the same setting won — not measured), nothing is offered and nothing is
+  written. A user list created then would hide that other default (E3 § 10, O4).
+- The write target from a Remote window is not measured: where `ConfigurationTarget.Global` writes
+  `terminal.integrated.commandsToSkipShell` from a Remote window, and which layer the terminal there reads. The owner's
+  windows are local (E3 § 10, O9).
+- No way to be asked again: a notification closed without *Add* is remembered (`globalState`) and is not shown again.
+  The person can add the ids by hand to `terminal.integrated.commandsToSkipShell` in the user `settings.json`
+  (*Preferences: Open User Settings (JSON)*); the help says so (E3 § 10, O10).
+- No cornerstone in E3: the quota is full (2 of 2), and the re-attach rule is small, pure and specified here; its
+  silent failure is covered by its event-sequence scenarios and R8 (E3 § 10, O11).
 
 ## Security
 
@@ -352,7 +440,10 @@ All paths under `src_vs_code/`.
 
 1. **E1** — stage 1, one PR, one extension release; the owner's real-window check before E2 starts.
 2. **E2** — stage 2, one PR, one extension release; real-window check on a VM.
-3. **E3** — stage 3, one PR, one extension release; then `review_feature` (three epics) and the promotion.
+3. **E3** — stage 3, one PR, one extension release, in this order (change 2.2): E3 merged → R8, R10 and R11 on the
+   pre-release VSIX of the merged head → `review_feature` over the three epics, every finding resolved (an accepted
+   fix that changes the product lands as a new PR and is verified on a new pre-release VSIX) → E3's release tag →
+   the promotion.
 
 ## Test plan
 
@@ -378,7 +469,13 @@ All paths under `src_vs_code/`.
   spawned before a "yes"); `fromSession` stays `false` for a non-`Creds:` terminal and `pinSession` never reads the
   local home for a `terminal` source.
 - **Stage 3**: `reattachPlan` (1/1 binds; 2 terminals or 2 conversations do not; an already bound key does not; a name
-  that fails `credsSession` never binds); go-to with a terminal; the skip-shell check over the `inspect()` shapes.
+  that fails `credsSession` never binds); the staggered orders as deterministic event sequences — case A (an orphan
+  binds to T1, then T2 of the same name opens: the bind is undone), case B (two conversations of one name restored
+  one after the other against one terminal: the bind is undone), and a used bind stays when a namesake opens later;
+  re-attach at the start of the door, *take* and *add*; go-to with a terminal (two live terminals of one name give a
+  list; no move between live namesakes); the skip-shell check over the `inspect()` shapes — the user offer, the one
+  notice with no button for a workspace or folder list, nothing for a default that lacks the ids, never a workspace
+  or folder write.
 - **Webview pages are not changed**; if one must be, it is tested by running it (`bundledPage.test.ts`).
 
 ## Real-window checks (recorded in this plan when measured)
@@ -418,10 +515,13 @@ All paths under `src_vs_code/`.
       remote session read-only over ssh, after the person agreed to that host once — ONE call on the registry
       path, by the exact session id; the title fallback (at most three calls) gives a list on ambiguity, never a
       guess.
-- [ ] After a reload a `Creds:` conversation re-attaches only when unambiguous; go-to works from a terminal; a
-      hidden skip-list default is offered back with the person's consent.
+- [ ] After a reload a `Creds:` conversation re-attaches only when unambiguous, and a bind that later turns
+      ambiguous before its first use is undone; go-to works from a terminal; a user-level skip list that hides the
+      default is offered back with the person's consent, and a workspace or folder list that hides it is named once
+      and never written.
 - [ ] Every real-window check R1–R11 is recorded here with its result.
-- [ ] Three extension releases cut and verified (tag pushed alone, its run observed); `review_feature` run;
+- [ ] Three extension releases cut and verified (tag pushed alone, its run observed); `review_feature` run over the
+      three epics after E3's merge and its R8, R10 and R11, and before E3's release tag, every finding resolved;
       the plan promoted with its deviations.
 
 ## Epics
@@ -509,19 +609,32 @@ host, whose keys, no forwarding) is authentication and authorisation — Fable b
 
 ### E3 — Polish (stage 3) · depends on E2
 
-- **Goal.** After a reload a `Creds:` conversation finds its terminal again, only when unambiguous; go-to works from a
-  terminal; a hidden skip-shell default is offered back with consent.
-- **Scope.** `reattachPlan` (names that pass `credsSession` only) and its three triggers (`onDidOpenTerminal`, after
-  the serializer restores, the start of the door), with the re-check before `panels.rekey` (`src/chatPanels.ts`);
-  `TabKind` `'terminal'`, Ctrl+Alt+G on `terminalFocus`, its skip-list entry and its overflow item
-  (`src/chatGoto.ts`, `package.json`); the skip-shell notification and the write to the user setting.
+- **Goal.** After a reload a `Creds:` conversation finds its terminal again, only when unambiguous, and never by
+  arrival order; go-to works from a terminal; a skip-shell default hidden by the person's user list is offered back
+  with consent, and one hidden by a workspace or folder list is named once.
+- **Scope.** `reattachPlan` (names that pass `credsSession` only), the provisional bind and its undo, and its
+  triggers (`onDidOpenTerminal`, after the serializer restores, the start of the door, of *take* and of *add* —
+  `src/chatRestorePanel.ts`, `src/chatCommand.ts`, `src/extension.ts`), with the re-check before `panels.rekey`
+  (`src/chatPanels.ts`); one reader of the window's terminals in place of the two copies (`src/chatReturnCommand.ts`,
+  `src/remoteSessionHost.ts`). Go-to: `TabKind` `'terminal'`, Ctrl+Alt+G on `terminalFocus`, its skip-list entry and
+  its overflow item, and `!terminalFocus` on `coai.backToSource`'s Ctrl+Alt+G (`package.json`); the decision and
+  its comments (`src/chatGoto.ts`), the host (`src/chatGotoCommand.ts`), the question (`src/chatSessionJoin.ts`), the
+  re-key road (`src/chatRegistry.ts` `revealBound`), the picker title (`src/conversationChoice.ts`), and
+  `research/module_extension.md:10319` (the two Ctrl+Alt+G `when`s). Skip shell: the user offer and its write to
+  the user setting, and the one notice with no button for a workspace or folder list. The help in five languages and
+  the documents, as for E1.
 - **Depends on.** E2 released, R6–R7 recorded. Re-attach reads the records E1 writes and the `credsSession` pattern
   of E2.
-- **Done when.** The stage-3 rows of the test plan are green. DoD item 5 holds. The PR is merged; the third release is
-  cut and verified after R8, R10 and R11 were recorded on the pre-release VSIX (entry 1.1). Then `review_feature` over the three epics, and the plan is promoted with its
-  deviations — the parent and the three stories documents together (DoD items 6–7).
+- **Done when.** The stage-3 rows of the test plan are green. DoD item 5 holds. The PR is merged; R8, R10 and R11
+  are recorded on the pre-release VSIX of the merged head (entry 1.1); then `review_feature` over the three epics runs
+  from the merged head and every finding is resolved — an accepted fix that changes the product lands as a new PR
+  and is verified on a new pre-release VSIX; then the third release is cut and verified (change 2.2); then the plan
+  is promoted with its deviations — the parent and the three stories documents together (DoD items 6–7).
 - **Cornerstone areas.** (b) again — the re-attach rule (one live terminal, one orphan, checked again before the
   re-key). No cornerstone story is recommended here: the rule is small, pure and already specified.
+- **Stories.** [PLAN_the_chat_opens_from_a_terminal_E3.md](PLAN_the_chat_opens_from_a_terminal_E3.md) — three stories,
+  written by Opus 2026-11-12 and revised for the re-review 2026-11-13: E3.S1 re-attach, E3.S2 go-to from a terminal,
+  E3.S3 skip-shell health. No cornerstone (quota full).
 
 ### Notes from the split, and how they were settled (2026-11-10, before the first plan round)
 
