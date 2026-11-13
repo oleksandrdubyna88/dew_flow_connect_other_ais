@@ -18,8 +18,9 @@ namespace CoaiMcp.Runners.Reviewers;
 /// quota, a timeout or an untrusted folder — three things it was mistaken for — it is Google
 /// retiring the path. The migration is a different CLI, so it is a different adapter.</para>
 /// <para><b>Why it fits.</b> It is the only vendor here that takes our finding schema as a flag
-/// AND reports its own token usage AND has a reasoning-effort setting: <c>--json-schema</c> puts
-/// the schema JSON straight into <c>result.response</c>, <c>usage</c> comes back on the same
+/// AND reports its own token usage AND has a reasoning-effort setting: <c>--json-schema</c> makes
+/// the CLI validate the answer and return it as <c>result.structured_output</c> (see
+/// <see cref="ReadAnswer"/>), <c>usage</c> comes back on the same
 /// envelope, and the model ids carry their own effort (<c>gemini-3.8-flash-high</c>). One
 /// subscription also reaches Claude and GPT-OSS models, so a "vendor" here is a fleet.</para>
 /// <para><b>Why the prompt rides stream-json.</b> <c>--print</c> takes its prompt as a flag VALUE,

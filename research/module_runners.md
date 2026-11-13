@@ -258,13 +258,22 @@ sequenceDiagram
   the turn had already paid for live only in the ladder's locals, so a throw dropped them from the ledger (the
   epic-3 code round of `research/PLAN_every_round_is_counted.md`; `ACancelDuringTheLaddersWait_KeepsTheLaunchesAlreadyPaid`).
 - **Antigravity (`agy`) is the closest fit to this product's contract**: `--json-schema` puts the
-  finding schema straight into `result.response`, the same envelope carries `usage`, and the model
+  finding schema straight into the `result` event (see the next point for which field), the same envelope carries `usage`, and the model
   ids carry their own reasoning effort. Its prompt rides `--input-format stream-json` on stdin as
   one NDJSON line (`{"event":"user","message":{"role":"user","content":"..."}}`) because `--print`
   takes its prompt as a flag VALUE and a review prompt is ~33 KB — past the Windows command line.
   It exists because Google retired Gemini Code Assist for individuals mid-2026-08-31: the Gemini
   CLI now fails in `_doSetupUser` with "migrate to the Antigravity suite", before any model is
   reached, which was mistaken in turn for a quota, a timeout and an untrusted folder.
+- **The answer is `result.structured_output` when the CLI gives one, else `result.response`.** agy 1.5.8 with
+  `--json-schema` runs a second, CLI-injected "reminder" turn, and `response` then concatenates every turn's text —
+  `{"findings":[]}` twice locally in 4 of 4 runs (gemini-4-hydrogen-low and gemini-3.8-flash-low) and four times on
+  the Team server's canary (2026-11-13). `GeminiPayload.Extract` took the FIRST copy, the model's un-reminded attempt,
+  while the CLI's own schema-validated object sat in `structured_output`. `AntigravityRuntime.ReadAnswer` now returns
+  that object's raw JSON when it is a JSON object, and `response` exactly as before when it is absent, `null` or not an
+  object — older agy, and the consultant's launches, which pass no schema (measured 2026-11-13: agy 1.5.8 without
+  `--json-schema` emits no `structured_output` field at all, one turn). The extra turn itself is the CLI's and still
+  costs a second model call per review (`AntigravityStructuredOutputTests`).
 - **The default model is one agy offers.** A row with `runtime: antigravity` and no model of its own launches
   `--model gemini-3.8-flash-low` (`AntigravityRuntime.DefaultModel`, since 2026-10-21; the extension's
   `ANTIGRAVITY_DEFAULT_MODEL` and the `coai.vendors` manifest default are the same id, and
