@@ -18,8 +18,9 @@ namespace CoaiMcp.Runners.Reviewers;
 /// quota, a timeout or an untrusted folder — three things it was mistaken for — it is Google
 /// retiring the path. The migration is a different CLI, so it is a different adapter.</para>
 /// <para><b>Why it fits.</b> It is the only vendor here that takes our finding schema as a flag
-/// AND reports its own token usage AND has a reasoning-effort setting: <c>--json-schema</c> puts
-/// the schema JSON straight into <c>result.response</c>, <c>usage</c> comes back on the same
+/// AND reports its own token usage AND has a reasoning-effort setting: <c>--json-schema</c> makes
+/// the CLI validate the answer and return it as <c>result.structured_output</c> (see
+/// <see cref="ReadAnswer"/>), <c>usage</c> comes back on the same
 /// envelope, and the model ids carry their own effort (<c>gemini-3.8-flash-high</c>). One
 /// subscription also reaches Claude and GPT-OSS models, so a "vendor" here is a fleet.</para>
 /// <para><b>Why the prompt rides stream-json.</b> <c>--print</c> takes its prompt as a flag VALUE,
@@ -144,11 +145,28 @@ public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRun
     private string Executable(ReviewerSettings settings) =>
         settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable;
 
-    /// <summary>The answer is the `result` event's response — already the schema's JSON.</summary>
+    /// <summary>
+    /// The answer is the schema's JSON: the CLI's own <c>structured_output</c> object when it has one,
+    /// otherwise the <c>result</c> event's <c>response</c>.
+    /// </summary>
+    /// <remarks>
+    /// agy 1.5.8 launched with <c>--json-schema</c> runs a second, "reminder" turn, and <c>response</c>
+    /// concatenates every turn's text — two copies of the JSON in each of 4 local runs (gemini-4-hydrogen-low ×2,
+    /// gemini-3.8-flash-low ×2), four copies in the one Team server canary review of gemini-4-hydrogen-low
+    /// (measured 2026-11-13). <c>structured_output</c> is the single object the CLI validated against the
+    /// schema. It is absent on older agy and on launches without a schema (the consultant), where
+    /// <c>response</c> is still the answer; anything that is not an object there is treated as absent.
+    /// </remarks>
     public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result) =>
-        Result(result.StdOut) is { } r && r.TryGetProperty("response", out var response)
-            ? response.GetString()
+        Result(result.StdOut) is { } r ? StructuredOutput(r) ?? Response(r) : null;
+
+    private static string? StructuredOutput(JsonElement result) =>
+        result.TryGetProperty("structured_output", out var output) && output.ValueKind == JsonValueKind.Object
+            ? output.GetRawText()
             : null;
+
+    private static string? Response(JsonElement result) =>
+        result.TryGetProperty("response", out var response) ? response.GetString() : null;
 
     /// <summary>
     /// Usage off the same envelope. <c>thinking_tokens</c> sits INSIDE <c>output_tokens</c> and
