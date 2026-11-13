@@ -1,12 +1,12 @@
 # PLAN — the chat opens from a terminal
 
-> Status: **epoch 2 open, approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
+> Status: **epoch 2 STOPPED for re-review 2026-11-13 (change 2.2: review_feature moves before E3's release tag); epoch 2 was approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
 > selection; `autoSend` kept as on the other doors). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
 > twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3. E1 merged
 > (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
 > 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, plan gate `proceed`,
-> E2.S1–S4 coded and tested, merged (#982, e060d77e; coai code gate `proceed`); R6 and R7 passed on VSIX 0.86.901 (2026-11-12), released from release PR #986 as extension 0.87.0; change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`) — the next change stops the plan. E3
-> not started. Plan gate round 1 `proceed` (codex, antigravity;
+> E2.S1–S4 coded and tested, merged (#982, e060d77e; coai code gate `proceed`); R6 and R7 passed on VSIX 0.86.901 (2026-11-12), released from release PR #986 as extension 0.87.0; change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`); change 2.2 stopped the plan before any E3 code. E3
+> stories written by Opus 2026-11-12 on `feat/chat-from-a-terminal-e3`; no E3 code until the re-review resumes the plan. Plan gate round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
 > read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
@@ -67,7 +67,7 @@ Narrowed: yes — the door no longer copies a VS Code terminal selection for the
 | PR review: the `none` fallback apart from the door's refusal, "switch conversations" in the help, the ambiguous-name host case, 8fc00cba | pushed, unmerged (PR #971) | fits | kept |
 | change 1.2 and the stop, f540ed97 | pushed, unmerged (PR #971) | fits | kept — the change this re-review answers |
 
-> Epoch 2 · approved 2026-11-11 · by owner · state: open
+> Epoch 2 · approved 2026-11-11 · by owner · state: stopped
 
 - 2.1 · 2026-11-11 · agent · contract — the automatic ssh call pins StrictHostKeyChecking=yes, so a person's accept-new or no cannot make it accept a host key
   (Fable's security judgement in the E2.S2 spec: under `BatchMode=yes` an unknown or changed host key is refused only
@@ -79,6 +79,15 @@ Narrowed: yes — the door no longer copies a VS Code terminal selection for the
   multiplexing; `SECURITY.md` names the residual in words. Question consultant a81ed863 (codex, antigravity): two
   causes; take only the host-key option. The owner agreed the same day: StrictHostKeyChecking=yes only, no full
   stop. The next accepted change stops the plan.)
+- 2.2 · 2026-11-13 · agent · build-order, merge-conditions — review_feature over the three epics runs after E3 is merged and before E3's release tag, not after the release
+  (Found when E3 started, by the Opus writer of the E3 stories (its open point O2). The E3 epic's "Done when" says
+  the third release is cut and verified, "then review_feature". The shared rule `coai-feature-gate.md` says
+  review_feature runs once, after every epic is built, and before the release; its Definition of Done says the
+  same. With one release per epic, "the release" is the last one, E3's. Question consultant 7df217cc (codex):
+  the rule decides the order, but moving a step of the build order is a change, as entry 1.1 was; in doubt it
+  is a change. Taken. The same consult round found that adding the terminal-focus exclusion to back-to-source's
+  Ctrl+Alt+G is NOT a change (consult 719f7038): the Definition of Done already says the old chords never fire in
+  a terminal, and R10 needs it. This second change stopped the plan for re-review. Nothing of E3 is built.)
 
 ## The symptom
 
