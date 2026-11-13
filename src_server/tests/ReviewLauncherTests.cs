@@ -312,6 +312,25 @@ public sealed class ReviewLauncherTests
                 "the continuation's answer is the job's, and both launches were billed");
     }
 
+    /// <summary>
+    /// agy 1.5.8 with <c>--json-schema</c> adds a reminder turn, and <c>response</c> carries every turn's text: four copies
+    /// in the one Team server canary review of gemini-4-hydrogen-low (2026-11-13). The job's answer is the CLI's validated
+    /// <c>structured_output</c>, once — the server reads it through the same adapter as the client (#990).
+    /// </summary>
+    [Fact]
+    public async Task AnAgyJobsAnswer_IsTheStructuredOutput_NotEveryTurnsText()
+    {
+        const string Validated = """{"findings":[]}""";
+        var stream = """{"event":"result","result":{"conversation_id":"conv-7","status":"SUCCESS","response":"""
+            + System.Text.Json.JsonSerializer.Serialize(string.Concat(Enumerable.Repeat(Validated + "\n", 4)))
+            + ""","num_turns":2,"structured_output":{"findings":[]},"usage":{"input_tokens":40,"output_tokens":20}}}""" + "\n";
+
+        var attempt = await RunAgy(new Scripted(new ProcessResult(0, stream, string.Empty, TimedOut: false)));
+
+        attempt.Should().BeOfType<ReviewAttempt.Answered>()
+            .Which.Raw.Should().Be(Validated, "the four concatenated copies are the CLI's turns, not the answer");
+    }
+
     [Fact]
     public async Task TheFollowUp_RunsAsTheSameAccountInTheSameConfinement()
     {

@@ -2314,6 +2314,14 @@ and `Confined`, with a scripted process (`Scripted`) that answers each launch in
   the conversation resolving under the confined slot environment was measured locally on #504 (agy 1.2.10)
   and is observable on the Team server only after a deploy.
 
+**A Team-server agy job's answer is the CLI's `structured_output` (2026-11-13, #990).**
+`src_server` `ReviewLauncherTests.AnAgyJobsAnswer_IsTheStructuredOutput_NotEveryTurnsText` — the same `RunAgy` and
+`Scripted` as above, one launch answering an agy 1.5.8 `result` line whose `response` holds four copies (the Team
+server canary's count) and whose `structured_output` is the object; the job's `Answered.Raw` is the object once.
+Green on #990's adapter, red with the pre-#990 adapter restored ("they differ at index 15"). The client-side
+cases (absent, null and non-object `structured_output`, and the parse end to end) are
+`src_mcp` `AntigravityStructuredOutputTests`.
+
 ## The shim tests' stub survives a bad request and says what it saw (2026-09-25, issue #462)
 
 `RemoteShimScenarioTests`' stub served one request at a time and caught nothing inside its loop: an answer that
