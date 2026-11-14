@@ -1,5 +1,17 @@
 # Changelog
 
+## Server 0.65.2 — 2026-11-13
+
+**Fixed: an Antigravity reviewer's answer is the one the CLI checked.** agy 1.5.8, run with the review's answer schema, adds a second turn that reminds the model to answer in that shape, and its `response` field then holds the text of every turn one after another. On 2026-11-13 that was two copies of the answer in each of 4 local runs (gemini-4-hydrogen-low ×2, gemini-3.8-flash-low ×2) and four copies in one review on the Team server. coai read the first copy, which is the model's answer before the reminder. It now reads `structured_output`, the single answer agy checked against the schema, and reads `response` as before when there is no such object: an older agy, and a consultation, which runs without a schema (#990).
+
+**Not changed:** the reminder turn is agy's own, so a review through agy 1.5.8 still costs a second model call.
+
+**Rollback:** 0.65.1 reads `response` and takes the first copy, as before.
+
+## Team server 0.16.1 — 2026-11-13
+
+**Fixed: an Antigravity job's answer is the one the CLI checked.** The Team server reads agy's answer through the same library as coai-mcp, so it gets the fix in Server 0.65.2 above: one copy of the answer instead of the first of up to four (#990). A server test pins it for a Team-server job (#991). No route or server source changed.
+
 ## Extension 0.87.0 — 2026-11-12
 
 **Added: a `Creds:` terminal reads its Claude session on the other machine.** In a terminal called `Creds: <host> / <session>`, the overflow menu (the three dots) of the terminal panel has **CoAI: take the question** and **CoAI: add the question**. They read the Claude session that runs in tmux session `<session>` on `<host>` over ONE ssh call, and put the question that waits there in the chat of that terminal. **Asked** in a chat from such a terminal shows what you wrote in that remote session. Every other terminal stays as in 0.86.0: it gives only what you copied.
