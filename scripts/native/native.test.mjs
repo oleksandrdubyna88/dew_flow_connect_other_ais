@@ -387,6 +387,22 @@ function pathDirs() {
   return { clean, wide };
 }
 
+// Red before 2026-11-15: with `<prefix>-<2 random bytes>` and a bare mkdirSync, 2000 folders in one ROOT met a taken name (EEXIST)
+// in all but about 3 runs in ten million. Owned folders draw again, so the count is exact and every call returns.
+linuxTest('pathDirs: a thousand calls in one ROOT never meet a taken name — 2000 distinct folders, clean 0755 holding only node, wide 0777', () => {
+  const made = new Set();
+  let last = { clean: '', wide: '' };
+  for (let call = 0; call < 1000; call += 1) {
+    last = pathDirs();
+    made.add(last.clean);
+    made.add(last.wide);
+  }
+  assert.equal(made.size, 2000, 'every call made two folders of its own');
+  assert.equal(statSync(last.clean).mode & 0o777, 0o755, 'clean stays 0755');
+  assert.equal(statSync(last.wide).mode & 0o777, 0o777, 'wide stays world-writable, the PATH entry the audit refuses');
+  assert.deepEqual(readdirSync(last.clean), ['node'], 'clean holds the node link and nothing else');
+});
+
 linuxTest('make-series.sh with a clean PATH: a private tree, SERIES_PATH, ONLY the PATH value in path.txt, node.txt an absolute realpath', () => {
   const series = bareSeries();
   const home = fakeHome();
