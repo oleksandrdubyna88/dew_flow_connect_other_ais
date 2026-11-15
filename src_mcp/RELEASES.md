@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.65.1...mcp-v0.65.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **antigravity:** read the review answer from structured_output, not the concatenated response ([#990](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/990)) ([539863e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/539863e2acf51062372580e0dedd5578e2eb7874))
+
 ## [0.65.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.65.0...mcp-v0.65.1) (2026-11-07)
 
 

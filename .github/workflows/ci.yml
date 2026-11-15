@@ -289,7 +289,10 @@ jobs:
   macos:
     name: macOS · mcp · server · bench
     runs-on: macos-latest
-    timeout-minutes: 30
+    # 30 until 2026-11-14: the job took 25.3, 26.9 and 29.8 minutes on #990, #992 and #991, and was cancelled at
+    # 30 three times in a row on #993 (its Test step alone ran 26.7 minutes before the cut; it is ~24 when the job
+    # passes). Past two thirds of the limit the limit is raised, in a ci: pull request, never during a release.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

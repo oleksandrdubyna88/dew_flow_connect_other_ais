@@ -495,6 +495,12 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
   wrote a non-JSON answer (the client repairs it) and a denial that exited non-zero. Whether the
   conversation resolves under a confined environment on the box's installed agy is observable only
   there — the suite asserts what is SENT (`ReviewLauncherTests`, the eight #515 tests).
+- **An agy job's answer is the CLI's `structured_output`, once** (2026-11-13). agy 1.5.8 with `--json-schema` adds
+  a reminder turn and `result.response` carries every turn's text — four copies in the one canary review of
+  gemini-4-hydrogen-low on this server. The job reads the answer through the shared adapter
+  (`AntigravityRuntime.ReadAnswer`, #990), which returns `structured_output` when it is an object and `response`
+  otherwise; `ReviewLauncherTests.AnAgyJobsAnswer_IsTheStructuredOutput_NotEveryTurnsText` pins it here (red with
+  the pre-#990 adapter).
 
 ```mermaid
 sequenceDiagram
