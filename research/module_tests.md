@@ -4576,6 +4576,17 @@ The bash rows ran red on the Linux CI job from a commit that held the new cases 
 
 **CodeRabbit round on PR #914 (2026-10-21).** `kimi.test.mjs`: a live pair written back from a copied home moves the watch's own shape baseline (`CredentialWatch.afterCopiedRun`; red: *the next launch was blamed for a write the copied run made*). `native-run.test.mjs`: a phase named `abort`, `remove-series`, `run`, `logs`, `tmp`, `checkout` or `bin` is refused (red: *Missing expected exception … renderRunScript wrote the phase 'abort'*). `proc.test.mjs`: the Windows listing throws when PowerShell is missing, signalled or exits non-zero (red: *a failed listing (ENOENT) was read as an empty process list*). `vibe.test.mjs`: `armFilterOf` — `--arms ""`, `--arms ,` or no value is an error, never every arm (red: the export did not exist; the old parse gave `[]` = no filter). `host-facts.test.mjs`: `coai-mcp --host-facts` runs with the minimal list plus `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR` (red: *the child was not given the session bus address*), and the `vibe` lookup follows `VibeRuntime.UvToolFolders` (red: *XDG_BIN_HOME comes before ~/.local/bin*). Second look: `proc.test.mjs` asserts `Get-CimInstance Win32_Process -ErrorAction Stop` in the PowerShell command (red: *a non-terminating Get-CimInstance error would be read as "no process"*); `vibe.test.mjs` `armFilterOf` refuses `--arms --cells M-V7` (red: *["--arms","--cells","M-V7"] was accepted*) and `armsCellsError` refuses a cell selection that holds a cell with no wanted arm (M-V5, M-V9 with a filter that removed its arm, the default list). Break-its were run on each and restored.
 
+**The PATH folders are owned folders (2026-11-15).** `pathDirs()`, the helper behind every make-series and PATH-audit case,
+made `clean-<2 random bytes>` and `wide-<2 random bytes>` in the file's one shared root with a bare `mkdirSync`; about 18
+calls per run, so two names were the same in roughly 0.2–0.5 % of runs, and CI failed once that way (PR #989, run
+43696858528: G4 died with `EEXIST … wide-5144`). Both now come from `wrap.ownedDir(scope, 'clean' | 'wide', { parent: ROOT })`,
+which claims a name exclusively and draws again when it is taken (the helper's own test: `owned.test.mjs` test 16); the
+modes are set as before (0755, 0777) and the same scope removes them. One new case pins it:
+
+| Suite | Runs | What it pins | Red message (before the fix) |
+|---|---|---|---|
+| `native.test.mjs` `pathDirs: a thousand calls in one ROOT never meet a taken name` | Linux | 1000 calls give 2000 distinct folders; `clean` is 0755 and holds only `node`, `wide` is 0777 | `EEXIST: file already exists, mkdir '…/clean-…'` (or `wide-`): with the old helper restored it failed in 3 runs of 3 (the chance of passing is about 3 in ten million); restored |
+
 ## The Linux teardown and the survivor marker (2026-10-16, A3 of E5 — `research/PLAN_kimi_and_vibe_on_linux.md` DL9; S-K6, S-K14–S-K16, S-K18, S-K21, S-K22, L-N2, L-N3)
 
 Two kinds of test, because a test host must never become a child subreaper (it would collect every other test's orphans): the **everywhere** tests run the decisions over seams; the **Linux** tests run the real teardown in a
