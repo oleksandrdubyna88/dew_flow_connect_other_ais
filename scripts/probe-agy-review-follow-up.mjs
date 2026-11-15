@@ -8,8 +8,8 @@
 // Launch shape = what `AntigravityRuntime.Build` sends a reviewer (src_mcp/runners/Reviewers/AntigravityRuntime.cs):
 // `--print= --input-format stream-json --output-format stream-json --mode plan --agent coai-reader --json-schema <finding
 // schema> --model <m> --add-dir <checkout>`, run FROM a folder holding the `coai-reader` agent (tools: view_file only)
-// and the PreToolUse hook that allows only view_file (AntigravityReadOnly). The product's hook handler is the coai
-// binary; here it is a node script with the SAME decision (`Decide`: allow view_file, deny every other tool). The finding
+// and the PreToolUse hook that allows only view_file or read_file (AntigravityReadOnly; read_file is agy 1.5.9's name). The product's hook handler is the coai
+// binary; here it is a node script with the SAME decision (`Decide`: allow view_file or read_file, deny every other tool). The finding
 // schema and the follow-up text (`AntigravityRuntime.NoCommands`) are read out of the C# sources, never copied, so the
 // probe cannot drift from the build it measures. The folder lives in the scratch directory (given, or by default an owned folder removed at exit — the exit line says `--scratch <dir>`; here the folder is the second argument); the person's own agy
 // configuration and `%LOCALAPPDATA%\coai-agy` are not touched.
@@ -102,9 +102,9 @@ const AGENT_FILE = '---\nname: coai-reader\n'
 const HOOK_HANDLER = `import { readFileSync } from 'node:fs';
 let name = '';
 try { name = JSON.parse(readFileSync(0, 'utf8'))?.toolCall?.name ?? ''; } catch { name = ''; }
-process.stdout.write(name === 'view_file'
+process.stdout.write(name === 'view_file' || name === 'read_file'
   ? '{"decision":"allow"}'
-  : JSON.stringify({ decision: 'deny', reason: 'coai: this consultation is read-only; only view_file runs' }));
+  : JSON.stringify({ decision: 'deny', reason: 'coai: this consultation is read-only; only view_file or read_file runs' }));
 `;
 
 function prepareHome() {

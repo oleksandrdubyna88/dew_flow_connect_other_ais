@@ -13,7 +13,8 @@ namespace CoaiMcp.Runners.Reviewers;
 /// <remarks>
 /// <para><b>Two blocks, because each fails open alone</b> (research/RESULTS_agy_write_block.md, agy 1.3.2, both sides):
 /// an agent whose <c>tools</c> list holds only <c>view_file</c>, selected with <c>--agent</c> — 0 of 3 written per side,
-/// even with no prose against writing — and a <c>PreToolUse</c> hook that allows only <c>view_file</c> — 0 of 3. An agent
+/// even with no prose against writing — and a <c>PreToolUse</c> hook that allows only the file readers, <c>view_file</c> or
+/// <c>read_file</c> (agy 1.5.9 renamed the tool the model is offered; research/RESULTS_agy_read_file.md) — 0 of 3. An agent
 /// that is not found falls back to agy's default agent and writes; a hook handler that answers nothing let a write through
 /// on Windows. Together a write needs both to fail at once. Reads still work (3 of 3 each).</para>
 /// <para><b>Where they live.</b> In a folder coai owns, the launch's cwd — never the operator's agy configuration, never a
@@ -27,17 +28,23 @@ namespace CoaiMcp.Runners.Reviewers;
 /// </remarks>
 public static class AntigravityReadOnly
 {
-    /// <summary>The agent every agy launch is started as — its tool list is <see cref="AllowedTool"/> alone.</summary>
+    /// <summary>The agent every agy launch is started as — its tool list is <see cref="AgentTool"/> alone.</summary>
     public const string AgentName = "coai-reader";
 
-    /// <summary>The one tool a launch may use: agy reads a file it names with it, and that is all coai asks of agy.</summary>
-    public const string AllowedTool = "view_file";
+    /// <summary>The one tool the agent file lists: agy reads a file it names with it, and that is all coai asks of agy.</summary>
+    /// <remarks>Stays <c>view_file</c> on every agy version: measured on 1.5.9, listing it still yields <c>read_file</c>
+    /// (research/RESULTS_agy_read_file.md), so the agent file never names <c>read_file</c>.</remarks>
+    public const string AgentTool = "view_file";
+
+    /// <summary>The tool names the hook allows: <c>view_file</c> on agy up to 1.5.8, <c>read_file</c> on 1.5.9
+    /// (research/RESULTS_agy_read_file.md) — both read-only file readers. Matched exactly, case-sensitively.</summary>
+    public static IReadOnlyList<string> HookAllowedTools { get; } = ["view_file", "read_file"];
 
     /// <summary>The argument that turns this binary into the hook's handler: a <c>PreToolUse</c> payload in, a decision out.</summary>
     public const string HookArgument = "--agy-hook";
 
     /// <summary>What a denied tool is told — and through it, the model.</summary>
-    public const string DenyReason = "coai: this consultation is read-only; only view_file runs";
+    public const string DenyReason = "coai: this consultation is read-only; only view_file or read_file runs";
 
     /// <summary>The arguments every agy argv carries.</summary>
     public static IReadOnlyList<string> AgentArguments { get; } = ["--agent", AgentName];
@@ -167,7 +174,7 @@ public static class AntigravityReadOnly
         + $"name: {AgentName}\n"
         + "description: A read-only consultant for ConnectOtherAIs. It reads files with view_file and never writes, edits or deletes.\n"
         + "tools:\n"
-        + $"  - {AllowedTool}\n"
+        + $"  - {AgentTool}\n"
         + "mainAgent: true\n"
         + "subagent: false\n"
         + "commandExecutionPolicy: \"off\"\n"
@@ -197,13 +204,13 @@ public static class AntigravityReadOnly
         }.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
 
     /// <summary>
-    /// The handler's decision for one <c>PreToolUse</c> payload: allow <see cref="AllowedTool"/>, deny every other tool —
+    /// The handler's decision for one <c>PreToolUse</c> payload: allow one of <see cref="HookAllowedTools"/>, deny every other tool —
     /// and deny what cannot be read, so a payload this code does not understand never lets a write through.
     /// </summary>
     /// <remarks>Read from the payload's own <c>toolCall.name</c>, never by searching its text: a tool's ARGUMENTS can
-    /// contain any string, the name of the allowed tool included.</remarks>
+    /// contain any string, the name of an allowed tool included.</remarks>
     public static string Decide(string payload) =>
-        ToolName(payload) == AllowedTool
+        HookAllowedTools.Contains(ToolName(payload), StringComparer.Ordinal)
             ? """{"decision":"allow"}"""
             : new JsonObject { ["decision"] = "deny", ["reason"] = DenyReason }.ToJsonString();
 

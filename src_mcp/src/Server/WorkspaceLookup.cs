@@ -12,7 +12,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// coai's own read-only list and search over a consultant's granted roots (research/PLAN_agy_searches_through_coai.md §3) —
-/// served to an antigravity consultant, which in <c>--mode plan</c> can only <c>view_file</c> a path it already knows.
+/// served to an antigravity consultant, which in <c>--mode plan</c> can only <c>view_file</c> (<c>read_file</c> on agy 1.5.9) a path it already knows.
 /// </summary>
 /// <remarks>
 /// <para><b>Contained the document reader's way.</b> A requested path is resolved component by component with every
