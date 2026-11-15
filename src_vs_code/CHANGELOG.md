@@ -1,5 +1,15 @@
 # Changelog
 
+## Server 0.65.3 — 2026-11-15
+
+**Fixed: Antigravity consultants and reviewers can read files again.** agy updated itself to 1.5.9 on 2026-11-14, and since then it offers the model its read tool as `read_file`, not `view_file`. coai's read-only hook allowed only `view_file`, so it denied every read: 4 of 4 runs on two models found nothing to read. To the person this looked like a size limit. The hook now allows exactly `view_file` and `read_file`, and still denies every other tool. On agy 1.5.9 a 307 KB file was read to the end with both markers found in 4 of 4 runs (gemini-4-argon-low ×2, gemini-4-hydrogen-low ×2). The write-block probe wrote nothing in any of 15 attempts (#995).
+
+**Not changed:**
+- agy reads at most 45 KiB or 800 lines per call, so a large file is read in pieces.
+- agy itself allows reads under `/tmp` outside the granted roots. The hook does not check paths, and a path check is a follow-up (research/RESULTS_agy_read_file.md §3).
+
+**Rollback:** 0.65.2 denies every read on agy 1.5.9.
+
 ## Server 0.65.2 — 2026-11-13
 
 **Fixed: an Antigravity reviewer's answer is the one the CLI checked.** agy 1.5.8, run with the review's answer schema, adds a second turn that reminds the model to answer in that shape, and its `response` field then holds the text of every turn one after another. On 2026-11-13 that was two copies of the answer in each of 4 local runs (gemini-4-hydrogen-low ×2, gemini-3.8-flash-low ×2) and four copies in one review on the Team server. coai read the first copy, which is the model's answer before the reminder. It now reads `structured_output`, the single answer agy checked against the schema, and reads `response` as before when there is no such object: an older agy, and a consultation, which runs without a schema (#990).
