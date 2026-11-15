@@ -1,5 +1,11 @@
 # Changelog
 
+## Team server 0.16.2 — 2026-11-15
+
+**Fixed: Antigravity reviewers on a Team server can read files again.** The Team server answers agy's tool-call hook with its own binary (`coai-server --agy-hook`) and the same library as coai-mcp. It therefore gets the fix in Server 0.65.3 below: on agy 1.5.9 the hook allows `read_file` as well as `view_file`, and still denies every other tool (#995). coai.remsoft.dev's agy updated itself to 1.5.9 on 2026-11-15, so on 0.16.1 every read by an Antigravity reviewer there was denied. A server test pins the hook as the built server answers it (#999). No route or server source changed.
+
+**Rollback:** 0.16.1 denies every Antigravity read on agy 1.5.9.
+
 ## Server 0.65.3 — 2026-11-15
 
 **Fixed: Antigravity consultants and reviewers can read files again.** agy updated itself to 1.5.9 on 2026-11-14, and since then it offers the model its read tool as `read_file`, not `view_file`. coai's read-only hook allowed only `view_file`, so it denied every read: 4 of 4 runs on two models found nothing to read. To the person this looked like a size limit. The hook now allows exactly `view_file` and `read_file`, and still denies every other tool. On agy 1.5.9 a 307 KB file was read to the end with both markers found in 4 of 4 runs (gemini-4-argon-low ×2, gemini-4-hydrogen-low ×2). The write-block probe wrote nothing in any of 15 attempts (#995).
