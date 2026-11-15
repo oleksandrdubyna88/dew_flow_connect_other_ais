@@ -31,11 +31,9 @@ public sealed class TheServerBinaryAnswersTheAgyHookTests : IDisposable
             AppContext.BaseDirectory, "coai-server" + (OperatingSystem.IsWindows() ? ".exe" : ""));
         File.Exists(exe).Should().BeTrue($"the test needs the server binary beside it, at {exe}");
 
-        var decisions = new Dictionary<string, string>();
-        foreach (var tool in new[] { "read_file", "view_file", "write_file", "run_command" })
-        {
-            decisions[tool] = await DecisionAsync(exe, tool);
-        }
+        string[] tools = ["read_file", "view_file", "write_file", "run_command"];
+        var answers = await Task.WhenAll(tools.Select(tool => DecisionAsync(exe, tool)));
+        var decisions = tools.Zip(answers).ToDictionary(pair => pair.First, pair => pair.Second);
 
         decisions.Should().Equal(
             new Dictionary<string, string>
@@ -59,7 +57,9 @@ public sealed class TheServerBinaryAnswersTheAgyHookTests : IDisposable
         var payload = $$"""{"toolCall":{"name":"{{tool}}","args":{} } }""";
 
         var answer = await new ProcessLauncher().RunAsync(
-            new ProcessRequest(exe, [AntigravityReadOnly.HookArgument], _dir) { StdIn = payload, Timeout = TimeSpan.FromSeconds(60) },
+            // The literal, not AntigravityReadOnly.HookArgument: the hook files already written on a host name it, so a
+            // rename that moved the constant and the routing together must still fail here.
+            new ProcessRequest(exe, ["--agy-hook"], _dir) { StdIn = payload, Timeout = TimeSpan.FromSeconds(60) },
             TestContext.Current.CancellationToken);
 
         answer.TimedOut.Should().BeFalse($"the hook answers in milliseconds and must not start the web host. It said: {answer.StdOut}{answer.StdErr}");
