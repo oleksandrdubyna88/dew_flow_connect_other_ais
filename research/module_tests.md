@@ -4572,7 +4572,8 @@ made `clean-<2 random bytes>` and `wide-<2 random bytes>` in the file's one shar
 calls per run, so two names were the same in roughly 0.2–0.5 % of runs, and CI failed once that way (PR #989, run
 43696858528: G4 died with `EEXIST … wide-5144`). Both now come from `wrap.ownedDir(scope, 'clean' | 'wide', { parent: ROOT })`,
 which claims a name exclusively and draws again when it is taken (the helper's own test: `owned.test.mjs` test 16); the
-modes are set as before (0755, 0777) and the same scope removes them. One new case pins it:
+modes are set as before (0755, 0777) and the same scope removes them. The plan and its deviations:
+[PLAN_the_native_test_folders_are_owned.md](PLAN_the_native_test_folders_are_owned.md) (PR #996). One new case pins it:
 
 | Suite | Runs | What it pins | Red message (before the fix) |
 |---|---|---|---|
