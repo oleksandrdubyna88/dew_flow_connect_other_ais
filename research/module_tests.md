@@ -2322,6 +2322,15 @@ Green on #990's adapter, red with the pre-#990 adapter restored ("they differ at
 cases (absent, null and non-object `structured_output`, and the parse end to end) are
 `src_mcp` `AntigravityStructuredOutputTests`.
 
+**The server binary's `--agy-hook` allows `read_file` (2026-11-15, #995).**
+`src_server` `TheServerBinaryAnswersTheAgyHookTests.TheServerBinary_AllowsViewFileAndReadFile_AndDeniesEveryOtherTool_AsAgyRunsTheHook`
+— the BUILT `coai-server` started as agy starts the hook (the one argument `AntigravityReadOnly.HookArgument`, a
+`PreToolUse` payload on stdin), once each for `read_file`, `view_file`, `write_file` and `run_command`; exit code 0 and a
+`decision` of allow, allow, deny, deny. agy 1.5.9 renamed `view_file` to `read_file` and #995 changed `Decide` in the
+library the server shares. Green on #995's `Decide`, red with the allow-list back to `view_file` alone (`read_file`
+differs: expected allow, was deny). The client binary's twin is `src_mcp`
+`AntigravityReadOnlyTests.TheBuiltBinary_AnswersTheHook_AsTheChildProcessAgyStarts`.
+
 ## The shim tests' stub survives a bad request and says what it saw (2026-09-25, issue #462)
 
 `RemoteShimScenarioTests`' stub served one request at a time and caught nothing inside its loop: an answer that
