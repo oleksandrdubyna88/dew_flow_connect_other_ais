@@ -41,7 +41,9 @@ public sealed class AntigravityReadOnlyTests : IDisposable
     public void OnlyViewFile_IsAllowed_AndEveryOtherTool_OrAPayloadNotUnderstood_IsDenied()
     {
         Decision(Payload("view_file")).Should().Be("allow");
-        foreach (var name in (string[])["write_to_file", "replace_file_content", "run_command", "browser_click_element", "define_subagent", "View_File", ""])
+        // agy 1.5.9 renamed its file reader (research/RESULTS_agy_read_file.md): the hook allows both names.
+        Decision(Payload("read_file")).Should().Be("allow");
+        foreach (var name in (string[])["write_to_file", "replace_file_content", "run_command", "browser_click_element", "define_subagent", "View_File", "Read_File", "READ_FILE", ""])
         {
             Decision(Payload(name)).Should().Be("deny", name);
         }
@@ -51,8 +53,10 @@ public sealed class AntigravityReadOnlyTests : IDisposable
         Decision("""{"toolCall":{}}""").Should().Be("deny");
         // The ARGUMENTS can carry any text, the allowed tool's own name included — the decision reads the call's name.
         Decision(Payload("write_to_file", """{"Content":"\"name\":\"view_file\""}""")).Should().Be("deny");
-        JsonDocument.Parse(AntigravityReadOnly.Decide(Payload("write_to_file"))).RootElement.GetProperty("reason").GetString()
-            .Should().Be(AntigravityReadOnly.DenyReason);
+        Decision(Payload("write_to_file", """{"Content":"\"name\":\"read_file\""}""")).Should().Be("deny");
+        var reason = JsonDocument.Parse(AntigravityReadOnly.Decide(Payload("write_to_file"))).RootElement.GetProperty("reason").GetString();
+        reason.Should().Be(AntigravityReadOnly.DenyReason);
+        reason.Should().Be("coai: this consultation is read-only; only view_file or read_file runs", "the model is told both names");
     }
 
     [Fact]
@@ -82,6 +86,7 @@ public sealed class AntigravityReadOnlyTests : IDisposable
 
         JsonDocument.Parse(await Answer(Payload("write_to_file"))).RootElement.GetProperty("decision").GetString().Should().Be("deny");
         JsonDocument.Parse(await Answer(Payload("view_file"))).RootElement.GetProperty("decision").GetString().Should().Be("allow");
+        JsonDocument.Parse(await Answer(Payload("read_file"))).RootElement.GetProperty("decision").GetString().Should().Be("allow");
     }
 
     [Fact]
@@ -130,6 +135,8 @@ public sealed class AntigravityReadOnlyTests : IDisposable
 
         var agent = File.ReadAllText(Path.Combine(folder, ".agents", "agents", "coai-reader.md"));
         agent.Should().Contain("name: coai-reader").And.Contain("tools:\n  - view_file\n").And.Contain("mainAgent: true");
+        // Measured on agy 1.5.9: listing view_file alone yields read_file, so the agent file never names read_file.
+        agent.Should().NotContain("read_file");
         var hooks = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, ".agents", "hooks.json"))).RootElement;
         var group = hooks.GetProperty("coai-read-only").GetProperty("PreToolUse")[0];
         group.GetProperty("matcher").GetString().Should().Be("*", "every tool call reaches the handler");
