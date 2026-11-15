@@ -376,12 +376,12 @@ function withPath(pathValue, text) {
   return makeSeries(series, home, text);
 }
 
+// Owned folders, not `<prefix>-<2 random bytes>`: about 18 calls share one ROOT, and 65 536 names made two of them the same
+// often enough to fail a CI run with EEXIST (2026-11-15, #989). The wrap claims each name exclusively and draws again when it is taken.
 function pathDirs() {
-  const clean = join(ROOT, `clean-${randomBytes(2).toString('hex')}`);
-  const wide = join(ROOT, `wide-${randomBytes(2).toString('hex')}`);
-  mkdirSync(clean);
+  const clean = wrap.ownedDir(scope, 'clean', { parent: ROOT });
   chmodSync(clean, 0o755);
-  mkdirSync(wide);
+  const wide = wrap.ownedDir(scope, 'wide', { parent: ROOT });
   chmodSync(wide, 0o777);
   symlinkSync(NODE, join(clean, 'node'));
   return { clean, wide };
