@@ -60,6 +60,14 @@ public sealed class AntigravityReadOnlyTests : IDisposable
     }
 
     [Fact]
+    public void TheHookAllowsBothFileReaders_AndTheAgentListsOnlyViewFile()
+    {
+        AntigravityReadOnly.HookAllowedTools.Should().Equal("view_file", "read_file");
+        AntigravityReadOnly.AgentTool.Should().Be("view_file");
+        AntigravityReadOnly.HookAllowedTools.Should().Contain(AntigravityReadOnly.AgentTool, "the hook never denies the agent's own tool");
+    }
+
+    [Fact]
     public void TheHookMode_ReadsThePayload_AndWritesTheDecision()
     {
         using var output = new StringWriter();
