@@ -25,7 +25,7 @@ Argon reported that the only tools declared to it were `read_file` and `manage_t
 `tools: [view_file]` still limits the toolbox on 1.5.9, and the read tool behind it now has a different name.
 No call named `view_file` was made in any arm.
 
-## 2. Test hook: 300 KB is read whole
+## 2. Test hook: 300 KB is reached to the end — both markers, with gaps at three page ends
 
 `gemini-4-hydrogen-low` made **8** `read_file` calls, all allowed and all `DONE`. It reported both markers on the
 right lines, and the last line as 3533. No other tool name reached the hook.

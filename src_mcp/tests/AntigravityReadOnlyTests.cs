@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// An agy launch cannot write inside its roots (research/PLAN_agy_cannot_write_its_roots.md): every launch runs from a folder
-/// coai owns, as an agent whose only tool is <c>view_file</c>, behind a hook that allows nothing else
+/// coai owns, as an agent whose only tool is <c>view_file</c>, behind a hook that allows only the file readers (<c>view_file</c>, and <c>read_file</c>, its name on agy 1.5.9)
 /// (research/RESULTS_agy_write_block.md). What CI cannot prove — that agy honours them — is the live probe's job.
 /// </summary>
 public sealed class AntigravityReadOnlyTests : IDisposable
@@ -38,7 +38,7 @@ public sealed class AntigravityReadOnlyTests : IDisposable
         JsonDocument.Parse(AntigravityReadOnly.Decide(payload)).RootElement.GetProperty("decision").GetString()!;
 
     [Fact]
-    public void OnlyViewFile_IsAllowed_AndEveryOtherTool_OrAPayloadNotUnderstood_IsDenied()
+    public void OnlyTheFileReaders_ViewFileAndReadFile_AreAllowed_AndEveryOtherTool_OrAPayloadNotUnderstood_IsDenied()
     {
         Decision(Payload("view_file")).Should().Be("allow");
         // agy 1.5.9 renamed its file reader (research/RESULTS_agy_read_file.md): the hook allows both names.
