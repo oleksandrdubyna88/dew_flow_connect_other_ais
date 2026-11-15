@@ -31,8 +31,10 @@ delay; it served 0.87.0 at 17:34 UTC) and every other automated item PASS. The s
 all six RIDs present`, `PASS 2 — marketplace serves 0.87.0`, `PASS 6` (the row labelled 7, "up but refuses everything";
 the checker numbers rows by position) — client-config 200 and the catalog 401 without a session, the expected answer,
 `PASS 9 — all six RIDs present` and `PASS 10 — 200 {"ok":true,"version":"0.16.0"}`, and ended "every automated item
-passed". By the table's labels: manual items **8 and 11 observed** on the deploy's canary above (the checker prints the
-row labelled 8 as 7); manual items 3, 4, 5, 6 and 12 were not run. In this release: #945 only (test infrastructure). Beside it, not an item of this file: the
+passed". By the table's labels: manual item **11 observed** on the deploy's canary above; manual items 3, 4, 5, 6, 8
+and 12 were not run. Item 8's own check — `/api/catalog` with a session, every vendor reporting a version — was not
+made; the canary's three `done` reviews show the vendors started, which is the failure item 8 names, but not by its
+check (the checker prints the row labelled 8 as 7). In this release: #945 only (test infrastructure). Beside it, not an item of this file: the
 ingest server **bugs 0.6.0** was deployed the same day (run 43269085878) — the host's canary said the service answers
 `/health` and opens its database, `live: 0.6.0`, and https://bugs.remsoft.dev answered `/health`.
 

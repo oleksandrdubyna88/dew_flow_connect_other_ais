@@ -31,7 +31,10 @@ failure before any swap, so a sentence that says "the host rolled back" there wo
    step's log". This works with every host script, old and new.
 2. Host script: print ONE machine-readable result line per run, with a unique prefix, for exactly these outcomes —
    rollback succeeded (to which version, confirmed by the health check after the switch), rollback failed (service
-   down), no predecessor (service stopped). Fix line 255 so "rolled back" is printed only when `switch_to` succeeded.
+   down), no predecessor and the service confirmed inactive by `systemctl is-active`, and no predecessor with the stop
+   NOT confirmed — line 248 runs `systemctl stop "$SERVICE" || true`, so a failed stop would otherwise be reported as a
+   stopped service while the rejected build keeps serving. Fix line 255 so "rolled back" is printed only when
+   `switch_to` succeeded.
 3. Workflow: capture that line even when the SSH step exits non-zero, write it into the job summary, and keep the
    run's failed status. A missing or malformed line means **unknown**, never "no rollback" — an older host script
    without the line keeps the neutral sentence from step 1 (the host script and the workflow ship separately).
@@ -39,9 +42,10 @@ failure before any swap, so a sentence that says "the host rolled back" there wo
 ## Test plan
 
 - Host script, in its existing test harness: canary fails with a predecessor → `rolled-back` line with that version;
-  `switch_to` fails during the rollback → `rollback-failed` line and no "rolled back to" sentence; no predecessor →
-  `no-predecessor` line.
-- Workflow logic, run by hand on the step's script: each of the three lines, plus no line at all, produces the right
+  `switch_to` fails during the rollback → `rollback-failed` line and no "rolled back to" sentence; no predecessor and
+  the stop succeeds → `no-predecessor` line; no predecessor and `systemctl stop` fails (the unit stays active) →
+  `stop-unconfirmed` line, never `no-predecessor`.
+- Workflow logic, run by hand on the step's script: each of the four lines, plus no line at all, produces the right
   summary sentence; `before == after` with no line gives the neutral sentence.
 - One real failed deploy is not required to prove this; if one happens, its summary is checked and recorded in
   `POST_DEPLOY.md`.
@@ -52,4 +56,6 @@ failure before any swap, so a sentence that says "the host rolled back" there wo
 - [ ] A host rollback is named in the run's summary with the version it went back to, or "unknown" when the host did
       not say.
 - [ ] `roll_back_to` never prints "rolled back" after a failed switch.
+- [ ] With no predecessor, "stopped" is reported only after `systemctl is-active` confirms it; a failed stop has its own
+      outcome.
 - [ ] `todo/README.md` row removed and this plan promoted to `research/` with its deviations.
