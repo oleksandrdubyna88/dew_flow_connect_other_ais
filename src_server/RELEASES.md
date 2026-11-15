@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.16.1...server-v0.16.2) (2026-11-15)
+
+
+### Bug Fixes
+
+* **server:** the server binary's agy hook allows read_file — carries [#995](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/995) into the Team server ([#999](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/999)) ([0de03e4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0de03e441d419efd6eb0d7a46536e6b2dba6627e))
+
 ## [0.16.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.16.0...server-v0.16.1) (2026-11-13)
 
 
