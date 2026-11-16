@@ -1,8 +1,11 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **plan only, nothing implemented yet, 2026-11-16 — plan round 1 `proceed` (2 of 2, gating 6 of 6), its findings folded in (§ 12); split into three epics E1–E3 the same day (§ Epics), stories documents written when each epic starts. E1 started
-> 2026-11-16 with its stories document, [PLAN_auto_never_asks_a_person_E1.md](PLAN_auto_never_asks_a_person_E1.md)
-> (E1.S1 marked the cornerstone, its spec by Fable to follow); nothing is coded yet.** Scope: a fifth value `auto` for *When the rounds run out*
+> Status: **stopped for re-review, 2026-11-16 — the second change after approval (entry 1.2) was accepted while E1.S1's
+> spec was written; no code on any epic until the whole plan is reviewed again. The whole plan was revised the same day
+> (§ *Re-review for epoch 2*: consulted, the done work sorted by an Opus judge, nothing cut, `Narrowed: no`); it waits
+> for re-approval through the gate.** Before the stop: **plan only, nothing implemented yet, 2026-11-16 — plan round 1 `proceed` (2 of 2, gating 6 of 6), its findings folded in (§ 12); split into three epics E1–E3 the same day (§ Epics), stories documents written when each epic starts. E1 started
+> 2026-11-16 with its stories document, [PLAN_auto_never_asks_a_person_E1.md](PLAN_auto_never_asks_a_person_E1.md),
+> and the E1.S1 cornerstone spec, [PLAN_auto_never_asks_a_person_E1_S1_spec.md](PLAN_auto_never_asks_a_person_E1_S1_spec.md); nothing is coded yet.** Scope: a fifth value `auto` for *When the rounds run out*
 > (`coai.onExhausted` / `COAI_ON_EXHAUSTED`), the default for every installation including choices made before; the
 > round machine's three `call_human` sites, the begin/resolve hold readers and `ask_human` in `src_mcp`; the setting, its
 > one-time migration, the env block and the rounds-log page in `src_vs_code`; the shared gate snippet in
@@ -16,10 +19,26 @@
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-16 · by reviewers · state: open
+> Epoch 1 · approved 2026-11-16 · by reviewers · state: stopped
 
 - 1.1 · 2026-11-16 · agent · epics, build-order — the gate's operator command split the three PRs into epics E1–E3
   (Fable, after the question consultants); notes N1–N5 and the § 4.3/§ 4.4/§ 4.7 wording repairs satisfy the plan as written.
+- 1.2 · 2026-11-16 · agent · contract — the release of a legacy hold sets AwaitingResolve true instead of keeping it
+  (E1.S1 spec, U1): a hold whose round was already resolved kept AdvanceOnResolve with nothing to consume it, so a
+  later round under a non-auto policy advanced on a plain resolve, and a feature review held at its cap never closed.
+  Counted on both question consultants' reading (consultation 4be988cc…); this second change stopped the plan.
+
+### Re-review for epoch 2
+
+Narrowed: no — DoD item 4 and § 8 step 4 grew; scope, goals, merge conditions and the release are unchanged
+
+| Work | Where | Verdict | Action |
+|---|---|---|---|
+| the plan, 602cfb91 | docs/plan-auto-mode and feat/auto-mode-e1, pushed, unmerged (#1007) | fits | kept; revised in place by the re-review |
+| marker kept while a legacy hold stands, § 6 access model, Auto label, e9213dfd | docs/plan-auto-mode, pushed | fits | kept — a fix that satisfies requirement 4 as written, so no entry |
+| the stop record, entry 1.2, 025673d5 | docs/plan-auto-mode, pushed | fits | kept |
+| E1 stories document, 1f0ae332 | feat/auto-mode-e1, pushed | fits | revised in place after re-approval (§ 4.3, N3, C4) |
+| E1.S1 cornerstone spec, 4cab5375 | feat/auto-mode-e1, pushed | fits | revised in place after re-approval (U1 settled, the note, the tests) |
 
 ## 1. What the owner asked for (2026-11-16)
 
@@ -52,7 +71,7 @@ unknown to `Human`).
 | S1 | `RoundMachine.CompleteRound`, `src_mcp/core/Rounds/RoundMachine.cs:440-452` | plan/code/document round with `reviewers.Answered == 0` (every reviewer failed, timed out, hit quota, was cancelled, unparseable; or the round deadline fired) | `call_human` **whatever the policy** — `GoodEnoughPolicyTests.WhenNobodyAnswered_ItStillCallsAHuman` (`src_mcp/tests/GoodEnoughPolicyTests.cs:65`) pins it |
 | S2 | `RoundMachine.CompleteFeatureRound`, `RoundMachine.cs:512-514` | feature review at its cap (round 2, or round 1 with a budget of one) with a ground: a blocking finding, a reviewer failure, or nobody answered (`GroundFor`) | `call_human` — the feature stage ignores `OnExhausted` entirely |
 | S3 | `RoundMachine.Exhausted`, `RoundMachine.cs:632-657` | findings still gate after the budget (default budget is ONE round: `PanelConfig.PlanDefault`/`CodeDefault`) | `call_human` under `Human`, and under `Escalate` once the ladder is spent |
-| S4 | the hold | after any of S1–S3: `HumanGate = true` | every `review_*` refused with `GateHeld` (`RoundMachine.cs:86-94`, checked at :132, :226, :286, :311); a new session beside it refused (`RoundEngine.HeldSentence`); `resolve` keeps the hold (`RoundMachine.cs:750-763`); only the person's answer file releases it (`CurrentAnswer`) |
+| S4 | the hold | after any of S1–S3: `HumanGate = true` | every `review_*` refused with `GateHeld` (`RoundMachine.cs:86-94`, checked at :132, :226, :286, :311); a fresh document review beside it refused (`RoundEngine.HeldSentence`, asked only by `PanelService.WhyNotAFreshReview`); `resolve` keeps the hold (`RoundMachine.cs:750-763`); only the person's answer file releases it (`CurrentAnswer`) |
 | S5 | `ask_human`, card door, `AskHumanService.ThroughTheDoorAsync` `src_mcp/src/Server/AskHumanService.cs:215-241` | the session is held, or a feature session after round 1 may be asked for a second round (`RoundMachine.AsksForTheGate`, :377) | **blocks** up to `COAI_ESCALATION_MINUTES` (15) polling the answer file, then `no_answer_yet` — the hold stays |
 | S6 | `ask_human`, the AI's own question, `AskHumanService.InTheConversationAsync` :128-146 | any question not the gate's | returns at once with `AskInTheConversation` (:202-208): *"ask the person yourself … and wait for their reply. Never decide alone"* — an orchestrator's agent stops here |
 
@@ -78,8 +97,9 @@ Under `auto` (the default):
    so an absent review is never indistinguishable from a review that judged the work. Its instruction tells the caller to
    say in its summary that the stage was NOT reviewed and why.
 3. **Rounds spent with findings open → `good_enough`** (O4), with the reason in the round's note.
-4. **A hold raised by a build that predates `auto` is released on the next call that reads it** (O2) — a review entry,
-   `resolve`, `status`, `ask_human` — logged, its notice withdrawn so the panel stops showing it. A hold raised by THIS
+4. **A hold raised by a build that predates `auto` is released by the next call that can write the release** (O2) — a
+   review entry, `resolve`, `status`, `ask_human` — logged, its notice withdrawn so the panel stops showing it, and never
+   answered with `GateHeld` under `auto` (§ 4.3). A hold raised by THIS
    build (under `human`, or under a workspace value) is not released by configuration — § 4.3, § 6.
 5. **`ask_human` never blocks, and the gate never asks.** The AI's own question without a `consultId` gets
    `consult_first` (O3); with the consultants' `consultId`, or when no consultant can be had, it gets today's
@@ -112,7 +132,7 @@ including S1 and S2 calling a person. And in every mode:
   older `coai-mcp` sharing the data folder (WSL + Windows, or a downgrade) throws on `"Auto"`, `SessionStore.Load`
   swallows it (`SessionStore.cs:522-530`), treats the session as new and overwrites it — the branch's trail is lost. With
   `"GoodEnough"` + `"autonomous": true` the older build reads a policy it knows (it does not ask a person at exhaustion),
-  and `PanelConfig`'s extension-data bag (`SessionState.cs:61`) with `SessionScrub.ConfigOf` keeps the unknown member
+  and `PanelConfig`'s extension-data bag (`SessionState.cs:147-157`) with `SessionScrub.ConfigOf` keeps the unknown member
   across its save. An older build still calls a person on S1/S2 — the downgrade limit, written down, not hidden.
 - **Parsing** (`PanelSettings.PolicyOf`, :1082-1088, and `Config`, :1679-1683): `"auto"` and absent/empty →
   `(GoodEnough, Autonomous: true)`; the four existing words → themselves with `Autonomous: false`; anything else →
@@ -121,7 +141,11 @@ including S1 and S2 calling a person. And in every mode:
   `auto`; harnesses that need a person pass `StagePolicy.Human` explicitly (CodeRoundHarness.cs, EndToEndTests.cs,
   ARoundsNumberComesFromTheJournalTests.cs already take the parameter).
 - **`Autonomous` is `bool?` on disk**: this build always writes `true` or `false`; `null` (the member absent) means the
-  config was written by a build that predates `auto` — the marker § 4.3 reads.
+  config was written by a build that predates `auto` — the marker § 4.3 reads. **While a hold stands whose marker is
+  absent, the refresh never stamps it** (it may refresh `OnExhausted`): the marker stays absent until that hold is
+  released — by `auto`, or by the person's answer — so a legacy hold first loaded and saved under `human` is still
+  released once the policy becomes `auto` (the E1 plan round and CodeRabbit on #1007, 2026-11-16; one test for that
+  sequence).
 - **Refreshed on every load that decides anything** (§ 11 C2; plan round 1 finding 1): one helper,
   `CurrentPolicy(session)`, sets `OnExhausted` and `Autonomous` from the current settings and is called by the begin
   (beside the `SecurityLane` refresh at `RoundEngine.cs:276-280`), by `resolve`, `status`, `ask_human` and
@@ -145,12 +169,12 @@ commit, and the owner's words are *"записали в логи и все"*. Re
 
 Everything that lists verdicts learns the new one in the same commit:
 
-- `RoundEngine.AnswerFor` (:926-948) — name `not_reviewed`, instruction: *"No reviewer answered — {failures}. Policy
+- `RoundEngine.AnswerFor` (:916-949) — name `not_reviewed`, instruction: *"No reviewer answered — {failures}. Policy
   `auto` proceeds WITHOUT a review. Call resolve (there is nothing to decide), say in your summary that this stage was not
   reviewed and why, then proceed."* `VerdictInstructionTests.EveryVerdictInTheUnion_IsHandledByTheAnswer` fails until it is.
 - `RoundCommands.MayProceed` (`src_mcp/src/Server/Rounds/RoundCommands.cs:16`) — or an operator's split order vanishes.
 - `src_bench/CoaiBench/Running/RoundRunner.cs:31` — or the bench retries an advanced plan and never reaches code.
-- `CadenceState` epic close (`src_mcp/core/Cadence/CadenceState.cs:5`) accepts any string; its "passed" wording is corrected.
+- `CadenceState` epic close (`src_mcp/core/Cadence/CadenceState.cs:5`) accepts any string; its "passed" wording is corrected, and an epic closed after a released legacy hold reads as "released by auto" (§ 4.3), not as a person's decision.
 - The `review_plan` tool's verdict list (`src_mcp/src/Tools.cs:103`) and the feature text (:298-311).
 
 ### 4.3 A hold from before the upgrade (O2)
@@ -163,13 +187,56 @@ exactly the road [PLAN_only_a_person_releases_the_gate.md](PLAN_only_a_person_re
 The marker is read BEFORE `CurrentPolicy` stamps the config, in the same helper.
 
 `RoundEngine.ApplyAnyHumanDecision` (:93-120) is the one reader every review entry passes; for such a hold it releases
-the session before anything else: `HumanGate = false, HoldQuestions = [], AdvanceOnResolve = true`, `AwaitingResolve`
-kept (the held round's findings still need `resolve`), saved, logged as a Warning *"auto released the {stage} hold of
-session {id} raised under {policy}"*, and each recorded hold question is withdrawn in the `escalations/` folder (the
-`Escalations.Expire` road, :244, with a reason the card shows) so the extension's watcher stops raising it. The same call
-is made by `resolve`'s and `status`'s loads (`PanelService`, :1636-1822) and by `HeldSentence`, so whichever the
-orchestrator calls first after the upgrade, it is not refused. A hold with no recorded question (`WithTheHoldReissued`,
-:154-168) is released the same way instead of being re-issued.
+the session before anything else. **The released state is `HumanGate = false, HoldQuestions = [], AwaitingResolve =
+true, AdvanceOnResolve = true`** — the state every auto verdict leaves (§ 4.2), so the next `resolve` (with the
+decisions still open, or none) advances the stage through the one path that already closes a stage
+(`PanelService.Finish`, the cadence close included). *[epoch 2, 2026-11-16: entry 1.2 — epoch 1 said "`AwaitingResolve`
+kept"; a held round the caller had already resolved has it `false`, which left `AdvanceOnResolve` with nothing to
+consume it: a later non-auto round then advanced on a plain `resolve`, and a feature review held at its cap never
+closed. Advancing at once on release was weighed and not taken: it would bypass `Finish` from read paths such as
+`status`.]*
+
+**The order, and what a failure leaves** (E1 plan round finding 1; the cadence consultation for epics 1–3). First each
+recorded hold question is withdrawn in the `escalations/` folder, so the extension's watcher stops raising it; the
+withdrawal tells *withdrawn*, *not there* (already gone or expired) and *failed* apart (`Escalations.Expire` returns
+`false` for both of the last two today, `Escalations.cs:243-245`). Only when none failed is the released session saved.
+Any failure — a withdrawal, the save, or a session claim another call holds — leaves the session held and unchanged on
+disk, with a Warning saying why; the next deciding load tries again. A crash between the two steps therefore leaves a
+held legacy session that the next load releases, never a released session with a live card. The card shows no reason
+(`Expire` has none, and E1 does not touch the extension): an expired card simply leaves the active list; the reason is
+in the Warning line *"auto released the {stage} hold of session {id} raised under {policy}"* and in the round's note.
+
+**The release is written on the held round** (the re-review consultation `1d4733ae…`): the held round's `RoundRecord`
+keeps its verdict (`call_human` or `escalated` — it is history) and gains the note *"released by policy auto: this hold
+was raised by a build before auto"*, saved with the session and upserted into `coai.db` by the existing writer
+(`RoundsDb.RecordRoundRow`, `ON CONFLICT(session_id, stage, number) DO UPDATE`, `RoundsDb.cs:849-865`). Writing it
+twice writes the same note. The cadence's epic close records the verdict of that round; its wording (§ 4.2) reads
+`call_human` with this note as "released by auto", not as a person's decision.
+
+The same release is made by `resolve`'s load (`PanelService.cs:1656`), `status`'s (`:567`), `ask_human`'s
+(`AskHumanService.cs:100-101`, before the door is chosen) and the fresh-document check that asks `HeldSentence`
+(`PanelService.WhyNotAFreshReview`, `:1152-1158`), so whichever the orchestrator calls first after the upgrade, it is
+never answered with `GateHeld`. `begin` and `resolve` release under the session claim they already take; `status`,
+`ask_human` and the fresh-document check take the claim for the release only and re-read under it — busy means nothing
+is written. A hold with no recorded question (`WithTheHoldReissued`, :154-168) is released the same way instead of
+being re-issued.
+
+**What a review entry answers** (the re-review judge, findings 1 and 3). After a release the held round still needs
+`resolve`, so a review entry is refused as today's `Unresolved` refusal is — but with a sentence of its own: *"policy
+auto released this {stage} hold, raised by a build before auto; call resolve (with the decisions still open, or none)
+and the stage moves on"*, never the sentence that says the findings were not resolved. When the release could not be
+written (a busy claim, a failed withdrawal or save), the entry answers *"policy auto is releasing this {stage} hold,
+raised by a build before auto; the release could not be written yet ({why}) — call again"*, never `GateHeld`, whose
+words say a person must decide.
+
+**A person's answer on file wins.** The release runs only when the hold's notice has no answer on file; an answer the
+person already gave (Proceed, Continue, Fix, Discuss) is applied as today (`ApplyAnyHumanDecision`), and auto does not
+override it.
+
+**Residuals of the order, written down.** A card an older build wrote but never recorded on the session is not
+withdrawn; the retention removes it seven days after it was asked. If one of several cards was withdrawn and the save
+then failed, the hold stands with fewer live cards; should the policy then leave `auto` before a release is written,
+the person sees the hold through the cards left, or through the card `ask_human` re-posts for a held session.
 
 **A known residual — rare, and written down.** The marker survives an older build's save only through the config's
 extension-data bag, and that bag exists since #868 (`fbf98e2a`, 2026-10-19; first released as `mcp-v0.63.0`). A
@@ -187,7 +254,7 @@ person's.
 
 | Call | Reply |
 |---|---|
-| The gate's question (card door) | `auto` raises no hold, and a legacy hold is released before the door is chosen (§ 4.3). The feature second-round request is answered at once — *"policy auto: a second feature round runs only on a ground the server finds; this review closes on resolve"* — logged, no card. A hold THIS build raised under `human` keeps its card (it is the person's, § 4.3), but the call returns at once with `no_answer_yet` (waited 0) instead of polling — never a wait under `auto` (note N3). |
+| The gate's question (card door) | `auto` raises no hold, and a legacy hold is released before the door is chosen (§ 4.3). The feature second-round request is answered at once — *"policy auto: a second feature round runs only on a ground the server finds; this review closes on resolve"* — logged, no card. A hold THIS build raised under `human` keeps its card (it is the person's, § 4.3), but the call returns at once with `no_answer_yet` (waited 0) instead of polling — never a wait under `auto` (note N3). Its sentence tells the two held cases apart: a hold this build raised is the person's (answer on its notice); a hold from before `auto` whose release could not be written yet (a busy claim, a failed withdrawal or save, § 4.3) is released by the next call — call again. |
 | The AI's own question, no `consultId` | `status: "consult_first"` (not an error; nothing spent, nothing counted): *"The person says: call the consultants — ask_consultants — talk it through, and come back to me only if the two of you did not settle it. Then call ask_human again with the consultId."* |
 | … with a `consultId` the desk accepts as proof | today's `ask_in_conversation` — the question really reaches the person |
 | … no consultant can be had (`none_available`, quota) | today's stand-down (`AskGate.cs:152-159`): `ask_in_conversation`, with the note saying why nobody was consulted |
@@ -196,7 +263,7 @@ person's.
 Every `consult_first` is a Serilog Information line with the question id and the decision — **never the question's
 text** (plan round 1 finding 4: an agent may paste a secret into a question; a test asks one carrying a key-shaped
 string and asserts it is absent from the log file). The existing `InTheConversationAsync` line that logs the text
-(`AskHumanService.cs:145`) is brought to the same rule in the same commit.
+(`AskHumanService.cs:143`), and the card door's line that does the same (`:229`), are brought to the same rule in the same commit.
 
 ### 4.5 Logging (requirement 6)
 
@@ -213,12 +280,12 @@ string and asserts it is absent from the log file). The existing `InTheConversat
 - **Manifest** `src_vs_code/package.json:349`: enum gains `"auto"`, default `"auto"`, description names all five.
 - **`settingsShape.ts`**: `OnExhausted` (:31) gains `'auto'`; `DEFAULTS.onExhausted = 'auto'` (:276); `asOnExhausted`
   (:627-631) accepts it.
-- **Select** (`src_vs_code/src/panelView.ts:1642-1648`): first option *"Auto — never ask a person; log and move on"*.
+- **Select** (`src_vs_code/src/panelView.ts:1642-1648`): first option *"Auto — the gate never holds or waits for a person; it logs and moves on"* (an AI's own question can still reach the person after its consultants, requirement 5 — the help says so).
 - **The one-time migration (O1)**, at activation, once per machine (a `globalState` marker
   `coai.onExhaustedAutoMigration` = the version that ran it): removes the saved `coai.onExhausted` from user settings
   (`config.update(key, undefined, Global)`) and from every per-side overlay (`seedOverlay` froze `'human'` into overlays
   of people who never chose it — `settingsShape.ts:404-414`, `sideSettings.ts:95`), then one non-modal notification:
-  *"When the rounds run out is now Auto — the gate never asks you; it logs and moves on. Change it in Reviews › The gate."*
+  *"When the rounds run out is now Auto — the gate never holds or waits for you; it logs and moves on. Your AI may still ask you a question its consultants could not settle. Change it in Reviews › The gate."*
   It runs after the settings mirror is set up, so the server file is rewritten by the ordinary change listener.
   Workspace-scoped values are NOT edited — see Q1.
 - **The env block** (`settingsShape.ts:551-553`) reads the binary's features (the fifth `envBlock` parameter, as
@@ -251,7 +318,8 @@ All of these are static or per-reply text that today promise a person; each is r
   (:400-446: the `consult_first` status, and that it never blocks under `auto`);
 - `GateHeld` and its siblings in `RoundMachine.cs:86-113` stay as they are. They are reachable only while a hold
   stands, and under `auto` one kind still can: a hold this build raised under `human` (or under a workspace value) before
-  the setting became `auto` (§ 4.3). The promise is exactly this: **`auto` raises no new hold and releases the eligible
+  the setting became `auto` (§ 4.3). A legacy hold under `auto` never reaches them: its two sentences are § 4.3's.
+  The promise is exactly this: **`auto` raises no new hold and releases the eligible
   legacy holds; a hold raised under `human` by this build keeps its authority**, and these sentences stay true for it
   until the person answers.
 - **The shared snippet**, `src_vs_code/src/claudeSnippet.ts` (`coai-snippet v5`) and its source of truth
@@ -265,7 +333,7 @@ All of these are static or per-reply text that today promise a person; each is r
 (and its stale "plan 3 rounds, code 2"), `help.ts:163-164`, `helpContent.ts:143-149` and the four translations
 (`helpDe/Es/Ru/Uk.ts`), `research/module_server.md` (*Only the `human` policy raises the gate*, ~:2304; env keys
 ~:1862), `research/module_core.md` (~:442-460), `research/module_extension.md`. `src_vs_code/CHANGELOG.md`: a
-*Server* entry and an *Extension* entry in the was/now style of 0.31.6 (CHANGELOG.md:3470-3495), saying plainly that
+*Server* entry and an *Extension* entry in the was/now style of 0.31.6 (`src_vs_code/CHANGELOG.md:3584`), saying plainly that
 **a value you chose is reset to Auto once**.
 
 ## 5. Compatibility
@@ -292,6 +360,32 @@ answer-file forgery class, closed by [PLAN_a_signed_answer_releases_the_gate.md]
 which this plan names on its side — and, rarer, the downgrade edge written at the end of § 4.3. Fail-open is deliberate
 and visible: `not_reviewed` is its own verdict, a Warning line and a note.
 
+**The access model this claim is made under** (CodeRabbit on #1007, 2026-11-16). The session files under
+`<dataDir>/sessions/` are as writable by a process running as the user as `settings.json` and the answer file are. A
+process that writes the session file can delete the marker — or clear `HumanGate` itself, which needs no marker and no
+`auto` at all. So the claim above is about the roads coai offers — a tool argument and the operator's configuration —
+and not about a forged session file; that is the same file-forgery class as the answer file, and it is closed, if at
+all, by the signed-answer plan, which must cover the session state too. This plan adds no protection against it and no
+new way into it.
+
+**An unusable settings file means `auto`** (the E1.S1 spec, § S1.8; decided at the re-review for epoch 2). A malformed,
+empty or denied `settings.json` reads as no values (`SettingsFile.TryRead`, `SettingsFile.cs:110-127`), and no value
+now means `auto` where it meant `human`. Under `auto` that also releases a hold from before `auto` (§ 4.3). Kept so,
+on the owner's words — *"если ревьюверы не отвечают, еще что-то — плевать. записали в логи"*: a damaged file must
+not block the orchestrator. It opens no new road: a process that can damage the file can as well write
+`COAI_ON_EXHAUSTED=auto` into it, and only holds from before `auto` are released either way. What is added is the
+record: the server writes a startup note and a Warning when the file exists but gave no values, naming the file and
+saying that the policy is `auto` by default. Failing closed (`human` on an unusable file) was weighed with the re-review
+consultation and not taken.
+
+**A read that failed by accident is read again** (the re-review judge, finding 2). At startup a BUSY file (a sharing
+violation while the panel writes it) also gives no values, and the host records the file's stamp before reading
+(`PanelServiceHost`), so nothing re-reads it until it changes: an operator who chose `human` would run `auto` until the
+next settings change, and a legacy hold would be released meanwhile. So a read that was busy or unusable does not
+record the stamp; the next deciding load reads the file again, and the policy is the operator's as soon as the file
+can be read. The startup note names the busy case too. A test: a busy first read, then a readable `human` file — the
+next deciding load runs `human` and releases nothing.
+
 ## 7. Boundaries with other plans
 
 | Item | Built by | The other plan's part |
@@ -314,9 +408,15 @@ The same table, shortened, is added to each of those four documents in the plan'
 3. RED: refresh — a session created under `Human` begins under `auto` and never holds; `EscalationsUsed` survives a
    toggle Escalate→auto→Escalate.
 4. RED: a held session from an older build (config without `autonomous`; with and without recorded questions) is
-   released under `auto` by whichever of begin, `resolve`, `status`, `ask_human`, `HeldSentence` comes FIRST after the
+   released under `auto` by whichever of begin, `resolve`, `status`, `ask_human`, the fresh-document check (`HeldSentence`) comes FIRST after the
    setting changes — one test per entry; its notice is withdrawn. A hold raised by this build under `human` is NOT
    released when the setting then becomes `auto`; `resolve(humanDecision: proceed)` is still refused on it.
+   Added at the re-review for epoch 2: a legacy hold loaded and saved under `human`, then `auto`, is released; after the
+   release one `resolve` through `PanelService` advances the stage exactly once in each of the four stages, whether the
+   held round had been resolved or not, the decisions recorded before survive, and the code stage's cadence closes; a
+   withdrawal that fails, a save that fails and a busy claim each leave the session held and unchanged on disk, and the
+   next load releases it; the held round's note reads "released by policy auto" in the session file and in `coai.db`;
+   an existing but unusable settings file runs `auto` and writes its startup note.
 5. RED: `ask_human` under `auto` — `consult_first` without `consultId`, `ask_in_conversation` with an accepted one, the
    stand-down without consultants, the feature second-round answer; never waits (a test with a 0-second budget and no
    answer file returns at once).
@@ -353,7 +453,7 @@ process; nothing with an in-flight state.
 
 ## 11. Consultations (2026-11-16, each verified against the code)
 
-- **C1** persistence shape → GoodEnough + trailing `autonomous` member; verified `PanelConfig`'s bag (`SessionState.cs:61`)
+- **C1** persistence shape → GoodEnough + trailing `autonomous` member; verified `PanelConfig`'s bag (`SessionState.cs:147-157`)
   and `SessionScrub.ConfigOf`. Consultation `af73fef3…`, solved.
 - **C2** refresh per begin → sound for future rounds; keep `EscalationsUsed` and pending decisions; flagged that a
   config release of a hold widens configuration authority — taken to the owner as O2. Consultation `21681354…`, solved.
@@ -377,7 +477,8 @@ process; nothing with an in-flight state.
 - [ ] Under `auto`, no code path sets `HumanGate`, writes a notice, or waits in `ask_human` — each of S1–S6 has a test.
 - [ ] `not_reviewed` exists end to end: machine, `AnswerFor`, `MayProceed`, bench, tool text, snippet v6.
 - [ ] Every auto decision is in the Serilog file, the round's `note` (session + `coai.db`) and on the rounds-log page.
-- [ ] Old holds are released by whichever call comes first, logged, notices withdrawn.
+- [ ] Old holds are released by whichever call comes first, logged, notices withdrawn before the release is saved, the
+      release noted on the held round; a failed step leaves the hold for the next call; one `resolve` then advances.
 - [ ] Panel and server defaults agree, and a test reads both.
 - [ ] The migration ran once, cleared user and overlay values, and announced itself; a later choice is kept.
 - [ ] Old server + new panel runs `good_enough` and says so; old panel + new server runs `auto`; a downgrade keeps the trail.
@@ -426,7 +527,7 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
   (`src_mcp/core/Rounds/SessionState.cs`), the defaults (`PanelConfig.Uniform`, the harnesses that need a person),
   `SessionStore` and `SessionScrub`, `CurrentPolicy` on every load that decides (`RoundEngine`, `PanelService`,
   `AskHumanService`, `HeldSentence`), and the bench's reader of the stored policy (note N2).
-  *The hold* — `RoundEngine.ApplyAnyHumanDecision` and the withdrawal of its notice (`Escalations.Expire`).
+  *The hold* — `RoundEngine.ApplyAnyHumanDecision` and the withdrawal of its notice before the release is saved (`Escalations`, a result that tells withdrawn, not there and failed apart), and the note on the held round.
   *The verdicts* — the three sites in `src_mcp/core/Rounds/RoundMachine.cs`, `RoundVerdict.NotReviewed`, and every
   reader: `RoundEngine.AnswerFor`, `RoundCommands.MayProceed`, `src_bench/CoaiBench/Running/RoundRunner.cs`,
   `CadenceState`'s wording, the verdict lists in `src_mcp/src/Tools.cs`.
@@ -445,7 +546,7 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
   3. every auto decision is in the Serilog file and in the round's `note`, in the session file and in `coai.db`
      (DoD item 3, all but the page); no log line carries the text of a question;
   4. a hold from a build before `auto` is released by whichever of begin, `resolve`, `status`, `ask_human` and
-     `HeldSentence` comes first — one test each — and its notice is withdrawn (DoD item 4). A hold THIS build raised
+     the fresh-document check (`HeldSentence`) comes first — one test each — and its notice is withdrawn (DoD item 4). A hold THIS build raised
      under `human`, or under a workspace-scoped value the migration does not touch (Q1), is NOT released by a later
      `auto`, and `resolve(humanDecision: "proceed")` is still refused on it (requirements 4 and 8);
   5. `ask_human` never waits, and it reaches a person only after the consultants, as the owner decided (O3):
@@ -580,6 +681,13 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
   (`src_vs_code/src/coaiInstall.ts:345-363`), so one window can clear them all. The spec says how every overlay key is
   found — the side registry (`src/sidesSeen.ts`) or the `coai.settingsOverlay@` prefix — and that another side's server
   settings file is rewritten only when a window of that side next mirrors it.
+- **N6 — two windows at once (E2.S2).** A `globalState` marker is no lock: two windows can both read "absent" before
+  either writes it (the cadence consultation for epics 1–3, `d5665d44…`, 2026-11-16; `catalogMigrationHost.ts:34`'s
+  queue serialises one extension host only). The spec names the coordination across windows of every side of one
+  profile, and the test that holds window B after its read while A finishes and the person chooses a value.
+- **N7 — the mirror after the migration is explicit (E2.S2).** Overlays are written with `globalState.update`
+  (`sideSettings.ts:36-43`), which fires no configuration change, so the listener of § 4.6 does not run. The migration
+  calls `mirrorSettings` itself when it is done, as the catalog migration does (`extension.ts:445-448`).
 
 ### The cornerstone ledger
 

@@ -59,6 +59,10 @@ allowance is agy's. coai's hook never checked paths, and this fix does not add a
 `workspacePaths` (the cwd folder and every `--add-dir` root) and `toolCall.args.Path`, so a path check in the hook is
 possible. It is recorded as a follow-up for the owner, not done here.
 
+> **Superseded 2026-11-16.** The hook now checks the path: it allows a reader only inside the granted roots and outside
+> the coai folder, and the three `/tmp` routes above were denied on the branch build (§6, "Live run on the branch build"). The paragraph above is kept as measured on
+> 2026-11-15.
+
 **The two meanings of `read_file` do not collide.** agy also uses `read_file` as a PERMISSION word in
 `result.denied_actions`, which `AntigravityRuntime.DeniedActions` and `AntigravityFollowUps.ReadActions` read. A hook
 denial is not reported there: in the three arms of §1, `denied_actions` was absent. An agy denial, as in the `$HOME`
@@ -103,6 +107,69 @@ the same binary, 3 runs each, `gemini-4-hydrogen-low`:
 | `coai-hook-read` | 0 | **3 of 3** |
 | `both-nogit` (agent + hook, cwd not a git repository, which is coai's layout) | **0 of 3** | — |
 | `both-nogit-read` | 0 | **3 of 3** |
+
+## 6. The hook checks the path (2026-11-16)
+
+§3 found that agy reads under `/tmp` outside its roots, and that the hook did not look at the path. This section records
+what the hook is handed, the three routes measured again, and the rule that closes them. The rule is the spec's:
+`PLAN_the_agy_hook_checks_the_path_S1_spec.md` (the plan's S1 spec).
+
+**The payload, captured 2026-11-16 on agy 1.5.9.** One `PreToolUse` payload per tool call. Its fields:
+`artifactDirectoryPath`, `conversationId`, `cwd`, `hookEventName`, `lastUserInput`, `modelName`, `stepIdx`,
+`toolCall` (`args` with `Path`, `id`, `name`), `transcriptPath` and `workspacePaths`.
+
+- `workspacePaths` holds the agy cwd first, then each `--add-dir` root. All entries are absolute.
+- `cwd` is the folder coai owns, the one that holds `.agents/hooks.json`. The hook process runs there too: its working
+  directory is `<coai folder>/.agents`. It is never a granted root.
+- `toolCall.args.Path` is the model's own text. In 6 of 7 calls it was absolute. Once it was relative, and agy itself
+  then rejected it. `..` and links arrive unresolved.
+- An environment variable set on agy reaches the hook process. The rule does not use that: it reads the roots from the
+  payload, which agy builds from the `--add-dir` arguments coai sets.
+- The hook runs before agy's own checks.
+
+**The three escapes, measured again on 2026-11-16 (before the fix).** Root under `/tmp`, a marker file under `/tmp`
+outside the root. The marker was read by an absolute path, by `root/../outside/x`, and through a link inside the root
+that points at it. All three read, 3 of 3. The hook allowed each call by name alone.
+
+**The rule, in short.** The hook allows `read_file` or `view_file` only when all of these hold. Otherwise it denies.
+
+- `Path` is one string, fully qualified. A relative path is denied.
+- The path, with links and `..` followed by `RealPath`, is inside at least one resolved root of `workspacePaths`.
+- The path is not inside the resolved `cwd`, the coai folder. This holds even when a granted root contains that folder.
+- Every entry of `workspacePaths` and `cwd` must resolve. A payload that lacks `cwd`, `workspacePaths` or `Path`
+  reads nothing. Any failure denies; the check never falls back to the spelling.
+- A path outside gets its own reason, `coai: this consultation reads only inside the folders it was given`. The
+  tool-name reason is unchanged. Neither names the path.
+
+Limits are in `SECURITY.md`, "What the sites guarantee": a link swapped between the check and agy's open is not closed,
+and a hard link or a bind mount is not seen.
+
+### Live run on the branch build
+
+2026-11-16, WSL, agy 1.5.9, `gemini-4-hydrogen-low`, `--mode plan --agent coai-reader`. The hook folder held the same
+`hooks.json` and agent file coai writes, and its `coai-hook.sh` started the branch's Release `coai-mcp` with
+`--agy-hook` (commit e31c1542). Two job folders under `/tmp`, made fresh: the granted root `J1` with `inside.txt`, and
+`J2`, never granted, with `secret.txt`; `J1/leak.txt` is a link to `J2/secret.txt`. One agy run per probe.
+
+| Probe | `Path` the model sent (`read_file`, 2 calls each) | Hook decision, from agy's output | Marker read |
+|---|---|---|---|
+| inside | `J1/inside.txt` | allowed | the inside marker, yes |
+| absolute | `J2/secret.txt` | `tool call denied by pre-tool hook: coai: this consultation reads only inside the folders it was given` | no |
+| `..` | `J1/../J2/secret.txt` | the same denial | no |
+| link | `J1/leak.txt` | the same denial | no |
+
+Each probe ATTEMPTED the read: the call and its `Path` are in agy's output, so a denial is the hook's, not a model that
+did not try. The secret marker appears in none of the four outputs. Script: `live-probe.sh` in the session's scratchpad
+(four `agy --print` runs and a grep of the stream for the `Path`, the reason and both markers).
+
+### Windows, not closed here
+
+An Opus review found two Windows-only gaps. This change does not fix them. They move to the follow-up plan
+`todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`. (W1) `RealPath` applies `..` to the path resolved so far, the Unix
+rule, but Win32 folds `..` as text before it follows a link or junction, so `<root>\junction\..\..\..\Users\me\.ssh\id_rsa` is judged
+inside and read outside, if agy allows that read (not measured on Windows). (W2) A UNC `Path` is resolved before it is judged, so the
+hook looks it up over SMB: that can send the user's NTLM credentials to that host, or stall past the hook's 10 s timeout. Neither applies on
+Linux, the Team server or WSL. Not measured on a Windows machine: both are read from the code and the Win32 rules.
 
 ## Not measured
 
