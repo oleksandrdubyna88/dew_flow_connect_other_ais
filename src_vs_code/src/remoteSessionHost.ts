@@ -5,6 +5,7 @@ import { notify, notifyAndAsk } from './notify';
 import { askPerson } from './personWait';
 import { HostAnswer, PickRow, Picked, Purpose, RemoteAnswer, RoadSeams, answersOf, onePerTerminal, reachOf, readsKey, remoteRoad, withAnswer, withoutHost } from './remoteRead';
 import { runRemote } from './remoteSsh';
+import { liveTerminals } from './terminalHost';
 
 /**
  * The `vscode` seams of the road to a terminal's remote Claude session (E2.S3, contract C4). Host code: every decision is
@@ -278,8 +279,7 @@ function terminalFor(key: object): ReachedTerminal {
  * entry id (the key of `threads`), and its source must be a terminal's.
  */
 export function terminalOf(id: object, panels: Pick<ChatPanels, 'keyOf'>): ReachedTerminal {
-  const live = vscode.window.terminals.map((terminal) => ({ key: terminal, name: terminal.name, exited: terminal.exitStatus !== undefined }));
-  const reach = reachOf(live, panels.keyOf(id), recordedNameOf(id));
+  const reach = reachOf(liveTerminals(vscode.window.terminals), panels.keyOf(id), recordedNameOf(id));
 
   return reach.kind === 'refused' ? reach : terminalFor(reach.key);
 }
