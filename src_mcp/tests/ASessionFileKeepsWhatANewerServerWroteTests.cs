@@ -461,6 +461,50 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!.AsObject().ContainsKey("catalog").Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(null, "Human")]
+    [InlineData(false, "Human")]
+    [InlineData(false, "GoodEnough")]
+    [InlineData(true, "GoodEnough")]
+    public void AutonomousAbsentFalseAndTrue_ComeBackFromALoadAndASave_AsTheyWere(bool? autonomous, string onExhausted)
+    {
+        // The member policy auto adds to a config. A build that has the bag but does not know the member must keep it as it
+        // found it — absent stays absent, a value stays that value — because "absent" is what marks a hold raised before
+        // policy auto existed (todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md, D2 and residual A8). Written against the tree before the member
+        // exists, on purpose: that tree IS such a build, and after the member lands this same test pins this build's own load and save.
+        var store = new SessionStore(_data);
+        var file = Plant(store, []);
+        Edit(file, json =>
+        {
+            var config = json["state"]!["config"]!.AsObject();
+            config["onExhausted"] = onExhausted;
+            if (autonomous is { } value)
+            {
+                config["autonomous"] = value;
+            }
+            else
+            {
+                config.Remove("autonomous");
+            }
+        });
+
+        store.Save(store.Load(Repo, Branch)!);
+        store.Save(store.Load(Repo, Branch)!);
+
+        var written = JsonNode.Parse(File.ReadAllText(file))!;
+        var kept = written["state"]!["config"]!.AsObject();
+        Spelled(file, ["state", "config"], "autonomous").Should().Be(
+            autonomous is null ? 0 : 1, "an absent marker stays absent and a written one is written once");
+        if (autonomous is { } expected)
+        {
+            kept["autonomous"]!.GetValue<bool>().Should().Be(expected, "the value comes back as it was");
+        }
+
+        kept["onExhausted"]!.GetValue<string>().Should().Be(onExhausted);
+        written["state"]!["sessionId"]!.GetValue<string>().Should().Be("bag-1", "the same session, not a new one");
+        written["rounds"]!.AsArray().Should().ContainSingle("the one round is kept");
+    }
+
     [Fact]
     public void ATypesContractNames_AreWorkedOutOncePerType()
     {
