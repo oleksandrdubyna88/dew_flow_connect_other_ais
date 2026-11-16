@@ -1,5 +1,26 @@
 # Changelog
 
+## Server 0.65.4 — 2026-11-16
+
+**Fixed: an Antigravity consultant or reviewer can read only inside the folders it was given (#1006).** Until now coai's read-only hook allowed `read_file` and `view_file` by name alone, and agy lets a reader reach `/tmp` outside its roots. On 2026-11-16 a consultant read a marker file under `/tmp` outside its granted folder by an absolute path, by `root/../outside/x`, and through a link inside the folder: 3 of 3. On the Team server every job's folder is under `/tmp`, so one job's reviewer could read another job's files. The hook now looks at the path. It follows links and `..`, and it allows the read only when the real path is inside a granted folder and outside the folder coai keeps for the hook. A relative path, a missing field or any path it cannot resolve is denied. The reason is `coai: this consultation reads only inside the folders it was given`, and it never repeats the path. The Team server answers the hook with its own binary and the same library, so it gets this with its next release.
+
+**Not changed:**
+- The tool-name rule: only `read_file` and `view_file` run, every other tool is denied, with the same reason as before.
+- agy's own checks still run after the hook allows a call.
+- agy reads at most 45 KiB or 800 lines per call.
+
+**Limits:**
+- A link swapped between the hook's check and agy's open is not closed.
+- Hard links and bind mounts are not seen.
+- Inside a granted folder nothing is narrowed: `.git` and credential-looking files stay readable by agy's reader.
+- An agy older than 1.5.9, whose hook call lacks the path, the working folder or the granted folders, has every read denied.
+- On Windows an 8.3 short name is refused wrongly, and agy there is not measured.
+- Two Windows gaps are not closed here and go to a follow-up plan (`todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`): `..` after a link or junction is applied to the resolved path, where Windows folds it as text first; and a UNC `Path` is looked up over the network before it is judged. Neither applies on Linux or the Team server.
+- A hook denial is not in agy's `denied_actions`, so coai's read follow-up does not fire for it.
+- The full list is in `SECURITY.md`, "What the sites guarantee".
+
+**Rollback:** 0.65.3 allows a reader by name alone again. For the Team server, re-dispatch `deploy-server.yml` with 0.16.2.
+
 ## Team server 0.16.2 — 2026-11-15
 
 **Fixed: Antigravity reviewers on a Team server can read files again.** The Team server answers agy's tool-call hook with its own binary (`coai-server --agy-hook`) and the same library as coai-mcp. It therefore gets the fix in Server 0.65.3 below: on agy 1.5.9 the hook allows `read_file` as well as `view_file`, and still denies every other tool (#995). coai.remsoft.dev's agy updated itself to 1.5.9 on 2026-11-15, so on 0.16.1 every read by an Antigravity reviewer there was denied. A server test pins the hook as the built server answers it (#999). No route or server source changed.
@@ -13,6 +34,7 @@
 **Not changed:**
 - agy reads at most 45 KiB or 800 lines per call, so a large file is read in pieces.
 - agy itself allows reads under `/tmp` outside the granted roots. The hook does not check paths, and a path check is a follow-up (research/RESULTS_agy_read_file.md §3).
+- (2026-11-16: done in the next release, below — now above: see Server 0.65.4. The bullet above is kept as it was written.)
 
 **Rollback:** 0.65.2 denies every read on agy 1.5.9.
 
