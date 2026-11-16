@@ -6,8 +6,9 @@
 > entry in the parent.
 >
 > Scope: `src_mcp`, `src_bench` and the server's documents. Three stories, the parent's intended cut, kept. **Cornerstone:
-> E1.S1** (`model: fable`) — the stored policy and the hold's authority. Fable writes its scenarios and brief in
-> `todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md` (not written yet). This document fixes S1's boundary and the
+> E1.S1** (`model: fable`) — the stored policy and the hold's authority. Its scenarios and brief are Fable's, in
+> [PLAN_auto_never_asks_a_person_E1_S1_spec.md](PLAN_auto_never_asks_a_person_E1_S1_spec.md) (written 2026-11-16,
+> before its code; it refined C1, C2 and C4 below). This document fixes S1's boundary and the
 > contracts S2 and S3 build on; S2 and S3 are briefed here in full. The parent's ledger line reads
 > `Cornerstones: 1 of 2 — E1.S1, E2.S2`.
 
@@ -127,7 +128,8 @@ Everything else matched, to the line or within one line: `RoundMachine.cs` `:86-
   three in the summary.
 - **Existing tests keep their meaning.** S1 flips the defaults to `auto` (the record defaults, `Uniform`, an absent
   key). A test that goes red ONLY because it relied on a default meaning `human` gets `human` pinned in its setup
-  (`StagePolicy.Human` with `Autonomous = false`, or `COAI_ON_EXHAUSTED=human` for an env-built one). Its assertions
+  (`StagePolicy.Human` named explicitly — a named policy is never auto, C2 — or `COAI_ON_EXHAUSTED=human` for an
+  env-built one; the S1 spec's § S1.9 has the rewrite table and names the hold suites pinned BEFORE the flip). Its assertions
   never change. List every such test in the PR. This applies in S2 and S3 too, for tests their change reddens.
 - **Temp folders.** New tests use `TempDir.For(...)`, `TempGitRepo` or `CodeRoundHarness` — never
   `Path.GetTempPath()` (the leftovers guard in `src_mcp/tests_leftovers` refuses it). A test that launches the fake CLI
@@ -158,29 +160,54 @@ Filters are xUnit v3 MTP: `--filter-class "*Name"`, `--filter-method "*Name*"`. 
 ## 4. Shared contracts — S1 delivers them; S2 and S3 rely on nothing else
 
 Fable's spec may refine a name below. If it does, it updates this section and the S2/S3 briefs in the same commit.
+**Refined 2026-11-16 by the S1 spec** (its table *Changes to § 4*, X1–X6): C1, C2 and C4 below, and the two lines of
+§ 8.2 and § 9.2 that used them.
 
-- **C1 — the flag.** `PanelConfig` carries `bool? Autonomous { get; init; }`, written to the session file as
+- **C1 — the flag.** `PanelConfig` carries `bool? Autonomous { get; private init; }`, written to the session file as
   `autonomous` (`true` or `false` by this build; absent means a build before `auto`), and a read-only
   `[JsonIgnore] bool IsAutonomous => Autonomous == true`. **S2 and S3 read only `IsAutonomous`.** Invariant:
-  `IsAutonomous` implies `OnExhausted == StagePolicy.GoodEnough`. The name sits beside `PanelSettings.Autonomous`
+  `IsAutonomous` implies `OnExhausted == StagePolicy.GoodEnough` — kept by construction: `OnExhausted` has a
+  `private init` too, a config is made in code by a constructor that writes the pair, and changed only by
+  `UnderPolicyOf(current)`, which S1 alone calls. S1's own readers are `PredatesAuto` (`Autonomous is null`) and
+  `LegacyHold`. The name sits beside `PanelSettings.Autonomous`
   (`COAI_AUTONOMOUS`, the autonomy ORDER — `PanelSettings.cs:474`), which is a different thing; every new comment and
   log line says "policy auto", never "autonomous", so the two cannot be read as one.
 - **C2 — building a config in a test.** `PanelConfig.Uniform(max, threshold, StagePolicy.X)` with an EXPLICIT policy
-  means that policy with `Autonomous = false`, so `GoodEnoughPolicyTests` keeps meaning "non-auto good_enough". An auto
-  config in a test is `PanelConfig.Uniform(max, threshold, StagePolicy.GoodEnough) with { Autonomous = true }`. How
-  `Uniform` tells an explicit policy from its default is the spec's choice.
+  means that policy with `Autonomous == false`, so `GoodEnoughPolicyTests` keeps meaning "non-auto good_enough". An auto
+  config in a test is `PanelConfig.Uniform(max, threshold)` — no policy named is policy auto, in `Uniform` and in
+  `new PanelConfig()` alike (the parameter is `StagePolicy? onExhausted = null`). `with { Autonomous = … }` and
+  `with { OnExhausted = … }` do not compile outside the type.
 - **C3 — the settings.** `PanelSettings.FromEnvironment` gives `Rounds.IsAutonomous == true` for `auto`, absent and
   empty; `false` for `human`, `continue`, `escalate`, `good_enough`; and `Human`, `false` plus today's complaint for an
   unknown word (`UnknownSettingValueTests`).
-- **C4 — the refreshed session.** Every load that decides — the begin in `RoundEngine.RunStageAsync` (beside
+- **C4 — the refreshed session.** Every load that decides — the begin in `RoundEngine.RunStageAsync` (`:267` and
   `:277-280`), `resolve` (`:1656`), `status` (`:567`), `ask_human` (`AskHumanService.cs:100-101`, BEFORE `_desk.Facts`)
-  and `HeldSentence` — passes the session through the parent's `CurrentPolicy` before it reads the hold. After it:
-  `Config.OnExhausted` and `Config.Autonomous` are the current settings'; a hold from before `auto` is released
-  (`HumanGate = false`, `HoldQuestions = []`, `AdvanceOnResolve = true`, `AwaitingResolve` kept, saved, Warning logged,
-  its notices withdrawn); a hold this build raised stays. So `RoundMachine.CompleteRound` sees the current policy, and
-  in `ask_human` a session that is still `HumanGate` under `IsAutonomous` is always a hold the person owns.
+  and the one caller of `HeldSentence` (`PanelService.WhyNotAFreshReview`, `:1152-1158`) — passes the session through
+  the parent's `CurrentPolicy` before it reads the hold. Its name here is `SessionPolicy`
+  (`src_mcp/src/Server/Rounds/SessionPolicy.cs`): `Current(session)` for a caller that holds the session's claim,
+  `CurrentUnclaimed(session, repoPath, at)` for one that does not (it takes the claim for the release alone and reads
+  the session again under it); the begin calls the two halves, `Released` before the person's decision is read and
+  `LegacyHold.Stamped` after it. After it:
+  - `Config.OnExhausted` and `Config.Autonomous` are the current settings' — **except while a hold from before `auto`
+    stands** (plan round F0): that session's config is left exactly as loaded, so its marker stays absent until the
+    hold is released, by `auto` or by the person's answer. A hold this build raises is stamped by the begin of its own
+    round, so its marker is never absent;
+  - a hold from before `auto` is released under `auto` (`HumanGate = false`, `HoldQuestions = []`,
+    `AdvanceOnResolve = true`, `AwaitingResolve` kept, saved, Warning logged, its notices withdrawn) — **the notices
+    first, the session second** (plan round F1). `Escalations.Withdraw` answers `Withdrawn`, `NotThere` (absent, or
+    expired already) or `Failed`; any `Failed`, or a save that fails, leaves the hold and its `HoldQuestions` as they
+    were with a Warning, and the next deciding load tries again. **One case of the parenthesis is reported and not
+    settled here — the S1 spec's § S1.8, U1:** a held round the caller already resolved has `AwaitingResolve == false`,
+    and "kept" then leaves `AdvanceOnResolve` with no resolve to consume it; the spec's reading is
+    `AwaitingResolve = true`;
+  - a hold this build raised stays.
+
+  So `RoundMachine.CompleteRound` sees the current policy. In `ask_human`, **whether the policy is `auto` is read from
+  the settings** (`_settings.Rounds.IsAutonomous`), not from the session: a session that is still `HumanGate` while the
+  settings say `auto` is a hold the person owns — or, rarely, a hold from before `auto` whose release could not be
+  written this time (`LegacyHold.Stands(session.State)` tells the two apart).
 - **C5 — the harness.** `CodeRoundHarness.Service(...)` gains `bool autonomous = false`; with it true, `Rounds` is the
-  C2 auto config. S1 adds it (its refresh tests need an auto service). If the spec does not, S2 adds it.
+  C2 auto config (`PanelConfig.Uniform(maxRounds, threshold)`). S1 adds it (its refresh test T24 uses it).
 
 ## 5. The notes the parent left to this document
 
@@ -232,8 +259,9 @@ branch, so each starts from the previous one's commits and nothing is merged by 
 
 ## 7. E1.S1 — the stored policy and the hold's authority · `model: fable` (CORNERSTONE)
 
-Scenarios and brief: **Fable**, in `todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md`. This section is the boundary
-only.
+Scenarios and brief: **Fable**, in
+[PLAN_auto_never_asks_a_person_E1_S1_spec.md](PLAN_auto_never_asks_a_person_E1_S1_spec.md) — its § S1.1 decides the
+seven inputs below (D1–D7) and folds the plan round's F0 and F1 (D8, D9). This section is the boundary only.
 
 **What it builds.** Parent § 4.1 and § 4.3, § 8 steps 2 (the parsing half), 3, 4 and 6, and N2. Done-when items 4, 6
 and the security half of 8.
@@ -353,7 +381,7 @@ sites), 2 (all but the tool text of S3's paragraphs and the snippet), 3.
 ### 8.2 Scenarios — RED first
 
 **`AutoNeverCallsAPersonTests`** (new, `src_mcp/tests/AutoNeverCallsAPersonTests.cs`, pure machine). Helpers:
-`Auto(int maxRounds, Stage stage)` = `new SessionState("s", "D:/r", "main", PanelConfig.Uniform(maxRounds, 0, StagePolicy.GoodEnough) with { Autonomous = true }) { Stage = stage, PlanProceeded = stage == Stage.CodeReview }`
+`Auto(int maxRounds, Stage stage)` = `new SessionState("s", "D:/r", "main", PanelConfig.Uniform(maxRounds, 0)) { Stage = stage, PlanProceeded = stage == Stage.CodeReview }`
 (a document session also sets `Document = "doc.md"`; a feature session `Feature = "todo/PLAN_x.md"` and
 `Branch = SessionKey.FeatureBranch`). `Nobody = new ReviewerSummary(2, 0, ["codex: exit 1", "gemini: exit 1"])`.
 
@@ -366,7 +394,7 @@ sites), 2 (all but the tool text of S3's paragraphs and the snippet), 3.
 | 5 | `FeatureAtItsCap_NobodyAnswered_IsNotReviewed` (budget 1 round 1; round 2) | `Nobody` | `NotReviewed`, `HumanGate` false | swap the `Answered == 0` test in `FeatureAtItsCap` |
 | 6 | `FeatureRoundOne_NobodyAnswered_UnderItsCap_StillRetries` | budget 2, round 1, `Nobody` | `Revise`, `SecondRound == ReviewerFailure` — unchanged | — (a guard on the unchanged path) |
 | 7 | `Exhausted_IsGoodEnough_WithItsReason` | `Auto(1, PlanReview)`, two Major findings, threshold 0, both answered | `GoodEnough`, `Reason` contains "still gate after 1 round(s)" | drop the first arm of `Exhausted` → the `GoodEnough` arm answers with an empty `Reason`, and the reason assertion fails |
-| 8 | `UnderEveryOtherPolicy_NobodyAnsweredStillCallsAPerson` (Theory: Human, Continue, Escalate, GoodEnough — all `Autonomous = false`) | `Nobody` | `CallHuman`, `HumanGate` true — today's | — |
+| 8 | `UnderEveryOtherPolicy_NobodyAnsweredStillCallsAPerson` (Theory: Human, Continue, Escalate, GoodEnough — each named in `Uniform`, so none is auto) | `Nobody` | `CallHuman`, `HumanGate` true — today's | — |
 | 9 | `ANonAutoGoodEnough_CarriesNoReason` | `Uniform(1, 0, GoodEnough)`, two Majors | `GoodEnough` with `Reason == ""` | — |
 | 10 | `NotReviewedMayProceed` | `RoundCommands.MayProceed(new RoundVerdict.NotReviewed(GateResult.Empty, Nobody, "x"))` | true | remove the `or` |
 
@@ -441,7 +469,7 @@ Break-it for #1: return `Batches(input)` instead of the auto table → #1 fails 
 In `AskHumanService.AskHumanAsync` (`:85-108`), after S1's refreshed load:
 
 ```csharp
-var autonomous = session?.State.Config.IsAutonomous ?? _settings.Rounds.IsAutonomous;
+var autonomous = _settings.Rounds.IsAutonomous;      // the SETTINGS, not the session — C4
 var facts = _desk.Facts(...);
 facts = facts with { Input = facts.Input with { Autonomous = autonomous } };
 return AskGate.Decide(facts.Input) switch
@@ -486,7 +514,7 @@ card door (`AskGateDesk.cs:156-157`), so `session!` is safe there; say so in a c
 | 3 | `TheConsultantsId_ReachesThePerson` | auto; `Proceeded(h)`; `consultId = await Consulted(h)` | `ask_in_conversation`; the consult record is spent (`h.Questions.Store.Read(id)!.EscalationId` not empty) |
 | 4 | `NoConsultant_StandsDownToThePerson` | auto; `Build(enabled: false)` | `ask_in_conversation`; note contains "switched off" |
 | 5 | `AProductionRisk_AsksTheConsultantsFirst_AsToday` | auto; `productionRisk: true`, a reason | `ask_in_conversation` with `consultantAnswers`; `Cards(h) == 0` |
-| 6 | `AHoldThisBuildRaised_IsAnsweredAtOnce_PointingAtItsNotice` | auto settings; a held session saved with `Config = Uniform(3, 2, Human) with { Autonomous = false }`, `HoldQuestions = ["n-1"]`; `EscalationBudget = 10 min` | returns in under 5 s (a `Stopwatch`); `status == "no_answer_yet"`; instruction contains "n-1" and "nothing was waited for"; `Cards(h) == 0`; the session still has `HumanGate` and `HoldQuestions == ["n-1"]` |
+| 6 | `AHoldThisBuildRaised_IsAnsweredAtOnce_PointingAtItsNotice` | auto settings; a held session saved with `Config = PanelConfig.Uniform(3, 2, StagePolicy.Human)` (a named policy: the marker is `false`), `HoldQuestions = ["n-1"]`; `EscalationBudget = 10 min` | returns in under 5 s (a `Stopwatch`); `status == "no_answer_yet"`; instruction contains "n-1" and "nothing was waited for"; `Cards(h) == 0`; the session still has `HumanGate` and `HoldQuestions == ["n-1"]` |
 | 7 | `AFeatureRequestWindow_IsToldTheServerDecides` | auto; a feature session, `RoundsRunThisStage = 1`, `SecondRound = None`, not held | `no_answer_yet`; instruction contains "runs only on a ground the server finds"; `Cards(h) == 0`; `RequestQuestions` empty |
 | 8 | `NoLogLineCarriesTheQuestion` (Theory: auto conversation; human conversation; human held card with a 300 ms budget) | the question `"Is sk-ant-api03-SECRETSECRETSECRET the right key?"` | the sink's lines contain the question id and never `SECRETSECRETSECRET` |
 
