@@ -11,6 +11,7 @@ import { signatureOf } from '../../renderAnswer';
 import { threads, type Thread } from '../../chatThread';
 import { until, registeredChat } from './hostHelpers';
 import { aClaudeLookingTabDoesNotTakeATerminalChat, backToATerminalInARealEditor } from './terminalReturnScenario';
+import { aTerminalTakesBackItsConversationInARealEditor } from './terminalReattachScenario';
 import { aRevisionInARealEditor } from './revisionScenario';
 import { aBugzCollectIsRefusedInARealEditor } from './bugzCollectScenario';
 import { theDefaultPhrasesInARealEditor } from './defaultPhrasesScenario';
@@ -883,6 +884,12 @@ const SCENARIOS: readonly Scenario[] = [
     // is in `terminalReturnScenario.ts`.
     name: 'a tab that looks like Claude\u2019s and is named like a terminal conversation does not take it',
     run: aClaudeLookingTabDoesNotTakeATerminalChat,
+  },
+  {
+    // E3.S1. A terminal that opens takes back the conversation of its name; a second terminal of the name takes it off again. What it
+    // drives is in `terminalReattachScenario.ts`.
+    name: 'a terminal that opens takes back the conversation of its name, and a second terminal of the name undoes it',
+    run: aTerminalTakesBackItsConversationInARealEditor,
   },
   {
     // E5.1's code round, finding 6: a stranded Bugz pick, and none, written to the real settings and refused by the

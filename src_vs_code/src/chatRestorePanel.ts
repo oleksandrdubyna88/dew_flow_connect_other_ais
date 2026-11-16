@@ -11,8 +11,10 @@ import {
   restoreDecision,
   restoringHtml,
 } from './chatRestore';
+import type { ConversationSource } from './chatStore';
 import { ChatStoreFile } from './chatStoreFile';
 import { ChatTabMemory } from './chatTabs';
+import { reattachByName } from './terminalHost';
 import { webviewNonce } from './webviewNonce';
 
 /**
@@ -95,6 +97,17 @@ export async function restoreAfterReload(
 }
 
 /**
+ * A terminal conversation the serializer just brought back may find its terminal again (E3.S1): the terminal can have opened before
+ * the conversation existed (the serializer first waits up to 5 s for the migration), so its `onDidOpenTerminal` found no orphan.
+ * The retry goes through the same function, so it re-attaches too. Any other source is not a terminal's, and nothing happens.
+ */
+function reattachRestored(panels: ChatPanels, source: ConversationSource): void {
+  if (source.kind === 'terminal') {
+    reattachByName(panels, source.name);
+  }
+}
+
+/**
  * One tab, decided and done — the half a retry runs again.
  *
  * @param open whether the panel is still there once the store has answered; the decision is applied
@@ -112,6 +125,7 @@ export async function restoreChatTab(
   }
   if (decision.kind === 'restore') {
     restoreConversation(deps.panels, panel, decision.record, deps.extensionUri);
+    reattachRestored(deps.panels, decision.record.source);
 
     return;
   }

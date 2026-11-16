@@ -76,6 +76,7 @@ import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { sideHereOf, sidesIn, stampThisSide, type SeenSide } from './sidesSeen';
 import { bindRemoteSessions, testDoorOf, type RemoteSessionsTestDoor } from './remoteSessionHost';
+import { bindReattach } from './terminalHost';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -300,6 +301,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
   // Made before the sidebar, which hands the review page's bugs to it (issue #487).
   const chatPanels = new ChatPanels();
+  // A terminal that opens (creds opens its terminals late, after the serializer restored the chats) takes back the conversation of its name (E3.S1).
+  bindReattach(context, chatPanels);
   // The page draws what the watch publishes, and repaints when it changes; the server's answer about the roots reaches
   // the watch through the panel's probe (paths per side, E5.3 / E5.6).
   onFindings(() => { void panelRef.render(); });
