@@ -119,7 +119,11 @@ including S1 and S2 calling a person. And in every mode:
   `auto`; harnesses that need a person pass `StagePolicy.Human` explicitly (CodeRoundHarness.cs, EndToEndTests.cs,
   ARoundsNumberComesFromTheJournalTests.cs already take the parameter).
 - **`Autonomous` is `bool?` on disk**: this build always writes `true` or `false`; `null` (the member absent) means the
-  config was written by a build that predates `auto` — the marker § 4.3 reads.
+  config was written by a build that predates `auto` — the marker § 4.3 reads. **While a hold stands whose marker is
+  absent, the refresh never stamps it** (it may refresh `OnExhausted`): the marker stays absent until that hold is
+  released — by `auto`, or by the person's answer — so a legacy hold first loaded and saved under `human` is still
+  released once the policy becomes `auto` (the E1 plan round and CodeRabbit on #1007, 2026-11-16; one test for that
+  sequence).
 - **Refreshed on every load that decides anything** (§ 11 C2; plan round 1 finding 1): one helper,
   `CurrentPolicy(session)`, sets `OnExhausted` and `Autonomous` from the current settings and is called by the begin
   (beside the `SecurityLane` refresh at `RoundEngine.cs:276-280`), by `resolve`, `status`, `ask_human` and
@@ -211,12 +215,12 @@ string and asserts it is absent from the log file). The existing `InTheConversat
 - **Manifest** `src_vs_code/package.json:349`: enum gains `"auto"`, default `"auto"`, description names all five.
 - **`settingsShape.ts`**: `OnExhausted` (:31) gains `'auto'`; `DEFAULTS.onExhausted = 'auto'` (:276); `asOnExhausted`
   (:627-631) accepts it.
-- **Select** (`src_vs_code/src/panelView.ts:1642-1648`): first option *"Auto — never ask a person; log and move on"*.
+- **Select** (`src_vs_code/src/panelView.ts:1642-1648`): first option *"Auto — the gate never holds or waits for a person; it logs and moves on"* (an AI's own question can still reach the person after its consultants, requirement 5 — the help says so).
 - **The one-time migration (O1)**, at activation, once per machine (a `globalState` marker
   `coai.onExhaustedAutoMigration` = the version that ran it): removes the saved `coai.onExhausted` from user settings
   (`config.update(key, undefined, Global)`) and from every per-side overlay (`seedOverlay` froze `'human'` into overlays
   of people who never chose it — `settingsShape.ts:404-414`, `sideSettings.ts:95`), then one non-modal notification:
-  *"When the rounds run out is now Auto — the gate never asks you; it logs and moves on. Change it in Reviews › The gate."*
+  *"When the rounds run out is now Auto — the gate never holds or waits for you; it logs and moves on. Your AI may still ask you a question its consultants could not settle. Change it in Reviews › The gate."*
   It runs after the settings mirror is set up, so the server file is rewritten by the ordinary change listener.
   Workspace-scoped values are NOT edited — see Q1.
 - **The env block** (`settingsShape.ts:551-553`) reads the binary's features (the fifth `envBlock` parameter, as
@@ -289,6 +293,14 @@ A hold raised under `human` stays the person's whatever the settings later say; 
 answer-file forgery class, closed by [PLAN_a_signed_answer_releases_the_gate.md](PLAN_a_signed_answer_releases_the_gate.md),
 which this plan names on its side — and, rarer, the downgrade edge written at the end of § 4.3. Fail-open is deliberate
 and visible: `not_reviewed` is its own verdict, a Warning line and a note.
+
+**The access model this claim is made under** (CodeRabbit on #1007, 2026-11-16). The session files under
+`<dataDir>/sessions/` are as writable by a process running as the user as `settings.json` and the answer file are. A
+process that writes the session file can delete the marker — or clear `HumanGate` itself, which needs no marker and no
+`auto` at all. So the claim above is about the roads coai offers — a tool argument and the operator's configuration —
+and not about a forged session file; that is the same file-forgery class as the answer file, and it is closed, if at
+all, by the signed-answer plan, which must cover the session state too. This plan adds no protection against it and no
+new way into it.
 
 ## 7. Boundaries with other plans
 
