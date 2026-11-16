@@ -1,7 +1,7 @@
 # PLAN — E3 stories: the chat finds its terminal again, go-to from a terminal, the skip list
 
 > Status: **written by Opus 2026-11-12 when the epic started; revised 2026-11-13 for the parent's re-review (epoch 2
-> stopped at change 2.2); coai plan gate round 1 `proceed` on 2a2f21fe (session 167eb40d, 0 findings).** Epic E3 of
+> stopped at change 2.2); coai plan gate round 1 `proceed` on 2a2f21fe (session 167eb40d, 0 findings); epoch 3 opened by the owner 2026-11-16, coding starts.** Epic E3 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics` § *E3*, its § *Stage 3*,
 > the stage-3 rows of its § *Test plan*, its real-window checks R8, R10 and R11, its DoD items 5–7 and its ledger entry 1.1).
 > Written on `feat/chat-from-a-terminal-e3` from `main` `4efa0a90` (extension 0.87.0). A stories document keeps no change
