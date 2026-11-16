@@ -106,8 +106,9 @@ Under `auto` (the default):
 5. **`ask_human` never blocks, and the gate never asks.** The AI's own question without a `consultId` gets
    `consult_first` (O3); with the consultants' `consultId`, or when no consultant can be had, it gets today's
    `ask_in_conversation` — the owner's explicit choice: a question the consultants could not settle does reach the
-   person. The card door is never opened. **The guarantee is therefore exactly:** coai never holds, never waits, and
-   never writes a card; the only road to a person is the AI's own question after the consultants, which the AI chose to
+   person. The card door is never opened. **The guarantee is therefore exactly:** under `auto` coai raises no new hold, never waits, and
+   never writes a card — a hold this build raised under `human` before the switch stays the person's (item 4); the
+   only road to a person is the AI's own question after the consultants, which the AI chose to
    ask. The migration's notification and the help say this sentence, not "never asks you anything".
 6. **Every one of these is written down three times**: a Serilog line (Warning for `not_reviewed` and a released hold,
    Information for the rest) beside the round's existing `Closing` line; the round's `note` in the session file and
@@ -293,12 +294,12 @@ string and asserts it is absent from the log file). The existing `InTheConversat
 - **Manifest** `src_vs_code/package.json:349`: enum gains `"auto"`, default `"auto"`, description names all five.
 - **`settingsShape.ts`**: `OnExhausted` (:31) gains `'auto'`; `DEFAULTS.onExhausted = 'auto'` (:276); `asOnExhausted`
   (:627-631) accepts it.
-- **Select** (`src_vs_code/src/panelView.ts:1642-1648`): first option *"Auto — the gate never holds or waits for a person; it logs and moves on"* (an AI's own question can still reach the person after its consultants, requirement 5 — the help says so).
+- **Select** (`src_vs_code/src/panelView.ts:1642-1648`): first option *"Auto — the gate raises no new hold and never waits for a person; it logs and moves on"* (an AI's own question can still reach the person after its consultants, requirement 5 — the help says so).
 - **The one-time migration (O1)**, at activation, once per machine (a `globalState` marker
   `coai.onExhaustedAutoMigration` = the version that ran it): removes the saved `coai.onExhausted` from user settings
   (`config.update(key, undefined, Global)`) and from every per-side overlay (`seedOverlay` froze `'human'` into overlays
   of people who never chose it — `settingsShape.ts:404-414`, `sideSettings.ts:95`), then one non-modal notification:
-  *"When the rounds run out is now Auto — the gate never holds or waits for you; it logs and moves on. Your AI may still ask you a question its consultants could not settle. Change it in Reviews › The gate."*
+  *"When the rounds run out is now Auto — the gate raises no new hold and never waits for you; it logs and moves on. Your AI may still ask you a question its consultants could not settle. Change it in Reviews › The gate."*
   It runs after the settings mirror is set up and, because overlays are written with `globalState.update` (no configuration
   change fires), it calls `mirrorSettings` itself once every clear succeeded and BEFORE it writes its marker, so an
   interrupted run is mirrored by the run that resumes it (N7).
