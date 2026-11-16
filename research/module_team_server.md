@@ -504,7 +504,7 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
 - **A Team-server agy reviewer's tool calls are answered by `coai-server --agy-hook`** (2026-11-15). The read-only
   folder's hook starts this binary (`Program.cs` routes `--agy-hook` before the web host), and on agy 1.5.9 — which
   renamed `view_file` to `read_file` — `AntigravityReadOnly.Decide` allows exactly those two tools and denies every other
-  (#995). `TheServerBinaryAnswersTheAgyHookTests` runs the built server binary and pins it, so a server release carries the fix.
+  (#995). `TheServerBinaryAnswersTheAgyHookTests` runs the built server binary and pins it, so a server release carries the fix. Since 2026-11-16 `Decide` also allows a reader only inside the job's granted roots and outside the coai folder, so one job's reviewer cannot read another job's folder under `/tmp` (RESULTS_agy_read_file.md §6, SECURITY.md).
 
 ```mermaid
 sequenceDiagram
