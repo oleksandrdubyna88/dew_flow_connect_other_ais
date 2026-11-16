@@ -77,10 +77,58 @@ public sealed record StageGate(int MaxRounds, int Threshold);
 /// site picks a budget by hand. A stage's round budget is the WIDEST of its roles: the stage counts
 /// rounds once, and a role simply stops taking part when its own budget is spent.</para>
 /// </remarks>
-public sealed record PanelConfig(
-    IReadOnlyDictionary<string, RoleGate>? Roles = null,
-    StagePolicy OnExhausted = StagePolicy.Human)
+public sealed record PanelConfig
 {
+    /// <summary>A config made IN CODE. A policy named is that policy and never policy auto.</summary>
+    /// <remarks>
+    /// Always writes <see cref="Autonomous"/> as <c>true</c> or <c>false</c>: a config made in code is never "from before policy
+    /// auto". The parameter names stay capitalised, because call sites name them (<c>OnExhausted:</c>).
+    /// </remarks>
+    public PanelConfig(IReadOnlyDictionary<string, RoleGate>? Roles = null, StagePolicy? OnExhausted = null)
+    {
+        this.Roles = Roles ?? Defaults();
+        this.OnExhausted = OnExhausted ?? StagePolicy.Human;
+        Autonomous = false;
+    }
+
+    /// <summary>A config as a SESSION FILE holds it: the deserialiser's constructor, and the store's for a file with no config.</summary>
+    /// <remarks>
+    /// <para><c>autonomous</c> has NO default and <see cref="Autonomous"/> has no initializer, and both are on purpose. A file
+    /// written before policy auto has no such member, and absent has to read as <c>null</c>: a constructor parameter with a
+    /// declared default reads it as that default (measured: <c>bool? Autonomous = true</c> reads <c>true</c>), and an
+    /// <c>init</c> property with an initializer reads <c>null</c> through the generated context and the initializer through the
+    /// reflection serializer. The shape here reads <c>null</c> through both. The one default that stays is today's: no
+    /// <c>onExhausted</c> reads <c>Human</c>.</para>
+    /// <para>Called from code at one production site, <c>SessionStore</c>'s file with no config; tests may call it to build a
+    /// config "as a build before policy auto wrote it".</para>
+    /// </remarks>
+    [JsonConstructor]
+    public PanelConfig(IReadOnlyDictionary<string, RoleGate>? roles, bool? autonomous, StagePolicy onExhausted = StagePolicy.Human)
+    {
+        Roles = roles ?? Defaults();
+        OnExhausted = onExhausted;
+        Autonomous = autonomous;
+    }
+
+    /// <summary>What happens when the rounds run out. Written with <see cref="Autonomous"/> and never alone.</summary>
+    public StagePolicy OnExhausted { get; private init; }
+
+    /// <summary>
+    /// Whether this session runs under policy auto: <c>true</c> or <c>false</c> as written by a build that knows it, and
+    /// <c>null</c> only for a session file that had no such member — a session from before policy auto.
+    /// </summary>
+    public bool? Autonomous { get; private init; }
+
+    /// <summary>Policy auto. Implies <c>OnExhausted == GoodEnough</c>, because nothing outside the type can write the halves apart.</summary>
+    [JsonIgnore] public bool IsAutonomous => Autonomous == true;
+
+    /// <summary>The session file had no marker: it was written before policy auto existed.</summary>
+    [JsonIgnore] public bool PredatesAuto => Autonomous is null;
+
+    /// <summary>This config under the policy of <paramref name="current"/> — both halves, never one.</summary>
+    public PanelConfig UnderPolicyOf(PanelConfig current) =>
+        this with { OnExhausted = current.OnExhausted, Autonomous = current.IsAutonomous };
+
     /// <summary>One attempt, at most six findings open.</summary>
     /// <remarks>
     /// <para>One round because the second and third re-raise what the first found rather than
@@ -156,7 +204,7 @@ public sealed record PanelConfig(
     [JsonExtensionData, JsonInclude]
     public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 
-    public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();
+    public IReadOnlyDictionary<string, RoleGate> Roles { get; init; }
 
     private static Dictionary<string, RoleGate> Defaults() =>
         AllRoles.ToDictionary(r => r, r => ShippedDefault(RoleCatalog.Builtin.ById(r)?.Stage ?? RoleStages.Result));
@@ -274,7 +322,7 @@ public sealed record PanelConfig(
     /// The same gate for every role — what the legacy single-value settings mean, and what a test
     /// that does not care about the split is asking for.
     /// </summary>
-    public static PanelConfig Uniform(int maxRounds, int threshold, StagePolicy onExhausted = StagePolicy.Human) =>
+    public static PanelConfig Uniform(int maxRounds, int threshold, StagePolicy? onExhausted = null) =>
         new(AllRoles.ToDictionary(r => r, _ => new RoleGate(maxRounds, threshold)), onExhausted);
 }
 

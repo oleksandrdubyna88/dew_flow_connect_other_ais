@@ -46,7 +46,11 @@ public class UnknownSettingValueTests
     [InlineData("human", StagePolicy.Human)]
     public void EveryPolicyThisBuildKnows(string value, StagePolicy expected)
     {
-        PanelSettings.FromEnvironment(With(value)).Rounds.OnExhausted.Should().Be(expected);
+        var rounds = PanelSettings.FromEnvironment(With(value)).Rounds;
+
+        rounds.OnExhausted.Should().Be(expected);
+        rounds.Autonomous.Should().BeFalse("a policy that is NAMED is that policy and never policy auto");
+        rounds.IsAutonomous.Should().BeFalse();
     }
 
     [Fact]

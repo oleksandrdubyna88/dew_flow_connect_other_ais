@@ -697,11 +697,12 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         // A file written before `config` existed deserialises with a NULL one — the same shape of
         // absence `UsedPrompts` documents next door, and `ASessionFromAnOlderBuildStillRuns` is what
         // found it here. It gets the shipped defaults, which is what a session that never recorded a
-        // budget was always running on; without this it got a NullReferenceException the moment the
+        // budget was always running on — and no policy-auto marker: a file with no config predates policy auto. Without this it
+        // got a NullReferenceException the moment the
         // catalog was reattached.
         var config = whole.State.Config is { } configured
             ? configured with { Catalog = live }
-            : new PanelConfig { Catalog = live };
+            : new PanelConfig(roles: null, autonomous: null) { Catalog = live };
 
         return whole with { State = whole.State with { Config = config } };
     }
