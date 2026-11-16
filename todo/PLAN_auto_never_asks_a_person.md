@@ -1,6 +1,8 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **plan only, nothing implemented yet, 2026-11-16 — plan round 1 `proceed` (2 of 2, gating 6 of 6), its findings folded in (§ 12); split into three epics E1–E3 the same day (§ Epics), stories documents written when each epic starts.** Scope: a fifth value `auto` for *When the rounds run out*
+> Status: **plan only, nothing implemented yet, 2026-11-16 — plan round 1 `proceed` (2 of 2, gating 6 of 6), its findings folded in (§ 12); split into three epics E1–E3 the same day (§ Epics), stories documents written when each epic starts. E1 started
+> 2026-11-16 with its stories document, [PLAN_auto_never_asks_a_person_E1.md](PLAN_auto_never_asks_a_person_E1.md)
+> (E1.S1 marked the cornerstone, its spec by Fable to follow); nothing is coded yet.** Scope: a fifth value `auto` for *When the rounds run out*
 > (`coai.onExhausted` / `COAI_ON_EXHAUSTED`), the default for every installation including choices made before; the
 > round machine's three `call_human` sites, the begin/resolve hold readers and `ask_human` in `src_mcp`; the setting, its
 > one-time migration, the env block and the rounds-log page in `src_vs_code`; the shared gate snippet in
@@ -186,7 +188,7 @@ person's.
 | Call | Reply |
 |---|---|
 | The gate's question (card door) | `auto` raises no hold, and a legacy hold is released before the door is chosen (§ 4.3). The feature second-round request is answered at once — *"policy auto: a second feature round runs only on a ground the server finds; this review closes on resolve"* — logged, no card. A hold THIS build raised under `human` keeps its card (it is the person's, § 4.3), but the call returns at once with `no_answer_yet` (waited 0) instead of polling — never a wait under `auto` (note N3). |
-| The AI's own question, no `consultId` | `status: "consult_first"` (not an error; nothing spent, nothing counted): *"The person says: call the consultant — ask_consultants, or consult for this checkout — talk it through, and come back to me only if the two of you did not settle it. Then call ask_human again with the consultId."* |
+| The AI's own question, no `consultId` | `status: "consult_first"` (not an error; nothing spent, nothing counted): *"The person says: call the consultants — ask_consultants — talk it through, and come back to me only if the two of you did not settle it. Then call ask_human again with the consultId."* |
 | … with a `consultId` the desk accepts as proof | today's `ask_in_conversation` — the question really reaches the person |
 | … no consultant can be had (`none_available`, quota) | today's stand-down (`AskGate.cs:152-159`): `ask_in_conversation`, with the note saying why nobody was consulted |
 | `productionRisk: true` | today's path (consultants asked beside, answers returned) |
@@ -412,6 +414,9 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
 
 ### E1 — The server: the whole `auto` contract (`coai-mcp`) · depends on nothing
 
+- **Stories document.** [PLAN_auto_never_asks_a_person_E1.md](PLAN_auto_never_asks_a_person_E1.md) — written by Opus
+  2026-11-16 when the epic started: the three stories below, E1.S1 marked `model: fable` (its spec,
+  `todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md`, follows), S2 and S3 briefed in full, notes N2–N4 settled.
 - **Goal.** A `coai-mcp` that under `auto` — the meaning of an absent key — raises no hold, never waits and writes no
   card: a round nobody answered ends `not_reviewed`, spent rounds end `good_enough`, a hold from before `auto` is
   released by whichever call reads it first, `ask_human` answers at once, and every such decision is logged and noted
@@ -581,4 +586,4 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
 The two stories named are the intended marks, within the quota. The count rises in the commit of the stories document
 that marks each one (`subagent-models.md`, *The cornerstone ledger*).
 
-Cornerstones: 0 of 2 — E1.S1, E2.S2
+Cornerstones: 1 of 2 — E1.S1, E2.S2
