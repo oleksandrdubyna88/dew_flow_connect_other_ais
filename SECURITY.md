@@ -52,6 +52,34 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
   and the delete runs at the judged path. Its first form compared `GetFullPath` strings.
 - **`WorktreePaths.Real` and `Same`** (git's `realpath` against a spelled path): `Real` throws `IOException` for a path
   that cannot be resolved; `Same`, a predicate, answers `false`. Neither falls back to the spelling.
+- **The agy hook's path check** (`AntigravityReadOnly.Decide`, answered by `coai-mcp --agy-hook` and `coai-server --agy-hook`; measured in
+  `research/RESULTS_agy_read_file.md` §6): a `read_file` or `view_file` call is allowed only when its `Path` is fully qualified
+  and its real path (`RealPath.Resolve`, links and `..` followed) is inside the real path of a granted root from the payload's
+  `workspacePaths`, and not inside the real path of the payload's `cwd`, the folder coai owns. A relative path, a missing or
+  malformed field, a second spelling of `Path`, a duplicate JSON property and any resolution failure deny. It fails closed and never
+  falls back to the spelling. The reason does not echo the path. On the Team server this keeps one job's reviewer out of another
+  job's folder under `/tmp`, which agy's own boundary allows. Limits:
+  - A link swapped between the hook's check and agy's open is not closed. The check is at one moment.
+  - Hard links and bind mounts are not seen by any path check.
+  - Inside a granted root nothing is narrowed: `.git` and credential-looking files stay readable by agy's reader, though coai's own
+    list and search hide them.
+  - Only `Path` is read. Whether any agy reader takes a second file argument is not measured, nor is `view_file`'s argument name on
+    agy before 1.5.9. A call without `Path` is denied.
+  - An agy older than 1.5.9, whose payload lacks `Path`, `cwd` or `workspacePaths`, has every read denied.
+  - Every `workspacePaths` entry other than `cwd` counts as a root. agy builds them from coai's `--add-dir` arguments. If agy added a folder
+    of its own, it would be a root.
+  - Windows: an 8.3 short name is a different string, so it is refused wrongly. Case is ignored, as `DocumentId.Comparison` does, so in a
+    directory made case-sensitive a sibling that differs only by case would be accepted. agy on Windows is not measured. On macOS a
+    different case is refused wrongly.
+  - Windows, not closed here (follow-up plan `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`): (a) `..` after a link or
+    junction. `RealPath` applies `..` to the path resolved so far, the Unix rule. Win32 folds `..` as text before it follows links. A
+    path such as `<root>\node_modules\junction\..\..\..\..\Users\me\.ssh\id_rsa` can pass the hook and be read outside the root, if
+    agy itself allows that read (not measured on Windows). (b) A UNC or device `Path` (`\\host\share\x`, `//host/share/x`) is resolved
+    before it is judged, so the hook looks it up over SMB. That can send the user's NTLM credentials to that host or run past the hook's
+    10 s timeout. Neither applies on Linux, the Team server or WSL.
+  - Hook denials are not in agy's `denied_actions`, so coai's read follow-up does not fire for them.
+  - agy's own checks still run after an allow. The hook only narrows.
+  - The hook always answers and exits 0. What agy does when a hook times out is not ours.
 
 - **A read root** (`HandleRead.Trust`, used by `AcpReadBoundary` and the private-folder check): the root's canonical path is fixed
   when the reader is made, and the opened handle's own name is compared with it. A root the resolver cannot resolve has an EMPTY canonical
