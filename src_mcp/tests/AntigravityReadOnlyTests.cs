@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Processes;
@@ -40,9 +41,7 @@ public sealed class AntigravityReadOnlyTests : IDisposable
     [Fact]
     public void OnlyTheFileReaders_ViewFileAndReadFile_AreAllowed_AndEveryOtherTool_OrAPayloadNotUnderstood_IsDenied()
     {
-        Decision(Payload("view_file")).Should().Be("allow");
-        // agy 1.5.9 renamed its file reader (research/RESULTS_agy_read_file.md): the hook allows both names.
-        Decision(Payload("read_file")).Should().Be("allow");
+        // The two readers are allowed ON A FILE INSIDE THE ROOTS (TheAgyHookReadsOnlyInsideItsRootsTests, A1); with no Path they are denied.
         foreach (var name in (string[])["write_to_file", "replace_file_content", "run_command", "browser_click_element", "define_subagent", "View_File", "Read_File", "READ_FILE", ""])
         {
             Decision(Payload(name)).Should().Be("deny", name);
@@ -81,20 +80,47 @@ public sealed class AntigravityReadOnlyTests : IDisposable
     public void TheHookArgument_StartsTheHookMode() =>
         Program.Classify([AntigravityReadOnly.HookArgument]).Should().Be(Program.Startup.AgyHook);
 
+    /// <summary>A reader call as agy 1.5.9 sends it: cwd, toolCall { args { Path }, name }, workspacePaths = [cwd, ..roots].</summary>
+    private static string ReaderCall(string tool, string path, string cwd, string root) => new JsonObject
+    {
+        ["cwd"] = cwd,
+        ["hookEventName"] = "PreToolUse",
+        ["toolCall"] = new JsonObject { ["args"] = new JsonObject { ["Path"] = path }, ["id"] = "call-1", ["name"] = tool },
+        ["workspacePaths"] = new JsonArray(cwd, root),
+    }.ToJsonString();
+
     [Fact]
     public async Task TheBuiltBinary_AnswersTheHook_AsTheChildProcessAgyStarts()
     {
         // What agy runs for every tool call: coai-mcp with the hook argument, the payload on stdin.
         var dll = Path.Combine(AppContext.BaseDirectory, "coai-mcp.dll");
         var launcher = new ProcessLauncher();
+        var home = Directory.CreateDirectory(Path.Combine(_base, "home", ".agents")).Parent!.FullName;
+        var root = Directory.CreateDirectory(Path.Combine(_base, "job-1")).FullName;
+        var sibling = Directory.CreateDirectory(Path.Combine(_base, "job-10")).FullName;
+        File.WriteAllText(Path.Combine(root, "inside.txt"), "inside");
+        File.WriteAllText(Path.Combine(sibling, "secret.txt"), "secret");
+        var inside = Path.Combine(root, "inside.txt");
 
-        async Task<string> Answer(string payload) => (await launcher.RunAsync(
-            new ProcessRequest("dotnet", [dll, AntigravityReadOnly.HookArgument], _base) { StdIn = payload, Timeout = TimeSpan.FromSeconds(60) },
-            TestContext.Current.CancellationToken)).StdOut;
+        async Task<(string Decision, string Reason)> Answer(string payload, string workingDirectory)
+        {
+            var said = (await launcher.RunAsync(
+                new ProcessRequest("dotnet", [dll, AntigravityReadOnly.HookArgument], workingDirectory) { StdIn = payload, Timeout = TimeSpan.FromSeconds(60) },
+                TestContext.Current.CancellationToken)).StdOut;
+            var answer = JsonDocument.Parse(said).RootElement;
 
-        JsonDocument.Parse(await Answer(Payload("write_to_file"))).RootElement.GetProperty("decision").GetString().Should().Be("deny");
-        JsonDocument.Parse(await Answer(Payload("view_file"))).RootElement.GetProperty("decision").GetString().Should().Be("allow");
-        JsonDocument.Parse(await Answer(Payload("read_file"))).RootElement.GetProperty("decision").GetString().Should().Be("allow");
+            return (answer.GetProperty("decision").GetString()!, answer.TryGetProperty("reason", out var reason) ? reason.GetString()! : string.Empty);
+        }
+
+        var agysCwd = Path.Combine(home, ".agents");
+        (await Answer(ReaderCall("write_to_file", inside, home, root), agysCwd)).Should().Be(("deny", AntigravityReadOnly.DenyReason));
+        (await Answer(ReaderCall("view_file", inside, home, root), agysCwd)).Decision.Should().Be("allow");
+        (await Answer(ReaderCall("read_file", inside, home, root), agysCwd)).Decision.Should().Be("allow");
+        (await Answer(ReaderCall("read_file", Path.Combine(sibling, "secret.txt"), home, root), agysCwd))
+            .Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason), "a sibling job is not a root");
+        // Only a child process can show that its own directory is no base: a bare name is not read as a file of the root.
+        (await Answer(ReaderCall("read_file", "inside.txt", home, root), root))
+            .Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason), "a path that is not fully qualified is never completed from the process directory");
     }
 
     [Fact]
