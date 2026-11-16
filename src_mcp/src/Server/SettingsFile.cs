@@ -72,9 +72,26 @@ public static class SettingsFile
         return TryRead(Path.Combine(dataDir, Name), readText) switch
         {
             SettingsRead.Busy => new SettingsLayer.Busy(),
-            var read => new SettingsLayer.Layered(Over(environment, ValuesOf(read))),
+            var read => new SettingsLayer.Layered(Over(environment, ValuesOf(read)), UnreadBecause(read)),
         };
     }
+
+    /// <summary>The layer a START builds on: always a lookup, and why the file gave nothing — "" when it was read or is missing.</summary>
+    /// <remarks>
+    /// <see cref="TryLayer"/>, except that a file held open by its writer is not a reason to build nothing: a start has no last good service to
+    /// keep, so it builds on the environment alone and says why.
+    /// </remarks>
+    internal static SettingsLayer.Layered StartLayer(string dataDir, Func<string, string?> environment, Action<string> said, Func<string, string> readText) =>
+        TryLayer(dataDir, environment, said, readText) switch
+        {
+            SettingsLayer.Layered layered => layered,
+            _ => new SettingsLayer.Layered(environment, BusyWhy),
+        };
+
+    internal const string BusyWhy = "it is held open by its writer";
+
+    /// <summary>Why a read gave nothing although the file is there — empty for a read that succeeded and for a file that is not there.</summary>
+    private static string UnreadBecause(SettingsRead read) => read is SettingsRead.Unusable unusable ? unusable.Why : string.Empty;
 
     private static void Adopt(Func<string, string?> environment, Action<string> said)
     {
@@ -104,14 +121,18 @@ public static class SettingsFile
     /// <see cref="IOException"/> as a holder too, which is right for a lock that is TAKEN; for a READ that rule would also
     /// call a failing disk "somebody is writing", so this one is the narrower statement the plan decided (C14).
     /// A permission denial is NEVER busy.</para>
-    /// <para>Malformed, empty and denied files answer <see cref="SettingsRead.Values"/> with nothing in it, as
-    /// <see cref="Read(string)"/> always did. A torn write heals by itself: the host stamp includes the length.</para>
+    /// <para>A file that is there and gave no values — malformed, empty, not a JSON object, denied, or an I/O failure that is not a sharing
+    /// violation — answers <see cref="SettingsRead.Unusable"/> with the reason. <see cref="SettingsRead.Values"/> now always means a
+    /// parsed object. <see cref="Read(string)"/> still answers an empty dictionary for every one of them, as it always did, so the one-shot modes
+    /// read as before. A torn write heals by itself: the host stamp includes the length.</para>
     /// </remarks>
     internal static SettingsRead TryRead(string path, Func<string, string> readText)
     {
         try
         {
-            return new SettingsRead.Values(Parse(readText(path)));
+            return Parse(readText(path)) is { } values
+                ? new SettingsRead.Values(values)
+                : new SettingsRead.Unusable("it is not a JSON object");
         }
         catch (Exception e) when (IsMissing(e))
         {
@@ -121,9 +142,17 @@ public static class SettingsFile
         {
             return new SettingsRead.Busy();
         }
-        catch (Exception e) when (IsUnusable(e))
+        catch (JsonException)
         {
-            return new SettingsRead.Values([]);
+            return new SettingsRead.Unusable("it is not JSON this server can read");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new SettingsRead.Unusable("access to it was denied");
+        }
+        catch (IOException)
+        {
+            return new SettingsRead.Unusable("it could not be opened");
         }
     }
 
@@ -131,14 +160,13 @@ public static class SettingsFile
 
     private static bool IsSharingViolation(IOException e) => e.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021);
 
-    private static bool IsUnusable(Exception e) => e is IOException or JsonException or UnauthorizedAccessException;
-
-    private static Dictionary<string, string> Parse(string text)
+    /// <summary>The values of a JSON object, or null when the text is JSON whose root is not an object.</summary>
+    private static Dictionary<string, string>? Parse(string text)
     {
         using var document = JsonDocument.Parse(text);
         if (document.RootElement.ValueKind != JsonValueKind.Object)
         {
-            return [];
+            return null;
         }
 
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

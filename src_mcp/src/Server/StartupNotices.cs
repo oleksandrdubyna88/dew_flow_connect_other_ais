@@ -48,6 +48,17 @@ internal static class StartupNotices
             ServerNoticeCodes.SettingsAdopted, Outcome, Canonical(settingsPath), sentence));
     }
 
+    /// <summary>The settings file is there and gave no values to the read a service was built on.</summary>
+    /// <remarks>
+    /// The Warning and the notice are ONE call, as <see cref="Adopted"/>'s are. An existing code and class — a setting this build fell back
+    /// on — because the extension renders the codes it knows; the subject is the settings path, canonicalised.
+    /// </remarks>
+    internal static void SettingsUnread(string sentence, string settingsPath, Noticing noticing, Serilog.ILogger log)
+    {
+        log.Warning("settings: {Note}", sentence);
+        noticing.Offered(() => Note(ServerNoticeCodes.UnrecognisedSetting, StoodDown, Canonical(settingsPath), sentence));
+    }
+
     /// <summary>Every unrecognised setting and every storage note this run has, written down.</summary>
     internal static void Record(
         PanelSettings settings, IReadOnlyList<StorageNote> storage, Noticing noticing,

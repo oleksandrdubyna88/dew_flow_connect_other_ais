@@ -252,6 +252,13 @@ public sealed record PanelSettings
 
     public PanelConfig Rounds { get; init; } = new();
 
+    /// <summary>
+    /// The policy in <see cref="Rounds"/> is a default taken because the settings file was there and could not be read (and the process
+    /// environment names no policy). Rounds run on it; no hold from before policy auto is released on it.
+    /// </summary>
+    /// <remarks>Set by <see cref="PanelServiceHost"/> alone; false in every settings object built any other way.</remarks>
+    public bool PolicyUnread { get; init; }
+
     public SecurityLaneSetting SecurityLane { get; init; } = new();
 
     public int GlobalConcurrency { get; init; } = 3;
@@ -1120,7 +1127,7 @@ public sealed record PanelSettings
     /// the new variable while telling the person about the old one, which is worse than either
     /// alone. (codex, on story 2.3.3's code round.)
     /// </remarks>
-    private static class Key
+    internal static class Key
     {
         internal const string Backoff = "COAI_RETRY_BACKOFF";
 

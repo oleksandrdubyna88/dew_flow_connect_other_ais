@@ -300,6 +300,165 @@ public sealed class PanelServiceHostTests : IDisposable
         CodexModel(host).Should().Be(DefaultCodexModel(), "an empty file is an explicit thing too: defaults, as before");
     }
 
+    // ---------- a settings read that failed (todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md, § S1.5.2) ----------
+
+    private sealed record Heard(List<Serilog.Events.LogEvent> Events, List<CoaiMcp.Core.Notices.ServerNotice> Notices)
+    {
+        public Serilog.ILogger Log { get; } = new Serilog.LoggerConfiguration().WriteTo.Sink(new CapturedEvents(Events)).CreateLogger();
+
+        public Noticing Noticing => new(notice => { Notices.Add(notice); return true; }, Log);
+
+        /// <summary>The Warnings that say the file could not be read — the note, not the retry's own line.</summary>
+        public IReadOnlyList<string> Notes() =>
+            [.. Events.Where(e => e.Level == Serilog.Events.LogEventLevel.Warning).Select(e => e.RenderMessage()).Where(m => m.Contains("could not be read"))];
+
+        public IReadOnlyList<CoaiMcp.Core.Notices.ServerNotice> NoticesOfTheNote() =>
+            [.. Notices.Where(n => ((n.Detail?.Length > 0 ? n.Detail : n.Title) ?? string.Empty).Contains("could not be read"))];
+    }
+
+    private static Heard NewHeard() => new([], []);
+
+    private const string BusyHuman = """{"COAI_ON_EXHAUSTED":"human"}""";
+
+    private static string SentenceOf(CoaiMcp.Core.Notices.ServerNotice notice) => (notice.Detail?.Length > 0 ? notice.Detail : notice.Title) ?? string.Empty;
+
+    /// <summary>
+    /// The first read at start is busy while the file holds the operator's <c>human</c>. The default a failed read gives is policy auto, so the
+    /// service runs on it and releases nothing — and, because the stamp is NOT recorded for a read that gave nothing, the first call after the file
+    /// can be read gives the operator's own policy (F25: the stamp used to be taken before the first read, so the defaults stayed for good).
+    /// </summary>
+    [Fact]
+    public void ABusyReadAtStart_IsReadAgain_AndThePolicyIsTheOperatorsOnceItReads()
+    {
+        File.WriteAllText(SettingsPath, BusyHuman);
+        var heard = NewHeard();
+        var busy = true;
+        var host = new PanelServiceHost(
+            Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), heard.Log, heard.Noticing,
+            path => busy ? throw new IOException("in use by another process", unchecked((int)0x80070020)) : File.ReadAllText(path));
+
+        var first = host.Current;
+        var whileBusy = new[] { first, host.Current, host.Current };
+
+        whileBusy.Should().OnlyContain(service => ReferenceEquals(service, first), "one service per stamp, not one per call");
+        first.Settings.Rounds.IsAutonomous.Should().BeTrue("a read that gave nothing runs on the shipped default, which is policy auto");
+        first.Settings.PolicyUnread.Should().BeTrue();
+        heard.Notes().Should().ContainSingle("the note is said once, however many calls ask");
+        var notice = heard.NoticesOfTheNote().Should().ContainSingle().Subject;
+        notice.Code.Should().Be("unrecognised-setting");
+        notice.Class.Should().Be("stand-down");
+        notice.Subject.Should().Be(Path.GetFullPath(SettingsPath));
+        var sentence = heard.Notes().Single();
+        sentence.Should().Contain(SettingsPath).And.Contain("held open by its writer").And.Contain("Auto by default").And.Contain("not released");
+        SentenceOf(notice).Should().Contain(SettingsPath).And.Contain("held open by its writer");
+
+        busy = false;
+        var after = host.Current.Settings;
+
+        after.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, "the file can be read now, and it says human");
+        after.Rounds.IsAutonomous.Should().BeFalse();
+        after.PolicyUnread.Should().BeFalse();
+    }
+
+    public static TheoryData<string, bool> UnusableFiles() => new()
+    {
+        { "not json", false }, { "not json", true },
+        { "an empty file", false }, { "an empty file", true },
+        { "an array", false }, { "an array", true },
+        { "a denied read", false }, { "a denied read", true },
+    };
+
+    /// <summary>
+    /// A file that is there and gives no values runs on the defaults with its note, is read again on EVERY call without a rebuild, and is the operator's the
+    /// moment it is repaired — or removed, which is a read that succeeded.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(UnusableFiles))]
+    public void AnUnusableFile_RunsAutoWithItsNote_IsReadAgainWithoutARebuild_AndIsTheOperatorsOnceRepaired(string how, bool onReload)
+    {
+        var denied = how == "a denied read";
+        var failing = false;
+        var heard = NewHeard();
+        PanelServiceHost Build() => new(
+            Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), heard.Log, heard.Noticing,
+            path => failing && denied ? throw new UnauthorizedAccessException($"Access to the path '{path}' is denied.") : File.ReadAllText(path));
+
+        string Spoiled() => how switch { "not json" => "{ not json", "an array" => "[]", _ => string.Empty };
+
+        // A denied read leaves the file alone and has the seam refuse it; every other row spoils the file itself.
+        void Break()
+        {
+            failing = true;
+            File.WriteAllText(SettingsPath, denied ? BusyHuman : Spoiled());
+        }
+
+        PanelServiceHost host;
+        if (onReload)
+        {
+            File.WriteAllText(SettingsPath, BusyHuman);
+            host = Build();
+            host.Current.Settings.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, "the fixture starts from a good human file");
+            Touch(Break);
+        }
+        else
+        {
+            Break();
+            host = Build();
+        }
+
+        var first = host.Current;
+        var again = new[] { host.Current, host.Current };
+
+        again.Should().OnlyContain(service => ReferenceEquals(service, first), $"{how}: one service per stamp, not one per call");
+        first.Settings.Rounds.IsAutonomous.Should().BeTrue(how);
+        first.Settings.PolicyUnread.Should().BeTrue(how);
+        heard.Notes().Should().ContainSingle($"{how}: one warning for that stamp");
+        heard.NoticesOfTheNote().Should().ContainSingle($"{how}: one notice for that stamp");
+        heard.Notes().Single().Should().Contain(SettingsPath, how);
+
+        if (denied)
+        {
+            failing = false;
+            var own = host.Current.Settings;
+            own.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, "the denial lifted and the file is untouched: its own values");
+            own.PolicyUnread.Should().BeFalse();
+
+            return;
+        }
+
+        Touch(() => File.WriteAllText(SettingsPath, BusyHuman));
+        var repaired = host.Current.Settings;
+        repaired.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, how);
+        repaired.PolicyUnread.Should().BeFalse(how);
+
+        Touch(() => File.WriteAllText(SettingsPath, Spoiled()));
+        host.Current.Settings.PolicyUnread.Should().BeTrue("broken again");
+        File.Delete(SettingsPath);
+        var removed = host.Current.Settings;
+        removed.Rounds.IsAutonomous.Should().BeTrue("a file that is not there is a read that succeeded: auto by default");
+        removed.PolicyUnread.Should().BeFalse("nothing was unreadable");
+    }
+
+    [Theory]
+    [InlineData("auto")]
+    [InlineData("human")]
+    public void APolicyNamedInTheEnvironment_IsRead_WhateverTheFileDoes(string named)
+    {
+        File.WriteAllText(SettingsPath, "not json");
+        var heard = NewHeard();
+        var host = new PanelServiceHost(
+            name => name switch { "COAI_DATA_DIR" => _dataDir, "COAI_ON_EXHAUSTED" => named, _ => null },
+            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), heard.Log, heard.Noticing, CancellationToken.None);
+
+        var settings = host.Current.Settings;
+
+        settings.PolicyUnread.Should().BeFalse("the policy comes from this server's own environment, which was read");
+        settings.Rounds.IsAutonomous.Should().Be(named == "auto");
+        settings.Rounds.OnExhausted.Should().Be(named == "auto" ? CoaiMcp.Core.Rounds.StagePolicy.GoodEnough : CoaiMcp.Core.Rounds.StagePolicy.Human);
+        var note = heard.NoticesOfTheNote().Should().ContainSingle("the note is still written").Subject;
+        SentenceOf(note).Should().Contain("comes from this server's own environment").And.NotContain("Auto by default");
+    }
+
     private static string CodexModel(PanelServiceHost host) =>
         host.Current.Settings.Providers.FirstOrDefault(p => p.Provider == "codex")?.Model ?? "(no codex row)";
 
