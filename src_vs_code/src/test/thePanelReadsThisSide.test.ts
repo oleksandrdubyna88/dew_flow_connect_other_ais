@@ -82,6 +82,7 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   'chatPresetsHost.ts global write': { count: 1, why: 'coai.chatModelPresets — not a per-side setting' },
   'configTransferCommands.ts global write': { count: 1, why: 'an import writes the base layer; per-side overrides are never touched' },
   'helpPanel.ts global write': { count: 1, why: 'coai.helpLanguage — about the reader, not the work' },
+  'skipShellHost.ts global write': { count: 1, why: 'terminal.integrated.commandsToSkipShell — a VS Code setting of the person, appended to after a press of Add (E3.S3), never a per-side setting' },
   'textToneHost.ts global write': { count: 1, why: 'coai.textTone — about the reader, not the work' },
   'uiScaleHost.ts global write': { count: 1, why: 'coai.uiScale — about the reader, not the work' },
   // The catalog migration moves EACH layer on its own (PLAN_one_model_catalog.md E1.3): the user layer is read raw

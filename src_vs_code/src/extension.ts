@@ -76,6 +76,7 @@ import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { sideHereOf, sidesIn, stampThisSide, type SeenSide } from './sidesSeen';
 import { bindRemoteSessions, testDoorOf, type RemoteSessionsTestDoor } from './remoteSessionHost';
+import { bindSkipShell, type SkipShellTestDoor } from './skipShellHost';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -105,6 +106,11 @@ export interface CoaiExports {
    * it is absent, so no other extension can write a consent into this profile or replace the ssh call. `remoteExportGuard.test.ts` holds that.
    */
   readonly remoteSessions?: RemoteSessionsTestDoor;
+  /**
+   * The BOUND skip-shell check, for a host scenario (E3.S3): replace the offer, run the check, save and restore the memory. Present ONLY in test
+   * mode, for the same reason: in production no other extension can answer the offer or write this profile's memory. `skipShellWiring.test.ts` holds that.
+   */
+  readonly skipShell?: SkipShellTestDoor;
 }
 
 /**
@@ -145,6 +151,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   bindChatSide(context);
   // The road to a `Creds: <host> / <session>` terminal's Claude session (E2.S3): the consent, the picked ids, the hosts command.
   const remote = bindRemoteSessions(context);
+  // The person's own skip list may hide the terminal keys of CoAI (E3.S3): tell once, offer Add for the user list, never write a workspace.
+  const skipShell = bindSkipShell(context);
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
   // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
   noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));
@@ -887,7 +895,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
 
   return {
     sidesSeen: () => sidesIn(context.globalState, Date.now()),
-    ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote) } : {}),
+    ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote), skipShell } : {}),
   };
 }
 
