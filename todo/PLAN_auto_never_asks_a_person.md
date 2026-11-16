@@ -103,7 +103,7 @@ Under `auto` (the default):
 3. **Rounds spent with findings open → `good_enough`** (O4), with the reason in the round's note.
 4. **A hold raised by a build that predates `auto` is released by the next call that can write the release** (O2) — a
    review entry, `resolve`, `status`, `ask_human` — logged, its notice withdrawn so the panel stops showing it, and never
-   answered with `GateHeld` under `auto` (§ 4.3). A hold raised by THIS
+   answered with `GateHeld` under `auto` (§ 4.3) unless the person answered it first (their answer wins). A hold raised by THIS
    build (under `human`, or under a workspace value) is not released by configuration — § 4.3, § 6.
 5. **`ask_human` never blocks, and the gate never asks.** The AI's own question without a `consultId` gets
    `consult_first` (O3); with the consultants' `consultId`, or when no consultant can be had, it gets today's
@@ -215,9 +215,11 @@ in the Warning line *"auto released the {stage} hold of session {id} raised unde
 
 **The release is written on the held round** (the re-review consultation `1d4733ae…`): the held round's `RoundRecord`
 keeps its verdict (`call_human` or `escalated` — it is history) and gains the note *"released by policy auto: this hold
-was raised by a build before auto"*, saved with the session and upserted into `coai.db` by the existing writer
-(`RoundsDb.RecordRoundRow`, `ON CONFLICT(session_id, stage, number) DO UPDATE`, `RoundsDb.cs:849-865`). Writing it
-twice writes the same note. The cadence's epic close records the verdict of that round; its wording (§ 4.2) reads
+was raised by a build before auto"*, saved with the session and written into that round's existing `coai.db` row
+(`rounds.note`, keyed by `session_id, stage, number` — `RoundsDb.cs:849-865`) by a one-column update; no schema step,
+and the round's findings are not re-recorded. *(Reference repaired 2026-11-16 by the E1.S1 spec, U2: the writer this
+sentence named, `RecordRoundRow`, is private and rewrites the whole row from a context the release does not have.)*
+Writing it twice writes the same note. The cadence's epic close records the verdict of that round; its wording (§ 4.2) reads
 `call_human` with this note as "released by auto", not as a person's decision.
 
 The same release is made by `resolve`'s load (`PanelService.cs:1656`), `status`'s (`:567`), `ask_human`'s
@@ -243,7 +245,11 @@ withdrawal — is closed by reading again: the release (1) withdraws the cards, 
 offers them; (2) reads each card's answer file AGAIN; (3) if an answer is now on file, applies it as today and writes
 no release; otherwise saves the release. An answer written after step 2 is to a card already withdrawn, which the
 extension does not offer. A test writes the answer between the withdrawal and the second read, and asserts the
-person's decision is applied and no release note is written.
+person's decision is applied and no release note is written. "As today" includes the card: when step 3 finds an
+answer and writes no release, the cards withdrawn in step 1 are restored to the state they had, so an answer that
+leaves the hold standing (Discuss, or words only) finds its card as it would today and the person can answer again
+(the E1.S1 spec, U3). A hold the person answered that way is the person's; it answers `GateHeld` as today — the
+"never `GateHeld`" of requirement 4 is about holds auto releases.
 
 **Residuals of the order, written down.** A card an older build wrote but never recorded on the session is not
 withdrawn; the retention removes it seven days after it was asked. If one of several cards was withdrawn and the save

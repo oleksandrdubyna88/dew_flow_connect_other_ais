@@ -1,14 +1,16 @@
 # PLAN — E1 stories: the server, the whole `auto` contract (`coai-mcp`)
 
-> Status: **plan only, nothing implemented yet, 2026-11-16 — written by Opus when the epic started, on branch
-> `feat/auto-mode-e1`.** Epic E1 of [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) (its
-> `## Epics`, § *E1*; the design is its § 4). A stories document keeps no change ledger: a change to this epic is an
-> entry in the parent.
+> Status: **plan only, nothing coded — revised to epoch 2 of the parent, 2026-11-16.** Written by Opus when the epic
+> started, on branch `feat/auto-mode-e1`; the parent then stopped at its second change (entry 1.2, the released
+> state), was revised whole and re-approved as epoch 2 the same day, and this document and the S1 spec were brought to
+> it before any code (U1 is entry 1.2; U2 and U3 are settled in the parent as non-changes, § 10). Epic E1 of
+> [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) (its `## Epics`, § *E1*; the design is its § 4).
+> A stories document keeps no change ledger: a change to this epic is an entry in the parent.
 >
 > Scope: `src_mcp`, `src_bench` and the server's documents. Three stories, the parent's intended cut, kept. **Cornerstone:
 > E1.S1** (`model: fable`) — the stored policy and the hold's authority. Its scenarios and brief are Fable's, in
 > [PLAN_auto_never_asks_a_person_E1_S1_spec.md](PLAN_auto_never_asks_a_person_E1_S1_spec.md) (written 2026-11-16,
-> before its code; it refined C1, C2 and C4 below). This document fixes S1's boundary and the
+> before its code, and revised to epoch 2 the same day — 67 scenarios; it refined C1–C4 below). This document fixes S1's boundary and the
 > contracts S2 and S3 build on; S2 and S3 are briefed here in full. The parent's ledger line reads
 > `Cornerstones: 1 of 2 — E1.S1, E2.S2`.
 
@@ -27,7 +29,8 @@ The parent's three stories are kept. The code confirms the cut:
 - **S2** is the round machine and what reads a verdict. It needs from S1 only a flag that says "this session is under
   `auto`" and a session refreshed before `CompleteRound` runs.
 - **S3** is `ask_human` and the static text. It needs from S1 a session that is refreshed and from which a legacy hold
-  is already released. Its last commit lists `onExhaustedAuto` in `--features`.
+  is already released — and, where the release could not be written this time, why (C4). Its last commit lists
+  `onExhaustedAuto` in `--features`.
 
 One correction to the parent's split of the § 8 steps: the auto twin of
 `GoodEnoughPolicyTests.WhenNobodyAnswered_ItStillCallsAHuman` (step 2) can only go green with S2's machine change, so
@@ -36,7 +39,11 @@ it moves to S2. Step 2's parsing half stays in S1.
 ## 2. What exists — verified at `602cfb91`
 
 `git diff 4cb32a76 602cfb91` touches only `todo/`, so every code line below is the same on `origin/main` 4cb32a76.
-Paths are from the repository root.
+Paths are from the repository root. **Re-checked at `47550a7c` for epoch 2 (2026-11-16):** the code files that differ
+since `602cfb91` are the agy hook's (`src_mcp/runners/Reviewers/AntigravityReadOnly.cs` and three test files), and
+none is named here; `research/module_server.md` changed one line at `:1527`, so `:1862` and `:2304` below hold. The
+line numbers are those of the tree before S1: S1 grows `RoundEngine.cs` by at most twelve lines (its constructor and
+the begin's hold check, § 6), so S2 and S3 find each site by the method named beside it.
 
 | Fact | Where |
 |---|---|
@@ -68,6 +75,8 @@ Paths are from the repository root.
 | The bench's verdicts that open the code stage; its test | `src_bench/CoaiBench/Running/RoundRunner.cs:30-31`; `src_bench/CoaiBench.Tests/PlanLoopTests.cs:17-31` |
 | The bench compares the asked `COAI_ON_EXHAUSTED` with the session's `onExhausted` (N2) | `src_bench/CoaiBench/Running/SettingsApplied.cs:66-75` |
 | The epic-close record's verdict ("passed: proceed, good_enough or continue_anyway"); where it is written | `src_mcp/core/Cadence/CadenceState.cs:3-7`; `src_mcp/src/Server/PanelService.cs:1790-1793` |
+| `CadenceState.IsClosed` says "code gate has passed"; the desk stores whatever verdict string it is handed — `Finish` passes `Rounds[^1].Verdict`, the reconcile the last code round's — and nothing renders it (its readers take the epic numbers only, `CadenceDesk.cs:336`, `QuestionConsult/StageRelease.cs:40-45`) | `CadenceState.cs:48-49`; `src_mcp/src/Server/Cadence/CadenceDesk.cs:302`, `:393-399` |
+| `resolve` with no decisions is refused while findings are pending; `Finish` is the one path that advances a stage and closes the cadence | `PanelService.cs:1675-1682`; `:1775-1810` |
 | `review_plan`'s verdict list; the `review_feature` D23 paragraph; `resolve`'s hold paragraph; `ask_human` | `src_mcp/src/Tools.cs:103-104`; `:298-311`; `:341-348`; `:399-446` |
 | The server instructions (1,935 characters; budget 2,000) | `src_mcp/src/Program.cs:2443-2466`; `src_mcp/tests/TheInstructionsFitWhatAClientKeepsTests.cs` |
 | The help's `COAI_ON_EXHAUSTED (continue|human|escalate)` — three of four words today | `Program.cs:2614` |
@@ -117,6 +126,16 @@ Everything else matched, to the line or within one line: `RoundMachine.cs` `:86-
 `:1907`, `README.md:44-45`, `ARCHITECTURE.md:80-82`, `help.ts:163-164`, `helpContent.ts:143-149`,
 `claudeSnippet.ts:119-122`, `prepare-gate.mjs:12-15`) were also checked and hold, but for the CHANGELOG line above.
 
+**Epoch 2 (2026-11-16): all eight rows above are repaired in the parent's revised text** — the bag at `:147-157`,
+`AnswerFor` at `:916-949`, both text-logging lines `:143` and `:229`, the `status`/`resolve` loads at `:567`/`:1656`,
+`HeldSentence`'s one caller, a withdrawn card that shows no reason, the `consult_first` sentence naming only
+`ask_consultants`, and the CHANGELOG line `:3584`. The references the revision added were opened too and hold:
+`PanelService.cs:1152-1158`, `:1656`, `:567`; `AskHumanService.cs:100-101`; `Escalations.cs:243-245`;
+`SettingsFile.cs:110-127` (`TryRead`); `RoundsDb.cs:849-865` (`RecordRoundRow`, the row and its key). One stale
+claim was not in the parent but here: § 4 C4 said `LegacyHold.Stands` tells `ask_human`'s two held cases apart, which
+U3 made untrue (a hold from before `auto` that the person answered stands as well); C4 and N3 now read the reason the
+release returns (§ 10).
+
 ## 3. Conventions every story follows
 
 - **Branch.** `feat/auto-mode-e1`, one PR for the epic. One coder at a time on the branch (§ 6 for the one exception).
@@ -135,7 +154,8 @@ Everything else matched, to the line or within one line: `RoundMachine.cs` `:86-
   `Path.GetTempPath()` (the leftovers guard in `src_mcp/tests_leftovers` refuses it). A test that launches the fake CLI
   is in `[Collection("fakecli-env")]`.
 - **File size.** `RoundMachine.cs` is at 782 of 800 lines and `RoundEngine.cs` is over. New logic goes into new small
-  files named below; the two big files get only the call sites and the `case` arms that must live there.
+  files named below; the two big files get only the call sites and the `case` arms that must live there. S1 adds at
+  most twelve lines to `RoundEngine.cs` and none to `RoundsDb.cs` (the S1 spec's checklist item 14).
 - **No `src_vs_code` change** in E1, and no new notice code (the extension renders codes it knows).
 
 Commands, from the repository root (`/home/jinx/git/dew_flow_connect_other_ais`). Never `dotnet test`
@@ -161,7 +181,11 @@ Filters are xUnit v3 MTP: `--filter-class "*Name"`, `--filter-method "*Name*"`. 
 
 Fable's spec may refine a name below. If it does, it updates this section and the S2/S3 briefs in the same commit.
 **Refined 2026-11-16 by the S1 spec** (its table *Changes to § 4*, X1–X6): C1, C2 and C4 below, and the two lines of
-§ 8.2 and § 9.2 that used them.
+§ 8.2 and § 9.2 that used them. **Revised the same day to epoch 2 of the parent** (the spec's X7–X10): C3 and C4 —
+the released state (the parent's entry 1.2), the person's answer, the note on the held round, what a review entry
+answers, and a settings read that failed. **Then by this document, the same day:** C4's U2 and U3 lines say how each
+was settled, and its last paragraph keeps the `Release` at `AskHumanService.cs:100`, because after U3 `Stands`
+cannot tell `ask_human`'s two held cases apart (§ 2.1).
 
 - **C1 — the flag.** `PanelConfig` carries `bool? Autonomous { get; private init; }`, written to the session file as
   `autonomous` (`true` or `false` by this build; absent means a build before `auto`), and a read-only
@@ -179,7 +203,12 @@ Fable's spec may refine a name below. If it does, it updates this section and th
   `with { OnExhausted = … }` do not compile outside the type.
 - **C3 — the settings.** `PanelSettings.FromEnvironment` gives `Rounds.IsAutonomous == true` for `auto`, absent and
   empty; `false` for `human`, `continue`, `escalate`, `good_enough`; and `Human`, `false` plus today's complaint for an
-  unknown word (`UnknownSettingValueTests`).
+  unknown word (`UnknownSettingValueTests`). A settings file that is there and cannot be read — busy at the start,
+  malformed, empty, denied — gives no values, so it reads as `auto` (parent § 6); the settings such a read gave carry
+  `PolicyUnread == true`, unless the process environment names the policy. Rounds run on them. No hold is released
+  on them, and the host reads the file again on the next call (the S1 spec's § S1.5.2). **S2 and S3 do not read
+  `PolicyUnread`.** The note that says the file could not be read is S1's — one call that writes the Warning and the
+  notice; the note for a policy pinned in the process environment stays S3's (§ 9.3).
 - **C4 — the refreshed session.** Every load that decides — the begin in `RoundEngine.RunStageAsync` (`:267` and
   `:277-280`), `resolve` (`:1656`), `status` (`:567`), `ask_human` (`AskHumanService.cs:100-101`, BEFORE `_desk.Facts`)
   and the one caller of `HeldSentence` (`PanelService.WhyNotAFreshReview`, `:1152-1158`) — passes the session through
@@ -187,25 +216,52 @@ Fable's spec may refine a name below. If it does, it updates this section and th
   (`src_mcp/src/Server/Rounds/SessionPolicy.cs`): `Current(session)` for a caller that holds the session's claim,
   `CurrentUnclaimed(session, repoPath, at)` for one that does not (it takes the claim for the release alone and reads
   the session again under it); the begin calls the two halves, `Released` before the person's decision is read and
-  `LegacyHold.Stamped` after it. After it:
+  `LegacyHold.Stamped` after it. Each answers a `Release(Session, NotWritten)`: the session to go on with, and — for
+  a hold from before `auto` that could not be released this time — why. A caller that only needs the session reads
+  `.Session`. After it:
   - `Config.OnExhausted` and `Config.Autonomous` are the current settings' — **except while a hold from before `auto`
     stands** (plan round F0): that session's config is left exactly as loaded, so its marker stays absent until the
     hold is released, by `auto` or by the person's answer. A hold this build raises is stamped by the begin of its own
     round, so its marker is never absent;
-  - a hold from before `auto` is released under `auto` (`HumanGate = false`, `HoldQuestions = []`,
-    `AdvanceOnResolve = true`, `AwaitingResolve` kept, saved, Warning logged, its notices withdrawn) — **the notices
-    first, the session second** (plan round F1). `Escalations.Withdraw` answers `Withdrawn`, `NotThere` (absent, or
-    expired already) or `Failed`; any `Failed`, or a save that fails, leaves the hold and its `HoldQuestions` as they
-    were with a Warning, and the next deciding load tries again. **One case of the parenthesis is reported and not
-    settled here — the S1 spec's § S1.8, U1:** a held round the caller already resolved has `AwaitingResolve == false`,
-    and "kept" then leaves `AdvanceOnResolve` with no resolve to consume it; the spec's reading is
-    `AwaitingResolve = true`;
-  - a hold this build raised stays.
+  - a hold from before `auto` is released under `auto`. **The released state** (the parent's entry 1.2, § 4.3) is
+    `HumanGate = false`, `HoldQuestions = []`, `AwaitingResolve = true`, `AdvanceOnResolve = true` — whether the held
+    round had been resolved or not — saved, a Warning logged. S1 does not move the stage: the next `resolve` does,
+    once, through `PanelService.Finish`, so the cadence closes and the decisions are recorded there. `PanelService`
+    refuses a `resolve` with no decisions while findings are pending (`PanelService.cs:1675-1682`), so a caller whose
+    held round still has open findings passes its decisions in that call;
+  - **the notices first, the session second** (plan round F1). `Escalations.Withdraw` answers `Withdrawn`, `NotThere`
+    (absent, or expired already) or `Failed`; any `Failed`, a save that fails, or a claim another call holds leaves
+    the hold and its `HoldQuestions` unchanged on disk with a Warning, and the next deciding load tries again;
+  - **the person's answer on file wins.** No release is written while any question of the hold has an answer on
+    file; the answers are read again after the withdrawal and before the save, and an answer found either time is
+    applied as today, by today's readers;
+  - **the release is noted on the held round**: `Rounds[^1].Note` becomes `LegacyHold.Note` (*"released by policy
+    auto: this hold was raised by a build before auto"*), its verdict unchanged, in the same save — and in
+    `coai.db`'s `rounds.note`, best effort, after the save, by a one-column update of that round's row
+    (`RoundNotes.Write`, `src_mcp/src/Store/RoundNotes.cs`; never `RecordRound`) — the S1 spec's U2, settled in the
+    parent's § 4.3 (§ 10);
+  - **a settings read that failed releases nothing** (C3): the hold stays as it is until the file can be read;
+  - **what a review entry answers**, as constants of `LegacyHold`, the parent's words: after a release and until the
+    `resolve`, `ReleasedSentence(stage)` — never `Unresolved`; while a release could not be written,
+    `NotWrittenSentence(stage, why)` — never `GateHeld`. `why` is one of four: the settings file could not be read;
+    another call holds this session; a notice could not be withdrawn; the session could not be saved;
+  - a hold this build raised stays, and so does a hold from before `auto` that the person answered with Discuss or
+    with words: it answers as today, and the cards the release had withdrawn are put back as they were
+    (`Escalations.Restore` — the S1 spec's U3, settled in the parent's § 4.3, § 10).
 
   So `RoundMachine.CompleteRound` sees the current policy. In `ask_human`, **whether the policy is `auto` is read from
-  the settings** (`_settings.Rounds.IsAutonomous`), not from the session: a session that is still `HumanGate` while the
-  settings say `auto` is a hold the person owns — or, rarely, a hold from before `auto` whose release could not be
-  written this time (`LegacyHold.Stands(session.State)` tells the two apart).
+  the settings** (`_settings.Rounds.IsAutonomous`), not from the session. A session that is still `HumanGate` while the
+  settings say `auto` is one of two held cases (the parent's § 4.4, first row; S3 words each, N3):
+  - **the person's** — a hold this build raised, or a hold from before `auto` that the person answered (its release
+    yields to the answer). The `Release` the load returned has an EMPTY `NotWritten`;
+  - **a hold from before `auto` whose release could not be written this time** — the `Release` carries the reason
+    (one of the four above).
+
+  `LegacyHold.Stands(session.State)` does NOT tell these apart: a hold from before `auto` that the person answered
+  stands as well. So S1's wiring at `AskHumanService.cs:100` keeps the whole `Release` in a local —
+  `var release = _policy.CurrentUnclaimed(_store.Load(…), repoPath, at); var session = release?.Session;` — the same
+  behaviour as the spec's one-line `?.Session`, and S3 reads `release?.NotWritten` without touching S1's line.
+  Among the person's holds, `Stands` only picks the words (raised by this build, or answered by the person).
 - **C5 — the harness.** `CodeRoundHarness.Service(...)` gains `bool autonomous = false`; with it true, `Rounds` is the
   C2 auto config (`PanelConfig.Uniform(maxRounds, threshold)`). S1 adds it (its refresh test T24 uses it).
 
@@ -216,17 +272,26 @@ Fable's spec may refine a name below. If it does, it updates this section and th
   `autonomous` `false` or absent (an older server never writes it). Asked `human`, `continue`, `escalate`: compared as
   today, and a session with `autonomous: true` is a mismatch. Not asked: nothing compared, as today. Each case is a row
   in `src_bench/CoaiBench.Tests/SettingsAppliedTests.cs`. S1's spec carries these rows.
-- **N3 — `ask_human` on a hold this build raised, while the policy is `auto` (S3).** No card is written, nothing is
-  recorded on the session, no consultId is spent, no batch is counted, and the call returns at once:
-  `{"status":"no_answer_yet","answer":"","answerOriginal":"","instruction":…}` (`HumanAnswer`, no new wire member). The
-  instruction is: *"policy auto: coai waits for nobody, and nothing was waited for (0 seconds). This {stage} gate was
-  held by this server under a policy that asks a person, before the setting became auto. That hold is the person's:
-  only their answer on its ConnectOtherAIs notice (escalation {noticeId}) releases it, and no new card was written.
-  Say in your summary that this gate is held for a person and why; work that does not need this gate may go on. Do
-  not run the review again."* `{noticeId}` is `HoldQuestions[0]` (the round's notice, or the re-issued one); when the
-  list is empty the parenthesis is left out. `{stage}` is `RoundSubject.StageName(...)`, as `HoldNotice` names it.
-  The same answer is given with `productionRisk: true`: the parent's "today's path" for a production risk is the
-  conversation door's; on the card door today's path is a card and a wait, which requirement 5 and N3 forbid.
+- **N3 — `ask_human` on a held gate while the policy is `auto` (S3).** The parent's § 4.4, first row: the reply tells
+  the two held cases of C4 apart. In both, no card is written, nothing is recorded on the session, no consultId is
+  spent, no batch is counted, and the call returns at once:
+  `{"status":"no_answer_yet","answer":"","answerOriginal":"","instruction":…}` (`HumanAnswer`, no new wire member).
+  Which case it is comes from the `Release` S1's load returned (C4), never from `Stands` alone:
+
+  | The `Release` and the session | Case | The instruction |
+  |---|---|---|
+  | `NotWritten` empty, `HumanGate`, `LegacyHold.Stands` false | a hold this build raised — the person's | *"policy auto: coai waits for nobody, and nothing was waited for (0 seconds). This {stage} gate was held by this server under a policy that asks a person, before the setting became auto. That hold is the person's: only their answer on its ConnectOtherAIs notice (escalation {noticeId}) releases it, and no new card was written. Say in your summary that this gate is held for a person and why; work that does not need this gate may go on. Do not run the review again."* |
+  | `NotWritten` empty, `HumanGate`, `LegacyHold.Stands` true | a hold from before `auto` that the person answered — the release yielded to their answer (parent § 4.3: *a person's answer on file wins*), so it is the person's | the same, with the second sentence *"This {stage} gate was held by a build before auto, and the person has answered its notice, so policy auto leaves the hold to them."* in place of the one about this server |
+  | `NotWritten` not empty | a hold from before `auto` whose release could not be written yet — NOT the person's | *"policy auto: coai waits for nobody, and nothing was waited for (0 seconds). "* + `LegacyHold.NotWrittenSentence(stage, why)` (the S1 spec's § S1.3, the parent's § 4.3 words: *"policy auto is releasing this {stage} hold, raised by a build before auto; the release could not be written yet ({why}) — call again"*) + *". No card was written and nothing was shown to a person. The next call that reads this session — ask_human, status, resolve or a review — releases it."* |
+
+  `{noticeId}` is `HoldQuestions[0]` (the round's notice, or the re-issued one); when the list is empty the
+  parenthesis is left out. `{stage}` is `RoundSubject.StageName(...)`, as `HoldNotice` names it. `{why}` is the
+  `Release`'s own reason, one of `LegacyHold`'s four constants, quoted, never reworded. Each case writes one
+  Information line with the question id, the stage, the session id and — for the third — the reason; never the
+  question's text. The same answer is given with `productionRisk: true`: the parent's "today's path" for a production
+  risk is the conversation door's; on the card door today's path is a card and a wait, which requirement 5 and N3
+  forbid. A hold `auto` RELEASED is not held, so it is not the card door at all: the question takes the conversation
+  road (`consult_first`, or the person after the consultants), as the S1 spec's § S1.5 table, row 1, says.
 - **N4 — the window between E1's and E2's releases (S3).** The CHANGELOG *Server* entry says it in one paragraph:
   *"An extension older than the next one never writes `COAI_ON_EXHAUSTED` while it shows Ask a human — that was its
   default — so this server runs Auto for it: when the rounds run out or nobody answers, no person is asked, and the
@@ -237,8 +302,9 @@ Fable's spec may refine a name below. If it does, it updates this section and th
 
 ## 6. Order, and what may run in parallel
 
-1. **S1 first.** Fable writes `todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md` (the cornerstone ledger already counts
-   it). Then a Sonnet coder builds it. S2 and S3 do not start coding before S1's contracts C1–C5 are committed.
+1. **S1 first.** Fable wrote `todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md` (the cornerstone ledger already counts
+   it) and revised it to epoch 2. Then a Sonnet coder builds it, in the spec's commit order (§ S1.11: 1–9 with 6a and
+   6b). S2 and S3 do not start coding before S1's contracts C1–C5 are committed.
 2. **S2 after S1.** It changes `RoundMachine.cs`, two new core files, `RoundEngine.cs` (`AnswerFor`, the record, the
    audit call), `FeatureSecondRound.cs`, `RoundAudit.cs`, `RoundCommands.cs`, the bench, and two hunks of `Tools.cs`.
 3. **S3 after S2.** It changes `AskGate.cs`, `AskHumanService.cs`, `ServerJsonContext.cs`, two other hunks of
@@ -249,22 +315,50 @@ Fable's spec may refine a name below. If it does, it updates this section and th
 no file S2 touches. It may be coded in a second worktree branched from S1's last commit while S2 is coded, and merged
 into `feat/auto-mode-e1` after S2's commits. Nothing else runs in parallel.
 
-**The shared files, and who owns which lines.** S1 owns `RoundEngine.cs:93-168` and the refresh at `:277-280`,
-`PanelService.cs`, `AskHumanService.cs:100-101`, `SessionState.cs`, `PanelSettings.cs:1077-1088` and `:1679-1683`.
-S2 owns `RoundEngine.cs:495-536`, `:650-651` and `:916-949`, and `Tools.cs:103-104` and `:298-311` (the verdict
-lists: `TheGateSaysWhenToConsultTests.ReviewPlanNamesEveryVerdictTheMachineCanEmit` turns red the moment
-`NotReviewed` exists, so the list moves in the same commit). S3 owns `Tools.cs:341-348` and `:399-446`, `Program.cs`,
-the rest of `AskHumanService.cs`, and a new method beside `PanelSettings.cs:1215-1224`. The stories run in order on one
-branch, so each starts from the previous one's commits and nothing is merged by hand but the AskGate slice.
+**The files, and who owns which lines** (revised for epoch 2 from the S1 spec's scope line and § S1.5). A file or a
+range one story owns is not edited by another; where two stories add to one file, each adds a member of its own and
+leaves the other's alone.
+
+| File | S1 | S2 | S3 |
+|---|---|---|---|
+| `src_mcp/core/Rounds/LegacyHold.cs` (new) | all | — | reads `Stands`, `NotWrittenSentence` and the four reason constants; never edits |
+| `src_mcp/src/Server/Rounds/SessionPolicy.cs` (new), `src_mcp/src/Store/RoundNotes.cs` (new) | all | — | — |
+| `src_mcp/core/Rounds/SessionState.cs` (`PanelConfig`) | all | — | — |
+| `src_mcp/core/Rounds/RoundMachine.cs` | — (spec checklist 12: no verdict, no refusal sentence changes) | all | — |
+| `src_mcp/src/Server/Rounds/RoundEngine.cs` | the constructor's parameter and field (`:23-58`), the begin's hold check and stamp (`:261-280`) | `:495-536`, `:650-651`, `:916-949` | — |
+| — the same file, `:93-168` (`ApplyAnyHumanDecision`, `ProceedOnFile`, `HeldSentence`, `WithTheHoldReissued`) | keeps their bodies (spec checklist 9) | — | — |
+| `src_mcp/src/Server/PanelService.cs` | all (`SessionPolicy` built and handed on, `status` `:567`, `WhyNotAFreshReview` `:1152-1158`, `resolve` `:1656`) | — | — |
+| `src_mcp/src/Server/AskHumanService.cs` | the constructor's `SessionPolicy`, and `:100-101` (the load, with the `Release` kept, C4) | — | everything else, including `:143` and `:229` |
+| `src_mcp/src/Server/PanelSettings.cs` | `PolicyOf` `:1077-1088`, `Config` `:1679-1683`, the new `PolicyUnread` | — | the new `PinnedPolicy`, beside `WhyExhausted` `:1215-1224` |
+| `src_mcp/src/Server/StartupNotices.cs` | the new `SettingsUnread` | — | the new `PinnedPolicy(…)`, placed after `SettingsUnread`; neither edits the other or `Record` |
+| `src_mcp/src/Server/PanelServiceHost.cs`, `SettingsFile.cs`, `SettingsRead.cs` | all (§ S1.5.2) | — | — |
+| `src_mcp/src/Server/Escalations.cs` (`Withdraw`, `Restore`, the `Writer` seam) | all | — | — |
+| `src_mcp/src/Server/SessionStore.cs` | `:704` (the null-config path) | `RoundRecord.Note`'s summary, `:135` | — |
+| `src_mcp/src/Store/Schema.cs` | — | the step-16 remarks, `:470-479` (no SQL) | — |
+| `src_mcp/src/Store/RoundsDb.cs` | not edited (spec checklist 14) | not edited | not edited |
+| `src_mcp/src/Program.cs` | not edited (spec checklist 18) | — | all (instructions, help, the pinned-policy note's call) |
+| `src_mcp/src/Tools.cs` | — | `:103-104`, `:298-311` | `:341-348`, `:399-446` |
+| `src_mcp/core/Cadence/CadenceState.cs`, `RoundCommands.cs`, `FeatureSecondRound.cs`, `RoundAudit.cs`, `src_bench/CoaiBench/Running/RoundRunner.cs` | — | all | — |
+| `src_bench/CoaiBench/Running/SettingsApplied.cs` | all (N2) | — | — |
+| `AskGate.cs`, `ServerJsonContext.cs`, `FeaturesMode.cs` | — | — | all |
+| `research/module_tests.md` | its one row (spec commit 9) | a row of its own beside S1's, if it adds a flow | the same |
+| `research/module_server.md`, `research/module_core.md`, the four related plans | — | — | all (§ 9.3) |
+
+`TheGateSaysWhenToConsultTests.ReviewPlanNamesEveryVerdictTheMachineCanEmit` turns red the moment `NotReviewed`
+exists, so S2's verdict list in `Tools.cs` moves in the same commit. The stories run in order on one branch, so each
+starts from the previous one's commits and nothing is merged by hand but the AskGate slice.
 
 ## 7. E1.S1 — the stored policy and the hold's authority · `model: fable` (CORNERSTONE)
 
 Scenarios and brief: **Fable**, in
 [PLAN_auto_never_asks_a_person_E1_S1_spec.md](PLAN_auto_never_asks_a_person_E1_S1_spec.md) — its § S1.1 decides the
-seven inputs below (D1–D7) and folds the plan round's F0 and F1 (D8, D9). This section is the boundary only.
+seven inputs below (D1–D7), folds the plan round's F0 and F1 (D8, D9) and, revised to epoch 2 of the parent, inputs
+8–13 (D10–D15). This section is the boundary only.
 
-**What it builds.** Parent § 4.1 and § 4.3, § 8 steps 2 (the parsing half), 3, 4 and 6, and N2. Done-when items 4, 6
-and the security half of 8.
+**What it builds.** Parent § 4.1 and § 4.3 as revised for epoch 2, the release half of § 4.4's first row (which hold
+is which; the reply's words are S3's), § 6's three rules for a settings file that cannot be read, § 8 steps 2 (the
+parsing half), 3, 4 — with the tests added at the re-review — and 6, and N2. Done-when items 4, 6 and the security
+half of 8; the parent's § 13 item 4.
 
 **Inputs it must decide, each named here because the code makes it a trap:**
 
@@ -294,13 +388,54 @@ and the security half of 8.
    engine. A small class of its own (for example `src_mcp/src/Server/Rounds/SessionPolicy.cs`) keeps it out of the
    982-line `RoundEngine.cs`.
 
+**Added at the re-review for epoch 2 (2026-11-16)** — the parent's § 4.3 and § 6 as they now stand:
+
+8. **The released state.** `AwaitingResolve = true` and `AdvanceOnResolve = true`, always (the parent's entry 1.2).
+   A held round the caller already resolved has `AwaitingResolve == false` (`RoundMachine.cs:754-777`), and nothing
+   in S1 may advance a stage itself: `PanelService.Finish` (`PanelService.cs:1775-1810`) is the one path that closes
+   the cadence and records the decisions. An empty `resolve` is refused while findings are pending (`:1675-1682`).
+   The spec has `PanelService`-level tests that one `resolve` after a release advances exactly once in each of the
+   four stages, resolved before or not, with the decisions kept and the code stage's cadence closed.
+9. **The person's answer on file wins.** The release reads the hold's answer files before it withdraws anything and
+   AGAIN after the withdrawal; an answer found either time is applied as today and no release is written. The spec
+   has the race test: an answer written between the withdrawal and the second read. When the second read finds the
+   answer, the cards this call withdrew are put back as they were (`Escalations.Restore`, its D16) — its U3, settled
+   in the parent's § 4.3 (§ 10).
+10. **The note on the held round.** `Rounds[^1]` keeps its verdict and gains the release note, in the session file
+    and in `coai.db`. `RoundsDb.RecordRoundRow` is private, and `RecordRound` rewrites the whole row from a context
+    the release does not hold (`RoundsDb.cs:196-210`, `:849-933`) — the spec's writer is a one-column update,
+    `RoundNotes.Write` (its § S1.5.1); reported upstream as its U2 and settled in the parent's § 4.3 (§ 10).
+11. **What a review entry answers.** After a release, a sentence of its own in place of `Unresolved`; while a release
+    could not be written, "could not be written yet ({why}) — call again" in place of `GateHeld`. The engine has one
+    hold check for every review entry (`RoundEngine.cs:267-274`), and the fresh-document check its own `switch`
+    (`PanelService.cs:1152-1158`).
+12. **A settings read that failed.** `SettingsFile.TryRead` answers a malformed, empty or denied file as no values
+    (`SettingsFile.cs:110-128`), and the host records the stamp before its first read (`PanelServiceHost.cs:88-89`).
+    Such a read releases nothing and is not recorded: busy, then a readable `human` → `human`, nothing released; a
+    malformed file → nothing released until it is repaired or removed.
+13. **Who owns the startup note for such a read.** S1 owns everything that decides a release; the spec says whether
+    the note's words are S1's or S3's (it says S1's — its D15 — and S3 keeps the pinned-policy note of § 9.3).
+
 **Outputs S2 and S3 rely on:** C1–C5 of § 4, and nothing else. **What S1 does not do:** no verdict changes, no
-`ask_human` reply changes, no tool text, no `--features` entry.
+`ask_human` reply changes, no tool text, no `--features` entry. It does add words of its own, and only these: the
+two sentences a review entry answers for a hold from before `auto` (input 11) and the startup note of input 12.
+**Reported upstream by the spec, and settled in the parent the same day, neither counted as a change (§ 10):** U2 —
+the note reaches `coai.db` by a one-column update of `rounds.note` (`RoundNotes.Write`), so commits 6a and 7 wait for
+nothing; U3 — a Discuss, or words, found at the second read of input 9 gets the cards the release withdrew put back
+(`Escalations.Restore`), and such a hold is the person's and answers `GateHeld` as today.
+
+**Files it touches** (the spec's scope line; § 6 has who owns which lines): new `LegacyHold.cs`, `SessionPolicy.cs`
+and `src_mcp/src/Store/RoundNotes.cs`; changed `SessionState.cs`, `PanelSettings.cs`, `SessionStore.cs:704`,
+`Escalations.cs`, `SettingsRead.cs`, `SettingsFile.cs`, `PanelServiceHost.cs`, `StartupNotices.cs` (one method),
+`RoundEngine.cs`, `PanelService.cs`, `AskHumanService.cs:100-101`, `SettingsApplied.cs`, tests, and its row in
+`research/module_tests.md`. Not `Program.cs`, not `RoundsDb.cs`.
 
 ## 8. E1.S2 — the verdicts and their record · Opus brief, Sonnet code
 
-**What it builds.** Parent § 4.2 and the server half of § 4.5; § 8 step 1; the auto twin of step 2. Done-when 1 (S1–S3
-sites), 2 (all but the tool text of S3's paragraphs and the snippet), 3.
+**What it builds.** Parent § 4.2 and the server half of § 4.5; the cadence wording of § 4.3 (a released hold's epic
+reads as released by auto); § 8 step 1; the auto twin of step 2. Done-when 1 (S1–S3 sites), 2 (all but the tool text
+of S3's paragraphs and the snippet), 3 (the Serilog line and the note of a round that ran — the release's own Warning
+and note are S1's).
 
 ### 8.1 The change
 
@@ -349,8 +484,18 @@ sites), 2 (all but the tool text of S3's paragraphs and the snippet), 3.
    - `RoundCommands.MayProceed` (`RoundCommands.cs:16-17`): add `or RoundVerdict.NotReviewed`.
    - `RoundRunner.Passed` (`src_bench/CoaiBench/Running/RoundRunner.cs:30-31`): add `or "not_reviewed"`; its summary
      says "the four the server acts on".
-   - `CadenceState.cs:3-7`: the summary becomes "An epic whose code stage moved to done — the gate passed, or policy
-     auto proceeded without a review", and the `Verdict` param lists `not_reviewed` too. No logic changes.
+   - `CadenceState.cs:3-7` and `:48`. The verdict an epic is closed with is `Rounds[^1].Verdict` (§ 2), and after a
+     release of a hold from before `auto` that round keeps its verdict — `call_human`, or `escalated` — with the note
+     *"released by policy auto: this hold was raised by a build before auto"* (`LegacyHold.Note`, the parent's § 4.3);
+     the next `resolve` moves the code stage to done through `Finish` and the cadence records that verdict (the S1
+     spec's T57 pins the close, once). So the wording must not read it as a person's decision:
+     - `ClosedEpic`'s summary: *"An epic whose code stage moved to done — the gate passed, policy auto proceeded
+       without a review, or policy auto released a hold a build before auto had raised."*
+     - its `Verdict` param: *"The verdict of the round that moved its code stage to done: proceed, good_enough,
+       continue_anyway or not_reviewed — or call_human or escalated when policy auto released that round's hold (its
+       note says "released by policy auto"): such an epic was released by auto, not passed by a person's decision."*
+     - `IsClosed`'s summary: *"Whether an epic's code stage has moved to done."*
+     No logic changes, and no test of its own: nothing renders the stored verdict (§ 2), and S1's T57 pins the close.
    - `Tools.cs:103-104`: `verdict (proceed | revise | continue_anyway | good_enough | not_reviewed | call_human | escalated)`.
    - `Tools.cs:298-311` (`review_feature`): the second round's last two sentences become true under every policy —
      *"… or the person asks for one — through `ask_human` with `feature`, answered on their panel with 'Keep going —
@@ -426,9 +571,13 @@ red only because S1 made the default `auto` gets `human` pinned (§ 3).
 
 ## 9. E1.S3 — `ask_human` never blocks, the words, the features entry · Opus brief, Sonnet code
 
-**What it builds.** Parent § 4.4, the server items of § 4.6, § 4.7 (server), § 4.8's server documents, § 7's four
-boundary tables; § 8 steps 5, 7 (the features entry) and 8. Done-when 1 (S5, S6), 2 (the tool text), 3 (no question
-text in a log), 5, 7.
+**What it builds.** Parent § 4.4 — its first row's two held cases included (N3) — the server items of § 4.6, § 4.7
+(server), § 4.8's server documents, § 7's four boundary tables; § 8 steps 5, 7 (the features entry) and 8. Done-when
+1 (S5, S6), 2 (the tool text), 3 (no question text in a log), 5, 7. Every text it writes is true under every policy,
+and beside the two sentences S1 adds for a review entry after a release (`LegacyHold.ReleasedSentence` and
+`NotWrittenSentence`, the parent's § 4.3), which S3 quotes and never rewords. **Not S3's:** the startup note for a
+settings file that exists and could not be read — S1 words, writes and tests it (`StartupNotices.SettingsUnread`,
+called by `PanelServiceHost`; the spec's § S1.5.2 and D15).
 
 ### 9.1 The pure gate (may run beside S2 — § 6)
 
@@ -466,7 +615,7 @@ Break-it for #1: return `Batches(input)` instead of the auto table → #1 fails 
 
 ### 9.2 The service
 
-In `AskHumanService.AskHumanAsync` (`:85-108`), after S1's refreshed load:
+In `AskHumanService.AskHumanAsync` (`:85-108`), after S1's refreshed load (`release` and `session`, C4):
 
 ```csharp
 var autonomous = _settings.Rounds.IsAutonomous;      // the SETTINGS, not the session — C4
@@ -476,7 +625,8 @@ return AskGate.Decide(facts.Input) switch
 {
     AskDecision.Refused refused => Error(refused.Sentence),
     AskDecision.ConsultFirst first => ConsultFirst(first.Note),
-    AskDecision.Allowed when autonomous && facts.Input.Door == AskDoor.Card => AnsweredAtOnce(session!),
+    AskDecision.Allowed when autonomous && facts.Input.Door == AskDoor.Card
+        => AnsweredAtOnce(session!, release?.NotWritten ?? string.Empty),
     AskDecision.Allowed allowed => await AskedAsync(...),     // today's two doors
     _ => throw new InvalidOperationException("the union is closed"),
 };
@@ -492,7 +642,10 @@ card door (`AskGateDesk.cs:156-157`), so `session!` is safe there; say so in a c
   *"The person says: call the consultants — ask_consultants — talk it through, and come
   back to me only if the two of you did not settle it. Then call ask_human again with the consultId."*
   (Settled 2026-11-16, § 10 item 1: only `ask_consultants` is named, because only its id opens the door.)
-- **`AnsweredAtOnce(PersistedSession session)`**: on a held session, N3's reply (§ 5) and
+- **`AnsweredAtOnce(PersistedSession session, string notWritten)`**: on a held session, N3's reply (§ 5) for the
+  case the `Release` names — `notWritten` not empty → the "call again" reply, with
+  `_log.Information("question {Id} under policy auto: the {Stage} hold of session {SessionId} is from before auto and its release could not be written yet ({Why}) — answered at once: call again", …)`;
+  empty → the person's reply (its second sentence chosen by `LegacyHold.Stands(session.State)`), with
   `_log.Information("question {Id} under policy auto: the {Stage} hold of session {SessionId} is the person's — answered at once, pointing at its notice {Notice}", …)`.
   On a feature session in its request window (not held), `HumanAnswer("no_answer_yet", "", "", NoSecondRoundUnderAuto)`
   with the parent's sentence *"policy auto: a second feature round runs only on a ground the server finds; this
@@ -517,9 +670,13 @@ card door (`AskGateDesk.cs:156-157`), so `session!` is safe there; say so in a c
 | 6 | `AHoldThisBuildRaised_IsAnsweredAtOnce_PointingAtItsNotice` | auto settings; a held session saved with `Config = PanelConfig.Uniform(3, 2, StagePolicy.Human)` (a named policy: the marker is `false`), `HoldQuestions = ["n-1"]`; `EscalationBudget = 10 min` | returns in under 5 s (a `Stopwatch`); `status == "no_answer_yet"`; instruction contains "n-1" and "nothing was waited for"; `Cards(h) == 0`; the session still has `HumanGate` and `HoldQuestions == ["n-1"]` |
 | 7 | `AFeatureRequestWindow_IsToldTheServerDecides` | auto; a feature session, `RoundsRunThisStage = 1`, `SecondRound = None`, not held | `no_answer_yet`; instruction contains "runs only on a ground the server finds"; `Cards(h) == 0`; `RequestQuestions` empty |
 | 8 | `NoLogLineCarriesTheQuestion` (Theory: auto conversation; human conversation; human held card with a 300 ms budget) | the question `"Is sk-ant-api03-SECRETSECRETSECRET the right key?"` | the sink's lines contain the question id and never `SECRETSECRETSECRET` |
+| 9 | `AHoldFromBeforeAutoNotYetReleased_IsToldToCallAgain` | auto settings; a held session saved with a config that has NO marker (built as the S1 spec's tests build one, `autonomous: null`), `HoldQuestions = ["n-1"]` and its notice open; the session's claim held by the test (`SessionClaim.TryTake`) for the call; `EscalationBudget = 10 min` | under 5 s; `no_answer_yet`; instruction contains `LegacyHold.NotWrittenSentence(<stage>, LegacyHold.ClaimBusy)` and "call again", and not "the person's"; `Cards(h) == 0`; the session on disk still held with `HoldQuestions == ["n-1"]`. Then the claim disposed and the same call again: `consult_first` (S1 released the hold; not the card door) |
+| 10 | `AHoldFromBeforeAutoThePersonAnswered_IsThePersons` | #9's session, no claim held, an answer with words only written for `n-1` (as `TheAnswerBelongsToTheCurrentHoldTests` writes one) | under 5 s; `no_answer_yet`; instruction contains "the person has answered its notice" and "n-1", and not "call again"; `Cards(h) == 0`; the session still held |
 
 Break-it for #6: route the auto card door to `AskedAsync` → the call waits 10 minutes (the test's own timeout,
-`--timeout 2m` on the run, fails it) and a card appears. **Must stay green unchanged:** `AskHumanServiceTests`,
+`--timeout 2m` on the run, fails it) and a card appears. Break-it for #9 and #10: choose the case by
+`LegacyHold.Stands(session.State)` instead of the `Release`'s reason → #10 answers "call again" for a hold the person
+answered (the reason C4 keeps the `Release`). **Must stay green unchanged:** `AskHumanServiceTests`,
 `AskHumanScenarioTests`, `AQuestionIsTheGatesTests`, `TheAnswerBelongsToTheCurrentHoldTests`,
 `ThePersonAsksForASecondFeatureRoundTests` (pin `human` where S1's default reddens them, § 3).
 
@@ -528,39 +685,51 @@ Break-it for #6: route the auto card door to `AskedAsync` → the call waits 10 
 - **`Tools.cs:341-348` (`resolve`).** Open the paragraph with *"Under a policy that asks a person, a call_human
   verdict holds the gate; policy `auto` raises no hold, and `not_reviewed` and `good_enough` are resolved like
   `proceed`."* Keep "is not a decision", "refused while a gate is held" and "answer on the notice card" (pinned by
-  `TheServerSaysWhatOnlyTheRuleSaidTests:91-105`).
+  `TheServerSaysWhatOnlyTheRuleSaidTests:91-105`). Close it with the release, so a caller that meets S1's sentence
+  finds the same instruction here: *"Policy auto also releases a hold left by a build before auto, and every review
+  call then says so: call resolve — with your decisions, or none — and the stage advances, once."* (With findings
+  still pending, "none" is refused, as today — `PanelService.cs:1675-1682`; the sentence says "your decisions" first.)
 - **`Tools.cs:399-446` (`ask_human`).** Add one paragraph before *THE GATE'S QUESTION*: *"UNDER POLICY `auto` (the
   default of When the rounds run out) this call never waits and writes no card. Your own question without a
   `consultId` is answered `status: "consult_first"` — ask the consultants, settle it with them, and come back with
-  the consultId only if you did not. A held gate the person owns is answered `no_answer_yet` at once, naming its
-  notice."* Then qualify *"THIS CALL BLOCKS"* with *"under any other policy"*. Keep the phase-rule paragraph whole and
-  word for word, "15 minutes by default" and "expired" (`TheGateSaysWhenToConsultTests:143-177`). The reply list at
-  the end names four statuses: add `consult_first`.
-- **`Program.cs:2443-2466` (the instructions).** The text is 1,935 of 2,000 characters. This version is 1,983 and
-  keeps every pinned phrase; use it or one no longer:
+  the consultId only if you did not. A held gate is answered `no_answer_yet` at once: a hold the person owns names
+  its notice; a hold left by a build before auto that could not be released yet says why — call again."* Then
+  qualify *"THIS CALL BLOCKS"* with *"under any other policy"*, and the closing *"`no_answer_yet` means nobody was at
+  the keyboard: ask the person directly … and wait"* with *"under any other policy; under `auto` it comes at once,
+  and its instruction says what to do instead"*. Keep the phase-rule paragraph whole and word for word, "15 minutes
+  by default" and "expired" (`TheGateSaysWhenToConsultTests:143-177`). The reply list at the end names four
+  statuses: add `consult_first`.
+- **`Program.cs:2443-2466` (the instructions).** The text is 1,935 of 2,000 characters. This version is 1,995 (counted
+  as the raw string reads, LF line ends, 2026-11-16) and keeps every pinned phrase — "COMMANDS", "outrank", "empty
+  list", "Reject in round ONE", "converging", "call_human", "REFUSE", "does not clear it", "ENFORCED stop", "answer
+  on the notice card", "not any argument of yours", the protocol's tool names, and the closing "the `consult`
+  PROMPT."; use it or one no longer. Item 3 is true under every policy: `call_human` and its hold come only from a
+  policy that asks a person, and the one hold `auto` releases — one a build before `auto` raised — is released with
+  a sentence that says so (S1's two review-entry sentences); "a card for the gate's question" stays true, because a
+  gate's question is only ever a hold's notice card, which `auto` never writes and keeps for a hold the person owns.
 
   ```text
   ConnectOtherAIs: a review gate run by OTHER vendors' models over your plan and your code.
-  It is ADDITIONAL: run your own review exactly as you would have, and start both AT ONCE. A
+  It is ADDITIONAL: run your own review as you would have, and start both AT ONCE. A
   different vendor's model answers what your own is worst placed to answer; your reviewers read
   the change in context. A `call_human` verdict stops the SHIPPING, not the task.
   The protocol, in order: `open` a session for the repo+branch. `review_plan` sends the plan to
   every enabled provider; `resolve` records an accept/reject for EVERY finding (a rejection needs
   a reason). Repeat until the verdict is `proceed`, implement, then `review_code`, `resolve`,
-  fix — the same loop. `review_code` REFUSES until a plan round reached
-  `proceed`. `providers` says what is configured; `status` re-orients a resumed conversation;
+  fix — the same loop. `review_code` REFUSES until a plan round reached `proceed`.
+  `providers` says what is configured; `status` re-orients a resumed conversation;
   `ask_consultants`, then `ask_human`: a card for the gate's question, `ask_in_conversation` for yours.
-  Three rules, none of them optional:
+  Three rules:
   1. A reply can carry COMMANDS — a `commands` list from the operator's panel switches, with a
      preamble. They outrank your own defaults and are about HOW to work. Say which you applied.
      An empty list is the default, not a fault.
   2. Reject in round ONE, not when the rounds run out. Accepting to be agreeable stops the loop
      converging: each accepted finding rewrites the plan, so the next round is handed fresh text
      and the count never falls.
-  3. `call_human` comes only from a policy that asks a person; under the default `auto` a round
-     nobody reviewed says `not_reviewed`. It is an ENFORCED stop: `review_plan` and `review_code`
-     refuse while it stands and `resolve` does not clear it. Only an answer on the notice card
-     releases it — not any argument of yours.
+  3. `call_human` comes only from a policy asking a person; under the default `auto` an
+     unreviewed round says `not_reviewed`, and an older build's hold is released, saying so.
+     It is an ENFORCED stop: `review_plan` and `review_code` refuse while it stands and `resolve`
+     does not clear it. Only an answer on the notice card releases it — not any argument of yours.
   `consult` is for when YOU are stuck: an independent model reads this checkout read-only with its
   uncommitted diff and answers advice, not orders — verify it, then report back on the same
   consultationId. The person can ask for one themselves with the `consult` PROMPT.
@@ -578,18 +747,27 @@ Break-it for #6: route the auto card door to `AskedAsync` → the call waits 10 
   `StartupNotices` gains `PinnedPolicy(IReadOnlyList<UnrecognisedSetting>, Noticing, ILogger)` that logs each at
   Warning and offers it as `Unrecognised` does (`StartupNotices.cs:69-81`). Test in
   `TheStartupNotesAreWrittenDownTests` style: `human` in the process env → one note, subject `COAI_ON_EXHAUSTED`;
-  `auto`, absent and `nonsense` → none; the same value only in the settings file → none.
+  `auto`, absent and `nonsense` → none; the same value only in the settings file → none. This is the only startup
+  note S3 adds. The note for a settings file that exists and could not be read is S1's — another fact, on another
+  subject (the file's path), written by `PanelServiceHost` through `StartupNotices.SettingsUnread` (the spec's
+  § S1.5.2, D15); S3's method sits after it in `StartupNotices.cs`, does not call it, and its test does not assert it.
+  When both hold (an unreadable file and a policy in the process environment), each writes its own note.
 - **Documents.** `research/module_server.md`: replace the paragraph at `:2304-2305` ("Only the `human` policy raises
-  the gate") with the five policies and what each does at the three sites, `auto` first; add `auto` and the absent
-  meaning at `:1862`. `research/module_core.md`: add the auto outcomes to the feature flowchart and bullets at
+  the gate") with the five policies and what each does at the three sites, `auto` first, then the release of a hold
+  from before `auto` as built (the marker read before the stamp, the person's answer first, the notices before the
+  save, the note on the held round, one `resolve` to move on, a settings read that failed releases nothing); add
+  `auto` and the absent meaning at `:1862`; and, handed on by the S1 spec (§ S1.8), one paragraph in § *Persistence*:
+  `autonomous` absent is a meaning, not a default, and a release that renames it must keep reading the old name. `research/module_core.md`: add the auto outcomes to the feature flowchart and bullets at
   `:436-470`. The boundary table of the parent's § 7, shortened, in each of
   [PLAN_only_a_person_releases_the_gate.md](PLAN_only_a_person_releases_the_gate.md),
   [PLAN_a_signed_answer_releases_the_gate.md](PLAN_a_signed_answer_releases_the_gate.md),
   [PLAN_a_cancelled_review_stops_its_round.md](PLAN_a_cancelled_review_stops_its_round.md) and
   [PLAN_review_plan_again_after_proceed.md](PLAN_review_plan_again_after_proceed.md) — a boundary section, not a
   change to their scope (the both-sides rule). Run `plan-lifecycle.mjs` after.
-- **The CHANGELOG *Server* entry**: drafted in the PR description, with N4's paragraph (§ 5), the five values, and the
-  sentence that a value chosen before is reset by the NEXT extension, not by this server.
+- **The CHANGELOG *Server* entry**: drafted in the PR description, with N4's paragraph (§ 5), the five values, the
+  sentence that a value chosen before is reset by the NEXT extension, not by this server, one sentence on the release
+  of a hold an older server raised (released under Auto unless the person answered it, noted on its round), and one
+  on a settings file that exists and cannot be read (Auto by default, a note, nothing released until it reads).
 
 ### 9.4 The last commit of the epic
 
@@ -615,29 +793,67 @@ fixes, which rebase under it or come before it.
    consultants' `consultId`" that the desk accepts; the sentence now names only `ask_consultants` (parent and § 9 here).
    Both question consultants (consultation `8e8e4b7d…`) read it the same way; teaching the desk to accept a `consult` id
    would have been a contract change and is not done.
+2. **U1 — the released state (from the S1 spec).** Epoch 1's § 4.3 kept `AwaitingResolve` on release; a held round
+   the caller had already resolved has it `false`, so `AdvanceOnResolve` had nothing to consume it — a later non-auto
+   round advanced on a plain `resolve`, and a feature review held at its cap never closed. **Settled as a change: the
+   parent's entry 1.2** (contract), its second change, which stopped epoch 1 for the whole re-review. Epoch 2's § 4.3
+   fixes the released state at `AwaitingResolve = true, AdvanceOnResolve = true`, consumed by one `resolve` through
+   `PanelService.Finish`; C4 and § 7 input 8 here, the spec's D10, J11 and T19–T21, T56–T58 are written to it.
+3. **U2 — the writer of the note in `coai.db` (from the S1 spec).** The parent named `RoundsDb.RecordRoundRow`, which is
+   private; its one caller, `RecordRound`, rewrites the whole row, the reviewers and the findings from a `RoundContext`
+   the release does not hold. **Settled 2026-11-16 as a reference repaired, not a change:** what the parent asks — the
+   note in the round's existing `rounds.note`, no schema step, the findings not re-recorded — is unchanged; only the
+   named writer was wrong. The parent's § 4.3 now says *a one-column update*; the spec builds it as
+   `RoundNotes.Write` (§ S1.5.1). C4 and § 7 input 10 here.
+4. **U3 — the cards of an answer that raced (from the S1 spec).** A Discuss, or words, found at the second read is
+   applied as today and keeps the hold — but the release had just withdrawn its cards, so the person had nothing left
+   to press. **Settled 2026-11-16 in the parent as a non-change:** "applied as today" already includes the card the
+   person answers on, so restoring the withdrawn cards satisfies § 4.3 and requirement 4 ("unless the person answered
+   it first") as written; the parent's § 4.3 now says so in words, and the spec builds `Escalations.Restore` (D16).
+   Such a hold is the person's and answers `GateHeld` as today. C4, § 7 input 9 and N3's second row here.
 
 Settled here as a fix that satisfies the parent as written (not a change): N2–N4 (§ 5); the feature round-1 retry stays
 `revise` (§ 8.1, item 3); the second text-logging line `:229` (§ 2.1); the instructions trimmed to fit the 2,000
 budget (§ 9.3); the CHANGELOG entry written in the release PR (§ 5, N4); the auto wording of
-`FeatureSecondRound` (§ 8.1, item 4).
+`FeatureSecondRound` (§ 8.1, item 4). For epoch 2: N3's two held cases told apart by the `Release`'s reason, and S1's
+line at `AskHumanService.cs:100` keeping that `Release` (C4) — the parent's § 4.4, first row, as written, which
+`Stands` alone could not deliver once U3 left a person-answered hold from before `auto` standing; the cadence wording
+for a released hold (§ 8.1, item 4; the parent's § 4.2 and § 4.3); the startup notes split, S1's for a file that
+could not be read and S3's for a pinned policy (§ 9.3; the spec's D15).
 
 ## 11. Definition of Done for E1
 
-- [ ] S1's spec written by Fable and built; C1–C5 hold; N2's rows green.
+- [ ] S1's spec — written by Fable, revised to epoch 2 — built; T1–T67 each seen RED, GREEN and broken; C1–C5 hold as
+      edited (the spec's X1–X10 and this document's C4); N2's rows green.
 - [ ] Under `auto`, each of S1–S6 has a test, and none sets `HumanGate`, writes a notice or waits (parent done-when 1).
 - [ ] `not_reviewed` is known to the machine, `AnswerFor`, `FeatureSecondRound`, `MayProceed`, the bench, `CadenceState`'s
-      wording and `review_plan`'s list (done-when 2).
+      wording — which reads an epic closed on a released `call_human` as released by auto — and `review_plan`'s list
+      (done-when 2).
 - [ ] Every auto decision is a Serilog line (Warning for `not_reviewed` and a released hold), a session-file `note` and a
-      `coai.db` `rounds.note`; no log line carries a question's text (done-when 3).
-- [ ] A legacy hold is released by whichever of begin, `resolve`, `status`, `ask_human` and `HeldSentence` comes first,
-      one test each, its notices withdrawn; a hold this build raised under `human` is not, and
-      `resolve(humanDecision: "proceed")` is still refused on it (done-when 4).
+      `coai.db` `rounds.note` — the release's note on the held round by a one-column update; no log line carries a
+      question's text (done-when 3).
+- [ ] A legacy hold is released by whichever of begin, `resolve`, `status`, `ask_human` and the fresh-document check
+      (`HeldSentence`'s caller) comes first, one test each — including a legacy hold first loaded and saved under
+      `human`, then `auto`; logged; its notices withdrawn BEFORE the release is saved; the release noted on the held
+      round, in the session file and in `coai.db`. A withdrawal that fails, a save that fails and a busy claim each
+      leave the session held and unchanged on disk, and the next load releases it. Then ONE `resolve` through
+      `PanelService` advances the stage exactly once in each of the four stages, whether the held round had been
+      resolved or not, the decisions recorded before survive, and the code stage's cadence closes. The person's answer
+      on file wins, read again after the withdrawal (the race test), and the withdrawn cards are put back when it is
+      found. A review entry answers the release's own two sentences, never `Unresolved` or `GateHeld` for such a hold.
+      An existing but unusable settings file runs `auto`, writes its startup note, and releases nothing until it
+      reads. A hold this build raised under `human` is not released, and `resolve(humanDecision: "proceed")` is still
+      refused on it (done-when 4; the parent's § 13 item 4 and § 8 step 4).
 - [ ] `ask_human` never waits under `auto`: `consult_first`, `ask_in_conversation` with an accepted id or when no
-      consultant can be had, N3's reply on a kept hold (done-when 5) — after § 10 item 1 is settled.
+      consultant can be had, and N3's reply on a held gate — the person's for a hold this build raised or a hold from
+      before `auto` the person answered, "call again" for a hold from before `auto` whose release could not be written
+      yet — each with its test (done-when 5).
 - [ ] A session file passes an older build's load and save with `autonomous` absent, `false` and `true` (done-when 6).
 - [ ] `onExhaustedAuto` is the last commit (done-when 7).
 - [ ] Under `human`, the existing hold suites pass with their assertions unchanged; every test that needed `human`
       pinned is listed in the PR (done-when 8).
+- [ ] The server instructions and every tool text S3 changes are true under every policy, beside S1's two
+      review-entry sentences; the instructions fit 2,000 characters with every pinned phrase.
 - [ ] Release build and both suites green; `dotnet format` clean; `plan-lifecycle.mjs` clean; the docs, the four
       boundary tables and the CHANGELOG draft are in the PR. Then the epic's code review, merge, `mcp-v*` release —
       reported as committed / built / released / running.
