@@ -1524,7 +1524,7 @@ coai's flags wrote a file inside its `--add-dir` root on Windows and in WSL
 ([RESULTS_agy_searches_through_coai.md](RESULTS_agy_searches_through_coai.md) §3). That is a defect of every agy launch,
 not of the reader — coai's reader only reads — and it is closed by
 [PLAN_agy_cannot_write_its_roots.md](PLAN_agy_cannot_write_its_roots.md) (2026-10-09): every agy launch runs as
-the `coai-reader` agent (`tools: [view_file]`) behind a hook that allows only `view_file` and `read_file` (agy 1.5.9's name for it — RESULTS_agy_read_file.md), from a folder coai owns
+the `coai-reader` agent (`tools: [view_file]`) behind a hook that allows only `view_file` and `read_file` (agy 1.5.9's name for it — RESULTS_agy_read_file.md), and only inside the granted roots (2026-11-16, RESULTS_agy_read_file.md §6), from a folder coai owns
 (`AntigravityReadOnly`, [module_runners.md](module_runners.md)). For this section that changes three things: a question
 row and a consultation no longer run FROM the root or the checkout (they reach it through `--add-dir`); the consult
 prompt names the checkout by its path (`ConsultantPromptInput.Checkout`) and the consultant check names `CHECK.md` by
