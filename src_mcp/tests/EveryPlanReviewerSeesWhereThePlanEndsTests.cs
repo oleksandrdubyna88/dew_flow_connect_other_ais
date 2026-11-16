@@ -55,6 +55,7 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
     private PanelService TwoVendors() =>
         ServiceFor(Defaults() with
         {
+            Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
             Providers = [new("codex") { ExecutablePath = FakeCliExe }, new("gemini") { ExecutablePath = FakeCliExe }],
         });
 
@@ -306,7 +307,7 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
         // T19, the fold half, as decided on the cadence consultation: a reviewer that says the plan did not reach it did
         // not review the plan, so its other findings are set aside — and the reviewer line says how many.
         Script(Answer(TokenFinding(Id), RealFinding, OtherFinding), Answer(TokenFinding(Id), RealFinding, OtherFinding));
-        var service = ServiceFor(Defaults());
+        var service = ServiceFor(Defaults() with { Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human) });
         await service.OpenAsync(_repo, "feature");
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", Plan, TestContext.Current.CancellationToken));
@@ -322,7 +323,7 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
         // The defect: two copies stayed an `Ok`, counted as answered, and under the plan threshold the round proceeded
         // with no review at all.
         Script(Answer(TokenFinding(Id), TokenFinding(Id)), Answer(TokenFinding(Id), TokenFinding(Id)));
-        var service = ServiceFor(Defaults());
+        var service = ServiceFor(Defaults() with { Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human) });
         await service.OpenAsync(_repo, "feature");
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", Plan, TestContext.Current.CancellationToken));
@@ -335,7 +336,7 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
     public async Task ATokenForAnotherPlanBesideRealFindings_IsAnAnswer_AndMerged()
     {
         Script(Answer(TokenFinding("0000000000000000"), RealFinding), Answer(TokenFinding("0000000000000000"), RealFinding));
-        var service = ServiceFor(Defaults());
+        var service = ServiceFor(Defaults() with { Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human) });
         await service.OpenAsync(_repo, "feature");
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", Plan, TestContext.Current.CancellationToken));

@@ -71,6 +71,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     {
         var settings = new PanelSettings
         {
+            Rounds = new PanelConfig(OnExhausted: StagePolicy.Human),
             DataDir = _data,
             Providers = [],
             EscalationBudget = budget ?? TimeSpan.FromMilliseconds(300),
@@ -102,7 +103,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     /// <summary>A session whose plan has proceeded — the phase every question after the plan round is asked in.</summary>
     private void Proceeded(Harness h, string plan = "", string epic = "", Stage stage = Stage.CodeReview) =>
         h.Sessions.Save(new PersistedSession(
-            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2)) { PlanProceeded = true, Stage = stage }, [])
+            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2, StagePolicy.Human)) { PlanProceeded = true, Stage = stage }, [])
         {
             Plan = plan,
             Epic = epic,
@@ -116,7 +117,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     /// </summary>
     private void Held(Harness h) =>
         h.Sessions.Save(new PersistedSession(
-            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2)) { PlanProceeded = true, HumanGate = true, Stage = Stage.CodeReview }, []));
+            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2, StagePolicy.Human)) { PlanProceeded = true, HumanGate = true, Stage = Stage.CodeReview }, []));
 
     /// <summary>The cards in front of the person — none at all when the directory was never made.</summary>
     private static int Cards(Harness h) =>

@@ -291,7 +291,7 @@ public sealed class McpContractTests : IDisposable
     /// <summary>A held gate on the path the two card tests ask about — the session a <c>call_human</c> leaves behind.</summary>
     private void HeldGateAtNowhere() =>
         new CoaiMcp.Server.SessionStore(_data).Save(new CoaiMcp.Server.PersistedSession(
-            new CoaiMcp.Core.Rounds.SessionState("s-held", "D:/nowhere", "main", CoaiMcp.Core.Rounds.PanelConfig.Uniform(3, 2)) { HumanGate = true }, []));
+            new CoaiMcp.Core.Rounds.SessionState("s-held", "D:/nowhere", "main", CoaiMcp.Core.Rounds.PanelConfig.Uniform(3, 2, CoaiMcp.Core.Rounds.StagePolicy.Human)) { HumanGate = true }, []));
 
     /// <summary>
     /// The AI's own question, over the real wire: no card, no wait — the reply tells it to ask in its own conversation

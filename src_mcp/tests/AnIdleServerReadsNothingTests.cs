@@ -92,7 +92,7 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
         var store = new SessionStore(_data);
         Saved(store, "b1", holding: "h1");
         store.Save(new PersistedSession(
-            new SessionState("s-req", "D:/repo", "b2", PanelConfig.Uniform(3, 2)) { RequestQuestions = ["r1"] }, []));
+            new SessionState("s-req", "D:/repo", "b2", PanelConfig.Uniform(3, 2, StagePolicy.Human)) { RequestQuestions = ["r1"] }, []));
 
         var held = store.HeldQuestions();
 
@@ -202,6 +202,7 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
     {
         var settings = new PanelSettings
         {
+            Rounds = new PanelConfig(OnExhausted: StagePolicy.Human),
             DataDir = _data,
             CodeWorkspace = "none",
             Providers = [new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "m" }],
@@ -223,7 +224,7 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
     private static PersistedSession Saved(SessionStore store, string branch, string holding)
     {
         var session = new PersistedSession(
-            new SessionState($"s-{branch}", "D:/repo", branch, PanelConfig.Uniform(3, 2))
+            new SessionState($"s-{branch}", "D:/repo", branch, PanelConfig.Uniform(3, 2, StagePolicy.Human))
             {
                 HoldQuestions = holding.Length > 0 ? [holding] : [],
             },

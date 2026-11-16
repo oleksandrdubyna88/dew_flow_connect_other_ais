@@ -68,7 +68,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
             Providers = [new("codex") { ExecutablePath = Exe, Feature = true, Enabled = providerEnabled },
                 .. secondRow is null ? Array.Empty<ProviderSettings>() : [secondRow]],
             SecurityLane = lane,
-            Rounds = (rounds ?? new PanelConfig()) with { SecurityLane = lane.Gate },
+            Rounds = (rounds ?? new PanelConfig(OnExhausted: StagePolicy.Human)) with { SecurityLane = lane.Gate },
             ReviewerTimeout = TimeSpan.FromSeconds(15),
             RoundTimeout = roundTimeout,
             CodeWorkspace = "none",
@@ -292,7 +292,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     {
         var lane = Lane("""{"enabled":true,"maxRounds":2,"prompts":[{"id":"redteam-general"}],"runs":[{"vendor":"codex","prompt":"redteam-general"}]}""");
         using var answer = JsonDocument.Parse(await RunFeature(
-            Service(failOrdinary: true, laneSetting: lane, rounds: PanelConfig.Uniform(1, 5))));
+            Service(failOrdinary: true, laneSetting: lane, rounds: PanelConfig.Uniform(1, 5, StagePolicy.Human))));
         answer.RootElement.TryGetProperty("error", out _).Should().BeFalse(answer.RootElement.ToString());
         answer.RootElement.GetProperty("verdict").GetString().Should().Be("call_human",
             "the operator gave the ordinary feature roles one round, and the lane's own budget is not theirs to spend");
@@ -321,7 +321,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     public async Task A_feature_round_admitted_for_a_lane_finding_with_no_lane_work_is_recorded_not_refused()
     {
         var lane = Lane("""{"enabled":true,"runs":[{"vendor":"codex","prompt":"redteam-sql"}]}""");
-        var service = Service(laneSetting: lane, rounds: PanelConfig.Uniform(1, 5));
+        var service = Service(laneSetting: lane, rounds: PanelConfig.Uniform(1, 5, StagePolicy.Human));
         using var answer = JsonDocument.Parse(await RunFeature(service, roundsRun: 1, ground: SecondRoundGround.BlockingFinding,
             files: [new("Fixed.cs", "@@ -1 +1 @@\n-old\n+return 42;")]));
         answer.RootElement.TryGetProperty("error", out _).Should().BeFalse(answer.RootElement.ToString());

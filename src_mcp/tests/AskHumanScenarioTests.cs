@@ -71,7 +71,7 @@ public sealed class AskHumanScenarioTests : IAsyncLifetime
     {
         // The plan has proceeded: the phase every question after the plan round is asked in.
         new SessionStore(_data).Save(new PersistedSession(
-            new SessionState("s-scenario", _repo.Path, "main", PanelConfig.Uniform(3, 2)) { PlanProceeded = true, Stage = Stage.CodeReview }, []));
+            new SessionState("s-scenario", _repo.Path, "main", PanelConfig.Uniform(3, 2, StagePolicy.Human)) { PlanProceeded = true, Stage = Stage.CodeReview }, []));
         using var server = StdioServer.Start(_data, "debug", 1,
             ("COAI_QCONSULT_ROWS", Rows), ("COAI_QCONSULT_MODE", "require"), ("COAI_QCONSULT_ROW_MINUTES", "1"));
         try

@@ -25,11 +25,11 @@ public sealed class AFeatureSessionIsKeptApartTests
     private const string Plan = "todo/PLAN_feature_review.md";
 
     private static SessionState Fresh(Stage stage = Stage.PlanReview) =>
-        new("s1", "/repo", "main", PanelConfig.Uniform(3, 5)) { Stage = stage };
+        new("s1", "/repo", "main", PanelConfig.Uniform(3, 5, StagePolicy.Human)) { Stage = stage };
 
     /// <summary>A feature session: the same state, under the feature branch, carrying its plan.</summary>
     private static SessionState Feature(Stage stage = Stage.FeatureReview) =>
-        new("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(3, 5)) { Stage = stage, Feature = Plan };
+        new("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(3, 5, StagePolicy.Human)) { Stage = stage, Feature = Plan };
 
     // ---------- the key ----------
 
@@ -261,7 +261,7 @@ public sealed class AFeatureSessionIsKeptApartTests
     // ---------- the store, the claim and the record ----------
 
     private static PersistedSession FeatureFile(string repo, string plan = Plan) =>
-        new(new SessionState("f1", repo, SessionKey.FeatureBranch, new PanelConfig()) { Feature = plan, Stage = Stage.FeatureReview }, [])
+        new(new SessionState("f1", repo, SessionKey.FeatureBranch, new PanelConfig(OnExhausted: StagePolicy.Human)) { Feature = plan, Stage = Stage.FeatureReview }, [])
         {
             OpenedUtc = DateTime.UtcNow,
             PlanText = "# the plan",

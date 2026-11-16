@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 public sealed class SecurityLaneBudgetTests
 {
     private static readonly PanelConfig OneOrdinaryRoundTwoLaneRounds =
-        PanelConfig.Uniform(1, 5) with { SecurityLane = new RoleGate(2, 0, true) };
+        PanelConfig.Uniform(1, 5, StagePolicy.Human) with { SecurityLane = new RoleGate(2, 0, true) };
 
     private static SessionState FeatureRoundOne() =>
         new("feature", "repo", SessionKey.FeatureBranch, OneOrdinaryRoundTwoLaneRounds)
