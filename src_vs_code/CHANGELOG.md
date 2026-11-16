@@ -1,5 +1,19 @@
 # Changelog
 
+## Team server 0.16.3 — 2026-11-16
+
+**Fixed: a Team-server Antigravity reviewer can read only inside its own job's folder.** The Team server answers agy's
+tool-call hook with its own binary (`coai-server --agy-hook`) and the same library as coai-mcp. It therefore gets the fix
+in Server 0.65.4 below (#1006). Every job's folder on the server is a `/tmp/coai-server-job-*` folder, and agy lets a
+reader reach `/tmp` outside its roots. Until now, an agy reviewer in one job could read another job's folder by an
+absolute path, by `..`, or through a link. The hook now resolves the path and allows a reader only inside the job's
+granted folder. Every other read is denied with `coai: this consultation reads only inside the folders it was given`.
+
+**Not changed:** the tool-name rule (only `read_file` and `view_file` run), agy's own checks, and the server's routes.
+The limits are those of Server 0.65.4 below. The Windows gaps there do not apply to a Linux server.
+
+**Rollback:** re-dispatch `deploy-server.yml` with 0.16.2. That version allows a reader by name alone again.
+
 ## Server 0.65.4 — 2026-11-16
 
 **Fixed: an Antigravity consultant or reviewer can read only inside the folders it was given (#1006).** Until now coai's read-only hook allowed `read_file` and `view_file` by name alone, and agy lets a reader reach `/tmp` outside its roots. On 2026-11-16 a consultant read a marker file under `/tmp` outside its granted folder by an absolute path, by `root/../outside/x`, and through a link inside the folder: 3 of 3. On the Team server every job's folder is under `/tmp`, so one job's reviewer could read another job's files. The hook now looks at the path. It follows links and `..`, and it allows the read only when the real path is inside a granted folder and outside the folder coai keeps for the hook. A relative path, a missing field or any path it cannot resolve is denied. The reason is `coai: this consultation reads only inside the folders it was given`, and it never repeats the path. The Team server answers the hook with its own binary and the same library, so it gets this with its next release.
