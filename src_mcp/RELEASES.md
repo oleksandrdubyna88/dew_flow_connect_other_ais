@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.65.3...mcp-v0.65.4) (2026-11-16)
+
+
+### Bug Fixes
+
+* **mcp:** the agy read-only hook allows a reader only inside the folders it was given ([#1006](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1006)) ([2c84a46](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2c84a462415ad091f18a2e70581056e6eaf12cdf))
+
 ## [0.65.3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.65.2...mcp-v0.65.3) (2026-11-15)
 
 
