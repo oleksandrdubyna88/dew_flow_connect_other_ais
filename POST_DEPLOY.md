@@ -19,7 +19,26 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-12 · extension **0.87.0** (released: `extension-v0.87.0` on 4efa0a90, release run 43268314149,
+Last verified: 2026-11-12 · server **0.16.0** deployed (run 43032711575) — the box served 0.15.0 before the deploy and
+serves 0.16.0 after it · mcp **0.65.1** unchanged · extension **0.87.0** as the target, released by another session (its
+record is that session's). Before the deploy, both host credentials were tested on the box in one call: the canary token
+was accepted by https://coai.remsoft.dev, and `claude -p` with the claude slot's own environment and `claude.token`
+answered `OK`. The deploy's canary ran one real review per configured vendor: `codex: done`, `antigravity: done`,
+`claude: done`; the rollback step was skipped. Run locally:
+`MCP_VERSION=0.65.1 SERVER_VERSION=0.16.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.87.0`. The
+first run, minutes after the extension's publish, printed `FAIL 2 — marketplace serves 0.86.0` (the Marketplace's own
+delay; it served 0.87.0 at 17:34 UTC) and every other automated item PASS. The second run, 17:35 UTC, printed `PASS 1 —
+all six RIDs present`, `PASS 2 — marketplace serves 0.87.0`, `PASS 6` (the row labelled 7, "up but refuses everything";
+the checker numbers rows by position) — client-config 200 and the catalog 401 without a session, the expected answer,
+`PASS 9 — all six RIDs present` and `PASS 10 — 200 {"ok":true,"version":"0.16.0"}`, and ended "every automated item
+passed". By the table's labels: manual item **11 observed** on the deploy's canary above; manual items 3, 4, 5, 6, 8
+and 12 were not run. Item 8's own check — `/api/catalog` with a session, every vendor reporting a version — was not
+made; the canary's three `done` reviews show the vendors started, which is the failure item 8 names, but not by its
+check (the checker prints the row labelled 8 as 7). In this release: #945 only (test infrastructure). Beside it, not an item of this file: the
+ingest server **bugs 0.6.0** was deployed the same day (run 43269085878) — the host's canary said the service answers
+`/health` and opens its database, `live: 0.6.0`, and https://bugs.remsoft.dev answered `/health`.
+
+Also verified: 2026-11-12 · extension **0.87.0** (released: `extension-v0.87.0` on 4efa0a90, release run 43268314149,
 its `extension` job green with "Publish to the Marketplace" at 17:23 UTC; every other job skipped, as on an
 extension-only tag) · mcp **0.65.1** unchanged · server **0.16.0** served by the box. Run locally:
 `MCP_VERSION=0.65.1 SERVER_VERSION=0.16.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.87.0`. The

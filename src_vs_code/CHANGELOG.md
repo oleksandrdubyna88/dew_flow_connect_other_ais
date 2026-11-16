@@ -1,5 +1,33 @@
 # Changelog
 
+## Team server 0.16.2 — 2026-11-15
+
+**Fixed: Antigravity reviewers on a Team server can read files again.** The Team server answers agy's tool-call hook with its own binary (`coai-server --agy-hook`) and the same library as coai-mcp. It therefore gets the fix in Server 0.65.3 below: on agy 1.5.9 the hook allows `read_file` as well as `view_file`, and still denies every other tool (#995). coai.remsoft.dev's agy updated itself to 1.5.9 on 2026-11-15, so on 0.16.1 every read by an Antigravity reviewer there was denied. A server test pins the hook as the built server answers it (#999). No route or server source changed.
+
+**Rollback:** 0.16.1 denies every Antigravity read on agy 1.5.9.
+
+## Server 0.65.3 — 2026-11-15
+
+**Fixed: Antigravity consultants and reviewers can read files again.** agy updated itself to 1.5.9 on 2026-11-14, and since then it offers the model its read tool as `read_file`, not `view_file`. coai's read-only hook allowed only `view_file`, so it denied every read: 4 of 4 runs on two models found nothing to read. To the person this looked like a size limit. The hook now allows exactly `view_file` and `read_file`, and still denies every other tool. On agy 1.5.9 a 307 KB file was read to the end with both markers found in 4 of 4 runs (gemini-4-argon-low ×2, gemini-4-hydrogen-low ×2). The write-block probe wrote nothing in any of 15 attempts (#995).
+
+**Not changed:**
+- agy reads at most 45 KiB or 800 lines per call, so a large file is read in pieces.
+- agy itself allows reads under `/tmp` outside the granted roots. The hook does not check paths, and a path check is a follow-up (research/RESULTS_agy_read_file.md §3).
+
+**Rollback:** 0.65.2 denies every read on agy 1.5.9.
+
+## Server 0.65.2 — 2026-11-13
+
+**Fixed: an Antigravity reviewer's answer is the one the CLI checked.** agy 1.5.8, run with the review's answer schema, adds a second turn that reminds the model to answer in that shape, and its `response` field then holds the text of every turn one after another. On 2026-11-13 that was two copies of the answer in each of 4 local runs (gemini-4-hydrogen-low ×2, gemini-3.8-flash-low ×2) and four copies in one review on the Team server. coai read the first copy, which is the model's answer before the reminder. It now reads `structured_output`, the single answer agy checked against the schema, and reads `response` as before when there is no such object: an older agy, and a consultation, which runs without a schema (#990).
+
+**Not changed:** the reminder turn is agy's own, so a review through agy 1.5.8 still costs a second model call.
+
+**Rollback:** 0.65.1 reads `response` and takes the first copy, as before.
+
+## Team server 0.16.1 — 2026-11-13
+
+**Fixed: an Antigravity job's answer is the one the CLI checked.** The Team server reads agy's answer through the same library as coai-mcp, so it gets the fix in Server 0.65.2 above: one copy of the answer instead of the first of up to four (#990). A server test pins it for a Team-server job (#991). No route or server source changed.
+
 ## Extension 0.87.0 — 2026-11-12
 
 **Added: a `Creds:` terminal reads its Claude session on the other machine.** In a terminal called `Creds: <host> / <session>`, the overflow menu (the three dots) of the terminal panel has **CoAI: take the question** and **CoAI: add the question**. They read the Claude session that runs in tmux session `<session>` on `<host>` over ONE ssh call, and put the question that waits there in the chat of that terminal. **Asked** in a chat from such a terminal shows what you wrote in that remote session. Every other terminal stays as in 0.86.0: it gives only what you copied.

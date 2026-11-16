@@ -44,7 +44,7 @@ C4Container
   Rel(mcp, vibe, "spawn in a sanitised snapshot (the round's, the conversation's, a question row's), a built environment and a coai-owned home checked before every launch")
   Rel(mcp, codex, "consult — one turn in the LIVE checkout, read-only, resumable")
   Rel(mcp, gem, "spawn as the coai-reader agent (tools: view_file), plan mode, from the read-only folder")
-  Rel(gem, mcp, "--agy-hook child before every tool call: allow view_file, deny the rest")
+  Rel(gem, mcp, "--agy-hook child before every tool call: allow view_file or read_file (agy 1.5.9), deny the rest")
   Rel(mcp, creds, "creds --help probe, then creds config - with the key on stdin, once per start, in the background")
   Rel(mcp, ext, "loopback: settings, round events, escalation")
   Rel(dev, ext, "configures, answers escalations")
