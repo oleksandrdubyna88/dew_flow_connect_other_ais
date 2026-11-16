@@ -1,9 +1,11 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **stopped for re-review, 2026-11-16 — the second change after approval (entry 1.2) was accepted while E1.S1's
-> spec was written; no code on any epic until the whole plan is reviewed again. The whole plan was revised the same day
-> (§ *Re-review for epoch 2*: consulted, the done work sorted by an Opus judge, nothing cut, `Narrowed: no`); it waits
-> for re-approval through the gate.** Before the stop: **plan only, nothing implemented yet, 2026-11-16 — plan round 1 `proceed` (2 of 2, gating 6 of 6), its findings folded in (§ 12); split into three epics E1–E3 the same day (§ Epics), stories documents written when each epic starts.** Scope: a fifth value `auto` for *When the rounds run out*
+> Status: **epoch 2 open, 2026-11-16 — re-approved by the gate the same day (the interim document review of the whole plan,
+> `proceed`, 4 of 4 reviewers; four findings folded, one rejected with its reason in § 4.3). Epoch 1 stopped at its second
+> change (entry 1.2), accepted while E1.S1's
+> spec was written, and halted all code until the whole plan was reviewed again. The whole plan was revised the same day
+> (§ *Re-review for epoch 2*: consulted, the done work sorted by an Opus judge, nothing cut, `Narrowed: no`); E1
+> resumes from its stories document and spec, revised to this epoch.** Before the stop: **plan only, nothing implemented yet, 2026-11-16 — plan round 1 `proceed` (2 of 2, gating 6 of 6), its findings folded in (§ 12); split into three epics E1–E3 the same day (§ Epics), stories documents written when each epic starts.** Scope: a fifth value `auto` for *When the rounds run out*
 > (`coai.onExhausted` / `COAI_ON_EXHAUSTED`), the default for every installation including choices made before; the
 > round machine's three `call_human` sites, the begin/resolve hold readers and `ask_human` in `src_mcp`; the setting, its
 > one-time migration, the env block and the rounds-log page in `src_vs_code`; the shared gate snippet in
@@ -17,7 +19,7 @@
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-16 · by reviewers · state: stopped
+> Epoch 1 · approved 2026-11-16 · by reviewers · state: closed
 
 - 1.1 · 2026-11-16 · agent · epics, build-order — the gate's operator command split the three PRs into epics E1–E3
   (Fable, after the question consultants); notes N1–N5 and the § 4.3/§ 4.4/§ 4.7 wording repairs satisfy the plan as written.
@@ -37,6 +39,8 @@ Narrowed: no — DoD item 4 and § 8 step 4 grew; scope, goals, merge conditions
 | the stop record, entry 1.2, 025673d5 | docs/plan-auto-mode, pushed | fits | kept |
 | E1 stories document, 1f0ae332 | feat/auto-mode-e1, pushed | fits | revised in place after re-approval (§ 4.3, N3, C4) |
 | E1.S1 cornerstone spec, 4cab5375 | feat/auto-mode-e1, pushed | fits | revised in place after re-approval (U1 settled, the note, the tests) |
+
+> Epoch 2 · approved 2026-11-16 · by reviewers · state: open
 
 ## 1. What the owner asked for (2026-11-16)
 
@@ -109,7 +113,10 @@ Under `auto` (the default):
    Information for the rest) beside the round's existing `Closing` line; the round's `note` in the session file and
    `coai.db`; and the rounds-log page, which shows the note for every round that has one.
 7. **Everyone is on `auto` after upgrading** (O1): the panel default, the server's absent-key default, a one-time
-   migration of saved values (§ 4.6), and sessions that pick the policy up on their next begin (§ 4.1).
+   migration of saved values (§ 4.6), and sessions that pick the policy up on their next begin (§ 4.1). **The one
+   exception is open question Q1**: a value a repository commits in its `.vscode/settings.json` is the team's file, not
+   the person's saved choice; it is not edited, it stays in force, and the gate section names it. Until the owner
+   decides Q1, "everyone" means every saved choice of the person's own — user settings and every side's overlay.
 
 Under every other value nothing changes — `human`, `continue`, `good_enough` and `escalate` keep today's behaviour,
 including S1 and S2 calling a person. And in every mode:
@@ -227,9 +234,14 @@ written (a busy claim, a failed withdrawal or save), the entry answers *"policy 
 raised by a build before auto; the release could not be written yet ({why}) — call again"*, never `GateHeld`, whose
 words say a person must decide.
 
-**A person's answer on file wins.** The release runs only when the hold's notice has no answer on file; an answer the
-person already gave (Proceed, Continue, Fix, Discuss) is applied as today (`ApplyAnyHumanDecision`), and auto does not
-override it.
+**A person's answer on file wins** (the re-review gate, finding 2). The release runs only when the hold's notice has no
+answer on file; an answer the person already gave (Proceed, Continue, Fix, Discuss) is applied as today
+(`ApplyAnyHumanDecision`), and auto does not override it. The race — an answer written after the check and before the
+withdrawal — is closed by reading again: the release (1) withdraws the cards, after which the extension no longer
+offers them; (2) reads each card's answer file AGAIN; (3) if an answer is now on file, applies it as today and writes
+no release; otherwise saves the release. An answer written after step 2 is to a card already withdrawn, which the
+extension does not offer. A test writes the answer between the withdrawal and the second read, and asserts the
+person's decision is applied and no release note is written.
 
 **Residuals of the order, written down.** A card an older build wrote but never recorded on the session is not
 withdrawn; the retention removes it seven days after it was asked. If one of several cards was withdrawn and the save
@@ -244,7 +256,10 @@ is `auto`, this build reads that hold as one from before the upgrade and release
 hold raised under `human` by this build, a save by a build older than 0.63.0, and a later switch to `auto`. The release
 is still logged as a Warning and its notice withdrawn, like every other. This plan does not close it. The opposite mix
 fails closed: a build that has the bag keeps the member, so a hold it raises on a file this build stamped stays the
-person's.
+person's. *Why it is accepted, not closed (the re-review gate, finding 0, rejected):* every build older than 0.63.0
+also predates the refusal of the AI's own claim (`ClaimRefusal`, first released in `mcp-v0.64.0`), so such a server
+releases ANY hold on `resolve(humanDecision: "proceed")` from the gated agent itself; with it in the loop the hold has
+no authority left to protect, and no member this build writes survives a build without the bag.
 
 ### 4.4 `ask_human` under `auto` (O3)
 
@@ -284,7 +299,9 @@ string and asserts it is absent from the log file). The existing `InTheConversat
   (`config.update(key, undefined, Global)`) and from every per-side overlay (`seedOverlay` froze `'human'` into overlays
   of people who never chose it — `settingsShape.ts:404-414`, `sideSettings.ts:95`), then one non-modal notification:
   *"When the rounds run out is now Auto — the gate never holds or waits for you; it logs and moves on. Your AI may still ask you a question its consultants could not settle. Change it in Reviews › The gate."*
-  It runs after the settings mirror is set up, so the server file is rewritten by the ordinary change listener.
+  It runs after the settings mirror is set up and, because overlays are written with `globalState.update` (no configuration
+  change fires), it calls `mirrorSettings` itself once every clear succeeded and BEFORE it writes its marker, so an
+  interrupted run is mirrored by the run that resumes it (N7).
   Workspace-scoped values are NOT edited — see Q1.
 - **The env block** (`settingsShape.ts:551-553`) reads the binary's features (the fifth `envBlock` parameter, as
   `consultantsEnv` does):
@@ -381,8 +398,14 @@ violation while the panel writes it) also gives no values, and the host records 
 (`PanelServiceHost`), so nothing re-reads it until it changes: an operator who chose `human` would run `auto` until the
 next settings change, and a legacy hold would be released meanwhile. So a read that was busy or unusable does not
 record the stamp; the next deciding load reads the file again, and the policy is the operator's as soon as the file
-can be read. The startup note names the busy case too. A test: a busy first read, then a readable `human` file — the
-next deciding load runs `human` and releases nothing.
+can be read. The startup note names the busy case too.
+
+**A failed read authorises no release** (the re-review gate, finding 1). Rounds run under such a read's default
+(`auto`: no new hold), but the release of a legacy hold (§ 4.3) needs the policy to come from a read that succeeded —
+a readable file, a file that is genuinely missing, or the process environment. While the read is busy or unusable a
+legacy hold stays as it is, and the entry answers § 4.3's "could not be written yet — call again" sentence with the
+reason "the settings file could not be read". Tests: a busy read with a readable `human` behind it releases nothing,
+and the next deciding load runs `human`; a malformed file releases nothing until it is repaired or removed.
 
 ## 7. Boundaries with other plans
 
