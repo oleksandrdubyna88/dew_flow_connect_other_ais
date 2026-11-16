@@ -1,6 +1,7 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **plan only, nothing implemented yet, 2026-11-16 — plan round 1 `proceed` (2 of 2, gating 6 of 6), its findings folded in (§ 12); split into three epics E1–E3 the same day (§ Epics), stories documents written when each epic starts.** Scope: a fifth value `auto` for *When the rounds run out*
+> Status: **stopped for re-review, 2026-11-16 — the second change after approval (entry 1.2) was accepted while E1.S1's
+> spec was written; no code on any epic until the whole plan is reviewed again.** Before the stop: **plan only, nothing implemented yet, 2026-11-16 — plan round 1 `proceed` (2 of 2, gating 6 of 6), its findings folded in (§ 12); split into three epics E1–E3 the same day (§ Epics), stories documents written when each epic starts.** Scope: a fifth value `auto` for *When the rounds run out*
 > (`coai.onExhausted` / `COAI_ON_EXHAUSTED`), the default for every installation including choices made before; the
 > round machine's three `call_human` sites, the begin/resolve hold readers and `ask_human` in `src_mcp`; the setting, its
 > one-time migration, the env block and the rounds-log page in `src_vs_code`; the shared gate snippet in
@@ -14,10 +15,14 @@
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-16 · by reviewers · state: open
+> Epoch 1 · approved 2026-11-16 · by reviewers · state: stopped
 
 - 1.1 · 2026-11-16 · agent · epics, build-order — the gate's operator command split the three PRs into epics E1–E3
   (Fable, after the question consultants); notes N1–N5 and the § 4.3/§ 4.4/§ 4.7 wording repairs satisfy the plan as written.
+- 1.2 · 2026-11-16 · agent · contract — the release of a legacy hold sets AwaitingResolve true instead of keeping it
+  (E1.S1 spec, U1): a hold whose round was already resolved kept AdvanceOnResolve with nothing to consume it, so a
+  later round under a non-auto policy advanced on a plain resolve, and a feature review held at its cap never closed.
+  Counted on both question consultants' reading (consultation 4be988cc…); this second change stopped the plan.
 
 ## 1. What the owner asked for (2026-11-16)
 
