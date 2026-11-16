@@ -80,6 +80,12 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
         }
     }
 
+    /// <summary>A folder link inside the fixture to the fixture itself, its target spelled as <see cref="TempDir"/> spells it.</summary>
+    /// <remarks>Not <c>_w</c>: where the temp folder is behind a link (macOS: <c>/var</c> → <c>/private/var</c>), the teardown
+    /// walks the unresolved spelling and must recognise the link's target as its own parent, or it stops the deletion
+    /// (<c>LinkTargetLostException</c>, the macOS job of the 0.65.4 release PR). The hook resolves either spelling alike.</remarks>
+    private void LinkToTheFixture(string relative) => Link(relative, _temp.Path, folder: true);
+
     // ---------- payloads and answers ----------
 
     /// <summary>The payload as agy 1.5.9 sends it: cwd, hookEventName, toolCall { args { Path }, id, name }, workspacePaths = [cwd, ..roots].</summary>
@@ -175,7 +181,7 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
     [Fact]
     public void A5_ARootSpelledThroughALink_ContainsItsOwnFiles()
     {
-        Link("via", _w, folder: true);
+        LinkToTheFixture("via");
         var roots = new[] { At("via/job-1") };
 
         Allowed(Call(At("via/job-1/inside.txt"), roots: roots));
@@ -284,7 +290,7 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
     [Fact]
     public void B13_TheCwdAndAnEntryNamingOneFolderThroughALink_AreTheSameFolder()
     {
-        Link("via", _w, folder: true);
+        LinkToTheFixture("via");
         var viaHome = At("via/home");
 
         var spelledAsLink = new[] { Home, Job1 };
