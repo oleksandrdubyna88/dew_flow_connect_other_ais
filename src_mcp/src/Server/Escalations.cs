@@ -92,6 +92,12 @@ public static class EscalationStatuses
     public const string Expired = "expired";
 }
 
+/// <summary>What <see cref="Escalations.Withdraw"/> did with one question of a hold that no longer stands.</summary>
+public enum Withdrawal { Withdrawn, NotThere, Failed }
+
+/// <summary>What <see cref="Escalations.Restore"/> did with one card policy auto withdrew and must offer again.</summary>
+public enum Restoration { Restored, NotExpired, Failed }
+
 /// <summary>One consultant row's answer as it sits under a person's card — the row's own words, with the flag D13 puts beside every answer.</summary>
 public sealed record EscalationAdvice(
     string RowId,
@@ -244,6 +250,100 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     public bool Expire(string id, DateTime nowUtc) =>
         Rewrite(id, question => question with { Status = EscalationStatuses.Expired, ExpiredUtc = nowUtc.ToString("O") });
 
+    /// <summary>The write every question file goes through — a seam for a failing write, as <c>SessionStore.FileWriter</c> is for a session.</summary>
+    internal Action<string, string> Writer { get; init; } = AtomicJson.Write;
+
+    /// <summary>
+    /// Takes the card of a hold that no longer stands out of the active set: <c>expired</c>, stamped, the question kept for the log.
+    /// Unlike <see cref="Expire"/> it tells a card that is not there (or is already expired, which it does not rewrite) from a write that failed.
+    /// </summary>
+    /// <remarks>
+    /// Reads under the file's turn and RELEASES the turn before it writes: <see cref="AtomicJson.Write"/> takes the turn itself and the
+    /// turn is not re-entrant.
+    /// </remarks>
+    public Withdrawal Withdraw(string id, DateTime nowUtc)
+    {
+        lock (RewriteGate)
+        {
+            var path = QuestionPath(id);
+            var (found, card) = Peek(path);
+            if (found == Peeked.Failed)
+            {
+                return Withdrawal.Failed;
+            }
+
+            if (card is null || card.Status == EscalationStatuses.Expired)
+            {
+                return Withdrawal.NotThere;
+            }
+
+            return TryWrite(path, card with { Status = EscalationStatuses.Expired, ExpiredUtc = nowUtc.ToString("O") })
+                ? Withdrawal.Withdrawn
+                : Withdrawal.Failed;
+        }
+    }
+
+    /// <summary>
+    /// Puts a card policy auto withdrew back as it was: <c>Status</c> open and <c>ExpiredUtc</c> empty, no other member and no answer file.
+    /// It does not know who expired a card — its callers decide that.
+    /// </summary>
+    public Restoration Restore(string id)
+    {
+        lock (RewriteGate)
+        {
+            var path = QuestionPath(id);
+            var (found, card) = Peek(path);
+            if (found == Peeked.Failed)
+            {
+                return Restoration.Failed;
+            }
+
+            if (card is null || card.Status != EscalationStatuses.Expired)
+            {
+                return Restoration.NotExpired;
+            }
+
+            return TryWrite(path, card with { Status = EscalationStatuses.Open, ExpiredUtc = string.Empty })
+                ? Restoration.Restored
+                : Restoration.Failed;
+        }
+    }
+
+    private enum Peeked { Read, Failed }
+
+    /// <summary>The card as it sits on disk, told apart: absent and malformed are no card (null), a file that cannot be read is a failure.</summary>
+    private static (Peeked Found, EscalationQuestion? Card) Peek(string path)
+    {
+        try
+        {
+            using var turn = SessionTurn.Take(path);
+
+            return (Peeked.Read, JsonSerializer.Deserialize(SharedRead.Text(path), EscalationJsonContext.Default.EscalationQuestion));
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or JsonException)
+        {
+            return (Peeked.Read, null);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return (Peeked.Failed, null);
+        }
+    }
+
+    private bool TryWrite(string path, EscalationQuestion card)
+    {
+        try
+        {
+            WriteAtomic(path, JsonSerializer.Serialize(card, EscalationJsonContext.Default.EscalationQuestion));
+
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// A standing NOTICE written before the card listed its decisions gets the list, in place: the same id, the same question, the
     /// answer file untouched (<c>todo/PLAN_only_a_person_releases_the_gate.md</c> §11.3). A second card for the same hold would be two buttons
@@ -380,7 +480,7 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     /// measurement is the READER taking the turn — this side is symmetry, and it is what protects
     /// the file from a reader that is not this code.
     /// </remarks>
-    private static void WriteAtomic(string path, string content) => AtomicJson.Write(path, content);
+    private void WriteAtomic(string path, string content) => Writer(path, content);
 }
 
 /// <summary>

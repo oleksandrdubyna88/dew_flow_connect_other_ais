@@ -377,4 +377,92 @@ public sealed class EscalationsTests : IDisposable
 
         _escalations.Read("q1").Should().BeNull("a question file nobody can open is nothing yet, never a throw");
     }
+
+    // ---------- withdrawn by policy auto, and put back (todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md, § S1.4) ----------
+
+    private static EscalationQuestion NoticeCard(string id) =>
+        Question(id) with { Kind = EscalationKinds.Notice, Decisions = EscalationDecisions.Notice };
+
+    [Fact]
+    public void Withdraw_TakesAnOpenQuestionOutOfTheActiveSet()
+    {
+        var when = new DateTime(2026, 11, 16, 10, 0, 0, DateTimeKind.Utc);
+        _escalations.Notify(Question("qW"));
+
+        _escalations.Withdraw("qW", when).Should().Be(Withdrawal.Withdrawn);
+
+        var read = _escalations.Read("qW")!;
+        read.Status.Should().Be(EscalationStatuses.Expired);
+        read.ExpiredUtc.Should().Be(when.ToString("O"));
+        read.Question.Should().Be(Question("qW").Question, "the question's text is kept");
+    }
+
+    [Fact]
+    public void Withdraw_ChangesNothingTheSecondTime_AndSaysNotThere()
+    {
+        var first = new DateTime(2026, 11, 16, 10, 0, 0, DateTimeKind.Utc);
+        _escalations.Notify(Question("qW"));
+        _escalations.Withdraw("qW", first).Should().Be(Withdrawal.Withdrawn);
+        var bytes = File.ReadAllBytes(_escalations.QuestionPath("qW"));
+
+        _escalations.Withdraw("qW", first.AddHours(1)).Should().Be(Withdrawal.NotThere, "an expired card is not rewritten");
+        _escalations.Read("qW")!.ExpiredUtc.Should().Be(first.ToString("O"), "the first stamp stays");
+        File.ReadAllBytes(_escalations.QuestionPath("qW")).Should().Equal(bytes);
+
+        _escalations.Withdraw("qNone", first).Should().Be(Withdrawal.NotThere, "no file");
+
+        File.WriteAllText(_escalations.QuestionPath("qBad"), "not json");
+        var bad = File.ReadAllBytes(_escalations.QuestionPath("qBad"));
+        _escalations.Withdraw("qBad", first).Should().Be(Withdrawal.NotThere, "no reader can show a card that does not parse");
+        File.ReadAllBytes(_escalations.QuestionPath("qBad")).Should().Equal(bad);
+    }
+
+    [Theory]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    public void Withdraw_ThatCannotWrite_SaysFailed_AndLeavesTheCardOpen(Type failure)
+    {
+        _escalations.Notify(Question("qW"));
+        var cannot = new Escalations(_data) { Writer = (_, _) => throw (Exception)Activator.CreateInstance(failure)! };
+
+        cannot.Withdraw("qW", DateTime.UtcNow).Should().Be(Withdrawal.Failed);
+
+        _escalations.Read("qW")!.Status.Should().BeEmpty("the card is still open");
+    }
+
+    [Fact]
+    public void Restore_PutsAWithdrawnCardBackAsItWas_AndChangesNothingTheSecondTime()
+    {
+        var t0 = new DateTime(2026, 11, 16, 9, 0, 0, DateTimeKind.Utc);
+        var t1 = t0.AddHours(1);
+        _escalations.Notify(NoticeCard("qR"));
+        var before = _escalations.Read("qR")!;
+        _escalations.Withdraw("qR", t1).Should().Be(Withdrawal.Withdrawn);
+        _escalations.Read("qR")!.ExpiredUtc.Should().Be(t1.ToString("O"));
+
+        _escalations.Restore("qR").Should().Be(Restoration.Restored);
+
+        var after = _escalations.Read("qR")!;
+        after.Should().BeEquivalentTo(before, "every member reads back as before the withdrawal");
+        after.Status.Should().BeEmpty();
+        after.ExpiredUtc.Should().BeEmpty();
+        var bytes = File.ReadAllBytes(_escalations.QuestionPath("qR"));
+
+        _escalations.Restore("qR").Should().Be(Restoration.NotExpired);
+        File.ReadAllBytes(_escalations.QuestionPath("qR")).Should().Equal(bytes);
+
+        _escalations.Restore("qNone").Should().Be(Restoration.NotExpired);
+        File.WriteAllText(_escalations.QuestionPath("qBad"), "not json");
+        var bad = File.ReadAllBytes(_escalations.QuestionPath("qBad"));
+        _escalations.Restore("qBad").Should().Be(Restoration.NotExpired);
+        File.ReadAllBytes(_escalations.QuestionPath("qBad")).Should().Equal(bad);
+
+        _escalations.Notify(Question("qE"));
+        _escalations.Expire("qE", t0).Should().BeTrue();
+        _escalations.Restore("qE").Should().Be(Restoration.Restored, "the method does not know who expired a card — its callers do");
+        _escalations.Read("qE")!.Status.Should().BeEmpty();
+
+        File.Exists(_escalations.AnswerPath("qR")).Should().BeFalse("no answer file is created or touched");
+        File.Exists(_escalations.AnswerPath("qE")).Should().BeFalse();
+    }
 }
