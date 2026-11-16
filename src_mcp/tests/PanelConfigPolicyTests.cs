@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
@@ -34,6 +35,31 @@ public sealed class PanelConfigPolicyTests
             config.IsAutonomous.Should().BeFalse(how);
             config.PredatesAuto.Should().BeFalse(how);
         }
+    }
+
+    public static TheoryData<string> DefaultsBuiltInCode() =>
+        ["new()", "new(roles)", "new { Catalog }", "Uniform", "PanelSettings().Rounds", "FromEnvironment(absent).Rounds"];
+
+    private static PanelConfig BuiltByDefault(string label) => label switch
+    {
+        "new()" => new PanelConfig(),
+        "new(roles)" => new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => new RoleGate(1, 5))),
+        "new { Catalog }" => new PanelConfig { Catalog = RoleCatalog.Builtin },
+        "Uniform" => PanelConfig.Uniform(1, 6),
+        "PanelSettings().Rounds" => new PanelSettings().Rounds,
+        "FromEnvironment(absent).Rounds" => PanelSettings.FromEnvironment(_ => null).Rounds,
+        _ => throw new ArgumentOutOfRangeException(nameof(label)),
+    };
+
+    [Theory]
+    [MemberData(nameof(DefaultsBuiltInCode))]
+    public void NoPolicyNamed_IsPolicyAuto_WhereverADefaultIsBuilt(string label)
+    {
+        var config = BuiltByDefault(label);
+
+        config.OnExhausted.Should().Be(StagePolicy.GoodEnough, label);
+        config.Autonomous.Should().BeTrue(label);
+        config.IsAutonomous.Should().BeTrue(label);
     }
 
     [Fact]

@@ -1074,14 +1074,19 @@ public sealed record PanelSettings
         _ => "none",
     };
 
-    /// <summary>What a policy name means, or Human when this build does not know the name.</summary>
+    /// <summary>What a policy name means: <c>null</c> when none is named (absent, empty or <c>auto</c> — policy auto), the policy
+    /// a known name stands for, or Human when this build does not know the name.</summary>
     /// <remarks>
     /// Human is the fallback because it is the end of the range that STOPS: a policy this build
-    /// cannot honour must never resolve to proceeding over open findings.
+    /// cannot honour must never resolve to proceeding over open findings. No trimming: <c>"auto "</c> is a word this
+    /// build does not know, and it stops. <c>auto</c> is spelled here and nowhere else on the server; what "no policy
+    /// named" means is decided by <see cref="PanelConfig"/>'s code constructor.
     /// </remarks>
-    private static StagePolicy PolicyOf(string? value) => value?.ToLowerInvariant() switch
+    private static StagePolicy? PolicyOf(string? value) => value?.ToLowerInvariant() switch
     {
+        null or "" or "auto" => null,
         "continue" => StagePolicy.Continue,
+        "human" => StagePolicy.Human,
         "escalate" => StagePolicy.Escalate,
         "good_enough" or "goodenough" => StagePolicy.GoodEnough,
         _ => StagePolicy.Human,

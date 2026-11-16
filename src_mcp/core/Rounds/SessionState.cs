@@ -79,7 +79,7 @@ public sealed record StageGate(int MaxRounds, int Threshold);
 /// </remarks>
 public sealed record PanelConfig
 {
-    /// <summary>A config made IN CODE. A policy named is that policy and never policy auto.</summary>
+    /// <summary>A config made IN CODE. No policy named is policy auto; a policy named is that policy and never auto.</summary>
     /// <remarks>
     /// Always writes <see cref="Autonomous"/> as <c>true</c> or <c>false</c>: a config made in code is never "from before policy
     /// auto". The parameter names stay capitalised, because call sites name them (<c>OnExhausted:</c>).
@@ -87,8 +87,8 @@ public sealed record PanelConfig
     public PanelConfig(IReadOnlyDictionary<string, RoleGate>? Roles = null, StagePolicy? OnExhausted = null)
     {
         this.Roles = Roles ?? Defaults();
-        this.OnExhausted = OnExhausted ?? StagePolicy.Human;
-        Autonomous = false;
+        this.OnExhausted = OnExhausted ?? StagePolicy.GoodEnough;
+        Autonomous = OnExhausted is null;
     }
 
     /// <summary>A config as a SESSION FILE holds it: the deserialiser's constructor, and the store's for a file with no config.</summary>

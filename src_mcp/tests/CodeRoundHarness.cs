@@ -111,7 +111,8 @@ internal sealed class CodeRoundHarness : IAsyncLifetime
         bool deal = false,
         IProcessLauncher? through = null,
         string workspace = "none",
-        Serilog.ILogger? log = null) =>
+        Serilog.ILogger? log = null,
+        bool autonomous = false) =>
         new(
             new PanelSettings
             {
@@ -120,7 +121,7 @@ internal sealed class CodeRoundHarness : IAsyncLifetime
                     new("codex") { ExecutablePath = FakeCliExe },
                     new("gemini") { ExecutablePath = FakeCliExe },
                 ],
-                Rounds = PanelConfig.Uniform(maxRounds, threshold, onExhausted),
+                Rounds = autonomous ? PanelConfig.Uniform(maxRounds, threshold) : PanelConfig.Uniform(maxRounds, threshold, onExhausted),
                 DataDir = Data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),

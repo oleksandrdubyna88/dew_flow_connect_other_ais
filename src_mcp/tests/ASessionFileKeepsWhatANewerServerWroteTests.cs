@@ -63,7 +63,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
 
     private static PersistedSession Baseline(string repo)
     {
-        var state = new SessionState("bag-1", repo, Branch, new PanelConfig()) { Stage = Stage.CodeReview };
+        var state = new SessionState("bag-1", repo, Branch, new PanelConfig(OnExhausted: StagePolicy.Human)) { Stage = Stage.CodeReview };
         var reviewer = new ReviewerState("codex", "correctness", ReviewerState.Done, 2);
         var round = new RoundRecord("CodeReview", 1, "proceed", 0, "codex", new DateTime(2026, 10, 18, 9, 0, 0, DateTimeKind.Utc))
         {
