@@ -15,6 +15,7 @@
 - Inside a granted folder nothing is narrowed: `.git` and credential-looking files stay readable by agy's reader.
 - An agy older than 1.5.9, whose hook call lacks the path, the working folder or the granted folders, has every read denied.
 - On Windows an 8.3 short name is refused wrongly, and agy there is not measured.
+- Two Windows gaps are not closed here and go to a follow-up plan (`todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`): `..` after a link or junction is applied to the resolved path, where Windows folds it as text first; and a UNC `Path` is looked up over the network before it is judged. Neither applies on Linux or the Team server.
 - A hook denial is not in agy's `denied_actions`, so coai's read follow-up does not fire for it.
 - The full list is in `SECURITY.md`, "What the sites guarantee".
 

@@ -2338,11 +2338,12 @@ The 2026-11-15 paragraph above is the state before the path check: `Decide` allo
   (`cwd`, `toolCall{args{Path},id,name}`, `workspacePaths` = cwd then the roots). Each deny row first shows that the same call, repaired in
   the one thing under test, is allowed, so a deny is not a rejected fixture. Allowed: both reader names inside the first and second root, `..` that
   stays inside, a link that stays inside, a root spelled through a link, a missing file or the root itself inside a root. Denied: an absolute path
-  outside, a prefix sibling (`job-1` against `job-10`), `root/../outside`, a link, a link folder, a chain of links and a dangling link out of
+  outside, a prefix sibling (`job-1` against `job-10`), `root/../outside`, a link, a link folder, a chain of links (B23: it ends INSIDE the root and is denied for its length, 45 links, over `RealPath`'s expansion budget; 2026-11-16 correction of "out of the root") and a dangling link out of
   the root, a path below a file, the coai folder (also under a root that contains it), no roots, relative and drive-relative paths, a missing,
   null or mistyped `args`, `Path`, `cwd` or `workspacePaths`, a second spelling of `Path`, duplicate JSON properties, a link loop, a reader
   that fails, and every other tool name (with the tool-name reason). The deny reason is a constant that carries no path.
-- `src_mcp/tests/AntigravityReadOnlyTests.cs`: the two allow assertions use real payloads, and the built `coai-mcp` is asked once with the child's
+  Tests for a lone UTF-16 surrogate in the payload (`Decide` never throws) are being added to this class in the same change (2026-11-16).
+- `src_mcp/tests/AntigravityReadOnlyTests.cs`: (2026-11-16 correction: the two allow assertions that "use real payloads" were REMOVED from this class and moved to A1 of `TheAgyHookReadsOnlyInsideItsRootsTests`; the built-binary test here now builds real payloads.) The built `coai-mcp` is asked once with the child's
   working directory set to the root and a relative `Path`, which a process directory must not turn into a base.
 - `src_server/tests/TheServerBinaryAnswersTheAgyHookTests.cs`: the test above, `TheServerBinary_AllowsViewFileAndReadFile_AndDeniesEveryOtherTool_AsAgyRunsTheHook`,
   is renamed in S1 for the path guarantee: `TheServerBinaryAnswersTheAgyHookTests.TheServerBinary_AnswersTheHookLikeDecide_AsAgyRunsIt` and `TheServerBinary_DeniesAReaderThroughALinkThatLeavesTheRoot`.

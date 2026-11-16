@@ -1,6 +1,6 @@
 # Plan: the agy read-only hook checks the path, not only the tool name
 
-> Status: **plan only, nothing implemented yet, 2026-11-16.** Plan gate session 3816a96b: `proceed`, 2 reviewers, both
+> Status: **coded and tested, 2026-11-16 (S1 and S2 on this branch, e31c1542); the local live run on the branch build passed; not merged, not released — the release steps of `## Stories` remain.** Plan gate session 3816a96b: `proceed`, 2 reviewers, both
 > findings accepted and folded in (`## Stories`). Allowed over the PR cap by the owner on 2026-11-16. Scope:
 > `src_mcp/runners/Reviewers/AntigravityReadOnly.cs`, its tests, the server binary's hook test, the documents of S2.
 

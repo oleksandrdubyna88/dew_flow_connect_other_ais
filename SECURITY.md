@@ -71,6 +71,12 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
   - Windows: an 8.3 short name is a different string, so it is refused wrongly. Case is ignored, as `DocumentId.Comparison` does, so in a
     directory made case-sensitive a sibling that differs only by case would be accepted. agy on Windows is not measured. On macOS a
     different case is refused wrongly.
+  - Windows, not closed here (follow-up plan `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`): (a) `..` after a link or
+    junction. `RealPath` applies `..` to the path resolved so far, the Unix rule. Win32 folds `..` as text before it follows links. A
+    path such as `<root>\node_modules\junction\..\..\..\..\Users\me\.ssh\id_rsa` can pass the hook and be read outside the root, if
+    agy itself allows that read (not measured on Windows). (b) A UNC or device `Path` (`\\host\share\x`, `//host/share/x`) is resolved
+    before it is judged, so the hook looks it up over SMB. That can send the user's NTLM credentials to that host or run past the hook's
+    10 s timeout. Neither applies on Linux, the Team server or WSL.
   - Hook denials are not in agy's `denied_actions`, so coai's read follow-up does not fire for them.
   - agy's own checks still run after an allow. The hook only narrows.
   - The hook always answers and exits 0. What agy does when a hook times out is not ours.

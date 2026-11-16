@@ -525,4 +525,87 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
             JsonDocument.Parse(output.ToString()).RootElement.GetProperty("decision").GetString().Should().Be(expected);
         }
     }
+
+    // ---------- D: total — a lone UTF-16 surrogate is a denial, never a throw ----------
+
+    private const string LoneSurrogate = "\\uD800";
+
+    [Fact]
+    public void D1_ALoneSurrogateInTheToolName_IsDeniedWithTheToolReason()
+    {
+        var (decision, reason) = Answer("""{"toolCall":{"name":"\uD800"}}""");
+
+        decision.Should().Be("deny");
+        reason.Should().Be(AntigravityReadOnly.DenyReason);
+    }
+
+    [Fact]
+    public void D2_ALoneSurrogateInThePath_IsDeniedWithThePlaceReason() =>
+        Denied(Call(Inside).Replace("inside.txt", "inside" + LoneSurrogate + ".txt", StringComparison.Ordinal));
+
+    [Fact]
+    public void D3_ALoneSurrogateInAWorkspacePathsEntry_IsDenied()
+    {
+        Put("zzroot/f.txt");
+        var roots = new[] { Job1, At("zzroot") };
+
+        Denied(
+            Call(Inside, roots: roots).Replace("zzroot", "zz" + LoneSurrogate + "root", StringComparison.Ordinal),
+            control: Call(Inside, roots: roots));
+    }
+
+    [Fact]
+    public void D4_ALoneSurrogateInTheCwd_IsDenied()
+    {
+        Put("zzhome/.agents/hooks.json");
+
+        Denied(
+            Call(Inside, cwd: At("zzhome")).Replace("zzhome", "zz" + LoneSurrogate + "home", StringComparison.Ordinal),
+            control: Call(Inside, cwd: At("zzhome")));
+    }
+
+    [Fact]
+    public void D5_TheHookMode_AnswersADenyAndExitsZero_ForALoneSurrogateInTheToolName()
+    {
+        using var output = new StringWriter();
+
+        AntigravityReadOnly.RunHook(new StringReader("""{"toolCall":{"name":"\uD800"}}"""), output).Should().Be(0);
+
+        var root = JsonDocument.Parse(output.ToString()).RootElement;
+        root.GetProperty("decision").GetString().Should().Be("deny");
+        root.GetProperty("reason").GetString().Should().Be(AntigravityReadOnly.DenyReason);
+    }
+
+    [Fact]
+    public void D6_TheCatchAll_WritesOneLine_NamingTheExceptionTypeOnly()
+    {
+        using var log = new StringWriter();
+
+        var answer = AntigravityReadOnly.Decide("""{"toolCall":{"name":"\uD800","args":{"Path":"/secret/place"}}}""", log: log);
+
+        JsonDocument.Parse(answer).RootElement.GetProperty("decision").GetString().Should().Be("deny");
+        log.ToString().Should().Be("coai --agy-hook: denied after InvalidOperationException" + Environment.NewLine);
+    }
+
+    [Fact]
+    public void D7_ThePlaceCatchAll_WritesOneLine_AndHoldsNoPartOfThePayload()
+    {
+        using var log = new StringWriter();
+        var payload = Call(Inside).Replace("inside.txt", "inside" + LoneSurrogate + ".txt", StringComparison.Ordinal);
+
+        AntigravityReadOnly.Decide(payload, log: log).Should().Contain(AntigravityReadOnly.DenyOutsideReason);
+
+        log.ToString().Should().Be("coai --agy-hook: denied after InvalidOperationException" + Environment.NewLine);
+    }
+
+    [Fact]
+    public void D8_AnAnswer_ThatNeedsNoCatch_WritesNothingToTheLog()
+    {
+        using var log = new StringWriter();
+
+        AntigravityReadOnly.Decide(Call(Inside), log: log).Should().Contain("allow");
+        AntigravityReadOnly.Decide(Call(Outside), log: log).Should().Contain("deny");
+
+        log.ToString().Should().BeEmpty();
+    }
 }

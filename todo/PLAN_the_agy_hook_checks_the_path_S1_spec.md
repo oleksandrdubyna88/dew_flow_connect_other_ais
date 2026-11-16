@@ -1,6 +1,6 @@
 # SPEC — story S1 (cornerstone): the agy hook allows a reader only inside the folders it was given
 
-> Status: **spec only, nothing implemented yet, 2026-11-16.** Parent plan:
+> Status: **coded and tested, 2026-11-16 (e31c1542), by Fable, written before its code; not merged.** Parent plan:
 > [PLAN_the_agy_hook_checks_the_path.md](PLAN_the_agy_hook_checks_the_path.md) (`## Stories`, S1). Spec by Fable, code by
 > Sonnet, review by Opus. Scope: `AntigravityReadOnly.Decide`, its tests in `src_mcp`, and the server binary test.
 

@@ -218,6 +218,7 @@ public static class AntigravityReadOnly
     /// </summary>
     /// <param name="payload">The text on the hook's standard input.</param>
     /// <param name="read">How one entry is looked at; the real file system when null (the seam <see cref="RealPath.Resolve"/> has).</param>
+    /// <param name="log">Where the one line a caught exception leaves goes — its type only; standard error when null.</param>
     /// <remarks>
     /// <para>Read from the payload's own <c>toolCall.name</c>, never by searching its text: a tool's ARGUMENTS can
     /// contain any string, the name of an allowed tool included.</para>
@@ -228,10 +229,38 @@ public static class AntigravityReadOnly
     /// spellings of <c>Path</c>, a duplicate property, or any entry that does not resolve is denied whole. Both denials are constants:
     /// <see cref="DenyReason"/> for the tool, <see cref="DenyOutsideReason"/> for the place; neither quotes the model's path.</para>
     /// </remarks>
-    public static string Decide(string payload, EntryReader? read = null) =>
+    public static string Decide(string payload, EntryReader? read = null, TextWriter? log = null)
+    {
+        try
+        {
+            return Decision(payload, read, log);
+        }
+        catch (Exception e)
+        {
+            // The process edge: whatever was not read (a lone surrogate in the tool name threw here) is a tool nobody allowed.
+            Report(e, log);
+
+            return Deny(DenyReason);
+        }
+    }
+
+    private static string Decision(string payload, EntryReader? read, TextWriter? log) =>
         Parse(payload) is not { } call || !HookAllowedTools.Contains(ToolName(call), StringComparer.Ordinal)
             ? Deny(DenyReason)
-            : ReadsInside(call, read) ? """{"decision":"allow"}""" : Deny(DenyOutsideReason);
+            : ReadsInside(call, read, log) ? """{"decision":"allow"}""" : Deny(DenyOutsideReason);
+
+    /// <summary>One line on standard error (or <paramref name="log"/>): the exception's TYPE only — its message can quote the model's path.</summary>
+    private static void Report(Exception e, TextWriter? log)
+    {
+        try
+        {
+            (log ?? Console.Error).WriteLine($"coai {HookArgument}: denied after {e.GetType().Name}");
+        }
+        catch (Exception logging) when (logging is IOException or ObjectDisposedException)
+        {
+            // A closed standard error must not turn a denial into silence.
+        }
+    }
 
     private static string Deny(string reason) => new JsonObject { ["decision"] = "deny", ["reason"] = reason }.ToJsonString();
 
@@ -254,14 +283,16 @@ public static class AntigravityReadOnly
         node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     /// <summary>The one place the process edge catches everything: a handler that answers nothing let a write through on Windows (research/RESULTS_agy_write_block.md).</summary>
-    private static bool ReadsInside(JsonObject call, EntryReader? read)
+    private static bool ReadsInside(JsonObject call, EntryReader? read, TextWriter? log)
     {
         try
         {
             return Placed(call, read) is { } places && places.Allows();
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            Report(e, log);
+
             return false;
         }
     }
