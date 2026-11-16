@@ -156,8 +156,10 @@ including S1 and S2 calling a person. And in every mode:
   `CurrentPolicy(session)`, sets `OnExhausted` and `Autonomous` from the current settings and is called by the begin
   (beside the `SecurityLane` refresh at `RoundEngine.cs:276-280`), by `resolve`, `status`, `ask_human` and
   `HeldSentence` before any of them reads the hold. `EscalationsUsed`, `RoundsRunThisStage` and pending
-  decisions are kept, so toggling the setting cannot refill the escalation ladder. A null config from an old file still
-  normalises to the record defaults (`SessionStore.cs:702-704`).
+  decisions are kept, so toggling the setting cannot refill the escalation ladder. A null config from an old file
+  normalises in `Load` (`SessionStore.cs:702-704`) through the file's constructor, whose `autonomous` has no default, so
+  the marker stays absent through the normalisation and `CurrentPolicy` reads it as it was on disk — never the record
+  defaults, which now mean `auto` (CodeRabbit on #1007; the E1.S1 spec, input 1).
 
 ### 4.2 The three `call_human` sites, under `Autonomous`
 
@@ -190,7 +192,7 @@ AND the session's stored config has `Autonomous == null` as loaded (§ 4.1) — 
 `auto`. A hold this build raised (the operator chose `human`, then something switched the setting) stays the person's:
 otherwise the gated agent could release its own hold by writing `COAI_ON_EXHAUSTED=auto` into `settings.json`, which is
 exactly the road [PLAN_only_a_person_releases_the_gate.md](PLAN_only_a_person_releases_the_gate.md) closed for arguments.
-The marker is read BEFORE `CurrentPolicy` stamps the config, in the same helper.
+The marker is read BEFORE `CurrentPolicy` stamps the config, in the same helper, and as `Load` left it — absent stays absent (§ 4.1).
 
 `RoundEngine.ApplyAnyHumanDecision` (:93-120) is the one reader every review entry passes; for such a hold it releases
 the session before anything else. **The released state is `HumanGate = false, HoldQuestions = [], AwaitingResolve =
@@ -386,7 +388,7 @@ new way into it.
 
 **An unusable settings file means `auto`** (the E1.S1 spec, § S1.8; decided at the re-review for epoch 2). A malformed,
 empty or denied `settings.json` reads as no values (`SettingsFile.TryRead`, `SettingsFile.cs:110-127`), and no value
-now means `auto` where it meant `human`. Under `auto` that also releases a hold from before `auto` (§ 4.3). Kept so,
+now means `auto` where it meant `human`. Kept so,
 on the owner's words — *"если ревьюверы не отвечают, еще что-то — плевать. записали в логи"*: a damaged file must
 not block the orchestrator. It opens no new road: a process that can damage the file can as well write
 `COAI_ON_EXHAUSTED=auto` into it, and only holds from before `auto` are released either way. What is added is the
@@ -707,6 +709,11 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
 - **N7 — the mirror after the migration is explicit (E2.S2).** Overlays are written with `globalState.update`
   (`sideSettings.ts:36-43`), which fires no configuration change, so the listener of § 4.6 does not run. The migration
   calls `mirrorSettings` itself when it is done, as the catalog migration does (`extension.ts:445-448`).
+- **N8 — a resumed run keeps a choice made after the interruption (E2.S2).** "A choice made afterwards is kept"
+  (E2 done-when 3) must hold for a run that stopped between its clears and its marker, too (CodeRabbit on #1007): a
+  rerun that blindly repeats every clear would reset a value the person chose in between. The spec records, before the
+  first clear, what each location held, and a resumed run clears a location only while it still holds that recorded
+  value; a test interrupts after the first clear, sets `human`, resumes, and finds `human` kept.
 
 ### The cornerstone ledger
 
