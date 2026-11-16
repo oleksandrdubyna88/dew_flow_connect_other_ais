@@ -7,7 +7,9 @@
 > 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, plan gate `proceed`,
 > E2.S1–S4 coded and tested, merged (#982, e060d77e; coai code gate `proceed`); R6 and R7 passed on VSIX 0.86.901 (2026-11-12), released from release PR #986 as extension 0.87.0; change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`); change 2.2 stopped the plan before any E3 code. E3
 > stories written by Opus 2026-11-12 on `feat/chat-from-a-terminal-e3`; no E3 code until the re-review resumes the plan. The
-> re-review's revision of the whole plan is written (2026-11-13, the baseline of epoch 3); its plan gate is owed. Plan gate round 1 `proceed` (codex, antigravity;
+> re-review's revision of the whole plan is written (2026-11-13, the baseline of epoch 3) and sorted by an Opus judge (every done item fits, kept). The E3
+> stories passed the coai plan gate on 2a2f21fe on 2026-11-13 (round 1 `proceed`, 0 findings, both reviewers, session
+> 167eb40d). Epoch 1's plan gate: round 1 `proceed` (codex, antigravity;
 > 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
 > read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
@@ -96,13 +98,14 @@ Narrowed: no — no epic, story, DoD item, merge condition or release leaves the
 
 | Work | Where | Verdict | Action |
 |---|---|---|---|
-| E1 merged, 0851f074 | main (#971) | — | — |
-| release extension 0.86.0, 45b070a2 | main (#978) | — | — |
-| E2 merged, e060d77e | main (#982) | — | — |
-| release extension 0.87.0, 4efa0a90 | main (#986) | — | — |
-| the 0.87.0 post-deploy record and the macOS CI todo, e3a9fb2b | pushed, unmerged (`feat/chat-from-a-terminal-e3`) — not this plan's work | — | — |
-| E3 stories document, 7ef05a24 | pushed, unmerged (`feat/chat-from-a-terminal-e3`) | — | — |
-| change 2.2 and the stop, b638aed0 | pushed, unmerged (`feat/chat-from-a-terminal-e3`) | — | — |
+| E1 merged, 0851f074 | main (#971) | fits | kept — stage 1, the Security section and DoD items 1–3 hold in the code (clipboard read under `oneCapture`, `terminalMatch` never re-keys, `tabSourced`, the `terminal` source); the road back's Ctrl+Alt+G without `!terminalFocus`, the "before stage 3" comments in `chatGoto.ts` and `module_extension.md:10319` are E3.S2's planned work, not a contradiction |
+| release extension 0.86.0, 45b070a2 | main (#978) | fits | kept |
+| E2 merged, e060d77e | main (#982) | fits | kept — stage 2 and the Security section hold (the ssh argv with `StrictHostKeyChecking=yes`, no `-n`, the 100-row consent, `SECURITY.md`'s residual); its own liveness map in `remoteSessionHost.ts:281` becomes E3.S1's one reader, as planned |
+| release extension 0.87.0, 4efa0a90 | main (#986) | fits | kept |
+| the 0.87.0 post-deploy record and the macOS CI todo, e3a9fb2b | pushed, unmerged (`feat/chat-from-a-terminal-e3`) — not this plan's work | fits | kept — not this plan's work |
+| E3 stories document, 7ef05a24 | pushed, unmerged (`feat/chat-from-a-terminal-e3`) | fits | kept — revised in place by the re-review (2a2f21fe) |
+| change 2.2 and the stop, b638aed0 | pushed, unmerged (`feat/chat-from-a-terminal-e3`) | fits | kept — the change this re-review answers |
+| the re-review's revision of the plan and the E3 stories, 2a2f21fe | pushed, unmerged (`feat/chat-from-a-terminal-e3`) | fits | kept — the baseline of epoch 3; the E3 stories passed the coai plan gate on it (session 167eb40d) |
 
 ## The symptom
 
@@ -344,13 +347,19 @@ what stage 3 touches and the text above did not name:
     binds to it, then a second terminal T2 of the same name opens. Case B: terminal T is open, and two conversations
     of its name are restored one after the other; the first binds by arrival order. The rule: **a bind that
     re-attach makes is provisional until the person first uses that conversation from its terminal** — the door,
-    *take* or *add* finds it on that terminal, or go-to from that terminal shows it. While a bind is provisional,
+    *take* or *add* finds it on that terminal, or go-to from that terminal shows it, and in each case only while the
+    plan for the name still answers one terminal and one conversation (`bound`). A use from the chat tab alone (a
+    message typed there, *back to source*) is not a use from the terminal. While a bind is provisional,
     each trigger counts its conversation as a conversation of the name and its terminal as a terminal of the name.
     When the name is no longer one live terminal and one conversation, the provisional bind is undone: the
     conversation goes back to a key of its own, its tab stays open, and the name binds again only when a trigger
-    sees one of each. So in case A and in case B nothing stays bound, and nothing is guessed. A bind that was used
-    is final: a namesake that opens later gets its own conversation, as in E1. The provisional marks are in memory
-    only, one per bound terminal, dropped with the terminal.
+    sees one of each. So in case A and in case B nothing stays bound, and nothing is guessed — with one exception: a
+    press of the door, *take* or *add* during the restore window (the serializer's migration wait, up to 5 s) confirms
+    the conversation that arrived first, before a second one of the name is registered (the first residual under
+    *What this plan does NOT do*). A bind that was used is final: a namesake that opens later gets its own
+    conversation, as in E1. The provisional marks are in memory only: one per bound terminal, holding the id of the
+    conversation that re-attach bound there. A terminal counts as provisional only while the registry's conversation
+    under it has that id, so a conversation closed and replaced on the same terminal is never read as provisional.
   - **Who brings creds terminals back after a reload** — VS Code's own terminal revival, creds, or both — is not
     known until R8 measures it. Until then, two terminals of one name are ambiguity and never a bind. R8 is not
     waived.
@@ -365,8 +374,8 @@ what stage 3 touches and the text above did not name:
     ids to the USER setting; pressing it is the consent; the answer is remembered.
   - **A workspace or folder list** hides the default (an *Add* to the user setting cannot fix it: that layer wins):
     ONE notification with NO button. It names the settings level to fix — the workspace settings or the folder
-    settings — and is shown once. The extension never writes workspace or folder settings (the owner, 2026-11-13; it
-    keeps the scope, so it is not a narrowing).
+    settings — and is shown once. The extension never writes workspace or folder settings (the owner, 2026-11-13, in
+    the session's question tool — option: tell in words; offered as not narrowing).
   - **Anything else** — no user, workspace or folder value, or a user value that is not a list of strings — gets no
     notification and no write (*What this plan does NOT do*).
 
@@ -392,9 +401,16 @@ what stage 3 touches and the text above did not name:
   it predates this plan). The terminal door is the cure for the person; a fix for the old command is a decision
   for the owner after R9.
 - No re-attach of a conversation that is restored after its terminal's bind was used (for example a restore retried
-  by a press): it stays on a key of its own, and the person reaches it with go-to (re-review).
+  by a press, or a second conversation restored after a press inside the restore window): it stays on a key of its
+  own. The person reaches it by its tab or the conversation picker; go-to from the terminal shows the terminal's live
+  conversation first (`chatGoto.ts:233-236`) (re-review).
+- A bind used only from the chat tab (a message typed there, *back to source*) stays provisional, so a namesake that
+  appears later still undoes it; the next press of the door, *take* or *add* in that terminal then starts a new
+  conversation (re-review).
 - No trigger when a terminal closes: with two terminals of one name, closing one re-attaches nothing until a terminal
-  opens or the door, *take* or *add* is pressed (E3 § 10, O7).
+  opens or the door, *take* or *add* is pressed (E3 § 10, O7). No trigger either when a conversation is reopened from
+  the conversation picker (it is keyed `{}`, so it is an orphan): a provisional bind of that name is undone only at
+  the next trigger, and until then it is not confirmed, because a use confirms only while the plan answers `bound`.
 - No write to workspace or folder settings: a workspace or folder list that hides the default gets one notification
   with no button that names where to add the ids, and the person adds them there.
 - No invented default: when no user, workspace or folder value is set and the default itself lacks the ids (for

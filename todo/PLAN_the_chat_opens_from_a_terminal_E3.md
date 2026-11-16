@@ -1,7 +1,7 @@
 # PLAN — E3 stories: the chat finds its terminal again, go-to from a terminal, the skip list
 
 > Status: **written by Opus 2026-11-12 when the epic started; revised 2026-11-13 for the parent's re-review (epoch 2
-> stopped at change 2.2); plan gate owed.** Epic E3 of
+> stopped at change 2.2); coai plan gate round 1 `proceed` on 2a2f21fe (session 167eb40d, 0 findings).** Epic E3 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics` § *E3*, its § *Stage 3*,
 > the stage-3 rows of its § *Test plan*, its real-window checks R8, R10 and R11, its DoD items 5–7 and its ledger entry 1.1).
 > Written on `feat/chat-from-a-terminal-e3` from `main` `4efa0a90` (extension 0.87.0). A stories document keeps no change
@@ -42,7 +42,8 @@ When E3 is done (parent DoD item 5):
 3. When the person's own user-level `commandsToSkipShell` hides the default, ONE notification offers **Add**. Pressing it is
    the consent: the missing ids are appended to the person's user setting, and nothing else in it changes. The answer is
    remembered. When a workspace or folder list hides the default, ONE notification with NO button names that settings
-   level, once; nothing is written (the owner, 2026-11-13).
+   level, once; nothing is written (the owner, 2026-11-13, in the session's question tool — option: tell in words;
+   offered as not narrowing).
 
 The silent failures this epic must not ship:
 
@@ -79,10 +80,10 @@ All paths are under `src_vs_code/` unless they start with `research/`. Every nam
 | Go-to's question, built from the TABS | `src/chatSessionJoin.ts:257` `askedForGoto` |
 | The picker titles of a narrowed go-to (exhaustive) | `src/conversationChoice.ts:87` `narrowedTitle` |
 | The manifest: the go-to command and the road back; the terminal title bar; the palette; the chords; the skip-list default | `package.json:315`, `:320`; `:1196-1210` (`view/title`: the button `navigation@90`, the two E2 items `coai@1`, `coai@2`); `:1268` (`commandPalette`); `:1347-1376` (`keybindings`: go-to `ctrl+alt+g` with `!terminalFocus` at `:1364`, **the road back `ctrl+alt+g` when `activeWebviewPanelId == 'coaiChat'` with NO `!terminalFocus` at `:1370`**); `:1387-1389` (`configurationDefaults`) |
-| The manifest tests E3 extends: the derived skip list, no older chord under `terminalFocus` (Ctrl+Alt+A and the go-to rows only) | `src/test/terminalDoorWiring.test.ts:42-46`, `:72-85`, `:87-101` |
+| The manifest tests E3 extends: the derived skip list, no older chord under `terminalFocus` (Ctrl+Alt+A and the go-to rows only) | `src/test/terminalDoorWiring.test.ts:42-46`, `:73-87`, `:89-102` |
 | The chat-scoped command list: `coai.backToSource`'s `when` must be EXACTLY `activeWebviewPanelId == 'coaiChat'` or `webviewId == 'coaiChat'` | `src/test/chatWiring.test.ts:475-477`, `:493-518` |
 | The door census (reads `view/title` rows of `view == terminal` since E2) | `src/test/chatWiring.test.ts:480-491` `doorCommands` |
-| Go-to tests that pin the tab path for a terminal in the editor area (kind `other` → the whole list) | `src/test/chatGoto.test.ts:215-224`, `:534-556`; `src/test/chatGotoWiring.test.ts:75-88` |
+| Go-to tests that pin the tab path for a terminal in the editor area (kind `other` → the whole list) | `src/test/chatGoto.test.ts:221-225`, `:537-556`; `src/test/chatGotoWiring.test.ts:76-90` |
 | The doc that says the two Ctrl+Alt+G `when`s never overlap | `research/module_extension.md:10319` |
 | A layered setting, narrowed (`defaultValue`, `globalValue`, `workspaceValue`, `workspaceFolderValue`) | `src/modelKeys.ts:43` `Inspected` |
 | Writes to the person's user settings today (all `ConfigurationTarget.Global`) | `src/sideConfig.ts:186`, `src/uiScaleHost.ts:32`, `src/configTransferCommands.ts:202` |
@@ -146,8 +147,10 @@ From the worktree root: `node .agents/conventions/tools/plan-lifecycle.mjs` befo
   - `Orphan = { readonly key: object; readonly name: string }` — an open panel whose thread source is `terminal` (its
     `name` is the source's full name) and whose key is NOT a terminal of the window (not in `window.terminals`).
   - `HeldTerminal = LiveTerminal & { readonly holds: 'nothing' | 'provisional' | 'final' }` — what the registry holds
-    under that terminal's key: nothing; a conversation that re-attach bound and the person has not used from this
-    terminal yet (`provisional`); or any other conversation (`final`: the door made it, or a provisional bind was used).
+    under that terminal's key: nothing; the conversation that re-attach bound there and the person has not used from this
+    terminal yet (`provisional`: the terminal's mark holds the entry id of the conversation the registry holds under it
+    now); or any other conversation (`final`: the door or go-to made it, a provisional bind was used, or the marked
+    conversation was closed and another took the terminal — its id differs from the mark).
   - `reattachPlan(orphans: readonly Orphan[], liveNames: readonly HeldTerminal[], name: string): Reattach` — the parent's
     pure rule with the staggered-arrival rule (parent § *Stage 3*), with
     `Reattach = { kind: 'bind'; from: object; to: object } | { kind: 'undo'; from: object } | { kind: 'leave'; why: Leave }`
@@ -171,13 +174,18 @@ From the worktree root: `node .agents/conventions/tools/plan-lifecycle.mjs` befo
     when `rekey` answered true; else `leave` `held`). `ReattachView = { orphans; liveNames }`;
     `ReattachActs = { rekey(from, to): boolean; mark(terminal): void; unmark(terminal): void }`. A use of the conversation
     is a host fact, not a plan input: C2's `confirmReattach`.
-- **C2 — the window's terminals (S1 owns).** NEW host `src/terminalHost.ts`: `liveTerminals(): readonly LiveTerminal[]`
-  (the one reader; `chatReturnCommand.ts` and `remoteSessionHost.ts` switch to it); the provisional marks, a `WeakSet` of
-  terminal keys in memory (dropped with the terminal); `reattachByName(panels, name): Reattach` (builds the view from
+- **C2 — the window's terminals (S1 owns).** NEW host `src/terminalHost.ts`: `liveTerminals(terminals: readonly
+  vscode.Terminal[]): readonly LiveTerminal[]` (the one mapper; `chatReturnCommand.ts` and `remoteSessionHost.ts` switch to
+  it). It takes the list as a parameter because `toTerminal` (`chatReturnCommand.ts:161-170`) reads `window.terminals` ONCE
+  and both decides and acts on that one read. The provisional marks: a `WeakMap` from terminal key to the entry `id`
+  (`ChatEntry.id`, `chatPanels.ts:50`) of the conversation re-attach bound there, in memory, dropped with the terminal; a
+  terminal is `provisional` only while `panels.get(terminal)?.id` is that id, so closing the conversation
+  (`ChatPanels.close`, `:187`) needs no hook; `reattachByName(panels, name): Reattach` (builds the view from
   `panels`, `threadUnder`, `window.terminals` and the marks, then `reattachOnce` with `panels.rekey` and the marks);
-  `confirmReattach(terminal)` (removes the mark: the bind is final — called by the door, *take* and *add* when
-  `terminalMatch` answers `existing` for that terminal, and by go-to from a terminal when it shows that terminal's
-  conversation, S2); and `bindReattach(context, panels)` (the `onDidOpenTerminal` listener).
+  `confirmReattach(panels, terminal)` (removes the mark — the bind is final — but ONLY when the plan for the terminal's
+  name, from a fresh view, answers `leave` `bound` for that terminal; any other answer changes nothing, and the next
+  trigger decides. Called by the door, *take* and *add* when `terminalMatch` answers `existing` for that terminal, and by
+  go-to from a terminal when it shows that terminal's conversation, S2); and `bindReattach(context, panels)` (the `onDidOpenTerminal` listener).
 - **C3 — go-to for a terminal (S2 owns).** In `src/chatGoto.ts`: `TabKind` gains `'terminal'`; `eligible('terminal')` is
   true; `Narrowing` gains `{ kind: 'several terminals'; count: number }`; `terminalGotoAsked(input): GotoAsked` builds the
   question from values the host read (no `vscode`). A NEW command `coai.goToFromTerminal` reads `window.activeTerminal`, as
@@ -207,14 +215,16 @@ Build order and its gates: § 6.
      E1's steal filter. **Staggered arrivals** (parent § *Stage 3*, re-review): a bind re-attach makes is `provisional`
      until its first use from that terminal; while it is provisional, its conversation counts among the conversations of
      the name, and when the name stops being one live terminal and one conversation, the plan answers `undo` (C1, step 3).
-     Arrival order never decides.
-  2. NEW host `src/terminalHost.ts` (C2), with its row in `sonarcloud.yml`. `liveTerminals()` maps `window.terminals` to
+     Arrival order never decides, with one named exception: a press of the door, *take* or *add* inside the restore
+     window confirms the conversation that arrived first (parent § *What this plan does NOT do*).
+  2. NEW host `src/terminalHost.ts` (C2), with its row in `sonarcloud.yml`. `liveTerminals(terminals)` maps the list it is given (`window.terminals`, read once by the caller) to
      `LiveTerminal` (`exited` = `exitStatus !== undefined`); `chatReturnCommand.ts:156` `asLive` and
      `remoteSessionHost.ts:281` call it (reuse-first move 2; their tests stay green with no edit). `reattachByName(panels,
      name)` reads the view twice through `reattachOnce`. No `await` between the second read and `panels.rekey`.
      `panels.rekey` itself still refuses a taken destination (`chatPanels.ts:168-171`); that refusal answers `leave`, not
-     an error. The provisional marks are a `WeakSet` of terminal keys in this module: `mark` after a bind, `unmark` after
-     an undo, `confirmReattach(terminal)` after a use. An undo re-keys the conversation to a fresh `{}`: the panel and its
+     an error. The provisional marks are a `WeakMap` from terminal key to entry id in this module (C2): `mark` after a
+     bind (the id of the entry it moved), `unmark` after an undo, `confirmReattach(panels, terminal)` after a use when the
+     plan answers `bound`. A mark whose id is not the entry under the terminal any more reads as `final`. An undo re-keys the conversation to a fresh `{}`: the panel and its
      tab stay as they are.
   3. **The triggers** (parent § *Stage 3*):
      - **A terminal opens.** `bindReattach(context, panels)`: `vscode.window.onDidOpenTerminal((opened) =>
@@ -226,12 +236,15 @@ Build order and its gates: § 6.
        migration wait of up to 5 s, `chatRestore.ts:56`), so its `onDidOpenTerminal` found no orphan yet. The retry path
        goes through the same function, so it re-attaches too.
      - **At the start of the door, of *take* and of *add*.** In `askFromTerminal` (`chatCommand.ts:342`), after the
-       clipboard read and right before `terminalMatch(` (`:365`), and in `takeFromTerminal` (`:637`, which *add* calls),
-       after the remote read and right before `terminalMatch(` (`:667`), each with no `await` between:
+       clipboard read and right before `const match = terminalMatch(` (`:365`), and in `takeFromTerminal` (`:637`, which
+       *add* calls), after the remote read. In `takeFromTerminal`, `terminalMatch(` sits today INSIDE `await
+       deliverPassage(…)` (`:667`): S1 lifts it to `const match = terminalMatch(…)` on its own line above that `await`, as
+       `askFromTerminal` does at `:365`, and passes `match`. Each call site then reads, with no `await` between:
        `reattachByName(panels, door.name)`. It covers every state the two events could not see (for example: two terminals
        of one name at the open, and one of them closed since). Without it, *take* and *add* start a second conversation
        after a reload (§ 10, O5, settled). When `terminalMatch` then answers `existing`, the door, *take* and *add* call
-       `confirmReattach(door.terminal)`: that is the first use, and the bind is final. Go-to does not run re-attach (S2).
+       `confirmReattach(panels, door.terminal)`: that is the first use, and the bind is final when the plan still answers
+       `bound`. Go-to does not run re-attach (S2).
   4. **What re-attach says.** No notification: it is housekeeping, and a press of the door or of *back to source* still
      says why when it cannot find the terminal (E1, E2). One `console.info` line for `several terminals`,
      `several orphans` and `undo` only: the name and the reason, so a person who asks why a chat did not re-attach can see it.
@@ -252,25 +265,28 @@ Build order and its gates: § 6.
 | S1-T8 | the plan is checked again before the re-key | `reattachOnce` with a `read` seam that answers view A, then view B: B adds a second terminal of the name, or removes the orphan, or makes the terminal hold `final`, or renames it → `rekey` NOT called, the answer is B's `leave`; A then A → `rekey(o, t)` called ONCE and `mark(t)` once; the same two-look rule for `undo` (B restores one-to-one → no `rekey`, no `unmark`) | act on the first plan → `the plan was acted on without a second look` |
 | S1-T9 | a refused re-key is not reported as a bind | `rekey` answers false → the answer is `leave` `held`, and a real `ChatPanels` with `t` already registered keeps both entries as they were | report `bind` whatever `rekey` says → `a refused re-key was reported as done` |
 | S1-T10 | the race, in both orders (over a real `ChatPanels` and fake views) | (a) the orphan registered first, then the terminal's open trigger → bound; (b) the terminal open first (its trigger finds no orphan → `no orphan`), then the restore trigger for that record's name → bound; (c) both triggers in either order with a second terminal of the name already open → never bound | drop the restore trigger → `a terminal that opened before its chat was restored stayed apart` |
-| S1-T11 | the triggers are wired (`terminalReattachWiring.test.ts`, new; host code, no seam reaches it) | `extension.ts` calls `bindReattach(`; `bindReattach` registers `onDidOpenTerminal` and calls `reattachByName(` with the opened terminal's `name`; `restoreChatTab`'s body calls `reattachByName(` after `restoreConversation(` for a `terminal` source; `askFromTerminal`'s body and `takeFromTerminal`'s body each call `reattachByName(` before `terminalMatch(` with no `await` between, and `confirmReattach(` after it. Companions: each scan finds its function and its anchor | remove one call, or move the door's call before `await fromTheTerminal(`, or take's before `await readRemoteSession(` → red naming the trigger |
+| S1-T11 | the triggers are wired (`terminalReattachWiring.test.ts`, new; host code, no seam reaches it) | `extension.ts` calls `bindReattach(`; `bindReattach` registers `onDidOpenTerminal` and calls `reattachByName(` with the opened terminal's `name`; `restoreChatTab`'s body calls `reattachByName(` after `restoreConversation(` for a `terminal` source; `askFromTerminal`'s body and `takeFromTerminal`'s body each call `reattachByName(` before `const match = terminalMatch(` with no `await` between (in `takeFromTerminal` the `terminalMatch(` is no longer inside `await deliverPassage(`), and `confirmReattach(` after it. Companions: each scan finds its function and its anchor | remove one call, or move the door's call before `await fromTheTerminal(`, or take's before `await readRemoteSession(` → red naming the trigger |
 | S1-T12 | one reader of the window's terminals | `chatReturnCommand.ts` and `remoteSessionHost.ts` hold no `exitStatus !== undefined` map of their own and call `liveTerminals(`; companion: `terminalHost.ts` holds the one map | leave the copy in `chatReturnCommand.ts` → red naming it |
 | S1-T13 | case A: a second terminal after the bind undoes it (an event sequence over a real `ChatPanels`, the marks and fake views) | orphan A `Creds: h / s` registered → T1 opens (open trigger) → A on T1, provisional → T2 `Creds: h / s` opens (open trigger) → `undo`: A on a fresh key of its own, T1 and T2 hold nothing, A's panel still open → the door in T1 with T2 still open → `several terminals`, a NEW conversation for T1 (E1's behaviour); in a second run T2 closes first, then the door in T1 → A bound to T1 and final | never undo → `a conversation stayed on the first of two terminals of its name` |
 | S1-T14 | case B: a second conversation after the bind undoes it (as S1-T13) | T `Creds: h / s` open → A restored (restore trigger) → A on T, provisional → B `Creds: h / s` restored (restore trigger) → `undo`: A and B both on keys of their own, T holds nothing → the door in T → `several orphans`, a NEW conversation (E1's behaviour) | keep the first arrival → `the first of two restored conversations kept the terminal` |
 | S1-T15 | a used bind is final (as S1-T13) | A on T1, provisional → the door in T1 finds A (`existing`) and confirms → T2 of the name opens → `leave` `several terminals`, A stays on T1, T2 holds nothing; the same after *take* confirms | undo a confirmed bind → `a conversation the person used was taken off its terminal` |
 | S1-T16 | the undo and the provisional state in the pure plan | `reattachPlan`: T1 `provisional` + T2 `nothing` → `undo` from T1; T1 `provisional` + one more orphan → `undo` from T1; T1 `provisional` alone → `leave` `bound`; T1 `final` + one orphan → `leave` `held`; an exited T2 does not count → `leave` `bound` | count only orphans as conversations → `a provisional bind survived a second conversation of its name` |
+| S1-T17 | a closed provisional conversation leaves no stale mark (as S1-T13) | A on T, provisional → the person closes A (`ChatPanels.close(T)`) → the door in T: `terminalMatch` answers `new`, a NEW conversation N on T → T2 of the name opens → `leave` `several terminals`, N stays on T (T holds `final`: the mark's id is A's, not N's) | read the mark by terminal only → `a new conversation on a terminal was undone as if re-attach had made it` |
+| S1-T18 | a use confirms only while the plan answers `bound` (as S1-T13) | A on T, provisional → a second conversation of the name reopened from the picker (keyed `{}`, no trigger runs) → go-to from T shows A and calls `confirmReattach` → the mark stays (the plan answers `undo`, not `bound`); the next trigger undoes A; with no second conversation the same call removes the mark | confirm without the plan → `an ambiguous bind was made final by a use` |
 
 - **Host scenario S1-H1** (new `src/test/host/terminalReattachScenario.ts`, registered in `scenarios.ts`): in a real editor,
   with its OWN `ChatPanels` and `bindReattach` on it (as `terminalReturnScenario.ts` uses its own registry): register a
   conversation keyed `{}` whose thread source is `sourceOfTerminal('Creds: h / s')`; `createTerminal({ name: 'Creds: h / s'
   })`; wait (`until`) for `panels.get(theTerminal)` to hold that conversation. Then a second orphan of `Creds: h / t` and
-  TWO terminals of that name, opened one after the other: after the second opened, neither holds it (case A in a real
-  editor: the first open binds, the second undoes). Dispose every terminal in a `finally`.
+  TWO terminals of that name, one after the other: create the first, wait (`until`) for it to hold the conversation, and
+  only then create the second; after the second opened, wait for neither to hold it (case A in a real editor: the first
+  open binds, the second undoes — waiting between the two is what makes the undo, not a never-bind, the thing tested). Dispose every terminal in a `finally`.
 - **Docs.** `research/module_extension.md`: a new section *The chat finds its terminal again (E3)* after the E2 section — the
   rule, the orphan, the triggers and the race, the staggered arrivals and the provisional bind, the re-check, the
   console line. `research/module_tests.md`: a new row
   *Chat with other AI — RE-ATTACH, GO-TO, THE SKIP LIST (E3)* with S1's tests; **not covered**: a real reload with creds —
   R8.
-- **Done when.** S1-T1…T16 green, each break-it seen red; S1-H1 green in CI's real-editor job on the head commit;
+- **Done when.** S1-T1…T18 green, each break-it seen red; S1-H1 green in CI's real-editor job on the head commit;
   `sonarExclusions.test.ts` green with `terminalHost.ts` listed; the whole suite and lint green.
 - **Size.** About 650 lines (≈ 190 code, ≈ 460 tests and the host scenario).
 
@@ -316,15 +332,15 @@ the parent's DoD item 2 already says the old chords never fire in a terminal, an
   3. `src/conversationChoice.ts:87` `narrowedTitle` — the arm `several terminals`: *"<N> terminals are called “<tab>” — which
      conversation did you mean?"*.
   4. `src/chatSessionJoin.ts` — `askedForTerminal(panels, index, terminal)` beside `askedForGoto` (`:257`), the host half:
-     `liveTerminals()` (S1), `threadUnder(panels, terminal)?.saveId`, `index.bySource(sourceOfTerminal(name))`, the
+     `liveTerminals(window.terminals)` (S1), `threadUnder(panels, terminal)?.saveId`, `index.bySource(sourceOfTerminal(name))`, the
      entries of `filedUnder('', whereToLook(), conversationWorkspace(), NAMES_ARE_CASE_BLIND)` (where `knownFolder` files a
      terminal conversation), then `terminalGotoAsked`. It never calls `tabMatch(`, `snapshots(` or `sessionsNamed(`.
   5. `src/chatGotoCommand.ts`:
      - `goToFromTerminal(panels, index, store, extensionUri, terminal)` — under the SAME `running` latch (`:67`) as
        `goToConversation`; no terminal → a warning, code `no-terminal-for-goto`, *"There is no terminal here — open one,
        then press go to."*; else `arrive` with the terminal's question. When `arrive` answers `reveal` for this terminal's
-       own conversation (`live`), it calls `confirmReattach(terminal)` (S1, C2): showing it from its terminal is a use, so a
-       provisional bind becomes final. Go-to runs no re-attach of its own: it keeps its explicit-choice path — the person pressed go-to in THIS
+       own conversation (`live`), it calls `confirmReattach(panels, terminal)` (S1, C2): showing it from its terminal is a use,
+       so a provisional bind becomes final — only when the plan for the name still answers `bound` (S1-T18). Go-to runs no re-attach of its own: it keeps its explicit-choice path — the person pressed go-to in THIS
        terminal, and two live namesakes or several records give a list (J4). A bind go-to makes is final, never provisional. `arrive` (`:88`) takes the question and the two
        seams below as one parameter object, so the tab road and the terminal road share every arm of the exhaustive switch.
      - `bindingTo` (`:261`) takes a `stillThere(key)` seam: the tab road passes `tabStillOpen`; the terminal road passes
@@ -350,8 +366,8 @@ the parent's DoD item 2 already says the old chords never fire in a terminal, an
 | # | Name (file) | Assertion | Break-it → the RED it must show |
 |---|---|---|---|
 | S2-T1 | the terminal go-to is declared and sits in the overflow (`terminalDoorWiring.test.ts`) | one command row (title, category); one `view/title` row, `when` exactly `view == terminal`, group `coai@3` (not `navigation`); one palette row `when: false`; one keybinding `ctrl+alt+g`, `mac` `cmd+alt+g`, `when` `terminalFocus` | group `navigation` → `the go-to item is not in the overflow menu` |
-| S2-T2 | the skip-list default holds both ids | the existing derived test (`:72-85`) finds `coai.goToFromTerminal` among the `terminalFocus` bindings (a second companion) and the default is exactly the two ids in order | remove the id from the default → `coai.goToFromTerminal is bound in a terminal but not in the skip list — the chord goes to the shell` |
-| S2-T3 | no other Ctrl+Alt+G binding can fire under terminal focus (extends `:87-101` to `ctrl+alt+g`)  | every `ctrl+alt+g` row but the terminal go-to carries `!terminalFocus`; companion: the derivation finds go-to's and the road back's rows | drop `!terminalFocus` from the road back → `coai.backToSource bound to ctrl+alt+g … can still fire in a terminal` |
+| S2-T2 | the skip-list default holds both ids | the existing derived test (`:73-87`) finds `coai.goToFromTerminal` among the `terminalFocus` bindings (a second companion) and the default is exactly the two ids in order | remove the id from the default → `coai.goToFromTerminal is bound in a terminal but not in the skip list — the chord goes to the shell` |
+| S2-T3 | no other Ctrl+Alt+G binding can fire under terminal focus (extends `:89-102` to `ctrl+alt+g`)  | every `ctrl+alt+g` row but the terminal go-to carries `!terminalFocus`; companion: the derivation finds go-to's and the road back's rows | drop `!terminalFocus` from the road back → `coai.backToSource bound to ctrl+alt+g … can still fire in a terminal` |
 | S2-T4 | a terminal is a kind go-to starts from (`chatGoto.test.ts`) | a `terminal` tab: `live` → `reveal`; one `mine` and `namesakes` 1 → `reopen`; none → `start` with the offer `h / s`; `building` → `building`; `unavailable` → `pick` | make `eligible('terminal')` false → `a terminal got the whole list instead of its conversation` |
 | S2-T5 | several records of one terminal name are a list, not a guess | three `mine` with the source `Creds: h / s` → `pick`, why `several`, `bind: true` | answer `reopen` with the first → `one of several conversations of a terminal was opened without a choice` |
 | S2-T6 | two live terminals of one name are a list even for one record | one `mine`, `namesakes` 2 → `pick`, why `{ several terminals, count 2 }`, `bind: true`; `narrowedTitle` gives *"2 terminals are called “h / s” — which conversation did you mean?"* | drop the helper → `a conversation was bound to one of two terminals of its name without a choice` |
@@ -360,7 +376,7 @@ the parent's DoD item 2 already says the old chords never fire in a terminal, an
 | S2-T9 | the bind re-checks the terminal at the press | the terminal road's `bindingTo` refuses when the terminal is gone, has exited, holds a conversation, or its live name now gives another source; it binds when all hold and `bindable` passes | skip the rename check → `a conversation was bound to a terminal that changed its name` |
 | S2-T10 | the terminal go-to never reads the tabs, and starts the terminal door (`chatGotoWiring.test.ts`) | the bodies of `goToFromTerminal` and `askedForTerminal` hold none of `tabMatch(`, `snapshots(`, `sessionsNamed(`, `askedForGoto(`; its `start` runs `askFromTerminal(` and never `chatWithOtherAi(`; the terminal road calls `confirmReattach(` on a `reveal` and never `reattachByName(`; companion: `goToConversation` still calls `askedForGoto(` | start with `chatWithOtherAi` → `the offer from a terminal opened the file door` |
 | S2-T11 | the press is a door, recorded first (`chatWiring.test.ts`, the census) | the census finds `coai.goToFromTerminal` (its `view/title` row) and its `noteChatDoor('goto')` comes first | move `noteChatDoor` after the call → `records the invocation after the work` |
-| S2-T12 | the tab road is unchanged | the existing tests at `chatGoto.test.ts:215-224` and `:534-556` (a terminal in the editor area is `other` → the whole list) are green with no edit | — (they are the guard) |
+| S2-T12 | the tab road is unchanged | the existing tests at `chatGoto.test.ts:221-225` and `:537-556` (a terminal in the editor area is `other` → the whole list) are green with no edit | — (they are the guard) |
 | S2-T13 | every language names the item (`helpCoverage.test.ts`) | each of the five articles, not a fallback, contains `**CoAI: go to this terminal's conversation**` and `Ctrl+Alt+G`; the help census passes for the new title | leave `helpEs.ts` as it is → `the es chat article never names go to from a terminal` |
 
 - **Host scenario S2-H1** — E1's `theSkipListDefaultHoldsTheTerminalDoor` (`terminalCaptureScenario.ts:63`) asserts BOTH ids
@@ -381,7 +397,8 @@ the parent's DoD item 2 already says the old chords never fire in a terminal, an
 - **Goal.** When the person's OWN user-level `terminal.integrated.commandsToSkipShell` hides E1's default, they are told once
   and offered **Add**. The press is the consent. The ids are appended to that list and nothing else changes. The answer is
   kept, so the notification does not come back. When a workspace or folder list hides the default, they are told ONCE, with
-  no button, which settings level to fix; the extension never writes workspace or folder settings (the owner, 2026-11-13).
+  no button, which settings level to fix; the extension never writes workspace or folder settings (the owner, 2026-11-13, in the session's question tool —
+  option: tell in words; offered as not narrowing).
 - **What the parent fixes and what this story reads from it.** *"if the person's own `commandsToSkipShell` hides the
   default, one notification with an *Add* button that appends the ids to the user setting; pressing it is the consent; the
   answer is remembered"* (§ *Stage 3*), and R11's *"a user-level `commandsToSkipShell` that lacks the ids"*. So: the TARGET is
@@ -495,8 +512,8 @@ the parent's DoD item 2 already says the old chords never fire in a terminal, an
    document (`planning-docs.md`).
 2. **The open points of § 10 are settled** by the parent's re-review (2026-11-13), O1 included; no gate is left between
    the stories. The plan is in its re-review: no story is coded before epoch 3 opens.
-3. **S1** — Sonnet codes; Opus reviews; Sonnet fixes. S1 extracts `liveTerminals()` first, in its own commit.
-4. **S2** — Sonnet codes; Opus reviews; Sonnet fixes. S2 needs S1's `liveTerminals()` and `confirmReattach`.
+3. **S1** — Sonnet codes; Opus reviews; Sonnet fixes. S1 extracts `liveTerminals(terminals)` first, in its own commit.
+4. **S2** — Sonnet codes; Opus reviews; Sonnet fixes. S2 needs S1's `liveTerminals(terminals)` and `confirmReattach`.
 5. **S3** — Sonnet codes; Opus reviews; Sonnet fixes. S3 needs S2's id in the manifest (S3-T9).
 6. One pull request for the epic. The code round of the review gate gets this document's § 1, § 4 and § 11 as `planText`.
    Every CI check green, and the `extension · a real editor` job read by its own result (§ 8).
@@ -522,7 +539,7 @@ the parent's DoD item 2 already says the old chords never fire in a terminal, an
 | An already bound key does not bind | S1 | S1-T4, S1-T9 |
 | A name that fails `credsSession` never binds | S1 | S1-T5, S1-T6 |
 | Re-checked just before `panels.rekey`; the triggers, *take* and *add* included | S1 | S1-T8, S1-T10, S1-T11 |
-| The staggered orders: case A, case B, a used bind stays | S1 | S1-T13…T16, S1-H1 |
+| The staggered orders: case A, case B, a used bind stays; no stale mark; a use confirms only a `bound` plan | S1 | S1-T13…T18, S1-H1 |
 | Go-to with a terminal | S2 | S2-T3…T10, S2-T12 |
 | The skip list holds every id bound under `terminalFocus` (stage 1, extended) | S2, S3 | S2-T2, S2-H1, S3-T9 |
 | The skip-shell check over the `inspect()` shapes; the one notice for a workspace or folder list | S3 | S3-T1, S3-T7, S3-T12 |
@@ -563,8 +580,8 @@ the parent's DoD item 2 already says the old chords never fire in a terminal, an
   one key to another (`ChatPanels`, one entry either way). Go-to: nothing new. The skip list: ONE `globalState` key,
   `coai.skipShellAnswers`, per id of `SKIP_SHELL_IDS` at most one `added` or `dismissed` row and one `told` row per layer
   (2 ids today: at most 6 rows, about 80 bytes each), rows of ids that left the list dropped on the next write — under 1 KiB for as long as the list stays short; nothing in flight survives a crash
-  (a notification open at a reload is no answer, and is asked again). The provisional marks of re-attach: a `WeakSet` in
-  memory, at most one per open terminal, gone with the terminal or the window. The user setting gains at most two strings, once. The
+  (a notification open at a reload is no answer, and is asked again). The provisional marks of re-attach: a `WeakMap` (terminal →
+  entry id) in memory, at most one per open terminal, gone with the terminal or the window. The user setting gains at most two strings, once. The
   conversation records: unchanged (E1's store and its ninety-day sweep).
 - **Security.** No new outward edge: E3 starts no process and calls no network. Two judgements:
   - **The terminal name is not proof** (parent § *Security*). Any program can open a terminal called `Creds: h / s`, and
@@ -597,7 +614,7 @@ outside the latch) — they stay open as E1 recorded them.
 2. **J2 — only open panels count.** Several stored records of one terminal name are normal (E1 § 11, carried note); counting
    them would make every terminal ambiguous after two reloads. Stored records are go-to's business (S2-T5).
 3. **J3 — a command of its own for go-to.** `coai.goToFromTerminal`, because `coai.goToConversation` reads the TAB (`askedForGoto`)
-   and its chord must keep `!terminalFocus` (`terminalDoorWiring.test.ts:87-101`). The same reason E1 gave
+   and its chord must keep `!terminalFocus` (`terminalDoorWiring.test.ts:89-102`). The same reason E1 gave
    `coai.askFromTerminal` its own command. The parent names no command id for go-to.
 4. **J4 — no move between live namesakes, and a list for two terminals of one name** (S2-T6, S2-T8). This satisfies E1.S2's
    contract as written (*"two live terminals of one name → two conversations with equal sources"*) on the go-to road,
@@ -614,7 +631,7 @@ not ledger entries.
 |---|---|---|
 | O1 | **The road back's chord.** `coai.backToSource` is bound to `ctrl+alt+g` when `activeWebviewPanelId == 'coaiChat'`, with no `!terminalFocus` (`package.json:1370-1373`). With a coai chat as the active editor and a terminal focused, it matches beside the new terminal go-to; if VS Code resolves the chord to the road back, which is not in the skip list, the key goes to the shell and R10 fails. E1 § 11 item 3 said E3 *"must add `!terminalFocus` here too"*. Taking it also needs `chatWiring.test.ts:493-518` (the exact `when`) and `research/module_extension.md:10319` (*"the two `when`s never overlap"*) changed. | **Not a change** (consult 719f7038): DoD item 2 already says the old chords never fire in a terminal, and R10 needs it. Taken in S2 (the manifest, S2-T3, the docs). |
 | O2 | **When the feature review runs.** The parent's build order and E3 *Done when* put `review_feature` AFTER the third release; `coai-feature-gate.md` says *"after every epic is built … and before the release"*. | **A change: entry 2.2**, the one that stopped the plan. Now: merge → R8, R10, R11 → `review_feature`, findings resolved → the tag → the promotion (§ 6). |
-| O3 | **A workspace or folder list hides the default.** **Add** to the user setting cannot fix it (the workspace layer wins). The first draft offered nothing and said nothing. | **The owner, 2026-11-13** (keeps the scope; not a narrowing): ONE notification with NO button that names the settings level to fix; never a write to workspace or folder settings (S3, S3-T12). |
+| O3 | **A workspace or folder list hides the default.** **Add** to the user setting cannot fix it (the workspace layer wins). The first draft offered nothing and said nothing. | **The owner, 2026-11-13, in the session's question tool** (option: tell in words; offered as not narrowing): ONE notification with NO button that names the settings level to fix; never a write to workspace or folder settings (S3, S3-T12). |
 | O4 | **A default that lacks the ids** with no user value (for example another extension's `configurationDefaults` for the same array setting won — not measured whether VS Code merges array defaults across extensions). Writing a user list then would hide that other default. | **A named limit**: no invented default, nothing offered, nothing written (parent § *What this plan does NOT do*; S3-T7). |
 | O5 | **"At the start of the door."** The first draft read it as the terminal door only. | **Wider** (consult 82282f3e): re-attach also runs at the start of *take* and *add* — without it, `takeFromTerminal` (`chatCommand.ts:667`) starts a second conversation. Go-to keeps its explicit-choice path (S1 item 3, S2 item 5). |
 | O6 | **A narrower orphan** (only panels the serializer restored, not one reopened from the picker or one whose terminal closed in this window) needs a mark on the panel the code does not keep. | **Kept as J1**: an orphan is an OPEN panel; closed stored records are never orphans; a conversation is never moved between live terminals. |
@@ -652,7 +669,7 @@ the parent (§ *What the code does today*, its re-verified list, and the E3 scop
 - [ ] Re-attach binds only a strict `Creds:` name, only one live terminal against one orphan, never a held terminal, and only
       after the second look (S1-T1…T10); its triggers — the open, the restore, the door, *take* and *add* — are wired
       (S1-T11); the window's terminals are read in one place (S1-T12); a provisional bind is undone in case A and case B, and
-      a used bind stays (S1-T13…T16).
+      a used bind stays, a closed conversation leaves no stale mark, and a use confirms only a `bound` plan (S1-T13…T18).
 - [ ] Go-to works from a terminal by Ctrl+Alt+G and by the overflow item; the skip-list default holds both ids; a conversation
       is never moved between live namesakes (S2-T1…T13); the road back's chord carries `!terminalFocus` (O1, settled).
 - [ ] The skip-shell check offers **Add** only for the person's own user list, writes only after the press, appends only the
