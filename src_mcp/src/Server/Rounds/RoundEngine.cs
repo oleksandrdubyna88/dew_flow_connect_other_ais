@@ -273,10 +273,12 @@ internal sealed class RoundEngine(
             return Error(pressed, from);
         }
 
+        // The policy a round ends under is the CURRENT one: the config is stamped here, AFTER the person's decision is applied,
+        // and never while a hold from before policy auto stands (which keeps its config as loaded, so a later release can find it).
         session = session with
         {
             State = session.State with
-            { Config = session.State.Config with { SecurityLane = _settings.SecurityLane.Gate } }
+            { Config = LegacyHold.Stamped(session.State, _settings.Rounds) with { SecurityLane = _settings.SecurityLane.Gate } }
         };
         // And the person's request for a feature review's second round (D23), read from the same road —
         // the answer file — and from nothing a caller passes. Nothing is saved for it here.
