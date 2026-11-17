@@ -101,14 +101,17 @@ export function narrowedTitle(why: Narrowing, tab: string, among: number): strin
       // perfectly well and nothing in it is called this. Saying the folder did not answer sent
       // people looking for a problem that was not there.
       return `No Claude session is called “${tab}” — which conversation did you mean?`;
+    case 'several terminals':
+      // E3.S2: two live terminals carry one name, so even ONE saved conversation of that name is not evidence for this one.
+      return `${why.count} terminals are called “${tab}” — which conversation did you mean?`;
     default: {
-      // EXHAUSTIVE BY NAME, like every other answer in this file: a fifth reason must be a compile
+      // EXHAUSTIVE BY NAME, like every other answer in this file: a sixth reason must be a compile
       // error rather than a picker with no title.
       const unhandled: never = why;
 
       throw new Error(
         `a narrowing this build has no sentence for: ${JSON.stringify(unhandled)}`
-        + ' — the reasons it may give are several, ambiguous session, cross root, unreadable and unmatched',
+        + ' — the reasons it may give are several, ambiguous session, cross root, unreadable, unmatched and several terminals',
       );
     }
   }

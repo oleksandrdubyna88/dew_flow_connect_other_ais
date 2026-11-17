@@ -1,4 +1,8 @@
+import * as vscode from 'vscode';
 import { ChatPanels } from './chatPanels';
+import { revealBoundWith } from './chatReveal';
+import { liveTerminals } from './terminalHost';
+import { terminalOfWindow } from './terminalSource';
 import { threadUnder, threads } from './chatThread';
 import { recordOf } from './chatPersist';
 import { metaOf } from './chatStore';
@@ -87,28 +91,15 @@ export function whereConversationSits(panels: ChatPanels, saveId: string): objec
   return undefined;
 }
 
-/** Bring the panel under this key to the front, for a caller that already knows where it sits. */
-export function revealUnder(panels: ChatPanels, key: object): void {
-  panels.get(key)?.panel.reveal();
-}
-
 /**
- * Reveal a conversation this window already holds — moving its registration onto `onto` first, when
- * that is where it belongs.
+ * Reveal a conversation this window already holds — moving its registration onto `onto` first, when that is where it belongs, and
+ * NEVER off a terminal of the window, live or exited (`chatReveal.ts` holds the rule; this supplies the one fact only the window knows:
+ * the terminals it lists — an exited terminal still listed keeps its conversation).
  *
- * <p>ONE rule for the two paths that reach a live conversation: *go to*'s reopen arm and the picker's
- * own accept. They were two copies of it and only one of them had it, so a conversation chosen from a
- * narrowed picker was revealed and the tab it belongs to left unbound for ever — the next press asked
- * the same question again. (Two vendors, the second code round.)</p>
+ * <p>The ONE road *go to*'s reopen arm and the picker's own accept both take.</p>
  */
 export function revealBound(panels: ChatPanels, where: object, onto: object | undefined): void {
-  if (onto !== undefined && onto !== where) {
-    panels.rekey(where, onto);
-    revealUnder(panels, onto);
-
-    return;
-  }
-  revealUnder(panels, where);
+  revealBoundWith(panels, where, onto, (key) => terminalOfWindow(liveTerminals(vscode.window.terminals), key));
 }
 
 /**

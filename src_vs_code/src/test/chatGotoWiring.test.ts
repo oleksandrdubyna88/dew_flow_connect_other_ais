@@ -143,15 +143,20 @@ test('binding is decided AT THE PRESS, and guarded three ways', () => {
   // It is a FUNCTION handed forward, called with the record the store has just answered with — and
   // in EVERY arm that binds. One arm holding a precomputed handle is the whole defect back again, so
   // this counts them rather than asking whether the shape appears anywhere.
-  assert.equal((command.match(/bindTo: bindingTo\(panels, asked, key\)/gu) ?? []).length, 2,
+  assert.equal((command.match(/bindTo: bindingTo\(panels, road\)/gu) ?? []).length, 2,
     'an arm that binds is handed a target worked out in advance rather than a question asked at the press');
-  assert.match(decide, /return \(record\) =>/u, 'the target is computed once rather than at the press');
-  // The record must still be this tab's — source AND the TAB'S root, never the record's own.
-  assert.match(decide, /bindable\(record, asked\.source, rootOfTab\(asked\), asked\.caseBlind\)/u,
+  assert.match(decide, /return \(record\) => bindTarget\(record, road\.asked, road\.key,/u, 'the target is computed once rather than at the press');
+  // The decision is `bindTarget` (pure, `chatGoto.ts`, since E3.S2: the tab and the terminal road share it). The record must still
+  // be this tab's — source AND the TAB'S root, never the record's own.
+  const pure = bodyOf(source('chatGoto.ts'), 'export function bindTarget(');
+  assert.match(pure, /bindable\(record, asked\.source, rootOfTab\(asked\), asked\.caseBlind\)/u,
     'the record is not re-checked against the tab it is about to be bound to');
   // The tab must still be there, and still hold nothing.
-  assert.match(decide, /!tabStillOpen\(key\)/u, 'a conversation can be bound to a tab that has been closed');
-  assert.match(decide, /panels\.get\(key\) !== undefined/u, 'a conversation can be bound to a tab that already holds one');
+  assert.match(pure, /!stillFree\(key, seams\)/u, 'the bind does not ask whether the key is still free');
+  assert.match(source('chatGoto.ts'), /const stillFree = [^\n]*seams\.stillThere\(key\) && !seams\.holdsOne\(key\)/u,
+    'a conversation can be bound to a tab that has been closed, or to one that already holds one');
+  assert.match(decide, /holdsOne: \(key\) => panels\.known\(\)\.some\(\(one\) => one\.key === key\)/u, 'the registry is not asked whether the tab already holds one');
+  assert.match(command, /stillThere: tabStillOpen/u, 'the tab road does not ask whether the tab is still open');
   // The record is read from DISK at the press, never from the index the decision was made on.
   const bind = command.slice(command.indexOf('async function bind('), command.indexOf('function bindingTo('));
   assert.match(bind, /await store\.read\(answer\.meta\.id\)/u, 'the record is bound from the index rather than from disk');
@@ -171,9 +176,10 @@ test('the record is re-checked against THE TAB’S root, never against its own',
   const command = source('chatGotoCommand.ts');
   const decide = command.slice(command.indexOf('function bindingTo('));
 
-  assert.match(decide, /bindable\(record, asked\.source, rootOfTab\(asked\), asked\.caseBlind\)/u,
+  const pure = bodyOf(source('chatGoto.ts'), 'export function bindTarget(');
+  assert.match(pure, /bindable\(record, asked\.source, rootOfTab\(asked\), asked\.caseBlind\)/u,
     'the record’s workspace is compared against something other than the tab’s own root');
-  assert.doesNotMatch(decide, /record\.workspace/u,
+  assert.doesNotMatch(pure + decide, /record\.workspace/u,
     'the record’s own workspace is still being used as the thing to compare it against');
 });
 
@@ -196,7 +202,8 @@ test('the offer to start one can be CHOSEN, and is not shown where it cannot be'
   // And the completion is the ordinary door, on the tab the row names — refused when that tab is
   // no longer the one in front, because starting a conversation for the wrong tab is the guess this
   // whole answer exists to avoid.
-  assert.match(command, /onNew: startingFor\(panels, extensionUri\)/u, 'the picker is given no way to start one');
+  assert.match(command, /start: startingFor\(panels, extensionUri\)/u, 'the tab road is given no way to start one');
+  assert.match(command, /onNew: road\.start,/u, 'the picker is given no way to start one');
   const starting = between(command, 'function startingFor(', 'function bindingTo(');
   assert.match(starting, /chatWithOtherAi\(panels, extensionUri, \[\], false\)/u, 'the offer does not open a conversation');
 });
@@ -297,7 +304,7 @@ test('a conversation the picker or a reload opened without a tab is REBOUND, not
   assert.match(bind, /revealBound\(panels, where, tab\?\.key\)/u, 'an unbound conversation is revealed but never bound to its tab');
   // The registry readers moved to `chatRegistry.ts` when the command file was split; what they must
   // do is unchanged.
-  assert.match(source('chatRegistry.ts'), /export function revealBound[\s\S]{0,400}panels\.rekey\(where, onto\)/u,
+  assert.match(source('chatReveal.ts'), /export function revealBoundWith[\s\S]{0,800}panels\.rekey\(where, onto\)/u,
     'the helper both callers go through does not actually move the registration');
 });
 
@@ -318,4 +325,54 @@ test('restoring binds only when a caller names a tab, and the reload serializer 
   const serializer = wiring.slice(wiring.indexOf('registerWebviewPanelSerializer'));
   assert.doesNotMatch(serializer.slice(0, 1_500), /restoreConversation\([^)]*bindTo/u,
     'the reload serializer binds restored conversations to tabs, which it has no way to identify');
+});
+
+// ───────────────── E3.S2: go to from a terminal ─────────────────
+
+test('S2-T10: the terminal go-to never reads the tabs, starts the terminal door, and confirms a use but never re-attaches', () => {
+  const command = source('chatGotoCommand.ts');
+  const road = bodyOf(command, 'export async function goToFromTerminal(');
+  const asked = bodyOf(source('chatSessionJoin.ts'), 'export function askedForTerminal(');
+  const both = `${road}\n${asked}`;
+
+  // The scans' own proof: the bodies are found and are the terminal road's, and the tab road still reads the tabs.
+  assert.ok(road.includes('askedForTerminal(') && asked.includes('terminalGotoAsked('), 'the derivation no longer finds the terminal road');
+  // The press-time question of the terminal road is the terminal's own (S2-T10, m4): in the window, alive, and the same name NOW. A road
+  // that passes `() => true` binds a conversation to a terminal that has gone, exited or been renamed, and every pure test stays green.
+  assert.match(road, /stillThere: \(key\) => terminalStillThere\(liveTerminals\(vscode\.window\.terminals\), key, asked\.source\),/u,
+    'the terminal road does not pass terminalStillThere as its stillThere, so a bind is never re-checked against the terminal');
+  assert.ok(bodyOf(command, 'export async function goToConversation(').includes('askedForGoto('), 'the tab go-to no longer calls askedForGoto, so this scan guards a function that moved');
+  for (const call of ['tabMatch(', 'snapshots(', 'sessionsNamed(', 'askedForGoto(']) {
+    assert.ok(!both.includes(call), `the terminal go-to calls ${call}…) — a terminal is read through the tabs again`);
+  }
+  assert.ok(/start: \(\) => \{[^]*?askFromTerminal\(panels, extensionUri, terminal\)\.catch\(/u.test(road), 'the offer from a terminal does not start the terminal door');
+  assert.ok(!road.includes('chatWithOtherAi('), 'the offer from a terminal opened the file door');
+  // The namesakes count the pressed terminal itself (m2): `oneLiveNamed` over the live ones read an exited pressed terminal as having none.
+  assert.ok(asked.includes('namesakesOf(') && !asked.includes('oneLiveNamed('), 'the namesakes of a go-to do not count the pressed terminal itself');
+  assert.ok(/=== 'reveal'\) \{\s*confirmReattach\(panels, terminal, name\);/u.test(road), 'a terminal go-to that shows the terminal’s conversation does not confirm it');
+  assert.ok(!both.includes('reattachByName('), 'the terminal go-to runs a re-attach of its own, which it must never do');
+  // One press at a time, under the SAME latch as the tab road.
+  assert.equal((command.match(/await pressed\(/gu) ?? []).length, 2, 'the two go-to commands do not share one latch');
+  assert.ok(/no-terminal-for-goto/u.test(road), 'a press with no terminal says nothing');
+});
+
+test('S2-T10c: the offer to start a conversation from a terminal catches its own failure and says it as the terminal door does', () => {
+  const road = bodyOf(source('chatGotoCommand.ts'), 'export async function goToFromTerminal(');
+  const door = /start: \(\) => \{([\s\S]*?)\n {6}\},/u.exec(road)?.[1] ?? '';
+
+  // The scan's own proof: the start arm is found and is the terminal door's.
+  assert.ok(door.includes('askFromTerminal(panels, extensionUri, terminal)'), 'the derivation no longer finds the terminal road\u2019s start');
+  assert.ok(door.includes('.catch('), 'the start of a conversation from a terminal has no catch, so a rejected door is an unhandled rejection');
+  assert.ok(door.includes("code: 'terminal-door-failed'"), 'the start of a conversation from a terminal does not say what the registered command says when the door fails');
+  // The same sentence the registered command shows, so the person sees one wording whichever way the door was reached.
+  const registered = /registerCommand\('coai\.askFromTerminal'[\s\S]*?title: '([^']*)'/u.exec(source('extension.ts'))?.[1] ?? '';
+  assert.ok(registered.length > 0 && door.includes(`title: '${registered}'`), 'the two failure notices of the terminal door say different things');
+});
+
+test('S2-T8c: the reveal road asks whether the key is a terminal of the window, not whether it is alive', () => {
+  const registry = bodyOf(source('chatRegistry.ts'), 'export function revealBound(');
+  const reveal = source('chatReveal.ts');
+
+  assert.ok(registry.includes('terminalOfWindow(liveTerminals(vscode.window.terminals), key)'), 'revealBound no longer asks the window which terminals it lists');
+  assert.ok(reveal.includes('isWindowTerminal') && !reveal.includes('isLiveTerminal'), 'the reveal seam is named for liveness again, which it does not test');
 });

@@ -36,7 +36,7 @@ import { forgetPickedConversation, switchConversations } from './conversationPic
 import { Choice, manageReviewTrees, TreesDeps } from './reviewTreesCommand';
 import { readTrees, removeTree } from './reviewTreeRead';
 import { openTreeFolder } from './revisionOpen';
-import { goToConversation } from './chatGotoCommand';
+import { goToConversation, goToFromTerminal } from './chatGotoCommand';
 import { backToSource } from './chatReturnCommand';
 import { ChatTabMemory } from './chatTabs';
 import { ChatStoreFile, conversationsDir } from './chatStoreFile';
@@ -76,6 +76,8 @@ import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { sideHereOf, sidesIn, stampThisSide, type SeenSide } from './sidesSeen';
 import { bindRemoteSessions, testDoorOf, type RemoteSessionsTestDoor } from './remoteSessionHost';
+import { bindReattach } from './terminalHost';
+import { bindSkipShell, type SkipShellTestDoor } from './skipShellHost';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -105,6 +107,11 @@ export interface CoaiExports {
    * it is absent, so no other extension can write a consent into this profile or replace the ssh call. `remoteExportGuard.test.ts` holds that.
    */
   readonly remoteSessions?: RemoteSessionsTestDoor;
+  /**
+   * The BOUND skip-shell check, for a host scenario (E3.S3): replace the offer, run the check, save and restore the memory. Present ONLY in test
+   * mode, for the same reason: in production no other extension can answer the offer or write this profile's memory. `skipShellWiring.test.ts` holds that.
+   */
+  readonly skipShell?: SkipShellTestDoor;
 }
 
 /**
@@ -145,6 +152,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   bindChatSide(context);
   // The road to a `Creds: <host> / <session>` terminal's Claude session (E2.S3): the consent, the picked ids, the hosts command.
   const remote = bindRemoteSessions(context);
+  // The person's own skip list may hide the terminal keys of CoAI (E3.S3): tell once, offer Add for the user list, never write a workspace.
+  const skipShell = bindSkipShell(context);
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
   // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
   noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));
@@ -300,6 +309,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
   // Made before the sidebar, which hands the review page's bugs to it (issue #487).
   const chatPanels = new ChatPanels();
+  // A terminal that opens (creds opens its terminals late, after the serializer restored the chats) takes back the conversation of its name (E3.S1).
+  bindReattach(context, chatPanels);
   // The page draws what the watch publishes, and repaints when it changes; the server's answer about the roots reaches
   // the watch through the panel's probe (paths per side, E5.3 / E5.6).
   onFindings(() => { void panelRef.render(); });
@@ -809,6 +820,24 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
           });
         });
     }),
+    // GO TO from a terminal (E3.S2): the same go-to, pressed IN a terminal, for THAT terminal — a command of its own because
+    // `coai.goToConversation` reads the active TAB and its chord keeps `!terminalFocus`. It is a door like the others, so it is
+    // recorded FIRST; it reads the active terminal as `coai.askFromTerminal` does and never goes through the tab match.
+    vscode.commands.registerCommand('coai.goToFromTerminal', () => {
+      noteChatDoor('goto');
+      void goToFromTerminal(chatPanels, housekeeping.index, chatStore, context.extensionUri, vscode.window.activeTerminal)
+        .catch((reason: unknown) => {
+          console.error('ConnectOtherAIs: going to a terminal conversation threw', reason);
+          void notify({
+            as: 'warning',
+            class: 'failure',
+            source: 'goToConversation',
+            code: 'conversation-not-opened',
+            title: 'That conversation could not be opened.',
+            detail: asText(reason),
+          });
+        });
+    }),
     // The road back (issue #314): from a coai chat to the tab, session or file it came from. NOT a
     // chat door — it opens no conversation — so nothing is recorded for it. Its decision is
     // `chatReturn.ts`; a right-click hands it the page's conversation id, the chord hands it nothing.
@@ -887,7 +916,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
 
   return {
     sidesSeen: () => sidesIn(context.globalState, Date.now()),
-    ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote) } : {}),
+    ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote), skipShell } : {}),
   };
 }
 

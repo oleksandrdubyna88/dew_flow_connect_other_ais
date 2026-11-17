@@ -475,6 +475,8 @@ const actsOnOurPicker = (row: Contribution): boolean => (row.when ?? '').include
 const ACTS_INSIDE_A_CHAT: readonly string[] = ['coai.backToSource'];
 const OUR_CHAT = "webviewId == 'coaiChat'";
 const OUR_CHAT_ACTIVE = "activeWebviewPanelId == 'coaiChat'";
+// The road back's chord is the SAME chord as go-to from a terminal, so it must never fire under terminal focus (E3.S2, O1).
+const OUR_CHAT_ACTIVE_OUTSIDE_TERMINAL = "activeWebviewPanelId == 'coaiChat' && !terminalFocus";
 
 /** Which commands a person can actually open a chat with, TAKEN FROM THE MANIFEST rather than typed. */
 function doorCommands(): readonly string[] {
@@ -500,7 +502,7 @@ test('a command that acts inside an open chat is scoped to the chat, and everyth
   for (const command of ACTS_INSIDE_A_CHAT) {
     const offeredAt = rows.filter((row) => row.command === command);
     assert.ok(offeredAt.length > 0, command + ' is allow-listed and offered nowhere — the list is watching a command that moved');
-    assert.ok(offeredAt.every((row) => row.when === OUR_CHAT || row.when === OUR_CHAT_ACTIVE),
+    assert.ok(offeredAt.every((row) => (MANIFEST.contributes.keybindings.includes(row) ? row.when === OUR_CHAT_ACTIVE_OUTSIDE_TERMINAL : row.when === OUR_CHAT || row.when === OUR_CHAT_ACTIVE)),
       command + ' is offered outside the chat page, where it could be a real way in');
     // The HANDLER'S body, cut out the way the door test below cuts one: `noteChatDoor` takes a door's
     // short name, never a command id, so searching the file for the id could never fail. (Our own code
@@ -616,4 +618,17 @@ test('a prompt button adopts text the person wrote, and a model button leaves it
     'a prompt button leaves pasted text alone again, which is issue #538');
   assert.match(model, /writeInstruction\(entry, thread, draft, was, config, 'leave'\)/,
     'a model button now rewrites a question somebody was half-way through writing');
+});
+
+test('S2-T11: the terminal go-to is found by the census and records its door first', () => {
+  const source = read('src/extension.ts');
+  const command = 'coai.goToFromTerminal';
+  const at = source.indexOf("registerCommand('" + command + "'");
+
+  assert.ok(doorCommands().includes(command), command + ' is offered from the terminal title bar and the census does not find it');
+  assert.notStrictEqual(at, -1, command + ' is registered by nothing');
+  const handler = source.slice(at, source.indexOf('registerCommand(', at + 20));
+  assert.ok(handler.indexOf("noteChatDoor('goto')") >= 0, command + ' does not record as the door goto');
+  assert.ok(handler.indexOf('noteChatDoor(') < handler.indexOf('goToFromTerminal(chatPanels'), command + ' records the invocation after the work');
+  assert.ok(handler.includes("code: 'conversation-not-opened'") && handler.includes('.catch((reason: unknown)'), command + ' has no catch of its own at its edge');
 });

@@ -100,6 +100,22 @@ test('S4-T10 every language’s chat article names the two terminal items, the h
   assert.ok(!Object.keys(SELF_EVIDENT).includes('coai.terminalHosts'), 'coai.terminalHosts is SELF_EVIDENT again: its help is in the chat article');
 });
 
+test('S2-T13 every language’s chat article names the terminal go-to, its chord and both skip-list ids', () => {
+  // The title and the chord are English in every language, like every control name here, so all five can be asked for them; the two
+  // ids are what the skip-list sentences name (the default holds both).
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} chat article is missing, so a reader of it gets English`);
+    const text = Object.values(body).join(' ');
+    assert.ok(text.includes("**CoAI: go to this terminal's conversation**"), `the ${language} chat article never names go to from a terminal`);
+    assert.ok(text.includes('`Ctrl+Alt+G`'), `the ${language} chat article never names the chord of go to from a terminal`);
+    assert.ok(text.includes('`coai.goToFromTerminal`') && text.includes('`coai.askFromTerminal`'), `the ${language} chat article names only one of the two skip-list ids`);
+  }
+});
+
 test('S1r-T8 no language’s chat article says the terminal door uses VS Code’s copy command', () => {
   // Epoch 1's "what can go wrong" sentence outlived change 1.2 in all five languages: the door no longer runs a copy command,
   // it only reads the clipboard. Each language's epoch-1 wording is named here, because a translation cannot be matched by
@@ -865,5 +881,34 @@ test('S5.7.6 (decision e) every language says a Kimi consult turn can time out b
     const paragraphs = Object.values(body).join('\n\n').split('\n\n');
     const told = paragraphs.find((one) => one.includes('Kimi') && one.includes('*interrupted*') && one.includes('*resumable*'));
     assert.ok(told !== undefined, `the ${language} consultant article never says a Kimi consult turn that waits behind a Kimi review can time out, *interrupted* and *resumable*`);
+  }
+});
+
+test('S3-T11 every language’s chat article says what Add does for the skip list', () => {
+  // The ids, the button and `settings.json` are not translated; the sentence about a workspace or folder list is, so it is asked for
+  // by a word of its own in each language. Each language's E1 sentence (only `coai.askFromTerminal`, "add it to your list") is named
+  // as gone: a translation cannot be matched by one English phrase.
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+  const workspaceWord: Record<string, string> = { en: 'workspace or a folder', de: 'Workspace oder einen Ordner', es: 'espacio de trabajo o una carpeta', ru: 'рабочей области или папки', uk: 'робочої області або теки' };
+  const epochOne: Record<string, string> = {
+    en: 'to bring it back.',
+    de: 'um sie zurückzuholen.',
+    es: 'para recuperarlo.',
+    ru: 'чтобы вернуть его.',
+    uk: 'щоб повернути його.',
+  };
+  assert.deepEqual(Object.keys(workspaceWord).sort(), [...HELP_LANGUAGES].sort(), 'a help language has no workspace wording named here');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} chat article is missing, so a reader of it gets English`);
+    const text = Object.values(body).join(' ');
+    const where = `the ${language} chat article does not say what Add does`;
+    assert.ok(text.includes('`coai.askFromTerminal`') && text.includes('`coai.goToFromTerminal`'), `${where}: it does not name both ids`);
+    assert.ok(text.includes('**Add**'), `${where}: it never names the button`);
+    assert.ok(text.includes(workspaceWord[language]), `${where}: it does not say a workspace or folder list is not changed`);
+    assert.ok(text.includes('`settings.json`') && text.includes('*Preferences: Open User Settings (JSON)*'), `${where}: it does not name the user settings.json for adding the ids by hand`);
+    assert.ok(!text.includes(epochOne[language]), `${where}: it still has the E1 sentence that only names coai.askFromTerminal`);
   }
 });

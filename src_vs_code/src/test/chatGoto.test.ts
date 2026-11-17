@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConversationMeta, sourceOfFile, sourceOfSession, sourceOfTerminal } from '../chatStore';
 import { IndexState } from '../chatStoreCache';
-import { Goto, GotoAsked, UNNAMED_TAB, bindable, goto, rootOfTab } from '../chatGoto';
+import { Goto, GotoAsked, UNNAMED_TAB, bindTarget, bindable, goto, rootOfTab, terminalGotoAsked, terminalStillThere } from '../chatGoto';
+import { narrowedTitle } from '../conversationChoice';
 
 /**
  * Which conversation belongs to the tab somebody is looking at — decided without a host.
@@ -553,4 +554,108 @@ test('an ambiguous Claude tab named like a terminal conversation may OPEN it by 
   assert.equal(bindable(record, { kind: 'none' }, t.workspace, true), false, 'what was opened by a name was bound to the tab');
   // A terminal in the editor area is a tab of kind `other`: it gets the whole list.
   assert.deepEqual(goto(asked({ tab: { kind: 'other', label: 'x', path: '' } })), { kind: 'everything' });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Go to from a terminal (E3.S2): a terminal is a kind go-to starts from, and it is never a tab.
+// ---------------------------------------------------------------------------------------------
+
+const TERMINAL = 'Creds: h / s';
+
+/** The question for a terminal, built the way the host builds it (`terminalGotoAsked`), with the values a test varies. */
+const terminalAsked = (over: Partial<Parameters<typeof terminalGotoAsked>[0]> = {}): GotoAsked => terminalGotoAsked({
+  name: TERMINAL,
+  liveId: '',
+  namesakes: 1,
+  candidates: [],
+  inRoot: [],
+  roots: ROOTS,
+  fallback: 'D:\\rsd\\one',
+  caseBlind: true,
+  index: READY,
+  ...over,
+});
+
+const ofTerminal = (over: Partial<ConversationMeta> = {}): ConversationMeta =>
+  meta({ source: sourceOfTerminal(TERMINAL), title: 'h / s', ...over });
+
+test('S2-T4: a terminal is a kind go-to starts from', () => {
+  const mine = ofTerminal();
+
+  assert.deepEqual(goto(terminalAsked({ liveId: 'open-1' })), { kind: 'reveal', id: 'open-1' });
+  assert.deepEqual(goto(terminalAsked({ candidates: [mine] })), { kind: 'reopen', meta: mine }, 'a terminal got the whole list instead of its conversation');
+  assert.deepEqual(goto(terminalAsked()), { kind: 'start', offer: 'h / s' }, 'a terminal got the whole list instead of the offer to start one');
+  assert.deepEqual(goto(terminalAsked({ index: { kind: 'building' } })), { kind: 'building' });
+  const unreadable = goto(terminalAsked({ index: { kind: 'unavailable', reason: 'locked', lastGoodAt: 1 }, inRoot: [mine] }));
+  assert.equal(unreadable.kind, 'pick', 'a terminal with an unreadable store did not get the narrowed list');
+  assert.notEqual(kindOf(goto(terminalAsked({ candidates: [mine] }))), 'everything', 'a terminal got the whole list instead of its conversation');
+});
+
+test('S2-T5: several records of one terminal name are a list, not a guess', () => {
+  const rows = [ofTerminal({ id: 'a' }), ofTerminal({ id: 'b' }), ofTerminal({ id: 'c' })];
+  const answer = goto(terminalAsked({ candidates: rows }));
+
+  assert.equal(answer.kind, 'pick', 'one of several conversations of a terminal was opened without a choice');
+  assert.deepEqual(answer.kind === 'pick' ? { why: answer.why, bind: answer.bind, among: answer.among.length } : undefined,
+    { why: { kind: 'several' }, bind: true, among: 3 });
+});
+
+test('S2-T6: two live terminals of one name are a list even for one record', () => {
+  const answer = goto(terminalAsked({ namesakes: 2, candidates: [ofTerminal()] }));
+
+  assert.equal(answer.kind, 'pick', 'a conversation was bound to one of two terminals of its name without a choice');
+  assert.deepEqual(answer.kind === 'pick' ? { why: answer.why, bind: answer.bind } : undefined,
+    { why: { kind: 'several terminals', count: 2 }, bind: true });
+  assert.equal(narrowedTitle({ kind: 'several terminals', count: 2 }, 'h / s', 1), '2 terminals are called “h / s” — which conversation did you mean?');
+  // The helper is for a TERMINAL only: two tabs of one name with one record still reopen (the tab road is unchanged).
+  assert.equal(goto(asked({ namesakes: 2, candidates: [meta()] })).kind, 'reopen');
+  // A live conversation of this very terminal is still shown, whatever its namesakes.
+  assert.equal(goto(terminalAsked({ namesakes: 2, liveId: 'open-1' })).kind, 'reveal');
+});
+
+test('S2-T7: the terminal question is built from the terminal, never from the tabs', () => {
+  const full = terminalAsked({ inRoot: [ofTerminal()] });
+
+  assert.equal(full.tab.label, 'h / s');
+  assert.equal(terminalAsked({ name: 'bash' }).tab.label, 'bash');
+  assert.deepEqual(full.source, sourceOfTerminal(TERMINAL), 'a terminal conversation was looked up by its title');
+  assert.equal(full.tab.path, '');
+  assert.equal(full.tab.kind, 'terminal');
+  assert.deepEqual([full.ambiguous, full.severalSessions, full.walkFailed], [false, false, false]);
+  assert.equal(rootOfTab(full), 'D:\\rsd\\one', 'a terminal conversation is not filed under the first root');
+  // A name that is not an identity is a tab nothing can belong to: the whole list, never an error.
+  for (const name of ['', 'x'.repeat(501), 'a\u0007b']) {
+    const odd = terminalAsked({ name });
+    assert.equal(odd.tab.kind, 'other', `the name ${JSON.stringify(name)} was accepted as a terminal conversation's`);
+    assert.deepEqual(goto(odd), { kind: 'everything' });
+  }
+  assert.equal(terminalAsked({ name: 'x'.repeat(500) }).tab.kind, 'terminal');
+});
+
+/** A record of the terminal, as much of it as the bind decision reads (the file's own fixture shape). */
+const recordOf = (over: { source?: ReturnType<typeof sourceOfTerminal>; workspace?: string } = {}): NonNullable<Parameters<typeof bindable>[0]> =>
+  ({ source: sourceOfTerminal(TERMINAL), workspace: 'D:\\rsd\\one', ...over }) as NonNullable<Parameters<typeof bindable>[0]>;
+
+test('S2-T9: the bind re-checks the terminal at the press', () => {
+  const key = {};
+  const question = terminalAsked();
+  const live = (over: { name?: string; exited?: boolean; key?: object } = {}) =>
+    [{ key: over.key ?? key, name: over.name ?? TERMINAL, exited: over.exited ?? false }];
+  const target = (stillThere: boolean, holds: boolean) => bindTarget(recordOf(), question, key, { stillThere: () => stillThere, holdsOne: () => holds });
+
+  assert.deepEqual(target(true, false), { key, label: 'h / s' }, 'a record that is this terminal\'s was refused');
+  assert.equal(target(false, false), undefined, 'a conversation was bound to a terminal that is gone');
+  assert.equal(target(true, true), undefined, 'a conversation was bound to a terminal that already holds one');
+  assert.equal(bindTarget(recordOf(), question, undefined, { stillThere: () => true, holdsOne: () => false }), undefined);
+  assert.equal(bindTarget(recordOf({ workspace: 'D:\\rsd\\two' }), question, key, { stillThere: () => true, holdsOne: () => false }), undefined,
+    'a record another window re-filed under another project was bound');
+  assert.equal(bindTarget(recordOf({ source: sourceOfTerminal('Creds: h / t') }), question, key, { stillThere: () => true, holdsOne: () => false }), undefined);
+
+  // The terminal's own press-time question: in the window, alive, and the same name NOW.
+  assert.equal(terminalStillThere(live(), key, question.source), true);
+  assert.equal(terminalStillThere([], key, question.source), false, 'a terminal that left the window was bound');
+  assert.equal(terminalStillThere(live({ exited: true }), key, question.source), false, 'a terminal that has exited was bound');
+  assert.equal(terminalStillThere(live({ key: {} }), key, question.source), false, 'another terminal stood in for it');
+  assert.equal(terminalStillThere(live({ name: 'Creds: h / t' }), key, question.source), false, 'a conversation was bound to a terminal that changed its name');
+  assert.equal(terminalStillThere(live({ name: 'bash' }), key, question.source), false);
 });

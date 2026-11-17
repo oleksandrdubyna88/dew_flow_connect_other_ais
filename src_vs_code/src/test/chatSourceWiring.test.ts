@@ -273,11 +273,11 @@ test('the road back to a terminal uses the chat\u2019s own key and one read of t
   const toTerminal = bodyOf(command, 'function toTerminal(');
 
   assert.match(toTerminal, /const all = vscode\.window\.terminals;/u, 'the window\u2019s terminals are not read once, into one list');
-  assert.match(toTerminal, /terminalRoad\(key, all\.map\(asLive\), name\)/u, 'the decision does not get the chat\u2019s own key and the list');
+  assert.match(toTerminal, /terminalRoad\(key, liveTerminals\(all\), name\)/u, 'the decision does not get the chat\u2019s own key and the list');
   assert.match(toTerminal, /all\.find\(\(one\) => one === road\.key\)\?\.show\(\);/u, 'the terminal is not shown by the key the decision returned');
   assert.equal(toTerminal.split('vscode.window.terminals').length - 1, 1, 'the window\u2019s terminals are read more than once, so the decision and the act can see two lists');
   assert.match(bodyOf(command, 'export async function backToSource('), /thread\.source, chat\.key\);/u, 'the chat\u2019s own key does not reach the road back');
-  assert.match(command, /const asLive = [^\n]*exited: one\.exitStatus !== undefined/u, 'a terminal that has ended is not told apart from one that runs');
+  assert.match(source('terminalHost.ts'), /exited: one\.exitStatus !== undefined/u, 'a terminal that has ended is not told apart from one that runs');
 });
 
 test('every tab match goes through the one filtered road', () => {

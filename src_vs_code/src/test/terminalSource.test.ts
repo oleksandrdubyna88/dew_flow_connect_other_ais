@@ -5,7 +5,7 @@ import { ChatEntry, ChatPanels } from '../chatPanels';
 import { sameSource, sourceOfFile, sourceOfTerminal, type ConversationSource } from '../chatStore';
 import { Thread, threads } from '../chatThread';
 import { CLAUDE_PANEL_VIEW_TYPE, type KnownPanel, type TabSnapshot, sourceSession } from '../sessionKey';
-import { type LiveTerminal, oneLiveNamed, tabPanels, tabSourced, terminalLabel, terminalMatch } from '../terminalSource';
+import { type LiveTerminal, namesakesOf, oneLiveNamed, tabPanels, tabSourced, terminalLabel, terminalMatch, terminalOfWindow } from '../terminalSource';
 
 /**
  * The terminal as a conversation source: its title, its live key, the ONE live terminal of a name,
@@ -148,4 +148,31 @@ test('the filter takes out terminal conversations and nothing else — judged by
     [{ key: plain, label: 'plain' }, { key: withoutThread, label: 'no-thread' }],
     'a terminal conversation was offered to a tab',
   );
+});
+
+// ───────────────── E3.S2 review: the namesakes of a go-to, and what the window holds ─────────────────
+
+const named = (key: object, name: string, exited = false): LiveTerminal => ({ key, name, exited });
+
+test('S2-T6b: the pressed terminal is always one of its own namesakes, exited or not, and a live namesake makes two', () => {
+  const t1 = {};
+  const t2 = {};
+  const name = 'Creds: h / s';
+
+  assert.equal(namesakesOf([named(t1, name)], t1, name), 1, 'a lone live terminal is not a namesake of itself');
+  assert.equal(namesakesOf([named(t1, name, true)], t1, name), 1, 'a lone exited terminal counted as no terminal at all');
+  assert.equal(namesakesOf([named(t1, name, true), named(t2, name)], t1, name), 2, 'a go-to pressed in an exited terminal took the live namesake\u2019s conversation as its own');
+  assert.equal(namesakesOf([named(t1, name), named(t2, name)], t1, name), 2, 'two live terminals of one name are not two');
+  assert.equal(namesakesOf([named(t1, name), named(t2, name, true)], t1, name), 1, 'an exited namesake counted');
+  assert.equal(namesakesOf([named(t1, name), named(t2, 'Creds: h / t')], t1, name), 1, 'a terminal of another name counted');
+  assert.equal(namesakesOf([], t1, name), 1, 'with no terminal listed the pressed one is still itself');
+});
+
+test('S2-T8b: a terminal of the window is any terminal still in its list — an exited one keeps its conversation', () => {
+  const live = {};
+  const exited = {};
+
+  assert.equal(terminalOfWindow([named(live, 'a'), named(exited, 'b', true)], exited), true, 'an exited terminal of the window was not counted');
+  assert.equal(terminalOfWindow([named(live, 'a')], live), true);
+  assert.equal(terminalOfWindow([named(live, 'a')], {}), false, 'a key that is no terminal of the window was counted');
 });
