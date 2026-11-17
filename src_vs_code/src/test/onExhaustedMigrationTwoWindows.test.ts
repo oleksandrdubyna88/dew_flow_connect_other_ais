@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   CLAIM_STALE_MS,
   CLAIM_TRIES,
+  migrateOnExhausted,
   ON_EXHAUSTED_MIGRATION_KEY as KEY,
   OVERLAY_WITNESS,
   recordOf,
@@ -320,6 +321,137 @@ test('T36 NoMarkerFromACopyWithAnUnsettledLocation', async () => {
 
   of.client.deliver();
   assert.equal(await activation(of, 'B').run(), 'migrated', 'the next activation completes');
+});
+
+/** A window of the client taken while A waits in its claim pause: its copy holds A's claim, and no `held` yet. */
+async function staleWindowAt(of: World, a: Rig): Promise<FakeWindow> {
+  await until(() => a.pauses.count() === 1, 'A in its claim pause');
+
+  return of.client.window();
+}
+
+/** The stale window writes any key — its whole copy replaces the stored value — and A's own copy is replaced by it. */
+function staleWrite(of: World, stale: FakeWindow, a: Rig): void {
+  void stale.update('coai.unrelated', 1);
+  of.client.deliver(a.window);
+}
+
+const witnessAsked = (of: World): number => of.settings.updates.filter((one) => one.key === USER_WITNESS).length;
+
+/** A run held at its witness write — the file has not answered — with a stale window taken in the claim pause. */
+async function heldAtWitness(): Promise<{ of: World; a: Rig; run: Promise<unknown>; stale: FakeWindow }> {
+  const of = world(false);
+  of.settings.hold(USER_WITNESS, 'unlanded');
+  const a = activation(of, 'A', { pauses: new Pauses(of.clock) });
+  const run = a.run();
+  const stale = await staleWindowAt(of, a);
+  a.pauses.next();
+  await until(() => witnessAsked(of) === 1, 'A asked for its witness write');
+
+  return { of, a, run, stale };
+}
+
+test('T36b NoMarkerFromACopyThatLostItsRecord', async () => {
+  // A stale window's write can carry A's claim with no `held` and the overlays as they were: the claim and `held` are two
+  // writes. A copy like that must never read as "nothing is due".
+
+  // (i) the copy arrives from A's `after`: no marker, no tell, the claim released; the next activation finishes.
+  const one = world(false);
+  const a = activation(one, 'A', { pauses: new Pauses(one.clock) });
+  const runA = a.run();
+  const staleA = await staleWindowAt(one, a);
+  a.onAfter = () => {
+    staleWrite(one, staleA, a);
+  };
+  await drive(a, runA);
+  assert.equal(await runA, 'incomplete');
+  assert.equal(one.client.record().completed, undefined, 'no completed in the stored value');
+  assert.equal(recordOf(a.window.get(KEY)).completed, undefined, 'nor in A\'s copy');
+  assert.deepEqual(a.tells(), [], 'no tell');
+  assert.equal(one.client.record().claim, undefined, 'the claim is released');
+  assert.ok(a.logs.some((line) => line.includes('(marker)')), 'and the log says why, at the marker');
+  one.client.deliver();
+  const next = activation(one, 'B');
+  assert.equal(await next.run(), 'migrated', 'the next activation completes');
+  assert.equal(overlayOf(one.client, KEY_X)['onExhausted'], undefined, 'X is cleared');
+  assert.equal(overlayOf(one.client, KEY_X)[OVERLAY_WITNESS], next.ports.version, 'and witnessed');
+  assert.equal(a.tells().length + next.tells().length, 1, 'exactly one tell');
+
+  // (ii) the copy arrives before the first overlay turn: the user layer is not touched.
+  const two = world(false);
+  const staleB: { window?: FakeWindow } = {};
+  const b: Rig = activation(two, 'A', {
+    pauses: new Pauses(two.clock),
+    beforeTurn: (n) => {
+      if (n === 1 && staleB.window !== undefined) {
+        staleWrite(two, staleB.window, b);
+      }
+    },
+  });
+  const runB = b.run();
+  staleB.window = await staleWindowAt(two, b);
+  await drive(b, runB);
+  assert.equal(await runB, 'incomplete');
+  assert.equal(witnessAsked(two), 0, 'no witness write in the settings log');
+  assert.equal(two.settings.layer('onExhausted', 'global'), 'human', 'the user layer is still human');
+  assert.ok(b.logs.some((line) => line.includes('(overlay turn)')), 'the first overlay turn says why');
+  two.client.deliver();
+  const again = activation(two, 'C');
+  assert.equal(await again.run(), 'migrated');
+  assert.equal(two.settings.layer('onExhausted', 'global'), undefined, 'the user value is removed');
+  assert.equal(two.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'and witnessed');
+
+  // (ii-b) the copy arrives after the last overlay turn, so only the user layer's own check can see it.
+  const three = world(false);
+  const staleC: { window?: FakeWindow } = {};
+  const c: Rig = activation(three, 'A', { pauses: new Pauses(three.clock) });
+  let turns = 0;
+  const wrapped = {
+    ...c.ports,
+    turn: async <T>(work: () => Promise<T>): Promise<T> => {
+      const result = await c.ports.turn(work);
+      turns += 1;
+      if (turns === 3 && staleC.window !== undefined) {
+        staleWrite(three, staleC.window, c);
+      }
+
+      return result;
+    },
+  };
+  const runC = migrateOnExhausted(wrapped);
+  staleC.window = await staleWindowAt(three, c);
+  await drive(c, runC);
+  assert.equal(await runC, 'incomplete');
+  assert.equal(witnessAsked(three), 0, 'no witness write');
+  assert.equal(three.settings.layer('onExhausted', 'global'), 'human', 'the user layer is still human');
+
+  // (iii) the record is read again after the witness write.
+  // (iii-a) the record is lost during the await: the witness is withdrawn, the value kept, the next start clears it.
+  const lost = await heldAtWitness();
+  staleWrite(lost.of, lost.stale, lost.a);
+  lost.of.settings.unhold(USER_WITNESS);
+  lost.of.settings.release(USER_WITNESS);
+  await drive(lost.a, lost.run);
+  assert.equal(await lost.run, 'incomplete');
+  assert.deepEqual(lost.a.userEvents().map((one) => one.kind), ['witness', 'withdraw'], 'the witness comes out again');
+  assert.equal(lost.of.settings.layer(USER_WITNESS, 'global'), undefined, 'and is gone from the file');
+  assert.equal(lost.of.settings.layer('onExhausted', 'global'), 'human', 'the value is kept');
+  lost.of.client.deliver();
+  const last = activation(lost.of, 'B');
+  assert.equal(await last.run(), 'migrated');
+  assert.equal(lost.of.settings.layer('onExhausted', 'global'), undefined, 'the next start clears it');
+  assert.equal(lost.of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'and witnesses it');
+
+  // (iii-b) the claim is taken over during the await: busy, and the value is untouched.
+  const taken = await heldAtWitness();
+  const other = taken.of.client.window();
+  void other.update(KEY, { ...taken.of.client.record(), claim: { by: 'other', at: taken.of.clock.now() } });
+  taken.of.client.deliver(taken.a.window);
+  taken.of.settings.release(USER_WITNESS);
+  await drive(taken.a, taken.run);
+  assert.equal(await taken.run, 'busy');
+  assert.equal(taken.a.userEvents().some((one) => one.kind === 'clear user'), false, 'no removal was asked for');
+  assert.equal(taken.of.settings.layer('onExhausted', 'global'), 'human', 'the value is untouched');
 });
 
 test('T41 TwoWindowsThatNeverHearEachOther_RemoveTheUserValueOnce_AndMayTellTwice', async () => {

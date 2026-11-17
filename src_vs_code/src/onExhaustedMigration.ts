@@ -190,6 +190,24 @@ function mine(ports: MigrationPorts, seen: MigrationRecord): boolean {
   return seen.completed === undefined && seen.claim?.by === ports.window;
 }
 
+/**
+ * The claim and `held` are two writes, so a stale window can put back a copy with this window's claim and no `held`.
+ * Such a copy cannot say what is due, and "nothing" is the wrong answer: the run stops and the next start plans again.
+ */
+function planLost(ports: MigrationPorts, seen: MigrationRecord, step: string): Stop | undefined {
+  if (seen.held !== undefined) {
+    return undefined;
+  }
+  ports.log(`what each location held was lost to a stale write; the next start plans again (${step})`);
+
+  return stop('incomplete');
+}
+
+/** What stops a step that reads the record: the claim is not this window's, or the plan is not in the copy. */
+function stoppedFor(ports: MigrationPorts, seen: MigrationRecord, step: string): Stop | undefined {
+  return mine(ports, seen) ? planLost(ports, seen, step) : stop('busy');
+}
+
 function versionOf(ports: MigrationPorts): string {
   return ports.version === '' ? 'unknown' : ports.version;
 }
@@ -364,8 +382,9 @@ function clearedOverlay(ports: MigrationPorts, id: string): Record<string, unkno
  */
 async function clearNextOverlay(ports: MigrationPorts): Promise<Stop | 'cleared' | undefined> {
   const seen = read(ports);
-  if (!mine(ports, seen)) {
-    return stop('busy');
+  const blocked = stoppedFor(ports, seen, 'overlay turn');
+  if (blocked !== undefined) {
+    return blocked;
   }
   const id = nextDue(ports, seen.held ?? {});
   if (id === undefined) {
@@ -391,8 +410,9 @@ async function overlays(ports: MigrationPorts): Promise<Stop | undefined> {
 
 /** Step 4: the witness is in the user layer first, whether or not the layer holds a value; then the value test decides. */
 async function userLayer(ports: MigrationPorts): Promise<Stop | undefined> {
-  if (!mine(ports, read(ports))) {
-    return stop('busy');
+  const blocked = stoppedFor(ports, read(ports), 'user layer');
+  if (blocked !== undefined) {
+    return blocked;
   }
   if (ports.user.witness() !== undefined) {
     return undefined;
@@ -432,16 +452,39 @@ function witnessRefused(ports: MigrationPorts, error: unknown): Stop {
 }
 
 /** The value as it is NOW is the one recorded — read again after the awaited witness write; the value test alone. */
-function stillTheRecordedValue(ports: MigrationPorts): boolean {
+function stillTheRecordedValue(ports: MigrationPorts, held: Readonly<Record<string, string>>): boolean {
   const value = heldText(ports.user.value());
 
-  return value !== undefined && value === read(ports).held?.[USER_ID];
+  return value !== undefined && value === held[USER_ID];
 }
 
+/**
+ * After the awaited witness write the record is read ONCE, in the same synchronous stretch as the value test and the
+ * removal. A claim that passed to another window leaves the value; a copy that lost `held` takes the witness out again,
+ * so the next start plans again and clears the value (§ S2.10).
+ */
 async function removeUnlessChosen(ports: MigrationPorts): Promise<Stop | undefined> {
-  if (!stillTheRecordedValue(ports)) {
-    return undefined;
+  const seen = read(ports);
+  if (!mine(ports, seen)) {
+    ports.log('the claim passed to another window while the witness was written; the value stays');
+
+    return stop('busy');
   }
+  if (seen.held === undefined) {
+    return lostAfterWitness(ports);
+  }
+
+  return stillTheRecordedValue(ports, seen.held) ? removeValue(ports) : undefined;
+}
+
+async function lostAfterWitness(ports: MigrationPorts): Promise<Stop> {
+  ports.log('what each location held was lost to a stale write while the witness was written; it is withdrawn');
+  await tryWithdraw(ports);
+
+  return stop('incomplete');
+}
+
+async function removeValue(ports: MigrationPorts): Promise<Stop | undefined> {
   try {
     await ports.user.clear();
 
@@ -451,13 +494,18 @@ async function removeUnlessChosen(ports: MigrationPorts): Promise<Stop | undefin
   }
 }
 
-/** A removal the settings file refused: the witness comes out again, so the next start finds the value and tries once more. */
-async function withdrawn(ports: MigrationPorts, error: unknown): Promise<Stop> {
+/** The witness comes out again; a withdrawal the file refuses is logged, and the next start keeps the value. */
+async function tryWithdraw(ports: MigrationPorts): Promise<void> {
   try {
     await ports.user.withdrawWitness();
   } catch (again: unknown) {
     ports.log('the witness could not be withdrawn either; the next start keeps the value', again);
   }
+}
+
+/** A removal the settings file refused: the witness comes out again, so the next start finds the value and tries once more. */
+async function withdrawn(ports: MigrationPorts, error: unknown): Promise<Stop> {
+  await tryWithdraw(ports);
 
   return stop('refused', reasonOf(error));
 }
@@ -468,8 +516,9 @@ async function withdrawn(ports: MigrationPorts, error: unknown): Promise<Stop> {
  */
 async function mark(ports: MigrationPorts): Promise<Stop | undefined> {
   const seen = read(ports);
-  if (!mine(ports, seen)) {
-    return stop('busy');
+  const blocked = stoppedFor(ports, seen, 'marker');
+  if (blocked !== undefined) {
+    return blocked;
   }
   const left = Object.entries(seen.held ?? {}).filter(([id, held]) => dueNow(ports, id, held)).map(([id]) => id);
   if (left.length > 0) {
