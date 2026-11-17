@@ -185,7 +185,8 @@ export type Step =
   | { readonly kind: 'done'; readonly found: Found; readonly drop: boolean }
   | { readonly kind: 'fallback-titles'; readonly folders: readonly string[] }
   | { readonly kind: 'fallback-tail'; readonly picked: Picked }
-  | { readonly kind: 'pick'; readonly rows: readonly PickRow[] }
+  /** `partial`: the rows come from a scan that did not read every session, so the list may lack the right one. */
+  | { readonly kind: 'pick'; readonly rows: readonly PickRow[]; readonly partial: boolean }
   | { readonly kind: 'refused'; readonly refusal: string; readonly drop: boolean };
 
 /** Where a press reads: the host and tmux session its terminal's name gives. */
@@ -249,22 +250,29 @@ function fallbackStep(read: Extract<RemoteRead, { readonly kind: 'fallback' }>, 
 const notEverything = (read: Extract<RemoteRead, { readonly kind: 'titles' }>): boolean =>
   read.scan.why !== 'all' || read.scan.more || read.sessions.some((one) => one.skipped);
 
+/**
+ * The one session of the name, read by itself only when the scan read every session: in a cut scan the right one may be
+ * among the sessions not read, so even one is offered as a list that says so (plan entry 3.1, the feature review 2026-11-17).
+ */
+const readAlone = <T>(named: readonly T[], partial: boolean): T | undefined => (partial || named.length !== 1 ? undefined : named[0]);
+
 function titlesStep(read: Extract<RemoteRead, { readonly kind: 'titles' }>, context: Context): Step {
   const named = namedAmong(read.sessions, (one) => one.names, context.session);
-  const [only] = named;
-  if (named.length === 1 && only !== undefined) {
+  const partial = notEverything(read);
+  const only = readAlone(named, partial);
+  if (only !== undefined) {
     return { kind: 'fallback-tail', picked: { id: only.sessionId, folders: [only.folder], host: context.host, session: context.session } };
   }
 
-  return named.length > 1
-    ? { kind: 'pick', rows: newestFirst(named.map(titledRow)) }
-    : stop(SAID.noTitle(context.host, context.session, notEverything(read)));
+  return named.length > 0
+    ? { kind: 'pick', rows: newestFirst(named.map(titledRow)), partial }
+    : stop(SAID.noTitle(context.host, context.session, partial));
 }
 
 /** Candidates are ALWAYS a list, even of one: nothing is chosen by itself. */
 const ambiguousStep = (read: Extract<RemoteRead, { readonly kind: 'ambiguous' }>, context: Context): Step =>
   (read.candidates.length > 0
-    ? { kind: 'pick', rows: newestFirst(read.candidates.map(candidateRow)) }
+    ? { kind: 'pick', rows: newestFirst(read.candidates.map(candidateRow)), partial: false }
     : stop(SAID.ambiguousNone(context.host, context.session)));
 
 const ARMS: Table<RemoteRead, readonly [Context], Step> = {
@@ -324,7 +332,8 @@ export interface RoadSeams {
   /** `runRemote` — S2 owns it, and nothing else here spawns. */
   readonly run: (host: string, session: string, operands: readonly string[], script: string) => PromiseLike<RemoteRun>;
   /** The list: the chosen `sessionId`, or `undefined` for a cancel. */
-  readonly pick: (rows: readonly PickRow[]) => PromiseLike<string | undefined>;
+  /** `partial`: not every session was read, so the list may lack the right one and must say so. */
+  readonly pick: (rows: readonly PickRow[], partial: boolean) => PromiseLike<string | undefined>;
   /** The progress line around one spawn. */
   readonly progress: <T>(host: string, work: () => PromiseLike<T>) => PromiseLike<T>;
   /** The terminal's picked id changed: set, or `undefined` for dropped. */
@@ -396,8 +405,8 @@ function remember(trip: Trip, picked: Picked): Trip {
 const within = (trip: Trip, next: () => Promise<RemoteAnswer>): Promise<RemoteAnswer> =>
   (trip.calls >= CALLS_MAX ? Promise.resolve(refuse(SAID.tooMany(trip.host))) : next());
 
-async function chosen(trip: Trip, rows: readonly PickRow[]): Promise<RemoteAnswer> {
-  const sessionId = await trip.seams.pick(rows);
+async function chosen(trip: Trip, rows: readonly PickRow[], partial: boolean): Promise<RemoteAnswer> {
+  const sessionId = await trip.seams.pick(rows, partial);
   const row = rows.find((one) => one.sessionId === sessionId);
 
   return row === undefined ? refuse(SAID.cancelled) : leg(remember(trip, { id: row.sessionId, folders: row.folders, host: trip.host, session: trip.session }), idCall(trip, row.sessionId));
@@ -416,7 +425,7 @@ const FOLLOW: Table<Step, readonly [Trip], Promise<RemoteAnswer>> = {
   },
   'fallback-titles': (step, trip) => within(trip, () => leg(trip, { kind: 'titles', session: trip.session, folders: step.folders })),
   'fallback-tail': (step, trip) => within(trip, () => leg(remember(trip, step.picked), idCall(trip, step.picked.id))),
-  'pick': (step, trip) => within(trip, () => chosen(trip, step.rows)),
+  'pick': (step, trip) => within(trip, () => chosen(trip, step.rows, step.partial)),
 };
 
 /** One call of the press and what follows from its answer. */

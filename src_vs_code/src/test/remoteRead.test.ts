@@ -111,6 +111,7 @@ function world(options: Options = {}) {
     asks: [] as string[],
     runs: [] as (readonly string[])[],
     picks: [] as (readonly PickRow[])[],
+    partials: [] as boolean[],
     kept: [] as (Picked | undefined)[],
     reads: 0,
     progress: 0,
@@ -134,7 +135,7 @@ function world(options: Options = {}) {
 
       return (options.script ?? (() => answered(registryFrame())))(operands, calls);
     },
-    pick: async (rows) => { w.picks.push(rows); return options.choose?.(rows); },
+    pick: async (rows, partial) => { w.picks.push(rows); w.partials.push(partial); return options.choose?.(rows); },
     progress: async (_host, work) => { w.progress += 1; return work(); },
     keep: (picked) => { w.kept.push(picked); },
   };
@@ -730,4 +731,33 @@ test('S3-T18: a pick row shows no format character, and the id and the folders t
   }
   assert.deepEqual(rows.map((one) => one.sessionId).sort(), [ID, ID2].sort(), 'the id of a titled row was changed');
   assert.deepEqual(rows.map((one) => one.folders), [[`-home-git-${dirty}`], [`-home-git-${dirty}`]], 'the folders of a titled row were changed');
+});
+
+test('S3-T19: one session of the name in a scan that did not read everything is offered as a list of one, never read by itself', async () => {
+  const names = { latest: S, former: [] };
+  const one = [{ sessionId: ID, folder: KB_FOLDER, mtime: 100, names, skipped: false }];
+  const where = { host: H, session: S };
+  const whole = nextStep({ kind: 'titles', sessions: one, scan: { why: 'all', tooLong: 0, more: false } }, undefined, where);
+  assert.equal(whole.kind, 'fallback-tail', 'one session of the name in a whole scan was not read by itself');
+
+  const partials = [
+    { why: 'count', more: false, skipped: false },
+    { why: 'time', more: false, skipped: false },
+    { why: 'all', more: true, skipped: false },
+    { why: 'all', more: false, skipped: true },
+  ] as const;
+  for (const partial of partials) {
+    const sessions = [...one, ...(partial.skipped ? [{ sessionId: ID2, folder: KB_FOLDER, mtime: 90, names: { latest: '', former: [] }, skipped: true }] : [])];
+    const step = nextStep({ kind: 'titles', sessions, scan: { why: partial.why, tooLong: 0, more: partial.more } }, undefined, where);
+    assert.equal(step.kind, 'pick', `one session of the name in a cut scan (${JSON.stringify(partial)}) was read without a choice`);
+    assert.deepEqual(step.kind === 'pick' ? [step.rows.map((row) => row.sessionId), step.partial] : [], [[ID], true], 'the list of one does not say that not every session was read');
+  }
+
+  const road = world({ script: sequence(
+    answered(fallbackFrame(KB, FALLBACK_FOLDERS)),
+    answered(titlesFrame([{ id: ID, folder: KB_FOLDER, title: S }], 'count')),
+  ), choose: () => undefined });
+  await remoteRoad(road.seams, NAME, 'prompts');
+  assert.deepEqual(road.w.partials, [true], 'the person was not shown a list that says not every session was read');
+  assert.equal(road.w.runs.length, 2, 'the one session of a cut scan was read before the person chose it');
 });

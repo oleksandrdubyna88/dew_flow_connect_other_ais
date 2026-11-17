@@ -449,7 +449,7 @@ and the typed result, areas (d) and (e)"*.
          `projectDirNames(paneCwd)` ∩ `read.folders` (at most 3, in `projectDirNames` order); none → `refused` naming
          host, session and folder — and when `read.skipped > 0` or `read.more`, the sentence says that some folders could
          not be listed;
-       - `titles` → `namedAmong(read.sessions, (s) => s.names, session)`: one → `fallback-tail` (call (iii), `{ kind:
+       - `titles` → `namedAmong(read.sessions, (s) => s.names, session)`: one (from a scan that read everything — the parent's entry 3.1: from a cut scan it is a `pick` of one with `partial`) → `fallback-tail` (call (iii), `{ kind:
          'id', … }`, with `picked = { id, folders: [that session's folder] }`); several → `pick` of them; none →
          `refused` naming host and session — and when `scan.why` is not `all`, `scan.more` is true or a session was
          `skipped`, the sentence says that not every session was read (a cut scan is never "no session");
