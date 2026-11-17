@@ -234,9 +234,9 @@ function reasonOf(error: unknown): string {
 /**
  * The run (§ S2.4). It never rejects, and nothing in it rests on the claim: what correctness rests on is the witnesses —
  * an overlay's is in the record it clears, the user layer's is a setting in the settings file — and that no value read
- * from the record or the settings is carried across an `await` — but the user layer's own planned entry, which the removal
- * after the witness write compares with when the copy read then has none. The catch at the top writes NOTHING: a claim left behind
- * goes stale, exactly as a dead host's does.
+ * from the record is carried across an `await`; the one value carried across the witness's await is the user value as read
+ * from the settings file just before the witness write, never a value read from the record. The catch at the top writes
+ * NOTHING: a claim left behind goes stale, exactly as a dead host's does.
  */
 export async function migrateOnExhausted(ports: MigrationPorts): Promise<MigrationOutcome> {
   try {
@@ -434,9 +434,10 @@ async function userLayer(ports: MigrationPorts): Promise<Stop | undefined> {
   if (ports.user.witness() !== undefined) {
     return undefined;
   }
+  const valueBeforeWitness = recordedValueNow(ports, seen);
   const refused = await writeWitness(ports);
 
-  return refused ?? removeUnlessChosen(ports, recordedUser(seen));
+  return refused ?? removeUnlessChosen(ports, valueBeforeWitness);
 }
 
 async function writeWitness(ports: MigrationPorts): Promise<Stop | undefined> {
@@ -468,40 +469,45 @@ function witnessRefused(ports: MigrationPorts, error: unknown): Stop {
   return stop('refused', reasonOf(error));
 }
 
-/** The value as it is NOW is the one recorded — read again after the awaited witness write; the value test alone. */
-function stillTheRecordedValue(ports: MigrationPorts, recorded: string | undefined): boolean {
+/** The value as it is NOW is the one the settings held just before the witness write; the value test alone. */
+function stillTheRecordedValue(ports: MigrationPorts, valueBeforeWitness: string | undefined): boolean {
   const value = heldText(ports.user.value());
 
-  return value !== undefined && value === recorded;
+  return value !== undefined && value === valueBeforeWitness;
 }
 
-/** What the record says the user layer held, else `fallback`; `undefined` when neither holds a value to migrate. */
-function recordedUser(seen: MigrationRecord, fallback?: string): string | undefined {
-  return seen.held?.[USER_ID] ?? fallback;
+/**
+ * The user value as the settings hold it now, when it is the recorded one; `undefined` otherwise. Read just before the
+ * witness write: it is the one value carried across that `await`, and the removal after it compares with it alone.
+ */
+function recordedValueNow(ports: MigrationPorts, seen: MigrationRecord): string | undefined {
+  const value = heldText(ports.user.value());
+
+  return value === seen.held?.[USER_ID] ? value : undefined;
 }
 
 /**
  * After the awaited witness write, a witness on disk certifies a removal THIS run is about to make: another window that
  * reads it treats the user layer as settled and skips it. So the run that wrote it finishes its removal whenever the value
- * is still the recorded one — whoever holds the claim now, and whether or not another run wrote its marker. The record
- * and the value are read in ONE synchronous stretch. `before` is what the record said when the witness was written: a
- * marker another run wrote carries no `held`, and a stale copy may have lost it. A copy of THIS run's claim that lost
+ * is still the one it held before the witness write — whoever holds the claim now, and whether or not another run wrote its
+ * marker. The record and the value are read in ONE synchronous stretch. The comparison is with that settings value, never
+ * with the record: a marker another run wrote carries no `held`, and a stale copy may have lost it. A copy of THIS run's claim that lost
  * `held` leaves the value and takes the witness out again, so the next start finds the value and clears it (§ S2.10).
  */
-async function removeUnlessChosen(ports: MigrationPorts, before: string | undefined): Promise<Stop | undefined> {
+async function removeUnlessChosen(ports: MigrationPorts, valueBeforeWitness: string | undefined): Promise<Stop | undefined> {
   const seen = read(ports);
   const own = mine(ports, seen);
   if (own && seen.held === undefined) {
     return giveUpAfterWitness(ports, 'what each location held was lost to a stale write while the witness was written; it is withdrawn', 'incomplete');
   }
-  const refused = await removeIfRecorded(ports, recordedUser(seen, before));
+  const refused = await removeIfRecorded(ports, valueBeforeWitness);
 
   return refused ?? endAfterWitness(ports, own);
 }
 
-/** The removal, when the value is still the recorded one; the call is made in the stretch that read the record. */
-function removeIfRecorded(ports: MigrationPorts, recorded: string | undefined): Promise<Stop | undefined> {
-  return stillTheRecordedValue(ports, recorded) ? removeValue(ports) : Promise.resolve(undefined);
+/** The removal, when the value is still the one read before the witness write; the call is made in the stretch that read the record. */
+function removeIfRecorded(ports: MigrationPorts, valueBeforeWitness: string | undefined): Promise<Stop | undefined> {
+  return stillTheRecordedValue(ports, valueBeforeWitness) ? removeValue(ports) : Promise.resolve(undefined);
 }
 
 /**

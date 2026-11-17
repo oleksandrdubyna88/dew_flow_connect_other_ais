@@ -4852,11 +4852,11 @@ that already holds `auto` is left as it is. A workspace or folder value is never
     recorded value and the current user value — it does NOT re-read the witness or compare who wrote it. A removal the
     settings file refuses withdraws the witness. A witness on disk certifies a removal the run that wrote it is about to make:
     another window that reads it treats the user layer as settled and skips it. So after its await the run that wrote it
-    finishes its own removal whenever the user value is still the recorded one — whoever holds the claim, and whether or
-    not another run wrote `completed` — and keeps the witness; it ends `busy` when the claim is no longer its own. What is
-    compared is the plan's entry in the copy it reads, or, when the copy has none (the marker `mark` writes carries no
-    `held`, and a stale copy may have lost it), the entry the run read before it wrote the witness. A value that is gone or
-    no longer the recorded one (another run removed it, or the person chose) is left alone and the witness stays, the run
+    finishes its own removal whenever the user value is still the one it held just before the witness write — whoever holds
+    the claim, and whether or not another run wrote `completed` — and keeps the witness; it ends `busy` when the claim is
+    no longer its own. What is compared is that value, read from the settings file after the run confirmed it was the
+    recorded one and just before the write, and never anything in the record (the marker `mark` writes carries no `held`,
+    and a stale copy may have lost it). A value that is gone or no longer that one (another run removed it, or the person chose) is left alone and the witness stays, the run
     ending `busy` if the claim was lost. A run that still holds the claim but whose copy lost its `held` withdraws and ends
     `incomplete`. It is
     read from `inspect().globalValue` only: a workspace can set a key of this scope, and a workspace value must never
@@ -4880,7 +4880,7 @@ that already holds `auto` is left as it is. A workspace or folder value is never
   and excludes nothing; no compare-and-set exists. The claim stays to make one window do the run in the usual case. What
   the correctness rests on: the user layer's witness lives in the settings file, out of reach of a stale `globalState`
   write; an overlay's value and witness are one record in one write, so a stale copy brings both back or neither; and no
-  value read from the record is carried across an `await` but the user layer's own planned entry (what the removal after the witness write compares with when the copy read then has none), with the marker written only from a copy in which every
+  value read from the record is carried across an `await` — the one value carried across the witness's await is the user value as read from the settings file just before the witness write, never a value read from the record — with the marker written only from a copy in which every
   recorded location is settled, checked with no `await` before the write.
 - **The order.** Claim, then record what each location holds, then each overlay (one write with its witness, one turn of
   the catalog migration's queue, because both migrations rewrite the same record), then the user layer (witness, await,
