@@ -126,31 +126,41 @@ public abstract class HoldFromBeforeAutoFixture : FakeCliRoundTests
             // A question asked on the held gate waits this long for a person, then returns with its card still on disk.
             EscalationBudget = TimeSpan.FromMilliseconds(300),
         };
-        switch (kind)
+
+        return kind switch
         {
-            case Kind.Document:
-                var catalog = RoleComposition.Compose([
-                    .. new[] { RoleCatalog.PlanRole, RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole,
-                        RoleCatalog.DocumentRole, RoleCatalog.DocumentSummaryRole }.Select(id => new RoleEntry(id, Active: false)),
-                    new RoleEntry("Spec", Name: "The specification", Stage: RoleStages.Result, ProgrammingTask: false,
-                        Prompts: [new PromptEntry("spec-general", "General", "Whether a reader could act on it.")]),
-                ]);
-                var gates = catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 0));
+            Kind.Document => DocumentSettings(settings, human),
+            Kind.Feature => FeatureSettings(settings, human),
+            _ => settings with { Rounds = human ? PanelConfig.Uniform(1, 0, StagePolicy.Human) : PanelConfig.Uniform(1, 0) },
+        };
+    }
 
-                return settings with { Rounds = (human ? new PanelConfig(gates, StagePolicy.Human) : new PanelConfig(gates)) with { Catalog = catalog } };
-            case Kind.Feature:
-                var feature = PanelConfig.AllRoles.ToDictionary(r => r, _ => new RoleGate(2, 5));
+    /// <summary>The document stage's settings: one result role of its own, every other role switched off, one round each.</summary>
+    private static PanelSettings DocumentSettings(PanelSettings settings, bool human)
+    {
+        var catalog = RoleComposition.Compose([
+            .. new[] { RoleCatalog.PlanRole, RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole,
+                RoleCatalog.DocumentRole, RoleCatalog.DocumentSummaryRole }.Select(id => new RoleEntry(id, Active: false)),
+            new RoleEntry("Spec", Name: "The specification", Stage: RoleStages.Result, ProgrammingTask: false,
+                Prompts: [new PromptEntry("spec-general", "General", "Whether a reader could act on it.")]),
+        ]);
+        var gates = catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 0));
 
-                return settings with
-                {
-                    Providers = [new("codex") { ExecutablePath = FakeCliExe, Feature = true }],
-                    Rounds = human ? new PanelConfig(feature, StagePolicy.Human) : new PanelConfig(feature),
-                    FeatureMinEpics = 3,
-                    FeatureSourceFollowUps = 3,
-                };
-            default:
-                return settings with { Rounds = human ? PanelConfig.Uniform(1, 0, StagePolicy.Human) : PanelConfig.Uniform(1, 0) };
-        }
+        return settings with { Rounds = (human ? new PanelConfig(gates, StagePolicy.Human) : new PanelConfig(gates)) with { Catalog = catalog } };
+    }
+
+    /// <summary>The feature stage's settings: the fake codex row with the feature gate on, two rounds a role.</summary>
+    private static PanelSettings FeatureSettings(PanelSettings settings, bool human)
+    {
+        var feature = PanelConfig.AllRoles.ToDictionary(r => r, _ => new RoleGate(2, 5));
+
+        return settings with
+        {
+            Providers = [new("codex") { ExecutablePath = FakeCliExe, Feature = true }],
+            Rounds = human ? new PanelConfig(feature, StagePolicy.Human) : new PanelConfig(feature),
+            FeatureMinEpics = 3,
+            FeatureSourceFollowUps = 3,
+        };
     }
 
     protected PanelService HumanService(Kind kind = Kind.Plan) => ServiceFor(SettingsOf(kind, human: true));
@@ -195,42 +205,7 @@ public abstract class HoldFromBeforeAutoFixture : FakeCliRoundTests
     {
         var hold = AddressOf(kind);
         var service = HumanService(kind);
-        var ct = TestContext.Current.CancellationToken;
-        switch (kind)
-        {
-            case Kind.Plan:
-                await service.OpenAsync(_repo, Branch);
-                Script(OneBlockingFinding);
-                Verdict(await service.ReviewPlanAsync(_repo, Branch, Plan, ct)).Should().Be("call_human");
-                break;
-            case Kind.Code:
-                await service.OpenAsync(_repo, Branch);
-                Script(Clean);
-                Verdict(await service.ReviewPlanAsync(_repo, Branch, Plan, ct)).Should().Be("proceed");
-                ErrorOf(await service.ResolveAsync(_repo, Branch, "[]")).Should().BeEmpty();
-                Write("app.cs", "v2\n");
-                await Commit("the change");
-                Script(OneBlockingFinding);
-                Verdict(await service.ReviewCodeAsync(_repo, Branch, "main", CodeRoundHarness.Scope, ct: ct)).Should().Be("call_human");
-                break;
-            case Kind.Document:
-                Directory.CreateDirectory(Path.Combine(_data, "prompts"));
-                await File.WriteAllTextAsync(Path.Combine(_data, "prompts", "spec-general.md"), "You read one thing: whether a reader could act on this document.", ct);
-                Write("docs/spec.md", DocumentText);
-                await service.OpenAsync(_repo, Branch);
-                Script(DocumentFinding);
-                Verdict(await service.ReviewDocumentAsync(_repo, Branch, DocumentPurpose, documentPath: Path.Combine(_repo, "docs/spec.md"))).Should().Be("call_human");
-                break;
-            default:
-                await FeatureWorkAsync();
-                Script(FeatureBlocking);
-                Verdict(await Feature(service, again: false)).Should().Be("revise");
-                ErrorOf(await service.ResolveAsync(_repo, hold.Branch, """[{"finding":0,"action":"accept"}]""", feature: FeaturePlanPath)).Should().BeEmpty();
-                Write("src/Cart.cs", "public sealed class Cart\n{\n    public int Count() => 1;\n}\n");
-                await Commit("the fix pull request");
-                Verdict(await Feature(service, again: true)).Should().Be("call_human");
-                break;
-        }
+        await HoldAsync(kind, hold, service);
 
         SessionOf(hold).State.HumanGate.Should().BeTrue($"the {kind} fixture must raise a hold");
         if (resolved)
@@ -240,6 +215,57 @@ public abstract class HoldFromBeforeAutoFixture : FakeCliRoundTests
         }
 
         return hold;
+    }
+
+    /// <summary>The stage's own road to <c>call_human</c>, through the real code.</summary>
+    private Task HoldAsync(Kind kind, Hold hold, PanelService service) => kind switch
+    {
+        Kind.Plan => PlanHoldAsync(service),
+        Kind.Code => CodeHoldAsync(service),
+        Kind.Document => DocumentHoldAsync(service),
+        _ => FeatureHoldAsync(hold, service),
+    };
+
+    private async Task PlanHoldAsync(PanelService service)
+    {
+        await service.OpenAsync(_repo, Branch);
+        Script(OneBlockingFinding);
+        Verdict(await service.ReviewPlanAsync(_repo, Branch, Plan, TestContext.Current.CancellationToken)).Should().Be("call_human");
+    }
+
+    private async Task CodeHoldAsync(PanelService service)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await service.OpenAsync(_repo, Branch);
+        Script(Clean);
+        Verdict(await service.ReviewPlanAsync(_repo, Branch, Plan, ct)).Should().Be("proceed");
+        ErrorOf(await service.ResolveAsync(_repo, Branch, "[]")).Should().BeEmpty();
+        Write("app.cs", "v2\n");
+        await Commit("the change");
+        Script(OneBlockingFinding);
+        Verdict(await service.ReviewCodeAsync(_repo, Branch, "main", CodeRoundHarness.Scope, ct: ct)).Should().Be("call_human");
+    }
+
+    private async Task DocumentHoldAsync(PanelService service)
+    {
+        Directory.CreateDirectory(Path.Combine(_data, "prompts"));
+        await File.WriteAllTextAsync(
+            Path.Combine(_data, "prompts", "spec-general.md"), "You read one thing: whether a reader could act on this document.", TestContext.Current.CancellationToken);
+        Write("docs/spec.md", DocumentText);
+        await service.OpenAsync(_repo, Branch);
+        Script(DocumentFinding);
+        Verdict(await service.ReviewDocumentAsync(_repo, Branch, DocumentPurpose, documentPath: Path.Combine(_repo, "docs/spec.md"))).Should().Be("call_human");
+    }
+
+    private async Task FeatureHoldAsync(Hold hold, PanelService service)
+    {
+        await FeatureWorkAsync();
+        Script(FeatureBlocking);
+        Verdict(await Feature(service, again: false)).Should().Be("revise");
+        ErrorOf(await service.ResolveAsync(_repo, hold.Branch, """[{"finding":0,"action":"accept"}]""", feature: FeaturePlanPath)).Should().BeEmpty();
+        Write("src/Cart.cs", "public sealed class Cart\n{\n    public int Count() => 1;\n}\n");
+        await Commit("the fix pull request");
+        Verdict(await Feature(service, again: true)).Should().Be("call_human");
     }
 
     private string _featureBase = string.Empty;
@@ -285,25 +311,27 @@ public abstract class HoldFromBeforeAutoFixture : FakeCliRoundTests
         service.StatusAsync(_repo, hold.Branch, hold.Document, string.Empty, hold.Feature);
 
     /// <summary>The stage's own review entry — <c>review_plan</c>, <c>review_code</c>, <c>review_document</c> or <c>review_feature</c>.</summary>
-    protected async Task<string> ReviewEntryAsync(PanelService service, Hold hold)
+    protected Task<string> ReviewEntryAsync(PanelService service, Hold hold)
     {
         var ct = TestContext.Current.CancellationToken;
-        switch (hold.Kind)
+        Script(AnswerOfTheEntry(hold.Kind));
+
+        return hold.Kind switch
         {
-            case Kind.Plan:
-                Script(Clean);
-                return await service.ReviewPlanAsync(_repo, hold.Branch, Plan, ct);
-            case Kind.Code:
-                Script(Clean);
-                return await service.ReviewCodeAsync(_repo, hold.Branch, "main", CodeRoundHarness.Scope, again: true, ct: ct);
-            case Kind.Document:
-                Script(DocumentFinding);
-                return await service.ReviewDocumentAsync(_repo, hold.Branch, DocumentPurpose, documentPath: Path.Combine(_repo, "docs/spec.md"));
-            default:
-                Script(FeatureBlocking);
-                return await Feature(service, again: true);
-        }
+            Kind.Plan => service.ReviewPlanAsync(_repo, hold.Branch, Plan, ct),
+            Kind.Code => service.ReviewCodeAsync(_repo, hold.Branch, "main", CodeRoundHarness.Scope, again: true, ct: ct),
+            Kind.Document => service.ReviewDocumentAsync(_repo, hold.Branch, DocumentPurpose, documentPath: Path.Combine(_repo, "docs/spec.md")),
+            _ => Feature(service, again: true),
+        };
     }
+
+    /// <summary>What the fake reviewer answers the stage's entry: a finding for the document and the feature stage, nothing for plan and code.</summary>
+    private static string AnswerOfTheEntry(Kind kind) => kind switch
+    {
+        Kind.Document => DocumentFinding,
+        Kind.Feature => FeatureBlocking,
+        _ => Clean,
+    };
 
     // ---------- the fixture as the real loader reads it ----------
 

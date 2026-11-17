@@ -17,21 +17,21 @@ public sealed class ASettingsReadThatFailedTests
 {
     private const string Path = "settings.json";
 
-    public static TheoryData<string> Rows() =>
-    [
-        "{}",
-        "an object with one value",
-        "an empty file",
-        "text that is not JSON",
-        "an array",
-        "null",
-        "a denied read",
-        "a plain IOException",
-        "a sharing violation",
-        "a lock violation",
-        "FileNotFoundException",
-        "DirectoryNotFoundException",
-    ];
+    public static TheoryData<string> Values() => ["{}", "an object with one value"];
+
+    public static TheoryData<string, string> Unusable() => new()
+    {
+        { "an empty file", "it is not JSON this server can read" },
+        { "text that is not JSON", "it is not JSON this server can read" },
+        { "an array", "it is not a JSON object" },
+        { "null", "it is not a JSON object" },
+        { "a denied read", "access to it was denied" },
+        { "a plain IOException", "it could not be opened" },
+    };
+
+    public static TheoryData<string> Busy() => ["a sharing violation", "a lock violation"];
+
+    public static TheoryData<string> Missing() => ["FileNotFoundException", "DirectoryNotFoundException"];
 
     private static Func<string, string> Seam(string row) => row switch
     {
@@ -51,40 +51,39 @@ public sealed class ASettingsReadThatFailedTests
     };
 
     [Theory]
-    [MemberData(nameof(Rows))]
-    public void TryRead_TellsAFileThatGaveNothing_FromOneThatIsNotThere(string row)
+    [MemberData(nameof(Values))]
+    public void TryRead_GivesTheValuesOfAnObject(string row)
     {
         var read = SettingsFile.TryRead(Path, Seam(row));
 
-        switch (row)
-        {
-            case "{}":
-                read.Should().BeOfType<SettingsRead.Values>().Which.Settings.Should().BeEmpty();
-                break;
-            case "an object with one value":
-                read.Should().BeOfType<SettingsRead.Values>().Which.Settings.Should().HaveCount(1);
-                break;
-            case "an empty file" or "text that is not JSON":
-                read.Should().Be(new SettingsRead.Unusable("it is not JSON this server can read"), row);
-                break;
-            case "an array" or "null":
-                read.Should().Be(new SettingsRead.Unusable("it is not a JSON object"), row);
-                break;
-            case "a denied read":
-                read.Should().Be(new SettingsRead.Unusable("access to it was denied"), row);
-                break;
-            case "a plain IOException":
-                read.Should().Be(new SettingsRead.Unusable("it could not be opened"), row);
-                break;
-            case "a sharing violation" or "a lock violation":
-                read.Should().BeOfType<SettingsRead.Busy>(row);
-                break;
-            default:
-                read.Should().BeOfType<SettingsRead.Missing>(row);
-                break;
-        }
-
-        // The one-shot modes read as they always did: nothing but the second row has a value to give.
-        SettingsFile.Read(Path, Seam(row)).Count.Should().Be(row == "an object with one value" ? 1 : 0, row);
+        read.Should().BeOfType<SettingsRead.Values>().Which.Settings.Should().HaveCount(row == "an object with one value" ? 1 : 0);
+        ReadAsTheOneShotModesDo(row).Should().Be(row == "an object with one value" ? 1 : 0, row);
     }
+
+    [Theory]
+    [MemberData(nameof(Unusable))]
+    public void TryRead_TellsAFileThatGaveNothing_WithTheReason(string row, string why)
+    {
+        SettingsFile.TryRead(Path, Seam(row)).Should().Be(new SettingsRead.Unusable(why), row);
+        ReadAsTheOneShotModesDo(row).Should().Be(0, row);
+    }
+
+    [Theory]
+    [MemberData(nameof(Busy))]
+    public void TryRead_TellsAFileHeldByItsWriter_AsBusy(string row)
+    {
+        SettingsFile.TryRead(Path, Seam(row)).Should().BeOfType<SettingsRead.Busy>(row);
+        ReadAsTheOneShotModesDo(row).Should().Be(0, row);
+    }
+
+    [Theory]
+    [MemberData(nameof(Missing))]
+    public void TryRead_TellsAFileThatIsNotThere_AsMissing(string row)
+    {
+        SettingsFile.TryRead(Path, Seam(row)).Should().BeOfType<SettingsRead.Missing>(row);
+        ReadAsTheOneShotModesDo(row).Should().Be(0, row);
+    }
+
+    // The one-shot modes read as they always did: nothing but the second Values row has a value to give.
+    private static int ReadAsTheOneShotModesDo(string row) => SettingsFile.Read(Path, Seam(row)).Count;
 }

@@ -50,21 +50,7 @@ public sealed class AHoldThisBuildRaisedIsNotReleasedByAutoTests : HoldFromBefor
         ErrorOf(await human.ResolveAsync(_repo, Branch, RejectIt)).Should().BeEmpty("the round is resolved; the hold stays");
         var auto = AutoService();
 
-        switch (entry)
-        {
-            case "a review entry":
-                ErrorOf(await ReviewEntryAsync(auto, PlanHold)).Should().Be(RoundMachine.GateHeld);
-                break;
-            case "resolve":
-                await auto.ResolveAsync(_repo, Branch, "[]");
-                break;
-            case "status":
-                await StatusAsync(auto, PlanHold);
-                break;
-            default:
-                await auto.AskHumanAsync(_repo, Branch, "May I ship?");
-                break;
-        }
+        await EnterAsync(auto, entry, resolveWith: "[]");
 
         Kept(id);
     }
@@ -185,21 +171,7 @@ public sealed class AHoldThisBuildRaisedIsNotReleasedByAutoTests : HoldFromBefor
         StripTheMarker(PlanHold, recorded: true);
         var cards = Cards();
 
-        switch (entry)
-        {
-            case "a review entry":
-                ErrorOf(await ReviewEntryAsync(human, PlanHold)).Should().Be(RoundMachine.GateHeld);
-                break;
-            case "status":
-                await StatusAsync(human, PlanHold);
-                break;
-            case "resolve":
-                await human.ResolveAsync(_repo, Branch, RejectIt);
-                break;
-            default:
-                await human.AskHumanAsync(_repo, Branch, "May I ship?");
-                break;
-        }
+        await EnterAsync(human, entry, resolveWith: RejectIt);
 
         SessionOf(PlanHold).State.HumanGate.Should().BeTrue();
         SessionOf(PlanHold).State.Config.PredatesAuto.Should().BeTrue("reading it under human did not write the marker");
@@ -208,6 +180,23 @@ public sealed class AHoldThisBuildRaisedIsNotReleasedByAutoTests : HoldFromBefor
         await StatusAsync(AutoService(), PlanHold);
 
         AssertReleased(PlanHold, recorded: true, id, cards);
+    }
+
+    /// <summary>One of the entries that load a hold, called on the plan stage's hold through <paramref name="service"/>.</summary>
+    private async Task EnterAsync(PanelService service, string entry, string resolveWith)
+    {
+        var reply = await (entry switch
+        {
+            "a review entry" => ReviewEntryAsync(service, PlanHold),
+            "status" => StatusAsync(service, PlanHold),
+            "resolve" => service.ResolveAsync(_repo, Branch, resolveWith),
+            _ => service.AskHumanAsync(_repo, Branch, "May I ship?"),
+        });
+
+        if (entry == "a review entry")
+        {
+            ErrorOf(reply).Should().Be(RoundMachine.GateHeld);
+        }
     }
 
     [Fact]

@@ -33,11 +33,14 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
             var lane = request.Arguments.Any(a => a.Contains("finding-schema-security", StringComparison.Ordinal));
             var env = request.Environment.ToDictionary();
             env["FAKECLI_MODE"] = "vendor";
-            env["FAKECLI_STDOUT"] = lane ? laneAnswer ?? "{\"status\":\"SECURE\",\"findings\":[]}" : "{\"findings\":[]}";
+            env["FAKECLI_STDOUT"] = StdoutOf(lane, laneAnswer);
             env["FAKECLI_OUTFILE_TEXT"] = env["FAKECLI_STDOUT"];
             env["FAKECLI_EXIT"] = (lane ? failLane : failOrdinary) ? "7" : "0";
             return real.RunAsync(request with { Environment = env }, ct);
         }
+
+        private static string StdoutOf(bool lane, string? laneAnswer) =>
+            lane ? laneAnswer ?? "{\"status\":\"SECURE\",\"findings\":[]}" : "{\"findings\":[]}";
     }
 
     public async ValueTask InitializeAsync()

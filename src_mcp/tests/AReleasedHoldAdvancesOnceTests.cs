@@ -43,18 +43,7 @@ public sealed class AReleasedHoldAdvancesOnceTests : HoldFromBeforeAutoFixture
         ErrorOf(await StatusAsync(auto, hold)).Should().BeEmpty();
         SessionOf(hold).State.AwaitingResolve.Should().BeTrue("the status call released it");
 
-        string reply;
-        if (resolved)
-        {
-            reply = await ResolveAsync(auto, hold, "[]");
-        }
-        else
-        {
-            var bytes = SessionBytes(hold);
-            ErrorOf(await ResolveAsync(auto, hold, "[]")).Should().Contain("await a decision");
-            SessionBytes(hold).Should().Be(bytes, "the refusal changes no byte");
-            reply = await ResolveAsync(auto, hold, RejectIt);
-        }
+        var reply = await TheOneResolveAsync(auto, hold, resolved);
 
         ErrorOf(reply).Should().BeEmpty(reply);
         var expected = kind == Kind.Plan ? Stage.CodeReview : Stage.Done;
@@ -65,11 +54,6 @@ public sealed class AReleasedHoldAdvancesOnceTests : HoldFromBeforeAutoFixture
         after.State.AdvanceOnResolve.Should().BeFalse();
         after.Pending.Should().BeEmpty();
         after.State.Rejections.Should().HaveCount(1, "the rejection made before the release, or in the one resolve, is kept");
-        if (kind == Kind.Plan)
-        {
-            after.State.PlanProceeded.Should().BeTrue();
-        }
-
         after.Rounds[^1].Verdict.Should().Be("call_human");
         after.Rounds[^1].Note.Should().Be(LegacyHold.Note);
         var where = $"session_id = '{after.State.SessionId}' AND stage = '{held.Stage}' AND number = {held.Number}";
@@ -82,8 +66,33 @@ public sealed class AReleasedHoldAdvancesOnceTests : HoldFromBeforeAutoFixture
         again.Should().Contain("no completed round awaiting decisions");
         SessionOf(hold).State.Stage.Should().Be(expected, "the stage moved once, not twice");
 
+        await TheStagesOwnAfterwardsAsync(kind, auto, hold, after);
+    }
+
+    /// <summary>
+    /// The one resolve of the row. Resolved: the caller decided the held round before the strip, so an empty list does it. Not resolved: its finding is
+    /// still pending, so an empty list is refused with no byte changed, and the decisions come in the one that advances.
+    /// </summary>
+    private async Task<string> TheOneResolveAsync(PanelService auto, Hold hold, bool resolved)
+    {
+        if (resolved)
+        {
+            return await ResolveAsync(auto, hold, "[]");
+        }
+
+        var bytes = SessionBytes(hold);
+        ErrorOf(await ResolveAsync(auto, hold, "[]")).Should().Contain("await a decision");
+        SessionBytes(hold).Should().Be(bytes, "the refusal changes no byte");
+
+        return await ResolveAsync(auto, hold, RejectIt);
+    }
+
+    /// <summary>What only one stage can show after its resolve: a plan opens the code gate, a feature review's third round is refused.</summary>
+    private async Task TheStagesOwnAfterwardsAsync(Kind kind, PanelService auto, Hold hold, PersistedSession after)
+    {
         if (kind == Kind.Plan)
         {
+            after.State.PlanProceeded.Should().BeTrue();
             Script(Clean);
             ErrorOf(await auto.ReviewCodeAsync(_repo, hold.Branch, "main", CodeRoundHarness.Scope)).Should().NotContain("plan gate comes first");
         }

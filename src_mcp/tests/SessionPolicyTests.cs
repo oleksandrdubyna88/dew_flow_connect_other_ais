@@ -510,12 +510,15 @@ public sealed class SessionPolicyTests : IDisposable
         {
             for (var column = 0; column < reader.FieldCount; column++)
             {
-                row[reader.GetName(column)] = reader.IsDBNull(column) ? "<null>" : reader.GetValue(column).ToString() ?? string.Empty;
+                row[reader.GetName(column)] = CellText(reader, column);
             }
         }
 
         return row;
     }
+
+    private static string CellText(SqliteDataReader reader, int column) =>
+        reader.IsDBNull(column) ? "<null>" : reader.GetValue(column).ToString() ?? string.Empty;
 
     private List<string> Scalars(string sql)
     {
