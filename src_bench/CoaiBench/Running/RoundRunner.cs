@@ -26,9 +26,13 @@ public sealed class RoundRunner(GateClient client, string repo, TimeSpan timeout
     /// </remarks>
     private const int MaxPlanRounds = 4;
 
-    /// <summary>The verdicts that open the code stage — the same three the server acts on.</summary>
+    /// <summary>The verdicts that open the code stage — the same four the server acts on.</summary>
+    /// <remarks>
+    /// <c>not_reviewed</c> is policy auto's: nobody answered, and the stage proceeds without a review. Left out, the bench would retry an
+    /// advanced plan stage and never reach the code one.
+    /// </remarks>
     internal static bool Passed(string verdict) =>
-        verdict is "proceed" or "good_enough" or "continue_anyway";
+        verdict is "proceed" or "good_enough" or "continue_anyway" or "not_reviewed";
 
     public async Task<RunRecord> RunAsync(Case work, string arm, int repeat, int lane, Stages stages, string branch)
     {
