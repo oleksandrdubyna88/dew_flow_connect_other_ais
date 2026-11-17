@@ -7,8 +7,7 @@
  */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { HERE, flag, newServer, releasedServer, run as runServer } from './releasedHalves.mjs';
@@ -30,8 +29,9 @@ function currentServer() {
   return flag('new', newServer() || (existsSync(release) ? release : ''));
 }
 
-// testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
-const work = mkdtempSync(join(tmpdir(), 'coai-on-exhausted-compat-'));
+// The run's own folder, owned by startOwnedRun and swept with it: no raw temp folder of this script's own.
+const work = join(run.folder, 'compat');
+mkdirSync(work, { recursive: true });
 const old = releasedServer(work, flag('tag', ''));
 const current = currentServer();
 if (!old || !current) {
