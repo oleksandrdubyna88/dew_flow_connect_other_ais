@@ -118,6 +118,9 @@ async function theLeg({ scope, start, answerOf, fakeCli }) {
     FAKECLI_STDOUT: ONE_BLOCKING_FINDING,
     FAKECLI_OUTFILE_TEXT: ONE_BLOCKING_FINDING,
     FAKECLI_EXIT: '0',
+    // Pinned: the panel's writer leaves the policy out at its default (Ask a human), and a server since policy auto reads
+    // "no policy named" as auto, which never holds (todo/PLAN_auto_never_asks_a_person.md, N4). This leg is about a HELD gate.
+    COAI_ON_EXHAUSTED: 'human',
   });
 
   const held = await hold(session, repo, answerOf);
