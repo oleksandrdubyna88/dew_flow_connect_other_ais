@@ -103,22 +103,32 @@ public sealed class AskHumanService
         var at = AddressOf(repoPath, branch, document, feature);
         // A hold from before policy auto is released by whichever call reads it first; the whole Release is kept for the reply's words.
         var release = _policy.CurrentUnclaimed(_store.Load(repoPath, at.Branch, at.Document, at.Feature), repoPath, at);
-        var session = release?.Session;
-        // Whether the policy is auto is read from the SETTINGS, not the session: a session raised under human is still held while the settings say auto.
-        var autonomous = _settings.Rounds.IsAutonomous;
-        var facts = _desk.Facts(repoPath, session, new AskArguments(consultId ?? string.Empty, productionRisk, (riskReason ?? string.Empty).Trim()), DateTime.UtcNow);
-        facts = facts with { Input = facts.Input with { Autonomous = autonomous } };
+        var facts = FactsOf(repoPath, release?.Session, consultId, productionRisk, riskReason);
 
-        return AskGate.Decide(facts.Input) switch
+        return await DecidedAsync(AskGate.Decide(facts.Input), release, at, repoPath, branch, question.Trim(), facts, ct);
+    }
+
+    /// <summary>The desk's facts, with the policy on them: whether it is auto is read from the SETTINGS, not the session — a session raised under human is still held while the settings say auto.</summary>
+    private AskFacts FactsOf(string repoPath, PersistedSession? session, string? consultId, bool productionRisk, string? riskReason)
+    {
+        var arguments = new AskArguments(consultId ?? string.Empty, productionRisk, (riskReason ?? string.Empty).Trim());
+        var facts = _desk.Facts(repoPath, session, arguments, DateTime.UtcNow);
+
+        return facts with { Input = facts.Input with { Autonomous = _settings.Rounds.IsAutonomous } };
+    }
+
+    /// <summary>What the gate decided, answered: a refusal, the consultants first, the gate's question at once, or the door the desk chose.</summary>
+    private async Task<string> DecidedAsync(
+        AskDecision decision, Release? release, SessionAddress at, string repoPath, string branch, string text, AskFacts facts, CancellationToken ct) =>
+        decision switch
         {
             AskDecision.Refused refused => Error(refused.Sentence),
             AskDecision.ConsultFirst first => ConsultFirst(first.Note),
-            // No session means no card door (AskGateDesk.DoorFor), so the session is there.
-            AskDecision.Allowed when autonomous && facts.Input.Door == AskDoor.Card => AnsweredAtOnce(session!, release?.NotWritten ?? string.Empty),
-            AskDecision.Allowed allowed => await AskedAsync(session, at, repoPath, branch, question.Trim(), facts, allowed, ct),
+            // No session means no card door (AskGateDesk.DoorFor), so the release is there.
+            AskDecision.Allowed when facts.Input.Autonomous && facts.Input.Door == AskDoor.Card => AnsweredAtOnce(release!.Value),
+            AskDecision.Allowed allowed => await AskedAsync(release?.Session, at, repoPath, branch, text, facts, allowed, ct),
             _ => throw new InvalidOperationException("the union is closed"),
         };
-    }
 
     /// <summary>Policy auto, the AI's own question with no proof: the consultants come before the person. Nothing is spent, counted, posted or recorded.</summary>
     private string ConsultFirst(string note)
@@ -135,8 +145,9 @@ public sealed class AskHumanService
     /// Policy auto, the gate's question: no card, no wait, nothing recorded on the session, no proof spent, no batch counted. A held gate is told whose
     /// hold it is (<see cref="AskUnderAuto.HeldInstruction"/>); a feature review's request window is told the server decides a second round.
     /// </summary>
-    private string AnsweredAtOnce(PersistedSession session, string notWritten)
+    private string AnsweredAtOnce(Release release)
     {
+        var (session, notWritten) = release;
         var id = NewQuestionId();
         if (!session.State.HumanGate)
         {

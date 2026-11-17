@@ -261,53 +261,53 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     /// Reads under the file's turn and RELEASES the turn before it writes: <see cref="AtomicJson.Write"/> takes the turn itself and the
     /// turn is not re-entrant.
     /// </remarks>
-    public Withdrawal Withdraw(string id, DateTime nowUtc)
-    {
-        lock (RewriteGate)
+    public Withdrawal Withdraw(string id, DateTime nowUtc) =>
+        Rewriting(
+            id,
+            card => card.Status != EscalationStatuses.Expired,
+            card => card with { Status = EscalationStatuses.Expired, ExpiredUtc = nowUtc.ToString("O") }) switch
         {
-            var path = QuestionPath(id);
-            var (found, card) = Peek(path);
-            if (found == Peeked.Failed)
-            {
-                return Withdrawal.Failed;
-            }
-
-            if (card is null || card.Status == EscalationStatuses.Expired)
-            {
-                return Withdrawal.NotThere;
-            }
-
-            return TryWrite(path, card with { Status = EscalationStatuses.Expired, ExpiredUtc = nowUtc.ToString("O") })
-                ? Withdrawal.Withdrawn
-                : Withdrawal.Failed;
-        }
-    }
+            Rewrote.Done => Withdrawal.Withdrawn,
+            Rewrote.NotThere => Withdrawal.NotThere,
+            _ => Withdrawal.Failed,
+        };
 
     /// <summary>
     /// Puts a card policy auto withdrew back as it was: <c>Status</c> open and <c>ExpiredUtc</c> empty, no other member and no answer file.
     /// It does not know who expired a card — its callers decide that.
     /// </summary>
-    public Restoration Restore(string id)
+    public Restoration Restore(string id) =>
+        Rewriting(
+            id,
+            card => card.Status == EscalationStatuses.Expired,
+            card => card with { Status = EscalationStatuses.Open, ExpiredUtc = string.Empty }) switch
+        {
+            Rewrote.Done => Restoration.Restored,
+            Rewrote.NotThere => Restoration.NotExpired,
+            _ => Restoration.Failed,
+        };
+
+    private enum Rewrote { Done, NotThere, Failed }
+
+    /// <summary>
+    /// The one read-then-write of a card, for <see cref="Withdraw"/> and <see cref="Restore"/>: no card, or a card <paramref name="applies"/> does
+    /// not hold of, is <see cref="Rewrote.NotThere"/>; a card that cannot be read or written is <see cref="Rewrote.Failed"/>.
+    /// </summary>
+    private Rewrote Rewriting(string id, Func<EscalationQuestion, bool> applies, Func<EscalationQuestion, EscalationQuestion> to)
     {
         lock (RewriteGate)
         {
             var path = QuestionPath(id);
             var (found, card) = Peek(path);
-            if (found == Peeked.Failed)
-            {
-                return Restoration.Failed;
-            }
 
-            if (card is null || card.Status != EscalationStatuses.Expired)
-            {
-                return Restoration.NotExpired;
-            }
-
-            return TryWrite(path, card with { Status = EscalationStatuses.Open, ExpiredUtc = string.Empty })
-                ? Restoration.Restored
-                : Restoration.Failed;
+            return found == Peeked.Failed ? Rewrote.Failed : Rewritten(path, card, applies, to);
         }
     }
+
+    private Rewrote Rewritten(string path, EscalationQuestion? card, Func<EscalationQuestion, bool> applies, Func<EscalationQuestion, EscalationQuestion> to) =>
+        card is null || !applies(card) ? Rewrote.NotThere
+        : TryWrite(path, to(card)) ? Rewrote.Done
+        : Rewrote.Failed;
 
     private enum Peeked { Read, Failed }
 

@@ -566,8 +566,7 @@ public sealed class PanelService
         }
 
         var at = AddressOf(repoPath, branch, document, feature);
-        // A hold from before policy auto is released by whichever call reads it first; this one holds no claim, so it takes it for the release alone.
-        var session = _policy.CurrentUnclaimed(_store.Load(repoPath, at.Branch, at.Document, at.Feature), repoPath, at)?.Session;
+        var session = LoadedUnderThePolicy(repoPath, at);
         if (session is null)
         {
             return Error(NoSession(document, feature));
@@ -1168,6 +1167,13 @@ public sealed class PanelService
             _ => null,
         };
     }
+
+    /// <summary>
+    /// The session at this address, after a hold from before policy auto was released by whichever call reads it first; this call holds no
+    /// claim, so it takes it for the release alone. Null for no session.
+    /// </summary>
+    private PersistedSession? LoadedUnderThePolicy(string repoPath, SessionAddress at) =>
+        _policy.CurrentUnclaimed(_store.Load(repoPath, at.Branch, at.Document, at.Feature), repoPath, at)?.Session;
 
     /// <summary>
     /// The session at this identity: the one that is there, or a new one.

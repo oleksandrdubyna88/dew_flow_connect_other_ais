@@ -2367,6 +2367,13 @@ after it; the stage does not move, and ONE `resolve` then advances it through `P
 cannot be read runs `auto` and releases nothing until it reads. A hold this build raised under `human` keeps its authority:
 `resolve(humanDecision: "proceed")` is still refused on it, and `ask_human` answers it at once and points at its notice.
 
+**Shape, held to cyclomatic complexity 4 (PR #1011, CodeRabbit).** `SessionPolicy.Write` is the order above and no more: `WithdrawEveryNotice` (every notice tried, no
+short circuit; `Withdrawals` carries who was withdrawn and who failed), then `NotWithdrawn`, `AnsweredMeanwhile` (the second read) or `Saved` (`ReleasedOf`, the save, the
+projection, the line) — the operation order is unchanged. `CurrentUnclaimed` is `Unclaimed` (the eligibility, `WouldRestore`, the pure decision) and `UnderTheClaim`
+(`ClaimIsBusy` when the claim is taken, else the read under it). `Decided` still answers `Release?`: null is "the pure steps decided nothing, go on to the write", the spec's
+§ S1.5 shape. `Escalations.Withdraw` and `Restore` are two mappings over one `Rewriting` (peek under the file's turn, then `Rewritten`). `AskHumanService.AskHumanAsync`
+validates and loads; `FactsOf` builds the desk's facts with the policy on them and `DecidedAsync` answers what the gate decided.
+
 ## Only an answer on the notice card releases the gate (2026-10-22)
 
 > Plan: [PLAN_only_a_person_releases_the_gate.md](../todo/PLAN_only_a_person_releases_the_gate.md) (the server half; the

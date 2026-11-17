@@ -1242,14 +1242,17 @@ public sealed record PanelSettings
     /// settings file is the panel's own choice.
     /// </summary>
     internal static IReadOnlyList<UnrecognisedSetting> PinnedPolicy(Func<string, string?> processEnv) =>
-        processEnv(Key.Exhausted) is { Length: > 0 } policy
-        && PolicyOf(policy) is { } named
-        && (named != StagePolicy.Human || string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase))
+        processEnv(Key.Exhausted) is { Length: > 0 } policy && NamesAKnownPolicyOtherThanAuto(policy)
             ? [new UnrecognisedSetting(
                 Key.Exhausted,
                 $"{Key.Exhausted} is '{policy}' in this server's own environment — your MCP client's `env` block — which overrides the panel; "
               + "Auto is the default now. Remove it from that `env` block to follow the panel.")]
             : [];
+
+    /// <summary>A word <see cref="PolicyOf"/> knows and that is not <c>auto</c>: an UNKNOWN word also reads as <c>human</c>, and only the spelling tells them apart.</summary>
+    private static bool NamesAKnownPolicyOtherThanAuto(string policy) =>
+        PolicyOf(policy) is { } named
+        && (named != StagePolicy.Human || string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase));
 
     private static IReadOnlyList<UnrecognisedSetting> WhyWorkspace(Func<string, string?> env) =>
         env(Key.Workspace) is { Length: > 0 } workspace && !AWorkspaceWeKnow(workspace)

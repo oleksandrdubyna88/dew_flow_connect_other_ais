@@ -53,42 +53,54 @@ internal sealed class SessionPolicy(
     }
 
     /// <summary>The same for a caller that holds NO claim: it takes the claim for the release alone. Null for no session.</summary>
-    internal Release? CurrentUnclaimed(PersistedSession? session, string repoPath, SessionAddress at)
-    {
-        if (session is null)
-        {
-            return null;
-        }
+    internal Release? CurrentUnclaimed(PersistedSession? session, string repoPath, SessionAddress at) =>
+        session is null ? null : Unclaimed(session, repoPath, at);
 
+    private Release Unclaimed(PersistedSession session, string repoPath, SessionAddress at)
+    {
         if (!Eligible(session))
         {
             return new Release(Stamped(session), string.Empty);
         }
 
-        // The person's answer is on file and a notice of the hold is expired: a restore would happen. A card is put back only under the claim and
-        // on the file as it is now (D16), so this call goes the way of a release — and says nothing of a release when the claim is busy.
-        var restorable = CurrentAnswer.For(session, escalations) is not null && HasExpiredNotice(session);
+        var restorable = WouldRestore(session);
         if (!restorable && Decided(session, restore: false) is { } done)
         {
             return done;
         }
 
-        var notWritten = restorable ? string.Empty : LegacyHold.ClaimBusy;
+        return UnderTheClaim(session, restorable, repoPath, at);
+    }
+
+    // The person's answer is on file and a notice of the hold is expired: a restore would happen. A card is put back only under the claim and
+    // on the file as it is now (D16), so a call that holds no claim goes the way of a release — and says nothing of a release when the claim is busy.
+    private bool WouldRestore(PersistedSession session) => CurrentAnswer.For(session, escalations) is not null && HasExpiredNotice(session);
+
+    private Release UnderTheClaim(PersistedSession session, bool restorable, string repoPath, SessionAddress at)
+    {
         using var claim = SessionClaim.TryTake(settings.DataDir, repoPath, at.Branch, at.Document, at.Feature);
         if (claim is null)
         {
-            log.Information(
-                "policy auto did not {Work} the {Stage} hold of session {SessionId} this call: another call holds the session — the next call tries again",
-                restorable ? "offer the notice of" : "release", StageOf(session), session.State.SessionId);
-
-            return new Release(session, notWritten);
+            return ClaimIsBusy(session, restorable);
         }
 
         // Read AGAIN under the claim: what this call was handed may be older than the file — a resolve may have saved in between.
         return store.Load(repoPath, at.Branch, at.Document, at.Feature) is { } fresh
             ? Current(fresh)
-            : new Release(session, notWritten);
+            : new Release(session, NotWrittenBecauseOfTheClaim(restorable));
     }
+
+    private Release ClaimIsBusy(PersistedSession session, bool restorable)
+    {
+        log.Information(
+            "policy auto did not {Work} the {Stage} hold of session {SessionId} this call: another call holds the session — the next call tries again",
+            restorable ? "offer the notice of" : "release", StageOf(session), session.State.SessionId);
+
+        return new Release(session, NotWrittenBecauseOfTheClaim(restorable));
+    }
+
+    // A restore says nothing of a release (it only offers a card again), so it names no reason; a release that waited for the claim names it.
+    private static string NotWrittenBecauseOfTheClaim(bool restorable) => restorable ? string.Empty : LegacyHold.ClaimBusy;
 
     /// <summary>Whether policy auto released this session's hold and the resolve that moves its stage has not come yet.</summary>
     /// <remarks>
@@ -198,54 +210,71 @@ internal sealed class SessionPolicy(
     // Steps 4 to 8: the release itself.
     private Release Write(PersistedSession session)
     {
+        var tried = WithdrawEveryNotice(session);
+
+        // No short circuit in the withdrawal: every notice was tried. One that could not be withdrawn keeps the hold, and the next deciding load tries again.
+        if (tried.Failed.Count > 0)
+        {
+            return NotWithdrawn(session, tried);
+        }
+
+        // The answers, read AGAIN: the last moment an answer to a card the panel still offered can exist. It is applied by today's readers, by
+        // today's rules, so what this call withdrew is put back — the person can answer again — and nothing is released.
+        return CurrentAnswer.For(session, escalations) is not null
+            ? AnsweredMeanwhile(session, tried.Withdrawn)
+            : Saved(session, tried.Withdrawn);
+    }
+
+    /// <summary>Which notices a try at withdrawing every one of the hold's cards got withdrawn, and which could not be.</summary>
+    private sealed record Withdrawals(List<string> Withdrawn, List<string> Failed);
+
+    private Withdrawals WithdrawEveryNotice(PersistedSession session)
+    {
         var now = DateTime.UtcNow;
-        var withdrawn = new List<string>();
-        var failed = new List<string>();
+        var tried = new Withdrawals([], []);
         foreach (var id in session.State.HoldQuestions)
         {
             switch (escalations.Withdraw(id, now))
             {
                 case Withdrawal.Withdrawn:
-                    withdrawn.Add(id);
+                    tried.Withdrawn.Add(id);
                     break;
                 case Withdrawal.Failed:
-                    failed.Add(id);
+                    tried.Failed.Add(id);
                     break;
             }
         }
 
-        // No short circuit above: every notice was tried. One that could not be withdrawn keeps the hold, and the next deciding load tries again.
-        if (failed.Count > 0)
-        {
-            log.Warning(
-                "policy auto could not withdraw notice(s) {Ids} of the {Stage} hold of session {SessionId} — the hold stays, and the next call tries again",
-                string.Join(", ", failed), StageOf(session), session.State.SessionId);
+        return tried;
+    }
 
-            // A failed attempt leaves nothing half done: the cards this call did withdraw are put back, so a hold that is later switched to
-            // `human` (and so never retried) does not keep a card the person can no longer answer.
-            PutBack(session, withdrawn);
+    private Release NotWithdrawn(PersistedSession session, Withdrawals tried)
+    {
+        log.Warning(
+            "policy auto could not withdraw notice(s) {Ids} of the {Stage} hold of session {SessionId} — the hold stays, and the next call tries again",
+            string.Join(", ", tried.Failed), StageOf(session), session.State.SessionId);
 
-            return new Release(session, LegacyHold.NoticeNotWithdrawn);
-        }
+        // A failed attempt leaves nothing half done: the cards this call did withdraw are put back, so a hold that is later switched to
+        // `human` (and so never retried) does not keep a card the person can no longer answer.
+        PutBack(session, tried.Withdrawn);
 
-        // The answers, read AGAIN: the last moment an answer to a card the panel still offered can exist. It is applied by today's readers, by
-        // today's rules, so what this call withdrew is put back — the person can answer again — and nothing is released.
-        if (CurrentAnswer.For(session, escalations) is not null)
-        {
-            var restored = PutBack(session, withdrawn);
-            log.Information(
-                "a person answered the {Stage} hold of session {SessionId} while policy auto was releasing it — their answer stands, nothing is released, and {Restored} notice(s) are offered again",
-                StageOf(session), session.State.SessionId, restored);
+        return new Release(session, LegacyHold.NoticeNotWithdrawn);
+    }
 
-            return new Release(session, string.Empty);
-        }
+    private Release AnsweredMeanwhile(PersistedSession session, List<string> withdrawn)
+    {
+        var restored = PutBack(session, withdrawn);
+        log.Information(
+            "a person answered the {Stage} hold of session {SessionId} while policy auto was releasing it — their answer stands, nothing is released, and {Restored} notice(s) are offered again",
+            StageOf(session), session.State.SessionId, restored);
 
-        var held = session.Rounds.Count > 0 ? session.Rounds[^1] : null;
-        var released = session with
-        {
-            State = LegacyHold.Released(session.State, settings.Rounds),
-            Rounds = held is null ? session.Rounds : [.. session.Rounds[..^1], held with { Note = LegacyHold.Note }],
-        };
+        return new Release(session, string.Empty);
+    }
+
+    // Steps 6 to 8: the save, then the projection, then the line.
+    private Release Saved(PersistedSession session, List<string> withdrawn)
+    {
+        var released = ReleasedOf(session);
         try
         {
             store.Save(released);
@@ -272,5 +301,17 @@ internal sealed class SessionPolicy(
             StageOf(session), session.State.SessionId, session.State.Config.OnExhausted, withdrawn.Count);
 
         return new Release(released, string.Empty);
+    }
+
+    // The session as released: the state the hold becomes, and the note on the held round.
+    private PersistedSession ReleasedOf(PersistedSession session)
+    {
+        var held = session.Rounds.Count > 0 ? session.Rounds[^1] : null;
+
+        return session with
+        {
+            State = LegacyHold.Released(session.State, settings.Rounds),
+            Rounds = held is null ? session.Rounds : [.. session.Rounds[..^1], held with { Note = LegacyHold.Note }],
+        };
     }
 }
