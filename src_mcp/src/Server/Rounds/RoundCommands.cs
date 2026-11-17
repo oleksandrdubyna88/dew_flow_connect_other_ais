@@ -14,7 +14,7 @@ internal sealed class RoundCommands(PanelSettings settings, RolePrompts prompts,
 
     /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>
     internal static bool MayProceed(RoundVerdict verdict) =>
-        verdict is RoundVerdict.Proceed or RoundVerdict.GoodEnough or RoundVerdict.ContinueAnyway;
+        verdict is RoundVerdict.Proceed or RoundVerdict.GoodEnough or RoundVerdict.NotReviewed or RoundVerdict.ContinueAnyway;
 
     /// <summary>
     /// Whom the split order is remembered against.

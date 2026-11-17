@@ -42,7 +42,10 @@ public abstract record RoundVerdict
     /// ones that hold, records why it rejected the rest, and proceeds. That last part is what keeps
     /// this different from <see cref="ContinueAnyway"/>, which proceeds and touches nothing.
     /// </remarks>
-    public sealed record GoodEnough(GateResult Gate, ReviewerSummary Reviewers) : RoundVerdict;
+    public sealed record GoodEnough(GateResult Gate, ReviewerSummary Reviewers, string Reason = "") : RoundVerdict;
+
+    /// <summary>No reviewer answered and policy auto proceeds WITHOUT a review — never a pass, said out loud.</summary>
+    public sealed record NotReviewed(GateResult Gate, ReviewerSummary Reviewers, string Reason) : RoundVerdict;
 
     /// <summary>Rounds exhausted, policy says a person decides.</summary>
     public sealed record CallHuman(GateResult Gate, ReviewerSummary Reviewers, string Reason) : RoundVerdict;
@@ -439,7 +442,8 @@ public static class RoundMachine
         // absence. One answer is enough to judge on; none is a person's call.
         if (reviewers.Answered == 0)
         {
-            return new Transition.Ok(
+            // Under policy auto nobody is asked either: the stage proceeds WITHOUT a review, and says so (AutoVerdicts).
+            return s.Config.IsAutonomous ? AutoVerdicts.NobodyAnswered(s, gate, reviewers, roundsRun) : new Transition.Ok(
                 // AwaitingResolve stays TRUE even though there are no findings to decide on: the
                 // round completed, and `resolve` is the only door a human's "proceed" can come
                 // through. With it false the verdict was unresolvable — the gate answered
@@ -509,9 +513,12 @@ public static class RoundMachine
             return new Transition.Ok(next with { SecondRound = ground }, new RoundVerdict.Revise(gate, reviewers, 1));
         }
 
-        return new Transition.Ok(
-            next with { HumanGate = true, SecondRound = SecondRoundGround.None },
-            new RoundVerdict.CallHuman(gate, reviewers, FeatureCallHumanReason(ground, gate, reviewers, roundsRun)));
+        // At its cap with a ground: a person under every policy but auto, which decides and says what it decided.
+        return s.Config.IsAutonomous
+            ? AutoVerdicts.FeatureAtItsCap(next, gate, reviewers, ground, roundsRun)
+            : new Transition.Ok(
+                next with { HumanGate = true, SecondRound = SecondRoundGround.None },
+                new RoundVerdict.CallHuman(gate, reviewers, FeatureCallHumanReason(ground, gate, reviewers, roundsRun)));
     }
 
     /// <summary>
@@ -575,7 +582,7 @@ public static class RoundMachine
         : reviewers.Answered == 0 || reviewers.Failures.Length > 0 ? SecondRoundGround.ReviewerFailure
         : SecondRoundGround.None;
 
-    private static string FeatureCallHumanReason(SecondRoundGround ground, GateResult gate, ReviewerSummary reviewers, int roundsRun)
+    internal static string FeatureCallHumanReason(SecondRoundGround ground, GateResult gate, ReviewerSummary reviewers, int roundsRun)
     {
         // The second round is the ordinary case; the first is an operator whose feature budget is one.
         var which = roundsRun == 1 ? "round 1, and the feature budget is one round" : "the second round";
@@ -632,6 +639,11 @@ public static class RoundMachine
     private static Transition Exhausted(SessionState s, GateResult gate, ReviewerSummary reviewers, int roundsRun) =>
         s.Config.OnExhausted switch
         {
+            // First, so that a config under policy auto can never reach the call_human arm, whatever OnExhausted says.
+            _ when s.Config.IsAutonomous => new Transition.Ok(
+                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
+                new RoundVerdict.GoodEnough(gate, reviewers, AutoVerdicts.ExhaustedReason(gate, roundsRun))),
+
             StagePolicy.Continue => new Transition.Ok(
                 s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
                 new RoundVerdict.ContinueAnyway(gate, reviewers)),

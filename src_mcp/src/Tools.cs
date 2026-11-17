@@ -100,8 +100,8 @@ internal static class Tools
                     Every reviewer is told the plan ends at its `END OF PLAN` line; one that did not receive it
                     whole does not count as answering. The reply
                     carries the merged, de-duplicated findings, the honest reviewer count, the
-                    verdict (proceed | revise | continue_anyway | good_enough | call_human |
-                    escalated) and what to do next. Then record decisions with `resolve` — every
+                    verdict (proceed | revise | continue_anyway | good_enough | not_reviewed |
+                    call_human | escalated) and what to do next. Then record decisions with `resolve` — every
                     finding, reasons on rejections.
 
                     A finding that changes your mind about the shape of the work is what `consult`

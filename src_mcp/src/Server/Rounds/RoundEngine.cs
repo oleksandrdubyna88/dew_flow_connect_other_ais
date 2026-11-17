@@ -948,6 +948,9 @@ internal sealed class RoundEngine(
                 "that are true and useful — that is the point of this setting, and it is what makes it " +
                 "different from continue_anyway. Reject the rest with reasons via resolve, say in your " +
                 "summary what you took and what you declined, then proceed."),
+            RoundVerdict.NotReviewed => ("not_reviewed", null,
+                $"No reviewer answered — {summary.Sentence}. Policy `auto` proceeds WITHOUT a review. Call resolve (there is nothing to decide), " +
+                "say in your summary that this stage was not reviewed and why, then proceed."),
             RoundVerdict.CallHuman h => ("call_human", null,
                 $"Rounds exhausted: {h.Reason}. A human decides — surface the open findings to them; do not proceed on your own."),
             RoundVerdict.Escalated e => ("escalated", e.Step.ToString(),
