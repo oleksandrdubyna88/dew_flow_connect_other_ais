@@ -441,8 +441,20 @@ test('T37b TheNotificationIsTrueForTheServerTheWindowRuns', async () => {
   assert.equal(bound, 20_000, 'the wait is capped at 20 s');
 
   // A binary whose features settle late, within the cap: the settled sentence is told, after one bounded wait.
-  const late = activation(world(false, {}), 'A', { features: { now: undefined, later: [FEATURES.onExhaustedAuto] } });
-  assert.equal(await late.run(), 'migrated');
+  // The wait is DEFERRED: until it is released the run has neither told nor finished, so a tell that did not await it is red.
+  const late = activation(world(false, {}), 'A', { features: { now: undefined, later: [FEATURES.onExhaustedAuto], deferred: true } });
+  let finished = false;
+  const lateRun = late.run().then((outcome) => {
+    finished = true;
+
+    return outcome;
+  });
+  await until(() => late.waits.length === 1, 'the tell is waiting for the features');
+  await flush();
+  assert.deepEqual(late.tells(), [], 'before the release nothing was told');
+  assert.equal(finished, false, 'and the run has not finished');
+  late.releaseFeatures();
+  assert.equal(await lateRun, 'migrated');
   assert.deepEqual(late.tells(), [NOW_AUTO]);
   assert.deepEqual(late.waits, [bound]);
 

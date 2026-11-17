@@ -448,9 +448,10 @@ export interface RigOptions {
   /**
    * What the window's `FeaturesCache` says: `now` is its settled list (`undefined` = not settled; the default is a binary
    * that lists `onExhaustedAuto`), `later` the list it settles on when the tell waits for it. Without `later`, an
-   * unsettled cache stays unsettled for the whole cap.
+   * unsettled cache stays unsettled for the whole cap. With `deferred`, `settleFeatures` stays pending until the test calls
+   * `releaseFeatures()`, which settles the list on `later` and resolves it; without it the wait resolves at once.
    */
-  readonly features?: { readonly now: readonly string[] | undefined; readonly later?: readonly string[] };
+  readonly features?: { readonly now: readonly string[] | undefined; readonly later?: readonly string[]; readonly deferred?: boolean };
   /** The per-side switch; off unless said. */
   readonly perSide?: boolean;
   readonly side?: Side;
@@ -478,6 +479,7 @@ export class Rig {
   onAfter: () => void = () => undefined;
 
   private turnCount = 0;
+  private releaseSettle: (() => void) | undefined;
   private featureList: readonly string[] | undefined;
   /** The caps the tell waited for features with, in order. */
   readonly waits: number[] = [];
@@ -494,6 +496,12 @@ export class Rig {
 
   run(): Promise<MigrationOutcome> {
     return migrateOnExhausted(this.ports);
+  }
+
+  /** Ends a deferred `settleFeatures` wait: the features settle on `later`. Does nothing when no wait is pending. */
+  releaseFeatures(): void {
+    this.releaseSettle?.();
+    this.releaseSettle = undefined;
   }
 
   /** Every sentence `tell` was handed. */
@@ -575,9 +583,18 @@ export class Rig {
       features: () => this.featureList,
       settleFeatures: (capMs) => {
         this.waits.push(capMs);
-        this.featureList = options.features?.later ?? this.featureList;
+        if (options.features?.deferred !== true) {
+          this.featureList = options.features?.later ?? this.featureList;
 
-        return Promise.resolve();
+          return Promise.resolve();
+        }
+
+        return new Promise<void>((resolve) => {
+          this.releaseSettle = () => {
+            this.featureList = options.features?.later ?? this.featureList;
+            resolve();
+          };
+        });
       },
       tell: (sentence) => {
         events.push({ kind: 'tell', sentence });
