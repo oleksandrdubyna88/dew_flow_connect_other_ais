@@ -381,3 +381,61 @@ test('S3-T13b the deferred check reports its failure and a later focus still run
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(errors.length, 1, 'a failure of the deferred check was swallowed');
 });
+
+/** The offer, held open until the test presses a button (or closes it with `undefined`). */
+function heldOffer(base: Fake): { readonly seams: SkipShellSeams; readonly press: (answer: string | undefined) => void } {
+  let press: (answer: string | undefined) => void = () => undefined;
+  const seams: SkipShellSeams = {
+    ...base.seams,
+    ask: (ids) => {
+      base.asked.push(ids);
+
+      return new Promise<string | undefined>((resolve) => {
+        press = resolve;
+      });
+    },
+  };
+
+  return { seams, press: (answer) => press(answer) };
+}
+
+const tick = (): Promise<void> => new Promise<void>((resolve) => setImmediate(resolve));
+
+test('S3-T14 a trigger that arrives while the offer is open is not dropped: one follow-up tells about the workspace list', async () => {
+  const base = fake({ layers: user('a'), answer: ADD });
+  const held = heldOffer(base);
+  const check = latchedCheck(held.seams);
+  const first = check();
+  await tick();
+  assert.equal(base.asked.length, 1, 'the offer was not open');
+
+  // A workspace list appears while the offer is open, and its change reaches the check.
+  base.layers = () => ({ globalValue: ['a'], workspaceValue: ['w'] });
+  assert.equal(await check(), 'nothing', 'a trigger during a check did not return at once');
+  assert.equal(base.told.length, 0, 'the follow-up ran while a notice was open');
+
+  held.press(ADD);
+  await first;
+  assert.deepEqual(base.told, [{ layer: 'workspace', ids: BOTH }], 'a trigger that arrived during the check was dropped: the workspace list was never named');
+  assert.equal(base.writes.length, 0, 'the workspace list was written');
+  assert.equal(base.asked.length, 1, 'the follow-up asked again');
+});
+
+test('S3-T14b however many triggers arrive during one check, ONE follow-up runs', async () => {
+  const base = fake({ layers: user('a'), answer: undefined });
+  const held = heldOffer(base);
+  const check = latchedCheck(held.seams);
+  const first = check();
+  await tick();
+  await Promise.all([check(), check(), check()]);
+
+  held.press(undefined);
+  await first;
+  await tick();
+  // The check itself reads the layers once when it has nothing to ask; the first check read once, and the follow-up once.
+  assert.equal(base.log.filter((step) => step === 'inspect').length, 2, 'several triggers during one check made more than one follow-up, or none');
+
+  // A trigger after everything settled runs a check of its own.
+  await check();
+  assert.equal(base.log.filter((step) => step === 'inspect').length, 3);
+});

@@ -1,5 +1,4 @@
 import type { Inspected } from './modelKeys';
-import { oneAtATime } from './oneAtATime';
 
 /**
  * The skip list of the terminal: does the person's own `terminal.integrated.commandsToSkipShell` hide the terminal keys of CoAI,
@@ -273,13 +272,38 @@ export async function checkSkipShell(seams: SkipShellSeams): Promise<SkipShellOu
 }
 
 /**
- * {@link checkSkipShell} behind ONE latch: a second trigger while a notification is open does nothing, so there is never more
- * than one notification at a time. The host calls this for the activation and for every change of the setting.
+ * {@link checkSkipShell} behind ONE latch: a trigger while a check is running never starts a second check beside it, so there is never
+ * more than one notification at a time (S3-T8). It is not DROPPED either (S3-T14): whatever changed meanwhile — a workspace list set while
+ * the offer is open — is read by ONE follow-up check, however many triggers arrive, which starts only after the running check has settled
+ * and so never while a notice is open (S3-T14b). The first caller gets the first check's outcome. The host calls this for the activation
+ * and for every change of the setting.
  */
 export function latchedCheck(seams: SkipShellSeams): () => Promise<SkipShellOutcome> {
-  const door = oneAtATime<SkipShellOutcome>('nothing');
+  let running = false;
+  let again = false;
+  const once = async (): Promise<SkipShellOutcome> => {
+    running = true;
+    try {
+      return await checkSkipShell(seams);
+    } finally {
+      running = false;
+    }
+  };
 
-  return () => door(() => checkSkipShell(seams));
+  return async () => {
+    if (running) {
+      again = true;
+
+      return 'nothing';
+    }
+    const outcome = await once();
+    while (again) {
+      again = false;
+      await once();
+    }
+
+    return outcome;
+  };
 }
 
 /** What the focus gate needs of the window. */
