@@ -415,6 +415,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     panel.forgetQconsultRootAnswers();
     mirrorSettings(settingsSync);
   });
+  // The sidebar asks THIS cache too — a page that meets an updated binary re-asks the one the file is written from.
+  panel.useFeatures(features);
   const askFeatures = (): ReturnType<FeaturesCache['of']> => features.of(serverPath(context.globalStorageUri)?.fsPath, serverRun);
   const settingsSync = new ServerSettingsSync(
     () => readCoaiConfiguration(context),

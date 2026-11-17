@@ -281,6 +281,9 @@ const MINT_BACKOFF_MS = 10 * 60 * 1000;
  */
 const SETTLE_GRACE_MS = 250;
 
+/** What the panel answers before `extension.ts` has handed it the window's feature cache: no claim about the binary. */
+const NO_CACHE_YET: BinaryFeatures = { features: [], why: 'the window has not handed the panel its feature cache', settled: false };
+
 /** Is this caller's consultant a DEFINITION on that runtime? An unplaceable entry is on none. */
 function onRuntime(one: ResolvedConsultant | undefined, runtime: string): boolean {
   return one !== undefined && one.kind === 'definition' && one.runtime === runtime;
@@ -606,7 +609,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       dataDir, storage: this.context.globalStorageUri, render: () => { void this.render(); },
       modelRows: () => this.vendorsHere(),
       // The row exactly as coai-mcp reads it — through the settings file's own wire, switched on for the check.
-      rowInput: (row) => checkInputOf(row, knownServerVersion(this.context.globalStorageUri, this.context.globalState), this.features.known()),
+      rowInput: (row) => checkInputOf(row, knownServerVersion(this.context.globalStorageUri, this.context.globalState), this.features?.known() ?? []),
     });
   }
 
@@ -3439,11 +3442,21 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     await this.render();
   }
 
-  /** What the installed coai-mcp says it accepts, asked once per binary FILE — an update is a new file, asked again. */
-  private readonly features = new FeaturesCache();
+  /**
+   * What the installed coai-mcp says it accepts, asked once per binary FILE — an update is a new file, asked again.
+   *
+   * <p>The window's ONE cache, handed in by `extension.ts` ({@link useFeatures}): the settings file reads its settled
+   * answer, so a second cache here would settle on an updated binary while the file still said what the old one did.</p>
+   */
+  private features: FeaturesCache | undefined = undefined;
+
+  /** The window's feature cache, handed in once right after `extension.ts` builds it — the panel never makes its own. */
+  useFeatures(cache: FeaturesCache): void {
+    this.features = cache;
+  }
 
   private binaryFeatures(): Promise<BinaryFeatures> {
-    return this.features.of(serverPath(this.context.globalStorageUri)?.fsPath, serverRun);
+    return this.features?.of(serverPath(this.context.globalStorageUri)?.fsPath, serverRun) ?? Promise.resolve(NO_CACHE_YET);
   }
 
   /** How long Try it waits: one classification of at most 64 K characters, never a vendor turn. */

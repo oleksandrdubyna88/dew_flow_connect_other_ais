@@ -203,3 +203,43 @@ test('an updated binary is not described by the old one\'s list, and each settle
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('an updated binary clears the settled list at once, then settles on its own answer and announces it once', async () => {
+  const { writeFileSync, rmSync, utimesSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const dir = ownedTemp('coai-features-settled-clears');
+  try {
+    const file = join(dir, 'coai-mcp');
+    writeFileSync(file, 'one');
+    utimesSync(file, new Date(1_000_000), new Date(1_000_000));
+    let release: (value: { code: number; output: string }) => void = () => undefined;
+    let started = false;
+    const older = async (): Promise<{ code: number; output: string }> => ({ code: 0, output: '{"features":[]}' });
+    const newer = (): Promise<{ code: number; output: string }> => {
+      started = true;
+
+      return new Promise((resolve) => { release = resolve; });
+    };
+    let announced = 0;
+    const cache = new FeaturesCache(() => { announced += 1; });
+
+    await cache.of(file, () => older);
+    assert.deepEqual(cache.settled(), [], 'the older binary settled on an empty list, which is an answer');
+    assert.equal(announced, 1);
+
+    utimesSync(file, new Date(2_000_000), new Date(2_000_000));
+    const pending = cache.of(file, () => newer);
+    while (!started) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(cache.settled(), undefined, 'the changed file is not described by the old empty list while it is asked');
+
+    release({ code: 0, output: '{"features":["onExhaustedAuto"]}' });
+    await pending;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(cache.settled(), ['onExhaustedAuto']);
+    assert.equal(announced, 2, 'the new answer is announced once, so the settings file is written for it');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
