@@ -1,6 +1,10 @@
 # PLAN — E2 stories: the extension, everyone is on `auto` and can see what it did (`src_vs_code`)
 
-> Status: **plan only, nothing coded — written 2026-11-17 by Opus when the epic started, on branch
+> Status: **brought to epoch 3 of the parent by its re-review, 2026-11-17 (the parent is stopped until the owner
+> approves epoch 3): C4–C6 and § 6 take the S2 spec's X1–X5, § 7.3 briefs S1's fix forward for U3, § 9 the kept
+> sentence and the notification's two forms, § 10 lists what Fable revises in the S2 spec. S1 coded on
+> `feat/auto-mode-e2` (8fd79b71, 91a62aa7, 44bb7a4c), the S3 page slice on `feat/auto-mode-e2-s3-page` (ff158372,
+> 726a2981); S2 not coded.** Before that: **plan only, nothing coded — written 2026-11-17 by Opus when the epic started, on branch
 > `feat/auto-mode-e2` at `origin/main` `b3abb791` (E1 merged as #1011, released as mcp 0.66.0 by #1012).** Epic E2 of
 > [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) (its `## Epics`, § *E2*; the design is its § 4.5
 > page item, § 4.6 and § 4.8). A stories document keeps no change ledger: a change to this epic is an entry in the
@@ -175,16 +179,33 @@ S2's spec may refine a name in C4–C6. If it does, it updates this section and 
   `src/onExhaustedWire.ts` is the parent § 4.6 table. `envBlock` gains a sixth parameter, `featuresSettled = false`,
   and calls it. `SettingsWrite` gains `featuresSettled: boolean`. `FeaturesCache.settled()` answers
   `readonly string[] | undefined`: `undefined` until this file's answer has settled.
-- **C4 — the migration's entry (S2).** One exported host function, `startOnExhaustedMigration(context, mirror)`, in
-  the new `src/onExhaustedMigrationHost.ts`. It is called once from `activate`, after the first `mirrorSettings`
-  (`extension.ts:438`). `mirror` is `() => mirrorSettings(settingsSync)`. Its decisions live in a pure module beside
-  it, `src/onExhaustedMigration.ts`.
-- **C5 — the marker (S2).** A `globalState` key `coai.onExhaustedAutoMigration`, whose value is the extension version
-  that completed the run (parent § 4.6). The spec settles what else it holds (N8, N9).
-- **C6 — what the migration touches (S2).** It touches the user layer (`ConfigurationTarget.Global`) and every
-  overlay's `onExhausted`. It never touches a workspace or folder value (Q1, the owner's decision), a client's `env`
-  block, or the server settings file directly: the file changes only through `mirror`. Its one notification is the
-  parent § 4.6 sentence, word for word. S3 quotes it, and only the coordinator changes it.
+*Revised at the parent's re-review for epoch 3 (2026-11-17), from the S2 spec's X1–X3 and the parent § 4.6 as revised.*
+
+- **C4 — the migration's entry (S2).** One exported host function,
+  `startOnExhaustedMigration(context, version, after): Promise<void>`, in the new `src/onExhaustedMigrationHost.ts`.
+  It is called once from `activate`, directly after the first `mirrorSettings(settingsSync);` (`extension.ts:438`),
+  and never rejects. `version` is `extensionVersion(context)` (`extension.ts:1341`, private there, so read once at the
+  call site). `after` is `() => { mirrorSettings(settingsSync); void panel.render(); }`: an overlay clear fires no
+  configuration event, so an open panel would go on drawing the old value (the catalog migration's callback does both,
+  `extension.ts:454-458`). Its decisions live in a pure module beside it, `src/onExhaustedMigration.ts`.
+- **C5 — the marker and the witnesses (S2).**
+  - The `globalState` key `coai.onExhaustedAutoMigration` holds one RECORD. Its `completed` member is the parent's
+    marker: the version that completed the run on this profile of this machine. A bare string in the slot reads as
+    completed. While a run is in flight it also holds a claim and what each location held (N8).
+  - Each overlay record the run cleared carries the member `onExhaustedAutoMigration` (the version), written in the
+    same `update` as the clear.
+  - The user layer's witness is the manifest setting `coai.onExhaustedResetToAuto` (parent § 4.6): no `scope`, no
+    default, *"Written by ConnectOtherAIs, not by hand"*; a string naming the version and the run that wrote it; read
+    from `inspect().globalValue` only. The S2 spec's `userBegun` in `globalState` is replaced by it.
+- **C6 — what the migration touches (S2).** The user layer (`ConfigurationTarget.Global`): `coai.onExhausted`, and
+  the witness setting — written before the removal and also when nothing is removed, withdrawn after a refused
+  removal. Every overlay's `onExhausted`, with the witness member in the same write. A location that holds `auto` is
+  not written. It never touches a workspace or folder value (Q1, the owner's decision), a client's `env` block, or the
+  server settings file directly: the file changes only through `after`. Its texts are the parent § 4.6's, word for
+  word, and only the coordinator changes them: the notification in two forms — *"When the rounds run out is now
+  Auto — …"* in a window that runs `auto`, and *"When the rounds run out now defaults to Auto, but {label} stays in
+  force in this window: {where} sets it. Change it in Reviews › The gate."* where another value stays — and the
+  warning for a settings file that refuses the change. S3 quotes them.
 
 ## 5. The notes the parent left to this epic
 
@@ -198,8 +219,10 @@ a human is chosen in the panel (§ 9.4). The server's pinned-policy startup note
 
 1. **S1 coded while Fable writes S2's spec.** S1 is fully briefed here and needs nothing from S2. The spec needs
    nothing from S1's code, only C1 and C4–C6.
-2. **S2 coded after S1's commits are on the branch and the spec is committed.** S2's tests read a cleared location as
-   `auto`, which is S1's manifest default.
+2. **S2 coded after S1's commits — its fix forward (§ 7.3) included — are on the branch and the spec, revised by Fable
+   to epoch 3 (§ 10), is committed.** S2's tests read a cleared location as `auto`, which S1's reader answers.
+   *(Epoch 3: S1's first three commits were made while Fable wrote the spec, as planned; the fix forward is S1's
+   fourth commit and may run while Fable revises the spec — the two touch no common file.)*
 3. **S3 last, in two halves.** The **page slice** (`roundsLog.ts`'s `detail()`, `LogRow.note`'s summary and its new
    test file) touches no file S1 or S2 touches. It may be coded in a second worktree branched from `b3abb791` at any
    time, and merged into `feat/auto-mode-e2` after S1. The **words** (help, READMEs, `ARCHITECTURE.md`,
@@ -209,27 +232,31 @@ a human is chosen in the panel (§ 9.4). The server's pinned-policy startup note
 
 | File | S1 | S2 | S3 |
 |---|---|---|---|
-| `src_vs_code/package.json` | `coai.onExhausted` (`:354-364`); one `scripts` entry `test:on-exhausted-compat` | — | — |
+| `src_vs_code/package.json` | `coai.onExhausted` (`:354-364`); one `scripts` entry `test:on-exhausted-compat` | the new property `coai.onExhaustedResetToAuto` (C5), beside `coai.catalogMigration` | — |
 | `src/settingsShape.ts` | all of it (`:31`, `:276`, `envBlock`'s signature and `:551-553`, `:627-631`) | reads `OVERLAID_SETTINGS` at most | — |
+| `src/modelKeys.ts` | the fix forward (§ 7.3): `HELD_ONLY_KEYS` and the reader | — | — |
+| `src/test/helpCoverage.test.ts` | — | one `SETTING_ALIAS` row for the new setting | — |
 | `src/onExhaustedWire.ts`, `src/onExhaustedPanel.ts` (new, pure) | all | — | reads the labels (C2) |
 | `src/binaryFeatures.ts`, `src/serverSettingsFile.ts`, `src/serverSettingsSync.ts` | all | — | — |
-| `src/extension.ts` | `:434` only (the getter) | one call after `:438` (C4) | — |
+| `src/extension.ts` | `:434` only (the getter) | one call directly after the first `mirrorSettings(settingsSync);` (`:438`, C4); a test-mode member of `CoaiExports` (`:102`) and its entry in the `ExtensionMode.Test` spread (`:917-920`) for the real-editor scenario | — |
+| `src/test/host/scenarios.ts`, `src/test/host/onExhaustedMigrationScenario.ts` (new) | — | one entry; the scenario | — |
 | `src/panelView.ts` | `gateBody`'s select and its two lines; one optional `PanelState` member | — | — |
 | `src/panelProvider.ts` | one member in the state it builds (`:1489` neighbourhood) | — | — |
 | `src/onExhaustedMigration.ts`, `src/onExhaustedMigrationHost.ts` (new) | — | all | — |
 | `.github/workflows/sonarcloud.yml` | — | the host module in the exclusions | — |
 | `notification-sites.json` | — | regenerated | — |
 | `src/roundsLog.ts` | — | — | `detail()` (`:1783-1803`) and `LogRow.note`'s summary (`:88-91`) |
-| `src/help.ts`, `src/helpContent.ts`, `src/helpDe/Es/Ru/Uk.ts` | — | — | all |
+| `src/help.ts`, `src/helpContent.ts`, `src/helpDe/Es/Ru/Uk.ts` | — | one English sentence in `helpContent.ts`'s `the-gate` naming `coai.onExhaustedResetToAuto`, which `helpCoverage.test.ts` ("every setting is described in the help") needs in S2's commit; S3 rewrites it in place and translates it | all else |
 | `scripts/seam-held-gate.mjs` | the pin (`:108-124`) | — | — |
 | `scripts/live-on-exhausted-compat.mjs` (new) | all | — | — |
 | seam scripts and tests calling `serverSettingsJsonWith` | the new `featuresSettled` field only | — | — |
 | `research/module_tests.md` | a row, if it adds a flow | its row (the migration is a flow) | a row for the page note |
 | `README.md`, `src_vs_code/README.md`, `ARCHITECTURE.md`, `research/module_extension.md` | — | — | all |
 
-The only real overlap is `extension.ts`: two hunks, about twenty lines apart, in different statements.
-`settingsShape.ts` is S1's alone. S2 needs no edit there: the overlay keys come from `coaiInstall.ts` and the store's
-`keys()`.
+The real overlaps: `extension.ts` (S1's getter and S2's call, about twenty lines apart, in different statements; S2's
+`CoaiExports` hunks are far from both); `package.json` (two different properties); `helpContent.ts` (S2's one sentence,
+which S3 owns from then on). `settingsShape.ts` is S1's alone. S2 needs no edit there: the overlay keys come from
+`coaiInstall.ts` and the store's `keys()`.
 
 ## 7. E2.S1 — the value, and what the server is sent · Opus brief, Sonnet code
 
@@ -394,6 +421,86 @@ with the pin moved. **Must stay green unchanged:** `install.test.ts:947-973` and
 **`research/module_tests.md`**: one row, "the settings file says what the binary it meets will run", naming tests 1–8
 and the compat script.
 
+### 7.3 Fix forward — the value from the layers that hold one (U3) · Opus brief, Sonnet code
+
+*Added at the parent's re-review for epoch 3 (2026-11-17). One new commit on `feat/auto-mode-e2` after 44bb7a4c; no
+revert, no history rewrite. Not a plan change: it makes C1's "a location with no value reads `auto`" true (parent
+§ 4.6, the bullet "The value is read from the layers that HOLD one").*
+
+**The defect.** VS Code can update the extension in place before it activates; that window keeps the OLD settings
+registry until a reload (observed 2026-10-09 for new keys: `research/PLAN_catalog_migration_waits_for_its_settings.md`,
+`src/test/host/migrationKeysScenario.ts`). `onExhausted` is read through `config.get` (`sideConfig.ts:47-48` →
+`modelKeys.ts` `userLayerReader` → `merged`), which answers the registry's default when no layer holds a value — the
+old default `human` there. As built in 8fd79b71, `human` differs from `DEFAULTS.onExhausted` (`auto`), so `envBlock`
+writes `COAI_ON_EXHAUSTED=human` for everyone who never chose anything, and the server raises holds that `auto` never
+releases (parent § 4.3). Before E2 that window wrote nothing. *Inferred from the 2026-10-09 observation; not observed
+for a changed default. The fix is right whether or not it happens.*
+
+**Files.**
+
+| File | Change |
+|---|---|
+| `src_vs_code/src/modelKeys.ts` | the list and the reader below |
+| `src_vs_code/src/test/modelKeys.test.ts` | scenarios F1, F2, F3, F6 |
+| `src_vs_code/src/test/aWindowUpdatedInPlaceRunsAuto.test.ts` (new) | scenarios F4, F5 |
+| `research/module_tests.md` | S1's row ("the settings file says what the binary it meets will run") gains F1–F6 |
+
+Nothing else. Not `settingsShape.ts`, not `sideConfig.ts`, not `sideSettings.ts`: the door already routes every side's
+reader through `userLayerReader` (`sideConfig.ts:31-38`, `:47-49`), and `seedIfEmpty` is handed the same door
+(`panelProvider.ts:2496-2500`), so one change in `modelKeys.ts` reaches the panel, the settings file and the seed.
+
+**The change** (`modelKeys.ts`, pure, no `vscode`):
+
+1. Beside `SAFETY_KEYS`, export a third list, documented with the defect above and a link to the parent § 4.6:
+   `export const HELD_ONLY_KEYS: readonly string[] = ['onExhausted'];` — "settings read from the layers that HOLD a
+   value — folder, workspace, user — never from the registry's default; with none held, `settingsFrom` supplies this
+   version's default (`DEFAULTS`)". It is NOT added to `USER_LAYER_KEYS`: a workspace value of `onExhausted` stays in
+   force (the owner's Q1, and S1's gate line names it).
+2. A private `heldValue(inspected: Inspected | undefined): unknown` answering the folder value, else the workspace
+   value, else the user (`globalValue`) value — never `defaultValue`. Write it so `complexity` stays ≤ 4, e.g.
+   `const layers = inspected ?? {}; return layers.workspaceFolderValue ?? layers.workspaceValue ?? layers.globalValue;`.
+3. `userLayerReader` answers a `USER_LAYER_KEYS` key as today, a `HELD_ONLY_KEYS` key with
+   `heldValue(inspect(section))`, and every other key with `merged(section)`. Keep its arrow body to one call of a
+   small private function if the nested choice pushes `complexity` past 4. Update its doc comment: it now names three
+   kinds of key.
+
+Consequences, each covered by a scenario: the panel and the settings file read `auto` where nothing is held (F1, F4);
+the folder > workspace > user order that `config.get` gave is kept (F2); this side's overlay still wins over all of
+them, because `overlaidReader` wraps the door (F3); an overlay seeded from now on does not freeze a default
+(`seedOverlay` skips `undefined`, `settingsShape.ts:406-416`) (F5) — the frozen `human` of `seedOverlay` is what the
+migration exists to clear, and a side that wants its own value chooses it, which writes it into the overlay.
+
+**Scenarios — RED first** (watch each fail on its assertion before the change, as § 3 says). The test helpers are
+`modelKeys.test.ts`'s `inspector`, `sideSettings.test.ts`'s store and side fixtures (copy, do not import, a fixture
+private to another test file), and the real `settingsFrom`, `seedOverlay`, `envBlock`, `DEFAULTS`, `DEFAULT_VENDORS`
+and `FEATURES`. The stale registry is modelled as `merged = () => 'human'` with `inspect` answering
+`{ defaultValue: 'human' }` — what an in-place window's configuration answers.
+
+| # | Test | Assertion | RED today because |
+|---|---|---|---|
+| F1 | `AWindowWhoseRegistryStillSaysHumanReadsAuto` (modelKeys.test.ts) | `userLayerReader(() => 'human', inspector({ onExhausted: { defaultValue: 'human' } }))('onExhausted')` is `undefined`, and `settingsFrom(that reader).onExhausted === 'auto'` | the reader answers `'human'` from `merged` |
+| F2 | `TheLayersThatHoldAValueKeepTheirOrder` (modelKeys.test.ts) | with `defaultValue: 'human'`, `globalValue: 'good_enough'`, `workspaceValue: 'escalate'`, `workspaceFolderValue: 'continue'` and `merged = () => 'human'`: `'continue'`; without the folder value `'escalate'`; without both `'good_enough'` | `merged` answers `'human'` in all three |
+| F3 | `ThisSidesOwnValueStillWins` (modelKeys.test.ts) | `sideConfigReader(<F2's reader with the workspace value>, true, store holding this side's overlay { onExhausted: 'good_enough' }, side)('onExhausted') === 'good_enough'` | green before the change — a guard; say so in the summary |
+| F4 | `NothingHeldWritesNoPolicy` (aWindowUpdatedInPlaceRunsAuto.test.ts) | `envBlock(settingsFrom(F1's reader), DEFAULT_VENDORS, '', undefined, [FEATURES.onExhaustedAuto], true)` has no `COAI_ON_EXHAUSTED`; with `[]`, `true` it is `'good_enough'`, never `'human'` | `COAI_ON_EXHAUSTED: 'human'` is written |
+| F5 | `ASeededOverlayFreezesNoDefault` (aWindowUpdatedInPlaceRunsAuto.test.ts) | `seedOverlay(F1's reader)` has no own `onExhausted`; with `globalValue: 'continue'` added, it has `'continue'` | `'human'` is seeded |
+| F6 | `TheOtherKeysAreReadAsBefore` (modelKeys.test.ts) | `userLayerReader(() => 7, inspector({ maxConcurrency: { defaultValue: 3 } }))('maxConcurrency') === 7`, and a `USER_LAYER_KEYS` key still answers its `defaultValue` when the user layer is empty | green before — a guard, next to the existing "every other setting is read as VS Code merges it" |
+
+**Break it** after GREEN, and quote both in the summary:
+- remove `'onExhausted'` from `HELD_ONLY_KEYS` → F1, F2, F4, F5 red, each showing `'human'`;
+- make `heldValue` fall back to `defaultValue` → F1, F4, F5 red.
+
+**Must stay green unchanged:** `modelKeysAreReadOnce.test.ts` and `thePanelReadsThisSide.test.ts` (no new direct
+`.get`/`.inspect` of a key is written; the read stays inside the door), `settingsShape.test.ts`, `sideSettings.test.ts`,
+`settingWrite.test.ts` (its seed tests use other keys), `theGateSaysAuto.test.ts`, `settingsSync.test.ts`. A test that
+goes red for any other reason is a defect in the change (§ 3).
+
+**Commands** (from `src_vs_code/`): `npm run compile` (read the exit code), then
+`node scripts/run-tests.mjs out/test/modelKeys.test.js` and `out/test/aWindowUpdatedInPlaceRunsAuto.test.js`, then
+`node ../.agents/conventions/tools/low-priority.mjs npm test` and `npm run lint`. No seam run is needed: the seam scripts
+build their settings from `DEFAULTS`, not through the door.
+
+**Commit message:** `fix(extension): a window that still holds the old settings registry reads policy auto, not its old default human` with the body naming U3, the parent § 4.6 bullet and F1–F6.
+
 ## 8. E2.S2 — the one-time migration · `model: fable` (CORNERSTONE)
 
 Scenarios and brief: **Fable**, in `todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md`. This section is the boundary
@@ -434,6 +541,9 @@ gate line names such a value.
    the new version finds no marker and clears it, then syncs the removal back to A. That is a choice made after the
    migration, reset. The spec settles it. Options include syncing the marker key with `setKeysForSync`, or a record
    that rides with the synced value. The spec writes down what remains (sync timing).
+   **Settled by the parent at epoch 3 (entry 2.2 and the re-review, § 4.6):** the user layer's witness is the setting
+   `coai.onExhaustedResetToAuto` in the user layer itself (C5), written before the removal and also when nothing is
+   removed, re-read after its awaited write; nothing is registered with `setKeysForSync`.
 6. **Marker semantics.** The value is the version that completed the run. The spec says what a marker from an older
    or a newer version means. A failed clear writes no marker, so the run is retried at the next activation. The spec
    says whether the person is told, and how often.
@@ -516,7 +626,12 @@ check once that the row really carries `not_reviewed` by asserting the verdict c
   - A `COAI_ON_EXHAUSTED` in your MCP client's `env` block wins over the panel. The server's startup notes name it.
 
   Then the one-time reset: *"A value chosen before this version is reset to Auto once, with one notification; choose
-  again afterwards and it is kept."*
+  again afterwards and it is kept — on this machine, and on the other machines Settings Sync carries your settings to.
+  Where another value stays in force, the notification names it and where it is set."* *(Epoch 3, X6: the sentence
+  ended at "it is kept", which held on one machine only; the user layer's witness makes it hold under Settings Sync.
+  The residuals — a window or a Sync delivery that lags the run — are written in `research/module_extension.md`
+  (§ 9.3), not in the help.)* The sentence also names `coai.onExhaustedResetToAuto` as written by the extension, not
+  by hand: S2 wrote that sentence in English (§ 6); S3 rewrites it here and translates it.
 - **`helpDe/Es/Ru/Uk.ts`**, the same article: the same content translated. Control labels stay English, as everywhere
   in these files (`Auto`, `Ask a human`, `not_reviewed`, `.vscode/settings.json`).
 - **`onExhaustedHelp.test.ts`** (new, the `kimiHelp.test.ts` shape). For every `HELP_LANGUAGES`, `bodyFor(the-gate)`
@@ -539,7 +654,9 @@ check once that the row really carries `not_reviewed` by asserting the verdict c
   - the six cells and why "not settled" writes nothing (every settled answer rewrites the file);
   - why the copied block carries no policy (R1);
   - the two gate-section lines;
-  - the migration as S2 built it: reach, coordination, marker, notification, and the residuals its spec wrote down;
+  - the migration as S2 built it: reach, the witnesses (the user layer's setting and why it has no `scope`; the
+    overlay member), the claim and why it is not a lock (`globalState` is one value per extension), the marker, the
+    notification's two forms, and every residual of the parent § 4.6 (i)–(vi) and of the S2 spec;
   - the rounds-log note.
 
   Fix the sentence at `:7261` only if it now reads wrong.
@@ -552,18 +669,20 @@ same). S3 drafts it in the E2 PR's description in the was/now style of `## Exten
 | | was | now |
 |---|---|---|
 | *When the rounds run out*, default | Ask a human | **Auto** |
-| A value you chose (your settings, each side's own settings) | kept | **reset to Auto once**, with one notification; a choice made afterwards is kept |
+| A value you chose (your settings, each side's own settings) | kept | **reset to Auto once**, with one notification; a choice made afterwards is kept, also on the other machines Settings Sync reaches |
 | A value in a workspace's `.vscode/settings.json` | in force | in force, never changed, and named in Reviews › The gate |
 | Ask a human chosen in the panel | written as nothing (it was the default), so Server 0.66.0 ran Auto | written as `human` and honoured |
 | A coai-mcp older than 0.66.0 | — | sent Good enough, and The gate says "predates Auto" |
 | The rounds log | a note only on a skipped round | the note of every round, `not_reviewed` among the verdicts |
 
-Then four plain sentences:
+Then five plain sentences:
 - requirement 5's guarantee;
 - "If you put `COAI_ON_EXHAUSTED=human` in your MCP client's env block, as the Server 0.66.0 note suggested, choose
   Ask a human in the panel and remove it there";
 - the pairing ("The MCP server to pair it with is `coai-mcp` 0.66.0");
-- the rollback ("0.87.x shows Ask a human but writes nothing, so a 0.66.0 server runs Auto for it").
+- the rollback ("0.87.x shows Ask a human but writes nothing, so a 0.66.0 server runs Auto for it");
+- every side together (the parent § 4.6, residual iv; the S2 spec, U8): "Update the extension on every side — each WSL
+  or SSH remote — together: a side still on 0.87.x keeps writing its settings file the old way".
 
 ### 9.5 Scenarios' home and the module-tests row
 
@@ -593,7 +712,8 @@ it gets no row.
   outside the enum.
 - **N9 for the spec.** Settings Sync can reset a choice made after the migration on another machine (§ 8, input 5).
   Its answer may change the parent's "once per machine". If R1 is recorded as 2.1, any change the spec reports becomes
-  2.2, which is a full stop. Consider settling both before recording either.
+  2.2, which is a full stop. Consider settling both before recording either. *(It became entry 2.2, which stopped the
+  plan; the re-review for epoch 3 settled it in the parent § 4.6.)*
 - **Stale status.** The E1 stories document's status still says "Not yet merged or released"; #1011 is merged and
   mcp 0.66.0 released. Not edited here.
 
@@ -604,6 +724,78 @@ Settled here as fixes that satisfy the parent as written (not changes):
 - `featuresSettled` as the way the "settled without" column is told apart from "not settled": the parent's "fifth
   `envBlock` parameter" is a plain list that cannot tell the two apart;
 - the stale `serverSettingsFile.ts:20-21` sentence.
+
+### 10.1 What Fable revises in the S2 spec, to epoch 3 (the parent's re-review, 2026-11-17)
+
+One new commit on `feat/auto-mode-e2`, by Fable, before S2's code; no revert (the spec is unbuilt). The parent § 4.6
+as revised is the bar; C4–C6 above already carry X1–X3, and § 6 carries X4, X5 and the new rows. If Fable refines a
+name in C4–C6, it updates § 4, § 6 and § 9 here in the same commit, as § 4 says.
+
+1. **Status and the X table.** Epoch 3; X1–X7 are made (X7: the `todo/README.md` row exists — update its text after
+   the revision); U1 is settled by entry 2.2 and the parent § 4.6.
+2. **Facts.** Add: V1–V3 verified by the coordinator in `extHostMemento.ts` (re-read by the judge); the activation
+   listener mirrors on any `coai` change (`extension.ts:603-616`); and — verify in VS Code's source, it is not read
+   here — that `config.update` of a key the registry does not know is refused.
+3. **D4.** The claim is a best effort that makes one window do the run in the usual case, not the coordination.
+   Correctness rests on the parent § 4.6's three points: the user layer's witness in the settings file; an overlay's
+   value and witness in one record and one write; no record value across an `await`, and the marker written only from a
+   copy in which every recorded location is settled, checked with NO `await` between that check and the marker's
+   `update` (step 5's `left` moves to directly before step 6's write).
+4. **D7 and the record.** The user layer's witness moves from `userBegun` in `globalState` to the setting
+   `coai.onExhaustedResetToAuto` in the user layer (C5). It is written when the user layer has no witness, whether or
+   not the layer holds a value to remove, so a later choice made on this machine is kept on the next one. Its value
+   names the version and this window's name. After its awaited write the run reads the setting AND the value again from
+   a fresh configuration: a witness that is not this run's, or a value no longer `held['user']`, stops the step and
+   leaves the value; else the removal. A refused removal withdraws the witness; a refused witness write is `refused`
+   (no removal, no marker). `MigrationRecord` loses `userBegun`; the record otherwise stays.
+5. **D8.** Replaced: Settings Sync is closed by the witness, with the parent § 4.6's Sync residuals (a delivery after
+   the read-back and before the removal; a machine whose run precedes Sync's first pull). Still nothing calls
+   `setKeysForSync`.
+6. **D11 — the notification, two forms** (C6, the parent § 4.6, point (e)). The window that tells computes the value
+   it runs and where it is set — through the same reader the panel uses (after S1's § 7.3), `inspect` and this side's
+   overlay — and shows the first sentence when that value is `auto`, else the second with `{label}` (`labelOf`) and
+   `{where}` ("this side's own settings", "this workspace's .vscode/settings.json", "your user settings"). D11's "does
+   not name a workspace value" is reversed: the second form names it, true for the window that shows it. A pure
+   function chooses the sentence; T5 pins both constants word for word.
+7. **D12.** `NOT_RESET` also when the witness write itself is refused.
+8. **D13.** The ready condition becomes: the registry knows `coai.onExhaustedResetToAuto` (`inspect` of it is not
+   `undefined`). With S1's § 7.3 a cleared location reads `auto` whatever the registry says; Fable decides whether to
+   keep the `defaultValue === 'auto'` test beside it.
+9. **D15 and the user-layer port.** The port also reads the witness (`inspect('onExhaustedResetToAuto').globalValue`,
+   asked again at every call) and writes or withdraws it with the Global target only. A workspace value of the witness
+   is never read. T6 and T20 grow to cover it.
+10. **S2.5.** The ports for the witness; `tell` takes the chosen sentence.
+11. **S2.6.** The row "another side, a window open": woken by the run's settings write (the witness or the removal)
+    when there is one, and by none when the witness was already there; an event can arrive before that window's copy
+    of `globalState` holds the clears. The promise is the parent's N5: that side's next mirror after its copy holds the
+    change, its next activation at the latest.
+12. **S2.7.** R1 → the parent § 4.6's Settings Sync residuals, plus how Sync merges two machines' witness values (not
+    checked). R2 stays — the same gap with the witness in the settings file; the notification now names the kept value.
+    R3 rewritten: the claim excludes nothing under lag; two runs and two notifications; a stale window's write that
+    brings a cleared overlay back drops the marker with it, and the next activation clears it and tells again; a choice
+    made in that stale window is cleared too. R4 → S1's § 7.3 and D13. R5, R6, R9, R10 stay.
+13. **Scenarios, added.** Over two `ClientState`s (two machines) sharing one `FakeUserSettings` (the synced layer):
+    (a) `ASecondMachineKeepsAChoiceMadeOnTheFirst` — A runs, the person chooses `human` in the user layer, B runs: B's
+    overlays are cleared, the user layer keeps `human`, B's notification is the second form naming "your user settings";
+    (b) `AFirstMachineWithNothingToRemoveStillWritesTheWitness` — then (a) holds for a choice made on A afterwards;
+    (c) `AWitnessDeliveredDuringTheAwaitedWriteStopsTheRemoval` — B's witness write held, A's witness and `human`
+    delivered, B makes no removal. In one machine: (d) `AStaleWindowBringsAnOverlayBack_TheNextActivationClearsIt` —
+    a window whose copy predates the run writes an unrelated key after it: the marker is gone and X holds its old value
+    unwitnessed; the next activation clears it and tells again (the residual, asserted as such); (e)
+    `NoMarkerFromACopyWithAnUnsettledLocation` — a stale value delivered just before the marker's check → no marker;
+    (f) `TheNotificationNamesAValueThatStaysInForce` — an overlay kept because it changed, a workspace value, a user
+    value from another machine → the second form with its label and place; nothing kept → the first form;
+    (g) `ASettingsFileThatRefusesTheWitness_RemovesNothing`. **Changed:** T14–T16 to the setting witness; T23 says its one
+    notification is the delivered case (the parent's residual iii); T31 also reads the witness's `globalValue`.
+14. **S2.9 files.** `package.json` (the property), `src/test/helpCoverage.test.ts` (one `SETTING_ALIAS` row) and one
+    English sentence in `helpContent.ts`'s `the-gate` (§ 6). Not `src/modelKeys.ts`: S1's.
+15. **S2.10.** Check 2 becomes the setting witness: written and read back from a fresh configuration before the
+    removal, withdrawn after a refused one, never read from a workspace layer. Add: no `await` between the settled
+    check and the marker's write; the sentence chosen from the value the window runs.
+16. **DoD and the reported list.** N9 ticked by (a)–(c); the two-window line within the parent's residual (iii). U1 →
+    entry 2.2 and § 4.6; U2 → the parent's N8; U3 → § 7.3 here and D13; U4 → the parent § 10, beside the plan; U5 →
+    the parent § 9; U6 → the parent § 4.6; U7 → the parent § 4.6 (the texts, a fresh install told, the second form);
+    U8 → the parent § 4.6 residual (iv) and § 9.4's fifth sentence; U9 → done.
 
 ## 11. Definition of Done for E2
 
@@ -617,10 +809,14 @@ Settled here as fixes that satisfy the parent as written (not changes):
       the panel's writer; `npm run test:seam` and `test:contract` are green over a fresh Release build.
 - [ ] S2: the spec — written by Fable before its code — built, and every scenario seen RED, GREEN and broken: the user
       value and every overlay cleared once, the marker written only after every clear and the mirror, a resumed run
-      that keeps a later choice, two windows → one result and one notification, a second activation doing nothing, a
-      workspace value untouched (the owner's Q1), N9 settled, all without the panel (parent done-when 3).
+      that keeps a later choice, two windows → one result and one notification within the parent § 4.6's residual
+      (iii), a second activation doing nothing, a workspace value untouched (the owner's Q1), N9 settled by the user
+      layer's witness and its two-machine scenarios, a stale window's resurrected overlay cleared by the next
+      activation, all without the panel (parent done-when 3). The spec revised by Fable to epoch 3 first (§ 10.1).
+- [ ] S1's fix forward (§ 7.3): F1–F6, each RED or named as a guard, and both break-its quoted (parent done-when 1).
 - [ ] The notification and the help state requirement 5's guarantee and nothing wider; no text says "never asks you
-      anything" (parent done-when 4).
+      anything"; the notification says Auto only in a window that runs Auto, and otherwise names the value in force and
+      where it is set (parent done-when 4).
 - [ ] The rounds-log page shows the note on a non-skipped row and filters `not_reviewed`, tested by running the page
       (parent done-when 5).
 - [ ] Help in five languages; the READMEs, `ARCHITECTURE.md` and `research/module_extension.md`; the CHANGELOG
