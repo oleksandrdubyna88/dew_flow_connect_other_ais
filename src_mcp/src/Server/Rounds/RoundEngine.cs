@@ -32,6 +32,7 @@ internal sealed class RoundEngine(
     Escalations escalations,
     UsageLedger ledger,
     Store.Projection projection,
+    SessionPolicy policy,
     CallerSessions callers,
     RemoteProbe remote,
     RoundAuthorsStep authors,
@@ -49,6 +50,7 @@ internal sealed class RoundEngine(
     private readonly Escalations _escalations = escalations;
     private readonly UsageLedger _ledger = ledger;
     private readonly Store.Projection _projection = projection;
+    private readonly SessionPolicy _policy = policy;
     private readonly CallerSessions _callers = callers;
     private readonly RemoteProbe _remote = remote;
     private readonly RoundAuthorsStep _authors = authors;
@@ -264,13 +266,23 @@ internal sealed class RoundEngine(
             return Error("no session for this repo+branch — call open first", from);
         }
 
-        session = ApplyAnyHumanDecision(session);
+        var release = _policy.Released(session);
+        if (release.NotWritten.Length > 0)
+        {
+            return Error(LegacyHold.NotWrittenSentence(SessionPolicy.StageOf(session), release.NotWritten), from);
+        }
+        session = ApplyAnyHumanDecision(release.Session);
         // ONE hold check for every review entry — review_plan, review_code, review_document and review_feature all come through
         // here (§11.7 of todo/PLAN_only_a_person_releases_the_gate.md): GateHeld while no person has answered, and the sentence
         // naming `resolve` once a Proceed is on file. Nothing is saved for a refusal.
         if (ProceedOnFile(session) is { Length: > 0 } pressed)
         {
             return Error(pressed, from);
+        }
+
+        if (SessionPolicy.AwaitsItsResolve(session))
+        {
+            return Error(LegacyHold.ReleasedSentence(SessionPolicy.StageOf(session)), from);
         }
 
         // The policy a round ends under is the CURRENT one: the config is stamped here, AFTER the person's decision is applied,

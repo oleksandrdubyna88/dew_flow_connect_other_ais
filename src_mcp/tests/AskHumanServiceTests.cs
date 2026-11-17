@@ -93,9 +93,10 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         var phase = new QuestionPhaseStore(_data);
         var cadence = new CadenceStore(_data);
         var desk = new AskGateDesk(questions, cadence, phase, escalations, _ => null, Logger.None);
+        var policy = new SessionPolicy(settings, sessions, escalations, new CoaiMcp.Store.Projection(_data, Logger.None), Logger.None);
         var service = new AskHumanService(
             settings, sessions, escalations, Logger.None, Noticing.None,
-            (_, branch, _, _) => new SessionAddress(branch, string.Empty, string.Empty), desk);
+            (_, branch, _, _) => new SessionAddress(branch, string.Empty, string.Empty), desk, policy);
 
         return new Harness(service, questions, escalations, sessions, phase, cadence, launcher);
     }

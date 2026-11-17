@@ -34,12 +34,14 @@ public sealed class AskHumanService
     private readonly Noticing _noticing;
     private readonly Func<string, string, string, string, SessionAddress> _addressOf;
     private readonly AskGateDesk _desk;
+    private readonly SessionPolicy _policy;
 
     /// <param name="addressOf">
     /// Which session a caller's arguments name — the service's own resolution, handed in rather than
     /// re-derived, because it reads the document store the service owns.
     /// </param>
     /// <param name="desk">The gate's facts and its bookkeeping — the phase, the proof, the beside run.</param>
+    /// <param name="policy">Policy auto's release of a hold from before it, read by the load that decides.</param>
     internal AskHumanService(
         PanelSettings settings,
         SessionStore store,
@@ -47,7 +49,8 @@ public sealed class AskHumanService
         Serilog.ILogger log,
         Noticing noticing,
         Func<string, string, string, string, SessionAddress> addressOf,
-        AskGateDesk desk)
+        AskGateDesk desk,
+        SessionPolicy policy)
     {
         _settings = settings;
         _store = store;
@@ -56,6 +59,7 @@ public sealed class AskHumanService
         _noticing = noticing;
         _addressOf = addressOf;
         _desk = desk;
+        _policy = policy;
     }
 
     /// <summary>
@@ -97,7 +101,9 @@ public sealed class AskHumanService
         }
 
         var at = AddressOf(repoPath, branch, document, feature);
-        var session = _store.Load(repoPath, at.Branch, at.Document, at.Feature);
+        // A hold from before policy auto is released by whichever call reads it first; the whole Release is kept for the reply's words.
+        var release = _policy.CurrentUnclaimed(_store.Load(repoPath, at.Branch, at.Document, at.Feature), repoPath, at);
+        var session = release?.Session;
         var facts = _desk.Facts(repoPath, session, new AskArguments(consultId ?? string.Empty, productionRisk, (riskReason ?? string.Empty).Trim()), DateTime.UtcNow);
 
         return AskGate.Decide(facts.Input) switch

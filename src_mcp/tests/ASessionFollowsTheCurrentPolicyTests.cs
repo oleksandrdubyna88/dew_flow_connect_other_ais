@@ -121,5 +121,13 @@ public sealed class ASessionFollowsTheCurrentPolicyTests : FakeCliRoundTests
         state.HumanGate.Should().BeTrue();
         state.Config.Autonomous.Should().BeFalse("the begin stamped the session before the round ran, so the hold it raised is this build's");
         ConfigOnDisk()["autonomous"]!.GetValue<bool>().Should().BeFalse();
+
+        // From the release on: the hold this build raised is the person's, whatever the policy is now.
+        var notice = state.HoldQuestions.Should().ContainSingle().Subject;
+        await ServiceUnder(PanelConfig.Uniform(1, 0)).StatusAsync(_repo, Branch);
+
+        Session().State.HumanGate.Should().BeTrue("policy auto releases only a hold from before it");
+        JsonNode.Parse(File.ReadAllText(Path.Combine(_data, "escalations", $"{notice}.json")))!["status"]!.GetValue<string>()
+            .Should().BeEmpty("the notice is still open");
     }
 }
