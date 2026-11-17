@@ -42,7 +42,7 @@ public sealed class TheAnswerBelongsToTheCurrentHoldTests : IDisposable
     /// <summary>A code session whose gate is held by the round that completed at <paramref name="held"/>.</summary>
     private static PersistedSession Held(DateTime held, bool skippedAfter = false) =>
         new(
-            new SessionState("s1", "/repo", "main", PanelConfig.Uniform(1, 5)) { Stage = Stage.CodeReview, PlanProceeded = true, RoundsRunThisStage = 1, HumanGate = true },
+            new SessionState("s1", "/repo", "main", PanelConfig.Uniform(1, 5, StagePolicy.Human)) { Stage = Stage.CodeReview, PlanProceeded = true, RoundsRunThisStage = 1, HumanGate = true },
             skippedAfter
                 ? [new RoundRecord(nameof(Stage.CodeReview), 1, "call_human", 2, "all 1 reviewers answered", held), new RoundRecord(nameof(Stage.CodeReview), 2, RoundRecord.Skipped, 0, "no reviewer ran", held.AddHours(2))]
                 : [new RoundRecord(nameof(Stage.CodeReview), 1, "call_human", 2, "all 1 reviewers answered", held)]);

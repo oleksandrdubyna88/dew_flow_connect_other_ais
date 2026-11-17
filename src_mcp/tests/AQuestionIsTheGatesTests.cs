@@ -19,10 +19,10 @@ public sealed class AQuestionIsTheGatesTests
     private const string Plan = "todo/PLAN_x.md";
 
     private static SessionState Branch(bool held = false) =>
-        new("s1", "/repo", "main", PanelConfig.Uniform(3, 2)) { PlanProceeded = true, Stage = Stage.CodeReview, HumanGate = held };
+        new("s1", "/repo", "main", PanelConfig.Uniform(3, 2, StagePolicy.Human)) { PlanProceeded = true, Stage = Stage.CodeReview, HumanGate = held };
 
     private static SessionState Feature(int rounds, SecondRoundGround ground = SecondRoundGround.None, bool held = false) =>
-        new("s2", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(2, 0))
+        new("s2", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(2, 0, StagePolicy.Human))
         {
             Stage = Stage.FeatureReview,
             Feature = Plan,

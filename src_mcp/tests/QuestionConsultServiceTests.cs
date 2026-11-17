@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoaiMcp.Core.QuestionConsult;
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
@@ -52,6 +53,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
         var scripted = launcher ?? new ScriptedLauncher(_real, Answers);
         var settings = new PanelSettings
         {
+            Rounds = new PanelConfig(OnExhausted: StagePolicy.Human),
             DataDir = _data,
             Providers = [],
             QuestionConsult = new QuestionConsultSettings
@@ -289,6 +291,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
             var scripted = new ScriptedLauncher(_real, Answers);
             var settings = new PanelSettings
             {
+                Rounds = new PanelConfig(OnExhausted: StagePolicy.Human),
                 DataDir = _data,
                 Providers = [],
                 QuestionConsult = new QuestionConsultSettings
@@ -319,7 +322,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
     public async Task RowsThatCannotBeRead_RefuseByName()
     {
         var scripted = new ScriptedLauncher(_real, Answers);
-        var settings = new PanelSettings { DataDir = _data, Providers = [], QuestionConsult = new QuestionConsultSettings { RowsUnreadable = true } };
+        var settings = new PanelSettings { Rounds = new PanelConfig(OnExhausted: StagePolicy.Human), DataDir = _data, Providers = [], QuestionConsult = new QuestionConsultSettings { RowsUnreadable = true } };
         var service = new QuestionConsultService(
             settings, scripted, new ReviewerExecutor(scripted), new ContextAssembler(scripted), new RolePrompts(_data),
             new UsageLedger(_data), VaultKeys.None("no vault"), Logger.None, _ => null, Noticing.None);

@@ -19,7 +19,24 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-12 · server **0.16.0** deployed (run 43032711575) — the box served 0.15.0 before the deploy and
+Last verified: 2026-11-16 · server **0.16.2** deployed (run 43720859407, 2026-11-15) — the box serves 0.16.2 · mcp
+**0.65.3** released (`mcp-v0.65.3`) · extension **0.87.0** as the target, unchanged. Run locally:
+`MCP_VERSION=0.65.3 SERVER_VERSION=0.16.2 node .agents/conventions/tools/post-deploy-check.mjs --target 0.87.0`, which
+printed `PASS 1 — all six RIDs present`, `PASS 2 — marketplace serves 0.87.0`, `PASS 6` (the row labelled 7) —
+client-config 200 and the catalog 401 without a session, the expected answer, `PASS 9 — all six RIDs present` and
+`PASS 10 — 200 {"ok":true,"version":"0.16.2"}`, and ended "every automated item passed". An earlier run on 2026-11-15
+passed `--target https://coai.remsoft.dev` and printed `FAIL 2`: the target is the extension VERSION, not the server's
+address, so that FAIL was the wrong argument, not the Marketplace. In this release: #995 (agy 1.5.9 offers its read
+tool as `read_file`; the read-only hook allowed only `view_file`, so every agy read was denied) and #999 (a test that
+the server binary's `--agy-hook` allows `read_file`). Beyond the table, on the box with agy 1.5.9: before the deploy
+(0.16.1), agy started from the server's read-only folder was told `read_file was denied by a pre-tool hook (coai: this
+consultation is read-only; only view_file runs)`; after it (0.16.2), the same run read its marker file and a request to
+create a file wrote nothing. The deploy's canary said `codex: done`, `antigravity: done`, `claude: done` — it passed on
+0.16.1 too, so it does not check that a reviewer can read. Locally, after the panel's Update installed mcp 0.65.3, agy
+1.5.9 run from the same kind of folder read a 343 KB file to its end with `read_file` and wrote nothing. Manual items
+3, 4, 5, 8 and 12 were not run; items 7 and 11 observed on the canary above.
+
+Previously verified: 2026-11-12 · server **0.16.0** deployed (run 43032711575) — the box served 0.15.0 before the deploy and
 serves 0.16.0 after it · mcp **0.65.1** unchanged · extension **0.87.0** as the target, released by another session (its
 record is that session's). Before the deploy, both host credentials were tested on the box in one call: the canary token
 was accepted by https://coai.remsoft.dev, and `claude -p` with the claude slot's own environment and `claude.token`

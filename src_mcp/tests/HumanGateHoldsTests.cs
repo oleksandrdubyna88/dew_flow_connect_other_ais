@@ -32,7 +32,7 @@ namespace CoaiMcp.Tests;
 public class HumanGateHoldsTests
 {
     private static SessionState Exhausted(Stage stage = Stage.PlanReview) => new SessionState(
-        "s1", "/repo", "main", PanelConfig.Uniform(maxRounds: 2, threshold: 2))
+        "s1", "/repo", "main", PanelConfig.Uniform(maxRounds: 2, threshold: 2, StagePolicy.Human))
     {
         Stage = stage,
         PlanProceeded = stage == Stage.CodeReview,
@@ -127,7 +127,7 @@ public class HumanGateHoldsTests
     {
         // The ordinary path must not acquire a new way to fail: rounds 1 and 2 of a two-round
         // budget open exactly as before.
-        var fresh = new SessionState("s2", "/repo", "main", PanelConfig.Uniform(2, 2));
+        var fresh = new SessionState("s2", "/repo", "main", PanelConfig.Uniform(2, 2, StagePolicy.Human));
 
         RoundMachine.BeginPlanRound(fresh).Should().BeOfType<Transition.Moved>();
         RoundMachine.BeginPlanRound(fresh with { RoundsRunThisStage = 1 })

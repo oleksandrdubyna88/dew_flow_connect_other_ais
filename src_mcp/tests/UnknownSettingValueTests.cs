@@ -39,6 +39,37 @@ public class UnknownSettingValueTests
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("auto")]
+    [InlineData("AUTO")]
+    [InlineData("Auto")]
+    public void AbsentEmptyAndAuto_ArePolicyAuto(string? value)
+    {
+        var settings = PanelSettings.FromEnvironment(name => name == "COAI_ON_EXHAUSTED" ? value : null);
+
+        settings.Rounds.OnExhausted.Should().Be(StagePolicy.GoodEnough, "policy auto ends a round with the findings worked, never with a person");
+        settings.Rounds.Autonomous.Should().BeTrue();
+        settings.Rounds.IsAutonomous.Should().BeTrue();
+        settings.Unrecognised.Should().BeEmpty("auto is a word this build knows");
+    }
+
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("auto ")]
+    [InlineData(" auto")]
+    [InlineData("automatic")]
+    [InlineData("auto,human")]
+    public void AWordThatOnlyLooksLikeAuto_StillStops(string value)
+    {
+        var settings = PanelSettings.FromEnvironment(With(value));
+
+        settings.Rounds.OnExhausted.Should().Be(StagePolicy.Human, "a word this build does not know falls to the end that stops");
+        settings.Rounds.Autonomous.Should().BeFalse();
+        settings.Unrecognised.Should().ContainSingle().Which.Should().Contain(value).And.Contain("asking a person");
+    }
+
+    [Theory]
     [InlineData("continue", StagePolicy.Continue)]
     [InlineData("escalate", StagePolicy.Escalate)]
     [InlineData("goodenough", StagePolicy.GoodEnough)]
@@ -46,7 +77,11 @@ public class UnknownSettingValueTests
     [InlineData("human", StagePolicy.Human)]
     public void EveryPolicyThisBuildKnows(string value, StagePolicy expected)
     {
-        PanelSettings.FromEnvironment(With(value)).Rounds.OnExhausted.Should().Be(expected);
+        var rounds = PanelSettings.FromEnvironment(With(value)).Rounds;
+
+        rounds.OnExhausted.Should().Be(expected);
+        rounds.Autonomous.Should().BeFalse("a policy that is NAMED is that policy and never policy auto");
+        rounds.IsAutonomous.Should().BeFalse();
     }
 
     [Fact]

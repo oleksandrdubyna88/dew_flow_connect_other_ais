@@ -353,7 +353,7 @@ public sealed class GateReportingTests
         // person it just called: that is a dead end, not a gate.
         var nobody = new ReviewerSummary(2, 0, ["codex: exit 1", "gemini: quota"]);
         var ok = (Transition.Ok)RoundMachine.CompleteRound(
-            new SessionState("s", "D:/r", "main", new PanelConfig()), Core.Gate.GateResult.Empty, nobody);
+            new SessionState("s", "D:/r", "main", new PanelConfig(OnExhausted: StagePolicy.Human)), Core.Gate.GateResult.Empty, nobody);
 
         ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>();
         RoundMachine.Resolve(ok.State, [], HumanDecision.Proceed)

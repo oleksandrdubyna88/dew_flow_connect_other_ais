@@ -27,7 +27,7 @@ public sealed class TheSecondFeatureRoundTests
 
     /// <summary>A feature session with the shipped feature budget: two rounds, at most five open.</summary>
     private static SessionState Feature(int maxRounds = 2, int threshold = 5) =>
-        new("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(maxRounds, threshold)) { Stage = Stage.FeatureReview, Feature = Plan };
+        new("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(maxRounds, threshold, StagePolicy.Human)) { Stage = Stage.FeatureReview, Feature = Plan };
 
     private static Finding F(Severity severity, string title) =>
         new(severity, Category.Reliability, "src/A.cs", 1, title, "why", "fix", ["codex"]);
@@ -280,7 +280,7 @@ public sealed class TheSecondFeatureRoundTests
         RoundMachine.ApplyPersonsRequest(held, HumanDecision.Continue).Should().BeSameAs(held,
             "a held gate is answered by ApplyHumanDecision, which grants a fresh set — a different promise");
 
-        var code = new SessionState("s2", "/repo", "main", PanelConfig.Uniform(2, 5)) { Stage = Stage.Done, RoundsRunThisStage = 1 };
+        var code = new SessionState("s2", "/repo", "main", PanelConfig.Uniform(2, 5, StagePolicy.Human)) { Stage = Stage.Done, RoundsRunThisStage = 1 };
         RoundMachine.ApplyPersonsRequest(code, HumanDecision.Continue).Should().BeSameAs(code, "only a feature review has this ground");
     }
 
@@ -332,7 +332,7 @@ public sealed class TheSecondFeatureRoundTests
     [Fact]
     public void ThePlanAndCodeStages_KeepTheirOwnRule()
     {
-        var plan = new SessionState("s3", "/repo", "main", PanelConfig.Uniform(2, 5));
+        var plan = new SessionState("s3", "/repo", "main", PanelConfig.Uniform(2, 5, StagePolicy.Human));
 
         var ok = RoundMachine.CompleteRound(plan, SixMajors(), Both).Should().BeOfType<Transition.Ok>().Subject;
 

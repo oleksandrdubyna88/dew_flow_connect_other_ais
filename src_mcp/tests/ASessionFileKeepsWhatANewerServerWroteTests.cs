@@ -63,7 +63,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
 
     private static PersistedSession Baseline(string repo)
     {
-        var state = new SessionState("bag-1", repo, Branch, new PanelConfig()) { Stage = Stage.CodeReview };
+        var state = new SessionState("bag-1", repo, Branch, new PanelConfig(OnExhausted: StagePolicy.Human)) { Stage = Stage.CodeReview };
         var reviewer = new ReviewerState("codex", "correctness", ReviewerState.Done, 2);
         var round = new RoundRecord("CodeReview", 1, "proceed", 0, "codex", new DateTime(2026, 10, 18, 9, 0, 0, DateTimeKind.Utc))
         {
@@ -405,7 +405,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         (ServerJsonContext.Default.SessionState,
             ["sessionId", "repoPath", "branch", "config", "stage", "roundsRunThisStage", "escalationsUsed", "awaitingResolve", "planProceeded", "advanceOnResolve", "humanGate", "holdQuestions", "requestQuestions", "rejections", "secondRound", "document", "isDocumentSession", "feature", "isFeatureSession"]),
         (ServerJsonContext.Default.PanelConfig,
-            ["onExhausted", "catalog", "securityLane", "roles"]),
+            ["onExhausted", "autonomous", "isAutonomous", "predatesAuto", "catalog", "securityLane", "roles"]),
         (ServerJsonContext.Default.RoleGate,
             ["maxRounds", "threshold", "enabled"]),
         (ServerJsonContext.Default.RoundRecord,
@@ -459,6 +459,228 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         store.Save(store.Load(Repo, Branch)!);
 
         JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!.AsObject().ContainsKey("catalog").Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(null, "Human")]
+    [InlineData(false, "Human")]
+    [InlineData(false, "GoodEnough")]
+    [InlineData(true, "GoodEnough")]
+    public void AutonomousAbsentFalseAndTrue_ComeBackFromALoadAndASave_AsTheyWere(bool? autonomous, string onExhausted)
+    {
+        // The member policy auto adds to a config. A build that has the bag but does not know the member must keep it as it
+        // found it — absent stays absent, a value stays that value — because "absent" is what marks a hold raised before
+        // policy auto existed (todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md, D2 and residual A8). Written against the tree before the member
+        // exists, on purpose: that tree IS such a build, and after the member lands this same test pins this build's own load and save.
+        var store = new SessionStore(_data);
+        var file = Plant(store, []);
+        Edit(file, json =>
+        {
+            var config = json["state"]!["config"]!.AsObject();
+            config["onExhausted"] = onExhausted;
+            if (autonomous is { } value)
+            {
+                config["autonomous"] = value;
+            }
+            else
+            {
+                config.Remove("autonomous");
+            }
+        });
+
+        store.Save(store.Load(Repo, Branch)!);
+        store.Save(store.Load(Repo, Branch)!);
+
+        var written = JsonNode.Parse(File.ReadAllText(file))!;
+        var kept = written["state"]!["config"]!.AsObject();
+        Spelled(file, ["state", "config"], "autonomous").Should().Be(
+            autonomous is null ? 0 : 1, "an absent marker stays absent and a written one is written once");
+        if (autonomous is { } expected)
+        {
+            kept["autonomous"]!.GetValue<bool>().Should().Be(expected, "the value comes back as it was");
+        }
+
+        kept["onExhausted"]!.GetValue<string>().Should().Be(onExhausted);
+        written["state"]!["sessionId"]!.GetValue<string>().Should().Be("bag-1", "the same session, not a new one");
+        written["rounds"]!.AsArray().Should().ContainSingle("the one round is kept");
+    }
+
+    /// <summary>The state's config object of a planted file, to edit.</summary>
+    private static JsonObject ConfigOf(JsonObject json) => json["state"]!["config"]!.AsObject();
+
+    [Theory]
+    [InlineData("Human", false)]
+    [InlineData("GoodEnough", false)]
+    [InlineData("Human", true)]
+    public void AFileWithNoAutonomous_ReadsAsNull(string onExhausted, bool writtenNull)
+    {
+        var store = new SessionStore(_data);
+        var file = Plant(store, []);
+        Edit(file, json =>
+        {
+            var config = ConfigOf(json);
+            config["onExhausted"] = onExhausted;
+            config.Remove("autonomous");
+            if (writtenNull)
+            {
+                config["autonomous"] = null;
+            }
+        });
+
+        var config = store.Load(Repo, Branch)!.State.Config;
+
+        config.Autonomous.Should().BeNull("a file with no marker predates policy auto");
+        config.PredatesAuto.Should().BeTrue();
+        config.IsAutonomous.Should().BeFalse();
+        config.Unknown.Should().BeNull();
+        config.OnExhausted.ToString().Should().Be(onExhausted);
+    }
+
+    [Fact]
+    public void TheNaivePositionalDefault_WouldReadAbsenceAsAuto_AndThatIsThePoint()
+    {
+        // The refuted shape (spec M1): a constructor parameter with a declared default reads a file with no member as the default.
+        // Policy auto's marker would then be true for every file written before it existed — the opposite of its meaning.
+        var naive = JsonSerializer.Deserialize("""{"onExhausted":"Human"}""", NaiveContext.Default.NaiveConfig)!;
+
+        naive.Autonomous.Should().BeTrue("the declared default fills an absent member, which is why the file constructor has none");
+        naive.OnExhausted.Should().Be(StagePolicy.Human);
+    }
+
+    [Theory]
+    [InlineData("autonomous", false)]
+    [InlineData("autonomous", true)]
+    [InlineData("AUTONOMOUS", false)]
+    public void AStoredMarker_BindsToTheMember_AndNeverToTheBag(string spelled, bool value)
+    {
+        var store = new SessionStore(_data);
+        var file = Plant(store, []);
+        Edit(file, json =>
+        {
+            var config = ConfigOf(json);
+            config.Remove("autonomous");
+            config[spelled] = value;
+        });
+
+        var loaded = store.Load(Repo, Branch)!;
+
+        loaded.State.Config.Autonomous.Should().Be(value);
+        loaded.State.Config.Unknown.Should().BeNull("a member this build knows is never put aside, whatever its case");
+        store.Save(loaded);
+        Spelled(file, ["state", "config"], "autonomous").Should().Be(1);
+    }
+
+    [Fact]
+    public void AComputedName_IsNotTheMarker()
+    {
+        var store = new SessionStore(_data);
+        var file = Plant(store, []);
+        Edit(file, json =>
+        {
+            var config = ConfigOf(json);
+            config.Remove("autonomous");
+            config["isAutonomous"] = true;
+            config["predatesAuto"] = false;
+        });
+
+        var loaded = store.Load(Repo, Branch)!;
+
+        loaded.State.Config.Autonomous.Should().BeNull("a computed name is not the marker");
+        loaded.State.Config.Unknown.Should().BeNull("a computed name is a member of the contract: it is ignored, not kept");
+        store.Save(loaded);
+        Spelled(file, ["state", "config"], "isAutonomous").Should().Be(0);
+        Spelled(file, ["state", "config"], "predatesAuto").Should().Be(0);
+        Spelled(file, ["state", "config"], "autonomous").Should().Be(0);
+    }
+
+    [Fact]
+    public void AKnownMarkerInABag_IsDroppedOnSave_AndTheTypedValueWins()
+    {
+        var store = new SessionStore(_data);
+        var file = Plant(store, []);
+
+        // (a) the typed marker says false, the bag says true.
+        Edit(file, json => ConfigOf(json)["autonomous"] = false);
+        var typed = store.Load(Repo, Branch)!;
+        store.Save(typed with
+        {
+            State = typed.State with { Config = typed.State.Config with { Unknown = WithEntry(typed.State.Config.Unknown, "autonomous", "true") } },
+        });
+        Spelled(file, ["state", "config"], "autonomous").Should().Be(1);
+        JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!["autonomous"]!.GetValue<bool>().Should().BeFalse("the typed value wins");
+
+        // (b) no typed marker: a bag cannot make one.
+        Edit(file, json => ConfigOf(json).Remove("autonomous"));
+        var absent = store.Load(Repo, Branch)!;
+        absent.State.Config.Autonomous.Should().BeNull();
+        store.Save(absent with
+        {
+            State = absent.State with { Config = absent.State.Config with { Unknown = WithEntry(absent.State.Config.Unknown, "autonomous", "true") } },
+        });
+        Spelled(file, ["state", "config"], "autonomous").Should().Be(0, "a bag cannot make the marker");
+    }
+
+    [Fact]
+    public void AFileWithNoConfig_IsAFileFromBeforeAuto()
+    {
+        var store = new SessionStore(_data);
+        var file = Plant(store, []);
+        Edit(file, json => json["state"]!.AsObject().Remove("config"));
+
+        var config = store.Load(Repo, Branch)!.State.Config;
+
+        config.Autonomous.Should().BeNull("a session with no config was written before policy auto");
+        config.PredatesAuto.Should().BeTrue();
+        config.OnExhausted.Should().Be(StagePolicy.Human);
+        config.Roles.Keys.Should().BeEquivalentTo(PanelConfig.AllRoles);
+        config.Catalog.Should().BeSameAs(RoleCatalog.Builtin);
+    }
+
+    public static TheoryData<string> ConfigsThisBuildMakes() =>
+    [
+        "new()", "continue", "human", "escalate", "good_enough", "uniform", "uniform-human", "env-absent", "env-human", "file-config-under-new",
+    ];
+
+    private static PanelConfig MadeBy(string label) => label switch
+    {
+        "new()" => new PanelConfig(),
+        "continue" => new PanelConfig(OnExhausted: StagePolicy.Continue),
+        "human" => new PanelConfig(OnExhausted: StagePolicy.Human),
+        "escalate" => new PanelConfig(OnExhausted: StagePolicy.Escalate),
+        "good_enough" => new PanelConfig(OnExhausted: StagePolicy.GoodEnough),
+        "uniform" => PanelConfig.Uniform(3, 2),
+        "uniform-human" => PanelConfig.Uniform(3, 2, StagePolicy.Human),
+        "env-absent" => PanelSettings.FromEnvironment(_ => null).Rounds,
+        "env-human" => PanelSettings.FromEnvironment(name => name == "COAI_ON_EXHAUSTED" ? "human" : null).Rounds,
+        "file-config-under-new" => new PanelConfig(roles: null, autonomous: null).UnderPolicyOf(new PanelConfig()),
+        _ => throw new ArgumentOutOfRangeException(nameof(label)),
+    };
+
+    [Theory]
+    [MemberData(nameof(ConfigsThisBuildMakes))]
+    public void AConfigThisBuildMade_IsNeverSavedWithoutTheMarker(string label)
+    {
+        var config = MadeBy(label);
+        var store = new SessionStore(_data);
+        var session = Baseline(Repo);
+
+        store.Save(session with { State = session.State with { Config = config } });
+
+        var file = store.FileFor(Repo, Branch);
+        Spelled(file, ["state", "config"], "autonomous").Should().Be(1, $"{label} must carry its marker");
+        JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!["autonomous"]!.GetValue<bool>()
+            .Should().Be(config.Autonomous!.Value, "the file holds what the config says");
+    }
+
+    [Fact]
+    public void AMarkerOfAnotherType_IsNotReadAsASession()
+    {
+        // The serializer's strictness policy auto relies on: half a file is not read, so no release decides on it (spec F13, M4).
+        var store = new SessionStore(_data);
+        var file = Plant(store, []);
+        Edit(file, json => ConfigOf(json)["autonomous"] = "false");
+
+        store.Load(Repo, Branch).Should().BeNull();
     }
 
     [Fact]
@@ -558,3 +780,15 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         AssertEveryUnknownIsThere(file, Planted);
     }
 }
+
+/// <summary>The naive shape (spec M1): a declared default on a constructor parameter. Used by one test, to show what it reads.</summary>
+internal sealed record NaiveConfig(StagePolicy OnExhausted = StagePolicy.GoodEnough, bool? Autonomous = true);
+
+/// <summary>A context with the session context's options — the shape a session file is read with.</summary>
+[System.Text.Json.Serialization.JsonSourceGenerationOptions(
+    PropertyNameCaseInsensitive = true,
+    PropertyNamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.CamelCase,
+    UseStringEnumConverter = true,
+    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+[System.Text.Json.Serialization.JsonSerializable(typeof(NaiveConfig))]
+internal sealed partial class NaiveContext : System.Text.Json.Serialization.JsonSerializerContext;

@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 public sealed class RoundMachineTests
 {
     private static SessionState Fresh(PanelConfig? config = null) =>
-        new("s-1", "D:/repo", "feature/x", config ?? new PanelConfig());
+        new("s-1", "D:/repo", "feature/x", config ?? new PanelConfig(OnExhausted: StagePolicy.Human));
 
     private static Finding F(string title = "finding") =>
         new(Severity.Major, Category.Security, "src/A.cs", 1, title, "why it breaks", "fix", ["codex"]);
@@ -155,7 +155,7 @@ public sealed class RoundMachineTests
         // single-round default there are none left after the first, and the override is then
         // legitimately honoured rather than refused. Stating the budget is what keeps this test
         // about the override instead of about a default.
-        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) });
+        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) }, StagePolicy.Human);
         var awaiting = ((Transition.Ok)RoundMachine.CompleteRound(Fresh(patient), Failing(), AllSix)).State;
 
         RoundMachine.Resolve(awaiting, [], callerClaimsProceed: true)
@@ -211,7 +211,7 @@ public sealed class RoundMachineTests
 
         // A round must remain for the verdict to be Revise at all — with the shipped one-round
         // budget the stage is spent and escalates, which says nothing about partial failures.
-        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) });
+        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) }, StagePolicy.Human);
         var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(patient), Failing(), partial);
 
         var revise = ok.Verdict.Should().BeOfType<RoundVerdict.Revise>().Subject;

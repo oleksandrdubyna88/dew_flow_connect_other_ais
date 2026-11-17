@@ -41,6 +41,7 @@ public sealed class PanelService
     private readonly AskHumanService _askHuman;
     private readonly EscalationRetention _retention;
     private readonly Store.Projection _projection;
+    private readonly SessionPolicy _policy;
     private readonly Runners.Processes.ProcessTracking _tracking;
     private readonly RemoteProbe _remote;
     private readonly ConsultationService _consultations;
@@ -103,6 +104,7 @@ public sealed class PanelService
         var ledger = new UsageLedger(settings.DataDir);
         var callers = new CallerSessions(settings.DataDir);
         _projection = new Store.Projection(settings.DataDir, log);
+        _policy = new SessionPolicy(settings, _store, _escalations, _projection, log);
         _consultations = new ConsultationService(
             settings, launcher, executor, _context, prompts, ledger, log,
             Environment.GetEnvironmentVariable, noticing, keys);
@@ -114,7 +116,7 @@ public sealed class PanelService
         // ask_human with its gate (S3): the desk gathers the phase from the session and the cadence record, verifies
         // a consultId against the question records, and runs the consultants beside a production risk.
         _askHuman = new AskHumanService(settings, _store, _escalations, log, noticing, AddressOf,
-            new AskGateDesk(_questions, cadenceStore, new QuestionPhaseStore(settings.DataDir), _escalations, Environment.GetEnvironmentVariable, log));
+            new AskGateDesk(_questions, cadenceStore, new QuestionPhaseStore(settings.DataDir), _escalations, Environment.GetEnvironmentVariable, log), _policy);
         _retention = new EscalationRetention(_escalations, _store.HeldQuestions, message => _log.Warning("escalations: {Detail}", message));
         // The consultation cadence (research/PLAN_consult_on_a_cadence.md): its record, its gate over the
         // consultation records, and every decision a round makes about it — kept out of this file.
@@ -143,7 +145,7 @@ public sealed class PanelService
         _commands = new RoundCommands(settings, prompts, log);
         _engine = new RoundEngine(
             settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, _escalations, ledger,
-            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
+            _projection, _policy, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
         // The fourth gate, in a file of its own (S2.2b): its inputs, its refs and its pack, over the same
         // engine. The outliner is the in-process tree-sitter one the pack is measured with.
         _feature = new FeatureStage(settings, launcher, _engine, _roster, new Normalizer.TreeSitterOutliner(), log, noticing);
@@ -564,7 +566,7 @@ public sealed class PanelService
         }
 
         var at = AddressOf(repoPath, branch, document, feature);
-        var session = _store.Load(repoPath, at.Branch, at.Document, at.Feature);
+        var session = LoadedUnderThePolicy(repoPath, at);
         if (session is null)
         {
             return Error(NoSession(document, feature));
@@ -1149,13 +1151,29 @@ public sealed class PanelService
     /// <para>Not over a round nobody has decided on: the old session would sit awaiting a resolve that now has no way to reach it,
     /// which is the orphaning this whole design was rewritten to prevent — one ordinal further along. (codex, the code round.)</para>
     /// </remarks>
-    private string? WhyNotAFreshReview(string repoPath, string branch, string document) =>
-        _store.Load(repoPath, branch, DocumentSessions.Which(document, newReview: false, id => _store.Exists(repoPath, branch, id))) switch
+    private string? WhyNotAFreshReview(string repoPath, string branch, string document)
+    {
+        var identity = DocumentSessions.Which(document, newReview: false, id => _store.Exists(repoPath, branch, id));
+
+        // The session is read through policy auto first (a hold from before policy auto is released by whichever call reads it first),
+        // so a released one says so — and never "nobody has decided" — and one whose release could not be written says why.
+        return _policy.CurrentUnclaimed(_store.Load(repoPath, branch, identity), repoPath, new SessionAddress(branch, identity, string.Empty)) switch
         {
-            { State.HumanGate: true } held => _engine.HeldSentence(held),
-            { State.AwaitingResolve: true } => DocumentSessions.StillOpen(document),
+            null => null,
+            { NotWritten.Length: > 0 } release => LegacyHold.NotWrittenSentence(SessionPolicy.StageOf(release.Session), release.NotWritten),
+            { Session.State.HumanGate: true } release => _engine.HeldSentence(release.Session),
+            { Session: var released } when SessionPolicy.AwaitsItsResolve(released) => LegacyHold.ReleasedSentence(SessionPolicy.StageOf(released)),
+            { Session.State.AwaitingResolve: true } => DocumentSessions.StillOpen(document),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// The session at this address, after a hold from before policy auto was released by whichever call reads it first; this call holds no
+    /// claim, so it takes it for the release alone. Null for no session.
+    /// </summary>
+    private PersistedSession? LoadedUnderThePolicy(string repoPath, SessionAddress at) =>
+        _policy.CurrentUnclaimed(_store.Load(repoPath, at.Branch, at.Document, at.Feature), repoPath, at)?.Session;
 
     /// <summary>
     /// The session at this identity: the one that is there, or a new one.
@@ -1659,6 +1677,8 @@ public sealed class PanelService
             return Task.FromResult(Error(noSession));
         }
 
+        // Under the claim this call holds: a hold from before policy auto is released here, and the decisions below are made on what it left.
+        session = _policy.Current(session).Session;
         _escalations.OfferHeldNotices(session);
         var persons = PersonsDecision(session);
 

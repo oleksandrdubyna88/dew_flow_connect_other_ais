@@ -102,27 +102,37 @@ internal static class FeatureSecondRound
     {
         RoundVerdict.Proceed =>
             "The feature gate passed. Record a decision for EVERY finding via resolve (rejections need reasons); the review "
-            + "closes on resolve. " + OneRoundUnless,
+            + "closes on resolve. " + OneRoundUnless(after),
+        // Policy auto's own: the reason it gives says why no person was called, and no person is asked for a second round either.
+        RoundVerdict.GoodEnough { Reason.Length: > 0 } g =>
+            $"{g.Reason.TrimEnd('.')}. Under policy auto no person is called: READ the open findings and apply the ones that are true and useful "
+            + "— as new pull requests, since the epics have merged — reject the rest with reasons via resolve, and say in your summary what you "
+            + "took and what you declined; the review closes on resolve.",
         RoundVerdict.GoodEnough g =>
             $"{g.Gate.GatingCount} finding(s) gate and none is blocking: one round is this review's budget for them (D23). "
             + "READ them and apply the ones that are true and useful — as new pull requests, since the epics have merged — "
             + "reject the rest with reasons via resolve, and say in your summary what you took and what you declined; the "
-            + "review closes on resolve. " + OneRoundUnless,
+            + "review closes on resolve. " + OneRoundUnless(after),
         RoundVerdict.Revise when after.SecondRound == SecondRoundGround.BlockingFinding =>
             "A blocking finding came back, so a second round runs (D23) — the last: a blocking finding or a reviewer "
-            + "failure in it calls a person. Resolve every finding with accept/reject + reason, fix the accepted ones as new "
+            + $"failure in it {WhatEndsIt(after)}. Resolve every finding with accept/reject + reason, fix the accepted ones as new "
             + "pull requests, then call review_feature again with again: true over the new head.",
         RoundVerdict.Revise when after.SecondRound == SecondRoundGround.ReviewerFailure =>
             $"{reviewers.Asked - reviewers.Answered} of {reviewers.Asked} reviewer(s) failed, so a retry runs (D23) — the second "
-            + "and last round: it asks only the reviewers that failed, needs no new head, and a retry that fails again calls a "
-            + "person. Resolve the findings of the reviewers that answered first (their decisions are carried into the retry's "
+            + $"and last round: it asks only the reviewers that failed, needs no new head, and a retry that fails again {WhatEndsIt(after)}. "
+            + "Resolve the findings of the reviewers that answered first (their decisions are carried into the retry's "
             + "verdict, not re-bought), then call review_feature again.",
         _ => string.Empty,
     };
 
-    private const string OneRoundUnless =
-        "A second round runs only for a reviewer failure, a blocking finding, or when the person asks for one — "
-        + "at most two rounds, ever (D23).";
+    /// <summary>What a second round that still has a ground does: calls a person, or — under policy auto — closes the review without one.</summary>
+    private static string WhatEndsIt(SessionState after) => after.Config.IsAutonomous
+        ? "closes the review under policy auto, with no person asked"
+        : "calls a person";
+
+    private static string OneRoundUnless(SessionState after) => after.Config.IsAutonomous
+        ? "A second round runs only for a reviewer failure or a blocking finding — at most two rounds, ever (D23); under policy auto no person is asked for one."
+        : "A second round runs only for a reviewer failure, a blocking finding, or when the person asks for one — at most two rounds, ever (D23).";
 
     /// <summary>
     /// Why an ADMITTED second round with nobody left to review it is refused rather than skipped: the

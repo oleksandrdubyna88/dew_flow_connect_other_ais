@@ -1,5 +1,62 @@
 # Changelog
 
+## Server 0.66.0 — 2026-11-17
+
+**Added: policy Auto for *When the rounds run out*, now the default. Under Auto the gate never asks a person: it logs and moves on (#1011).** It is meant for an unattended orchestrator, which must never be blocked by the gate. Auto replaces every point where the gate called a person:
+- A round in which no reviewer answered ends `not_reviewed`. That verdict is never a pass, and the reply says so out loud.
+- Spent rounds end `good_enough` with a reason.
+- A feature review at its cap ends `good_enough`, or `not_reviewed` when nobody answered.
+- Each of these rounds is written down three times: on the round, in `coai.db`, and as a Warning in the log.
+- `ask_human` never waits and never writes a card. The AI's own question goes to the consultants first (`consult_first`), and only a verified consultation reaches the person.
+- `--features` lists `onExhaustedAuto`.
+
+**The five values** are `auto` (the default), `human`, `good_enough`, `continue` and `escalate`. When no policy is named, the policy is `auto`. A word this build does not know is still read as `human`, which stops.
+
+**A value chosen before** is reset by the NEXT extension release, not by this server.
+
+**A hold an older server raised** is released under Auto unless the person already answered it, and the release is noted on its round. A hold raised under `human` by this server stays the person's.
+
+**A settings file that exists but cannot be read** means Auto by default, with a note and a Warning. Until the file can be read, no hold is released.
+
+**Between this release and the next extension:** An extension older than the next one never writes `COAI_ON_EXHAUSTED` while it shows Ask a human — that was its default — so this server runs Auto for it: when the rounds run out or nobody answers, no person is asked, and the round says `good_enough` or `not_reviewed`. Choose Ask a human again (any other value is written and honoured) to keep a person in the loop; the next extension release says this in a notification.
+
+**Keeping a person in the loop with the extension you have now:** choosing Ask a human again writes nothing, because it is that extension's default. Until the next extension ships, put `COAI_ON_EXHAUSTED=human` in the MCP client's env block. The server honours it, and its startup notes say that a policy is pinned there.
+
+## Team server 0.16.3 — 2026-11-16
+
+**Fixed: a Team-server Antigravity reviewer can read only inside its own job's folder.** The Team server answers agy's
+tool-call hook with its own binary (`coai-server --agy-hook`) and the same library as coai-mcp. It therefore gets the fix
+in Server 0.65.4 below (#1006). Every job's folder on the server is a `/tmp/coai-server-job-*` folder, and agy lets a
+reader reach `/tmp` outside its roots. Until now, an agy reviewer in one job could read another job's folder by an
+absolute path, by `..`, or through a link. The hook now resolves the path and allows a reader only inside the job's
+granted folder. Every other read is denied with `coai: this consultation reads only inside the folders it was given`.
+
+**Not changed:** the tool-name rule (only `read_file` and `view_file` run), agy's own checks, and the server's routes.
+The limits are those of Server 0.65.4 below. The Windows gaps there do not apply to a Linux server.
+
+**Rollback:** re-dispatch `deploy-server.yml` with 0.16.2. That version allows a reader by name alone again.
+
+## Server 0.65.4 — 2026-11-16
+
+**Fixed: an Antigravity consultant or reviewer can read only inside the folders it was given (#1006).** Until now coai's read-only hook allowed `read_file` and `view_file` by name alone, and agy lets a reader reach `/tmp` outside its roots. On 2026-11-16 a consultant read a marker file under `/tmp` outside its granted folder by an absolute path, by `root/../outside/x`, and through a link inside the folder: 3 of 3. On the Team server every job's folder is under `/tmp`, so one job's reviewer could read another job's files. The hook now looks at the path. It follows links and `..`, and it allows the read only when the real path is inside a granted folder and outside the folder coai keeps for the hook. A relative path, a missing field or any path it cannot resolve is denied. The reason is `coai: this consultation reads only inside the folders it was given`, and it never repeats the path. The Team server answers the hook with its own binary and the same library, so it gets this with its next release.
+
+**Not changed:**
+- The tool-name rule: only `read_file` and `view_file` run, every other tool is denied, with the same reason as before.
+- agy's own checks still run after the hook allows a call.
+- agy reads at most 45 KiB or 800 lines per call.
+
+**Limits:**
+- A link swapped between the hook's check and agy's open is not closed.
+- Hard links and bind mounts are not seen.
+- Inside a granted folder nothing is narrowed: `.git` and credential-looking files stay readable by agy's reader.
+- An agy older than 1.5.9, whose hook call lacks the path, the working folder or the granted folders, has every read denied.
+- On Windows an 8.3 short name is refused wrongly, and agy there is not measured.
+- Two Windows gaps are not closed here and go to a follow-up plan (`todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`): `..` after a link or junction is applied to the resolved path, where Windows folds it as text first; and a UNC `Path` is looked up over the network before it is judged. Neither applies on Linux or the Team server.
+- A hook denial is not in agy's `denied_actions`, so coai's read follow-up does not fire for it.
+- The full list is in `SECURITY.md`, "What the sites guarantee".
+
+**Rollback:** 0.65.3 allows a reader by name alone again. For the Team server, re-dispatch `deploy-server.yml` with 0.16.2.
+
 ## Team server 0.16.2 — 2026-11-15
 
 **Fixed: Antigravity reviewers on a Team server can read files again.** The Team server answers agy's tool-call hook with its own binary (`coai-server --agy-hook`) and the same library as coai-mcp. It therefore gets the fix in Server 0.65.3 below: on agy 1.5.9 the hook allows `read_file` as well as `view_file`, and still denies every other tool (#995). coai.remsoft.dev's agy updated itself to 1.5.9 on 2026-11-15, so on 0.16.1 every read by an Antigravity reviewer there was denied. A server test pins the hook as the built server answers it (#999). No route or server source changed.
@@ -13,6 +70,7 @@
 **Not changed:**
 - agy reads at most 45 KiB or 800 lines per call, so a large file is read in pieces.
 - agy itself allows reads under `/tmp` outside the granted roots. The hook does not check paths, and a path check is a follow-up (research/RESULTS_agy_read_file.md §3).
+- (2026-11-16: done in the next release, below — now above: see Server 0.65.4. The bullet above is kept as it was written.)
 
 **Rollback:** 0.65.2 denies every read on agy 1.5.9.
 

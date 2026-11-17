@@ -37,9 +37,25 @@ public sealed class PanelServiceHost : IPanelServiceSource
     private PanelService _current;
     private (DateTime Written, long Length) _stamp;
 
+    /// <summary>A stamp no file has: where <c>_warned</c> starts, and what <c>_stamp</c> holds while the service stands on a read that gave nothing.</summary>
+    private static readonly (DateTime Written, long Length) Never = (DateTime.MaxValue, -1);
+
     // The stamp a reload last said it could not use, so a file held for a while is one warning, not one per call. It starts
     // on a stamp no file can have (the missing file stamps as default).
-    private (DateTime Written, long Length) _warned = (DateTime.MaxValue, -1);
+    private (DateTime Written, long Length) _warned = Never;
+
+    // The stamp of the file the CURRENT service was built from although it could not be read (settings.json is there and gave no values).
+    // `_stamp` is `Never` then, so every call reads the file again; this one is what stops that read building a second service for the same stamp.
+    private (DateTime Written, long Length) _unreadAt = Never;
+
+    // Why that read gave nothing. The same file can turn from busy to malformed without its stamp moving, and then the note built from the busy read
+    // would keep saying the wrong thing; a read for the same stamp is skipped only when it fails for the same reason.
+    private string _unreadWhy = string.Empty;
+
+    // The adoption sentence last said. An adoption that fails is retried on every call while the side has no settings file of its own, and
+    // each retry yields the SAME sentence: it is said (Warning and notice) once, a different sentence is said again, and a read that gave
+    // values (`Published`) forgets it.
+    private string _adoptionSaid = string.Empty;
 
     /// <param name="noticing">
     /// Where this host's services write their notices. It is REQUIRED and has no default, because a
@@ -115,12 +131,19 @@ public sealed class PanelServiceHost : IPanelServiceSource
     /// <summary>Built in the constructor, so always ready.</summary>
     public Task Ready => Task.CompletedTask;
 
-    /// <summary>The constructor's build — the settings file read as it always was, a busy or broken one giving defaults and a start.</summary>
+    /// <summary>The constructor's build — a busy or broken settings file giving the defaults, a note, and a read again on the next call.</summary>
     private PanelService Start()
     {
         var dataDir = SettingsFile.DataDirFrom(_env).Path;
+        var layer = SettingsFile.StartLayer(dataDir, _env, Noted(dataDir), _readText);
+        if (layer.Unread.Length > 0)
+        {
+            // The stamp is recorded BEFORE the first read (constructor), so a read that gave nothing would be served as that stamp's settings for as
+            // long as the file does not change. It stays unrecorded: the next call reads again.
+            (_unreadAt, _unreadWhy, _stamp) = (_stamp, layer.Unread, Never);
+        }
 
-        return Assemble(first: true, SettingsFile.Layer(dataDir, _env, Noted(dataDir), _readText));
+        return Assemble(first: true, layer);
     }
 
     /// <summary>
@@ -146,14 +169,33 @@ public sealed class PanelServiceHost : IPanelServiceSource
 
         return SettingsFile.TryLayer(dataDir, _env, Noted(dataDir), _readText) switch
         {
-            SettingsLayer.Layered layered => Published(stamp, Assemble(first: false, layered.Lookup)),
+            SettingsLayer.Layered { Unread.Length: > 0 } unread => Unreadable(stamp, unread),
+            SettingsLayer.Layered layered => Published(stamp, Assemble(first: false, layered)),
             _ => Kept(stamp, log => log.Warning("settings reload skipped — the file is held open by its writer. The last good settings stay and the next call tries again")),
         };
     }
 
+    /// <summary>
+    /// A file that is there and gave no values: its defaults are published (with their note) but its stamp is NOT recorded, so the next call reads the
+    /// file again — and builds nothing while the file is still the same one for the same reason (<c>_unreadAt</c>, <c>_unreadWhy</c>).
+    /// </summary>
+    private PanelService Unreadable((DateTime Written, long Length) stamp, SettingsLayer.Layered layer)
+    {
+        if (stamp == _unreadAt && layer.Unread == _unreadWhy)
+        {
+            return _current;
+        }
+
+        var rebuilt = Assemble(first: false, layer);
+        (_current, _unreadAt, _unreadWhy, _stamp) = (rebuilt, stamp, layer.Unread, Never);
+        _log.Information("settings reloaded — the file could not be read, so the defaults serve until it can be");
+
+        return _current;
+    }
+
     private PanelService Published((DateTime Written, long Length) stamp, PanelService rebuilt)
     {
-        (_stamp, _current) = (stamp, rebuilt);
+        (_stamp, _current, _unreadAt, _unreadWhy, _adoptionSaid) = (stamp, rebuilt, Never, string.Empty, string.Empty);
         _log.Information("settings reloaded — the panel's file changed on disk");
 
         return _current;
@@ -175,20 +217,45 @@ public sealed class PanelServiceHost : IPanelServiceSource
     // nobody watching. It has a log and, since story 2.3.3, the page as well. No flag guards this one:
     // `AdoptRootSettings` yields a sentence only when it actually MOVED something, so the build after an adoption says nothing.
     private Action<string> Noted(string dataDir) =>
-        note => StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), _noticing, _log);
+        note =>
+        {
+            if (note != _adoptionSaid)
+            {
+                _adoptionSaid = note;
+                StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), _noticing, _log);
+            }
+        };
 
     /// <param name="first">
     /// Whether this is the constructor's build. A PARAMETER rather than a field somebody has to
     /// reason about across threads: the two callers each know which they are, and the answer then
     /// cannot be wrong for a later build because an earlier one threw. (gemini, second code round.)
     /// </param>
-    private PanelService Assemble(bool first, Func<string, string?> configuration)
+    private PanelService Assemble(bool first, SettingsLayer.Layered layer)
     {
-        var settings = PanelSettings.FromEnvironment(configuration);
+        var unread = layer.Unread.Length > 0;
+        // The policy is a default taken from a failed read only when nothing in the process environment named it: a policy that came from the
+        // environment was READ, and the file cannot change it (the environment wins, key by key).
+        var policyNamed = _env(PanelSettings.Key.Exhausted) is { Length: > 0 };
+        var settings = PanelSettings.FromEnvironment(layer.Lookup) with { PolicyUnread = unread && !policyNamed };
         Reloaded(settings, first);
+        if (unread)
+        {
+            // On the first build too: Program reads this file once more for ITS notes and never says this, so this is the only one.
+            var path = SettingsFile.PathFor(SettingsFile.DataDirFrom(_env).Path);
+            StartupNotices.SettingsUnread(UnreadSentence(path, layer.Unread, policyNamed), path, _noticing, _log);
+        }
 
         return new PanelService(settings, _keys, _vaultReadUtc, _launcher, _log, _noticing, hostStopping: _hostStopping);
     }
+
+    private static string UnreadSentence(string path, string why, bool policyNamed) =>
+        $"{path} could not be read ({why}). "
+        + (policyNamed
+            ? $"Every setting in it is at its default; {PanelSettings.Key.Exhausted} comes from this server's own environment and stands."
+            : "Every setting in it is at its default, so When the rounds run out is Auto by default: the gate holds for nobody, "
+              + "and a hold from a build before Auto is not released until this file can be read.")
+        + " Repair or remove the file, or save the settings once from the panel — it is read again on the next call.";
 
     /// <summary>
     /// What a settings RELOAD says about the values it could not use: the same thing startup says.

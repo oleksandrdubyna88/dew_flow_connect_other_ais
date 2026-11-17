@@ -252,6 +252,13 @@ public sealed record PanelSettings
 
     public PanelConfig Rounds { get; init; } = new();
 
+    /// <summary>
+    /// The policy in <see cref="Rounds"/> is a default taken because the settings file was there and could not be read (and the process
+    /// environment names no policy). Rounds run on it; no hold from before policy auto is released on it.
+    /// </summary>
+    /// <remarks>Set by <see cref="PanelServiceHost"/> alone; false in every settings object built any other way.</remarks>
+    public bool PolicyUnread { get; init; }
+
     public SecurityLaneSetting SecurityLane { get; init; } = new();
 
     public int GlobalConcurrency { get; init; } = 3;
@@ -1074,14 +1081,19 @@ public sealed record PanelSettings
         _ => "none",
     };
 
-    /// <summary>What a policy name means, or Human when this build does not know the name.</summary>
+    /// <summary>What a policy name means: <c>null</c> when none is named (absent, empty or <c>auto</c> — policy auto), the policy
+    /// a known name stands for, or Human when this build does not know the name.</summary>
     /// <remarks>
     /// Human is the fallback because it is the end of the range that STOPS: a policy this build
-    /// cannot honour must never resolve to proceeding over open findings.
+    /// cannot honour must never resolve to proceeding over open findings. No trimming: <c>"auto "</c> is a word this
+    /// build does not know, and it stops. <c>auto</c> is spelled here and nowhere else on the server; what "no policy
+    /// named" means is decided by <see cref="PanelConfig"/>'s code constructor.
     /// </remarks>
-    private static StagePolicy PolicyOf(string? value) => value?.ToLowerInvariant() switch
+    private static StagePolicy? PolicyOf(string? value) => value?.ToLowerInvariant() switch
     {
+        null or "" or "auto" => null,
         "continue" => StagePolicy.Continue,
+        "human" => StagePolicy.Human,
         "escalate" => StagePolicy.Escalate,
         "good_enough" or "goodenough" => StagePolicy.GoodEnough,
         _ => StagePolicy.Human,
@@ -1115,7 +1127,7 @@ public sealed record PanelSettings
     /// the new variable while telling the person about the old one, which is worse than either
     /// alone. (codex, on story 2.3.3's code round.)
     /// </remarks>
-    private static class Key
+    internal static class Key
     {
         internal const string Backoff = "COAI_RETRY_BACKOFF";
 
@@ -1222,6 +1234,25 @@ public sealed record PanelSettings
               + "person instead. The panel is probably newer than this server: update it in "
               + "ConnectOtherAIs > MCP server.")]
             : [];
+
+    /// <summary>
+    /// A policy the PROCESS environment pins — a client's <c>env</c> block, which wins over the panel (<c>SettingsFile.Over</c>) and so is outside the
+    /// extension's one-time migration. One note for a known word other than <c>auto</c>; none for <c>auto</c>, absent or empty, and none for an unknown
+    /// word, which <see cref="WhyExhausted"/> already says — one value is never two notes. Only the process environment is read: the same value in the
+    /// settings file is the panel's own choice.
+    /// </summary>
+    internal static IReadOnlyList<UnrecognisedSetting> PinnedPolicy(Func<string, string?> processEnv) =>
+        processEnv(Key.Exhausted) is { Length: > 0 } policy && NamesAKnownPolicyOtherThanAuto(policy)
+            ? [new UnrecognisedSetting(
+                Key.Exhausted,
+                $"{Key.Exhausted} is '{policy}' in this server's own environment — your MCP client's `env` block — which overrides the panel; "
+              + "Auto is the default now. Remove it from that `env` block to follow the panel.")]
+            : [];
+
+    /// <summary>A word <see cref="PolicyOf"/> knows and that is not <c>auto</c>: an UNKNOWN word also reads as <c>human</c>, and only the spelling tells them apart.</summary>
+    private static bool NamesAKnownPolicyOtherThanAuto(string policy) =>
+        PolicyOf(policy) is { } named
+        && (named != StagePolicy.Human || string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase));
 
     private static IReadOnlyList<UnrecognisedSetting> WhyWorkspace(Func<string, string?> env) =>
         env(Key.Workspace) is { Length: > 0 } workspace && !AWorkspaceWeKnow(workspace)

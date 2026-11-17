@@ -32,6 +32,7 @@ internal sealed class RoundEngine(
     Escalations escalations,
     UsageLedger ledger,
     Store.Projection projection,
+    SessionPolicy policy,
     CallerSessions callers,
     RemoteProbe remote,
     RoundAuthorsStep authors,
@@ -49,6 +50,7 @@ internal sealed class RoundEngine(
     private readonly Escalations _escalations = escalations;
     private readonly UsageLedger _ledger = ledger;
     private readonly Store.Projection _projection = projection;
+    private readonly SessionPolicy _policy = policy;
     private readonly CallerSessions _callers = callers;
     private readonly RemoteProbe _remote = remote;
     private readonly RoundAuthorsStep _authors = authors;
@@ -264,7 +266,12 @@ internal sealed class RoundEngine(
             return Error("no session for this repo+branch — call open first", from);
         }
 
-        session = ApplyAnyHumanDecision(session);
+        var release = _policy.Released(session);
+        if (release.NotWritten.Length > 0)
+        {
+            return Error(LegacyHold.NotWrittenSentence(SessionPolicy.StageOf(session), release.NotWritten), from);
+        }
+        session = ApplyAnyHumanDecision(release.Session);
         // ONE hold check for every review entry — review_plan, review_code, review_document and review_feature all come through
         // here (§11.7 of todo/PLAN_only_a_person_releases_the_gate.md): GateHeld while no person has answered, and the sentence
         // naming `resolve` once a Proceed is on file. Nothing is saved for a refusal.
@@ -273,10 +280,15 @@ internal sealed class RoundEngine(
             return Error(pressed, from);
         }
 
+        if (SessionPolicy.AwaitsItsResolve(session))
+        {
+            return Error(LegacyHold.ReleasedSentence(SessionPolicy.StageOf(session)), from);
+        }
+
         session = session with
         {
             State = session.State with
-            { Config = session.State.Config with { SecurityLane = _settings.SecurityLane.Gate } }
+            { Config = LegacyHold.Stamped(session.State, _settings.Rounds) with { SecurityLane = _settings.SecurityLane.Gate } }
         };
         // And the person's request for a feature review's second round (D23), read from the same road —
         // the answer file — and from nothing a caller passes. Nothing is saved for it here.
@@ -492,7 +504,7 @@ internal sealed class RoundEngine(
 
             var decisionSummary = SecurityRound.DecisionSummary(results, roundWork, summary);
             SecurityRound.Notice(results, roundWork, _noticing);
-            if (RoundMachine.CompleteRound(session.State, gate, decisionSummary) is not Transition.Ok completed)
+            if (RoundMachine.CompleteRound(session.State, gate, decisionSummary, merged.Length) is not Transition.Ok completed)
             {
                 return Error("the round could not complete — this is a bug, report it", from);
             }
@@ -529,6 +541,8 @@ internal sealed class RoundEngine(
                 Gitlinks = roundWork.Gitlinks,
                 // What the consultation cadence said about this round: met, or stood down and why.
                 CadenceNote = stage.Cadence.Call.Note,
+                // What policy auto decided and why — empty for every round a person's policy decided.
+                Note = AutoNote.Of(completed.Verdict),
                 // The D23 ground a feature review's second round was admitted on — read from the state this
                 // round BEGAN from, because completing it is what spends the ground.
                 AdmittedBy = FeatureSecondRound.AdmittedBy(session.State),
@@ -648,6 +662,7 @@ internal sealed class RoundEngine(
                 Carried = [],
             });
             audit.Closing(answer.Verdict, gate.GatingCount, summary.Sentence, record);
+            audit.Autonomous(answer.Verdict, record.Note);
             audit.Findings(merged);
             // And into the database, with what the round was ABOUT. Best-effort by construction:
             // the round is already answered and saved, and a projection that cannot be written must
@@ -936,6 +951,15 @@ internal sealed class RoundEngine(
                 "that are true and useful — that is the point of this setting, and it is what makes it " +
                 "different from continue_anyway. Reject the rest with reasons via resolve, say in your " +
                 "summary what you took and what you declined, then proceed."),
+            RoundVerdict.NotReviewed => ("not_reviewed", null,
+                // Only the security lane's findings can stand when no ordinary reviewer answered, and `resolve` refuses an empty list while any is
+                // pending — so "there is nothing to decide" would send the caller into a refusal.
+                merged.Length > 0
+                    ? $"No ordinary reviewer answered. {summary.Sentence}. Policy `auto` proceeds WITHOUT an ordinary review, but {merged.Length} finding(s) " +
+                      "from the security lane await a decision. Call resolve with a decision for each (accept, or reject with a reason), " +
+                      "say in your summary that the ordinary reviewers did not review this stage and why, then proceed."
+                    : $"No reviewer answered — {summary.Sentence}. Policy `auto` proceeds WITHOUT a review. Call resolve (there is nothing to decide), " +
+                      "say in your summary that this stage was not reviewed and why, then proceed."),
             RoundVerdict.CallHuman h => ("call_human", null,
                 $"Rounds exhausted: {h.Reason}. A human decides — surface the open findings to them; do not proceed on your own."),
             RoundVerdict.Escalated e => ("escalated", e.Step.ToString(),

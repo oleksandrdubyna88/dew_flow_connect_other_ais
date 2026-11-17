@@ -44,7 +44,7 @@ public sealed class ThePersonAsksForASecondFeatureRoundTests : IDisposable
     /// </summary>
     private static PersistedSession ClosedAfterOneRound(DateTime completedUtc, params string[] askedAfterIt) =>
         new(
-            new SessionState("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(2, 5)) { Feature = Plan, Stage = Stage.Done, RoundsRunThisStage = 1, RequestQuestions = askedAfterIt },
+            new SessionState("s1", "/repo", SessionKey.FeatureBranch, PanelConfig.Uniform(2, 5, StagePolicy.Human)) { Feature = Plan, Stage = Stage.Done, RoundsRunThisStage = 1, RequestQuestions = askedAfterIt },
             [new RoundRecord(nameof(Stage.FeatureReview), 1, "good_enough", 3, "all 1 reviewers answered", completedUtc) { Sha = "abc" }]);
 
     private void Answered(string id, string decision, DateTime answeredUtc)
@@ -171,7 +171,7 @@ public sealed class ThePersonAsksForASecondFeatureRoundTests : IDisposable
     public void AQuestionAskedBeforeRoundOne_OrOnAnotherKindOfSession_IsNotRecorded()
     {
         var beforeRoundOne = ClosedAfterOneRound(DateTime.UtcNow).State with { Stage = Stage.FeatureReview, RoundsRunThisStage = 0 };
-        var code = new SessionState("s2", "/repo", "main", PanelConfig.Uniform(2, 5)) { Stage = Stage.CodeReview, RoundsRunThisStage = 1 };
+        var code = new SessionState("s2", "/repo", "main", PanelConfig.Uniform(2, 5, StagePolicy.Human)) { Stage = Stage.CodeReview, RoundsRunThisStage = 1 };
 
         RoundMachine.RecordQuestion(beforeRoundOne, "q").Should().BeSameAs(beforeRoundOne, "an answer to a question asked before the round is about whatever it asked");
         RoundMachine.RecordQuestion(code, "q").Should().BeSameAs(code, "a code session has no second-round request");

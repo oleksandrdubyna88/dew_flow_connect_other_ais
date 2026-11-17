@@ -280,6 +280,12 @@ the success save is `RoundEngine.cs:597`, outside `_gate`; the scheduler reports
 17. D6 overstated its ordering: the promise is now "persisted before the engine awaits teardown completion", the kill is not held back for
     the write (the reason is in D6), and the millisecond crash window is acknowledged.
 
+## Boundary with the auto plan
+
+> Added 2026-11-17 by the auto plan's E1.S3 (its § 7, the same table shortened in each of the four documents it touches) — a boundary section, not a change to this plan's scope.
+
+[PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) adds the verdict `not_reviewed` (no reviewer answered, policy `auto`). It is **disjoint** from this plan: a cancelled round produces no verdict, so `not_reviewed` never covers it. Both change `RoundMachine.cs` and `RoundEngine.cs`; whichever merges second rebases them.
+
 ## Epics
 
 One epic. Cornerstones: 1 of 1 — S2 (the record a withdrawal leaves; it decides what the gate, the database and every reader see).

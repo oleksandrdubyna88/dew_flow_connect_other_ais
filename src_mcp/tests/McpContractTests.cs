@@ -261,7 +261,8 @@ public sealed class McpContractTests : IDisposable
     public async Task AskHuman_WithNobodyListening_WaitsThenSaysToAskInTheChat()
     {
         HeldGateAtNowhere();
-        using var server = Start(escalationSeconds: 3);
+        // The card and its wait are the policies that ask a person's; policy auto (the default) answers a held gate at once.
+        using var server = Start("debug", 3, ("COAI_ON_EXHAUSTED", "human"));
         try
         {
             await RoundTrip(server, """
@@ -291,7 +292,7 @@ public sealed class McpContractTests : IDisposable
     /// <summary>A held gate on the path the two card tests ask about — the session a <c>call_human</c> leaves behind.</summary>
     private void HeldGateAtNowhere() =>
         new CoaiMcp.Server.SessionStore(_data).Save(new CoaiMcp.Server.PersistedSession(
-            new CoaiMcp.Core.Rounds.SessionState("s-held", "D:/nowhere", "main", CoaiMcp.Core.Rounds.PanelConfig.Uniform(3, 2)) { HumanGate = true }, []));
+            new CoaiMcp.Core.Rounds.SessionState("s-held", "D:/nowhere", "main", CoaiMcp.Core.Rounds.PanelConfig.Uniform(3, 2, CoaiMcp.Core.Rounds.StagePolicy.Human)) { HumanGate = true }, []));
 
     /// <summary>
     /// The AI's own question, over the real wire: no card, no wait — the reply tells it to ask in its own conversation
@@ -328,7 +329,7 @@ public sealed class McpContractTests : IDisposable
     public async Task AskHuman_AnsweredInVsCode_ReturnsThePersonsWords()
     {
         HeldGateAtNowhere();
-        using var server = Start(escalationSeconds: 60);
+        using var server = Start("debug", 60, ("COAI_ON_EXHAUSTED", "human"));
         try
         {
             await RoundTrip(server, """

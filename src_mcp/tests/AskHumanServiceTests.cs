@@ -71,6 +71,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     {
         var settings = new PanelSettings
         {
+            Rounds = new PanelConfig(OnExhausted: StagePolicy.Human),
             DataDir = _data,
             Providers = [],
             EscalationBudget = budget ?? TimeSpan.FromMilliseconds(300),
@@ -92,9 +93,10 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         var phase = new QuestionPhaseStore(_data);
         var cadence = new CadenceStore(_data);
         var desk = new AskGateDesk(questions, cadence, phase, escalations, _ => null, Logger.None);
+        var policy = new SessionPolicy(settings, sessions, escalations, new CoaiMcp.Store.Projection(_data, Logger.None), Logger.None);
         var service = new AskHumanService(
             settings, sessions, escalations, Logger.None, Noticing.None,
-            (_, branch, _, _) => new SessionAddress(branch, string.Empty, string.Empty), desk);
+            (_, branch, _, _) => new SessionAddress(branch, string.Empty, string.Empty), desk, policy);
 
         return new Harness(service, questions, escalations, sessions, phase, cadence, launcher);
     }
@@ -102,7 +104,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     /// <summary>A session whose plan has proceeded — the phase every question after the plan round is asked in.</summary>
     private void Proceeded(Harness h, string plan = "", string epic = "", Stage stage = Stage.CodeReview) =>
         h.Sessions.Save(new PersistedSession(
-            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2)) { PlanProceeded = true, Stage = stage }, [])
+            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2, StagePolicy.Human)) { PlanProceeded = true, Stage = stage }, [])
         {
             Plan = plan,
             Epic = epic,
@@ -116,7 +118,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     /// </summary>
     private void Held(Harness h) =>
         h.Sessions.Save(new PersistedSession(
-            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2)) { PlanProceeded = true, HumanGate = true, Stage = Stage.CodeReview }, []));
+            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2, StagePolicy.Human)) { PlanProceeded = true, HumanGate = true, Stage = Stage.CodeReview }, []));
 
     /// <summary>The cards in front of the person — none at all when the directory was never made.</summary>
     private static int Cards(Harness h) =>

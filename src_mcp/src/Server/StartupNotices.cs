@@ -48,6 +48,31 @@ internal static class StartupNotices
             ServerNoticeCodes.SettingsAdopted, Outcome, Canonical(settingsPath), sentence));
     }
 
+    /// <summary>The settings file is there and gave no values to the read a service was built on.</summary>
+    /// <remarks>
+    /// The Warning and the notice are ONE call, as <see cref="Adopted"/>'s are. An existing code and class — a setting this build fell back
+    /// on — because the extension renders the codes it knows; the subject is the settings path, canonicalised.
+    /// </remarks>
+    internal static void SettingsUnread(string sentence, string settingsPath, Noticing noticing, Serilog.ILogger log)
+    {
+        log.Warning("settings: {Note}", sentence);
+        noticing.Offered(() => Note(ServerNoticeCodes.UnrecognisedSetting, StoodDown, Canonical(settingsPath), sentence));
+    }
+
+    /// <summary>
+    /// A policy a client's <c>env</c> block still pins (<see cref="PanelSettings.PinnedPolicy"/>), said at Warning and offered as an unrecognised setting
+    /// is — the existing code and class, because the extension renders the codes it knows. Its own method, after <see cref="SettingsUnread"/>, calling
+    /// neither it nor <see cref="Record"/>: when both an unreadable file and a pinned policy hold, each writes its own note, under its own subject.
+    /// </summary>
+    internal static void PinnedPolicy(IReadOnlyList<UnrecognisedSetting> pinned, Noticing noticing, Serilog.ILogger log)
+    {
+        foreach (var setting in pinned)
+        {
+            log.Warning("{Pinned}", setting.Sentence);
+            noticing.Offered(() => Note(ServerNoticeCodes.UnrecognisedSetting, StoodDown, setting.Key, setting.Sentence));
+        }
+    }
+
     /// <summary>Every unrecognised setting and every storage note this run has, written down.</summary>
     internal static void Record(
         PanelSettings settings, IReadOnlyList<StorageNote> storage, Noticing noticing,

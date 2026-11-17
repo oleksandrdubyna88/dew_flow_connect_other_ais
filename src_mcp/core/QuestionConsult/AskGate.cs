@@ -65,6 +65,12 @@ public sealed record AskGateInput
     /// The default is the AI's own question, as every other default here is the ordinary call.
     /// </summary>
     public AskDoor Door { get; init; } = AskDoor.Conversation;
+
+    /// <summary>
+    /// Policy auto, read from the settings (<c>todo/PLAN_auto_never_asks_a_person.md</c> § 4.4, O3). Default false: every table row
+    /// above is the shipped gate. Under it the person is never asked first — see <see cref="AskGate.Decide"/>.
+    /// </summary>
+    public bool Autonomous { get; init; }
 }
 
 /// <summary>The two places a question reaches the person (<c>research/PLAN_ask_human_is_for_the_gate.md</c>).</summary>
@@ -88,6 +94,12 @@ public abstract record AskDecision
 
     public sealed record Refused(string Sentence) : AskDecision;
 
+    /// <summary>
+    /// Policy auto, the AI's own question with no proof: it goes to the consultants first and the person is not asked (O3).
+    /// </summary>
+    /// <param name="Note">The rejected-consultId clause, or empty when no id was passed.</param>
+    public sealed record ConsultFirst(string Note) : AskDecision;
+
     private AskDecision() { }
 }
 
@@ -109,20 +121,46 @@ public abstract record AskDecision
 /// <para><b>A held gate's question is not the AI's</b> (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G7): on the
 /// card door the phase rule does not apply — the gate is asking the person, the consultants cannot release a hold,
 /// and the batches count the AI's own questions. Only a production risk keeps D8 there.</para>
+/// <para><b>Under policy auto</b> (<see cref="AskGateInput.Autonomous"/>, O3) the table above is not asked: see <c>Autonomously</c> — the AI's
+/// own question goes to the consultants first, whatever the phase and the batches say. The one exception is a production risk
+/// on the AI's own question: it keeps today's decision, phase exclusion included (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c> § 9.1) — in
+/// Planning or Released the person is asked at once, with an empty note; the reply still carries the instruction to ask them in the conversation.</para>
 /// </remarks>
 public static class AskGate
 {
-    public static AskDecision Decide(AskGateInput input)
-    {
-        if (input.ProductionRisk && string.IsNullOrWhiteSpace(input.RiskReason))
-        {
-            return new AskDecision.Refused(
-                "productionRisk needs a riskReason — say in one sentence what a wrong answer could do to production. "
-                + "Without it the question is an ordinary one, and goes through the question consultant like any other in its phase");
-        }
+    public static AskDecision Decide(AskGateInput input) =>
+        RiskWithoutAReason(input) ? new AskDecision.Refused(NeedsAReason)
+        : input.Autonomous ? Autonomously(input)
+        : AsksNoConsultant(input) ? new AskDecision.Allowed(string.Empty, Counted: false, ConsultBeside: false)
+        : Building(input);
 
-        return AsksNoConsultant(input) ? new AskDecision.Allowed(string.Empty, Counted: false, ConsultBeside: false) : Building(input);
-    }
+    /// <summary>A production risk with no reason is refused in every mode and under every policy, before anything else is asked.</summary>
+    private static bool RiskWithoutAReason(AskGateInput input) => input.ProductionRisk && string.IsNullOrWhiteSpace(input.RiskReason);
+
+    private const string NeedsAReason =
+        "productionRisk needs a riskReason — say in one sentence what a wrong answer could do to production. "
+        + "Without it the question is an ordinary one, and goes through the question consultant like any other in its phase";
+
+    /// <summary>
+    /// Policy auto (O3) — the person is never asked first. A held gate's card is answered by the service at once, so no consultant
+    /// runs beside it; a production risk on the AI's own question is today's decision — the phase exclusion included, so in Planning or
+    /// Released it reaches the person at once with an empty note (the reply still tells the AI to ask them in the conversation, <c>Reply</c> in
+    /// <c>AskHumanService</c>); any other question of the AI's goes to the consultants first, in every phase and mode, unless a verified
+    /// consultId or a stand-down lets it through to the person. For those, the phase rule and the free batches decide nothing here; the
+    /// batches stay a record of what reached the person.
+    /// </summary>
+    private static AskDecision Autonomously(AskGateInput input) =>
+        input switch
+        {
+            { Door: AskDoor.Card } => new AskDecision.Allowed(string.Empty, Counted: false, ConsultBeside: false),
+            { ProductionRisk: true } => Decide(input with { Autonomous = false }),
+            { Proof: ConsultProof.Verified verified } => new AskDecision.Allowed(verified.Note, CountsToday(input), ConsultBeside: false),
+            { Unavailable.Length: > 0 } => new AskDecision.Allowed(StoodDown(input), CountsToday(input), ConsultBeside: false),
+            _ => new AskDecision.ConsultFirst(Rejected(input).Trim()),
+        };
+
+    private static bool CountsToday(AskGateInput input) =>
+        input.Phase == AskPhase.Building && input.Mode != QuestionMode.Off && !input.PhaseUnreadable;
 
     /// <summary>
     /// The building phase: a production risk first — it needs no phase count, so an unreadable phase record does not
@@ -153,15 +191,21 @@ public static class AskGate
     {
         if (input.Unavailable.Length > 0)
         {
-            return new AskDecision.Allowed(
-                $"the question consultant is required here and stood down: {input.Unavailable} — the person is asked",
-                Counted: true, ConsultBeside: false);
+            return new AskDecision.Allowed(StoodDown(input), Counted: true, ConsultBeside: false);
         }
 
         return input.Mode == QuestionMode.Require
             ? new AskDecision.Refused(Refusal(input))
             : new AskDecision.Allowed(Reminder(input), Counted: true, ConsultBeside: false);
     }
+
+    /// <summary>
+    /// D9: nobody could be asked, so the person is. Under policy auto the phase rule decides nothing, so the sentence does not say the consultant
+    /// "is required here"; it names a rejected consultId like every other sentence of the gate (D14 (a)). Every other policy: today's, byte for byte.
+    /// </summary>
+    private static string StoodDown(AskGateInput input) => input.Autonomous
+        ? $"the question consultant stood down: {input.Unavailable} — under policy auto it comes first, and none could be had, so the person is asked{Rejected(input)}"
+        : $"the question consultant is required here and stood down: {input.Unavailable} — the person is asked";
 
     /// <summary>
     /// Off, the plan stage, the release — and a held gate's own question, which is the gate asking rather than the AI

@@ -23,7 +23,7 @@ namespace CoaiMcp.Tests;
 public sealed class ADocumentSessionIsKeptApartTests
 {
     private static SessionState Fresh(Stage stage = Stage.PlanReview) =>
-        new("s1", "/repo", "main", PanelConfig.Uniform(3, 5)) { Stage = stage };
+        new("s1", "/repo", "main", PanelConfig.Uniform(3, 5, StagePolicy.Human)) { Stage = stage };
 
     /// <summary>A document session: the same state carrying the document it is about.</summary>
     private static SessionState Doc(Stage stage = Stage.DocumentReview) =>
