@@ -1,6 +1,8 @@
+import assert from 'node:assert/strict';
 import { CatalogTurns } from '../catalogTurns';
 import { overlayKey, Side } from '../coaiInstall';
 import {
+  CLAIM_STALE_MS,
   LayeredSetting,
   MigrationOutcome,
   MigrationPorts,
@@ -12,7 +14,7 @@ import {
   userLayerOf,
 } from '../onExhaustedMigration';
 import { inForceOf } from '../onExhaustedTold';
-import { readOverlay } from '../sideSettings';
+import { readOverlay, writeOverlay } from '../sideSettings';
 
 /**
  * The doubles every E2.S2 migration test stands on (todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.8.0).
@@ -50,9 +52,7 @@ export async function until(done: () => boolean, what: string): Promise<void> {
   for (let turn = 0; turn < 200 && !done(); turn += 1) {
     await flush();
   }
-  if (!done()) {
-    throw new Error(`never reached: ${what}`);
-  }
+  assert.ok(done(), `never reached: ${what}`);
 }
 
 /** The fake clock the `now` port reads. */
@@ -616,4 +616,46 @@ export function usualSettings(workspace: boolean): FakeUserSettings {
   }
 
   return settings;
+}
+
+/** One world: the client store of one machine, the settings file and the clock the windows share. */
+export interface World {
+  readonly client: ClientState;
+  readonly settings: FakeUserSettings;
+  readonly clock: FakeClock;
+}
+
+export function world(workspace = true, state: Record<string, unknown> = usualState()): World {
+  return { client: new ClientState(state), settings: usualSettings(workspace), clock: new FakeClock() };
+}
+
+/** One activation: a new window of the client, with every pause answered at once unless the options say otherwise. */
+export function activation(of: World, name: string, options: Partial<RigOptions> = {}): Rig {
+  const manual = options.pauses !== undefined || options.auto === false;
+
+  return new Rig({
+    client: of.client,
+    settings: of.settings,
+    name,
+    pauses: options.pauses ?? new Pauses(of.clock),
+    auto: !manual,
+    ...options,
+  });
+}
+
+/** The person chooses a value in a side's overlay, through the real writer, in a window of their own. */
+export function chooseInOverlay(client: ClientState, side: Side, value: string): FakeWindow {
+  const chooser = client.window();
+  void writeOverlay(chooser, side, 'onExhausted', value);
+
+  return chooser;
+}
+
+/** Another activation after a host died: the clock passes the claim's age and a new window of the same client starts. */
+export function afterADeath(of: World): void {
+  of.clock.advance(CLAIM_STALE_MS + 1);
+}
+
+export function overlayOf(client: ClientState, key: string): Record<string, unknown> {
+  return client.value()[key] as Record<string, unknown>;
 }
