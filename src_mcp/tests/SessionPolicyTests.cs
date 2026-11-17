@@ -132,7 +132,15 @@ public sealed class SessionPolicyTests : IDisposable
     public void TheNoticesAreWithdrawnBeforeTheSessionIsSaved_AndAFailedSaveIsRetried()
     {
         var session = Planted("n-1");
-        var failing = new SessionStore(_data.Path) { FileWriter = (_, _) => throw new IOException("the disk is full") };
+        var atSave = string.Empty;
+        var failing = new SessionStore(_data.Path)
+        {
+            FileWriter = (_, _) =>
+            {
+                atSave = Read("n-1").Status;
+                throw new IOException("the disk is full");
+            },
+        };
 
         var first = PolicyOver(failing, new Escalations(_data.Path)).Released(session);
 
@@ -143,9 +151,8 @@ public sealed class SessionPolicyTests : IDisposable
         var onDisk = Store().Load(Repo, Branch)!;
         onDisk.State.HumanGate.Should().BeTrue("the save failed, so the hold stands");
         onDisk.Rounds[^1].Note.Should().BeEmpty();
-        var notice = Read("n-1");
-        notice.Status.Should().Be(EscalationStatuses.Expired, "the withdrawal came BEFORE the save");
-        var t1 = notice.ExpiredUtc;
+        atSave.Should().Be(EscalationStatuses.Expired, "the withdrawal came BEFORE the save");
+        Read("n-1").Status.Should().Be(EscalationStatuses.Open, "a failed attempt puts back what it withdrew");
         Lines(LogEventLevel.Warning).Should().ContainSingle(l => l.Contains("could not save the release", StringComparison.Ordinal));
 
         var second = Policy().Released(Store().Load(Repo, Branch)!);
@@ -153,7 +160,7 @@ public sealed class SessionPolicyTests : IDisposable
         second.NotWritten.Should().BeEmpty();
         var released = Store().Load(Repo, Branch)!;
         released.State.HumanGate.Should().BeFalse();
-        Read("n-1").ExpiredUtc.Should().Be(t1, "the second pass rewrites no card");
+        Read("n-1").Status.Should().Be(EscalationStatuses.Expired, "the second pass withdraws it again");
         Lines(LogEventLevel.Warning).Should().Contain(l => l.Contains("auto released the", StringComparison.Ordinal));
     }
 
@@ -162,16 +169,18 @@ public sealed class SessionPolicyTests : IDisposable
     {
         var session = Planted("n-1", "q-2");
         var bytes = FileText();
+        var written = new List<string>();
 
-        var first = PolicyOver(Store(), FailingFor("n-1", _data.Path)).Released(session);
+        var first = PolicyOver(Store(), FailingFor("n-1", _data.Path, written.Add)).Released(session);
 
         first.Session.Should().BeSameAs(session);
         first.NotWritten.Should().Be(LegacyHold.NoticeNotWithdrawn);
         FileText().Should().Be(bytes, "nothing is saved");
         Store().Load(Repo, Branch)!.State.HoldQuestions.Should().Equal("n-1", "q-2");
         Read("n-1").Status.Should().Be(EscalationStatuses.Open);
-        Read("q-2").Status.Should().Be(EscalationStatuses.Expired, "every notice is tried: no short circuit");
-        var q2 = Read("q-2").ExpiredUtc;
+        written.Count(f => Path.GetFileName(f) == "q-2.json").Should().Be(2, "every notice is tried (no short circuit), and the one withdrawn is put back");
+        Read("q-2").Status.Should().Be(EscalationStatuses.Open, "a failed attempt puts back what it withdrew");
+        Read("q-2").ExpiredUtc.Should().BeEmpty();
         Lines(LogEventLevel.Warning).Should().ContainSingle(l => l.Contains("n-1", StringComparison.Ordinal) && l.Contains("could not withdraw", StringComparison.Ordinal));
         Said("auto released").Should().BeEmpty();
 
@@ -180,7 +189,71 @@ public sealed class SessionPolicyTests : IDisposable
         second.NotWritten.Should().BeEmpty();
         Store().Load(Repo, Branch)!.State.HumanGate.Should().BeFalse();
         Read("n-1").Status.Should().Be(EscalationStatuses.Expired);
-        Read("q-2").ExpiredUtc.Should().Be(q2, "an expired card is not rewritten");
+        Read("q-2").Status.Should().Be(EscalationStatuses.Expired);
+    }
+
+    // ---------- D16, J8 residual (c): a failed attempt puts back what it withdrew ----------
+
+    [Fact]
+    public void AWithdrawalThatFailsAfterAnotherSucceeded_PutsTheFirstCardBack_AndTheHoldStands()
+    {
+        var session = Planted("n-1", "q-2");
+        var bytes = FileText();
+
+        var first = PolicyOver(Store(), FailingFor("q-2", _data.Path)).Released(session);
+
+        first.Session.Should().BeSameAs(session);
+        first.NotWritten.Should().Be(LegacyHold.NoticeNotWithdrawn);
+        Read("n-1").Status.Should().Be(EscalationStatuses.Open, "the first withdrawal of this attempt is undone");
+        Read("n-1").ExpiredUtc.Should().BeEmpty();
+        Read("q-2").Status.Should().Be(EscalationStatuses.Open);
+        FileText().Should().Be(bytes, "nothing is saved");
+        Store().Load(Repo, Branch)!.State.HoldQuestions.Should().Equal("n-1", "q-2");
+        Said("auto released").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AFailedSave_PutsEveryWithdrawnCardBack_AndTheHoldStands()
+    {
+        var session = Planted("n-1", "q-2");
+        var failing = new SessionStore(_data.Path) { FileWriter = (_, _) => throw new IOException("the disk is full") };
+
+        var first = PolicyOver(failing, new Escalations(_data.Path)).Released(session);
+
+        first.Session.Should().BeSameAs(session);
+        first.NotWritten.Should().Be(LegacyHold.SessionNotSaved);
+        Read("n-1").Status.Should().Be(EscalationStatuses.Open);
+        Read("n-1").ExpiredUtc.Should().BeEmpty();
+        Read("q-2").Status.Should().Be(EscalationStatuses.Open);
+        Read("q-2").ExpiredUtc.Should().BeEmpty();
+        Store().Load(Repo, Branch)!.State.HumanGate.Should().BeTrue();
+    }
+
+    [Fact]
+    public void APutBackThatFails_IsAWarning_NeverANewReason()
+    {
+        var session = Planted("n-1", "q-2");
+        var writes = 0;
+        var escalations = new Escalations(_data.Path)
+        {
+            Writer = (file, text) =>
+            {
+                var name = Path.GetFileName(file);
+                if (name == "q-2.json" || (name == "n-1.json" && Interlocked.Increment(ref writes) > 1))
+                {
+                    throw new IOException("the disk refused the write");
+                }
+
+                AtomicJson.Write(file, text);
+            },
+        };
+
+        var first = PolicyOver(Store(), escalations).Released(session);
+
+        first.Session.Should().BeSameAs(session);
+        first.NotWritten.Should().Be(LegacyHold.NoticeNotWithdrawn, "the reason is the withdrawal's, not the restore's");
+        Read("n-1").Status.Should().Be(EscalationStatuses.Expired, "the restore failed, and the next call tries again");
+        Lines(LogEventLevel.Warning).Should().Contain(l => l.Contains("could not offer", StringComparison.Ordinal) && l.Contains("n-1", StringComparison.Ordinal));
     }
 
     // ---------- T32: any other session is left alone ----------

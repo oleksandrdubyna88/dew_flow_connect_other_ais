@@ -2359,7 +2359,7 @@ the round's `note` in the session file and `coai.db`'s `rounds.note`, and a verd
 marker is a hold from before `auto`, and under `auto` the first call that loads it releases it: `begin`, `resolve`, `status`,
 `ask_human` or the fresh-document check, through `SessionPolicy`. The order is the safety argument — the marker is read BEFORE the
 config is stamped (stamping a standing hold would make it this build's, and so a person's, for good); the person's answer on file wins
-and is read again after the withdrawal, putting the cards back when it is found; every notice is withdrawn BEFORE the session is saved;
+and is read again after the withdrawal, putting the cards back when it is found; every notice is withdrawn BEFORE the session is saved, and an attempt that fails (a withdrawal that cannot be written, or the save) puts back the cards IT withdrew, best effort, so a policy switched to `human` meanwhile leaves no card the person cannot answer (a restore that fails is a warning, never a new reason; the first of two cards withdrawn and the second failing is the J8 (c) case);
 the release is noted on the held round (`released by policy auto: …`) in the same save, and in `coai.db` by a one-column update
 after it; the stage does not move, and ONE `resolve` then advances it through `PanelService.Finish`. A settings file that exists and
 cannot be read runs `auto` and releases nothing until it reads. A hold this build raised under `human` keeps its authority:

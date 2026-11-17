@@ -171,6 +171,30 @@ internal sealed class SessionPolicy(
         }
     }
 
+    // Best effort, the one call the answer race and the two failed attempts share: the cards THIS attempt withdrew are offered again. A restore
+    // that fails is a Warning and never a new reason (D16). Answers how many were put back.
+    private int PutBack(PersistedSession session, List<string> withdrawn)
+    {
+        var notRestored = new List<string>();
+        var restored = 0;
+        foreach (var id in withdrawn)
+        {
+            switch (escalations.Restore(id))
+            {
+                case Restoration.Restored:
+                    restored++;
+                    break;
+                case Restoration.Failed:
+                    notRestored.Add(id);
+                    break;
+            }
+        }
+
+        WarnNotOffered(session, notRestored);
+
+        return restored;
+    }
+
     // Steps 4 to 8: the release itself.
     private Release Write(PersistedSession session)
     {
@@ -197,6 +221,10 @@ internal sealed class SessionPolicy(
                 "policy auto could not withdraw notice(s) {Ids} of the {Stage} hold of session {SessionId} — the hold stays, and the next call tries again",
                 string.Join(", ", failed), StageOf(session), session.State.SessionId);
 
+            // A failed attempt leaves nothing half done: the cards this call did withdraw are put back, so a hold that is later switched to
+            // `human` (and so never retried) does not keep a card the person can no longer answer.
+            PutBack(session, withdrawn);
+
             return new Release(session, LegacyHold.NoticeNotWithdrawn);
         }
 
@@ -204,22 +232,7 @@ internal sealed class SessionPolicy(
         // today's rules, so what this call withdrew is put back — the person can answer again — and nothing is released.
         if (CurrentAnswer.For(session, escalations) is not null)
         {
-            var notRestored = new List<string>();
-            var restored = 0;
-            foreach (var id in withdrawn)
-            {
-                switch (escalations.Restore(id))
-                {
-                    case Restoration.Restored:
-                        restored++;
-                        break;
-                    case Restoration.Failed:
-                        notRestored.Add(id);
-                        break;
-                }
-            }
-
-            WarnNotOffered(session, notRestored);
+            var restored = PutBack(session, withdrawn);
             log.Information(
                 "a person answered the {Stage} hold of session {SessionId} while policy auto was releasing it — their answer stands, nothing is released, and {Restored} notice(s) are offered again",
                 StageOf(session), session.State.SessionId, restored);
@@ -242,6 +255,8 @@ internal sealed class SessionPolicy(
             log.Warning(
                 e, "policy auto could not save the release of the {Stage} hold of session {SessionId} — the hold stays, and the next call tries again",
                 StageOf(session), session.State.SessionId);
+
+            PutBack(session, withdrawn);
 
             return new Release(session, LegacyHold.SessionNotSaved);
         }
