@@ -1,8 +1,10 @@
 # SPEC — story S1 (cornerstone): the agy hook allows a reader only inside the folders it was given
 
-> Status: **coded and tested, 2026-11-16 (e31c1542), by Fable, written before its code; not merged.** Parent plan:
+> Status: **IMPLEMENTED, 2026-11-17** (shipped in #1006, written by Fable before its code). Parent plan:
 > [PLAN_the_agy_hook_checks_the_path.md](PLAN_the_agy_hook_checks_the_path.md) (`## Stories`, S1). Spec by Fable, code by
 > Sonnet, review by Opus. Scope: `AntigravityReadOnly.Decide`, its tests in `src_mcp`, and the server binary test.
+>
+> **Deviation from this text.** `Decide` ships as `Decide(string payload, EntryReader? read = null, TextWriter? log = null)`, and the last-resort catch of section 1 ("Total") covers the WHOLE of `Decide`, not D2–D7 alone: a lone UTF-16 surrogate in `toolCall.name` threw outside it. That one case is denied with `DenyReason`, not `DenyOutsideReason`; D2–D7 keep `DenyOutsideReason`. Each catch writes one stderr line naming the exception type only. The parent plan's status line has the whole record.
 
 The coder re-discovers nothing: this file is the brief. Where it and the plan differ, section 7 says so.
 

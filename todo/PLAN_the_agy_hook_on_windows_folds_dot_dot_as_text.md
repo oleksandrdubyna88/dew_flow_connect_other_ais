@@ -5,7 +5,7 @@
 > the Team server and WSL are not affected.
 >
 > Found by the Opus review of the parent plan's branch, 2026-11-16; parent:
-> [PLAN_the_agy_hook_checks_the_path.md](PLAN_the_agy_hook_checks_the_path.md). The parent's path check ships with these two gaps stated as
+> [PLAN_the_agy_hook_checks_the_path.md](../research/PLAN_the_agy_hook_checks_the_path.md). The parent's path check ships with these two gaps stated as
 > limits. They are moved here so the parent plan does not change a second time after its approval.
 
 ## 1. Problem
@@ -33,7 +33,7 @@ The model sends:
 3. Windows folds the text to `C:\Users\me\.ssh\id_rsa` and reads outside the root.
 
 The read goes through only if agy itself allows it. agy on Windows is not measured. On Linux agy denies `$HOME` by itself. Scenario B7 of
-[the S1 spec](PLAN_the_agy_hook_checks_the_path_S1_spec.md) (`job-1/l3/../secret.txt`) passes on Windows for the wrong reason.
+[the S1 spec](../research/PLAN_the_agy_hook_checks_the_path_S1_spec.md) (`job-1/l3/../secret.txt`) passes on Windows for the wrong reason.
 
 ### W2. A network path is looked up before it is judged
 
