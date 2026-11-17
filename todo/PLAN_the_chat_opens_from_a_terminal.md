@@ -516,9 +516,11 @@ what stage 3 touches and the text above did not name:
 | R7 | The registry path finds the right session on each of the three users; the fallback list works when two sessions share a name. | E2 |
 |  | 2026-11-12, VSIX 0.86.901 (abf58a7b): PASSED — the owner's report. Not reported, so still owed (none is a release condition): M-O2…M-O7 of the S2 spec and the look of a long prompt in *Asked*. The VSIX's extension code is the merged head's: from abf58a7b to e060d77e only tests changed under `src_vs_code`. |  |
 | R8 | After a VS Code reload, creds reopens its terminals and the conversations re-attach. | E3 |
+|  | 2026-11-17, VSIX 0.87.901 (b3abb791, the merged E3 head): PASSED — the owner's report. Not reported: who brought the terminals back (VS Code or creds), whether a name appeared twice, and the full-restart run; none is a release condition. |  |
 | R9 | With a terminal focused, the command palette no longer lists `coai.chatWithOtherAi` (its `!terminalFocus` entry). If it IS listed: with a Claude tab as the active editor, running it must not interrupt the terminal's program (see *What this plan does NOT do*). | E1 |
 |  | 2026-11-11, VSIX 0.85.902 (a2d7d416): PASSED — the owner's report. The VSIX's extension code is the merged head's: from a2d7d416 to the head only the conventions pin, two `.claude/hooks` files and `POST_DEPLOY.md` changed (a merge of `main`). |  |
 | R10 | Ctrl+Alt+G in a `Creds:` tmux terminal opens go-to and prints nothing in the pane. | E3 |
+|  | 2026-11-17, VSIX 0.87.901 (b3abb791, the merged E3 head): PASSED — the owner's report. |  |
 | R11 | With a user-level `commandsToSkipShell` that lacks the ids, the notification appears once, *Add* appends them, and R1 then passes. | E3 |
 
 ## Definition of Done
