@@ -1,6 +1,7 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **epoch 2 open, 2026-11-16 — re-approved by the gate the same day (the interim document review of the whole plan,
+> Status: **E1 (the server) built 2026-11-17, in PR #1011, code gate `proceed`; E2 and E3 not started.** Before that:
+> **epoch 2 open, 2026-11-16 — re-approved by the gate the same day (the interim document review of the whole plan,
 > `proceed`, 4 of 4 reviewers; four findings folded, one rejected with its reason in § 4.3). Epoch 1 stopped at its second
 > change (entry 1.2), accepted while E1.S1's
 > spec was written, and halted all code until the whole plan was reviewed again. The whole plan was revised the same day

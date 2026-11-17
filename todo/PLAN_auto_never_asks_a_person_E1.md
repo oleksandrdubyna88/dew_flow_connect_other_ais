@@ -1,6 +1,8 @@
 # PLAN — E1 stories: the server, the whole `auto` contract (`coai-mcp`)
 
-> Status: **plan only, nothing coded — revised to epoch 2 of the parent, 2026-11-16.** Written by Opus when the epic
+> Status: **built 2026-11-17 on `feat/auto-mode-e1`, in PR #1011. S1–S3 were coded, each story was judged by Opus,
+> and the coai code gate returned `proceed` (session 50ab0468, epic 1/3). Not yet merged or released.** Before that:
+> **plan only, nothing coded — revised to epoch 2 of the parent, 2026-11-16.** Written by Opus when the epic
 > started, on branch `feat/auto-mode-e1`; the parent then stopped at its second change (entry 1.2, the released
 > state), was revised whole and re-approved as epoch 2 the same day, and this document and the S1 spec were brought to
 > it before any code (U1 is entry 1.2; U2 and U3 are settled in the parent as non-changes, § 10). Epic E1 of
@@ -827,7 +829,10 @@ instead of "nothing to decide" or "nothing was reviewed", because `resolve` refu
 policy keeps today's words byte for byte. § 9.2's tests 9 and 10 assert the card count unchanged rather than
 `Cards(h) == 0`, because their setup posts the hold's notice. The S1 spec's residual (d) and D13 are kept by code: a
 notice is put back only under the session's claim, read again, and a released hold with no rounds still names its
-release.
+release. After CodeRabbit on #1011, two more fixes. The spec's T59 (`TryRead_TellsAFileThatGaveNothing_FromOneThatIsNotThere`)
+is now four theories (`Values`, `Unusable`, `Busy`, `Missing`) with the same inputs. A side whose root settings cannot be
+adopted now reads as a policy that could not be read (`PolicyUnread`), so it releases nothing, as the parent's § 6
+requires ("a failed read authorizes no release").
 
 ## 11. Definition of Done for E1
 
