@@ -85,8 +85,9 @@ export interface LogRow {
    */
   readonly status: 'running' | 'done' | 'interrupted' | 'awaiting' | 'skipped';
   /**
-   * Why a SKIPPED round did not run, with `×N` when one row stands for N skips — empty for every round
-   * that ran, and for every conversation (`noteOf`).
+   * Why a SKIPPED round did not run, with `×N` when one row stands for N skips; or what policy auto decided for a
+   * round that ran — its reason, or that it released a hold an older build had raised. Empty otherwise, and for
+   * every conversation (`noteOf`).
    */
   readonly note: string;
 
@@ -1791,10 +1792,13 @@ ${teamSectionHtml(waitingFor())}
       return asked + '<div class="reviewer skipnote">Nobody reviewed this round, and it did not block: '
         + esc(row.note || 'the server recorded no reason') + '</div>';
     }
+    // What policy auto decided for a round that RAN: its reason, or that it released an older build's hold.
+    // A skip said its note above, and saying it twice is a defect.
+    var noted = row.note ? '<div class="reviewer roundnote">' + esc(row.note) + '</div>' : '';
     if (row.reviewers.length === 0) {
-      return asked + '<div class="reviewer">This round recorded no reviewer detail — it was written by an older server.</div>';
+      return asked + noted + '<div class="reviewer">This round recorded no reviewer detail — it was written by an older server.</div>';
     }
-    var lines = asked;
+    var lines = asked + noted;
     for (var i = 0; i < row.reviewers.length; i++) {
       var line = row.reviewers[i];
       var slash = line.indexOf('/');
