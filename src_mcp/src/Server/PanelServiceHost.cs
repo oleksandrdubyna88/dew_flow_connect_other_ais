@@ -52,6 +52,11 @@ public sealed class PanelServiceHost : IPanelServiceSource
     // would keep saying the wrong thing; a read for the same stamp is skipped only when it fails for the same reason.
     private string _unreadWhy = string.Empty;
 
+    // The adoption sentence last said. An adoption that fails is retried on every call while the side has no settings file of its own, and
+    // each retry yields the SAME sentence: it is said (Warning and notice) once, a different sentence is said again, and a read that gave
+    // values (`Published`) forgets it.
+    private string _adoptionSaid = string.Empty;
+
     /// <param name="noticing">
     /// Where this host's services write their notices. It is REQUIRED and has no default, because a
     /// defaulted one is the trap story 2.3.2's plan round named: production takes the quiet path
@@ -190,7 +195,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
 
     private PanelService Published((DateTime Written, long Length) stamp, PanelService rebuilt)
     {
-        (_stamp, _current, _unreadAt, _unreadWhy) = (stamp, rebuilt, Never, string.Empty);
+        (_stamp, _current, _unreadAt, _unreadWhy, _adoptionSaid) = (stamp, rebuilt, Never, string.Empty, string.Empty);
         _log.Information("settings reloaded — the panel's file changed on disk");
 
         return _current;
@@ -212,7 +217,14 @@ public sealed class PanelServiceHost : IPanelServiceSource
     // nobody watching. It has a log and, since story 2.3.3, the page as well. No flag guards this one:
     // `AdoptRootSettings` yields a sentence only when it actually MOVED something, so the build after an adoption says nothing.
     private Action<string> Noted(string dataDir) =>
-        note => StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), _noticing, _log);
+        note =>
+        {
+            if (note != _adoptionSaid)
+            {
+                _adoptionSaid = note;
+                StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), _noticing, _log);
+            }
+        };
 
     /// <param name="first">
     /// Whether this is the constructor's build. A PARAMETER rather than a field somebody has to

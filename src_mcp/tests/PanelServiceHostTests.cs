@@ -312,6 +312,13 @@ public sealed class PanelServiceHostTests : IDisposable
         public IReadOnlyList<string> Notes() =>
             [.. Events.Where(e => e.Level == Serilog.Events.LogEventLevel.Warning).Select(e => e.RenderMessage()).Where(m => m.Contains("could not be read"))];
 
+        /// <summary>The Warnings of an adoption that failed (or happened): <c>StartupNotices.Adopted</c>'s own line.</summary>
+        public IReadOnlyList<string> AdoptionWarnings() =>
+            [.. Events.Where(e => e.Level == Serilog.Events.LogEventLevel.Warning).Select(e => e.RenderMessage()).Where(m => m.StartsWith("data directory:", StringComparison.Ordinal))];
+
+        public IReadOnlyList<CoaiMcp.Core.Notices.ServerNotice> AdoptionNotices() =>
+            [.. Notices.Where(n => n.Code == CoaiMcp.Core.Notices.ServerNoticeCodes.SettingsAdopted)];
+
         public IReadOnlyList<CoaiMcp.Core.Notices.ServerNotice> NoticesOfTheNote() =>
             [.. Notices.Where(n => ((n.Detail?.Length > 0 ? n.Detail : n.Title) ?? string.Empty).Contains("could not be read"))];
     }
@@ -506,12 +513,32 @@ public sealed class PanelServiceHostTests : IDisposable
         settings.PolicyUnread.Should().BeTrue("the operator's settings exist in the root and could not be adopted: auto here is a default, not a choice");
         settings.Rounds.IsAutonomous.Should().BeTrue();
         File.Exists(sideSettings).Should().BeFalse("nothing was adopted");
+        for (var again = 0; again < 3; again++)
+        {
+            host.Current.Settings.PolicyUnread.Should().BeTrue("every call retries the adoption");
+        }
+
+        heard.AdoptionWarnings().Should().ContainSingle("an adoption that keeps failing the same way is said once, however many calls retry it");
+        heard.AdoptionNotices().Should().ContainSingle("and offered once");
+
+        File.WriteAllText(rootSettings, "[1]");
+        host.Current.Settings.PolicyUnread.Should().BeTrue("still not adoptable");
+        host.Current.Settings.PolicyUnread.Should().BeTrue();
+        heard.AdoptionWarnings().Should().HaveCount(2, "a different failure is said again, once");
+        heard.AdoptionNotices().Should().HaveCount(2);
+        heard.AdoptionWarnings()[1].Should().NotBe(heard.AdoptionWarnings()[0]);
+
+        File.WriteAllText(rootSettings, "{ not json");
+        host.Current.Settings.PolicyUnread.Should().BeTrue();
+        heard.AdoptionWarnings().Should().HaveCount(3, "the first failure again, after a different one, is a change");
+
         heard.NoticesOfTheNote().Select(SentenceOf).Should().Contain(s => s.Contains("Auto by default") && s.Contains(SettingsFile.NotAdopted), "the person is told the settings are unread, and why");
 
         File.WriteAllText(rootSettings, BusyHuman);
         var repaired = host.Current.Settings;
 
         repaired.PolicyUnread.Should().BeFalse("the root file was adopted and read");
+        heard.AdoptionWarnings().Should().HaveCount(4, "the adoption itself is said once, as it always was");
         repaired.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, "the operator's own policy");
     }
 
