@@ -12,14 +12,18 @@ import { bodyOf, sourceFiles, sourceOf } from './sourceReading';
  * editor, which is `terminalReattachScenario.ts` in CI and the owner's R8.</p>
  */
 
-/** The one place the window's terminals become `LiveTerminal`s: the `exited` flag is read from the process's `exitStatus`. */
-const EXIT_MAP = /exitStatus\s*!==\s*undefined/u;
+/** Any test of a terminal's `exitStatus` against `undefined`, either way round: the flag of a terminal that has ended. */
+const EXIT_MAP = /exitStatus\s*[!=]==\s*undefined/u;
 
-test('the window’s terminals are read as LiveTerminal in ONE place', () => {
+test('the window’s terminals are mapped to LiveTerminal by ONE map; liveNameOf is the one single-terminal check', () => {
   const holders = sourceFiles().filter((file) => EXIT_MAP.test(sourceOf(file)));
 
-  // The scan's own proof: it still finds the one map, so a reformatted line cannot make it match nothing and pass for ever.
-  assert.deepEqual(holders, ['terminalHost.ts'], `the exitStatus map of LiveTerminal is in ${holders.join(', ')}, not only in terminalHost.ts`);
+  // The scan's own proof: it still finds both, so a reformatted line cannot make it match nothing and pass for ever.
+  assert.deepEqual(holders, ['remoteSessionHost.ts', 'terminalHost.ts'], `a test of exitStatus is in ${holders.join(', ')}: only terminalHost.ts (the LiveTerminal map) and liveNameOf in remoteSessionHost.ts may hold one`);
+  const remote = sourceOf('remoteSessionHost.ts');
+
+  assert.equal(remote.match(new RegExp(EXIT_MAP.source, 'gu'))?.length, 1, 'remoteSessionHost.ts holds more than its one single-terminal check');
+  assert.ok(EXIT_MAP.test(bodyOf(remote, 'const liveNameOf = ')), 'the one exitStatus test in remoteSessionHost.ts is not liveNameOf');
   for (const file of ['chatReturnCommand.ts', 'remoteSessionHost.ts']) {
     assert.ok(sourceOf(file).includes('liveTerminals('), `${file} does not read the window's terminals through liveTerminals(`);
   }
@@ -42,13 +46,27 @@ test('S1-T11: a terminal that opens re-attaches the conversation of its name', (
 });
 
 test('S1-T11: a restored terminal conversation re-attaches after the serializer restores it', () => {
-  const text = sourceOf('chatRestorePanel.ts');
-  const restore = bodyOf(text, 'export async function restoreChatTab(');
-  const helper = bodyOf(text, 'function reattachRestored(');
+  const restore = bodyOf(sourceOf('chatRestorePanel.ts'), 'export async function restoreChatTab(');
+  const host = bodyOf(sourceOf('terminalHost.ts'), 'export function reattachRestored(');
 
   assert.ok(at(restore, 'reattachRestored(', 'restoreChatTab') > at(restore, 'restoreConversation(', 'restoreChatTab'), 'the restore does not re-attach AFTER restoreConversation(');
-  assert.ok(helper.includes("source.kind === 'terminal'"), 'the restore trigger does not look at the record’s source kind');
-  assert.ok(helper.includes('reattachByName(panels, source.name)'), 'the restore trigger does not re-attach by the record’s terminal name');
+  assert.ok(restore.includes('reattachRestored(deps.panels, decision.record.source)'), 'the restore trigger does not hand over the record\u2019s source');
+  assert.ok(host.includes('reattachRestoredIn(win, source)'), 'the restore trigger does not run the pure restore rule over the source');
+});
+
+test('S1-T19: every re-attach call a door or a restore makes is guarded, so a defect there never fails the press', () => {
+  const host = sourceOf('terminalHost.ts');
+
+  for (const opening of ['function reattachBy(', 'export function confirmReattach(']) {
+    assert.ok(bodyOf(host, opening).includes('guarded('), `${opening} is not guarded: a defect in it fails the door or the restore`);
+  }
+  assert.ok(bodyOf(host, 'export function reattachRestored(').includes('reattachBy('), 'the restore trigger does not go through the guarded road');
+  assert.ok(host.includes('export const reattachByName = ') && /reattachByName = [^\n]*reattachBy\(/u.test(host), 'reattachByName does not go through the guarded road');
+});
+
+test('S1-T20: the confirmation is judged under the name the door read, never the terminal\u2019s name now', () => {
+  assert.ok(helperOf().includes('confirmReattach(panels, door.terminal, door.name)'), 'the door confirms under a name other than the one it read before it awaited');
+  assert.ok(!bodyOf(sourceOf('terminalHost.ts'), 'export function confirmReattach(').includes('terminal.name'), 'confirmReattach reads the terminal\u2019s name now');
 });
 
 /** The door’s helper: the one re-attach, match and confirmation that the door, take and add share. */
@@ -58,7 +76,7 @@ test('S1-T11: the door, take and add re-attach right before the match, with no a
   const helper = helperOf();
   const reattach = at(helper, 'reattachByName(panels, door.name)', 'terminalDoorMatch');
   const match = at(helper, 'const match = terminalMatch(', 'terminalDoorMatch');
-  const confirm = at(helper, 'confirmReattach(panels, door.terminal)', 'terminalDoorMatch');
+  const confirm = at(helper, 'confirmReattach(panels, door.terminal, door.name)', 'terminalDoorMatch');
 
   assert.ok(reattach < match, 're-attach does not run BEFORE the match');
   assert.ok(match < confirm, 'a use is not confirmed AFTER the match');

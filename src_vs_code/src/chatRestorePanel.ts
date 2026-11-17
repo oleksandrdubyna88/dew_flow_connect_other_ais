@@ -11,10 +11,9 @@ import {
   restoreDecision,
   restoringHtml,
 } from './chatRestore';
-import type { ConversationSource } from './chatStore';
 import { ChatStoreFile } from './chatStoreFile';
 import { ChatTabMemory } from './chatTabs';
-import { reattachByName } from './terminalHost';
+import { reattachRestored } from './terminalHost';
 import { webviewNonce } from './webviewNonce';
 
 /**
@@ -93,17 +92,6 @@ export async function restoreAfterReload(
     await restoreChatTab(deps, panel, id, open);
   } finally {
     closing.dispose();
-  }
-}
-
-/**
- * A terminal conversation the serializer just brought back may find its terminal again (E3.S1): the terminal can have opened before
- * the conversation existed (the serializer first waits up to 5 s for the migration), so its `onDidOpenTerminal` found no orphan.
- * The retry goes through the same function, so it re-attaches too. Any other source is not a terminal's, and nothing happens.
- */
-function reattachRestored(panels: ChatPanels, source: ConversationSource): void {
-  if (source.kind === 'terminal') {
-    reattachByName(panels, source.name);
   }
 }
 

@@ -329,7 +329,7 @@ function terminalDoorMatch(panels: ChatPanels, door: { readonly terminal: vscode
   reattachByName(panels, door.name);
   const match = terminalMatch(panels.known(), door.terminal, door.name);
   if (match.kind === 'existing') {
-    confirmReattach(panels, door.terminal);
+    confirmReattach(panels, door.terminal, door.name);
   }
 
   return match;
