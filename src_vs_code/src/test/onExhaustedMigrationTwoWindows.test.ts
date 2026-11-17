@@ -442,30 +442,25 @@ test('T36b NoMarkerFromACopyThatLostItsRecord', async () => {
   assert.equal(lost.of.settings.layer('onExhausted', 'global'), undefined, 'the next start clears it');
   assert.equal(lost.of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'and witnesses it');
 
-  // (iii-b) the claim is taken over during the await: busy, the witness comes out again, the value is untouched, and the
-  // window that took over migrates the user layer.
-  const taken = await heldAtWitness();
-  const other = taken.of.client.window();
-  void other.update(KEY, { ...taken.of.client.record(), claim: { by: 'other', at: taken.of.clock.now() } });
-  taken.of.client.deliver(taken.a.window);
-  taken.of.settings.unhold(USER_WITNESS);
-  taken.of.settings.release(USER_WITNESS);
-  await drive(taken.a, taken.run);
-  assert.equal(await taken.run, 'busy');
-  assert.deepEqual(taken.a.userEvents().map((one) => one.kind), ['witness', 'withdraw'], 'the witness comes out again, and no removal is asked for');
-  assert.equal(taken.of.settings.layer(USER_WITNESS, 'global'), undefined, 'and is gone from the file');
-  assert.equal(taken.of.settings.layer('onExhausted', 'global'), 'human', 'the value is untouched');
+  // (iii-b) the claim is taken over during the await and the value is untouched: the witness is A's, so A removes the value
+  // itself and keeps the witness; it ends busy, and the window that took over finds the layer settled.
+  const taken = await lostClaimAt(() => undefined);
+  assert.equal(taken.outcome, 'busy');
+  assert.deepEqual(taken.a.userEvents().map((one) => one.kind), ['witness', 'clear user'], 'A asks for its witness and the removal, and never withdraws');
+  assert.equal(taken.of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'the witness stays in the file');
+  assert.equal(taken.of.settings.layer('onExhausted', 'global'), undefined, 'the value is removed');
   taken.of.client.deliver();
   const took = activation(taken.of, 'other');
   assert.equal(await took.run(), 'migrated', 'the window that took over finishes');
-  assert.equal(taken.of.settings.layer('onExhausted', 'global'), undefined, 'it removes the value');
-  assert.equal(taken.of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'and writes its own witness');
+  assert.deepEqual(took.userEvents(), [], 'and finds the user layer settled');
+  assert.equal(taken.of.settings.layer('onExhausted', 'global'), undefined, 'the value stays reset');
+  await assertChoiceSurvives(taken.of, taken.a, 'busy', ['witness', 'clear user'], 'iii-b (the claim was taken over)');
 });
 
 /**
  * (iii-c) A loses the claim during its witness await, and what the other run did meanwhile is `done`: the witness is ONE
- * fixed word with no owner, so a run that finds the claim gone may take it out again only when no run completed and the
- * value is still the recorded one. Otherwise it must stay: it is what keeps a later choice from being reset.
+ * fixed word with no owner, and one on disk certifies a removal its writer is about to make — so A never takes it out
+ * after losing the claim. It removes the value when the value is still the recorded one, and leaves it alone otherwise.
  */
 async function lostClaimAt(done: (of: World, took: FakeWindow) => void): Promise<{ of: World; a: Rig; outcome: unknown }> {
   const held = await heldAtWitness();
@@ -486,9 +481,9 @@ function secondMachine(of: World): World {
 }
 
 /** What the person chose afterwards must outlive every run, on this machine and on a second one. */
-async function assertChoiceSurvives(of: World, a: Rig, outcome: unknown, why: string): Promise<void> {
+async function assertChoiceSurvives(of: World, a: Rig, outcome: unknown, events: readonly string[], why: string): Promise<void> {
   assert.equal(outcome, 'busy', why);
-  assert.deepEqual(a.userEvents().map((one) => one.kind), ['witness'], `${why}: A asked for its witness and never withdrew it`);
+  assert.deepEqual(a.userEvents().map((one) => one.kind), events, `${why}: A asked for its witness and never withdrew it`);
   assert.equal(of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, `${why}: the witness is still in the file`);
   of.settings.set('onExhausted', 'global', 'continue');
   const machine = activation(secondMachine(of), 'M2');
@@ -497,14 +492,14 @@ async function assertChoiceSurvives(of: World, a: Rig, outcome: unknown, why: st
 }
 
 test('T36b-c ALostClaim_LeavesTheWitnessToTheRunThatOwnsIt', async () => {
-  // (iii-c1) the other run COMPLETED, and the value is untouched (another machine's witness was already in the file):
-  // only the completed marker tells A that the witness is not its to take out.
+  // (iii-c1) the other run COMPLETED, and the value is untouched (another machine's witness was already in the file). Its
+  // marker carries no `held`, as `mark` writes it: A removes the value by what it recorded, and the witness stays.
   const completed = await lostClaimAt((of, took) => {
-    void took.update(KEY, { ...of.client.record(), claim: undefined, completed: '0.88.0', by: 'other' });
+    void took.update(KEY, { completed: '0.88.0', by: 'other' });
     of.settings.set(USER_WITNESS, 'global', USER_WITNESS_WORD);
   });
-  assert.equal(completed.of.settings.layer('onExhausted', 'global'), 'human', 'c1 holds: the value is still the recorded one');
-  await assertChoiceSurvives(completed.of, completed.a, completed.outcome, 'c1 (another run completed)');
+  assert.equal(completed.of.settings.layer('onExhausted', 'global'), undefined, 'c1: A removed the value it recorded');
+  await assertChoiceSurvives(completed.of, completed.a, completed.outcome, ['witness', 'clear user'], 'c1 (another run completed)');
 
   // (iii-c2) the other run REMOVED the value and relies on the witness; nothing completed yet.
   const removed = await lostClaimAt((of) => {
@@ -512,7 +507,7 @@ test('T36b-c ALostClaim_LeavesTheWitnessToTheRunThatOwnsIt', async () => {
     of.settings.set(USER_WITNESS, 'global', USER_WITNESS_WORD);
   });
   assert.equal(recordOf(removed.of.client.record()).completed, undefined, 'c2 holds: nobody completed');
-  await assertChoiceSurvives(removed.of, removed.a, removed.outcome, 'c2 (another run removed the value)');
+  await assertChoiceSurvives(removed.of, removed.a, removed.outcome, ['witness'], 'c2 (another run removed the value)');
 
   // (iii-c3) the person CHOSE another value meanwhile: it is not the recorded one, so nothing of A's may undo the witness.
   const chose = await lostClaimAt((of) => {
@@ -520,9 +515,41 @@ test('T36b-c ALostClaim_LeavesTheWitnessToTheRunThatOwnsIt', async () => {
     of.settings.set(USER_WITNESS, 'global', USER_WITNESS_WORD);
   });
   assert.equal(chose.outcome, 'busy', 'c3');
-  assert.deepEqual(chose.a.userEvents().map((one) => one.kind), ['witness'], 'c3: no withdrawal');
+  assert.deepEqual(chose.a.userEvents().map((one) => one.kind), ['witness'], 'c3: no withdrawal and no removal');
   assert.equal(chose.of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'c3: the witness stays');
   assert.equal(chose.of.settings.layer('onExhausted', 'global'), 'good_enough', 'c3: and so does the choice');
+});
+
+test('T36b-d AWitnessStillPending_IsNotACompletedReset_AFinishesItsOwnRemoval', async () => {
+  // CodeRabbit's interleaving. A's witness LANDS in the file but its promise is held. B was taken from a stale copy before
+  // A's claim reached it, so it never heard A: it reads the witness, treats the user layer as settled, skips it and writes
+  // its marker. A's removal is what the witness certified; it must still make it.
+  const of = world(false);
+  of.settings.hold(USER_WITNESS, 'landed');
+  const stale = of.client.window();
+  const a = activation(of, 'A', { pauses: new Pauses(of.clock) });
+  const runA = a.run();
+  await until(() => a.pauses.count() === 1, 'A in its claim pause');
+  a.pauses.next();
+  await until(() => witnessAsked(of) === 1, 'A asked for its witness write');
+  assert.equal(of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'the witness is on disk');
+  assert.equal(of.settings.layer('onExhausted', 'global'), 'human', 'and the value is still there');
+
+  const b = activation(of, 'B', { window: stale });
+  assert.equal(await b.run(), 'migrated', 'B settles from its stale copy');
+  assert.deepEqual(b.userEvents(), [], 'B saw the witness and skipped the user layer');
+  assert.equal(of.settings.layer('onExhausted', 'global'), 'human', 'so the value is still there');
+  of.client.deliver(a.window);
+  of.settings.release(USER_WITNESS);
+
+  assert.equal(await runA, 'busy', 'A lost the claim');
+  assert.deepEqual(a.userEvents().map((one) => one.kind), ['witness', 'clear user'], 'A removes the value and never withdraws');
+  assert.equal(of.settings.layer('onExhausted', 'global'), undefined, 'the user layer ends without human');
+  assert.equal(of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'and the witness stays');
+  of.client.deliver();
+  assert.equal(await activation(of, 'C').run(), 'already', 'a later activation finds the reset complete');
+  assert.equal(of.settings.layer('onExhausted', 'global'), undefined, 'and the value stays reset');
+  await assertChoiceSurvives(of, a, 'busy', ['witness', 'clear user'], 'd (a pending witness)');
 });
 
 test('T41 TwoWindowsThatNeverHearEachOther_RemoveTheUserValueOnce_AndMayTellTwice', async () => {

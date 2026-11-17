@@ -234,7 +234,8 @@ function reasonOf(error: unknown): string {
 /**
  * The run (§ S2.4). It never rejects, and nothing in it rests on the claim: what correctness rests on is the witnesses —
  * an overlay's is in the record it clears, the user layer's is a setting in the settings file — and that no value read
- * from the record or the settings is carried across an `await`. The catch at the top writes NOTHING: a claim left behind
+ * from the record or the settings is carried across an `await` — but the user layer's own planned entry, which the removal
+ * after the witness write compares with when the copy read then has none. The catch at the top writes NOTHING: a claim left behind
  * goes stale, exactly as a dead host's does.
  */
 export async function migrateOnExhausted(ports: MigrationPorts): Promise<MigrationOutcome> {
@@ -425,7 +426,8 @@ async function overlays(ports: MigrationPorts): Promise<Stop | undefined> {
 
 /** Step 4: the witness is in the user layer first, whether or not the layer holds a value; then the value test decides. */
 async function userLayer(ports: MigrationPorts): Promise<Stop | undefined> {
-  const blocked = stoppedFor(ports, read(ports), 'user layer');
+  const seen = read(ports);
+  const blocked = stoppedFor(ports, seen, 'user layer');
   if (blocked !== undefined) {
     return blocked;
   }
@@ -434,7 +436,7 @@ async function userLayer(ports: MigrationPorts): Promise<Stop | undefined> {
   }
   const refused = await writeWitness(ports);
 
-  return refused ?? removeUnlessChosen(ports);
+  return refused ?? removeUnlessChosen(ports, recordedUser(seen));
 }
 
 async function writeWitness(ports: MigrationPorts): Promise<Stop | undefined> {
@@ -467,53 +469,52 @@ function witnessRefused(ports: MigrationPorts, error: unknown): Stop {
 }
 
 /** The value as it is NOW is the one recorded — read again after the awaited witness write; the value test alone. */
-function stillTheRecordedValue(ports: MigrationPorts, held: Readonly<Record<string, string>>): boolean {
+function stillTheRecordedValue(ports: MigrationPorts, recorded: string | undefined): boolean {
   const value = heldText(ports.user.value());
 
-  return value !== undefined && value === held[USER_ID];
+  return value !== undefined && value === recorded;
+}
+
+/** What the record says the user layer held, else `fallback`; `undefined` when neither holds a value to migrate. */
+function recordedUser(seen: MigrationRecord, fallback?: string): string | undefined {
+  return seen.held?.[USER_ID] ?? fallback;
 }
 
 /**
- * After the awaited witness write the record is read ONCE, in the same synchronous stretch as the value test and the
- * removal. A copy that lost `held` leaves the value and takes the witness out again, so the next start finds the value and
- * clears it (§ S2.10); a lost claim is decided by `afterLostClaim`.
+ * After the awaited witness write, a witness on disk certifies a removal THIS run is about to make: another window that
+ * reads it treats the user layer as settled and skips it. So the run that wrote it finishes its removal whenever the value
+ * is still the recorded one — whoever holds the claim now, and whether or not another run wrote its marker. The record
+ * and the value are read in ONE synchronous stretch. `before` is what the record said when the witness was written: a
+ * marker another run wrote carries no `held`, and a stale copy may have lost it. A copy of THIS run's claim that lost
+ * `held` leaves the value and takes the witness out again, so the next start finds the value and clears it (§ S2.10).
  */
-async function removeUnlessChosen(ports: MigrationPorts): Promise<Stop | undefined> {
+async function removeUnlessChosen(ports: MigrationPorts, before: string | undefined): Promise<Stop | undefined> {
   const seen = read(ports);
-  if (!mine(ports, seen)) {
-    return afterLostClaim(ports, seen);
-  }
-  if (seen.held === undefined) {
+  const own = mine(ports, seen);
+  if (own && seen.held === undefined) {
     return giveUpAfterWitness(ports, 'what each location held was lost to a stale write while the witness was written; it is withdrawn', 'incomplete');
   }
+  const refused = await removeIfRecorded(ports, recordedUser(seen, before));
 
-  return stillTheRecordedValue(ports, seen.held) ? removeValue(ports) : undefined;
+  return refused ?? endAfterWitness(ports, own);
+}
+
+/** The removal, when the value is still the recorded one; the call is made in the stretch that read the record. */
+function removeIfRecorded(ports: MigrationPorts, recorded: string | undefined): Promise<Stop | undefined> {
+  return stillTheRecordedValue(ports, recorded) ? removeValue(ports) : Promise.resolve(undefined);
 }
 
 /**
- * The claim passed to another window while the witness was written. The witness is ONE fixed word with no owner, so taking
- * it out is only right when no run completed and the value is still the recorded one: then it would stay un-reset under a
- * witness. A completed run owns the witness; a value that is gone or different was removed by another run or chosen by the
- * person, and the witness is what protects it. A copy with no `held` has nothing to compare and no run can have completed
- * from it, so it withdraws as a lost record does. Record and value are read in the same synchronous stretch.
+ * The run goes on while the claim is its own. Once it passed to another window the run ends `busy` and the witness STAYS:
+ * it is ONE fixed word with no owner, and another run may rely on it — what is still there was removed or is the person's.
  */
-function afterLostClaim(ports: MigrationPorts, seen: MigrationRecord): Promise<Stop> {
-  if (settledByAnotherRun(ports, seen)) {
-    ports.log('the claim passed to another window while the witness was written; the witness stays with the run that settled the value');
-
-    return Promise.resolve(stop('busy'));
+function endAfterWitness(ports: MigrationPorts, own: boolean): Stop | undefined {
+  if (own) {
+    return undefined;
   }
+  ports.log('the claim passed to another window while the witness was written; the witness stays');
 
-  return giveUpAfterWitness(ports, 'the claim passed to another window while the witness was written; the witness is withdrawn', 'busy');
-}
-
-/** A run completed, or the value is no longer the recorded one: the witness is no longer this run's to take out. */
-function settledByAnotherRun(ports: MigrationPorts, seen: MigrationRecord): boolean {
-  if (seen.completed !== undefined) {
-    return true;
-  }
-
-  return seen.held !== undefined && !stillTheRecordedValue(ports, seen.held);
+  return stop('busy');
 }
 
 /** The value stays and so does nothing of this run's: the witness comes out again and the run ends with `outcome`. */
