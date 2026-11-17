@@ -281,3 +281,46 @@ export function latchedCheck(seams: SkipShellSeams): () => Promise<SkipShellOutc
 
   return () => door(() => checkSkipShell(seams));
 }
+
+/** What the focus gate needs of the window. */
+export interface FocusSeams {
+  /** Whether this window is the one the person works in. */
+  readonly focused: () => boolean;
+  /** Calls `run` at the first moment the window is focused. The host drops its listener after that call; `run` is safe to call again. */
+  readonly whenFocused: (run: () => void) => void;
+}
+
+/**
+ * The startup and change-of-setting check runs only in a FOCUSED window: when several windows are restored at once, only the one the person
+ * works in asks. An unfocused window waits for its first focus (one wait at a time, however many triggers arrive meanwhile) and then runs
+ * `check` once — through the same latch and the same memory, so a window focused after the person answered elsewhere finds the answer, or
+ * the ids already in the list, and asks nothing.
+ *
+ * @param onError where a failure of the deferred run goes: nobody awaits it
+ */
+export function gatedByFocus(
+  check: () => Promise<SkipShellOutcome>,
+  seams: FocusSeams,
+  onError: (reason: unknown) => void,
+): () => Promise<SkipShellOutcome> {
+  let waiting = false;
+
+  return async () => {
+    if (seams.focused()) {
+      return check();
+    }
+    if (!waiting) {
+      waiting = true;
+      let spent = false;
+      seams.whenFocused(() => {
+        if (!spent) {
+          spent = true;
+          waiting = false;
+          check().catch(onError);
+        }
+      });
+    }
+
+    return 'nothing';
+  };
+}

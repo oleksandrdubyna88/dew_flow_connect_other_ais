@@ -75,3 +75,16 @@ test('the skip-shell door identifier appears only at its declaration, its bindin
   assert.equal(uses.length - stray.length, 3, `the scan expected three allowed uses of skipShell in extension.ts, found ${uses.length - stray.length}`);
   assert.deepEqual(stray.map((one) => text.slice(Math.max(0, (one.index ?? 0) - 40), (one.index ?? 0) + 20)), [], 'skipShell is used outside its declaration, its binding and the test-mode ternary: the door can leave test mode');
 });
+
+test('the check runs only in a focused window: activation and the setting listener both go through the focus gate', () => {
+  const bound = bodyOf(HOST, 'export function bindSkipShell(');
+  const gate = bound.indexOf('gatedByFocus(');
+
+  assert.ok(gate >= 0 && bound.includes('vscode.window.state.focused'), 'the host does not gate the check on the focus of the window');
+  assert.ok(/onDidChangeWindowState\(/u.test(bound) && /listener\.dispose\(\)/u.test(bound), 'the host does not wait for the first focus and then drop its listener');
+  // Every trigger is `run()`, which calls the gated check; nothing calls the bare latched `check()` here, which would ask in the background.
+  const run = bound.slice(bound.indexOf('const run = '), bound.indexOf('};', bound.indexOf('const run = ')));
+  assert.ok(run.includes('gated()'), 'run() does not call the gated check');
+  assert.equal([...bound.matchAll(/(?<![\w.])check\(\)/gu)].length, 0, 'a trigger calls the latched check directly, so a window in the background would ask');
+  assert.equal([...bound.matchAll(/\brun\(\);/gu)].length, 2, 'the activation and the setting listener are not both a run()');
+});

@@ -6,6 +6,7 @@ import {
   askTitle,
   latchedCheck,
   toldTitle,
+  gatedByFocus,
   type SkipShellMemory,
   type SkipShellOutcome,
   type SkipShellSeams,
@@ -78,7 +79,8 @@ export interface SkipShellTestDoor {
 
 /**
  * Check once at activation and again whenever the setting changes — both through ONE latch, so a second trigger while a
- * notification is open does nothing. Nothing here waits for the person: the first check runs detached.
+ * notification is open does nothing, and both only in a focused window (`gatedByFocus`). The test door's `check` is the latched check
+ * itself: a host scenario must not depend on whether the window it runs in has focus. Nothing here waits for the person: the first check runs detached.
  */
 export function bindSkipShell(context: vscode.ExtensionContext): SkipShellTestDoor {
   let ask: SkipShellSeams['ask'] = askToAdd;
@@ -92,10 +94,24 @@ export function bindSkipShell(context: vscode.ExtensionContext): SkipShellTestDo
     failed: sayFailed,
     now: () => new Date(),
   });
+  const failedToRun = (reason: unknown): void => {
+    console.warn('ConnectOtherAIs: the skip-list check of the terminal keys could not run', reason);
+  };
+  // Only a focused window asks: of several restored at once, the one the person works in. An unfocused one waits for its first focus.
+  const gated = gatedByFocus(check, {
+    focused: () => vscode.window.state.focused,
+    whenFocused: (go) => {
+      const listener = vscode.window.onDidChangeWindowState((state) => {
+        if (state.focused) {
+          listener.dispose();
+          go();
+        }
+      });
+      context.subscriptions.push(listener);
+    },
+  }, failedToRun);
   const run = (): void => {
-    check().catch((reason: unknown) => {
-      console.warn('ConnectOtherAIs: the skip-list check of the terminal keys could not run', reason);
-    });
+    gated().catch(failedToRun);
   };
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((change) => {
     if (change.affectsConfiguration(`${SECTION}.${SETTING}`)) {

@@ -6,12 +6,14 @@ import {
   ADD,
   SKIP_SHELL_IDS,
   checkSkipShell,
+  gatedByFocus,
   latchedCheck,
   offered,
   rememberedWith,
   skipShellState,
   toldAbout,
   withIds,
+  type FocusSeams,
   type RepositoryLayer,
   type SkipShellSeams,
 } from '../skipShell';
@@ -321,4 +323,61 @@ test('S3-T6b the failure sentence does not end the reason with two periods', asy
   await checkSkipShell({ ...run.seams, update: async () => { throw new Error('Unable to write to User Settings because the file is dirty.'); } });
   assert.ok(run.failures[0]?.includes('the file is dirty. Nothing else'), `the sentence is not "reason. Nothing else": ${run.failures[0]}`);
   assert.ok(!run.failures[0]?.includes('..'), `the failure sentence has a double period: ${run.failures[0]}`);
+});
+
+interface FakeWindow {
+  focused: boolean;
+  readonly waits: (() => void)[];
+  readonly seams: FocusSeams;
+}
+
+/** A window whose focus the test turns on, and whose `whenFocused` registrations it keeps so it can fire each as often as it likes. */
+function fakeWindow(focused: boolean): FakeWindow {
+  const win: FakeWindow = { focused, waits: [], seams: { focused: () => win.focused, whenFocused: (run) => { win.waits.push(run); } } };
+
+  return win;
+}
+
+test('S3-T13 only a focused window asks about the skip list', async () => {
+  let asks = 0;
+  const gate = (win: FakeWindow) => gatedByFocus(async () => { asks += 1; return 'added' as const; }, win.seams, () => undefined);
+
+  // Focused: it asks at once.
+  const focused = fakeWindow(true);
+  assert.equal(await gate(focused)(), 'added');
+  assert.equal(asks, 1, 'a focused window did not check at once');
+
+  // Unfocused: nothing until focus, then exactly one check, however many triggers and focus events there are.
+  asks = 0;
+  const background = fakeWindow(false);
+  const run = gate(background);
+  assert.equal(await run(), 'nothing', 'a window in the background asked about the skip list');
+  await run();
+  await run();
+  assert.equal(asks, 0, 'a window in the background asked about the skip list');
+  assert.equal(background.waits.length, 1, 'several triggers made several waits for the same focus');
+  background.focused = true;
+  background.waits[0]?.();
+  background.waits[0]?.();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(asks, 1, 'two focus events made the window ask twice');
+
+  // A later trigger while focused runs at once; a new loss of focus waits again.
+  await run();
+  assert.equal(asks, 2);
+  background.focused = false;
+  await run();
+  assert.equal(asks, 2, 'a window that lost focus asked about the skip list');
+  assert.equal(background.waits.length, 2);
+});
+
+test('S3-T13b the deferred check reports its failure and a later focus still runs once', async () => {
+  const errors: unknown[] = [];
+  const win = fakeWindow(false);
+  const run = gatedByFocus(async () => { throw new Error('boom'); }, win.seams, (reason) => errors.push(reason));
+  await run();
+  win.focused = true;
+  win.waits[0]?.();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(errors.length, 1, 'a failure of the deferred check was swallowed');
 });
