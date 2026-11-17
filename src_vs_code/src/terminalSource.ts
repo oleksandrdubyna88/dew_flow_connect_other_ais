@@ -61,7 +61,10 @@ export function terminalLabel(name: string): string {
   return name.startsWith(CREDS) && name.length > CREDS.length ? name.slice(CREDS.length) : name;
 }
 
-/** The conversation of THIS terminal object, or a new one. It never matches by name and never answers `rekey`. */
+/**
+ * The conversation of THIS terminal object, or a new one. It never matches by name and never answers `rekey`: the DOOR never re-keys.
+ * Re-attach (`terminalReattach.ts`) is a separate road that runs before it and moves a restored conversation onto its terminal.
+ */
 export function terminalMatch(known: readonly KnownPanel[], terminal: object, name: string): SessionMatch {
   const label = terminalLabel(name);
 

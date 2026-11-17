@@ -13,6 +13,7 @@ import {
 } from './chatRestore';
 import { ChatStoreFile } from './chatStoreFile';
 import { ChatTabMemory } from './chatTabs';
+import { reattachRestored } from './terminalHost';
 import { webviewNonce } from './webviewNonce';
 
 /**
@@ -112,6 +113,7 @@ export async function restoreChatTab(
   }
   if (decision.kind === 'restore') {
     restoreConversation(deps.panels, panel, decision.record, deps.extensionUri);
+    reattachRestored(deps.panels, decision.record.source);
 
     return;
   }

@@ -20,7 +20,7 @@ import {
   tabReachable,
   terminalRoad,
 } from './chatReturn';
-import type { LiveTerminal } from './terminalSource';
+import { liveTerminals } from './terminalHost';
 import { notify } from './notify';
 
 /**
@@ -152,16 +152,13 @@ function unreachable(answer: never): void {
   refuse(`CoAI does not know how to go back to ${JSON.stringify(answer)}.`);
 }
 
-/** One terminal as the decision reads it. */
-const asLive = (one: vscode.Terminal): LiveTerminal => ({ key: one, name: one.name, exited: one.exitStatus !== undefined });
-
 /**
  * The terminal, through VS Code's own `Terminal.show()` — no other extension is called. ONE read of the window's
  * terminals decides and acts, so the two cannot see two lists.
  */
 function toTerminal(key: object, name: string): void {
   const all = vscode.window.terminals;
-  const road = terminalRoad(key, all.map(asLive), name);
+  const road = terminalRoad(key, liveTerminals(all), name);
   if (road.kind === 'refuse') {
     refuse(road.sentence);
 
