@@ -58,6 +58,9 @@ function defaultNameFor(stage: string): string {
 }
 
 test('the policy the panel shows by default is the one the server runs with nothing named', () => {
+  // reads-another-program: the panel's default policy and the server's reading of "no policy named" are one decision in
+  // two languages, and nothing shared holds it. The reads are positive matches of one exact line each and fail LOUDLY
+  // when that line changes; nothing here derives a list that could go quiet.
   const panelSettingsCs = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src_mcp', 'src', 'Server', 'PanelSettings.cs'), 'utf8');
 
   assert.match(

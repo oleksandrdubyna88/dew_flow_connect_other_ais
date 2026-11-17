@@ -73,6 +73,7 @@
     {"file":"src_vs_code/scripts/live-fresh.mjs","line":175,"sha256":"ceed6721c2637bffb608ffa4c2fce3b11a8fd9ccf2594709baceb3c2dd152648","class":"raw-temp","guards":["csharp"],"proof":"entry"},
     {"file":"src_vs_code/scripts/live-gauge-compat.mjs","line":82,"sha256":"3f1d665bb1f1de6d194e2a0ebd9af148cb60b7212822c70849db3a23e7344bc8","class":"raw-temp","guards":["csharp"],"proof":"entry"},
     {"file":"src_vs_code/scripts/live-gauge-compat.mjs","line":95,"sha256":"51c0ed8c0981480fe56297e573237d4cdafbd853fd8db6230e3e943e9023525c","class":"raw-temp","guards":["csharp"],"proof":"entry"},
+    {"file":"src_vs_code/scripts/live-on-exhausted-compat.mjs","line":34,"sha256":"44a56c888996b160a478bdc5a6f797eaeb04d8acc5655d932b501dbcc45a7bbf","class":"raw-temp","guards":["csharp"],"proof":"entry"},
     {"file":"src_vs_code/scripts/live-paths-per-side-compat.mjs","line":115,"sha256":"3c78dcf122063d2c8f36574cb089d283edf696b32f877c19590b778d814e3780","class":"raw-temp","guards":["csharp"],"proof":"entry"},
     {"file":"src_vs_code/scripts/live-security-settings-compat.mjs","line":22,"sha256":"f13e630b0e841fb75d904b8ae2b781df4e843fbb1278054fba63a07019197142","class":"raw-temp","guards":["csharp"],"proof":"entry"},
     {"file":"src_vs_code/scripts/live-vibe-runtime-compat.mjs","line":62,"sha256":"7d161d5512aed9c2d3f29ad67f3a2a77869e09ef4efdbd3bd27b69ab1af64f9c","class":"raw-temp","guards":["csharp"],"proof":"entry"},
