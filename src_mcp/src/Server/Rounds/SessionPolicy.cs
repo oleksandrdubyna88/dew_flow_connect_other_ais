@@ -41,7 +41,7 @@ internal sealed class SessionPolicy(
             return new Release(session, string.Empty);
         }
 
-        return Decided(session) ?? Write(session);
+        return Decided(session, restore: true) ?? Write(session);
     }
 
     /// <summary><see cref="Released"/>, then <see cref="Stamped"/> on its session — for a caller that holds the claim.</summary>
@@ -65,25 +65,29 @@ internal sealed class SessionPolicy(
             return new Release(Stamped(session), string.Empty);
         }
 
-        if (Decided(session) is { } done)
+        // The person's answer is on file and a notice of the hold is expired: a restore would happen. A card is put back only under the claim and
+        // on the file as it is now (D16), so this call goes the way of a release — and says nothing of a release when the claim is busy.
+        var restorable = CurrentAnswer.For(session, escalations) is not null && HasExpiredNotice(session);
+        if (!restorable && Decided(session, restore: false) is { } done)
         {
             return done;
         }
 
+        var notWritten = restorable ? string.Empty : LegacyHold.ClaimBusy;
         using var claim = SessionClaim.TryTake(settings.DataDir, repoPath, at.Branch, at.Document, at.Feature);
         if (claim is null)
         {
             log.Information(
-                "policy auto did not release the {Stage} hold of session {SessionId} this call: another call holds the session — the next call tries again",
-                StageOf(session), session.State.SessionId);
+                "policy auto did not {Work} the {Stage} hold of session {SessionId} this call: another call holds the session — the next call tries again",
+                restorable ? "offer the notice of" : "release", StageOf(session), session.State.SessionId);
 
-            return new Release(session, LegacyHold.ClaimBusy);
+            return new Release(session, notWritten);
         }
 
         // Read AGAIN under the claim: what this call was handed may be older than the file — a resolve may have saved in between.
         return store.Load(repoPath, at.Branch, at.Document, at.Feature) is { } fresh
             ? Current(fresh)
-            : new Release(session, LegacyHold.ClaimBusy);
+            : new Release(session, notWritten);
     }
 
     /// <summary>Whether policy auto released this session's hold and the resolve that moves its stage has not come yet.</summary>
@@ -98,13 +102,17 @@ internal sealed class SessionPolicy(
     // Step 1: not ours. This is the whole authority check, and it reads the config AS LOADED.
     private bool Eligible(PersistedSession session) => settings.Rounds.IsAutonomous && LegacyHold.Stands(session.State);
 
-    // Steps 2 and 3: the two reasons to write nothing at all and withdraw nothing (step 2 may put a card back). Null: go on.
-    private Release? Decided(PersistedSession session)
+    // Steps 2 and 3: the two reasons to write nothing at all and withdraw nothing (step 2 may put a card back, and only for a caller that holds
+    // the claim: `restore`). Null: go on.
+    private Release? Decided(PersistedSession session, bool restore)
     {
         // The person's answer wins: any answer to any question of the hold — words with no button count — and the hold is theirs.
         if (CurrentAnswer.For(session, escalations) is not null)
         {
-            OfferAgainTheNoticesWithdrawnBefore(session);
+            if (restore)
+            {
+                OfferAgainTheNoticesWithdrawnBefore(session);
+            }
 
             return new Release(session, string.Empty);
         }
@@ -121,6 +129,10 @@ internal sealed class SessionPolicy(
 
         return null;
     }
+
+    // Whether step 2 has anything to put back: a notice of the hold that a withdrawal expired.
+    private bool HasExpiredNotice(PersistedSession session) =>
+        session.State.HoldQuestions.Any(id => escalations.Read(id) is { Kind: EscalationKinds.Notice, Status: EscalationStatuses.Expired });
 
     // Step 2's retry of a restore that failed (D16): the hold's NOTICES that are expired are put back while the person's answer is on file.
     // A standing hold's notice is expired by nothing but a withdrawal; a question card that ran out its own wait is not a notice and is left.

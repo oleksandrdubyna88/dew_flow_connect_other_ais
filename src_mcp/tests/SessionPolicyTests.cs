@@ -294,6 +294,70 @@ public sealed class SessionPolicyTests : IDisposable
         Said("auto released").Should().BeEmpty();
     }
 
+    // ---------- T49b: a notice is put back only under the claim, on the file as it is now (D16, J8 (d)) ----------
+
+    /// <summary>A held copy with the person's answer on file (on the question) and the notice n-1 already withdrawn.</summary>
+    private PersistedSession HeldWithAnswerAndAWithdrawnNotice()
+    {
+        var session = Planted("n-1", "q-2");
+        Answer("q-2", "continue");
+        new Escalations(_data.Path).Withdraw("n-1", DateTime.UtcNow).Should().Be(Withdrawal.Withdrawn);
+        Read("n-1").Status.Should().Be(EscalationStatuses.Expired);
+
+        return session;
+    }
+
+    [Fact]
+    public void ANoticeIsNotPutBack_WhenTheFileOnDiskIsAlreadyReleased_ByAStaleCopy()
+    {
+        var stale = HeldWithAnswerAndAWithdrawnNotice();
+        // The call that held the claim saved its release (HoldQuestions emptied) after this copy was loaded.
+        Store().Save(stale with { State = LegacyHold.Released(stale.State, Settings().Rounds) });
+        var settled = FileText();
+
+        var result = Policy().CurrentUnclaimed(stale, Repo, At)!.Value;
+
+        result.NotWritten.Should().BeEmpty();
+        result.Session.State.HumanGate.Should().BeFalse("the disk's session came back, not the stale held copy");
+        Read("n-1").Status.Should().Be(EscalationStatuses.Expired, "no open card is made for a hold that no longer stands");
+        FileText().Should().Be(settled, "nothing is written");
+        using var afterwards = SessionClaim.TryTake(_data.Path, Repo, Branch);
+        afterwards.Should().NotBeNull("the claim taken for the restore is let go");
+    }
+
+    [Fact]
+    public void ANoticeIsPutBack_WhenTheFileOnDiskStillHolds_AndTheNextLoadRetriesIt()
+    {
+        var session = HeldWithAnswerAndAWithdrawnNotice();
+        var bytes = FileText();
+
+        var result = Policy().CurrentUnclaimed(session, Repo, At)!.Value;
+
+        result.NotWritten.Should().BeEmpty();
+        result.Session.State.HumanGate.Should().BeTrue("the hold is the person's");
+        Read("n-1").Status.Should().Be(EscalationStatuses.Open, "the retry of D16 still works");
+        Read("n-1").ExpiredUtc.Should().BeEmpty();
+        FileText().Should().Be(bytes, "no marker and no note");
+        using var afterwards = SessionClaim.TryTake(_data.Path, Repo, Branch);
+        afterwards.Should().NotBeNull("the claim taken for the restore is let go");
+    }
+
+    [Fact]
+    public void ANoticeIsNotPutBack_WhileAnotherCallHoldsTheClaim_AndNothingThrows()
+    {
+        var session = HeldWithAnswerAndAWithdrawnNotice();
+        var bytes = FileText();
+
+        using var claim = SessionClaim.TryTake(_data.Path, Repo, Branch);
+        claim.Should().NotBeNull();
+        var result = Policy().CurrentUnclaimed(session, Repo, At)!.Value;
+
+        result.Session.Should().BeSameAs(session);
+        result.NotWritten.Should().BeEmpty("the hold is the person's: a busy claim is not a reason");
+        Read("n-1").Status.Should().Be(EscalationStatuses.Expired, "the next deciding load tries again");
+        FileText().Should().Be(bytes);
+    }
+
     // ---------- T67: a restore that fails ----------
 
     [Fact]
