@@ -512,3 +512,13 @@ A consultation on a cadence, held after §12, found two defects in what was buil
 
 The *questions-waiting* help article carries both facts in all five languages; the extension's Proceed detail is English only, like the
 rest of the card.
+
+## Boundary with the auto plan
+
+> Added 2026-11-17 by the auto plan's E1.S3 (its § 7, the same table shortened in each of the four documents it touches) — a boundary section, not a change to this plan's scope.
+
+[PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) adds policy `auto`, the default of `COAI_ON_EXHAUSTED`: it raises no hold at all and never waits for a person. Where the two meet:
+
+| Item | This plan | The auto plan's part |
+|---|---|---|
+| A hold released only by the person's answer; `ClaimRefusal` | built here | adds one release, in the load that reads the hold (`SessionPolicy`, beside `ApplyAnyHumanDecision`): a hold a build BEFORE `auto` raised is released by `auto` unless the person answered it first; **every refusal of the AI's claim is left as it is**, and a hold this build raised under `human` keeps this plan's authority — `resolve(humanDecision: "proceed")` is still refused on it |

@@ -30,3 +30,9 @@ Not written: the design above has to be chosen first. When it is, this document 
 
 - [ ] The design questions in §3 are answered by the owner.
 - [ ] This stub is replaced by a plan carrying the sections §4 lists.
+
+## Boundary with the auto plan
+
+> Added 2026-11-17 by the auto plan's E1.S3 (its § 7, the same table shortened in each of the four documents it touches) — a boundary section, not a change to this plan's scope.
+
+[PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) makes the stored policy (`COAI_ON_EXHAUSTED`, `settings.json`) decide whether a hold from before `auto` is released. That file is an input the agent can write as well as the operator can, so a signed answer's design must treat `settings.json`'s policy the same way as the answer file: the auto plan's § 6 says a settings file that cannot be read releases nothing, and a release never reads the person's answer as absent — the signed answer, when it exists, is read where `CurrentAnswer` is read today, before any release and again after the withdrawal of the notices.
