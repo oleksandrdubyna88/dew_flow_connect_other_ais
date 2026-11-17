@@ -3,6 +3,15 @@ import { overlayKeyOf } from './coaiInstall';
 import { unknownKeysOf, unregisteredKeyIn } from './catalogMigrationRun';
 import { InForce, runsAuto, sentenceFor } from './onExhaustedTold';
 
+/** Ordinal order, by UTF-16 code unit: what a bare `sort()` did, stated, and never the locale's. */
+function byCodeUnit(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+
+  return a < b ? -1 : 1;
+}
+
 /**
  * The one-time migration that resets every saved *When the rounds run out* to Auto (E2.S2; the decisions are
  * todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.1, the run is § S2.4). Pure and `vscode`-free: the host hands in a
@@ -137,7 +146,7 @@ export function planOf(store: MigrationStore, userValue: unknown): Readonly<Reco
   const prefix = overlayKeyOf('');
   const held: Record<string, string> = {};
   addHeld(held, USER_ID, userValue);
-  for (const key of store.keys().filter((one) => one.startsWith(prefix)).sort()) {
+  for (const key of store.keys().filter((one) => one.startsWith(prefix)).sort(byCodeUnit)) {
     const slot = store.get(key);
     addHeld(held, key, isRecord(slot) ? slot['onExhausted'] : undefined);
   }
@@ -335,7 +344,7 @@ async function clears(ports: MigrationPorts): Promise<Stop | undefined> {
 }
 
 function sameHeld(stored: Readonly<Record<string, string>> | undefined, planned: Readonly<Record<string, string>>): boolean {
-  const text = (held: Readonly<Record<string, string>>): string => JSON.stringify(Object.entries(held).sort());
+  const text = (held: Readonly<Record<string, string>>): string => JSON.stringify(Object.entries(held).sort((a, b) => byCodeUnit(a[0], b[0])));
 
   return stored !== undefined && text(stored) === text(planned);
 }
@@ -371,7 +380,7 @@ function dueNow(ports: MigrationPorts, id: string, held: string | undefined): bo
 
 /** The first overlay id of `held`, in key order, that is due at this moment. */
 function nextDue(ports: MigrationPorts, held: Readonly<Record<string, string>>): string | undefined {
-  return Object.keys(held).filter((id) => id !== USER_ID).sort().find((id) => dueNow(ports, id, held[id]));
+  return Object.keys(held).filter((id) => id !== USER_ID).sort(byCodeUnit).find((id) => dueNow(ports, id, held[id]));
 }
 
 /** The overlay record without `onExhausted` and with its witness — every other member kept. */
