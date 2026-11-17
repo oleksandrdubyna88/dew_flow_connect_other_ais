@@ -40,17 +40,16 @@ export function labelOf(value: OnExhausted): string {
   return choice === undefined ? value : (choice.short ?? choice.label);
 }
 
-/** The choice this value names, when it is one of the choices other than Auto — the only ones a workspace can override with. */
+/** The choice this value names, when it is one of the choices — Auto included: a workspace Auto beats a person's other pick. */
 function knownOverride(value: unknown): OnExhausted | undefined {
-  const choice = ON_EXHAUSTED_CHOICES.find((one) => one.value === value);
-
-  return choice === undefined || choice.value === 'auto' ? undefined : choice.value;
+  return ON_EXHAUSTED_CHOICES.find((one) => one.value === value)?.value;
 }
 
 /**
- * The policy a workspace's `.vscode/settings.json` sets, which wins over the choice the page shows: the folder value
- * when there is one, else the workspace value — and only when it is a known choice other than Auto, and this side's own
- * settings overlay does not hold the key (the overlay wins over a workspace value, `sideSettings.ts`).
+ * The policy a workspace's settings set (`.vscode/settings.json`, or the `.code-workspace` file in a multi-root window), which wins over the choice the page shows: the folder value
+ * when there is one, else the workspace value — and only when it is a known choice (Auto too: a workspace that turns Auto
+ * on makes the select snap back from any other pick), and this side's own settings overlay does not hold the key (the
+ * overlay wins over a workspace value, `sideSettings.ts`).
  */
 export function workspacePolicyOf(
   inspected: { readonly workspaceValue?: unknown; readonly workspaceFolderValue?: unknown },
@@ -87,5 +86,5 @@ export function gateNotes(
 }
 
 function workspaceSentence(workspace: OnExhausted): string {
-  return `This workspace sets When the rounds run out to ${labelOf(workspace)} in its .vscode/settings.json, which wins over the choice above. Remove it there to use your own.`;
+  return `This workspace sets When the rounds run out to ${labelOf(workspace)} in this workspace's settings (.vscode/settings.json or the .code-workspace file), which wins over the choice above. Remove it there to use your own.`;
 }

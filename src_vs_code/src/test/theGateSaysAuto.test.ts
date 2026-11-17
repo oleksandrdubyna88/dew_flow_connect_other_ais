@@ -62,6 +62,11 @@ test('AWorkspaceValueIsNamed', () => {
 
   assert.equal(occurrences(runPanel(panelState('gate', { workspacePolicy: 'human' })).html, sentence), 1);
   assert.equal(occurrences(runPanel(panelState('gate', { workspacePolicy: undefined })).html, sentence), 0);
+  assert.equal(
+    occurrences(runPanel(panelState('gate', { workspacePolicy: 'auto' })).html, 'This workspace sets When the rounds run out to Auto'),
+    1,
+    'a workspace Auto is named, so a person who picks another choice is told why the select went back',
+  );
 });
 
 test('AHostileLabelCannotReachThePage', () => {

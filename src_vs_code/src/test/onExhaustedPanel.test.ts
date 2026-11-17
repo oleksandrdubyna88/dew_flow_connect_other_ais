@@ -24,8 +24,14 @@ test('a folder value wins over a workspace value', () => {
   assert.equal(workspacePolicyOf({ workspaceValue: 'continue' }, false), 'continue');
 });
 
-test('Auto, an unknown word, a non-string, or this side holding the key is no workspace policy', () => {
-  assert.equal(workspacePolicyOf({ workspaceValue: 'auto' }, false), undefined, 'a workspace Auto agrees with the default');
+test('a workspace or folder Auto is a workspace policy: it wins over a person who picks another choice', () => {
+  assert.equal(workspacePolicyOf({ workspaceValue: 'auto' }, false), 'auto', 'the select would snap back with no sentence');
+  assert.equal(workspacePolicyOf({ workspaceFolderValue: 'auto' }, false), 'auto');
+  assert.equal(workspacePolicyOf({ workspaceFolderValue: 'auto', workspaceValue: 'human' }, false), 'auto', 'the folder value is the one in force');
+  assert.equal(workspacePolicyOf({ workspaceValue: 'auto' }, true), undefined, 'this side overlay still wins');
+});
+
+test('an unknown word, a non-string, or this side holding the key is no workspace policy', () => {
   assert.equal(workspacePolicyOf({ workspaceValue: '<b>' }, false), undefined);
   assert.equal(workspacePolicyOf({ workspaceValue: 7 }, false), undefined);
   assert.equal(workspacePolicyOf({}, false), undefined);
@@ -33,8 +39,7 @@ test('Auto, an unknown word, a non-string, or this side holding the key is no wo
   assert.equal(workspacePolicyOf({ workspaceFolderValue: 'human', workspaceValue: 'continue' }, true), undefined);
 });
 
-test('a folder value is the one in force, so a folder Auto hides a workspace policy', () => {
-  assert.equal(workspacePolicyOf({ workspaceFolderValue: 'auto', workspaceValue: 'human' }, false), undefined);
+test('a folder value is the one in force, so an unknown folder word hides a workspace policy', () => {
   assert.equal(workspacePolicyOf({ workspaceFolderValue: 'nonsense', workspaceValue: 'human' }, false), undefined);
 });
 
@@ -42,7 +47,8 @@ test('the gate notes are at most two, the older server first', () => {
   const both = gateNotes('auto', [], 'human');
   assert.equal(both.length, 2);
   assert.match(both[0]!, /predates Auto/u);
-  assert.match(both[1]!, /This workspace sets When the rounds run out to Ask a human in its \.vscode\/settings\.json/u);
+  assert.match(both[1]!, /This workspace sets When the rounds run out to Ask a human in this workspace's settings/u);
+  assert.match(gateNotes('human', undefined, 'auto')[0]!, /to Auto in this workspace's settings/u, 'a workspace Auto is named too');
 
   assert.deepEqual(gateNotes('auto', undefined, undefined), [], 'not settled is not older');
   assert.deepEqual(gateNotes('auto', [FEATURES.onExhaustedAuto], undefined), []);
