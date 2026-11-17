@@ -16,11 +16,15 @@ namespace CoaiBench.Tests;
 /// </remarks>
 public sealed class SettingsAppliedTests
 {
-    private static JsonObject Config(int rounds, int threshold, string onExhausted) =>
+    /// <param name="autonomous">The session's <c>autonomous</c> member; null writes none, as a server from before policy auto left it.</param>
+    private static JsonObject Config(int rounds, int threshold, string onExhausted, bool? autonomous = null) =>
         JsonNode.Parse($$"""
             { "roles": { "PlanCritique": { "maxRounds": {{rounds}}, "threshold": {{threshold}} } },
-              "onExhausted": "{{onExhausted}}" }
+              "onExhausted": "{{onExhausted}}"{{Member(autonomous)}} }
             """) as JsonObject ?? [];
+
+    private static string Member(bool? autonomous) =>
+        autonomous is { } marker ? ", \"autonomous\": " + (marker ? "true" : "false") : string.Empty;
 
     private static Dictionary<string, string> Asked(params (string Key, string Value)[] pairs) =>
         pairs.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
@@ -63,6 +67,49 @@ public sealed class SettingsAppliedTests
     public void GoodEnoughAndGood_Enough_AreTheSameDecisionSpelledTwice() =>
         SettingsCheck.Of(Asked(("COAI_ON_EXHAUSTED", "good_enough")), Config(1, 6, "GoodEnough"), [])
             .Ok.Should().BeTrue();
+
+    // ---------- policy auto: the word AND the marker ----------
+
+    /// <summary>
+    /// Policy auto is stored as <c>GoodEnough</c> with <c>autonomous: true</c>; the word alone cannot tell it from a named <c>good_enough</c>.
+    /// A session with no <c>autonomous</c> member is an older server's, and means the policy it names.
+    /// </summary>
+    [Theory]
+    [InlineData("auto", "GoodEnough", true, true)]
+    [InlineData("AUTO", "GoodEnough", true, true)]
+    [InlineData("auto", "GoodEnough", false, false)]
+    [InlineData("auto", "GoodEnough", null, false)]
+    [InlineData("auto", "Human", null, false)]
+    [InlineData("good_enough", "GoodEnough", false, true)]
+    [InlineData("good_enough", "GoodEnough", null, true)]
+    [InlineData("good_enough", "GoodEnough", true, false)]
+    [InlineData("human", "Human", false, true)]
+    [InlineData("human", "Human", null, true)]
+    [InlineData("human", "Human", true, false)]
+    [InlineData("human", "GoodEnough", true, false)]
+    [InlineData("continue", "Continue", false, true)]
+    [InlineData("escalate", "Escalate", null, true)]
+    [InlineData("escalate", "Escalate", true, false)]
+    public void TheAskedPolicy_AgainstWhatTheSessionStored(string asked, string seen, bool? autonomous, bool ok)
+    {
+        var applied = SettingsCheck.Of(Asked(("COAI_ON_EXHAUSTED", asked)), Config(1, 6, seen, autonomous), []);
+
+        applied.Ok.Should().Be(ok, string.Join("; ", applied.Mismatches));
+        applied.Checked.Should().Contain("on-exhausted");
+        if (!ok)
+        {
+            applied.Mismatches.Should().ContainSingle().Which.Should().Contain($"asked '{asked}'").And.Contain($"session says '{seen}'");
+        }
+    }
+
+    [Fact]
+    public void ASessionThatRunsAuto_IsNotJudgedWhenNothingWasAsked()
+    {
+        var applied = SettingsCheck.Of(Asked(), Config(1, 6, "GoodEnough", autonomous: true), []);
+
+        applied.Ok.Should().BeTrue();
+        applied.Checked.Should().NotContain("on-exhausted");
+    }
 
     // ---------- the three switches, which are visible as ORDERS ----------
 

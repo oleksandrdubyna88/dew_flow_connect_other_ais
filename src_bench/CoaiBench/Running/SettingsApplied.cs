@@ -66,14 +66,40 @@ public static class SettingsCheck
         if (asked.TryGetValue("COAI_ON_EXHAUSTED", out var policy))
         {
             examined.Add("on-exhausted");
-            var seen = config["onExhausted"]?.GetValue<string>() ?? string.Empty;
-            // `good_enough` in the file, `GoodEnough` in the state: the same decision, spelled twice.
-            if (!seen.Replace("_", "", StringComparison.Ordinal)
-                .Equals(policy.Replace("_", "", StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase))
+            if (PolicyMismatch(policy, config["onExhausted"]?.GetValue<string>() ?? string.Empty, config) is { } mismatch)
             {
-                mismatches.Add($"on-exhausted asked '{policy}', session says '{seen}'");
+                mismatches.Add(mismatch);
             }
         }
+    }
+
+    /// <summary>
+    /// The asked policy against what the session stored: the word AND the session's <c>autonomous</c> member — or null when they agree.
+    /// </summary>
+    /// <remarks>
+    /// Policy auto is stored as <c>GoodEnough</c> with <c>autonomous: true</c>; a named <c>good_enough</c> is the same word with <c>false</c>
+    /// (or no member, from a server before policy auto). The word alone cannot tell them apart, so asked <c>auto</c> is satisfied only by
+    /// the marker, and any other asked word is contradicted by <c>autonomous: true</c>.
+    /// </remarks>
+    private static string? PolicyMismatch(string asked, string seen, JsonObject config)
+    {
+        var autonomous = config["autonomous"] is JsonValue marker && marker.TryGetValue<bool>(out var value) ? value : (bool?)null;
+        var markerWords = autonomous switch
+        {
+            true => " with autonomous true",
+            false => " with autonomous false",
+            _ => " with no autonomous member",
+        };
+        // `good_enough` in the file, `GoodEnough` in the state: the same decision, spelled twice.
+        static string Plain(string word) => word.Replace("_", "", StringComparison.Ordinal);
+        var disagrees = asked.Equals("auto", StringComparison.OrdinalIgnoreCase)
+            ? !Plain(seen).Equals("GoodEnough", StringComparison.OrdinalIgnoreCase) || autonomous != true
+            : !Plain(seen).Equals(Plain(asked), StringComparison.OrdinalIgnoreCase) || autonomous == true;
+
+        return disagrees
+            ? $"on-exhausted asked '{asked}', session says '{seen}'"
+                + (asked.Equals("auto", StringComparison.OrdinalIgnoreCase) || autonomous == true ? markerWords : string.Empty)
+            : null;
     }
 
     /// <summary>Phrases that belong to exactly ONE order, so finding one proves which order it was.</summary>
