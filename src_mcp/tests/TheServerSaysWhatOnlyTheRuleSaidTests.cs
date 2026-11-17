@@ -109,6 +109,21 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
     public void NoToolDescriptionNamesAPhone() =>
         File.ReadAllText(ToolsSourcePath()).Should().NotContain("or phone");
 
+    /// <summary>
+    /// A retry asks only the reviewers that failed, so under policy auto a second round that fails again is <c>not_reviewed</c> whenever nobody
+    /// ANSWERED in it — one of two failing is the common case — and <c>good_enough</c> otherwise. The description used to say every reviewer
+    /// had to fail twice (Opus review of E1.S2, 2026-11-17).
+    /// </summary>
+    [Fact]
+    public void TheReviewFeatureDescriptionSaysAFailedRetryIsNotReviewedWhenNobodyAnsweredInIt()
+    {
+        var source = string.Join(' ', File.ReadAllText(ToolsSourcePath()).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        source.Should().Contain("under `auto` it is `good_enough`, or `not_reviewed` when nobody answered in it.");
+        source.Should().NotContain("every reviewer failed twice", "a retry asks only the reviewers that failed, so one of two failing again already leaves nobody answered")
+            .And.NotContain("Under `auto` neither blocks");
+    }
+
     private static string ToolsSourcePath()
     {
         var here = new DirectoryInfo(AppContext.BaseDirectory);
