@@ -43,7 +43,7 @@ export async function pathMissingSeam({ providersIn, fail }) {
 
   // The settings file, by the extension's own writer: one root that is there, one that is not.
   const stored = { qconsultRoots: [here, gone] };
-  const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: [] };
+  const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: [], featuresSettled: false };
   writeFileSync(join(dataDir, 'settings.json'), serverSettingsJsonWith(settingsFrom((key) => stored[key]), vendorsFrom([]), write), 'utf8');
 
   // The server's half, through the extension's own parser.

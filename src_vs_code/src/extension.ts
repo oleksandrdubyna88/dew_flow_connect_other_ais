@@ -431,7 +431,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // asking the row's own provider first when its endpoint names one.
     () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
     // A catalog field crosses only when the binary lists it; what it last settled on, never a spawn per write.
-    () => features.known(),
+    () => features.settled(),
     // Never written into a NAMED data root that is missing (E5.7): the watch's answer, waited for (bounded).
     () => pathWatch.dataRootMissing(),
   );

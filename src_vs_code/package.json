@@ -354,13 +354,21 @@
         "coai.onExhausted": {
           "type": "string",
           "enum": [
+            "auto",
             "human",
             "continue",
             "good_enough",
             "escalate"
           ],
-          "default": "human",
-          "markdownDescription": "When rounds run out with findings still gating: `continue` as-is (said out loud), call a `human`, or `escalate` the ladder (reviewer effort → reviewer model → arbiter model)."
+          "enumDescriptions": [
+            "Auto: the gate raises no new hold and never waits for a person; a round nobody answered proceeds as not_reviewed, spent rounds as good_enough, each logged and noted on the round.",
+            "Ask a human: stop and ask you.",
+            "Continue as-is, said out loud.",
+            "Good enough: apply what is true, reject the rest with reasons.",
+            "Climb the ladder: reviewer effort, then reviewer model, then arbiter model."
+          ],
+          "default": "auto",
+          "markdownDescription": "When rounds run out with findings still gating, or nobody answered: `auto` (the default) — the gate raises no new hold and never waits for a person; a round nobody answered proceeds as `not_reviewed`, spent rounds as `good_enough`, each logged and noted on the round, and your AI may still ask you a question its consultants could not settle; `human` — stop and ask you; `continue` as-is (said out loud); `good_enough` — apply what is true, reject the rest with reasons; `escalate` the ladder (reviewer effort → reviewer model → arbiter model)."
         },
         "coai.maxConcurrency": {
           "type": "integer",

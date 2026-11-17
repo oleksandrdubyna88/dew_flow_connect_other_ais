@@ -50,6 +50,39 @@ test('the binary is asked with --features and nothing else', async () => {
   assert.deepEqual(asked, [['--features']]);
 });
 
+test('FeaturesCacheTellsUnsettledFromEmpty', async () => {
+  const { writeFileSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const dir = ownedTemp('coai-features-settled');
+  try {
+    const first = join(dir, 'coai-mcp');
+    const other = join(dir, 'other-mcp');
+    writeFileSync(first, 'one');
+    writeFileSync(other, 'two');
+    const cache = new FeaturesCache();
+    assert.equal(cache.settled(), undefined, 'nothing asked is not an older binary');
+
+    await cache.of(first, () => answering(64, 'unknown argument'));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(cache.settled(), [], 'a 64 is a settled answer: an older binary');
+
+    let release: (value: { code: number; output: string }) => void = () => undefined;
+    let started = false;
+    void cache.of(other, () => () => {
+      started = true;
+
+      return new Promise((resolve) => { release = resolve; });
+    });
+    while (!started) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(cache.settled(), undefined, 'another file has not answered yet, and the old one does not speak for it');
+    release({ code: 0, output: '{"features":[]}' });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('the cache key changes when the binary file does, and a missing file is 0 rather than a throw', async () => {
   const { writeFileSync, utimesSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');

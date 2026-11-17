@@ -69,7 +69,7 @@ void test('--providers names a missing root as a settingProblem of the wire shap
   const gone = join(roots, 'gone');
   try {
     const stored: Record<string, unknown> = { qconsultRoots: [here, gone] };
-    const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: [] as string[] };
+    const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: [] as string[], featuresSettled: false };
     writeFileSync(join(dataDir, 'settings.json'), serverSettingsJsonWith(settingsFrom((key) => stored[key]), vendorsFrom([]), write), 'utf8');
 
     const output = await providersIn(binary, dataDir);
