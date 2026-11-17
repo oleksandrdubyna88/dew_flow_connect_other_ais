@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.66.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.65.4...mcp-v0.66.0) (2026-11-17)
+
+
+### Features
+
+* policy auto — the server never asks a person when the rounds run out (E1 of the auto plan) ([#1011](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1011)) ([92f1fa8](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/92f1fa8f07940d3e4740fb22bfdd1bb3a4591f82))
+
 ## [0.65.4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.65.3...mcp-v0.65.4) (2026-11-16)
 
 
