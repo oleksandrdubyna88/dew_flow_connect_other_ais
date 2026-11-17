@@ -61,7 +61,10 @@ export function terminalLabel(name: string): string {
   return name.startsWith(CREDS) && name.length > CREDS.length ? name.slice(CREDS.length) : name;
 }
 
-/** The conversation of THIS terminal object, or a new one. It never matches by name and never answers `rekey`. */
+/**
+ * The conversation of THIS terminal object, or a new one. It never matches by name and never answers `rekey`: the DOOR never re-keys.
+ * Re-attach (`terminalReattach.ts`) is a separate road that runs before it and moves a restored conversation onto its terminal.
+ */
 export function terminalMatch(known: readonly KnownPanel[], terminal: object, name: string): SessionMatch {
   const label = terminalLabel(name);
 
@@ -92,6 +95,21 @@ export function oneLiveNamed(live: readonly LiveTerminal[], name: string): Named
 
   return named.length === 0 ? { kind: 'none' } : { kind: 'several', count: named.length };
 }
+
+/**
+ * How many terminals answer to exactly this name for a go-to pressed in `pressed` (E3.S2): the LIVE terminals of the name other than the
+ * pressed one, plus the pressed terminal itself — exited or not, so never below 1. A go-to pressed in an exited terminal with a live
+ * namesake therefore sees two, and asks the person, instead of showing the live namesake's conversation as its own.
+ */
+export function namesakesOf(live: readonly LiveTerminal[], pressed: object, name: string): number {
+  return 1 + live.filter((one) => !one.exited && one.name === name && one.key !== pressed).length;
+}
+
+/**
+ * Whether this key is a terminal still in the window's list — LIVE OR EXITED. An exited terminal that is still listed keeps its
+ * conversation (as `orphansOf` counts it), so nothing may move that conversation onto a namesake.
+ */
+export const terminalOfWindow = (terminals: readonly LiveTerminal[], key: object): boolean => terminals.some((one) => one.key === key);
 
 /**
  * The panels a TAB may be matched against: every panel but the ones opened from a terminal.

@@ -23,6 +23,7 @@ import { agentOffered } from './chatAccessRules';
 import { Ready, chatCatalogFrom, chatRead, openingPrompt, readyToChat, roleOf, savedModels, savedPick, savedPrompts, taskOf } from './chatConfig';
 import { CANCELLED, fromTheEditor, fromTheTerminal, matchedSource, passageFor } from './chatCapture';
 import { terminalMatch } from './terminalSource';
+import { confirmReattach, reattachByName } from './terminalHost';
 import { ChatSession } from './chatSession';
 import {
   chatProvidersFromPresets,
@@ -42,7 +43,7 @@ import {
   openingTurn,
   serviceLines,
 } from './chatPrompt';
-import { sourceSession } from './sessionKey';
+import { sourceSession, type SessionMatch } from './sessionKey';
 import {
   waitingQuestion,
 } from './claudeSessions';
@@ -316,6 +317,24 @@ function terminalDoorName(terminal: vscode.Terminal | undefined): { readonly ter
   return { terminal, name };
 }
 
+/**
+ * The conversation of this terminal, after the one look re-attach takes at its name (E3.S1): a chat restored by a reload finds its terminal
+ * again here, so the door, *take* and *add* use THAT conversation and start no second one. No `await` between the re-attach and the match.
+ *
+ * <p>When the match is `existing` this is the first use of that conversation from its terminal, and a bind that re-attach made is final
+ * (`confirmReattach` — only while the plan for the name still answers one terminal and one conversation). The door itself never
+ * re-keys: `terminalMatch` stays as it is, and re-attach is a separate road that runs before it.</p>
+ */
+function terminalDoorMatch(panels: ChatPanels, door: { readonly terminal: vscode.Terminal; readonly name: string }): SessionMatch {
+  reattachByName(panels, door.name);
+  const match = terminalMatch(panels.known(), door.terminal, door.name);
+  if (match.kind === 'existing') {
+    confirmReattach(panels, door.terminal, door.name);
+  }
+
+  return match;
+}
+
 /** Said when the clipboard held no text, could not be read, or another capture held the latch: the capture's own sentence, which says which. */
 function terminalDoorNothing(failure: string): void {
   void notify({
@@ -362,7 +381,7 @@ export async function askFromTerminal(
     return;
   }
   const { autoSend } = chatSettingsFrom(chatRead(vscode.workspace.getConfiguration('coai')));
-  const match = terminalMatch(panels.known(), door.terminal, door.name);
+  const match = terminalDoorMatch(panels, door);
 
   await deliverPassage(panels, extensionUri, ready, match, passage, sendsImmediately(autoSend, false), false, sourceOfTerminal(door.name));
 }
@@ -663,8 +682,9 @@ export async function takeFromTerminal(
     return;
   }
   const text = question.text;
+  const match = terminalDoorMatch(panels, door);
 
-  await deliverPassage(panels, extensionUri, ready, terminalMatch(panels.known(), door.terminal, door.name), { text }, false, true, sourceOfTerminal(door.name), append);
+  await deliverPassage(panels, extensionUri, ready, match, { text }, false, true, sourceOfTerminal(door.name), append);
 }
 
 /** The same door, the other verb: the question is ADDED to what the composer already holds. */

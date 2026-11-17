@@ -317,6 +317,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.goToFromTerminal",
+        "title": "CoAI: go to this terminal's conversation",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.backToSource",
         "title": "CoAI: back to where this chat came from",
         "category": "ConnectOtherAIs"
@@ -1210,6 +1215,11 @@
           "group": "coai@2"
         },
         {
+          "command": "coai.goToFromTerminal",
+          "when": "view == terminal",
+          "group": "coai@3"
+        },
+        {
           "command": "coai.help",
           "when": "view == coai.panel",
           "group": "navigation@0"
@@ -1280,6 +1290,10 @@
         },
         {
           "command": "coai.addFromTerminal",
+          "when": "false"
+        },
+        {
+          "command": "coai.goToFromTerminal",
           "when": "false"
         },
         {
@@ -1370,7 +1384,13 @@
         "command": "coai.backToSource",
         "key": "ctrl+alt+g",
         "mac": "cmd+alt+g",
-        "when": "activeWebviewPanelId == 'coaiChat'"
+        "when": "activeWebviewPanelId == 'coaiChat' && !terminalFocus"
+      },
+      {
+        "command": "coai.goToFromTerminal",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "when": "terminalFocus"
       },
       {
         "command": "coai.switchConversations",
@@ -1386,7 +1406,8 @@
     ],
     "configurationDefaults": {
       "terminal.integrated.commandsToSkipShell": [
-        "coai.askFromTerminal"
+        "coai.askFromTerminal",
+        "coai.goToFromTerminal"
       ]
     }
   },

@@ -11,6 +11,7 @@ import { signatureOf } from '../../renderAnswer';
 import { threads, type Thread } from '../../chatThread';
 import { until, registeredChat } from './hostHelpers';
 import { aClaudeLookingTabDoesNotTakeATerminalChat, backToATerminalInARealEditor } from './terminalReturnScenario';
+import { aTerminalTakesBackItsConversationInARealEditor } from './terminalReattachScenario';
 import { aRevisionInARealEditor } from './revisionScenario';
 import { aBugzCollectIsRefusedInARealEditor } from './bugzCollectScenario';
 import { theDefaultPhrasesInARealEditor } from './defaultPhrasesScenario';
@@ -21,6 +22,7 @@ import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
 import { aTerminalPressTakesTheCopiedTextAndLeavesTheClipboard, theSkipListDefaultHoldsTheTerminalDoor } from './terminalCaptureScenario';
 import { aPressOnACredsTerminalReachesTheBoundRoadOnce, theTerminalItemsFollowTheActiveTerminalAndTheAnswer } from './terminalDoorsScenario';
 import { theConsentOfAHostIsKeptInTheRealGlobalState } from './terminalHostsScenario';
+import { theSkipListAddAppendsToTheUserSettingOnce } from './skipShellScenario';
 import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
 
 /**
@@ -885,6 +887,12 @@ const SCENARIOS: readonly Scenario[] = [
     run: aClaudeLookingTabDoesNotTakeATerminalChat,
   },
   {
+    // E3.S1. A terminal that opens takes back the conversation of its name; a second terminal of the name takes it off again. What it
+    // drives is in `terminalReattachScenario.ts`.
+    name: 'a terminal that opens takes back the conversation of its name, and a second terminal of the name undoes it',
+    run: aTerminalTakesBackItsConversationInARealEditor,
+  },
+  {
     // E5.1's code round, finding 6: a stranded Bugz pick, and none, written to the real settings and refused by the
     // collect's own decision, which starts nothing. What it does and does not drive is in `bugzCollectScenario.ts`.
     name: 'a Bugz collect with a stranded pick, or none, read from the real settings, is refused and starts nothing',
@@ -947,6 +955,13 @@ const SCENARIOS: readonly Scenario[] = [
     // `terminalHostsScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
     name: 'the consent of a host is kept in globalState: a "no" refuses a terminal press before any ssh, and a "yes" reaches the run seam',
     run: theConsentOfAHostIsKeptInTheRealGlobalState,
+  },
+  {
+    // S3-H1 of the E3 stories document (the chat opens from a terminal): through the test door of the BOUND skip-shell check, with the offer replaced by a
+    // fake that answers Add — the person's own user list gets the missing ids after their entries, once, and a second check asks nobody; the editor's
+    // user setting and the memory key are put back. What it drives is in `skipShellScenario.ts`. It cannot run on a machine without libnss3; CI runs it.
+    name: 'the skip-list Add appends the missing ids to the user setting once, keeps the person\'s entries first, and is not asked again',
+    run: theSkipListAddAppendsToTheUserSettingOnce,
   },
   {
     // S4-H1 of the E2 stories document: the context key `coai.terminalReadsSession` of the bound wiring follows the active terminal and the host's

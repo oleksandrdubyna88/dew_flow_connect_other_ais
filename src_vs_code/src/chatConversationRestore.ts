@@ -252,7 +252,9 @@ export function restoreConversation(
   });
   // ITS OWN KEY unless a caller named one. The tab a conversation was opened from may be gone, may
   // be a different object, or may already hold a live conversation — so a reload and a picker choice
-  // both give it a key of its own, and only *go to* binds it to the tab a person is looking at.
+  // both give it a key of its own, and only *go to* binds it to the tab a person is looking at. A conversation
+  // of a terminal has one other road: a `Creds:` terminal of the same name may take it back by the re-attach rule (`terminalReattach.ts`, E3.S1) — only when exactly one
+  // live terminal and exactly one orphaned conversation carry the name, and provisionally until the person uses it from the terminal.
   panels.open(bindTo?.key ?? {}, bindTo?.label ?? saved.title, () => entry);
   // A restored conversation is an open one, and the sweep in every other window must hear so.
   pulse?.();

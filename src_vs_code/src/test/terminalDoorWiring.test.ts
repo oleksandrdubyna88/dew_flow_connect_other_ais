@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { SKIP_SHELL_IDS } from '../skipShell';
 import { bodyOf, sourceOf } from './sourceReading';
 
 /**
@@ -21,6 +22,7 @@ const read = (relative: string): string => readFileSync(join(ROOT, relative), 'u
 interface Row {
   readonly command?: string;
   readonly key?: string;
+  readonly mac?: string;
   readonly when?: string;
   readonly title?: string;
   readonly category?: string;
@@ -216,4 +218,112 @@ test('S4-T7: the two items sit in the terminal panel overflow, only when the ter
   }
   // The proof that this reads the right rows: the E1 button is still there, and it IS in navigation.
   assert.equal(rows.find((row) => row.command === DOOR)?.group, 'navigation@90');
+});
+
+// ───────────────── E3.S2: go to from a terminal ─────────────────
+
+const GO_TO_TERMINAL = 'coai.goToFromTerminal';
+const GO_TO_CHORD = 'ctrl+alt+g';
+
+test('S2-T1: the terminal go-to is declared, sits in the overflow, is hidden from the palette and has its chord', () => {
+  const declared = MANIFEST.contributes.commands.filter((row) => row.command === GO_TO_TERMINAL);
+  const items = (MANIFEST.contributes.menus['view/title'] ?? []).filter((row) => row.command === GO_TO_TERMINAL);
+  const palette = (MANIFEST.contributes.menus['commandPalette'] ?? []).filter((row) => row.command === GO_TO_TERMINAL);
+  const chords = MANIFEST.contributes.keybindings.filter((row) => row.command === GO_TO_TERMINAL);
+
+  assert.equal(declared.length, 1, `${GO_TO_TERMINAL} is declared ${declared.length} times in contributes.commands, not once`);
+  assert.equal(declared[0]?.title, "CoAI: go to this terminal's conversation");
+  assert.equal(declared[0]?.category, 'ConnectOtherAIs');
+  assert.equal(items.length, 1, `${GO_TO_TERMINAL} has ${items.length} view/title rows, not one`);
+  assert.equal(items[0]?.when, 'view == terminal', 'the go-to item is not scoped to the terminal view');
+  assert.equal(items[0]?.group, 'coai@3', 'the go-to item is not in the overflow menu: its group is not coai@3, after the two items of E2');
+  assert.ok(!(items[0]?.group ?? '').startsWith('navigation'), 'the go-to item is not in the overflow menu: it is a title-bar button');
+  assert.equal(palette.length, 1, `${GO_TO_TERMINAL} has ${palette.length} commandPalette rows, not one`);
+  assert.equal(palette[0]?.when, 'false', 'the go-to item is offered by the palette, where no terminal is meant');
+  assert.equal(chords.length, 1, 'the chord does nothing in a terminal: the terminal go-to has no keybinding');
+  assert.equal(chords[0]?.key, GO_TO_CHORD);
+  assert.equal(chords[0]?.mac, 'cmd+alt+g', 'the chord is unreachable on macOS');
+  assert.equal(chords[0]?.when, 'terminalFocus');
+});
+
+test('S2-T2: the skip-list default holds both ids, in order, and every terminalFocus binding is among them', () => {
+  const skipped = MANIFEST.contributes.configurationDefaults?.[SKIP_LIST];
+  const bound = MANIFEST.contributes.keybindings.filter((row) => requiresTerminalFocus(row.when)).map((row) => row.command ?? '');
+
+  // The scan's own proof: the derivation finds the go-to chord among the terminalFocus bindings, beside the door's.
+  assert.ok(bound.includes(GO_TO_TERMINAL), 'the derivation no longer finds the terminal go-to among the terminalFocus bindings');
+  assert.ok(Array.isArray(skipped), `${SKIP_LIST} has no default in contributes.configurationDefaults`);
+  assert.ok(
+    (skipped as readonly unknown[]).includes(GO_TO_TERMINAL),
+    `${GO_TO_TERMINAL} is bound in a terminal but not in the skip list — the chord goes to the shell`,
+  );
+  assert.deepEqual(skipped, [DOOR, GO_TO_TERMINAL], 'the skip-list default is not exactly the two ids in order');
+});
+
+/**
+ * The top-level pieces of a `when` clause: its `&&` conjuncts and whether an `||` sits at the top, outside every parenthesis.
+ * `x || !terminalFocus` has an `||` at the top and no `!terminalFocus` conjunct; `(a || b) && !terminalFocus` has the conjunct and the `||` is inside.
+ */
+function topLevelOf(when: string): { readonly conjuncts: readonly string[]; readonly orAtTop: boolean } {
+  let depth = 0;
+  let current = '';
+  const conjuncts: string[] = [];
+  let orAtTop = false;
+  for (let at = 0; at < when.length; at += 1) {
+    const two = when.slice(at, at + 2);
+    depth += when[at] === '(' ? 1 : when[at] === ')' ? -1 : 0;
+    if (depth === 0 && two === '&&') {
+      conjuncts.push(current.trim());
+      current = '';
+      at += 1;
+    } else if (depth === 0 && two === '||') {
+      orAtTop = true;
+      at += 1;
+    } else {
+      current += when[at];
+    }
+  }
+
+  return { conjuncts: [...conjuncts, current.trim()], orAtTop };
+}
+
+test('S2-T3b: the scan of a when clause tells the weak form from the strong one', () => {
+  assert.deepEqual(topLevelOf('a && !terminalFocus'), { conjuncts: ['a', '!terminalFocus'], orAtTop: false });
+  assert.deepEqual(topLevelOf("(x == 1 || editorTextFocus) && !terminalFocus"), { conjuncts: ['(x == 1 || editorTextFocus)', '!terminalFocus'], orAtTop: false });
+  assert.equal(topLevelOf('x || !terminalFocus').orAtTop, true, 'an or at the top was not seen');
+  assert.ok(!topLevelOf('x || !terminalFocus').conjuncts.includes('!terminalFocus'), 'a disjunct was taken for a conjunct');
+  assert.ok(!topLevelOf('(a && !terminalFocus) || b').conjuncts.includes('!terminalFocus'), 'a conjunct inside parentheses was taken for a top-level one');
+});
+
+test('S2-T3: no other Ctrl+Alt+G binding can fire under terminal focus', () => {
+  const rows = MANIFEST.contributes.keybindings.filter((row) => row.key === GO_TO_CHORD);
+  const others = rows.filter((row) => row.command !== GO_TO_TERMINAL);
+
+  // The scan's own proof: it finds the go-to's chord, the tab go-to and the road back, so an emptied filter cannot pass for ever.
+  assert.ok(rows.some((row) => row.command === GO_TO_TERMINAL), 'the derivation no longer finds the terminal go-to chord');
+  assert.ok(others.some((row) => row.command === 'coai.goToConversation'), 'the derivation no longer finds the tab go-to chord');
+  assert.ok(others.some((row) => row.command === 'coai.backToSource'), 'the derivation no longer finds the road back chord');
+  for (const row of others) {
+    // A top-level `&& !terminalFocus` and no top-level `||`: `x || !terminalFocus` contains the words and still fires in a terminal.
+    const { conjuncts, orAtTop } = topLevelOf(row.when ?? '');
+    assert.ok(
+      conjuncts.includes('!terminalFocus') && !orAtTop,
+      `${row.command} bound to ${row.key} when "${row.when}" can still fire in a terminal, where the terminal go-to must win`,
+    );
+  }
+});
+
+test('the skip-shell check knows exactly the commands the manifest binds under terminal focus (S3-T9)', () => {
+  const skipped = MANIFEST.contributes.configurationDefaults?.[SKIP_LIST];
+  const bound = new Set(MANIFEST.contributes.keybindings.filter((row) => requiresTerminalFocus(row.when)).map((row) => row.command ?? ''));
+
+  // The scan's own proof: the derivation still finds the door, so a reformatted `when` cannot empty it and pass for ever.
+  assert.ok(bound.has(DOOR), 'the derivation no longer finds the terminal door among the terminalFocus bindings');
+  for (const command of bound) {
+    assert.ok((SKIP_SHELL_IDS as readonly string[]).includes(command), `the skip-list check does not know ${command}`);
+  }
+  for (const id of SKIP_SHELL_IDS) {
+    assert.ok(bound.has(id), `the skip-list check names ${id}, which is not bound under terminalFocus in the manifest`);
+  }
+  assert.deepEqual([...SKIP_SHELL_IDS], skipped, 'SKIP_SHELL_IDS is not exactly the manifest default of terminal.integrated.commandsToSkipShell, in order');
 });
