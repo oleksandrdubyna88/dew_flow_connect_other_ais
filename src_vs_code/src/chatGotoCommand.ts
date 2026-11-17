@@ -13,6 +13,7 @@ import { ConversationIndex } from './chatStoreCache';
 import { ChatStoreFile } from './chatStoreFile';
 import { ConversationRecord } from './chatStore';
 import { Narrowed, switchConversations } from './conversationPickerCommand';
+import { asText } from './asText';
 import { notify } from './notify';
 import { narrowedTitle, stillListing } from './conversationChoice';
 
@@ -139,7 +140,18 @@ export async function goToFromTerminal(
       key: terminal,
       stillThere: (key) => terminalStillThere(liveTerminals(vscode.window.terminals), key, asked.source),
       start: () => {
-        void askFromTerminal(panels, extensionUri, terminal);
+        // The same failure the registered command says when the terminal door rejects (`coai.askFromTerminal` in extension.ts).
+        askFromTerminal(panels, extensionUri, terminal).catch((reason: unknown) => {
+          console.error('coai.askFromTerminal failed', reason);
+          void notify({
+            as: 'warning',
+            class: 'failure',
+            source: 'askFromTerminal',
+            code: 'terminal-door-failed',
+            title: 'The copied text could not be sent to a chat.',
+            detail: asText(reason),
+          });
+        });
       },
     };
     if (await arrive(panels, store, extensionUri, index, road) === 'reveal') {

@@ -97,6 +97,21 @@ export function oneLiveNamed(live: readonly LiveTerminal[], name: string): Named
 }
 
 /**
+ * How many terminals answer to exactly this name for a go-to pressed in `pressed` (E3.S2): the LIVE terminals of the name other than the
+ * pressed one, plus the pressed terminal itself — exited or not, so never below 1. A go-to pressed in an exited terminal with a live
+ * namesake therefore sees two, and asks the person, instead of showing the live namesake's conversation as its own.
+ */
+export function namesakesOf(live: readonly LiveTerminal[], pressed: object, name: string): number {
+  return 1 + live.filter((one) => !one.exited && one.name === name && one.key !== pressed).length;
+}
+
+/**
+ * Whether this key is a terminal still in the window's list — LIVE OR EXITED. An exited terminal that is still listed keeps its
+ * conversation (as `orphansOf` counts it), so nothing may move that conversation onto a namesake.
+ */
+export const terminalOfWindow = (terminals: readonly LiveTerminal[], key: object): boolean => terminals.some((one) => one.key === key);
+
+/**
  * The panels a TAB may be matched against: every panel but the ones opened from a terminal.
  * Judged by the conversation's durable source, never by its key — a restored terminal conversation is keyed by a plain object.
  */

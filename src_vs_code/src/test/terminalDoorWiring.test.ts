@@ -260,6 +260,41 @@ test('S2-T2: the skip-list default holds both ids, in order, and every terminalF
   assert.deepEqual(skipped, [DOOR, GO_TO_TERMINAL], 'the skip-list default is not exactly the two ids in order');
 });
 
+/**
+ * The top-level pieces of a `when` clause: its `&&` conjuncts and whether an `||` sits at the top, outside every parenthesis.
+ * `x || !terminalFocus` has an `||` at the top and no `!terminalFocus` conjunct; `(a || b) && !terminalFocus` has the conjunct and the `||` is inside.
+ */
+function topLevelOf(when: string): { readonly conjuncts: readonly string[]; readonly orAtTop: boolean } {
+  let depth = 0;
+  let current = '';
+  const conjuncts: string[] = [];
+  let orAtTop = false;
+  for (let at = 0; at < when.length; at += 1) {
+    const two = when.slice(at, at + 2);
+    depth += when[at] === '(' ? 1 : when[at] === ')' ? -1 : 0;
+    if (depth === 0 && two === '&&') {
+      conjuncts.push(current.trim());
+      current = '';
+      at += 1;
+    } else if (depth === 0 && two === '||') {
+      orAtTop = true;
+      at += 1;
+    } else {
+      current += when[at];
+    }
+  }
+
+  return { conjuncts: [...conjuncts, current.trim()], orAtTop };
+}
+
+test('S2-T3b: the scan of a when clause tells the weak form from the strong one', () => {
+  assert.deepEqual(topLevelOf('a && !terminalFocus'), { conjuncts: ['a', '!terminalFocus'], orAtTop: false });
+  assert.deepEqual(topLevelOf("(x == 1 || editorTextFocus) && !terminalFocus"), { conjuncts: ['(x == 1 || editorTextFocus)', '!terminalFocus'], orAtTop: false });
+  assert.equal(topLevelOf('x || !terminalFocus').orAtTop, true, 'an or at the top was not seen');
+  assert.ok(!topLevelOf('x || !terminalFocus').conjuncts.includes('!terminalFocus'), 'a disjunct was taken for a conjunct');
+  assert.ok(!topLevelOf('(a && !terminalFocus) || b').conjuncts.includes('!terminalFocus'), 'a conjunct inside parentheses was taken for a top-level one');
+});
+
 test('S2-T3: no other Ctrl+Alt+G binding can fire under terminal focus', () => {
   const rows = MANIFEST.contributes.keybindings.filter((row) => row.key === GO_TO_CHORD);
   const others = rows.filter((row) => row.command !== GO_TO_TERMINAL);
@@ -269,8 +304,10 @@ test('S2-T3: no other Ctrl+Alt+G binding can fire under terminal focus', () => {
   assert.ok(others.some((row) => row.command === 'coai.goToConversation'), 'the derivation no longer finds the tab go-to chord');
   assert.ok(others.some((row) => row.command === 'coai.backToSource'), 'the derivation no longer finds the road back chord');
   for (const row of others) {
+    // A top-level `&& !terminalFocus` and no top-level `||`: `x || !terminalFocus` contains the words and still fires in a terminal.
+    const { conjuncts, orAtTop } = topLevelOf(row.when ?? '');
     assert.ok(
-      (row.when ?? '').includes('!terminalFocus'),
+      conjuncts.includes('!terminalFocus') && !orAtTop,
       `${row.command} bound to ${row.key} when "${row.when}" can still fire in a terminal, where the terminal go-to must win`,
     );
   }

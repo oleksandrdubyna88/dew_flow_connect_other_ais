@@ -337,15 +337,42 @@ test('S2-T10: the terminal go-to never reads the tabs, starts the terminal door,
 
   // The scans' own proof: the bodies are found and are the terminal road's, and the tab road still reads the tabs.
   assert.ok(road.includes('askedForTerminal(') && asked.includes('terminalGotoAsked('), 'the derivation no longer finds the terminal road');
+  // The press-time question of the terminal road is the terminal's own (S2-T10, m4): in the window, alive, and the same name NOW. A road
+  // that passes `() => true` binds a conversation to a terminal that has gone, exited or been renamed, and every pure test stays green.
+  assert.match(road, /stillThere: \(key\) => terminalStillThere\(liveTerminals\(vscode\.window\.terminals\), key, asked\.source\),/u,
+    'the terminal road does not pass terminalStillThere as its stillThere, so a bind is never re-checked against the terminal');
   assert.ok(bodyOf(command, 'export async function goToConversation(').includes('askedForGoto('), 'the tab go-to no longer calls askedForGoto, so this scan guards a function that moved');
   for (const call of ['tabMatch(', 'snapshots(', 'sessionsNamed(', 'askedForGoto(']) {
     assert.ok(!both.includes(call), `the terminal go-to calls ${call}…) — a terminal is read through the tabs again`);
   }
-  assert.ok(/start: \(\) => \{\s*void askFromTerminal\(panels, extensionUri, terminal\);/u.test(road), 'the offer from a terminal does not start the terminal door');
+  assert.ok(/start: \(\) => \{[^]*?askFromTerminal\(panels, extensionUri, terminal\)\.catch\(/u.test(road), 'the offer from a terminal does not start the terminal door');
   assert.ok(!road.includes('chatWithOtherAi('), 'the offer from a terminal opened the file door');
+  // The namesakes count the pressed terminal itself (m2): `oneLiveNamed` over the live ones read an exited pressed terminal as having none.
+  assert.ok(asked.includes('namesakesOf(') && !asked.includes('oneLiveNamed('), 'the namesakes of a go-to do not count the pressed terminal itself');
   assert.ok(/=== 'reveal'\) \{\s*confirmReattach\(panels, terminal, name\);/u.test(road), 'a terminal go-to that shows the terminal’s conversation does not confirm it');
   assert.ok(!both.includes('reattachByName('), 'the terminal go-to runs a re-attach of its own, which it must never do');
   // One press at a time, under the SAME latch as the tab road.
   assert.equal((command.match(/await pressed\(/gu) ?? []).length, 2, 'the two go-to commands do not share one latch');
   assert.ok(/no-terminal-for-goto/u.test(road), 'a press with no terminal says nothing');
+});
+
+test('S2-T10c: the offer to start a conversation from a terminal catches its own failure and says it as the terminal door does', () => {
+  const road = bodyOf(source('chatGotoCommand.ts'), 'export async function goToFromTerminal(');
+  const door = /start: \(\) => \{([\s\S]*?)\n {6}\},/u.exec(road)?.[1] ?? '';
+
+  // The scan's own proof: the start arm is found and is the terminal door's.
+  assert.ok(door.includes('askFromTerminal(panels, extensionUri, terminal)'), 'the derivation no longer finds the terminal road\u2019s start');
+  assert.ok(door.includes('.catch('), 'the start of a conversation from a terminal has no catch, so a rejected door is an unhandled rejection');
+  assert.ok(door.includes("code: 'terminal-door-failed'"), 'the start of a conversation from a terminal does not say what the registered command says when the door fails');
+  // The same sentence the registered command shows, so the person sees one wording whichever way the door was reached.
+  const registered = /registerCommand\('coai\.askFromTerminal'[\s\S]*?title: '([^']*)'/u.exec(source('extension.ts'))?.[1] ?? '';
+  assert.ok(registered.length > 0 && door.includes(`title: '${registered}'`), 'the two failure notices of the terminal door say different things');
+});
+
+test('S2-T8c: the reveal road asks whether the key is a terminal of the window, not whether it is alive', () => {
+  const registry = bodyOf(source('chatRegistry.ts'), 'export function revealBound(');
+  const reveal = source('chatReveal.ts');
+
+  assert.ok(registry.includes('terminalOfWindow(liveTerminals(vscode.window.terminals), key)'), 'revealBound no longer asks the window which terminals it lists');
+  assert.ok(reveal.includes('isWindowTerminal') && !reveal.includes('isLiveTerminal'), 'the reveal seam is named for liveness again, which it does not test');
 });

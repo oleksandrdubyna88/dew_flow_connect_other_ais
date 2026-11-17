@@ -283,7 +283,9 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // terminal to go from (`no-terminal-for-goto`, a refusal), and its command fails with the same fixed sentence as go-to's (`conversation-not-opened`). S3: the skip-list
 // check of the terminal keys offers **Add** for the person's own user list (`skip-list-hides-terminal-keys`, a `notifyAndAsk`), says once, with no button, that a workspace
 // or folder list hides them (`skip-list-hidden-by-workspace`), and says when the write did not take (`skip-list-not-written`).
-const PLACES_THIS_SPEAKS = 182;
+// 182 -> 183 on 2026-11-17 (E3.S2 review, m3): the offer to start a conversation from a terminal catches a rejection of the terminal door and says it as the
+// registered command does (`terminal-door-failed`, one more site, the same code).
+const PLACES_THIS_SPEAKS = 183;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
