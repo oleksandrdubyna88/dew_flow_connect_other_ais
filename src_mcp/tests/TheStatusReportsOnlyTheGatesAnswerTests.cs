@@ -42,13 +42,13 @@ public sealed class TheStatusReportsOnlyTheGatesAnswerTests : IAsyncLifetime
     }
 
     private PanelService Service() =>
-        new(new PanelSettings { DataDir = _data, Providers = [] }, VaultKeys.None("no vault"), default,
+        new(new PanelSettings { Rounds = new PanelConfig(OnExhausted: StagePolicy.Human), DataDir = _data, Providers = [] }, VaultKeys.None("no vault"), default,
             _launcher, Serilog.Core.Logger.None, Noticing.None);
 
     private void Save(SessionState state) => new SessionStore(_data).Save(new PersistedSession(state, []));
 
     private SessionState Session(bool held, IReadOnlyList<string> holdQuestions) =>
-        new("s-status", _repo.Path, "main", PanelConfig.Uniform(3, 2))
+        new("s-status", _repo.Path, "main", PanelConfig.Uniform(3, 2, StagePolicy.Human))
         {
             PlanProceeded = true,
             Stage = Stage.CodeReview,
@@ -107,7 +107,7 @@ public sealed class TheStatusReportsOnlyTheGatesAnswerTests : IAsyncLifetime
         await _repo.CommitAsync("the plan");
         var round = DateTime.UtcNow.AddMinutes(-10);
         new SessionStore(_data).Save(new PersistedSession(
-            new SessionState("s-status", _repo.Path, SessionKey.FeatureBranch, PanelConfig.Uniform(2, 0))
+            new SessionState("s-status", _repo.Path, SessionKey.FeatureBranch, PanelConfig.Uniform(2, 0, StagePolicy.Human))
             {
                 Stage = Stage.FeatureReview,
                 Feature = DocumentReader.IdentityOf(_repo.Path, plan),

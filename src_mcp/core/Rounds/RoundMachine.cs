@@ -42,7 +42,10 @@ public abstract record RoundVerdict
     /// ones that hold, records why it rejected the rest, and proceeds. That last part is what keeps
     /// this different from <see cref="ContinueAnyway"/>, which proceeds and touches nothing.
     /// </remarks>
-    public sealed record GoodEnough(GateResult Gate, ReviewerSummary Reviewers) : RoundVerdict;
+    public sealed record GoodEnough(GateResult Gate, ReviewerSummary Reviewers, string Reason = "") : RoundVerdict;
+
+    /// <summary>No reviewer answered and policy auto proceeds WITHOUT a review — never a pass, said out loud.</summary>
+    public sealed record NotReviewed(GateResult Gate, ReviewerSummary Reviewers, string Reason) : RoundVerdict;
 
     /// <summary>Rounds exhausted, policy says a person decides.</summary>
     public sealed record CallHuman(GateResult Gate, ReviewerSummary Reviewers, string Reason) : RoundVerdict;
@@ -420,14 +423,16 @@ public static class RoundMachine
             ? s with { SecondRound = SecondRoundGround.PersonAsked, RequestQuestions = [] }
             : s;
 
-    public static Transition CompleteRound(SessionState s, GateResult gate, ReviewerSummary reviewers)
+    /// <param name="awaiting">How many findings the round leaves for <c>resolve</c> to decide — all of them, the lane's included, as the
+    /// ordinary reviewers' <paramref name="reviewers"/> count does not say. Only the words of a round nobody ordinary answered read it.</param>
+    public static Transition CompleteRound(SessionState s, GateResult gate, ReviewerSummary reviewers, int awaiting = 0)
     {
         // The feature stage has its own rule for what a round's outcome MEANS (D23): one round unless a
         // second is needed, two at most. Everything the gate computed is the same; what changes is which
         // verdict it becomes and what the state remembers about why.
         if (s.Stage == Stage.FeatureReview)
         {
-            return CompleteFeatureRound(s, gate, reviewers);
+            return CompleteFeatureRound(s, gate, reviewers, awaiting);
         }
 
         var roundsRun = s.RoundsRunThisStage + 1;
@@ -436,21 +441,16 @@ public static class RoundMachine
         // failed — one vendor out of quota, the other refusing an untrusted folder — so no
         // findings arrived and the round answered 'proceed'. A panel that did not review is not a
         // panel that approved; an empty result set is the ABSENCE of evidence, not evidence of
-        // absence. One answer is enough to judge on; none is a person's call.
-        if (reviewers.Answered == 0)
-        {
-            return new Transition.Ok(
-                // AwaitingResolve stays TRUE even though there are no findings to decide on: the
-                // round completed, and `resolve` is the only door a human's "proceed" can come
-                // through. With it false the verdict was unresolvable — the gate answered
-                // call_human and then refused the human, which is a dead end rather than a gate.
-                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, HumanGate = true },
-                new RoundVerdict.CallHuman(
-                    gate,
-                    reviewers,
-                    $"no reviewer answered — nothing was reviewed. {reviewers.Sentence}"));
-        }
+        // absence. One answer is enough to judge on; none is a person's call — or, under policy auto,
+        // the stage proceeds WITHOUT a review and says so (RoundCompletion, AutoVerdicts).
+        return reviewers.Answered == 0
+            ? RoundCompletion.NobodyAnswered(s, gate, reviewers, roundsRun, awaiting)
+            : Judged(s, gate, reviewers, roundsRun);
+    }
 
+    /// <summary>A round some reviewer answered: passed, revised, or its rounds exhausted.</summary>
+    private static Transition Judged(SessionState s, GateResult gate, ReviewerSummary reviewers, int roundsRun)
+    {
         if (gate.Passed)
         {
             return new Transition.Ok(
@@ -490,7 +490,7 @@ public static class RoundMachine
     /// <para>A blocking finding outranks a failure as the ground: a fix wants every reviewer's eyes, while a
     /// retry asks only the ones that failed.</para>
     /// </remarks>
-    private static Transition CompleteFeatureRound(SessionState s, GateResult gate, ReviewerSummary reviewers)
+    private static Transition CompleteFeatureRound(SessionState s, GateResult gate, ReviewerSummary reviewers, int awaiting)
     {
         var roundsRun = s.RoundsRunThisStage + 1;
         var ground = GroundFor(gate, reviewers);
@@ -509,9 +509,8 @@ public static class RoundMachine
             return new Transition.Ok(next with { SecondRound = ground }, new RoundVerdict.Revise(gate, reviewers, 1));
         }
 
-        return new Transition.Ok(
-            next with { HumanGate = true, SecondRound = SecondRoundGround.None },
-            new RoundVerdict.CallHuman(gate, reviewers, FeatureCallHumanReason(ground, gate, reviewers, roundsRun)));
+        // At its cap with a ground: a person under every policy but auto, which decides and says what it decided.
+        return RoundCompletion.FeatureAtItsCap(s, next, gate, reviewers, ground, roundsRun, awaiting);
     }
 
     /// <summary>
@@ -575,7 +574,7 @@ public static class RoundMachine
         : reviewers.Answered == 0 || reviewers.Failures.Length > 0 ? SecondRoundGround.ReviewerFailure
         : SecondRoundGround.None;
 
-    private static string FeatureCallHumanReason(SecondRoundGround ground, GateResult gate, ReviewerSummary reviewers, int roundsRun)
+    internal static string FeatureCallHumanReason(SecondRoundGround ground, GateResult gate, ReviewerSummary reviewers, int roundsRun)
     {
         // The second round is the ordinary case; the first is an operator whose feature budget is one.
         var which = roundsRun == 1 ? "round 1, and the feature budget is one round" : "the second round";
@@ -632,6 +631,11 @@ public static class RoundMachine
     private static Transition Exhausted(SessionState s, GateResult gate, ReviewerSummary reviewers, int roundsRun) =>
         s.Config.OnExhausted switch
         {
+            // First, so that a config under policy auto can never reach the call_human arm, whatever OnExhausted says.
+            _ when s.Config.IsAutonomous => new Transition.Ok(
+                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
+                new RoundVerdict.GoodEnough(gate, reviewers, AutoVerdicts.ExhaustedReason(gate, roundsRun))),
+
             StagePolicy.Continue => new Transition.Ok(
                 s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
                 new RoundVerdict.ContinueAnyway(gate, reviewers)),

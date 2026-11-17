@@ -74,6 +74,19 @@ public sealed class GoodEnoughPolicyTests
     }
 
     [Fact]
+    public void WhenNobodyAnswered_UnderAuto_ItIsNotReviewed()
+    {
+        // The auto twin of the test above: policy auto asks nobody either, so the empty result proceeds WITHOUT a review — said out loud.
+        var nobody = new ReviewerSummary(2, 0, ["codex: exit 1", "antigravity: timeout"]);
+
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(
+            new SessionState("s", "D:/r", "main", PanelConfig.Uniform(1, 0)), GateResult.Empty, nobody);
+
+        ok.Verdict.Should().BeOfType<RoundVerdict.NotReviewed>();
+        ok.State.HumanGate.Should().BeFalse();
+    }
+
+    [Fact]
     public void TheSettingIsReadFromItsOwnName()
     {
         var settings = PanelSettings.FromEnvironment(name => name == "COAI_ON_EXHAUSTED" ? "good_enough" : null);

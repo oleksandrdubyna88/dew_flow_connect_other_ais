@@ -19,6 +19,7 @@ public sealed class PlanLoopTests
     [InlineData("proceed")]
     [InlineData("good_enough")]
     [InlineData("continue_anyway")]
+    [InlineData("not_reviewed")]
     public void TheVerdictsThatOpenTheCodeStage(string verdict) =>
         RoundRunner.Passed(verdict).Should().BeTrue();
 

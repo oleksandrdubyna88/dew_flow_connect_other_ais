@@ -15,7 +15,7 @@
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
-| `ask_human` | `AskHumanService` (its own file since 2026-10-01, a proved move out of `PanelService` — S2 of the question consultant) over `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session that can still be asked for its second round (one round run, no ground, not held — narrowed 2026-10-03) it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request; **since 2026-10-02 (S3) the GATE stands in front of it**: the phase rule inferred by the server, a `consultId` verified, a `productionRisk` asked at once with the consultants beside — see *The door to the person* below | an empty question; `document` and `feature` together; `productionRisk` without a `riskReason`; and, under `require`, a question the phase rule sends to the consultants first (named `ask_consultants`, with the count); otherwise it WAITS the budget (15 minutes by default), then answers `no_answer_yet` telling the model to ask in the chat and marks the card `expired`. **Since 2026-10-03 only the GATE's question becomes a card** — a held gate, or a feature review that can still be asked for its second round (`RoundMachine.AsksForTheGate`); every other question is the AI's own and is answered at once with `ask_in_conversation` (`ConversationAnswer`), no card, no wait; a production risk outside the gate asks the consultants FIRST and returns their fenced answers (*Two doors*). |
+| `ask_human` | `AskHumanService` (its own file since 2026-10-01, a proved move out of `PanelService` — S2 of the question consultant) over `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session that can still be asked for its second round (one round run, no ground, not held — narrowed 2026-10-03) it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request; **since 2026-10-02 (S3) the GATE stands in front of it**: the phase rule inferred by the server, a `consultId` verified, a `productionRisk` asked at once with the consultants beside — see *The door to the person* below | an empty question; `document` and `feature` together; `productionRisk` without a `riskReason`; and, under `require`, a question the phase rule sends to the consultants first (named `ask_consultants`, with the count); otherwise it WAITS the budget (15 minutes by default), then answers `no_answer_yet` telling the model to ask in the chat and marks the card `expired`. **Since 2026-10-03 only the GATE's question becomes a card** — a held gate, or a feature review that can still be asked for its second round (`RoundMachine.AsksForTheGate`); every other question is the AI's own and is answered at once with `ask_in_conversation` (`ConversationAnswer`), no card, no wait; a production risk outside the gate asks the consultants FIRST and returns their fenced answers (*Two doors*). **Under policy auto (the default, 2026-11-17) it never waits and writes no card** — the AI's own question without a proof is answered `consult_first`, a held gate at once with `no_answer_yet` (*ask_human never waits under policy auto*, below). |
 | `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
 | `close_consult` | `CloseAsync` — how a consultation ENDED, recorded by whoever knows | not your consultation; a word outside the closed set; `lapsed`, which is the server's own; a consultation that FAILED and produced no advice; a different verdict over one already recorded |
 | `ask_consultants` | `QuestionConsultService` → `QuestionFanOut` — every active model × prompt row answers in PARALLEL before the person is asked (2026-10-01, `todo/PLAN_question_consultant.md` S2) | the switch off, nobody to ask and the quota are ANSWERS (`status`: `off` · `none_available` · `quota_spent`), not refusals; refused: an empty `context` by name, a question over 4 KB, a context over 8 KB, rows that cannot be read, `document` and `feature` together, a path that is no repository — see *The question consultant* below |
@@ -1405,6 +1405,33 @@ draws every card, as before.
 sweep asks; the gate's wiring and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497
 (the default's constant and its remark paid for by the surplus blank lines beside it).
 
+## ask_human never waits under policy auto (2026-11-17, `todo/PLAN_auto_never_asks_a_person_E1.md` § 9, owner decision O3)
+
+> Plan: [PLAN_auto_never_asks_a_person.md](../todo/PLAN_auto_never_asks_a_person.md) § 4.4 (the design) and
+> [PLAN_auto_never_asks_a_person_E1.md](../todo/PLAN_auto_never_asks_a_person_E1.md) § 9 and N3 (the words).
+
+Under policy `auto` the person is never asked first and nothing waits. Whether the policy is `auto` is read from the SETTINGS
+(`_settings.Rounds.IsAutonomous`), not from the session: a session raised under `human` is still `HumanGate` while the settings say
+`auto`, and that is the one case below that is not simply "no".
+
+| The call | The reply |
+|---|---|
+| The AI's own question, no `consultId` (or one the desk rejected) | `status: "consult_first"` — a `ConversationAnswer` with the instruction *call the consultants — ask_consultants — and come back only if the two of you did not settle it*, and the rejected-id clause as `note`. Nothing spent, counted, posted or recorded. |
+| … with a `consultId` the desk accepts (only an `ask_consultants` record counts) | today's `ask_in_conversation`; the batch is still counted in the building phase, so a switch back to `human` reads true counts |
+| … no consultant can be had | today's stand-down, `ask_in_conversation`; under `auto` the note does not say the consultant "is required here" — the phase rule decides nothing |
+| `productionRisk: true` outside a held gate | today's decision, the phase exclusion included: in the building phase the consultants first, their answers returned; in Planning or Released the person at once (`ask_in_conversation`, empty `note` — the `instruction` still tells the AI to ask the person in the conversation) |
+| The gate's question — a held gate, or a feature review's request window | answered AT ONCE (`no_answer_yet`, nothing waited for, no card, nothing recorded on the session), whatever `productionRisk` says |
+
+The held gate has two cases, told apart by the `Release` the load returned — never by `LegacyHold.Stands` alone, because a hold from
+before `auto` that the person answered stands as well: a hold **the person owns** (raised by this build, or answered by the person)
+names its notice — only their answer on it releases it; a hold from before `auto` **whose release could not be written yet** (the
+claim was busy, the settings file unread, a notice not withdrawn, the session not saved) quotes `LegacyHold.NotWrittenSentence` and says
+to call again — the next call that reads the session releases it. A feature session in its request window is told that a second round
+runs only on a ground the server finds. Each case is one Information line with the question id, the stage and the session id, never
+the question's text; no log line of `ask_human` carries a question's text on any road (a question may contain a secret an agent pasted;
+the text stays on the card and in the consult record). The pure decision is `AskGate.Decide` with `AskGateInput.Autonomous`
+(`AskDecision.ConsultFirst`); `AskUnderAuto` holds the words and `AskHumanService` the doors.
+
 ## The questions reach `--log`, and the consultants beside a long question still run (2026-10-02, `todo/PLAN_question_consultant.md` S4)
 
 S4 is the extension's story; four things in it are this server's, each in a commit of its own.
@@ -1859,7 +1886,7 @@ front of `ask_human` has let it through — *The door to the person*, above.
 ## Configuration and keys
 
 Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI_EXE_*`,
-`COAI_MAX_ROUNDS`, `COAI_GATE_THRESHOLD`, `COAI_ON_EXHAUSTED`, `COAI_MAX_CONCURRENCY`,
+`COAI_MAX_ROUNDS`, `COAI_GATE_THRESHOLD`, `COAI_ON_EXHAUSTED` (`auto|human|continue|good_enough|escalate`; **absent, empty or `auto` is policy auto** — an unknown word is `human` plus a complaint), `COAI_MAX_CONCURRENCY`,
 `COAI_MAX_PER_PROVIDER`, `COAI_REVIEWER_TIMEOUT_MINUTES`, `COAI_DATA_DIR`, `COAI_LOG_LEVEL`, and
 `COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config -` once per
 start, the key written to its stdin and never in its arguments (2026-10-10,
@@ -1981,6 +2008,8 @@ which a ratchet test could only ask after the fact: `ServeAsync` and `PanelServi
 log (`data directory: {Note}`, beside `StorageNotes`), and the two one-shot modes pass `Note` — STDERR,
 because their stdout carries the JSON a caller parses.
 
+**A failed adoption leaves the policy unread (2026-11-17, PR #1011).** `SettingsFile.TryLayer` (the reload and the start) takes the sentences the adoption returned: a side file that is still NOT there after an adoption that said something means the root file — where the operator's settings are — could not be read or published, so the layer carries `SettingsFile.NotAdopted` as its unread reason and `PanelServiceHost` sets `PolicyUnread` (the policy auto defaulted to was not the operator's). `SessionPolicy.Decided` then keeps a legacy hold. Before this the read of the missing side file answered "read, empty": a malformed root file and an absent side file released a hold the operator's own `human` policy had raised. The host reads again on every call while the policy is unread, so repairing the root file adopts it on the next call (`PanelServiceHostTests.ASideWhoseRootSettingsCannotBeAdopted_HasItsPolicyUnread_UntilTheRootIsRepaired`). **The retry is silent when it fails the same way (CodeRabbit on #1011):** `PanelServiceHost.Noted` remembers the adoption sentence last said (`_adoptionSaid`) and forwards to `StartupNotices.Adopted` (the Warning and the notice) only a sentence that differs from it; a published read (`Published`) forgets it. The retry itself still happens on every call.
+
 **It takes no lock, and that is not an oversight** — four reviewers across two vendors asked. The lock
 is the EXTENSION's (`settings.lock`, taken in `extension.ts` around a write of this same file) and the
 server has never had a client for it. It does not need one: `File.Move(overwrite: false)` makes this
@@ -2021,6 +2050,14 @@ Four properties of it are load-bearing, and each was earned:
 the real one, retried briefly (see *A session is saved under its own scratch name*); a torn file
 reads as a fresh session rather than a locked repo. Round trail (`RoundRecord`) and pending findings ride in the same file — `status`
 survives a server restart, per the durable-status rule.
+
+### `autonomous` absent is a meaning, not a default (2026-11-17)
+
+`state.config.autonomous` is `true` or `false` in every session file this build writes, and ABSENT in one from before policy auto — and
+absent is what marks a hold as "from before `auto`", the only hold policy auto releases. The loader therefore keeps absence as `null`
+(no declared default on the constructor parameter or the property: the source generator would fill it). A release of this server that
+RENAMES the member must keep reading the old name: a session this build wrote under the old name would otherwise load with `null`, which reads as "from before `auto`" (`PredatesAuto`), and a hold a PERSON owns (raised under `human`, `autonomous: false`) would become eligible for release under `auto` — the authority boundary lost, not kept (CodeRabbit, PR #1011); and `OnExhausted` stays `GoodEnough`
+on disk for policy auto, never a new enum name, because `SessionStore.Load` turns a parse failure into a NEW session.
 
 ### A session file keeps what a newer server wrote (`Unknown` bags)
 
@@ -2301,8 +2338,41 @@ are unchanged and were always described this way to the person — `continue` an
 set of rounds, `discuss` advances nothing. The fourth, `proceed`, arrived 2026-10-22 and is the only one that
 ships with the findings open.
 
-Only the `human` policy raises the gate. `continue_anyway` and `good_enough` advance on resolve, and
-a gate over them would break a configuration whose whole point is not to stop; a test pins that.
+**The five policies, and what each does where the rounds run out.** `COAI_ON_EXHAUSTED` is read into
+`PanelConfig.OnExhausted`; `PanelConfig.Autonomous` (`IsAutonomous`) says which of them is policy `auto`, and the two are
+written together and never apart. Three sites decide: a round nobody answered (`CompleteRound`), a feature review at its cap
+(`CompleteFeatureRound`) and the rounds being spent (`Exhausted`).
+
+| Policy | Nobody answered | Feature at its cap, with a ground | Rounds spent |
+|---|---|---|---|
+| **`auto`** (the default; absent means it) | `not_reviewed` — nothing was reviewed, said out loud; the stage advances on resolve | `good_enough`, or `not_reviewed` when nobody answered; no hold | `good_enough`, with the reason on the round's note |
+| `human` | `call_human`, the gate held | `call_human`, the gate held | `call_human`, the gate held |
+| `escalate` | `call_human` | `call_human` | `escalated` up the ladder, then `call_human` |
+| `continue` | `call_human` | `call_human` | `continue_anyway` |
+| `good_enough` (named) | `call_human` | `call_human` | `good_enough`, no reason |
+
+Only a policy that asks a person raises the gate. `continue_anyway` and `good_enough` advance on resolve, and a gate over
+them would break a configuration whose whole point is not to stop; a test pins that. **Policy `auto` raises no hold at all, waits
+for nobody and writes no card**: every decision it takes is a Serilog line (Warning for `not_reviewed` and for a released hold),
+the round's `note` in the session file and `coai.db`'s `rounds.note`, and a verdict an AI is told to act on.
+
+**A hold from before `auto` is released — a hold this build raised is not.** The marker is `PanelConfig.Autonomous`: `true` or
+`false` as written by a build that knows policy auto, absent for a session file from before it. A held session whose config has no
+marker is a hold from before `auto`, and under `auto` the first call that loads it releases it: `begin`, `resolve`, `status`,
+`ask_human` or the fresh-document check, through `SessionPolicy`. The order is the safety argument — the marker is read BEFORE the
+config is stamped (stamping a standing hold would make it this build's, and so a person's, for good); the person's answer on file wins
+and is read again after the withdrawal, putting the cards back when it is found; every notice is withdrawn BEFORE the session is saved, and an attempt that fails (a withdrawal that cannot be written, or the save) puts back the cards IT withdrew, best effort, so a policy switched to `human` meanwhile leaves no card the person cannot answer (a restore that fails is a warning, never a new reason; the first of two cards withdrawn and the second failing is the J8 (c) case);
+the release is noted on the held round (`released by policy auto: …`) in the same save, and in `coai.db` by a one-column update
+after it; the stage does not move, and ONE `resolve` then advances it through `PanelService.Finish`. A settings file that exists and
+cannot be read runs `auto` and releases nothing until it reads. A hold this build raised under `human` keeps its authority:
+`resolve(humanDecision: "proceed")` is still refused on it, and `ask_human` answers it at once and points at its notice.
+
+**Shape, held to cyclomatic complexity 4 (PR #1011, CodeRabbit).** `SessionPolicy.Write` is the order above and no more: `WithdrawEveryNotice` (every notice tried, no
+short circuit; `Withdrawals` carries who was withdrawn and who failed), then `NotWithdrawn`, `AnsweredMeanwhile` (the second read) or `Saved` (`ReleasedOf`, the save, the
+projection, the line) — the operation order is unchanged. `CurrentUnclaimed` is `Unclaimed` (the eligibility, `WouldRestore`, the pure decision) and `UnderTheClaim`
+(`ClaimIsBusy` when the claim is taken, else the read under it). `Decided` still answers `Release?`: null is "the pure steps decided nothing, go on to the write", the spec's
+§ S1.5 shape. `Escalations.Withdraw`, `Restore` and (since CodeRabbit on #1011, 2026-11-17) the older `Rewrite` behind `Expire`, `Attach` and `OfferDecisions` are mappings over one `Rewriting`: the file's turn is taken ONCE and held across the read (`Peek`) and the write (`Writer`, now `AtomicJson.WriteUnderTurn` by default; `Post` and `Notify` take the turn themselves) — read and written under two turns, a second process could write between them and the stale copy would put an expiry back `AskHumanService.AskHumanAsync`
+validates and loads; `FactsOf` builds the desk's facts with the policy on them and `DecidedAsync` answers what the gate decided.
 
 ## Only an answer on the notice card releases the gate (2026-10-22)
 

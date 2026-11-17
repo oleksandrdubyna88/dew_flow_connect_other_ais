@@ -24,7 +24,7 @@ public sealed class OnlyAPersonReleasesTheGateMachineTests : IDisposable
     public void Dispose() => _data.Dispose();
 
     private static SessionState Fresh(PanelConfig? config = null) =>
-        new("s-1", "D:/repo", "feature/x", config ?? new PanelConfig());
+        new("s-1", "D:/repo", "feature/x", config ?? new PanelConfig(OnExhausted: StagePolicy.Human));
 
     private static Finding F(string title = "finding") =>
         new(Severity.Major, Category.Security, "src/A.cs", 1, title, "why it breaks", "fix", ["codex"]);
@@ -156,7 +156,7 @@ public sealed class OnlyAPersonReleasesTheGateMachineTests : IDisposable
     [Fact]
     public void ACallersClaim_WhileRoundsRemain_IsRefused_AsItAlwaysWas()
     {
-        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) });
+        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) }, StagePolicy.Human);
         var awaiting = ((Transition.Ok)RoundMachine.CompleteRound(Fresh(patient), Failing(), AllSix)).State;
 
         RoundMachine.Resolve(awaiting, [], HumanDecision.None, callerClaimsProceed: true)
@@ -216,7 +216,7 @@ public sealed class OnlyAPersonReleasesTheGateMachineTests : IDisposable
 
     private static PersistedSession HeldOn(params string[] questions) =>
         new(
-            new SessionState("s1", "/repo", "main", PanelConfig.Uniform(1, 5))
+            new SessionState("s1", "/repo", "main", PanelConfig.Uniform(1, 5, StagePolicy.Human))
             {
                 Stage = Stage.CodeReview,
                 PlanProceeded = true,

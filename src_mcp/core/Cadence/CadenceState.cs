@@ -1,8 +1,15 @@
 namespace CoaiMcp.Core.Cadence;
 
-/// <summary>An epic whose code gate has passed — which a checkpoint does as well as a last round.</summary>
+/// <summary>
+/// An epic whose code stage moved to done — the gate passed, policy auto proceeded without a review, or policy auto released a hold a
+/// build before auto had raised.
+/// </summary>
 /// <param name="Number">The epic's number as the plan writes it.</param>
-/// <param name="Verdict">The verdict that moved its code stage to done: proceed, good_enough or continue_anyway.</param>
+/// <param name="Verdict">
+/// The verdict of the round that moved its code stage to done: proceed, good_enough, continue_anyway or not_reviewed — or call_human or
+/// escalated when policy auto released that round's hold (its note says "released by policy auto"): such an epic was released by auto,
+/// not passed by a person's decision.
+/// </param>
 /// <param name="ClosedUtc">When, ISO 8601.</param>
 public sealed record ClosedEpic(int Number, string Verdict, string ClosedUtc);
 
@@ -45,7 +52,7 @@ public sealed record CadenceState
     /// <summary>Whether the risk question has been answered, with items or with a reason for none.</summary>
     public bool RiskAnswered => RiskAnsweredUtc.Length > 0;
 
-    /// <summary>Whether an epic's code gate has passed.</summary>
+    /// <summary>Whether an epic's code stage has moved to done.</summary>
     public bool IsClosed(int epic) => Closed.Any(closed => closed.Number == epic);
 
     /// <summary>

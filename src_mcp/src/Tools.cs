@@ -100,8 +100,8 @@ internal static class Tools
                     Every reviewer is told the plan ends at its `END OF PLAN` line; one that did not receive it
                     whole does not count as answering. The reply
                     carries the merged, de-duplicated findings, the honest reviewer count, the
-                    verdict (proceed | revise | continue_anyway | good_enough | call_human |
-                    escalated) and what to do next. Then record decisions with `resolve` — every
+                    verdict (proceed | revise | continue_anyway | good_enough | not_reviewed |
+                    call_human | escalated) and what to do next. Then record decisions with `resolve` — every
                     finding, reasons on rejections.
 
                     A finding that changes your mind about the shape of the work is what `consult`
@@ -130,8 +130,8 @@ internal static class Tools
                 Name = "review_code",
                 Title = "One independent reviewer per configured role, per provider, over the branch diff",
                 Description = """
-                    The code gate — REFUSES until a plan round reached `proceed`, and REFUSES a
-                    bare diff. Per enabled provider, one reviewer per role configured for this
+                    The code gate — REFUSES until the plan stage advanced (a round that ended `proceed`, `continue_anyway`,
+                    `good_enough` or `not_reviewed`, then `resolve`d), and REFUSES a bare diff. Per enabled provider, one reviewer per role configured for this
                     stage — conventions / architecture / security+reliability / UX-DX & code
                     performance as shipped, plus any role the operator has added — reads the SCOPE,
                     the shaped diff of `branch` over `baseRef` (lock files and build output
@@ -303,11 +303,12 @@ internal static class Tools
                     the answered reviewers' decided findings under `carried`), a `blocking` finding came
                     back (fix it, then call again with `again: true` over the new HEAD), or the person asks
                     for one — through `ask_human` with `feature`, answered on their panel with
-                    "Keep going — more rounds"; no argument of yours can grant it, `again: true` included.
+                    "Keep going — more rounds" (never under policy `auto`, which asks no person); no
+                    argument of yours can grant it, `again: true` included.
                     A second round that still carries a `blocking` finding, or fails again, is `call_human`,
-                    which does block; so is a round in which every reviewer failed twice. A third round is
-                    never run. `again: true` is refused when nothing moved and when no ground admits a
-                    round; against a NEW `baseRef` it starts a fresh review of the same plan.
+                    which does block — under `auto` it is `good_enough`, or `not_reviewed` when nobody answered
+                    in it. A third round is never run. `again: true` is refused when nothing moved and when no
+                    ground admits a round; against a NEW `baseRef` it starts a fresh review of the same plan.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -338,6 +339,8 @@ internal static class Tools
                     reason refuses the whole call; a reasoned rejection is discounted in later
                     rounds unless a reviewer re-raises it with a genuinely new argument.
 
+                    Under a policy that asks a person, a call_human verdict holds the gate; policy `auto`
+                    raises no hold, and `not_reviewed` and `good_enough` are resolved like `proceed`.
                     After a call_human verdict a held gate is released only by an
                     answer on the notice card — the person's "Proceed despite the findings" button there. `humanDecision`
                     is not a decision: the server never reads the release from this argument, it
@@ -346,6 +349,9 @@ internal static class Tools
                     so; call resolve — with your decisions, or none — and the stage advances, the
                     findings you left undecided recorded as proceeded over (not as rejections: raised
                     again in a later round they still gate).
+                    Policy auto also releases a hold left by a build before auto, and every review
+                    call then says so: call resolve — with your decisions, or none — and the stage
+                    advances, once.
 
                     A DOCUMENT round is resolved with its `document`; a FEATURE round with its `feature` —
                     the same `planPath` you gave `review_feature` (the branch is then not read).
@@ -400,11 +406,19 @@ internal static class Tools
                 Description = """
                     Two kinds of question, and the server tells them apart by the session you name.
 
+                    UNDER POLICY `auto` (the default of When the rounds run out) this call never waits
+                    for the person and writes no card (the consultants of a production risk still run, and
+                    their answers come back before this call returns). Your own question without a `consultId` is answered
+                    `status: "consult_first"` — ask the consultants, settle it with them, and come back
+                    with the consultId only if you did not. A held gate is answered `no_answer_yet` at
+                    once: a hold the person owns names its notice; a hold left by a build before auto
+                    that could not be released yet says why — call again.
+
                     THE GATE'S QUESTION — the session is held by a `call_human` verdict, or it is a
                     feature review after its first round, where the person may ask for the second. It
                     appears in VS Code (a dialog, the status bar, the open-questions list) with the
-                    round's still-gating findings, and THIS CALL BLOCKS until they answer or the
-                    budget runs out (15 minutes by default).
+                    round's still-gating findings, and under any other policy THIS CALL BLOCKS until they
+                    answer or the budget runs out (15 minutes by default).
 
                     YOUR OWN QUESTION — anything else: a choice about the work, a missing detail. No
                     card is written and nothing waits: the reply is `status: "ask_in_conversation"`,
@@ -436,11 +450,13 @@ internal static class Tools
                     a held document or feature review is the one way the gate's question comes back as
                     `ask_in_conversation`: the branch's own session is not the held one.
 
-                    Three possible replies. `status: "ask_in_conversation"` — your own question: ask in
-                    this conversation, as above. `status: "answered"` carries their words in `answer` —
-                    act on them. `status: "no_answer_yet"` means nobody was at the keyboard: ask the
-                    person directly in this conversation and wait for their reply. Never decide
-                    alone because nobody answered. The question is then marked expired in VS Code —
+                    Four possible replies. `status: "consult_first"` — policy auto, your own question:
+                    call ask_consultants first, as above. `status: "ask_in_conversation"` — your own
+                    question: ask in this conversation, as above. `status: "answered"` carries their
+                    words in `answer` — act on them. `status: "no_answer_yet"` means nobody was at the
+                    keyboard: ask the person directly in this conversation and wait for their reply —
+                    under any other policy; under `auto` it comes at once, and its instruction says what
+                    to do instead. Never decide alone because nobody answered. The question is then marked expired in VS Code —
                     out of the active list, kept in the log for seven days — and every reply's `note`
                     carries what the gate said beside the door.
                     """,

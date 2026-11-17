@@ -23,7 +23,7 @@ namespace CoaiMcp.Tests;
 public sealed class DataDirIsAbsoluteTests
 {
     private static PanelSettings From(string dataDir) =>
-        PanelSettings.FromEnvironment(name => name == "COAI_DATA_DIR" ? dataDir : null);
+        PanelSettings.FromEnvironment(name => name == "COAI_DATA_DIR" ? dataDir : name == "COAI_ON_EXHAUSTED" ? "human" : null);
 
     [Fact]
     public void ARelativeDataDir_IsResolvedAgainstTheWorkingDirectory()

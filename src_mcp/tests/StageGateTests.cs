@@ -26,7 +26,7 @@ public sealed class StageGateTests
         // Every code role is named. A stage's threshold is the WIDEST of its roles, so a role left
         // out of this dictionary would answer from the shipped default and quietly set the number
         // under test — which is exactly what happened when Conventions became the fourth code role.
-        var config = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2), ["Conventions"] = new(3, 3), ["Architecture"] = new(3, 3), ["SecurityReliability"] = new(3, 3), ["UxDxPerformance"] = new(3, 3) });
+        var config = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2), ["Conventions"] = new(3, 3), ["Architecture"] = new(3, 3), ["SecurityReliability"] = new(3, 3), ["UxDxPerformance"] = new(3, 3) }, StagePolicy.Human);
 
         config.For(Stage.PlanReview).Threshold.Should().Be(2);
         config.For(Stage.CodeReview).Threshold.Should().Be(3, "a diff is not a document");
@@ -39,7 +39,7 @@ public sealed class StageGateTests
         // more; the thresholds are high because a gate that blocks every real change is a gate
         // people route around. The plan is the LOOSER of the two now — it was the stricter one for
         // as long as the plan stage had three rounds to spend.
-        var config = new PanelConfig();
+        var config = new PanelConfig(OnExhausted: StagePolicy.Human);
 
         config.For(Stage.PlanReview).Should().Be(new StageGate(1, 6));
         config.For(Stage.CodeReview).Should().Be(new StageGate(1, 5));
@@ -48,7 +48,7 @@ public sealed class StageGateTests
     [Fact]
     public void RaisingTheCodeThreshold_LeavesThePlanGateWhereItWas()
     {
-        var config = new PanelConfig() with { Roles = new Dictionary<string, RoleGate> { ["PlanCritique"] = PanelConfig.PlanDefault, ["Architecture"] = new(3, 6), ["SecurityReliability"] = new(3, 6), ["UxDxPerformance"] = new(3, 6) } };
+        var config = new PanelConfig(OnExhausted: StagePolicy.Human) with { Roles = new Dictionary<string, RoleGate> { ["PlanCritique"] = PanelConfig.PlanDefault, ["Architecture"] = new(3, 6), ["SecurityReliability"] = new(3, 6), ["UxDxPerformance"] = new(3, 6) } };
 
         config.For(Stage.PlanReview).Threshold.Should().Be(PanelConfig.PlanDefault.Threshold,
             "the stages are independent or they are not split");
@@ -59,7 +59,7 @@ public sealed class StageGateTests
     [Fact]
     public void ACodeRound_WithThreeFindings_PassesUnderTheCodeThreshold()
     {
-        var state = new SessionState("s", "D:/r", "main", new PanelConfig()) with { Stage = Stage.CodeReview };
+        var state = new SessionState("s", "D:/r", "main", new PanelConfig(OnExhausted: StagePolicy.Human)) with { Stage = Stage.CodeReview };
         var three = GateRule.Evaluate(
             [Gating("a"), Gating("b"), Gating("c")], [], state.Config.For(state.Stage).Threshold);
 
@@ -80,7 +80,7 @@ public sealed class StageGateTests
             ["Architecture"] = new(1, 9),
             ["SecurityReliability"] = new(1, 9),
             ["UxDxPerformance"] = new(1, 9),
-        });
+        }, StagePolicy.Human);
         var state = new SessionState("s", "D:/r", "main", config);
         var three = GateRule.Evaluate(
             [Gating("a"), Gating("b"), Gating("c")], [], state.Config.For(state.Stage).Threshold);
@@ -95,7 +95,7 @@ public sealed class StageGateTests
     [Fact]
     public void TheLegacySingleValue_AppliesToBothStages()
     {
-        var env = new Dictionary<string, string> { ["COAI_MAX_ROUNDS"] = "5", ["COAI_GATE_THRESHOLD"] = "1" };
+        var env = new Dictionary<string, string> { ["COAI_MAX_ROUNDS"] = "5", ["COAI_GATE_THRESHOLD"] = "1", ["COAI_ON_EXHAUSTED"] = "human" };
         var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
         settings.Rounds.For(Stage.PlanReview).Should().Be(new StageGate(5, 1));
@@ -111,6 +111,7 @@ public sealed class StageGateTests
             ["COAI_GATE_THRESHOLD"] = "1",
             ["COAI_THRESHOLD_CODE"] = "4",
             ["COAI_MAX_ROUNDS_PLAN"] = "2",
+            ["COAI_ON_EXHAUSTED"] = "human",
         };
         var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 

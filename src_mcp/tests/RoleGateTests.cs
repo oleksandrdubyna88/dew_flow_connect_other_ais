@@ -137,6 +137,7 @@ public sealed class RoleGateTests
             ["COAI_MAX_ROUNDS_CODE"] = "2",
             ["COAI_ROUNDS_SECURITYRELIABILITY"] = "3",
             ["COAI_THRESHOLD_UXDXPERFORMANCE"] = "0",
+            ["COAI_ON_EXHAUSTED"] = "human",
         };
         var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
@@ -148,7 +149,7 @@ public sealed class RoleGateTests
     [Fact]
     public void COAI_ENABLED_SwitchesOneCodeRoleOff_AndNothingElse()
     {
-        var env = new Dictionary<string, string> { ["COAI_ENABLED_ARCHITECTURE"] = "false" };
+        var env = new Dictionary<string, string> { ["COAI_ENABLED_ARCHITECTURE"] = "false", ["COAI_ON_EXHAUSTED"] = "human" };
         var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
         settings.Rounds.For(RoleCatalog.ArchitectureRole).Enabled.Should().BeFalse();
@@ -166,7 +167,7 @@ public sealed class RoleGateTests
         // leave the reviewer working; only the four spellings of false stop it.
         foreach (var value in new[] { "", "no", "off", "0.0", "FaLsE", "true", " false " })
         {
-            var env = new Dictionary<string, string> { ["COAI_ENABLED_UXDXPERFORMANCE"] = value };
+            var env = new Dictionary<string, string> { ["COAI_ENABLED_UXDXPERFORMANCE"] = value, ["COAI_ON_EXHAUSTED"] = "human" };
             var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
             settings.Rounds.For(RoleCatalog.UxDxRole).Enabled.Should().BeTrue($"'{value}' does not say off");
@@ -174,7 +175,7 @@ public sealed class RoleGateTests
 
         foreach (var value in new[] { "0", "false", "FALSE", "False" })
         {
-            var env = new Dictionary<string, string> { ["COAI_ENABLED_UXDXPERFORMANCE"] = value };
+            var env = new Dictionary<string, string> { ["COAI_ENABLED_UXDXPERFORMANCE"] = value, ["COAI_ON_EXHAUSTED"] = "human" };
             var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
             settings.Rounds.For(RoleCatalog.UxDxRole).Enabled.Should().BeFalse($"'{value}' says off");
@@ -184,7 +185,7 @@ public sealed class RoleGateTests
     [Fact]
     public void NoEnvironmentAtAll_LeavesEveryRoleOn()
     {
-        var settings = PanelSettings.FromEnvironment(_ => null);
+        var settings = PanelSettings.FromEnvironment(name => name == "COAI_ON_EXHAUSTED" ? "human" : null);
 
         settings.Rounds.EnabledRolesOf(Stage.CodeReview).Should().HaveCount(4);
         settings.Rounds.For(RoleCatalog.PlanRole).Enabled.Should().BeTrue();
@@ -194,7 +195,7 @@ public sealed class RoleGateTests
     public void ThePlanRole_CannotBeSwitchedOffByAVariable()
     {
         // Code review only. The boundary refuses rather than trusting that nobody writes the key.
-        var env = new Dictionary<string, string> { ["COAI_ENABLED_PLANCRITIQUE"] = "false" };
+        var env = new Dictionary<string, string> { ["COAI_ENABLED_PLANCRITIQUE"] = "false", ["COAI_ON_EXHAUSTED"] = "human" };
         var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
         settings.Rounds.For(RoleCatalog.PlanRole).Enabled.Should().BeTrue();
@@ -209,7 +210,7 @@ public sealed class RoleGateTests
         // default, so a pristine install sends none and THIS is what runs. The two disagreed for a
         // day — panel showing one round, server running three. `panelServerDefaultsAgreement.test.ts`
         // reads these constants out of the C# and fails when they drift again.
-        var config = new PanelConfig();
+        var config = new PanelConfig(OnExhausted: StagePolicy.Human);
 
         config.For(RoleCatalog.PlanRole).Should().Be(new RoleGate(1, 6));
         config.For(RoleCatalog.ArchitectureRole).Should().Be(new RoleGate(1, 5));
@@ -225,7 +226,7 @@ public sealed class RoleGateTests
         // shipped default of three instead, silently. The panel has always accepted zero and has a
         // test saying so.
         var settings = PanelSettings.FromEnvironment(
-            name => name == "COAI_GATE_THRESHOLD" ? "0" : null);
+            name => name == "COAI_GATE_THRESHOLD" ? "0" : name == "COAI_ON_EXHAUSTED" ? "human" : null);
 
         settings.Rounds.For(RoleCatalog.ArchitectureRole).Threshold.Should().Be(0);
         settings.Rounds.For(RoleCatalog.PlanRole).Threshold.Should().Be(0);
@@ -234,7 +235,7 @@ public sealed class RoleGateTests
     [Fact]
     public void ARoundBudgetOfZero_IsStillRefused_BecauseItWouldGateNothing()
     {
-        PanelSettings.FromEnvironment(name => name == "COAI_MAX_ROUNDS" ? "0" : null)
+        PanelSettings.FromEnvironment(name => name == "COAI_MAX_ROUNDS" ? "0" : name == "COAI_ON_EXHAUSTED" ? "human" : null)
             .Rounds.For(RoleCatalog.ArchitectureRole).MaxRounds.Should().Be(
                 PanelConfig.CodeDefault.MaxRounds, "zero rounds would run no review at all");
     }
@@ -253,7 +254,7 @@ public sealed class RoleGateTests
             ["Architecture"] = new(3, 9),
             ["SecurityReliability"] = new(3, 9),
             ["UxDxPerformance"] = new(1, 0),
-        });
+        }, StagePolicy.Human);
         var state = new SessionState("s", "D:/r", "main", config) with
         {
             Stage = Stage.CodeReview,
@@ -279,7 +280,7 @@ public sealed class RoleGateTests
             ["Architecture"] = new(1, 9),
             ["SecurityReliability"] = new(3, 0),
             ["UxDxPerformance"] = new(1, 9),
-        });
+        }, StagePolicy.Human);
         var state = new SessionState("s", "D:/r", "main", config) with { Stage = Stage.CodeReview };
 
         var gate = GateRule.Evaluate(
