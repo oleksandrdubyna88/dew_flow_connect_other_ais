@@ -375,8 +375,8 @@ string and asserts it is absent from the log file). The existing `InTheConversat
 
   **One witness per location, kept where that location's value lives.** A location with a witness is never cleared
   again, whatever it holds — that is what keeps a choice made after the clear.
-  - *The user layer's witness is a setting in the user layer itself*, `coai.onExhaustedResetToAuto`, written — and read
-    back — before the user value is removed (entry 2.2), and written as well when the layer holds nothing to remove. A
+  - *The user layer's witness is a setting in the user layer itself*, `coai.onExhaustedResetToAuto`, written
+    before the user value is removed (entry 2.2), and written as well when the layer holds nothing to remove. A
     run that finds it, written on this machine or carried by Settings Sync from another, leaves the user value alone.
     It lives in the settings file because the user layer is one file on every machine Settings Sync reaches while
     `globalState` is per machine, and because a settings write is a per-key edit of that file that no `globalState`
@@ -416,7 +416,7 @@ string and asserts it is absent from the log file). The existing `InTheConversat
 
   **The order.** Claim → record what each location holds (N8) → each overlay, one write with its witness, one turn of the
   catalog migration's queue (the two migrations rewrite the same record) → the user layer: when it has no witness, write
-  the witness, await it, then read the witness and the value AGAIN — a value no
+  the witness, await it, then read the value AGAIN — a value no
   longer the one recorded stops the step and leaves the value (point (c)); else remove the value; a removal the settings
   file refuses withdraws the witness → the mirror → the marker → the notification.
 
@@ -455,7 +455,8 @@ string and asserts it is absent from the log file). The existing `InTheConversat
   **Residuals, written down and not closed** (each in `research/module_extension.md` when E2 ships):
   (i) a host that dies after the user witness is written and before the removal leaves that one value in place for good
   (N8) — the notification names it; (ii) the stale-window and Settings Sync windows above; (iii) two windows whose copies
-  hear each other later than the claim's pause can both run and both notify; (iv) a side whose extension is OLDER
+  hear each other later than the claim's pause can both run and both notify, and can both ask for the user value's removal — the second removes a choice only
+  if one was made in the time of one settings write; (iv) a side whose extension is OLDER
   rewrites its file with the old writer, so a side whose overlay ran `continue`, `good_enough` or `escalate` runs `human`
   on a server older than 0.66.0 until that side's extension updates — the CHANGELOG says to update every side's
   extension together; (v) an older extension that turns the per-side switch on after the run freezes its default

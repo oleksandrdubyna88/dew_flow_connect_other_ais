@@ -195,7 +195,7 @@ S2's spec may refine a name in C4–C6. If it does, it updates this section and 
   - Each overlay record the run cleared carries the member `onExhaustedAutoMigration` (the version), written in the
     same `update` as the clear.
   - The user layer's witness is the manifest setting `coai.onExhaustedResetToAuto` (parent § 4.6): no `scope`, no
-    default, *"Written by ConnectOtherAIs, not by hand"*; a string naming the version and the run that wrote it; read
+    default, *"Written by ConnectOtherAIs, not by hand"*; one fixed word, `auto`, on every machine (entry 3.1), and after its awaited write only the value is tested; read
     from `inspect().globalValue` only. The S2 spec's `userBegun` in `globalState` is replaced by it.
 - **C6 — what the migration touches (S2).** The user layer (`ConfigurationTarget.Global`): `coai.onExhausted`, and
   the witness setting — written before the removal and also when nothing is removed, withdrawn after a refused
@@ -779,7 +779,7 @@ name in C4–C6, it updates § 4, § 6 and § 9 here in the same commit, as § 4
     (a) `ASecondMachineKeepsAChoiceMadeOnTheFirst` — A runs, the person chooses `human` in the user layer, B runs: B's
     overlays are cleared, the user layer keeps `human`, B's notification is the second form naming "your user settings";
     (b) `AFirstMachineWithNothingToRemoveStillWritesTheWitness` — then (a) holds for a choice made on A afterwards;
-    (c) `AWitnessDeliveredDuringTheAwaitedWriteStopsTheRemoval` — B's witness write held, A's witness and `human`
+    (c) `AChoiceDeliveredDuringTheAwaitedWriteStopsTheRemoval` — B's witness write held, A's witness and `human`
     delivered, B makes no removal. In one machine: (d) `AStaleWindowBringsAnOverlayBack_TheNextActivationClearsIt` —
     a window whose copy predates the run writes an unrelated key after it: the marker is gone and X holds its old value
     unwitnessed; the next activation clears it and tells again (the residual, asserted as such); (e)
