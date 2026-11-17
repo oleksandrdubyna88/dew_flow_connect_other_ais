@@ -41,8 +41,11 @@ plan, a spec, a piece of prose — with no plan round before it and its own sess
 roles ship for it: *The document*, which reads for whether a reader could act on it, and a summary
 role that writes an account of the whole thing rather than findings. A summary gates nothing.
 
-**When the rounds run out**, your policy decides: ask a human, continue and say what is still open,
-or climb a ladder — reviewer effort, then reviewer model, then the arbiter.
+**When the rounds run out**, your policy decides, and **Auto** is the default: the gate raises no
+new hold and never waits for a person — a round nobody answered proceeds as `not_reviewed`, spent
+rounds as good enough, each logged — though your AI may still ask you a question its consultants
+could not settle. Or ask a human, continue and say what is still open, apply what is true and move
+on, or climb a ladder — reviewer effort, then reviewer model, then the arbiter.
 
 ---
 
