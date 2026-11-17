@@ -1,6 +1,6 @@
 # PLAN — E2.S2 spec: the one-time migration — every saved choice reset to `auto` once, and a later choice kept (CORNERSTONE)
 
-> Status: **spec only, nothing coded — written 2026-11-17 by Fable before its code, and revised the same day by Fable
+> Status: **built 2026-11-17 in PR #1018 (feat/auto-mode-e2), with the Opus review's fixes: a copy that lost its record ends `incomplete` and writes no marker (T36b), the witness is withdrawn when the record is lost or the claim is taken over during its write without another run completing, and the notification is true for the server the window runs. Not yet merged or released.** Before that: **spec only, nothing coded — written 2026-11-17 by Fable before its code, and revised the same day by Fable
 > to epoch 3 of the parent (the re-review after entry 2.2; approved by the owner, narrowed).** Cornerstone spec of story
 > E2.S2 of [PLAN_auto_never_asks_a_person_E2.md](PLAN_auto_never_asks_a_person_E2.md) (its § 8, and § 10.1 — the
 > sixteen items this revision follows; parent [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md),

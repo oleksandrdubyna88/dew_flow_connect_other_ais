@@ -1,6 +1,6 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **epoch 3 open, 2026-11-17 — approved by the owner (the revision is `Narrowed: yes`), after the interim document
+> Status: **E2 built 2026-11-17 in PR #1018 (S1, S2, S3; the coai code gate `proceed`); not yet merged or released. E3 not started.** Before that: **epoch 3 open, 2026-11-17 — approved by the owner (the revision is `Narrowed: yes`), after the interim document
 > review of the whole plan returned `proceed` (4 of 4 reviewers; three wording findings folded). E2 resumes: the S1 fix
 > forward and Fable's S2 spec revision, then S2, then S3.** Before that: **epoch 2 stopped for re-review, 2026-11-17, at its second change (entry 2.2, Settings Sync and the
 > migration's witness). No new code on any epic until the whole plan is reviewed again. The whole plan was revised the
