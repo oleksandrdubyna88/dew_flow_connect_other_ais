@@ -819,7 +819,15 @@ budget (§ 9.3); the CHANGELOG entry written in the release PR (§ 5, N4); the a
 line at `AskHumanService.cs:100` keeping that `Release` (C4) — the parent's § 4.4, first row, as written, which
 `Stands` alone could not deliver once U3 left a person-answered hold from before `auto` standing; the cadence wording
 for a released hold (§ 8.1, item 4; the parent's § 4.2 and § 4.3); the startup notes split, S1's for a file that
-could not be read and S3's for a pinned policy (§ 9.3; the spec's D15).
+could not be read and S3's for a pinned policy (§ 9.3; the spec's D15). At build, 2026-11-17, after the Opus
+judges of S1–S3: a `not_reviewed` round whose security lane answered says that the lane's findings await a decision,
+instead of "nothing to decide" or "nothing was reviewed", because `resolve` refuses an empty decision list there.
+`review_feature`'s text names `not_reviewed` for a retry nobody answered (§ 8.1). Under `auto` the stand-down note of
+`ask_human` names a rejected consultId (D14(a)) and drops "required here". § 9.3 left this open, and every other
+policy keeps today's words byte for byte. § 9.2's tests 9 and 10 assert the card count unchanged rather than
+`Cards(h) == 0`, because their setup posts the hold's notice. The S1 spec's residual (d) and D13 are kept by code: a
+notice is put back only under the session's claim, read again, and a released hold with no rounds still names its
+release.
 
 ## 11. Definition of Done for E1
 
