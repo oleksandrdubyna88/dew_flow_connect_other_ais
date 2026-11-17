@@ -4781,6 +4781,150 @@ flowchart LR
   D[(server data dir)] --> R[rounds view]
 ```
 
+## Policy Auto in the panel (E2 of the auto plan)
+
+*Written 2026-11-17 from `todo/PLAN_auto_never_asks_a_person.md` § 4.6 (epoch 3) and the stories document
+`todo/PLAN_auto_never_asks_a_person_E2.md`. The value, the wire, the gate section and the rounds-log note are code on
+`feat/auto-mode-e2`. The migration's module names and mechanics are the stories document's C4–C6 and the S2 spec's; read this section
+against `src/onExhaustedMigration.ts` and `src/onExhaustedMigrationHost.ts` before trusting a detail of the migration.*
+
+The panel's `When the rounds run out` (`coai.onExhausted`) has five values and **Auto is the default**, in the manifest,
+in `DEFAULTS` and in the server (an absent `COAI_ON_EXHAUSTED` is policy `auto`; `panelServerDefaultsAgreement.test.ts`
+reads the C# and fails if the two drift). The guarantee the panel's words make is the parent's requirement 5 and nothing
+wider: under Auto coai raises no new hold, never waits and never writes a card; a hold this build raised under Ask a
+human before the switch stays the person's; the only road to a person is the AI's own question after its consultants,
+or when no consultant can be had, which the AI chose to ask. No text says "never asks you anything".
+
+**The value and its labels.** `OnExhausted` (`onExhaustedPanel.ts`) is `auto | human | continue | good_enough |
+escalate`. `ON_EXHAUSTED_CHOICES` is the one list of labels, Auto first, and every page, sentence and test that names a
+choice reads it (`labelOf` answers `Auto`, not the option's whole sentence). `asOnExhausted` accepts a word the list
+holds and answers `DEFAULTS` for any other, so a typo reads as Auto, and the server then runs Auto as well.
+
+**The value is read from the layers that hold one.** `modelKeys.ts` lists `onExhausted` in `HELD_ONLY_KEYS`: its reader
+answers the folder value, else the workspace value, else the user value, and nothing when none holds one — never the
+registry's default. A window that VS Code updated in place keeps the old registry until a reload, and its default for
+this key was `human`; reading it would have written `COAI_ON_EXHAUSTED=human` for everyone who never chose anything.
+This side's overlay still wins over every layer, and an overlay seeded from now on freezes no default into itself.
+
+**The six cells** (`onExhaustedEnv`, `onExhaustedWire.ts`; `envBlock` calls it):
+
+| Panel value | The server lists `onExhaustedAuto` | Settled WITHOUT it (older, or `--features` answered 64) | Not settled yet |
+|---|---|---|---|
+| `auto` | nothing written | `COAI_ON_EXHAUSTED=good_enough` | nothing written |
+| any other | written as it is | written as it is | written as it is |
+
+"Not settled" writes nothing because every settled `--features` answer rewrites the settings file (`FeaturesCache` →
+`mirrorSettings`), so a file written too early is corrected within a moment, and a file written as `good_enough` for a
+binary that has not answered yet would be wrong for a current one. `FeaturesCache.settled()` is what tells the two
+apart: `undefined` before this file's answer, a list (empty for an older binary) after it. A pristine panel therefore
+writes no policy for a current server, and writing `human` is now a choice that differs from the default, so it is written
+and honoured.
+
+**Why the copied block carries no policy** (entry 2.1 of the plan). Every clipboard block carries `serverEnv()` only,
+`COAI_DATA_DIR` and `COAI_DATA_SIDE`, and `install.test.ts` and `theDirectoryAPersonChose.test.ts` hold it. The policy
+reaches a server only through the settings file. A pinned `COAI_ON_EXHAUSTED=auto` in a client's `env` would win over
+every later panel choice of Ask a human, and the server's pinned-policy startup note does not fire for `auto`, so the
+block stays as it is.
+
+**The gate section's two lines** (`gateNotes`, drawn under the select as a `stale` line): *"This coai-mcp predates Auto:
+it runs Good enough and still asks a person when no reviewer answers — update it in Setup › MCP server."* for a person on
+Auto whose binary has SAID it does not list `onExhaustedAuto` (never while the answer is pending), and *"This workspace
+sets When the rounds run out to {label} in its .vscode/settings.json, which wins over the choice above. Remove it there to
+use your own."* whenever the folder-else-workspace value is a known choice in force, Auto included, unless this side's
+overlay holds the key (`workspacePolicyOf`: an overlay value wins over it, so the line does not appear then). A value that
+is not one of the choices never reaches the page.
+
+**The migration** (`src/onExhaustedMigration.ts` pure, `src/onExhaustedMigrationHost.ts` the host; started from
+`activate` after the first `mirrorSettings`, never from the panel, and it never rejects). It clears the saved
+`coai.onExhausted` once: in the user layer, and in every side's overlay (`coai.settingsOverlay@<sideKey>` records in
+`globalState`, found by walking `Memento.keys()` for the prefix, so a side the registry pruned is reached too). A location
+that already holds `auto` is left as it is. A workspace or folder value is never edited (Q1, the owner's decision
+2026-11-17: the team's file, not the person's saved choice); the gate section names it instead.
+
+- **One witness per location, kept where that location's value lives.** A location with a witness is never cleared
+  again, whatever it holds: that is what keeps a choice made afterwards.
+  - The **user layer's witness is a setting in the user layer**, `coai.onExhaustedResetToAuto` (a string naming the version
+    and the run, written by the extension and never by hand). It is written and read back from a fresh configuration
+    BEFORE the value is removed, and written as well when the layer holds nothing to remove, so a choice made on this
+    machine later is kept on the next machine. A run that finds it, written here or carried by Settings Sync, leaves the user
+    value alone; a removal the settings file refuses withdraws it. It is read from `inspect().globalValue` only: a
+    workspace can set a key of this scope, and a workspace value must never certify the user layer.
+  - It declares **no `scope`**, the scope `coai.onExhausted` has, so it is synced exactly when the value it witnesses is.
+    `machine` and `machine-overridable` are left out of Settings Sync by default, so the next machine would not see the
+    witness; `application` is shared by every profile, so a witness written in one profile would certify another profile's
+    value that was never cleared.
+  - It is a setting and not a `globalState` key because the user layer is one file on every machine Settings Sync
+    reaches while `globalState` is per machine, and because a settings write is a per-key edit that no `globalState` write
+    can undo. Nothing here calls `setKeysForSync`.
+  - An **overlay's witness is a member of its record**, `onExhaustedAutoMigration` (the version), written in the SAME
+    `globalState.update` that removes `onExhausted`, so there is no instant between the clear and its witness, and a
+    later choice written through `writeOverlay` keeps the member.
+  - The **marker** is the `globalState` key `coai.onExhaustedAutoMigration`, a record: `completed` is the version that
+    completed the run on this profile of this machine (a bare string reads as completed); while a run is in flight it
+    also holds a claim and what each location held before the first clear.
+- **The claim is not a lock.** `Memento.update` writes the extension's whole `globalState` object as one stored value, and
+  a window's copy learns another window's write only when the editor delivers it. A window whose copy is stale puts
+  that whole copy back with any key it writes, so a claim taken by write, pause and read-back reads the window's own copy
+  and excludes nothing; no compare-and-set exists. The claim stays to make one window do the run in the usual case. What
+  the correctness rests on: the user layer's witness lives in the settings file, out of reach of a stale `globalState`
+  write; an overlay's value and witness are one record in one write, so a stale copy brings both back or neither; and no
+  value read from the record is carried across an `await`, with the marker written only from a copy in which every
+  recorded location is settled, checked with no `await` before the write.
+- **The order.** Claim, then record what each location holds, then each overlay (one write with its witness, one turn of
+  the catalog migration's queue, because both migrations rewrite the same record), then the user layer (witness, await,
+  read the witness and the value again; a witness that is not this run's or a value no longer the recorded one stops
+  the step; else remove), then the mirror, then the marker, then the notification. The mirror is called by the run itself
+  because an overlay clear fires no configuration event, and it comes BEFORE the marker, also in a run that ends
+  incomplete. The run starts only when the registry knows `coai.onExhaustedResetToAuto`, because a write of an unregistered
+  key is refused; a window updated in place runs it at its next activation.
+- **Other sides.** Another side's server settings file is rewritten at that side's next mirror after its copy of
+  `globalState` holds the change, its next activation at the latest. Another open window is woken by the configuration
+  event of the run's own settings write, and none fires when the witness was already there.
+- **The notification** is non-modal, one per completed run, and true for the window that shows it. A pure function chooses
+  the sentence from the value that window runs and where it is set (the shared reader, `inspect`, this side's overlay).
+  In a window that runs Auto: *"When the rounds run out is now Auto — the gate raises no new hold and never waits for
+  you; it logs and moves on. Your AI may still ask you a question its consultants could not settle, or when no
+  consultant can be had. Change it in Reviews › The gate."* Where another value stays in force: *"When the rounds run
+  out now defaults to Auto, but {label} stays in force in this window: {where} sets it. Change it in Reviews › The
+  gate."*, `{where}` being "this side's own settings", "this workspace's .vscode/settings.json" or "your user settings".
+  A fresh install is told too, because nothing the extension keeps tells it from an upgrade and both sentences are true
+  for it. A settings file that refuses the change writes no marker, is retried at the next start, and is told once per
+  machine while it lasts. Anything else that ends a run early goes to the extension host's console.
+
+**Residuals, written down and not closed** (the parent § 4.6; the S2 spec adds the last three):
+
+1. A host that dies after the user witness is written and before the removal leaves that one value in place for good: the
+   next run finds the witness and keeps the value. The notification names it. The opposite order would reset a choice made
+   later.
+2. **Stale windows and Settings Sync.** A stale window whose copy predates the run puts a cleared overlay back, with the
+   marker gone: that side runs the old value, shown in the gate section, until the next activation clears it and tells
+   again; a choice made in that stale window is cleared too. For the user layer: a Settings Sync delivery that lands after
+   the run's read-back and before its removal is written (the time of one settings write) can be removed with the
+   rest; and a machine whose run comes before Sync has pulled the other machine's file clears its own copy, after which
+   Sync's merge can drop a choice made elsewhere that equals the old value. Neither window is measured. How Sync merges
+   two machines' witness values was not checked.
+3. Two windows whose copies hear each other later than the claim's pause can both run and both notify.
+4. **An older extension on another side** rewrites that side's file with the old writer, which writes the key only when
+   the value differs from its default `human`. So a side whose overlay ran `continue`, `good_enough` or `escalate` runs
+   `human` on a coai-mcp older than 0.66.0 until that side's extension updates. The CHANGELOG says to update the
+   extension on every side (each WSL or SSH remote) together.
+5. An older extension that turns the per-side switch on after the run freezes its default `human` into a new overlay,
+   which nothing clears.
+6. "Once" is once per profile of a machine for the overlays and the marker, and once for every machine Settings Sync
+   reaches for the user layer.
+7. An overlay left alone because its value changed carries no witness; if the record is lost, a new plan records the later
+   choice as the old value. The notification can appear twice when a host dies between showing it and recording it, or never when the marker is
+   written and showing the notification then fails (the marker is there, so nothing retries it).
+   No test runs two real windows: the two-window fake is a reading of VS Code's source, and the owner's hand check is the
+   only observation there can be.
+
+**The rounds-log note.** `LogRow.note` carries a round's note whether or not it ran: a skipped round's reason (with `×N`
+for repeats) or what policy Auto decided for a round that ran — its reason, or that it released a hold an older build had
+raised. `detail()` in the page script draws it, under the "asked by" lines and above the reviewers, as
+`<div class="reviewer roundnote">` on a row that was not skipped; a skipped row still says its reason once, in its own
+branch. The verdict `not_reviewed` is a raw string like every verdict, so the verdict cell and the verdict facet need no
+code. `roundsLogNotes.test.ts` runs the page.
+
 ## What it deliberately does not do
 
 - **Never writes another program's config file.** The block is offered; the person sees what they
