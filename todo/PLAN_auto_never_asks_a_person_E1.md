@@ -1,6 +1,6 @@
 # PLAN — E1 stories: the server, the whole `auto` contract (`coai-mcp`)
 
-> Status: **built 2026-11-17 on `feat/auto-mode-e1`, in PR #1011. S1–S3 were coded, each story was judged by Opus,
+> Status: **merged 2026-11-17 as #1011 and released as mcp 0.66.0 (#1012), verified.** Before that: **built 2026-11-17 on `feat/auto-mode-e1`, in PR #1011. S1–S3 were coded, each story was judged by Opus,
 > and the coai code gate returned `proceed` (session 50ab0468, epic 1/3). Not yet merged or released.** Before that:
 > **plan only, nothing coded — revised to epoch 2 of the parent, 2026-11-16.** Written by Opus when the epic
 > started, on branch `feat/auto-mode-e1`; the parent then stopped at its second change (entry 1.2, the released

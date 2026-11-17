@@ -1,6 +1,9 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **E1 (the server) built 2026-11-17, in PR #1011, code gate `proceed`; E2 and E3 not started.** Before that:
+> Status: **E1 (the server) merged 2026-11-17 as #1011 and released as mcp 0.66.0 (#1012). E2 started the same day: its
+> stories document, [PLAN_auto_never_asks_a_person_E2.md](PLAN_auto_never_asks_a_person_E2.md), is written, E2.S2 marked
+> the cornerstone; nothing of E2 is coded. E3 not started.** Before that: **E1 built 2026-11-17, in PR #1011, code gate
+> `proceed`.** Before that:
 > **epoch 2 open, 2026-11-16 — re-approved by the gate the same day (the interim document review of the whole plan,
 > `proceed`, 4 of 4 reviewers; four findings folded, one rejected with its reason in § 4.3). Epoch 1 stopped at its second
 > change (entry 1.2), accepted while E1.S1's
@@ -44,6 +47,9 @@ Narrowed: no — DoD item 4 and § 8 step 4 grew; scope, goals, merge conditions
 | E1.S1 cornerstone spec, 4cab5375 | feat/auto-mode-e1, pushed | fits | revised in place after re-approval (U1 settled, the note, the tests) |
 
 > Epoch 2 · approved 2026-11-16 · by reviewers · state: open
+
+- 2.1 · 2026-11-17 · agent · epics, approach — the copied MCP block carries only COAI_DATA_DIR and COAI_DATA_SIDE (since a0eee1ca; install.test.ts and theDirectoryAPersonChose.test.ts), so no pasted block pins a policy: E2 adds no wait for features and no COAI_ON_EXHAUSTED to it, and done-when 2's second clause becomes "the copied block carries no COAI_ON_EXHAUSTED"
+  (found by the E2 stories document, § 2.1 and § 10 R1; verified by the coordinator against extension.ts and install.test.ts.)
 
 ## 1. What the owner asked for (2026-11-16)
 
@@ -324,10 +330,10 @@ string and asserts it is absent from the log file). The existing `InTheConversat
   | any other | written, as today | written, as today | written, as today |
 
   The settings FILE may be written while features are unsettled, because every settled answer rewrites it
-  (`FeaturesCache` → `mirrorSettings`, `extension.ts`). A block the panel hands out for a client's `env` is copied once
-  and never rewritten, so it is offered only after the features have settled (plan round 1 finding 3): the copy action
-  awaits `askFeatures()`, and if no binary answers it writes `COAI_ON_EXHAUSTED=auto` explicitly — an old server then
-  complains and asks a person (`WhyExhausted`), which is loud, never silent.
+  (`FeaturesCache` → `mirrorSettings`, `extension.ts`). *Changed by entry 2.1:* no block the panel hands out for a client's
+  `env` carries a policy — the copy action passes only `COAI_DATA_DIR` and `COAI_DATA_SIDE` (`serverEnv()`, guarded by
+  `install.test.ts`), so the policy reaches a server only through the settings file, and plan round 1 finding 3's risk
+  does not arise. E2 leaves the copy action as it is.
 - **A client `env` that still pins another policy** (an old pasted block wins over the file, `SettingsFile.cs:49-58`)
   is outside the migration's reach: the server writes a startup note when `COAI_ON_EXHAUSTED` comes from the process
   environment and is not `auto` (the `TheStartupNotesAreWrittenDown` road), naming where to remove it.
@@ -481,6 +487,7 @@ process; nothing with an in-flight state.
 - **Q1 — workspace-scoped values.** A `coai.onExhausted` in a repository's `.vscode/settings.json` overrides user settings.
   Clearing it edits a file the repository's team owns. *Assumed:* not edited; the gate section says *"this workspace sets
   When the rounds run out to X"* when a workspace value overrides `auto`. The owner may flip this to "clear it too".
+  Owner's answer 2026-11-17: not edited — the assumption stands.
 - **Q2 — an empty round with rounds left.** *Assumed:* `not_reviewed` at once (§ 4.2). Alternative: one retry while the
   budget allows.
 
@@ -501,7 +508,7 @@ process; nothing with an in-flight state.
 | 0 | a policy change lets the gated agent release a hold | accepted — only holds from a build before `auto` are released (§ 4.3, § 6) |
 | 1 | policy refreshed on begin only, not on every release path | accepted — `CurrentPolicy` on every load that decides (§ 4.1), one test per first call |
 | 2 | unattended installs can still reach a person | accepted as a narrowing — the guarantee is stated exactly (requirement 5); the post-consultant road is the owner's O3 |
-| 3 | an env block copied before features settle runs `human` on an old server | accepted — the copy waits for features, else writes `auto` explicitly (§ 4.6) |
+| 3 | an env block copied before features settle runs `human` on an old server | accepted — the copy waits for features, else writes `auto` explicitly (§ 4.6); superseded by entry 2.1: the copied block never carried a policy |
 | 4 | `consult_first` would log the question's text | accepted — id and decision only, and the existing line too (§ 4.4) |
 | 5 | a cancelled round has no auto continuation | rejected — the caller cancelled it; no hold, no card, the next call runs the round again |
 
@@ -613,8 +620,7 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
 - **Scope.** `src_vs_code` and the reader-facing documents: the panel half of § 4.6, the page item of § 4.5, § 4.8.
   Under `src_vs_code/`: `package.json` (enum, default, description); `src/settingsShape.ts` (`OnExhausted`, `DEFAULTS`,
   `asOnExhausted`, `envBlock` reading the features); `src/binaryFeatures.ts`; `src/panelView.ts` (the select; the gate
-  section's two lines — "this coai-mcp predates Auto" and "this workspace sets …"); the copy action, which awaits
-  `askFeatures()` (`src/extension.ts:407`); the migration — a module of its own, started after the settings mirror,
+  section's two lines — "this coai-mcp predates Auto" and "this workspace sets …"); the copy action is left as it is (entry 2.1); the migration — a module of its own, started after the settings mirror,
   over the user value and EVERY side's overlay in `globalState` (`overlayKeyOf`, `src/coaiInstall.ts`;
   `src/sidesSeen.ts`). `src/catalogMigrationHost.ts` is the precedent for queued runs and for reading the user layer
   through `globalValue`, NOT for its reach: it migrates this side's overlay only. `src/roundsLog.ts` (the note on every
@@ -625,8 +631,7 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
   new panel against the previous `coai-mcp`.
 - **Done when.** Steps 1–5 of PR 2 (§ 8) are green, each RED seen first, and:
   1. the manifest, `DEFAULTS` and the C# defaults agree, and one test reads both sides (DoD item 5);
-  2. each of the six cells of the env table has a test; a block is handed out only after the features settled, else
-     with `COAI_ON_EXHAUSTED=auto` written out; a new panel with the previous server writes `good_enough` and the gate
+  2. each of the six cells of the env table has a test; the copied block carries no `COAI_ON_EXHAUSTED` (entry 2.1); a new panel with the previous server writes `good_enough` and the gate
      section says so (DoD item 7, the panel part);
   3. the migration clears the user value and the value in every side's overlay; its marker is written only after every
      write succeeded, so an interrupted run resumes; two windows activating together leave one result and one
@@ -642,9 +647,12 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
      reset to Auto once (DoD item 9, the extension part).
   The PR is merged, `extension-v*` is released and verified.
 - **Cornerstone areas.** (c) — the recommended cornerstone, E2.S2.
+- **Stories document.** [PLAN_auto_never_asks_a_person_E2.md](PLAN_auto_never_asks_a_person_E2.md) — written by Opus
+  2026-11-17 when the epic started: the three stories below, E2.S2 marked `model: fable` (its spec, written by Fable
+  after it, `todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md`), S1 and S3 briefed in full, N5–N8 handed to the spec.
 - **Intended stories.**
   - **E2.S1 — the value, and what the server is sent.** The manifest, the shape, the select, the features, the six env
-    cells, the copy action, the two gate-section lines, the defaults-agreement test, the seam script. Steps 1 and 5.
+    cells, the two gate-section lines, the defaults-agreement test, the seam script. Steps 1 and 5.
   - **E2.S2 — the one-time migration (cornerstone; spec by Fable).** The user value and every side's overlay, the
     marker and the resume, two windows at once, the workspace value left alone and named, the one notification,
     adoption without the panel. Step 2.
@@ -733,4 +741,4 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
 The two stories named are the intended marks, within the quota. The count rises in the commit of the stories document
 that marks each one (`subagent-models.md`, *The cornerstone ledger*).
 
-Cornerstones: 1 of 2 — E1.S1, E2.S2
+Cornerstones: 2 of 2 — E1.S1, E2.S2
