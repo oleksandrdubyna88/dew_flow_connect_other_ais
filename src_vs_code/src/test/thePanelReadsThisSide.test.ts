@@ -79,6 +79,10 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
     why: 'coai.teamServers — one list every side shares, by design; and coai.planPrices (story 6.2) — what an account '
       + 'costs the person, the same on every side, never a per-side setting',
   },
+  'panelProvider.ts by-name': {
+    count: 1,
+    why: 'coai.onExhausted inspected for the WORKSPACE layer only, to name a workspace value that wins over the choice in the gate section (E2.S1) — read to tell the person, never as the value this side runs with',
+  },
   'chatPresetsHost.ts global write': { count: 1, why: 'coai.chatModelPresets — not a per-side setting' },
   'configTransferCommands.ts global write': { count: 1, why: 'an import writes the base layer; per-side overrides are never touched' },
   'helpPanel.ts global write': { count: 1, why: 'coai.helpLanguage — about the reader, not the work' },

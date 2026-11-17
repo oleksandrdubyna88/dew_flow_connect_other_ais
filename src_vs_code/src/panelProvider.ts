@@ -85,7 +85,8 @@ import { refreshCountsAndReach, refreshCountsThenReach, StoreReach } from './sto
 import { PROBE_USAGE_FILE, probeUsagePath } from './probeUsageFile';
 import { ranOnOf, roundsBlock } from './roundsBlock';
 import { chatLedgerLines } from './roundMoney';
-import { seedIfEmpty } from './sideSettings';
+import { readOverlay, seedIfEmpty } from './sideSettings';
+import { workspacePolicyOf } from './onExhaustedPanel';
 import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer, writesTheOverlay } from './sideConfig';
 import { foldedWrite } from './catalogEdit';
 import { asRecord } from './catalogLaunch';
@@ -148,6 +149,7 @@ import {
   roleRecordUpdate,
   SettingMessage,
   CoaiSettings,
+  type OnExhausted,
   settingMessageFrom,
   type SettingWrite,
   settingsFrom,
@@ -1487,6 +1489,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // The Settings page (PLAN_one_model_catalog.md E3): what the binary takes once it has said, when each new
       // control was first seen, and the clock its "new" marks are measured against.
       serverFeatures: settledFeatures(features),
+      // A workspace's own When-the-rounds-run-out, which wins over the choice shown (`onExhaustedPanel.ts`, the gate section).
+      workspacePolicy: this.workspacePolicy(config),
       firstSeen: this.context.globalState.get<Record<string, number>>(FIRST_SEEN_KEY) ?? {},
       now: Date.now(),
       // Only what ≡ brought back — never asked here, on a repaint (PLAN_custom_endpoint_model_list).
@@ -2331,6 +2335,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** This window's side as the side registry records it — the one activation stamps (`sideHereOf`). */
   private sideHere(): SideHere {
     return sideHereOf(thisSide(this.context.globalStorageUri), process.platform);
+  }
+
+  /** What a workspace sets for When the rounds run out that this side's choice does not override — the gate section names it. */
+  private workspacePolicy(config: vscode.WorkspaceConfiguration): OnExhausted | undefined {
+    const overlay = this.perSide(config) ? readOverlay(this.context.globalState, thisSide(this.context.globalStorageUri)) : {};
+
+    return workspacePolicyOf(config.inspect('onExhausted') ?? {}, 'onExhausted' in overlay);
   }
 
   /** Whether this side keeps its own settings. Shared by every side, deliberately: one switch. */
