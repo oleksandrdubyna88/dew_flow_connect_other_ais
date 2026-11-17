@@ -1,7 +1,7 @@
 # PLAN — E3 stories: the chat finds its terminal again, go-to from a terminal, the skip list
 
 > Status: **written by Opus 2026-11-12 when the epic started; revised 2026-11-13 for the parent's re-review (epoch 2
-> stopped at change 2.2); coai plan gate round 1 `proceed` on 2a2f21fe (session 167eb40d, 0 findings); epoch 3 opened by the owner 2026-11-16, coding starts.** Epic E3 of
+> stopped at change 2.2); coai plan gate round 1 `proceed` on 2a2f21fe (session 167eb40d, 0 findings); epoch 3 opened by the owner 2026-11-16; coded and merged (#1015, b3abb791, 2026-11-17; coai code gate `proceed`); the owner's R8, R10 and R11 passed on VSIX 0.87.901 (2026-11-17).** Epic E3 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics` § *E3*, its § *Stage 3*,
 > the stage-3 rows of its § *Test plan*, its real-window checks R8, R10 and R11, its DoD items 5–7 and its ledger entry 1.1).
 > Written on `feat/chat-from-a-terminal-e3` from `main` `4efa0a90` (extension 0.87.0). A stories document keeps no change
@@ -663,27 +663,27 @@ the parent (§ *What the code does today*, its re-verified list, and the E3 scop
 
 ## 11. Definition of Done — epic E3
 
-- [ ] The plan gate passed for this document, and the parent's epoch 3 is open; § 10's open points are coded as the
+- [x] The plan gate passed for this document, and the parent's epoch 3 is open; § 10's open points are coded as the
       re-review settled them, and any new change after epoch 3 opens has its entry in the parent's ledger.
-- [ ] S1–S3 coded to this document; every scenario green; every new test seen RED, GREEN, RED with its guarded line broken,
+- [x] S1–S3 coded to this document; every scenario green; every new test seen RED, GREEN, RED with its guarded line broken,
       and GREEN again, with the observations in the summary.
-- [ ] Re-attach binds only a strict `Creds:` name, only one live terminal against one orphan, never a held terminal, and only
+- [x] Re-attach binds only a strict `Creds:` name, only one live terminal against one orphan, never a held terminal, and only
       after the second look (S1-T1…T10); its triggers — the open, the restore, the door, *take* and *add* — are wired
       (S1-T11); the window's terminals are read in one place (S1-T12); a provisional bind is undone in case A and case B, and
       a used bind stays, a closed conversation leaves no stale mark, and a use confirms only a `bound` plan (S1-T13…T18).
-- [ ] Go-to works from a terminal by Ctrl+Alt+G and by the overflow item; the skip-list default holds both ids; a conversation
+- [x] Go-to works from a terminal by Ctrl+Alt+G and by the overflow item; the skip-list default holds both ids; a conversation
       is never moved between live namesakes (S2-T1…T13); the road back's chord carries `!terminalFocus` (O1, settled).
-- [ ] The skip-shell check offers **Add** only for the person's own user list, writes only after the press, appends only the
+- [x] The skip-shell check offers **Add** only for the person's own user list, writes only after the press, appends only the
       missing ids, re-reads before the write, reads back after it, and remembers the answer; a workspace or folder list gets one
       notice with no button that names its level, and is never written (S3-T1…T12).
-- [ ] `npm run compile` exit 0; `npm test` green; `npm run lint` green; no suppression count grew; `sonarExclusions.test.ts`
+- [x] `npm run compile` exit 0; `npm test` green; `npm run lint` green; no suppression count grew; `sonarExclusions.test.ts`
       green with `terminalHost.ts` and `skipShellHost.ts` listed; `notification-sites.json` regenerated; the door census and
       the help census green.
-- [ ] S1-H1, S2-H1 and S3-H1 green in CI's `extension · a real editor` job on the head commit, read from that job, named in
+- [x] S1-H1, S2-H1 and S3-H1 green in CI's `extension · a real editor` job on the head commit, read from that job, named in
       the pull request; the editor's user setting restored by S3-H1.
-- [ ] `research/module_extension.md` (the E3 section), `research/module_tests.md` (the E3 row) and `research/architecture.md`
+- [x] `research/module_extension.md` (the E3 section), `research/module_tests.md` (the E3 row) and `research/architecture.md`
       (the user-setting write) updated; the help in five languages.
-- [ ] The pull request merged; **R8, R10 and R11 measured on the pre-release VSIX of the merged head, before the tag**, and
+- [x] The pull request merged; **R8, R10 and R11 measured on the pre-release VSIX of the merged head, before the tag**, and
       recorded in the parent's R-table with what § 8 says to record beside them.
 - [ ] `review_feature` run over the three epics after the merge and R8, R10 and R11, and BEFORE the tag (parent change 2.2);
       every finding resolved; an accepted fix that changes the product landed as a new pull request and was verified on a
