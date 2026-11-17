@@ -303,9 +303,11 @@ internal static class Tools
                     the answered reviewers' decided findings under `carried`), a `blocking` finding came
                     back (fix it, then call again with `again: true` over the new HEAD), or the person asks
                     for one — through `ask_human` with `feature`, answered on their panel with
-                    "Keep going — more rounds"; no argument of yours can grant it, `again: true` included.
+                    "Keep going — more rounds" (never under policy `auto`, which asks no person); no
+                    argument of yours can grant it, `again: true` included.
                     A second round that still carries a `blocking` finding, or fails again, is `call_human`,
-                    which does block; so is a round in which every reviewer failed twice. A third round is
+                    which does block; so is a round in which every reviewer failed twice. Under `auto` neither
+                    blocks: the first is `good_enough`, the second `not_reviewed`. A third round is
                     never run. `again: true` is refused when nothing moved and when no ground admits a
                     round; against a NEW `baseRef` it starts a fresh review of the same plan.
                     """,
