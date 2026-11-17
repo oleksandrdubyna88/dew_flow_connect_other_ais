@@ -48,6 +48,10 @@ public sealed class PanelServiceHost : IPanelServiceSource
     // `_stamp` is `Never` then, so every call reads the file again; this one is what stops that read building a second service for the same stamp.
     private (DateTime Written, long Length) _unreadAt = Never;
 
+    // Why that read gave nothing. The same file can turn from busy to malformed without its stamp moving, and then the note built from the busy read
+    // would keep saying the wrong thing; a read for the same stamp is skipped only when it fails for the same reason.
+    private string _unreadWhy = string.Empty;
+
     /// <param name="noticing">
     /// Where this host's services write their notices. It is REQUIRED and has no default, because a
     /// defaulted one is the trap story 2.3.2's plan round named: production takes the quiet path
@@ -131,7 +135,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
         {
             // The stamp is recorded BEFORE the first read (constructor), so a read that gave nothing would be served as that stamp's settings for as
             // long as the file does not change. It stays unrecorded: the next call reads again.
-            (_unreadAt, _stamp) = (_stamp, Never);
+            (_unreadAt, _unreadWhy, _stamp) = (_stamp, layer.Unread, Never);
         }
 
         return Assemble(first: true, layer);
@@ -168,17 +172,17 @@ public sealed class PanelServiceHost : IPanelServiceSource
 
     /// <summary>
     /// A file that is there and gave no values: its defaults are published (with their note) but its stamp is NOT recorded, so the next call reads the
-    /// file again — and builds nothing while the file is still the same one (<c>_unreadAt</c>).
+    /// file again — and builds nothing while the file is still the same one for the same reason (<c>_unreadAt</c>, <c>_unreadWhy</c>).
     /// </summary>
     private PanelService Unreadable((DateTime Written, long Length) stamp, SettingsLayer.Layered layer)
     {
-        if (stamp == _unreadAt)
+        if (stamp == _unreadAt && layer.Unread == _unreadWhy)
         {
             return _current;
         }
 
         var rebuilt = Assemble(first: false, layer);
-        (_current, _unreadAt, _stamp) = (rebuilt, stamp, Never);
+        (_current, _unreadAt, _unreadWhy, _stamp) = (rebuilt, stamp, layer.Unread, Never);
         _log.Information("settings reloaded — the file could not be read, so the defaults serve until it can be");
 
         return _current;
@@ -186,7 +190,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
 
     private PanelService Published((DateTime Written, long Length) stamp, PanelService rebuilt)
     {
-        (_stamp, _current, _unreadAt) = (stamp, rebuilt, Never);
+        (_stamp, _current, _unreadAt, _unreadWhy) = (stamp, rebuilt, Never, string.Empty);
         _log.Information("settings reloaded — the panel's file changed on disk");
 
         return _current;

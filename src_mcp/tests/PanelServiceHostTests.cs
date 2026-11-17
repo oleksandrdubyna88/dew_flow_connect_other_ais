@@ -360,6 +360,32 @@ public sealed class PanelServiceHostTests : IDisposable
         after.PolicyUnread.Should().BeFalse();
     }
 
+    /// <summary>
+    /// The first read at start is busy, the next one gives the SAME file (its stamp unmoved) as malformed text. The service built from the busy read is not
+    /// kept: the person is told the real reason, once, instead of a note that the file is held open by its writer.
+    /// </summary>
+    [Fact]
+    public void AFileThatTurnsFromBusyToMalformed_SaysTheRealReason()
+    {
+        File.WriteAllText(SettingsPath, BusyHuman);
+        var heard = NewHeard();
+        var reads = 0;
+        var host = new PanelServiceHost(
+            Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), heard.Log, heard.Noticing,
+            _ => ++reads == 1 ? throw new IOException("in use by another process", unchecked((int)0x80070020)) : "{ not json");
+
+        heard.Notes().Should().ContainSingle("the constructor's own read was the busy one").Which.Should().Contain("held open by its writer");
+
+        var second = host.Current;
+        var again = host.Current;
+
+        heard.Notes().Should().HaveCount(2, "the malformed read is a new reason for the same stamp, so it is said");
+        heard.Notes()[1].Should().NotContain("held open by its writer", "that was the first read's reason, not this one's");
+        heard.NoticesOfTheNote().Should().HaveCount(2);
+        again.Should().BeSameAs(second, "the same stamp and the same reason build nothing more");
+        second.Settings.PolicyUnread.Should().BeTrue();
+    }
+
     public static TheoryData<string, bool> UnusableFiles() => new()
     {
         { "not json", false }, { "not json", true },
