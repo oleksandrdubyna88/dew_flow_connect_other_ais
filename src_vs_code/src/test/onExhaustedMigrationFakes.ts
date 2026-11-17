@@ -260,15 +260,15 @@ export class FakeUserSettings {
     return this.entryOf(key)[layer];
   }
 
-  /** What `inspect` answers (V6): an object for any key; an unknown key's members are all `undefined`. */
+  /**
+   * What `inspect` answers (V6): an object for any key. An unregistered key has no default, but VS Code keeps it in the
+   * user model, so its layers are what the file holds.
+   */
   inspect(key: string): { defaultValue: unknown; globalValue: unknown; workspaceValue: unknown; workspaceFolderValue: unknown } {
     const entry = this.entryOf(key);
-    if (!entry.declared) {
-      return { defaultValue: undefined, globalValue: undefined, workspaceValue: undefined, workspaceFolderValue: undefined };
-    }
 
     return {
-      defaultValue: entry.defaultValue,
+      defaultValue: entry.declared ? entry.defaultValue : undefined,
       globalValue: entry.global,
       workspaceValue: entry.workspace,
       workspaceFolderValue: entry.folder,

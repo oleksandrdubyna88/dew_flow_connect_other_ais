@@ -77,9 +77,18 @@ test('T29 TheFakesBehaveAsTheEditorIsRead', async () => {
   settings.undeclare('x');
   assert.equal(settings.inspect('x').defaultValue, undefined);
 
+  // V6: an unregistered key stays in the user model, so its layers answer what the file holds; only its default is undefined.
+  settings.set('x', 'global', 'kept');
+  settings.set('x', 'workspace', 'near');
+  assert.equal(settings.inspect('x').globalValue, 'kept');
+  assert.equal(settings.inspect('x').workspaceValue, 'near');
+  assert.equal(settings.inspect('x').defaultValue, undefined);
+  settings.set('x', 'workspace', undefined);
+
   // V5: a VALUE written to an undeclared key is refused in VS Code's words; its removal is accepted.
   await assert.rejects(Promise.resolve(settings.update('x', 'v', GLOBAL)), new Error(unregisteredWords('x')));
   await settings.update('x', undefined, GLOBAL);
+  assert.equal(settings.inspect('x').globalValue, undefined, 'the removal of an undeclared key is accepted and lands');
 
   // A snapshot does not see a later write; the next snapshot does.
   settings.declare('y');
