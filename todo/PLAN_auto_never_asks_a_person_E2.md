@@ -187,7 +187,7 @@ S2's spec may refine a name in C4–C6. If it does, it updates this section and 
   and never rejects. `version` is `extensionVersion(context)` (`extension.ts:1341`, private there, so read once at the
   call site). `after` is `() => { mirrorSettings(settingsSync); void panel.render(); }`: an overlay clear fires no
   configuration event, so an open panel would go on drawing the old value (the catalog migration's callback does both,
-  `extension.ts:454-458`). Its decisions live in a pure module beside it, `src/onExhaustedMigration.ts`.
+  `extension.ts:456-459`). Its decisions live in a pure module beside it, `src/onExhaustedMigration.ts`.
 - **C5 — the marker and the witnesses (S2).**
   - The `globalState` key `coai.onExhaustedAutoMigration` holds one RECORD. Its `completed` member is the parent's
     marker: the version that completed the run on this profile of this machine. A bare string in the slot reads as
@@ -238,11 +238,13 @@ a human is chosen in the panel (§ 9.4). The server's pinned-policy startup note
 | `src/test/helpCoverage.test.ts` | — | one `SETTING_ALIAS` row for the new setting | — |
 | `src/onExhaustedWire.ts`, `src/onExhaustedPanel.ts` (new, pure) | all | — | reads the labels (C2) |
 | `src/binaryFeatures.ts`, `src/serverSettingsFile.ts`, `src/serverSettingsSync.ts` | all | — | — |
-| `src/extension.ts` | `:434` only (the getter) | one call directly after the first `mirrorSettings(settingsSync);` (`:438`, C4); a test-mode member of `CoaiExports` (`:102`) and its entry in the `ExtensionMode.Test` spread (`:917-920`) for the real-editor scenario | — |
+| `src/extension.ts` | `:434` only (the getter) | one call directly after the first `mirrorSettings(settingsSync);` (`:438`, C4); a test-mode member of `CoaiExports` (`:102`) and its entry in the `ExtensionMode.Test` spread (`:919`) for the real-editor scenario | — |
 | `src/test/host/scenarios.ts`, `src/test/host/onExhaustedMigrationScenario.ts` (new) | — | one entry; the scenario | — |
 | `src/panelView.ts` | `gateBody`'s select and its two lines; one optional `PanelState` member | — | — |
 | `src/panelProvider.ts` | one member in the state it builds (`:1489` neighbourhood) | — | — |
-| `src/onExhaustedMigration.ts`, `src/onExhaustedMigrationHost.ts` (new) | — | all | — |
+| `src/onExhaustedMigration.ts`, `src/onExhaustedMigrationHost.ts`, `src/onExhaustedTold.ts` (new) | — | all | — |
+| `src/configTransfer.ts` | — | one `NEVER_TRANSFERRED` row for the witness (spec D19) | — |
+| `src/test/onExhaustedMigrationTwoMachines.test.ts` (new) | — | all | — |
 | `.github/workflows/sonarcloud.yml` | — | the host module in the exclusions | — |
 | `notification-sites.json` | — | regenerated | — |
 | `src/roundsLog.ts` | — | — | `detail()` (`:1783-1803`) and `LogRow.note`'s summary (`:88-91`) |
@@ -530,7 +532,7 @@ gate line names such a value.
    that holds window B after its read while A finishes and the person chooses a value: one result, one notification.
 3. **N7 — the mirror.** The user-layer clear fires `onDidChangeConfiguration`, and the activation listener mirrors.
    An overlay clear fires nothing. So the run calls `mirror` itself once every clear has succeeded and BEFORE it writes
-   its marker. That is the catalog migration's precedent (`extension.ts:454-458`).
+   its marker. That is the catalog migration's precedent (`extension.ts:456-459`).
 4. **N8 — record before clear.** A resumed run must keep a choice made after the interruption. Comparing values alone
    cannot do it: a location recorded as `human`, cleared, and then set to `human` again by the person reads exactly as
    "not yet cleared". So the record carries per-location progress, persisted after each clear. The test interrupts after
@@ -758,8 +760,7 @@ name in C4–C6, it updates § 4, § 6 and § 9 here in the same commit, as § 4
    not name a workspace value" is reversed: the second form names it, true for the window that shows it. A pure
    function chooses the sentence; T5 pins both constants word for word.
 7. **D12.** `NOT_RESET` also when the witness write itself is refused.
-8. **D13.** The ready condition becomes: the registry knows `coai.onExhaustedResetToAuto` (`inspect` of it is not
-   `undefined`). With S1's § 7.3 a cleared location reads `auto` whatever the registry says; Fable decides whether to
+8. **D13.** The ready condition becomes: the registry knows `coai.onExhaustedResetToAuto` (`inspect(key)?.defaultValue` is not `undefined` — `unknownKeysOf` of `catalogMigrationRun.ts`; in an extension host `inspect` of an unknown key answers an object whose members are all `undefined`, X8 of the spec). With S1's § 7.3 a cleared location reads `auto` whatever the registry says; Fable decides whether to
    keep the `defaultValue === 'auto'` test beside it.
 9. **D15 and the user-layer port.** The port also reads the witness (`inspect('onExhaustedResetToAuto').globalValue`,
    asked again at every call) and writes or withdraws it with the Global target only. A workspace value of the witness

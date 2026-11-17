@@ -81,6 +81,9 @@ Narrowed: yes — E2 done-when 3 and DoD item 6 keep every clause, but "two wind
 
 > Epoch 3 · approved 2026-11-17 · by owner · state: open
 
+- 3.1 · 2026-11-17 · agent · approach — Settings Sync merges a key added on two machines with different values as a conflict it asks the person to resolve (settingsMerge.ts, read by the S2 spec, U10), so a witness naming its run would put a conflict on a key the person never wrote: the witness is one fixed word on every machine, and the read-back after the await is the value test alone
+  (the coordinator's decision; the first change of epoch 3.)
+
 ## 1. What the owner asked for (2026-11-16)
 
 > *«сюда нужно добавить авто мод — и он должен быть по умолчанию на всех, кто установит новую версию. это значит, что
@@ -378,8 +381,8 @@ string and asserts it is absent from the log file). The existing `InTheConversat
     It lives in the settings file because the user layer is one file on every machine Settings Sync reaches while
     `globalState` is per machine, and because a settings write is a per-key edit of that file that no `globalState`
     write can undo (point (a)). It is written when nothing is removed because a person on that machine may choose a
-    value afterwards, and the next machine must keep it. Its value names the version and the run that wrote it, so a
-    run recognises its own write when it reads it back; it is read from `inspect().globalValue` only.
+    value afterwards, and the next machine must keep it. Its value is one fixed word, the same on every machine, so Settings
+    Sync merges two machines' witnesses without a conflict (entry 3.1); it is read from `inspect().globalValue` only.
   - *Its scope* (point (b)): none declared — the scope `coai.onExhausted` has — so the witness is synced exactly when the
     value it witnesses is, and lives in each profile's own settings beside it. `machine` and `machine-overridable` are
     left out of Settings Sync by default, so the next machine would not see it; `application` is shared by every
@@ -413,13 +416,13 @@ string and asserts it is absent from the log file). The existing `InTheConversat
 
   **The order.** Claim → record what each location holds (N8) → each overlay, one write with its witness, one turn of the
   catalog migration's queue (the two migrations rewrite the same record) → the user layer: when it has no witness, write
-  the witness, await it, then read the witness and the value AGAIN — a witness that is not this run's, or a value no
-  longer the one recorded, stops the step and leaves the value (point (c)); else remove the value; a removal the settings
+  the witness, await it, then read the witness and the value AGAIN — a value no
+  longer the one recorded stops the step and leaves the value (point (c)); else remove the value; a removal the settings
   file refuses withdraws the witness → the mirror → the marker → the notification.
 
   **Settings Sync during a run** (point (c)). Sync can deliver another machine's file while the witness write is awaited;
   the read after the await sees it. A fixed pause proves nothing and none is relied on. What remains: a delivery that
-  lands after that read and before the removal is written — the time of one settings write; and a machine whose run comes
+  lands between the first read of the witness and its write, or after the read-back and before the removal is written — the time of one settings write; and a machine whose run comes
   before Sync has pulled the other machine's file at all, which clears its own copy, after which Sync's merge can drop a
   choice made elsewhere that equals the old value. Neither is measured; both are written down.
 
@@ -457,7 +460,11 @@ string and asserts it is absent from the log file). The existing `InTheConversat
   on a server older than 0.66.0 until that side's extension updates — the CHANGELOG says to update every side's
   extension together; (v) an older extension that turns the per-side switch on after the run freezes its default
   `human` into a new overlay, which nothing clears; (vi) "once" is once per profile of a machine for overlays and the
-  marker, and once for every machine Sync reaches for the user layer.
+  marker, and once for every machine Sync reaches for the user layer; (vii) a settings file that never accepts a write:
+  the run never completes, the notification is never shown, and every start tries again; (viii) a value in a remote
+  machine's own user settings (Remote-SSH, WSL): `globalValue` merges the remote file over the local one and a removal
+  goes to the file that holds the key, so one run clears one of the two and the other stays, witnessed — it takes a
+  hand edit of that remote file.
 - **The env block** (`settingsShape.ts:551-553`) reads the binary's features (the fifth `envBlock` parameter, as
   `consultantsEnv` does):
 
