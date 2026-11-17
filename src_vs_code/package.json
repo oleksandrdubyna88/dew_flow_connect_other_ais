@@ -1449,6 +1449,7 @@
     "test:paths-per-side-compat": "npm run compile && node scripts/live-paths-per-side-compat.mjs",
     "test:gauge-compat": "npm run compile && node scripts/live-gauge-compat.mjs",
     "test:command-models-compat": "npm run compile && node scripts/live-command-models-compat.mjs",
+    "test:on-exhausted-compat": "npm run compile && node scripts/live-on-exhausted-compat.mjs",
     "test:vibe-runtime-compat": "npm run compile && node scripts/live-vibe-runtime-compat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
     "measure:image": "npm run compile && node scripts/measure-image.mjs",

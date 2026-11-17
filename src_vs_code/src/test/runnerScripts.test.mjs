@@ -29,7 +29,7 @@ const ENTRIES = Object.freeze([
   inPkg('live-claude-models.mjs', 'live-models'), inPkg('live-close-consult-compat.mjs', 'compat-close'),
   inPkg('live-command-models-compat.mjs', 'compat-cmd-models'), inPkg('live-feature-schema-compat.mjs', 'compat-schema'),
   inPkg('live-feature-vendor-compat.mjs', 'compat-vendor'), inPkg('live-fresh.mjs', 'live-fresh'), inPkg('live-gauge-compat.mjs', 'compat-gauge'),
-  inPkg('live-paths-per-side-compat.mjs', 'compat-paths'), inPkg('live-security-settings-compat.mjs', 'compat-security'),
+  inPkg('live-on-exhausted-compat.mjs', 'compat-policy'), inPkg('live-paths-per-side-compat.mjs', 'compat-paths'), inPkg('live-security-settings-compat.mjs', 'compat-security'),
   inPkg('live-vibe-runtime-compat.mjs', 'compat-vibe'), inPkg('measure-stream.mjs', 'measure-stream'), inPkg('measure-image.mjs', 'measure-image'),
   inPkg('measure-append.mjs', 'measure-append'), inPkg('measure-consultant-skew.mjs', 'measure-skew'), inPkg('measure-help-clicks.mjs', 'measure-clicks'),
   inPkg('measure-failure-layout.mjs', 'measure-failure'), inPkg('measure-answer-code-layout.mjs', 'measure-code'), inPkg('render-page.mjs', 'render-page'),
