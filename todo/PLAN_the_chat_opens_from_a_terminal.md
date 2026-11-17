@@ -1,6 +1,6 @@
 # PLAN — the chat opens from a terminal
 
-> Status: **epoch 3 open, approved by the owner 2026-11-16 (narrowed: the skip-list *Add* only for the user list; a workspace or folder list gets one notice with no button; any other value nothing), after the re-review of change 2.2 (review_feature moves before E3's release tag); epoch 2 was approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
+> Status: **E3 coded and merged (#1015, b3abb791, 2026-11-17; coai code gate `proceed`); R8, R10 and R11 passed on VSIX 0.87.901 (2026-11-17); `review_feature` over E1–E3 `proceed` (2026-11-17, one Minor finding accepted as change 3.1: the title fallback no longer reads one session of a cut scan by itself); next: its fix in its own PR and a new pre-release VSIX, then the extension release 0.88.0. Epoch 3 open (one change, 3.1), approved by the owner 2026-11-16 (narrowed: the skip-list *Add* only for the user list; a workspace or folder list gets one notice with no button; any other value nothing), after the re-review of change 2.2 (review_feature moves before E3's release tag); epoch 2 was approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
 > selection; `autoSend` kept as on the other doors). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
 > twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3. E1 merged
 > (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
@@ -108,6 +108,14 @@ Narrowed: yes — the skip-list check of epoch 2 (Stage 3, DoD item 5) offered *
 | the re-review's revision of the plan and the E3 stories, 2a2f21fe | pushed, unmerged (`feat/chat-from-a-terminal-e3`) | fits | kept — the baseline of epoch 3; the E3 stories passed the coai plan gate on it (session 167eb40d) |
 
 > Epoch 3 · approved 2026-11-16 · by owner · state: open
+
+- 3.1 · 2026-11-17 · agent · contract — the title fallback reads one session of the name by itself only when its scan read every session; from a cut scan the one session is offered as a list of one that says not every session was read
+  (The feature review over E1–E3, 2026-11-17, codex-3, Minor: E2.S3's `titles` step took the one session of the
+  name even when the scan stopped at its count or time limit, had more rows, or skipped a session, so a session of the
+  name among those not read could be passed over without a choice. Accepted: it is the plan's own rule for the
+  ambiguity arm — a list, even of one. `Step` `pick` gains `partial`; `RoadSeams.pick` takes it and the pick's
+  placeholder says so. Test S3-T19, seen RED, GREEN, RED twice (the step and the road). Lands before the 0.88.0 tag in
+  its own PR, verified on a new pre-release VSIX. The first change of epoch 3: one more stops the plan.)
 
 ## The symptom
 
@@ -516,10 +524,13 @@ what stage 3 touches and the text above did not name:
 | R7 | The registry path finds the right session on each of the three users; the fallback list works when two sessions share a name. | E2 |
 |  | 2026-11-12, VSIX 0.86.901 (abf58a7b): PASSED — the owner's report. Not reported, so still owed (none is a release condition): M-O2…M-O7 of the S2 spec and the look of a long prompt in *Asked*. The VSIX's extension code is the merged head's: from abf58a7b to e060d77e only tests changed under `src_vs_code`. |  |
 | R8 | After a VS Code reload, creds reopens its terminals and the conversations re-attach. | E3 |
+|  | 2026-11-17, VSIX 0.87.901 (b3abb791, the merged E3 head): PASSED — the owner's report. Not reported: who brought the terminals back (VS Code or creds), whether a name appeared twice, and the full-restart run; none is a release condition. |  |
 | R9 | With a terminal focused, the command palette no longer lists `coai.chatWithOtherAi` (its `!terminalFocus` entry). If it IS listed: with a Claude tab as the active editor, running it must not interrupt the terminal's program (see *What this plan does NOT do*). | E1 |
 |  | 2026-11-11, VSIX 0.85.902 (a2d7d416): PASSED — the owner's report. The VSIX's extension code is the merged head's: from a2d7d416 to the head only the conventions pin, two `.claude/hooks` files and `POST_DEPLOY.md` changed (a merge of `main`). |  |
 | R10 | Ctrl+Alt+G in a `Creds:` tmux terminal opens go-to and prints nothing in the pane. | E3 |
+|  | 2026-11-17, VSIX 0.87.901 (b3abb791, the merged E3 head): PASSED — the owner's report. |  |
 | R11 | With a user-level `commandsToSkipShell` that lacks the ids, the notification appears once, *Add* appends them, and R1 then passes. | E3 |
+|  | 2026-11-17, VSIX 0.87.901 (b3abb791): PASSED — the owner's report. With `["workbench.action.quickOpen"]` in the user `settings.json`: one notification naming both ids; *Add* left the person's entry first and `coai.askFromTerminal`, `coai.goToFromTerminal` after it, once each; the comments and the layout of the file stayed as they were; with `cat -v` in a `Creds:` tmux pane Ctrl+Alt+A opened the chat and Ctrl+Alt+G opened go-to, and nothing was printed. The second run (closed without *Add*) was not done: after the *Add* the answer is remembered, so putting the list back showed no notification, as designed; the closed-without-*Add* path is covered by the unit tests. |  |
 
 ## Definition of Done
 

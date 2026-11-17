@@ -50,12 +50,12 @@ interface Choice extends vscode.QuickPickItem {
 
 const choiceOf = (row: PickRow): Choice => ({ label: row.label, description: row.description, detail: row.detail, sessionId: row.sessionId });
 
-/** The pick list: one row for each candidate, in the order the road decided (newest first), nothing preselected. */
-async function pickOne(rows: readonly PickRow[]): Promise<string | undefined> {
+/** The pick list: one row for each candidate, in the order the road decided (newest first), nothing preselected; it says so when not every session was read. */
+async function pickOne(rows: readonly PickRow[], partial: boolean): Promise<string | undefined> {
   const chosen = await askPerson(() => vscode.window.showQuickPick(rows.map(choiceOf), {
     canPickMany: false,
     title: 'Which Claude session is this terminal’s?',
-    placeHolder: 'Choose the session to read',
+    placeHolder: partial ? 'Not every session on the host was read, so the right one may be missing. Choose the session to read' : 'Choose the session to read',
     matchOnDescription: true,
     matchOnDetail: true,
   }));
