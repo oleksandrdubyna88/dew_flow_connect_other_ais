@@ -2444,12 +2444,12 @@ internal static class Program
 
     internal const string Instructions = """
         ConnectOtherAIs: a review gate run by OTHER vendors' models over your plan and code.
-        It is ADDITIONAL: run your own review as usual, and start both AT ONCE. Another
+        It is ADDITIONAL: run your own review and start both AT ONCE. Another
         vendor's model answers what your own is worst placed to answer; your reviewers read
         the change in context. A `call_human` verdict stops the SHIPPING, not the task.
         The protocol: `open` a session for the repo+branch. `review_plan` sends the plan to
         every enabled provider; `resolve` records an accept/reject for EVERY finding (a rejection needs a reason).
-        Repeat until the verdict advances the stage (`proceed`, `good_enough` or `not_reviewed`), `resolve`,
+        Repeat until the verdict advances the stage (`proceed`, `continue_anyway`, `good_enough` or `not_reviewed`), `resolve`,
         implement, then `review_code`, `resolve`, fix — the same loop. `review_code` REFUSES until the plan
         stage advanced.
         `providers` says what is configured; `status` re-orients a resumed conversation;

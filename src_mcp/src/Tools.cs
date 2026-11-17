@@ -130,7 +130,7 @@ internal static class Tools
                 Name = "review_code",
                 Title = "One independent reviewer per configured role, per provider, over the branch diff",
                 Description = """
-                    The code gate — REFUSES until the plan stage advanced (a round that ended `proceed`,
+                    The code gate — REFUSES until the plan stage advanced (a round that ended `proceed`, `continue_anyway`,
                     `good_enough` or `not_reviewed`, then `resolve`d), and REFUSES a bare diff. Per enabled provider, one reviewer per role configured for this
                     stage — conventions / architecture / security+reliability / UX-DX & code
                     performance as shipped, plus any role the operator has added — reads the SCOPE,
@@ -407,7 +407,8 @@ internal static class Tools
                     Two kinds of question, and the server tells them apart by the session you name.
 
                     UNDER POLICY `auto` (the default of When the rounds run out) this call never waits
-                    and writes no card. Your own question without a `consultId` is answered
+                    for the person and writes no card (the consultants of a production risk still run, and
+                    their answers come back before this call returns). Your own question without a `consultId` is answered
                     `status: "consult_first"` — ask the consultants, settle it with them, and come back
                     with the consultId only if you did not. A held gate is answered `no_answer_yet` at
                     once: a hold the person owns names its notice; a hold left by a build before auto

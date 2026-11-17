@@ -21,7 +21,8 @@ public sealed class TheWordsAreTrueUnderPolicyAutoTests
     [Fact]
     public void AskHumanSaysItNeverWaitsUnderAuto_AndWhatItAnswersInstead()
     {
-        AskHuman.Should().Contain("UNDER POLICY `auto`").And.Contain("never waits and writes no card")
+        AskHuman.Should().Contain("UNDER POLICY `auto`").And.Contain("never waits for the person and writes no card")
+            .And.Contain("the consultants of a production risk still run", "auto never waits for the PERSON; it does not skip the consultants")
             .And.Contain("`status: \"consult_first\"`", "the AI's own question without a consultId")
             .And.Contain("ask the consultants", "the sentence says what to do next")
             .And.Contain("A held gate is answered `no_answer_yet` at once")
@@ -66,7 +67,8 @@ public sealed class TheWordsAreTrueUnderPolicyAutoTests
     [Fact]
     public void TheInstructionsSayWhichVerdictsLetAStageAdvance_AndReviewCodeWaitsForTheStage()
     {
-        Flat(Program.Instructions).Should().Contain("Repeat until the verdict advances the stage (`proceed`, `good_enough` or `not_reviewed`)")
+        Flat(Program.Instructions).Should().Contain("Repeat until the verdict advances the stage (`proceed`, `continue_anyway`, `good_enough` or `not_reviewed`)",
+                "policy continue answers an exhausted round continue_anyway with AdvanceOnResolve set (RoundMachine.Exhausted, RoundCommands.MayProceed): it advances too")
             .And.Contain("`review_code` REFUSES until the plan stage advanced")
             .And.NotContain("until a plan round reached `proceed`", "under the default policy a round nobody answered ends not_reviewed, and the stage opens on resolve");
         Program.Instructions.Length.Should().BeLessThanOrEqualTo(2000);
@@ -78,7 +80,7 @@ public sealed class TheWordsAreTrueUnderPolicyAutoTests
         var reviewCode = Flat(TheGateSaysWhenToConsultTests.DescriptionOf("review_code"));
 
         reviewCode.Should().Contain("REFUSES until the plan stage advanced")
-            .And.Contain("`proceed`, `good_enough` or `not_reviewed`")
+            .And.Contain("`proceed`, `continue_anyway`, `good_enough` or `not_reviewed`")
             .And.NotContain("until a plan round reached `proceed`");
     }
 
