@@ -462,6 +462,69 @@ test('T36b NoMarkerFromACopyThatLostItsRecord', async () => {
   assert.equal(taken.of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'and writes its own witness');
 });
 
+/**
+ * (iii-c) A loses the claim during its witness await, and what the other run did meanwhile is `done`: the witness is ONE
+ * fixed word with no owner, so a run that finds the claim gone may take it out again only when no run completed and the
+ * value is still the recorded one. Otherwise it must stay: it is what keeps a later choice from being reset.
+ */
+async function lostClaimAt(done: (of: World, took: FakeWindow) => void): Promise<{ of: World; a: Rig; outcome: unknown }> {
+  const held = await heldAtWitness();
+  const took = held.of.client.window();
+  void took.update(KEY, { ...held.of.client.record(), claim: { by: 'other', at: held.of.clock.now() } });
+  done(held.of, took);
+  held.of.client.deliver(held.a.window);
+  held.of.settings.unhold(USER_WITNESS);
+  held.of.settings.release(USER_WITNESS);
+  await drive(held.a, held.run);
+
+  return { of: held.of, a: held.a, outcome: await held.run };
+}
+
+/** Another machine of the same person: its own client store, the same settings file (the witness syncs). */
+function secondMachine(of: World): World {
+  return { client: world(false).client, settings: of.settings, clock: of.clock };
+}
+
+/** What the person chose afterwards must outlive every run, on this machine and on a second one. */
+async function assertChoiceSurvives(of: World, a: Rig, outcome: unknown, why: string): Promise<void> {
+  assert.equal(outcome, 'busy', why);
+  assert.deepEqual(a.userEvents().map((one) => one.kind), ['witness'], `${why}: A asked for its witness and never withdrew it`);
+  assert.equal(of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, `${why}: the witness is still in the file`);
+  of.settings.set('onExhausted', 'global', 'continue');
+  const machine = activation(secondMachine(of), 'M2');
+  await machine.run();
+  assert.equal(of.settings.layer('onExhausted', 'global'), 'continue', `${why}: the second machine keeps the value chosen afterwards`);
+}
+
+test('T36b-c ALostClaim_LeavesTheWitnessToTheRunThatOwnsIt', async () => {
+  // (iii-c1) the other run COMPLETED, and the value is untouched (another machine's witness was already in the file):
+  // only the completed marker tells A that the witness is not its to take out.
+  const completed = await lostClaimAt((of, took) => {
+    void took.update(KEY, { ...of.client.record(), claim: undefined, completed: '0.88.0', by: 'other' });
+    of.settings.set(USER_WITNESS, 'global', USER_WITNESS_WORD);
+  });
+  assert.equal(completed.of.settings.layer('onExhausted', 'global'), 'human', 'c1 holds: the value is still the recorded one');
+  await assertChoiceSurvives(completed.of, completed.a, completed.outcome, 'c1 (another run completed)');
+
+  // (iii-c2) the other run REMOVED the value and relies on the witness; nothing completed yet.
+  const removed = await lostClaimAt((of) => {
+    of.settings.set('onExhausted', 'global', undefined);
+    of.settings.set(USER_WITNESS, 'global', USER_WITNESS_WORD);
+  });
+  assert.equal(recordOf(removed.of.client.record()).completed, undefined, 'c2 holds: nobody completed');
+  await assertChoiceSurvives(removed.of, removed.a, removed.outcome, 'c2 (another run removed the value)');
+
+  // (iii-c3) the person CHOSE another value meanwhile: it is not the recorded one, so nothing of A's may undo the witness.
+  const chose = await lostClaimAt((of) => {
+    of.settings.set('onExhausted', 'global', 'good_enough');
+    of.settings.set(USER_WITNESS, 'global', USER_WITNESS_WORD);
+  });
+  assert.equal(chose.outcome, 'busy', 'c3');
+  assert.deepEqual(chose.a.userEvents().map((one) => one.kind), ['witness'], 'c3: no withdrawal');
+  assert.equal(chose.of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'c3: the witness stays');
+  assert.equal(chose.of.settings.layer('onExhausted', 'global'), 'good_enough', 'c3: and so does the choice');
+});
+
 test('T41 TwoWindowsThatNeverHearEachOther_RemoveTheUserValueOnce_AndMayTellTwice', async () => {
   const removals = (of: World): number => of.settings.updates.filter((one) => one.key === 'onExhausted' && one.value === undefined).length;
   const witnessAsks = (of: World): number => of.settings.updates.filter((one) => one.key === USER_WITNESS).length;

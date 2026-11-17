@@ -466,19 +466,45 @@ function stillTheRecordedValue(ports: MigrationPorts, held: Readonly<Record<stri
 
 /**
  * After the awaited witness write the record is read ONCE, in the same synchronous stretch as the value test and the
- * removal. A claim that passed to another window, and a copy that lost `held`, both leave the value and take the witness
- * out again, so the next start finds the value and clears it (§ S2.10).
+ * removal. A copy that lost `held` leaves the value and takes the witness out again, so the next start finds the value and
+ * clears it (§ S2.10); a lost claim is decided by `afterLostClaim`.
  */
 async function removeUnlessChosen(ports: MigrationPorts): Promise<Stop | undefined> {
   const seen = read(ports);
   if (!mine(ports, seen)) {
-    return giveUpAfterWitness(ports, 'the claim passed to another window while the witness was written; the witness is withdrawn', 'busy');
+    return afterLostClaim(ports, seen);
   }
   if (seen.held === undefined) {
     return giveUpAfterWitness(ports, 'what each location held was lost to a stale write while the witness was written; it is withdrawn', 'incomplete');
   }
 
   return stillTheRecordedValue(ports, seen.held) ? removeValue(ports) : undefined;
+}
+
+/**
+ * The claim passed to another window while the witness was written. The witness is ONE fixed word with no owner, so taking
+ * it out is only right when no run completed and the value is still the recorded one: then it would stay un-reset under a
+ * witness. A completed run owns the witness; a value that is gone or different was removed by another run or chosen by the
+ * person, and the witness is what protects it. A copy with no `held` has nothing to compare and no run can have completed
+ * from it, so it withdraws as a lost record does. Record and value are read in the same synchronous stretch.
+ */
+function afterLostClaim(ports: MigrationPorts, seen: MigrationRecord): Promise<Stop> {
+  if (settledByAnotherRun(ports, seen)) {
+    ports.log('the claim passed to another window while the witness was written; the witness stays with the run that settled the value');
+
+    return Promise.resolve(stop('busy'));
+  }
+
+  return giveUpAfterWitness(ports, 'the claim passed to another window while the witness was written; the witness is withdrawn', 'busy');
+}
+
+/** A run completed, or the value is no longer the recorded one: the witness is no longer this run's to take out. */
+function settledByAnotherRun(ports: MigrationPorts, seen: MigrationRecord): boolean {
+  if (seen.completed !== undefined) {
+    return true;
+  }
+
+  return seen.held !== undefined && !stillTheRecordedValue(ports, seen.held);
 }
 
 /** The value stays and so does nothing of this run's: the witness comes out again and the run ends with `outcome`. */
