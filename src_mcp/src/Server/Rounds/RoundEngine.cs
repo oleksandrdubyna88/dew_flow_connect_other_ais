@@ -541,6 +541,8 @@ internal sealed class RoundEngine(
                 Gitlinks = roundWork.Gitlinks,
                 // What the consultation cadence said about this round: met, or stood down and why.
                 CadenceNote = stage.Cadence.Call.Note,
+                // What policy auto decided and why — empty for every round a person's policy decided.
+                Note = AutoNote.Of(completed.Verdict),
                 // The D23 ground a feature review's second round was admitted on — read from the state this
                 // round BEGAN from, because completing it is what spends the ground.
                 AdmittedBy = FeatureSecondRound.AdmittedBy(session.State),
@@ -660,6 +662,7 @@ internal sealed class RoundEngine(
                 Carried = [],
             });
             audit.Closing(answer.Verdict, gate.GatingCount, summary.Sentence, record);
+            audit.Autonomous(answer.Verdict, record.Note);
             audit.Findings(merged);
             // And into the database, with what the round was ABOUT. Best-effort by construction:
             // the round is already answered and saved, and a projection that cannot be written must

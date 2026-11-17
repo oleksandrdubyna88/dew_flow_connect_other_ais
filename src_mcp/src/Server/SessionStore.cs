@@ -132,7 +132,7 @@ public sealed record RoundRecord(
     /// <summary>The verdict of a round that did not run because nobody could review it (D1).</summary>
     public const string Skipped = "skipped";
 
-    /// <summary>Why a SKIPPED round did not run — empty for every round that ran.</summary>
+    /// <summary>Why a SKIPPED round did not run, or what policy auto decided for a round that ran — empty otherwise.</summary>
     public string Note { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>

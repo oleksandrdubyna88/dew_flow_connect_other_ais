@@ -473,7 +473,9 @@ internal static class Schema
     /// serves it (D1): the row is written with verdict <c>skipped</c> and the reason here, with a
     /// repeat count (<c>×N</c>) when consecutive identical skips coalesced into one row. Empty for
     /// every round that ran, and for every row written before this step — the one spelling of no
-    /// note, which is what <c>--log</c> answers for a database that has no column at all.</para>
+    /// note, which is what <c>--log</c> answers for a database that has no column at all. The one
+    /// exception is a round policy auto decided (<c>not_reviewed</c>, or a <c>good_enough</c> it gave
+    /// a reason for), which carries that reason here: the column's meaning widened, its SQL did not.</para>
     /// <para>Its own step, appended: a database that has run fifteen records fifteen, and widening
     /// the fifteenth would leave it without this column while believing it had run every step.</para>
     /// </remarks>

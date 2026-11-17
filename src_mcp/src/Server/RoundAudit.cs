@@ -147,6 +147,28 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
             (record.CompletedUtc - record.StartedUtc).TotalSeconds);
     }
 
+    /// <summary>What policy auto decided for this round, and why — a Warning when nothing was reviewed.</summary>
+    /// <remarks>
+    /// Nothing for an empty reason: a round a person's policy decided has no auto decision to say. The reason is a sentence of this
+    /// server's own and never a question's text, but it carries reviewer failures, so it is cleaned for one line like every other value.
+    /// </remarks>
+    public void Autonomous(string verdict, string reason)
+    {
+        if (reason.Length == 0)
+        {
+            return;
+        }
+
+        if (verdict == "not_reviewed")
+        {
+            _log.Warning("round {Round} {Stage} {Verdict} under policy auto: {Reason}", number, stage, verdict, ForALogLine(reason));
+        }
+        else
+        {
+            _log.Information("round {Round} {Stage} {Verdict} under policy auto: {Reason}", number, stage, verdict, ForALogLine(reason));
+        }
+    }
+
     /// <summary>
     /// Where a finding points, or nothing at all.
     /// </summary>
