@@ -1,8 +1,9 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **E1 (the server) merged 2026-11-17 as #1011 and released as mcp 0.66.0 (#1012). E2 started the same day: its
-> stories document, [PLAN_auto_never_asks_a_person_E2.md](PLAN_auto_never_asks_a_person_E2.md), is written, E2.S2 marked
-> the cornerstone; nothing of E2 is coded. E3 not started.** Before that: **E1 built 2026-11-17, in PR #1011, code gate
+> Status: **epoch 2 stopped for re-review, 2026-11-17, at its second change (entry 2.2, Settings Sync and the
+> migration's witness). No new code on any epic until the whole plan is reviewed again.** Before that: **E1 (the server) merged 2026-11-17 as #1011 and released as mcp 0.66.0 (#1012). E2 started the same day: its
+> stories document, [PLAN_auto_never_asks_a_person_E2.md](PLAN_auto_never_asks_a_person_E2.md), the E2.S2 spec, E2.S1
+> coded on `feat/auto-mode-e2` and the S3 page slice on `feat/auto-mode-e2-s3-page`. E3 not started.** Before that: **E1 built 2026-11-17, in PR #1011, code gate
 > `proceed`.** Before that:
 > **epoch 2 open, 2026-11-16 — re-approved by the gate the same day (the interim document review of the whole plan,
 > `proceed`, 4 of 4 reviewers; four findings folded, one rejected with its reason in § 4.3). Epoch 1 stopped at its second
@@ -46,10 +47,12 @@ Narrowed: no — DoD item 4 and § 8 step 4 grew; scope, goals, merge conditions
 | E1 stories document, 1f0ae332 | feat/auto-mode-e1, pushed | fits | revised in place after re-approval (§ 4.3, N3, C4) |
 | E1.S1 cornerstone spec, 4cab5375 | feat/auto-mode-e1, pushed | fits | revised in place after re-approval (U1 settled, the note, the tests) |
 
-> Epoch 2 · approved 2026-11-16 · by reviewers · state: open
+> Epoch 2 · approved 2026-11-16 · by reviewers · state: stopped
 
 - 2.1 · 2026-11-17 · agent · epics, approach — the copied MCP block carries only COAI_DATA_DIR and COAI_DATA_SIDE (since a0eee1ca; install.test.ts and theDirectoryAPersonChose.test.ts), so no pasted block pins a policy: E2 adds no wait for features and no COAI_ON_EXHAUSTED to it, and done-when 2's second clause becomes "the copied block carries no COAI_ON_EXHAUSTED"
   (found by the E2 stories document, § 2.1 and § 10 R1; verified by the coordinator against extension.ts and install.test.ts.)
+- 2.2 · 2026-11-17 · owner · approach, contract — Settings Sync carries the user settings to every machine while the globalState marker stays per machine, so another machine's first run resets a choice made after the migration (E2.S2 spec, U1): a witness in the synced user layer is written before the user value is removed, and a machine that finds it leaves the user value alone
+  (both question consultants read it as a change, consultation 36f6b75a…; the owner chose the witness and the stop over a narrowed done-when 3. This second change stopped the plan.)
 
 ## 1. What the owner asked for (2026-11-16)
 
