@@ -20,9 +20,9 @@ public static class LegacyHold
         Config = s.Config.UnderPolicyOf(current),
     };
 
-    /// <summary>The config a deciding load reads: the settings' policy — but untouched while a hold from before auto stands.</summary>
+    /// <summary>The config a deciding load reads: the CURRENT settings' policy, stamped after the person's decision is applied — but untouched while a hold from before auto stands.</summary>
     /// <remarks>
-    /// Stamping a standing hold from before policy auto would write the marker onto it and make it this build's hold: a person's, for good.
+    /// Stamping a standing hold from before policy auto would write the marker onto it and make it this build's hold: a person's, for good. It keeps its config as loaded, so a later release can find it.
     /// </remarks>
     public static PanelConfig Stamped(SessionState s, PanelConfig current) =>
         Stands(s) ? s.Config : s.Config.UnderPolicyOf(current);

@@ -285,8 +285,6 @@ internal sealed class RoundEngine(
             return Error(LegacyHold.ReleasedSentence(SessionPolicy.StageOf(session)), from);
         }
 
-        // The policy a round ends under is the CURRENT one: the config is stamped here, AFTER the person's decision is applied,
-        // and never while a hold from before policy auto stands (which keeps its config as loaded, so a later release can find it).
         session = session with
         {
             State = session.State with
