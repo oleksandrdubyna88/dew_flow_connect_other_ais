@@ -1,6 +1,6 @@
 # PLAN — the chat opens from a terminal
 
-> Status: **epoch 3 open, approved by the owner 2026-11-16 (narrowed: the skip-list *Add* only for the user list; a workspace or folder list gets one notice with no button; any other value nothing), after the re-review of change 2.2 (review_feature moves before E3's release tag); epoch 2 was approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
+> Status: **E3 coded and merged (#1015, b3abb791, 2026-11-17; coai code gate `proceed`); R8, R10 and R11 passed on VSIX 0.87.901 (2026-11-17); next: `review_feature` over E1–E3, then the extension release 0.88.0. Epoch 3 open, approved by the owner 2026-11-16 (narrowed: the skip-list *Add* only for the user list; a workspace or folder list gets one notice with no button; any other value nothing), after the re-review of change 2.2 (review_feature moves before E3's release tag); epoch 2 was approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
 > selection; `autoSend` kept as on the other doors). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
 > twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3. E1 merged
 > (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
