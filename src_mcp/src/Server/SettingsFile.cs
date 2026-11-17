@@ -67,12 +67,12 @@ public static class SettingsFile
     /// </remarks>
     internal static SettingsLayer TryLayer(string dataDir, Func<string, string?> environment, Action<string> said, Func<string, string> readText)
     {
-        Adopt(environment, said);
+        var adopted = Adopt(environment, said);
 
         return TryRead(Path.Combine(dataDir, Name), readText) switch
         {
             SettingsRead.Busy => new SettingsLayer.Busy(),
-            var read => new SettingsLayer.Layered(Over(environment, ValuesOf(read)), UnreadBecause(read)),
+            var read => new SettingsLayer.Layered(Over(environment, ValuesOf(read)), UnreadBecause(read, adopted)),
         };
     }
 
@@ -90,15 +90,33 @@ public static class SettingsFile
 
     internal const string BusyWhy = "it is held open by its writer";
 
-    /// <summary>Why a read gave nothing although the file is there — empty for a read that succeeded and for a file that is not there.</summary>
-    private static string UnreadBecause(SettingsRead read) => read is SettingsRead.Unusable unusable ? unusable.Why : string.Empty;
-
-    private static void Adopt(Func<string, string?> environment, Action<string> said)
+    /// <summary>
+    /// Why a read gave nothing although the settings exist — empty for a read that succeeded and for settings that are nowhere.
+    /// </summary>
+    /// <remarks>
+    /// A file that is there and unusable says why. A side file that is NOT there after an adoption that SAID something is the other case: the
+    /// adoption succeeds by publishing the side file (then the read sees it), so a sentence beside a missing file is an adoption that failed — the
+    /// root file the operator's settings are in could not be read or published. Those settings are unread, and a default taken from them must
+    /// not release a hold (<see cref="SessionPolicy"/>; PR #1011, CodeRabbit).
+    /// </remarks>
+    private static string UnreadBecause(SettingsRead read, IReadOnlyList<string> adopted) => read switch
     {
-        foreach (var sentence in AdoptRootSettings(environment))
+        SettingsRead.Unusable unusable => unusable.Why,
+        SettingsRead.Missing when adopted.Count > 0 => NotAdopted,
+        _ => string.Empty,
+    };
+
+    internal const string NotAdopted = "this side has no settings file of its own, and the one it would adopt could not be adopted";
+
+    private static IReadOnlyList<string> Adopt(Func<string, string?> environment, Action<string> said)
+    {
+        var sentences = AdoptRootSettings(environment);
+        foreach (var sentence in sentences)
         {
             said(sentence);
         }
+
+        return sentences;
     }
 
     private static Func<string, string?> Over(Func<string, string?> environment, Dictionary<string, string> fromFile) =>

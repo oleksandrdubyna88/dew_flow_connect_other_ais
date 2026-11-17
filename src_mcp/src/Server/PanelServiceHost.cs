@@ -238,7 +238,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
     }
 
     private static string UnreadSentence(string path, string why, bool policyNamed) =>
-        $"{path} exists but could not be read ({why}). "
+        $"{path} could not be read ({why}). "
         + (policyNamed
             ? $"Every setting in it is at its default; {PanelSettings.Key.Exhausted} comes from this server's own environment and stands."
             : "Every setting in it is at its default, so When the rounds run out is Auto by default: the gate holds for nobody, "

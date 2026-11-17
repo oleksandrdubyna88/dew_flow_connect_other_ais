@@ -485,6 +485,36 @@ public sealed class PanelServiceHostTests : IDisposable
         SentenceOf(note).Should().Contain("comes from this server's own environment").And.NotContain("Auto by default");
     }
 
+    /// <summary>
+    /// A side with no settings file of its own whose ROOT file cannot be read is an unread policy, as a side file that cannot be read is
+    /// (CodeRabbit on PR #1011: the adoption's failure was only a sentence, so the layer read the missing side file as "read, empty" and
+    /// auto released a hold the operator's own policy raised). Repairing the root file ends it: the next call adopts it.
+    /// </summary>
+    [Fact]
+    public void ASideWhoseRootSettingsCannotBeAdopted_HasItsPolicyUnread_UntilTheRootIsRepaired()
+    {
+        var sideSettings = Path.Combine(_dataDir, "wsl", SettingsFile.Name);
+        var rootSettings = Path.Combine(_dataDir, SettingsFile.Name);
+        File.WriteAllText(rootSettings, "{ not json");
+        var heard = NewHeard();
+        var host = new PanelServiceHost(
+            name => name switch { "COAI_DATA_DIR" => _dataDir, "COAI_DATA_SIDE" => "wsl", _ => null },
+            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), heard.Log, heard.Noticing, CancellationToken.None);
+
+        var settings = host.Current.Settings;
+
+        settings.PolicyUnread.Should().BeTrue("the operator's settings exist in the root and could not be adopted: auto here is a default, not a choice");
+        settings.Rounds.IsAutonomous.Should().BeTrue();
+        File.Exists(sideSettings).Should().BeFalse("nothing was adopted");
+        heard.NoticesOfTheNote().Select(SentenceOf).Should().Contain(s => s.Contains("Auto by default") && s.Contains(SettingsFile.NotAdopted), "the person is told the settings are unread, and why");
+
+        File.WriteAllText(rootSettings, BusyHuman);
+        var repaired = host.Current.Settings;
+
+        repaired.PolicyUnread.Should().BeFalse("the root file was adopted and read");
+        repaired.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, "the operator's own policy");
+    }
+
     private static string CodexModel(PanelServiceHost host) =>
         host.Current.Settings.Providers.FirstOrDefault(p => p.Provider == "codex")?.Model ?? "(no codex row)";
 
