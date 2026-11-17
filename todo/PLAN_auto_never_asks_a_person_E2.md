@@ -507,8 +507,10 @@ check once that the row really carries `not_reviewed` by asserting the verdict c
   *Auto*". `usage` opens with Auto, in the words above, then *Ask a human* ("the gate stops and puts the decision in
   front of you — the way to keep a person in the loop"), and the other three as today. `whatCanGoWrong` gains three
   sentences:
-  - A `coai.onExhausted` in a workspace's `.vscode/settings.json` wins over your choice and is never changed by the
-    extension. **Reviews › The gate** names it.
+  - A `coai.onExhausted` in a workspace's `.vscode/settings.json` wins over your user choice — unless this side has
+    its own value, which wins over both (`sideSettings.ts:66-73`) — and is never changed by the extension.
+    **Reviews › The gate** names it whenever it is the value in force. (Plan round 1 of E2, finding 3: the help must
+    not claim the workspace value wins over a side's own; the five languages say the same.)
   - A coai-mcp older than 0.66.0 does not know Auto: the panel sends Good enough, which still asks a person when nobody
     answered, and The gate says "predates Auto".
   - A `COAI_ON_EXHAUSTED` in your MCP client's `env` block wins over the panel. The server's startup notes name it.
