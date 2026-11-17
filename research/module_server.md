@@ -2008,6 +2008,8 @@ which a ratchet test could only ask after the fact: `ServeAsync` and `PanelServi
 log (`data directory: {Note}`, beside `StorageNotes`), and the two one-shot modes pass `Note` — STDERR,
 because their stdout carries the JSON a caller parses.
 
+**A failed adoption leaves the policy unread (2026-11-17, PR #1011).** `SettingsFile.TryLayer` (the reload and the start) takes the sentences the adoption returned: a side file that is still NOT there after an adoption that said something means the root file — where the operator's settings are — could not be read or published, so the layer carries `SettingsFile.NotAdopted` as its unread reason and `PanelServiceHost` sets `PolicyUnread` (the policy auto defaulted to was not the operator's). `SessionPolicy.Decided` then keeps a legacy hold. Before this the read of the missing side file answered "read, empty": a malformed root file and an absent side file released a hold the operator's own `human` policy had raised. The host reads again on every call while the policy is unread, so repairing the root file adopts it on the next call (`PanelServiceHostTests.ASideWhoseRootSettingsCannotBeAdopted_HasItsPolicyUnread_UntilTheRootIsRepaired`).
+
 **It takes no lock, and that is not an oversight** — four reviewers across two vendors asked. The lock
 is the EXTENSION's (`settings.lock`, taken in `extension.ts` around a write of this same file) and the
 server has never had a client for it. It does not need one: `File.Move(overwrite: false)` makes this
@@ -2054,7 +2056,7 @@ survives a server restart, per the durable-status rule.
 `state.config.autonomous` is `true` or `false` in every session file this build writes, and ABSENT in one from before policy auto — and
 absent is what marks a hold as "from before `auto`", the only hold policy auto releases. The loader therefore keeps absence as `null`
 (no declared default on the constructor parameter or the property: the source generator would fill it). A release of this server that
-RENAMES the member must keep reading the old name, or every old hold becomes a person's for good; and `OnExhausted` stays `GoodEnough`
+RENAMES the member must keep reading the old name: a session this build wrote under the old name would otherwise load with `null`, which reads as "from before `auto`" (`PredatesAuto`), and a hold a PERSON owns (raised under `human`, `autonomous: false`) would become eligible for release under `auto` — the authority boundary lost, not kept (CodeRabbit, PR #1011); and `OnExhausted` stays `GoodEnough`
 on disk for policy auto, never a new enum name, because `SessionStore.Load` turns a parse failure into a NEW session.
 
 ### A session file keeps what a newer server wrote (`Unknown` bags)
