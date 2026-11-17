@@ -8,7 +8,7 @@ import { NO_LOCAL_SESSION, walksLocalHome } from './credsSession';
 import { ConversationIndex } from './chatStoreCache';
 import { GotoAsked, sessionSourceOf, tabKindOf, terminalGotoAsked } from './chatGoto';
 import { liveTerminals } from './terminalHost';
-import { oneLiveNamed } from './terminalSource';
+import { namesakesOf } from './terminalSource';
 import { NAMES_ARE_CASE_BLIND, conversationWorkspace, everyFolder, fsPathOf, whereToLook } from './chatRoots';
 import { filedUnder, sameRoot, sessionIdOf } from './chatSource';
 import { tabMatch } from './chatCapture';
@@ -359,18 +359,17 @@ export async function sessionsNamed(title: string): Promise<{ readonly found: re
  *
  * <p>Built from the terminal and the registry only: it never calls `tabMatch(`, `snapshots(` or `sessionsNamed(`, because a terminal
  * is not a tab and asking the tabs what the person meant is how a file's text was once taken for a terminal's. The name is read
- * ONCE by the caller; the namesakes are the LIVE terminals of exactly that name (this one included, so never below 1); the saved conversations are
+ * ONCE by the caller; the namesakes are the LIVE terminals of exactly that name plus this one itself, exited or not (so never below 1; `namesakesOf`); the saved conversations are
  * the ones of the terminal's source, and the root is the one `filedUnder` gives a conversation with no path — where
  * `knownFolder` files a terminal conversation.</p>
  */
 export function askedForTerminal(panels: ChatPanels, index: ConversationIndex, terminal: vscode.Terminal, name: string): GotoAsked {
-  const named = oneLiveNamed(liveTerminals(vscode.window.terminals), name);
   const here = filedUnder('', whereToLook(), conversationWorkspace(), NAMES_ARE_CASE_BLIND);
 
   return terminalGotoAsked({
     name,
     liveId: threadUnder(panels, terminal)?.saveId ?? '',
-    namesakes: named.kind === 'several' ? named.count : 1,
+    namesakes: namesakesOf(liveTerminals(vscode.window.terminals), terminal, name),
     candidates: index.bySource(sourceOfTerminal(name)),
     inRoot: index.entries({ kind: 'workspace', workspace: here }),
     roots: whereToLook(),

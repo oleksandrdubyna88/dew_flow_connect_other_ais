@@ -20,21 +20,22 @@ export function revealUnder(panels: Pick<ChatPanels, 'get'>, key: object): void 
  * copies of it and only one of them had it, so a conversation chosen from a narrowed picker was revealed and the tab it belongs to
  * left unbound for ever. (Two vendors, the second code round.)</p>
  *
- * <p><b>A live terminal's conversation is never moved</b> (E3.S2, J4): when `where` is a terminal of the window and is not
- * `onto`, the conversation is revealed where it is. Two live terminals of one name carry equal sources, and moving one's
+ * <p><b>A terminal's conversation is never moved</b> (E3.S2, J4): when `where` is a terminal of the window (live or exited) and is not
+ * `onto`, the conversation is revealed where it is. Two terminals of one name carry equal sources, and moving one's
  * conversation onto its namesake would make the answer arrive in the other terminal's chat with nothing looking wrong. The guard is
  * HERE, on the road both callers take, and not at the two callers. A conversation under a key that is not a terminal (restored by a
  * reload, or reopened by the picker: `{}`) is still moved onto the terminal — that is the person's own re-attach.</p>
  *
- * @param isLiveTerminal whether a key is a terminal of the window (the host reads `window.terminals`)
+ * @param isWindowTerminal whether a key is a terminal still listed by the window — LIVE OR EXITED: an exited terminal that is still in
+ *   the window keeps its conversation, as `orphansOf` counts it (the host reads `window.terminals`)
  */
 export function revealBoundWith(
   panels: Pick<ChatPanels, 'get' | 'rekey'>,
   where: object,
   onto: object | undefined,
-  isLiveTerminal: (key: object) => boolean,
+  isWindowTerminal: (key: object) => boolean,
 ): void {
-  if (onto !== undefined && onto !== where && !isLiveTerminal(where)) {
+  if (onto !== undefined && onto !== where && !isWindowTerminal(where)) {
     panels.rekey(where, onto);
     revealUnder(panels, onto);
 

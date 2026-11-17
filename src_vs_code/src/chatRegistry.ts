@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { ChatPanels } from './chatPanels';
 import { revealBoundWith } from './chatReveal';
+import { liveTerminals } from './terminalHost';
+import { terminalOfWindow } from './terminalSource';
 import { threadUnder, threads } from './chatThread';
 import { recordOf } from './chatPersist';
 import { metaOf } from './chatStore';
@@ -91,12 +93,13 @@ export function whereConversationSits(panels: ChatPanels, saveId: string): objec
 
 /**
  * Reveal a conversation this window already holds — moving its registration onto `onto` first, when that is where it belongs, and
- * NEVER off a live terminal (`chatReveal.ts` holds the rule; this supplies the one fact only the window knows: the terminals it has).
+ * NEVER off a terminal of the window, live or exited (`chatReveal.ts` holds the rule; this supplies the one fact only the window knows:
+ * the terminals it lists — an exited terminal still listed keeps its conversation).
  *
  * <p>The ONE road *go to*'s reopen arm and the picker's own accept both take.</p>
  */
 export function revealBound(panels: ChatPanels, where: object, onto: object | undefined): void {
-  revealBoundWith(panels, where, onto, (key) => vscode.window.terminals.some((one) => one === key));
+  revealBoundWith(panels, where, onto, (key) => terminalOfWindow(liveTerminals(vscode.window.terminals), key));
 }
 
 /**
