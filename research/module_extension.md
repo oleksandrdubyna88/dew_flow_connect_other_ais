@@ -4850,7 +4850,7 @@ that already holds `auto` is left as it is. A workspace or folder value is never
     machine. A run that finds it, written here or carried by Settings Sync, leaves the user value alone. After its own
     write, `removeUnlessChosen` reads the record and the user value in one synchronous stretch and checks the claim, the
     recorded value and the current user value — it does NOT re-read the witness or compare who wrote it. A removal the
-    settings file refuses withdraws the witness. A witness on disk certifies a removal the run that wrote it is about to make:
+    settings file refuses attempts to withdraw the witness (a withdrawal it refuses too is logged, and the next start keeps the value). A witness on disk certifies a removal the run that wrote it is about to make:
     another window that reads it treats the user layer as settled and skips it. So after its await the run that wrote it
     finishes its own removal whenever the user value is still the one it held just before the witness write — whoever holds
     the claim, and whether or not another run wrote `completed` — and keeps the witness; it ends `busy` when the claim is
