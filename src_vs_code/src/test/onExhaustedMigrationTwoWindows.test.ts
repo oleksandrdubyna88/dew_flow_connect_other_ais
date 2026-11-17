@@ -442,16 +442,24 @@ test('T36b NoMarkerFromACopyThatLostItsRecord', async () => {
   assert.equal(lost.of.settings.layer('onExhausted', 'global'), undefined, 'the next start clears it');
   assert.equal(lost.of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'and witnesses it');
 
-  // (iii-b) the claim is taken over during the await: busy, and the value is untouched.
+  // (iii-b) the claim is taken over during the await: busy, the witness comes out again, the value is untouched, and the
+  // window that took over migrates the user layer.
   const taken = await heldAtWitness();
   const other = taken.of.client.window();
   void other.update(KEY, { ...taken.of.client.record(), claim: { by: 'other', at: taken.of.clock.now() } });
   taken.of.client.deliver(taken.a.window);
+  taken.of.settings.unhold(USER_WITNESS);
   taken.of.settings.release(USER_WITNESS);
   await drive(taken.a, taken.run);
   assert.equal(await taken.run, 'busy');
-  assert.equal(taken.a.userEvents().some((one) => one.kind === 'clear user'), false, 'no removal was asked for');
+  assert.deepEqual(taken.a.userEvents().map((one) => one.kind), ['witness', 'withdraw'], 'the witness comes out again, and no removal is asked for');
+  assert.equal(taken.of.settings.layer(USER_WITNESS, 'global'), undefined, 'and is gone from the file');
   assert.equal(taken.of.settings.layer('onExhausted', 'global'), 'human', 'the value is untouched');
+  taken.of.client.deliver();
+  const took = activation(taken.of, 'other');
+  assert.equal(await took.run(), 'migrated', 'the window that took over finishes');
+  assert.equal(taken.of.settings.layer('onExhausted', 'global'), undefined, 'it removes the value');
+  assert.equal(taken.of.settings.layer(USER_WITNESS, 'global'), USER_WITNESS_WORD, 'and writes its own witness');
 });
 
 test('T41 TwoWindowsThatNeverHearEachOther_RemoveTheUserValueOnce_AndMayTellTwice', async () => {

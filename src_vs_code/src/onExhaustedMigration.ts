@@ -460,28 +460,27 @@ function stillTheRecordedValue(ports: MigrationPorts, held: Readonly<Record<stri
 
 /**
  * After the awaited witness write the record is read ONCE, in the same synchronous stretch as the value test and the
- * removal. A claim that passed to another window leaves the value; a copy that lost `held` takes the witness out again,
- * so the next start plans again and clears the value (§ S2.10).
+ * removal. A claim that passed to another window, and a copy that lost `held`, both leave the value and take the witness
+ * out again, so the next start finds the value and clears it (§ S2.10).
  */
 async function removeUnlessChosen(ports: MigrationPorts): Promise<Stop | undefined> {
   const seen = read(ports);
   if (!mine(ports, seen)) {
-    ports.log('the claim passed to another window while the witness was written; the value stays');
-
-    return stop('busy');
+    return giveUpAfterWitness(ports, 'the claim passed to another window while the witness was written; the witness is withdrawn', 'busy');
   }
   if (seen.held === undefined) {
-    return lostAfterWitness(ports);
+    return giveUpAfterWitness(ports, 'what each location held was lost to a stale write while the witness was written; it is withdrawn', 'incomplete');
   }
 
   return stillTheRecordedValue(ports, seen.held) ? removeValue(ports) : undefined;
 }
 
-async function lostAfterWitness(ports: MigrationPorts): Promise<Stop> {
-  ports.log('what each location held was lost to a stale write while the witness was written; it is withdrawn');
+/** The value stays and so does nothing of this run's: the witness comes out again and the run ends with `outcome`. */
+async function giveUpAfterWitness(ports: MigrationPorts, why: string, outcome: 'busy' | 'incomplete'): Promise<Stop> {
+  ports.log(why);
   await tryWithdraw(ports);
 
-  return stop('incomplete');
+  return stop(outcome);
 }
 
 async function removeValue(ports: MigrationPorts): Promise<Stop | undefined> {
