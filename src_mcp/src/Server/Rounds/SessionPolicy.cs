@@ -91,10 +91,14 @@ internal sealed class SessionPolicy(
     }
 
     /// <summary>Whether policy auto released this session's hold and the resolve that moves its stage has not come yet.</summary>
-    /// <remarks>Read from the session itself — not held, both flags set, and the held round's note — so no member is added to the file.</remarks>
+    /// <remarks>
+    /// Read from the session itself — not held, both flags set, and the held round's note — so no member is added to the file. A hold with no round
+    /// is released without a note (D12); only that release leaves both flags set with no round at all (every other road to them completes a round
+    /// first), so the flags alone say it.
+    /// </remarks>
     internal static bool AwaitsItsResolve(PersistedSession session) =>
         session.State is { HumanGate: false, AwaitingResolve: true, AdvanceOnResolve: true }
-        && session.Rounds is [.., { Note: LegacyHold.Note }];
+        && session.Rounds is [] or [.., { Note: LegacyHold.Note }];
 
     /// <summary>The stage's name as a sentence says it — the words <c>HoldNotice</c> uses.</summary>
     internal static string StageOf(PersistedSession session) => RoundSubject.StageName(session.State.Stage.ToString());

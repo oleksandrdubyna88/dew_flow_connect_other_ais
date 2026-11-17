@@ -264,6 +264,35 @@ public sealed class AHoldFromBeforeAutoIsReleasedTests : HoldFromBeforeAutoFixtu
         error.Should().Be(RoundMachine.Unresolved);
     }
 
+    [Fact]
+    public async Task AHoldWithNoRounds_IsReleasedWithoutANote_AndAReviewEntryStillNamesTheRelease()
+    {
+        var human = await HeldAsync();
+        ErrorOf(await human.ResolveAsync(_repo, Branch, RejectIt)).Should().BeEmpty();
+        var hold = new Hold(Kind.Plan, Branch, string.Empty, string.Empty);
+        StripTheMarker(hold, recorded: false);
+        var file = SessionFileOf(hold);
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+        json["rounds"] = new System.Text.Json.Nodes.JsonArray();
+        File.WriteAllText(file, json.ToJsonString());
+        SessionOf(hold).Rounds.Should().BeEmpty("a hold with no round is released without a note (D12)");
+        var auto = AutoService();
+
+        // The first call that reads it releases it, and its entry names the release.
+        var error = ErrorOf(await ReviewEntryAsync(auto, hold));
+
+        error.Should().Be(LegacyHold.ReleasedSentence(StageWords(SessionOf(hold))));
+        error.Should().NotBe(RoundMachine.Unresolved);
+        var released = SessionOf(hold);
+        released.State.HumanGate.Should().BeFalse();
+        released.Rounds.Should().BeEmpty();
+        SessionPolicy.AwaitsItsResolve(released).Should().BeTrue("the release is read from the flags when there is no round to carry a note");
+        ErrorOf(await ReviewEntryAsync(auto, hold)).Should().Be(error, "a second identical call answers the same");
+
+        StageOf(await auto.ResolveAsync(_repo, Branch, "[]")).Should().Be("CodeReview", "the following resolve advances once");
+        SessionPolicy.AwaitsItsResolve(SessionOf(hold)).Should().BeFalse("the resolve consumed both flags");
+    }
+
     // ---------- T55: a release that could not be written ----------
 
     [Fact]
