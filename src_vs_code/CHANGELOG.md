@@ -1,5 +1,27 @@
 # Changelog
 
+## Server 0.66.0 — 2026-11-17
+
+**Added: policy Auto for *When the rounds run out*, now the default. Under Auto the gate never asks a person: it logs and moves on (#1011).** It is meant for an unattended orchestrator, which must never be blocked by the gate. Auto replaces every point where the gate called a person:
+- A round in which no reviewer answered ends `not_reviewed`. That verdict is never a pass, and the reply says so out loud.
+- Spent rounds end `good_enough` with a reason.
+- A feature review at its cap ends `good_enough`, or `not_reviewed` when nobody answered.
+- Each of these rounds is written down three times: on the round, in `coai.db`, and as a Warning in the log.
+- `ask_human` never waits and never writes a card. The AI's own question goes to the consultants first (`consult_first`), and only a verified consultation reaches the person.
+- `--features` lists `onExhaustedAuto`.
+
+**The five values** are `auto` (the default), `human`, `good_enough`, `continue` and `escalate`. When no policy is named, the policy is `auto`. A word this build does not know is still read as `human`, which stops.
+
+**A value chosen before** is reset by the NEXT extension release, not by this server.
+
+**A hold an older server raised** is released under Auto unless the person already answered it, and the release is noted on its round. A hold raised under `human` by this server stays the person's.
+
+**A settings file that exists but cannot be read** means Auto by default, with a note and a Warning. Until the file can be read, no hold is released.
+
+**Between this release and the next extension:** An extension older than the next one never writes `COAI_ON_EXHAUSTED` while it shows Ask a human — that was its default — so this server runs Auto for it: when the rounds run out or nobody answers, no person is asked, and the round says `good_enough` or `not_reviewed`. Choose Ask a human again (any other value is written and honoured) to keep a person in the loop; the next extension release says this in a notification.
+
+**Keeping a person in the loop with the extension you have now:** choosing Ask a human again writes nothing, because it is that extension's default. Until the next extension ships, put `COAI_ON_EXHAUSTED=human` in the MCP client's env block. The server honours it, and its startup notes say that a policy is pinned there.
+
 ## Team server 0.16.3 — 2026-11-16
 
 **Fixed: a Team-server Antigravity reviewer can read only inside its own job's folder.** The Team server answers agy's
