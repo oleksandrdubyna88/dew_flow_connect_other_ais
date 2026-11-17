@@ -504,7 +504,7 @@ internal sealed class RoundEngine(
 
             var decisionSummary = SecurityRound.DecisionSummary(results, roundWork, summary);
             SecurityRound.Notice(results, roundWork, _noticing);
-            if (RoundMachine.CompleteRound(session.State, gate, decisionSummary) is not Transition.Ok completed)
+            if (RoundMachine.CompleteRound(session.State, gate, decisionSummary, merged.Length) is not Transition.Ok completed)
             {
                 return Error("the round could not complete — this is a bug, report it", from);
             }
@@ -952,8 +952,14 @@ internal sealed class RoundEngine(
                 "different from continue_anyway. Reject the rest with reasons via resolve, say in your " +
                 "summary what you took and what you declined, then proceed."),
             RoundVerdict.NotReviewed => ("not_reviewed", null,
-                $"No reviewer answered — {summary.Sentence}. Policy `auto` proceeds WITHOUT a review. Call resolve (there is nothing to decide), " +
-                "say in your summary that this stage was not reviewed and why, then proceed."),
+                // Only the security lane's findings can stand when no ordinary reviewer answered, and `resolve` refuses an empty list while any is
+                // pending — so "there is nothing to decide" would send the caller into a refusal.
+                merged.Length > 0
+                    ? $"No ordinary reviewer answered. {summary.Sentence}. Policy `auto` proceeds WITHOUT an ordinary review, but {merged.Length} finding(s) " +
+                      "from the security lane await a decision. Call resolve with a decision for each (accept, or reject with a reason), " +
+                      "say in your summary that the ordinary reviewers did not review this stage and why, then proceed."
+                    : $"No reviewer answered — {summary.Sentence}. Policy `auto` proceeds WITHOUT a review. Call resolve (there is nothing to decide), " +
+                      "say in your summary that this stage was not reviewed and why, then proceed."),
             RoundVerdict.CallHuman h => ("call_human", null,
                 $"Rounds exhausted: {h.Reason}. A human decides — surface the open findings to them; do not proceed on your own."),
             RoundVerdict.Escalated e => ("escalated", e.Step.ToString(),

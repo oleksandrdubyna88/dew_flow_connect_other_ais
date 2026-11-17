@@ -20,13 +20,17 @@ internal static class AutoVerdicts
     /// <c>AwaitingResolve</c> stays true like every round that ran: <c>resolve</c> is the only door the stage moves through, and with
     /// no findings to decide it is accepted with none.
     /// </remarks>
-    internal static Transition NobodyAnswered(SessionState s, GateResult gate, ReviewerSummary reviewers, int roundsRun) =>
+    /// <param name="awaiting">The findings <c>resolve</c> will ask a decision for: only the security lane's can exist when no ordinary
+    /// reviewer answered, and then "nothing was reviewed" is false and "nothing to decide" is wrong.</param>
+    internal static Transition NobodyAnswered(SessionState s, GateResult gate, ReviewerSummary reviewers, int roundsRun, int awaiting = 0) =>
         new Transition.Ok(
             s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
             new RoundVerdict.NotReviewed(
                 gate,
                 reviewers,
-                $"policy auto: no reviewer answered — nothing was reviewed, and the stage proceeds without a review. {reviewers.Sentence}"));
+                awaiting > 0
+                    ? $"policy auto: no reviewer answered among the ordinary roles — the security lane's {awaiting} finding(s) stand and await a decision, and the stage proceeds without an ordinary review. {reviewers.Sentence}"
+                    : $"policy auto: no reviewer answered — nothing was reviewed, and the stage proceeds without a review. {reviewers.Sentence}"));
 
     /// <summary>
     /// A feature review that reached its two-round cap with a ground: nobody answering is <c>not_reviewed</c>, a blocking finding or a
@@ -34,9 +38,11 @@ internal static class AutoVerdicts
     /// </summary>
     /// <param name="next">The state the round completed into: its round counted, <c>AwaitingResolve</c> set.</param>
     internal static Transition FeatureAtItsCap(
-        SessionState next, GateResult gate, ReviewerSummary reviewers, SecondRoundGround ground, int roundsRun)
+        SessionState next, GateResult gate, ReviewerSummary reviewers, SecondRoundGround ground, int roundsRun, int awaiting = 0)
     {
-        var reason = "policy auto: " + RoundMachine.FeatureCallHumanReason(ground, gate, reviewers, roundsRun);
+        var reason = reviewers.Answered == 0 && awaiting > 0
+            ? $"policy auto: no reviewer answered among the ordinary roles after {roundsRun} round(s) — the security lane's {awaiting} finding(s) stand and await a decision, and a feature review has two rounds at most (D23). {reviewers.Sentence}"
+            : "policy auto: " + RoundMachine.FeatureCallHumanReason(ground, gate, reviewers, roundsRun);
         return new Transition.Ok(
             next with { AdvanceOnResolve = true, SecondRound = SecondRoundGround.None },
             reviewers.Answered == 0
