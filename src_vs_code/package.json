@@ -999,6 +999,10 @@
           ],
           "markdownDescription": "Written by ConnectOtherAIs, not by hand. `migrated`: the consultant and question-consultant models in these settings were moved into the reviewer list (the model catalog). `restored`: they were put back with **ConnectOtherAIs: Restore settings from before the catalog**, and are not moved again by themselves."
         },
+        "coai.onExhaustedResetToAuto": {
+          "type": "string",
+          "markdownDescription": "Written by ConnectOtherAIs, not by hand. It records that **When the rounds run out** in these settings was reset to Auto once. While it is here, a value you choose afterwards is kept — also on the other machines Settings Sync carries your settings to."
+        },
         "coai.chatPresetsMoved": {
           "type": "array",
           "default": [],
