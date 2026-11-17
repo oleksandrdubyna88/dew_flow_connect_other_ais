@@ -122,7 +122,9 @@ public abstract record AskDecision
 /// card door the phase rule does not apply — the gate is asking the person, the consultants cannot release a hold,
 /// and the batches count the AI's own questions. Only a production risk keeps D8 there.</para>
 /// <para><b>Under policy auto</b> (<see cref="AskGateInput.Autonomous"/>, O3) the table above is not asked: see <c>Autonomously</c> — the AI's
-/// own question goes to the consultants first, whatever the phase and the batches say.</para>
+/// own question goes to the consultants first, whatever the phase and the batches say. The one exception is a production risk
+/// on the AI's own question: it keeps today's decision, phase exclusion included (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c> § 9.1) — in
+/// Planning or Released the person is asked at once, with an empty note; the reply still carries the instruction to ask them in the conversation.</para>
 /// </remarks>
 public static class AskGate
 {
@@ -141,9 +143,11 @@ public static class AskGate
 
     /// <summary>
     /// Policy auto (O3) — the person is never asked first. A held gate's card is answered by the service at once, so no consultant
-    /// runs beside it; a production risk on the AI's own question is today's decision; any other question of the AI's goes to the
-    /// consultants first, in every phase and mode, unless a verified consultId or a stand-down lets it through to the person. The
-    /// phase rule and the free batches decide nothing here; the batches stay a record of what reached the person.
+    /// runs beside it; a production risk on the AI's own question is today's decision — the phase exclusion included, so in Planning or
+    /// Released it reaches the person at once with an empty note (the reply still tells the AI to ask them in the conversation, <c>Reply</c> in
+    /// <c>AskHumanService</c>); any other question of the AI's goes to the consultants first, in every phase and mode, unless a verified
+    /// consultId or a stand-down lets it through to the person. For those, the phase rule and the free batches decide nothing here; the
+    /// batches stay a record of what reached the person.
     /// </summary>
     private static AskDecision Autonomously(AskGateInput input) =>
         input switch

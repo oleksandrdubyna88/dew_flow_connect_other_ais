@@ -1419,7 +1419,7 @@ Under policy `auto` the person is never asked first and nothing waits. Whether t
 | The AI's own question, no `consultId` (or one the desk rejected) | `status: "consult_first"` — a `ConversationAnswer` with the instruction *call the consultants — ask_consultants — and come back only if the two of you did not settle it*, and the rejected-id clause as `note`. Nothing spent, counted, posted or recorded. |
 | … with a `consultId` the desk accepts (only an `ask_consultants` record counts) | today's `ask_in_conversation`; the batch is still counted in the building phase, so a switch back to `human` reads true counts |
 | … no consultant can be had | today's stand-down, `ask_in_conversation`; under `auto` the note does not say the consultant "is required here" — the phase rule decides nothing |
-| `productionRisk: true` outside a held gate | today's path: the consultants first, their answers returned |
+| `productionRisk: true` outside a held gate | today's decision, the phase exclusion included: in the building phase the consultants first, their answers returned; in Planning or Released the person at once (`ask_in_conversation`, empty `note` — the `instruction` still tells the AI to ask the person in the conversation) |
 | The gate's question — a held gate, or a feature review's request window | answered AT ONCE (`no_answer_yet`, nothing waited for, no card, nothing recorded on the session), whatever `productionRisk` says |
 
 The held gate has two cases, told apart by the `Release` the load returned — never by `LegacyHold.Stands` alone, because a hold from
