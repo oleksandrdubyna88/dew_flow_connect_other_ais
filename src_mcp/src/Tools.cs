@@ -130,8 +130,8 @@ internal static class Tools
                 Name = "review_code",
                 Title = "One independent reviewer per configured role, per provider, over the branch diff",
                 Description = """
-                    The code gate — REFUSES until a plan round reached `proceed`, and REFUSES a
-                    bare diff. Per enabled provider, one reviewer per role configured for this
+                    The code gate — REFUSES until the plan stage advanced (a round that ended `proceed`,
+                    `good_enough` or `not_reviewed`, then `resolve`d), and REFUSES a bare diff. Per enabled provider, one reviewer per role configured for this
                     stage — conventions / architecture / security+reliability / UX-DX & code
                     performance as shipped, plus any role the operator has added — reads the SCOPE,
                     the shaped diff of `branch` over `baseRef` (lock files and build output

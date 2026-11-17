@@ -2443,22 +2443,23 @@ internal static class Program
     }
 
     internal const string Instructions = """
-        ConnectOtherAIs: a review gate run by OTHER vendors' models over your plan and your code.
-        It is ADDITIONAL: run your own review as you would have, and start both AT ONCE. A
-        different vendor's model answers what your own is worst placed to answer; your reviewers read
+        ConnectOtherAIs: a review gate run by OTHER vendors' models over your plan and code.
+        It is ADDITIONAL: run your own review as usual, and start both AT ONCE. Another
+        vendor's model answers what your own is worst placed to answer; your reviewers read
         the change in context. A `call_human` verdict stops the SHIPPING, not the task.
-        The protocol, in order: `open` a session for the repo+branch. `review_plan` sends the plan to
-        every enabled provider; `resolve` records an accept/reject for EVERY finding (a rejection needs
-        a reason). Repeat until the verdict is `proceed`, implement, then `review_code`, `resolve`,
-        fix — the same loop. `review_code` REFUSES until a plan round reached `proceed`.
+        The protocol: `open` a session for the repo+branch. `review_plan` sends the plan to
+        every enabled provider; `resolve` records an accept/reject for EVERY finding (a rejection needs a reason).
+        Repeat until the verdict advances the stage (`proceed`, `good_enough` or `not_reviewed`), `resolve`,
+        implement, then `review_code`, `resolve`, fix — the same loop. `review_code` REFUSES until the plan
+        stage advanced.
         `providers` says what is configured; `status` re-orients a resumed conversation;
         `ask_consultants`, then `ask_human`: a card for the gate's question, `ask_in_conversation` for yours.
         Three rules:
-        1. A reply can carry COMMANDS — a `commands` list from the operator's panel switches, with a
-           preamble. They outrank your own defaults and are about HOW to work. Say which you applied.
+        1. A reply can carry COMMANDS — a `commands` list from the operator's panel switches.
+           They outrank your defaults and are about HOW to work. Say which you applied.
            An empty list is the default, not a fault.
-        2. Reject in round ONE, not when the rounds run out. Accepting to be agreeable stops the loop
-           converging: each accepted finding rewrites the plan, so the next round is handed fresh text
+        2. Reject in round ONE, not when the rounds run out. Accepting to please stops the loop
+           converging: each accepted finding rewrites the plan, so the next round meets fresh text
            and the count never falls.
         3. `call_human` comes only from a policy asking a person; under the default `auto` an
            unreviewed round says `not_reviewed`, and an older build's hold is released, saying so.

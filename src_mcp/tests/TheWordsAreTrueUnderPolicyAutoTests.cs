@@ -63,6 +63,25 @@ public sealed class TheWordsAreTrueUnderPolicyAutoTests
         Program.Instructions.Length.Should().BeLessThanOrEqualTo(2000, "a client keeps about 2 KiB and drops the rest");
     }
 
+    [Fact]
+    public void TheInstructionsSayWhichVerdictsLetAStageAdvance_AndReviewCodeWaitsForTheStage()
+    {
+        Flat(Program.Instructions).Should().Contain("Repeat until the verdict advances the stage (`proceed`, `good_enough` or `not_reviewed`)")
+            .And.Contain("`review_code` REFUSES until the plan stage advanced")
+            .And.NotContain("until a plan round reached `proceed`", "under the default policy a round nobody answered ends not_reviewed, and the stage opens on resolve");
+        Program.Instructions.Length.Should().BeLessThanOrEqualTo(2000);
+    }
+
+    [Fact]
+    public void TheReviewCodeDescriptionDoesNotWaitForProceed_ItWaitsForTheStage()
+    {
+        var reviewCode = Flat(TheGateSaysWhenToConsultTests.DescriptionOf("review_code"));
+
+        reviewCode.Should().Contain("REFUSES until the plan stage advanced")
+            .And.Contain("`proceed`, `good_enough` or `not_reviewed`")
+            .And.NotContain("until a plan round reached `proceed`");
+    }
+
     private static string Flat(string text) => System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
 
     [Fact]
