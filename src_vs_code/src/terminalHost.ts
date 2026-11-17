@@ -52,8 +52,8 @@ export function reattachByName(panels: ChatPanels, name: string): Reattach {
  * The person used a conversation from its terminal (the door, *take* or *add* found it, or go-to showed it): its bind is final —
  * but only while the plan for the terminal's name still answers `bound` for THIS terminal (`confirmBound`).
  */
-export function confirmReattach(panels: ChatPanels, terminal: vscode.Terminal): void {
-  confirmBound(windowOf(panels), terminal, terminal.name);
+export function confirmReattach(panels: ChatPanels, terminal: vscode.Terminal, name: string = terminal.name): void {
+  confirmBound(windowOf(panels), terminal, name);
 }
 
 /** Activation: the trigger of a terminal that opens — creds opens its terminals late, after the serializer restored the chats. */

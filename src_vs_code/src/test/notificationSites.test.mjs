@@ -279,7 +279,9 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 174 -> 177 on 2026-11-11 (E2.S4 of todo/PLAN_the_chat_opens_from_a_terminal_E2.md): the two terminal doors say what they found — a refusal when there is no
 // question to hand over (`no-question-from-terminal`, one site for both verbs) — and each fails with a fixed sentence and no error text
 // (`question-not-taken-from-terminal`, `question-not-added-from-terminal`).
-const PLACES_THIS_SPEAKS = 177;
+// 177 -> 179 on 2026-11-17 (E3.S2 of todo/PLAN_the_chat_opens_from_a_terminal_E3.md): go-to pressed in a terminal says there is no terminal
+// to go from (`no-terminal-for-goto`, a refusal), and its command fails with the same fixed sentence as go-to's (`conversation-not-opened`).
+const PLACES_THIS_SPEAKS = 179;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

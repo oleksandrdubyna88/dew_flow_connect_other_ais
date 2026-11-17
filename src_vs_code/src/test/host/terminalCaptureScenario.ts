@@ -69,4 +69,9 @@ export async function theSkipListDefaultHoldsTheTerminalDoor(): Promise<void> {
     fallback.includes('coai.askFromTerminal'),
     `the default of terminal.integrated.commandsToSkipShell does not hold coai.askFromTerminal, so Ctrl+Alt+A in a terminal goes to the shell; it holds ${fallback.length} commands`,
   );
+  // S2-H1 (E3.S2): go to from a terminal is a second chord under terminalFocus, so its id is in the default too, with its own message.
+  assert.ok(
+    fallback.includes('coai.goToFromTerminal'),
+    `the default of terminal.integrated.commandsToSkipShell does not hold coai.goToFromTerminal, so Ctrl+Alt+G in a terminal goes to the shell; it holds ${fallback.length} commands`,
+  );
 }

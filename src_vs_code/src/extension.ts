@@ -36,7 +36,7 @@ import { forgetPickedConversation, switchConversations } from './conversationPic
 import { Choice, manageReviewTrees, TreesDeps } from './reviewTreesCommand';
 import { readTrees, removeTree } from './reviewTreeRead';
 import { openTreeFolder } from './revisionOpen';
-import { goToConversation } from './chatGotoCommand';
+import { goToConversation, goToFromTerminal } from './chatGotoCommand';
 import { backToSource } from './chatReturnCommand';
 import { ChatTabMemory } from './chatTabs';
 import { ChatStoreFile, conversationsDir } from './chatStoreFile';
@@ -802,6 +802,24 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
       void goToConversation(chatPanels, housekeeping.index, chatStore, context.extensionUri)
         .catch((reason: unknown) => {
           console.error('ConnectOtherAIs: going to a conversation threw', reason);
+          void notify({
+            as: 'warning',
+            class: 'failure',
+            source: 'goToConversation',
+            code: 'conversation-not-opened',
+            title: 'That conversation could not be opened.',
+            detail: asText(reason),
+          });
+        });
+    }),
+    // GO TO from a terminal (E3.S2): the same go-to, pressed IN a terminal, for THAT terminal — a command of its own because
+    // `coai.goToConversation` reads the active TAB and its chord keeps `!terminalFocus`. It is a door like the others, so it is
+    // recorded FIRST; it reads the active terminal as `coai.askFromTerminal` does and never goes through the tab match.
+    vscode.commands.registerCommand('coai.goToFromTerminal', () => {
+      noteChatDoor('goto');
+      void goToFromTerminal(chatPanels, housekeeping.index, chatStore, context.extensionUri, vscode.window.activeTerminal)
+        .catch((reason: unknown) => {
+          console.error('ConnectOtherAIs: going to a terminal conversation threw', reason);
           void notify({
             as: 'warning',
             class: 'failure',

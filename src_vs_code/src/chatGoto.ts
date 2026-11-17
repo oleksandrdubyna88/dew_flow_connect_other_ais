@@ -1,6 +1,7 @@
-import { ConversationMeta, ConversationRecord, ConversationSource, sameSource, sourceOfSession } from './chatStore';
+import { ConversationMeta, ConversationRecord, ConversationSource, isTerminalName, sameSource, sourceOfSession, sourceOfTerminal } from './chatStore';
 import { IndexState } from './chatStoreCache';
 import { filedUnder, sameRoot } from './chatSource';
+import { LiveTerminal, terminalLabel } from './terminalSource';
 
 /**
  * *CoAI: go to conversation* — which conversation belongs to the tab somebody is looking at.
@@ -42,9 +43,14 @@ export type TabKind =
   /** A document a person is reading: `file` or `untitled`. Named by its uri. */
   | 'document'
   /**
-   * The Output pane, a settings tab, our own chat tab, a terminal in the editor area — a TAB this command cannot start
-   * from. A terminal CAN own a conversation (the terminal door, terminalSource.ts); go-to does not start from one
-   * before stage 3 of that plan.
+   * A terminal of the window, named by its full name (E3.S2): the one go-to starts from when the command is pressed IN a terminal
+   * (`coai.goToFromTerminal`). It is never a TAB: a terminal is not read through the tabs, and `terminalGotoAsked` builds it.
+   */
+  | 'terminal'
+  /**
+   * The Output pane, a settings tab, our own chat tab, a terminal in the EDITOR AREA — a TAB this command cannot start from. A
+   * terminal in the editor area reached through the TAB path is still `other` (that path is unchanged); the terminal road
+   * (`terminal`, above) never goes through the tabs.
    */
   | 'other';
 
@@ -59,7 +65,9 @@ export type Narrowing =
   /** The store could not be read; these are the rows as they were last known. */
   | { readonly kind: 'unreadable'; readonly reason: string }
   /** The folder ANSWERED, and no session in it is called what this tab is called. */
-  | { readonly kind: 'unmatched' };
+  | { readonly kind: 'unmatched' }
+  /** More than one live terminal of the window carries this terminal's exact name, so one saved conversation is not evidence for THIS one. */
+  | { readonly kind: 'several terminals'; readonly count: number };
 
 /**
  * What *go to* should do.
@@ -153,7 +161,8 @@ export interface GotoAsked {
    */
   readonly walkFailed: boolean;
   /**
-   * How many tabs open right now carry this tab's label — at least 1, since this tab is one of them.
+   * How many tabs open right now carry this tab's label — at least 1, since this tab is one of them. For a `terminal`: the number
+   * of LIVE terminals of exactly this name, this one included.
    *
    * <p>It is what makes a NAME usable as evidence, and the whole reason the fallback below is
    * allowed to exist. Three reviewers refused an auto-open on a unique title with the same case:
@@ -311,9 +320,14 @@ export function goto(asked: GotoAsked): Goto {
     }
   }
   if (mine.length > 1) {
-    // Impossible by construction — one source belongs to one conversation, and C1 writes it once —
-    // and answered honestly anyway, because the alternative is guessing which of two is yours.
+    // Impossible by construction for a file or a Claude session — one source belongs to one conversation, and C1 writes
+    // it once. For a TERMINAL source it is the normal case: each reload before E3 made one more record of the same name.
+    // Answered honestly in both, because the alternative is guessing which of two is yours.
     return { kind: 'pick', among: mine, why: { kind: 'several' }, offer, bind: true };
+  }
+  const namesake = severalTerminals(asked, mine, offer);
+  if (namesake !== undefined) {
+    return namesake;
   }
   const only = mine[0];
   if (only !== undefined) {
@@ -331,26 +345,39 @@ export function goto(asked: GotoAsked): Goto {
   return { kind: 'start', offer };
 }
 
-/** Whether a conversation can belong to a tab of this kind — exhaustive, so a fourth kind must decide. */
-function eligible(kind: TabKind): boolean {
-  switch (kind) {
-    case 'claude':
-    case 'document':
-      return true;
-    case 'other':
-      return false;
-    default: {
-      // A new tab kind must not fall silently into the document path, where it would be matched by a
-      // path it has not got — so it is a COMPILE error. At runtime it answers "not eligible", which
-      // sends the press to the full list: a tab kind this build has never heard of is exactly the
-      // case the operator's decision 7 covers, and throwing here would take the command down instead
-      // of showing the list. (codex, then local, the code rounds.)
-      const unhandled: never = kind;
-      console.warn(`ConnectOtherAIs: a tab kind this build has no arm for: ${JSON.stringify(unhandled)}`);
-
-      return false;
-    }
+/**
+ * Two live terminals of one name and ONE saved conversation: a list, never the one conversation.
+ *
+ * <p>A single saved conversation is not evidence for THIS terminal when another live terminal answers to the same name — the
+ * source is the name, so both would own it. The person chooses, and the choice binds (go-to never moves a conversation from one
+ * live terminal onto its namesake: `revealBound` holds that half).</p>
+ */
+function severalTerminals(asked: GotoAsked, mine: readonly ConversationMeta[], offer: string): Goto | undefined {
+  if (asked.tab.kind !== 'terminal' || asked.namesakes < 2 || mine.length !== 1) {
+    return undefined;
   }
+
+  return { kind: 'pick', among: mine, why: { kind: 'several terminals', count: asked.namesakes }, offer, bind: true };
+}
+
+/**
+ * Whether a conversation can belong to a tab of this kind — a table over EVERY kind, so a fifth kind must decide (a missing row is a
+ * compile error).
+ */
+const ELIGIBLE: Readonly<Record<TabKind, boolean>> = { claude: true, document: true, terminal: true, other: false };
+
+function eligible(kind: TabKind): boolean {
+  const known: boolean | undefined = ELIGIBLE[kind];
+  if (known === undefined) {
+    // A tab kind this build has never heard of is exactly the case the operator's decision 7 covers: it answers "not eligible",
+    // which sends the press to the full list, and throwing here would take the command down instead of showing the list.
+    // (codex, then local, the code rounds.)
+    console.warn(`ConnectOtherAIs: a tab kind this build has no row for: ${JSON.stringify(kind)}`);
+
+    return false;
+  }
+
+  return known;
 }
 
 /**
@@ -439,3 +466,90 @@ export const bindable = (
   caseBlind: boolean,
 ): boolean =>
   record !== undefined && sameSource(record.source, source) && sameRoot(record.workspace, workspace, caseBlind);
+
+/** What the host read about the terminal go-to is pressed in: values only, no `vscode`. */
+export interface TerminalGotoInput {
+  /** The terminal's FULL name, read once. */
+  readonly name: string;
+  /** The saveId of the conversation the registry holds under this terminal, or empty. */
+  readonly liveId: string;
+  /** How many LIVE terminals of exactly this name the window has, this one included. */
+  readonly namesakes: number;
+  /** `ConversationIndex.bySource(sourceOfTerminal(name))`. */
+  readonly candidates: readonly ConversationMeta[];
+  /** The saved conversations filed under the root a terminal conversation is filed under. */
+  readonly inRoot: readonly ConversationMeta[];
+  readonly roots: readonly string[];
+  readonly fallback: string;
+  readonly caseBlind: boolean;
+  readonly index: IndexState;
+}
+
+/**
+ * The question go-to asks for a TERMINAL, built from the terminal and never from the tabs.
+ *
+ * <p>The source is the terminal's FULL name (`sourceOfTerminal`), the label is what the title shows (`terminalLabel`), the path
+ * is empty (a terminal is filed under the first root, as `filedUnder` does for any tab with no path). A name that is not an
+ * identity (`isTerminalName` refuses it) gives kind `other` — the whole list, never an error, the operator's rule.</p>
+ */
+export function terminalGotoAsked(input: TerminalGotoInput): GotoAsked {
+  const usable = isTerminalName(input.name);
+
+  return {
+    tab: { kind: usable ? 'terminal' : 'other', label: usable ? terminalLabel(input.name) : input.name, path: '' },
+    live: input.liveId,
+    source: sourceOfTerminal(input.name),
+    ambiguous: false,
+    severalSessions: false,
+    walkFailed: false,
+    namesakes: input.namesakes,
+    candidates: input.candidates,
+    inRoot: input.inRoot,
+    roots: input.roots,
+    fallback: input.fallback,
+    caseBlind: input.caseBlind,
+    index: input.index,
+  };
+}
+
+/** A tab or terminal a conversation may be bound to. */
+export interface Bound {
+  readonly key: object;
+  readonly label: string;
+}
+
+/** What binding re-asks at the press, as values: the road's own "is it still there" and "does it hold one already". */
+export interface BindSeams {
+  /** The tab is still open, or the terminal is still in the window, alive, and still the same name. */
+  readonly stillThere: (key: object) => boolean;
+  /** The registry already holds a conversation under this key. */
+  readonly holdsOne: (key: object) => boolean;
+}
+
+/**
+ * The question "may this conversation be bound to that tab or terminal", asked at the moment of the press.
+ *
+ * <p>Everything it checks can change while a record is read or a picker is on screen, so it is asked when a row is accepted, with
+ * the record the store has just answered with: the record is still this tab's (source AND the TAB'S root, never the record's own),
+ * the key is still there, and it still holds no conversation of its own.</p>
+ */
+export function bindTarget(record: ConversationRecord, asked: GotoAsked, key: object | undefined, seams: BindSeams): Bound | undefined {
+  if (key === undefined || !stillFree(key, seams)) {
+    return undefined;
+  }
+
+  // THE TAB'S OWN ROOT, through the very function the decision filed by. Passing the record's own workspace made this half a
+  // tautology — a root compared against itself passes for every record in the store. (gemini, the second code round.)
+  return bindable(record, asked.source, rootOfTab(asked), asked.caseBlind) ? { key, label: asked.tab.label } : undefined;
+}
+
+/** The key is still there, and still holds no conversation of its own. */
+const stillFree = (key: object, seams: BindSeams): boolean => seams.stillThere(key) && !seams.holdsOne(key);
+
+/**
+ * Whether the terminal go-to was pressed in is still the one: in the window's list, not exited, and its LIVE name still gives the
+ * same source (a rename while the picker is open refuses the bind).
+ */
+export function terminalStillThere(live: readonly LiveTerminal[], key: object, source: ConversationSource): boolean {
+  return live.some((one) => one.key === key && !one.exited && sameSource(sourceOfTerminal(one.name), source));
+}

@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
-import { Goto, GotoAsked, bindable, goto, rootOfTab } from './chatGoto';
+import { Bound, Goto, GotoAsked, bindTarget, goto, terminalStillThere } from './chatGoto';
 import {
+  askFromTerminal,
   chatWithOtherAi,
 } from './chatCommand';
 import { restoreConversation } from './chatConversationRestore';
-import { askedForGoto } from './chatSessionJoin';
+import { askedForGoto, askedForTerminal } from './chatSessionJoin';
+import { liveTerminals, confirmReattach } from './terminalHost';
 import { revealBound, revealConversation, tabStillOpen, whereConversationSits } from './chatRegistry';
 import { ChatPanels } from './chatPanels';
 import { ConversationIndex } from './chatStoreCache';
@@ -50,10 +52,19 @@ import { narrowedTitle, stillListing } from './conversationChoice';
  * my own brief for this story drifted from it.)</p>
  */
 
-/** A tab a conversation may be bound to. */
-interface Bound {
-  readonly key: object;
-  readonly label: string;
+/**
+ * One way into go-to: what the press asked, and the three things that differ between a TAB and a TERMINAL. `arrive` takes it whole, so
+ * the tab road and the terminal road share every arm of the exhaustive switch.
+ *
+ * <p>`key` is what a conversation would be bound to — the tab, or the terminal; `stillThere` is the press-time question of whether it
+ * still is; `start` is the door *New conversation* runs: the tab road keeps the file door, the terminal road runs the terminal door
+ * for THAT terminal, never the tab door, which would read a file tab.</p>
+ */
+interface Road {
+  readonly asked: GotoAsked;
+  readonly key: object | undefined;
+  readonly stillThere: (key: object) => boolean;
+  readonly start: () => void;
 }
 
 /**
@@ -66,6 +77,19 @@ interface Bound {
  */
 let running = false;
 
+/** Run one press under the latch that both commands share: a second press while one is working does nothing. */
+async function pressed(work: () => Promise<void>): Promise<void> {
+  if (running) {
+    return;
+  }
+  try {
+    running = true;
+    await work();
+  } finally {
+    running = false;
+  }
+}
+
 /** The command. It reads the active tab; the menus it appears in are the editor's and the panel's. */
 export async function goToConversation(
   panels: ChatPanels,
@@ -73,25 +97,66 @@ export async function goToConversation(
   store: ChatStoreFile,
   extensionUri: vscode.Uri,
 ): Promise<void> {
-  if (running) {
-    return;
-  }
-  try {
-    running = true;
-    await arrive(panels, index, store, extensionUri);
-  } finally {
-    running = false;
-  }
+  await pressed(async () => {
+    const { asked, key } = await askedForGoto(panels, index);
+    await arrive(panels, store, extensionUri, index, { asked, key, stillThere: tabStillOpen, start: startingFor(panels, extensionUri) });
+  });
 }
 
-/** What to do about the tab somebody is looking at, and then the doing of it. */
-async function arrive(
+/**
+ * *CoAI: go to this terminal's conversation* — go-to pressed IN a terminal, for THAT terminal (E3.S2).
+ *
+ * <p>A terminal is not a tab, so this never goes through the tab match: it reads the terminal it is handed (the window's active one),
+ * asks `askedForTerminal`, and shares every arm of `arrive` with the tab road under the SAME `running` latch. It runs no re-attach of
+ * its own — it keeps its explicit-choice path: the person pressed go-to in THIS terminal, and two live namesakes or several records
+ * give a list. A bind it makes is final. When it SHOWS this terminal's own conversation (`reveal`), that is a use, and a bind
+ * re-attach made becomes final (`confirmReattach`, only while the plan for the name still answers `bound`).</p>
+ */
+export async function goToFromTerminal(
   panels: ChatPanels,
   index: ConversationIndex,
   store: ChatStoreFile,
   extensionUri: vscode.Uri,
+  terminal: vscode.Terminal | undefined,
 ): Promise<void> {
-  const { asked, key } = await askedForGoto(panels, index);
+  if (terminal === undefined) {
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'goToConversation',
+      code: 'no-terminal-for-goto',
+      title: 'There is no terminal here — open one, then press go to.',
+    });
+
+    return;
+  }
+  await pressed(async () => {
+    // The name is read ONCE at the press: the question is built from it and the confirmation judges the plan under it.
+    const name = terminal.name;
+    const asked = askedForTerminal(panels, index, terminal, name);
+    const road: Road = {
+      asked,
+      key: terminal,
+      stillThere: (key) => terminalStillThere(liveTerminals(vscode.window.terminals), key, asked.source),
+      start: () => {
+        void askFromTerminal(panels, extensionUri, terminal);
+      },
+    };
+    if (await arrive(panels, store, extensionUri, index, road) === 'reveal') {
+      confirmReattach(panels, terminal, name);
+    }
+  });
+}
+
+/** What to do about the tab or terminal somebody is looking at, and then the doing of it. Says which answer it carried out. */
+async function arrive(
+  panels: ChatPanels,
+  store: ChatStoreFile,
+  extensionUri: vscode.Uri,
+  index: ConversationIndex,
+  road: Road,
+): Promise<Goto['kind']> {
+  const { asked } = road;
   const answer = goto(asked);
   const show = (narrowed?: Narrowed): void =>
     switchConversations(panels, { index, store, extensionUri, workspace: () => asked.fallback }, narrowed);
@@ -101,11 +166,11 @@ async function arrive(
       // The commonest answer and the cheapest: it is already here.
       revealConversation(panels, answer.id);
 
-      return;
+      return answer.kind;
     case 'reopen':
-      await bind(panels, store, extensionUri, answer, asked, key, show);
+      await bind(panels, store, extensionUri, answer, road, show);
 
-      return;
+      return answer.kind;
     case 'pick':
       // Every ambiguity this feature meets ends here: the person sees the candidates and chooses. A
       // `cross root` row carries no binding at all — that conversation belongs to another project,
@@ -115,11 +180,11 @@ async function arrive(
         title: narrowedTitle(answer.why, offer, answer.among.length),
         offer,
         startOnNew: false,
-        onNew: startingFor(panels, extensionUri),
-        ...(answer.bind ? { bindTo: bindingTo(panels, asked, key) } : {}),
+        onNew: road.start,
+        ...(answer.bind ? { bindTo: bindingTo(panels, road) } : {}),
       });
 
-      return;
+      return answer.kind;
     case 'start':
       // NOT a new conversation. The picker, with the offer under the cursor, and nothing created
       // until it is chosen.
@@ -128,17 +193,17 @@ async function arrive(
         title: `No conversation for “${offer}” yet`,
         offer,
         startOnNew: true,
-        onNew: startingFor(panels, extensionUri),
-        bindTo: bindingTo(panels, asked, key),
+        onNew: road.start,
+        bindTo: bindingTo(panels, road),
       });
 
-      return;
+      return answer.kind;
     case 'everything':
       // The operator's decision: a tab with nothing behind it gets the LIST, never an error and
       // never silence.
       show();
 
-      return;
+      return answer.kind;
     case 'building':
       // The list is not read yet, so this cannot say whether the tab has a conversation — and
       // guessing would offer to create a second one for a tab that already has one.
@@ -150,7 +215,7 @@ async function arrive(
         title: stillListing(offer),
       });
 
-      return;
+      return answer.kind;
     default: {
       // EXHAUSTIVE BY NAME: a seventh answer must be a compile error here rather than a press that
       // does nothing.
@@ -177,13 +242,12 @@ async function bind(
   store: ChatStoreFile,
   extensionUri: vscode.Uri,
   answer: Extract<Goto, { kind: 'reopen' }>,
-  asked: GotoAsked,
-  key: object | undefined,
+  road: Road,
   show: (narrowed?: Narrowed) => void,
 ): Promise<void> {
   const seen = await store.read(answer.meta.id);
   const record = seen.kind === 'record' ? seen.record : undefined;
-  const tab = record === undefined ? undefined : bindingTo(panels, asked, key)(record);
+  const tab = record === undefined ? undefined : bindingTo(panels, road)(record);
   if (record === undefined) {
     void notify({
       as: 'warning',
@@ -250,31 +314,16 @@ function startingFor(panels: ChatPanels, extensionUri: vscode.Uri): () => void {
 }
 
 /**
- * The question "may this conversation be bound to that tab", asked at the moment of the press.
+ * The question "may this conversation be bound to that tab or terminal", asked at the moment of the press.
  *
- * <p>Everything it checks can change while a record is read or a picker is on screen, which is why it
- * is a function handed forward rather than an answer worked out in advance: the record can be
- * re-filed by another window, the tab can be closed, and the tab can gain a conversation of its own.
- * Binding through a stale answer would register a panel against a tab nobody is looking at, or swap
- * what is in a live tab underneath somebody. (Three findings, the code round.)</p>
+ * <p>Everything it checks can change while a record is read or a picker is on screen, which is why it is a function handed forward
+ * rather than an answer worked out in advance. The decision is `bindTarget` (pure, `chatGoto.ts`): the record is still this one's,
+ * the road still has it (`stillThere`: the tab is open, or the terminal is in the window, alive and still the same name), and it holds no
+ * conversation of its own. (Three findings, the code round.)</p>
  */
-function bindingTo(
-  panels: ChatPanels,
-  asked: GotoAsked,
-  key: object | undefined,
-): (record: ConversationRecord) => Bound | undefined {
-  return (record) => {
-    if (key === undefined || !tabStillOpen(key) || panels.get(key) !== undefined) {
-      return undefined;
-    }
-
-    // THE TAB'S OWN ROOT, through the very function the decision filed by. Passing the record's
-    // own workspace made this half a tautology — a root compared against itself passes for every
-    // record in the store — so a conversation another window re-filed into a different project
-    // would have bound to this tab anyway: the cross-root rule undone at the last step, in the one
-    // place it has to hold. (gemini, the second code round.)
-    return bindable(record, asked.source, rootOfTab(asked), asked.caseBlind)
-      ? { key, label: asked.tab.label }
-      : undefined;
-  };
+function bindingTo(panels: ChatPanels, road: Road): (record: ConversationRecord) => Bound | undefined {
+  return (record) => bindTarget(record, road.asked, road.key, {
+    stillThere: road.stillThere,
+    holdsOne: (key) => panels.known().some((one) => one.key === key),
+  });
 }

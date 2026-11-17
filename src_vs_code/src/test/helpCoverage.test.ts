@@ -100,6 +100,22 @@ test('S4-T10 every language’s chat article names the two terminal items, the h
   assert.ok(!Object.keys(SELF_EVIDENT).includes('coai.terminalHosts'), 'coai.terminalHosts is SELF_EVIDENT again: its help is in the chat article');
 });
 
+test('S2-T13 every language’s chat article names the terminal go-to, its chord and both skip-list ids', () => {
+  // The title and the chord are English in every language, like every control name here, so all five can be asked for them; the two
+  // ids are what the skip-list sentences name (the default holds both).
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} chat article is missing, so a reader of it gets English`);
+    const text = Object.values(body).join(' ');
+    assert.ok(text.includes("**CoAI: go to this terminal's conversation**"), `the ${language} chat article never names go to from a terminal`);
+    assert.ok(text.includes('`Ctrl+Alt+G`'), `the ${language} chat article never names the chord of go to from a terminal`);
+    assert.ok(text.includes('`coai.goToFromTerminal`') && text.includes('`coai.askFromTerminal`'), `the ${language} chat article names only one of the two skip-list ids`);
+  }
+});
+
 test('S1r-T8 no language’s chat article says the terminal door uses VS Code’s copy command', () => {
   // Epoch 1's "what can go wrong" sentence outlived change 1.2 in all five languages: the door no longer runs a copy command,
   // it only reads the clipboard. Each language's epoch-1 wording is named here, because a translation cannot be matched by
