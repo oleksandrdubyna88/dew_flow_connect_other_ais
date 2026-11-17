@@ -211,8 +211,13 @@ public static class AskGate
             : new AskDecision.Allowed(Reminder(input), Counted: true, ConsultBeside: false);
     }
 
-    private static string StoodDown(AskGateInput input) =>
-        $"the question consultant is required here and stood down: {input.Unavailable} — the person is asked";
+    /// <summary>
+    /// D9: nobody could be asked, so the person is. Under policy auto the phase rule decides nothing, so the sentence does not say the consultant
+    /// "is required here"; it names a rejected consultId like every other sentence of the gate (D14 (a)). Every other policy: today's, byte for byte.
+    /// </summary>
+    private static string StoodDown(AskGateInput input) => input.Autonomous
+        ? $"the question consultant stood down: {input.Unavailable} — under policy auto it comes first, and none could be had, so the person is asked{Rejected(input)}"
+        : $"the question consultant is required here and stood down: {input.Unavailable} — the person is asked";
 
     /// <summary>
     /// Off, the plan stage, the release — and a held gate's own question, which is the gate asking rather than the AI

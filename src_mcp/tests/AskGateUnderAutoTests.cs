@@ -91,6 +91,36 @@ public sealed class AskGateUnderAutoTests
         allowed.ConsultBeside.Should().BeFalse("there is nobody to run beside it");
     }
 
+    /// <summary>
+    /// The shipped stand-down says the consultant "is required here" — the phase rule's words, which decide nothing under policy
+    /// auto (O3 is unconditional). Under policy auto the sentence says what is true: nobody could be asked, so the person is.
+    /// </summary>
+    [Theory]
+    [InlineData(AskPhase.Planning)]
+    [InlineData(AskPhase.Building)]
+    [InlineData(AskPhase.Released)]
+    public void TheStandDown_UnderAuto_DoesNotClaimThePhaseRuleRequiredTheConsultant(AskPhase phase)
+    {
+        var allowed = Allowed(Auto(phase: phase) with { Unavailable = "switched off" });
+
+        allowed.Note.Should().Contain("stood down").And.Contain("switched off").And.Contain("the person is asked");
+        allowed.Note.Should().NotContain("required here", "under policy auto the phase rule decides nothing");
+    }
+
+    /// <summary>D14 (a): a consultId that did not count is named wherever the decision is said — the stand-down is one of the places.</summary>
+    [Fact]
+    public void TheStandDown_UnderAuto_NamesARejectedConsultId()
+    {
+        var allowed = Allowed(Auto() with { Unavailable = "switched off", Proof = new ConsultProof.Rejected("abc", "too old") });
+
+        allowed.Note.Should().Contain("stood down").And.Contain("switched off").And.Contain("abc").And.Contain("too old");
+    }
+
+    [Fact]
+    public void TheStandDown_UnderEveryOtherPolicy_KeepsTodaysSentence_ByteForByte() =>
+        Allowed(Auto(batches: 9) with { Unavailable = "switched off", Autonomous = false }).Note.Should().Be(
+            "the question consultant is required here and stood down: switched off — the person is asked");
+
     [Theory]
     [InlineData(QuestionMode.Require, AskPhase.Planning, false)]
     [InlineData(QuestionMode.Require, AskPhase.Released, false)]

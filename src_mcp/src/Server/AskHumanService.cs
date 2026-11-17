@@ -104,14 +104,63 @@ public sealed class AskHumanService
         // A hold from before policy auto is released by whichever call reads it first; the whole Release is kept for the reply's words.
         var release = _policy.CurrentUnclaimed(_store.Load(repoPath, at.Branch, at.Document, at.Feature), repoPath, at);
         var session = release?.Session;
+        // Whether the policy is auto is read from the SETTINGS, not the session: a session raised under human is still held while the settings say auto.
+        var autonomous = _settings.Rounds.IsAutonomous;
         var facts = _desk.Facts(repoPath, session, new AskArguments(consultId ?? string.Empty, productionRisk, (riskReason ?? string.Empty).Trim()), DateTime.UtcNow);
+        facts = facts with { Input = facts.Input with { Autonomous = autonomous } };
 
         return AskGate.Decide(facts.Input) switch
         {
             AskDecision.Refused refused => Error(refused.Sentence),
+            AskDecision.ConsultFirst first => ConsultFirst(first.Note),
+            // No session means no card door (AskGateDesk.DoorFor), so the session is there.
+            AskDecision.Allowed when autonomous && facts.Input.Door == AskDoor.Card => AnsweredAtOnce(session!, release?.NotWritten ?? string.Empty),
             AskDecision.Allowed allowed => await AskedAsync(session, at, repoPath, branch, question.Trim(), facts, allowed, ct),
             _ => throw new InvalidOperationException("the union is closed"),
         };
+    }
+
+    /// <summary>Policy auto, the AI's own question with no proof: the consultants come before the person. Nothing is spent, counted, posted or recorded.</summary>
+    private string ConsultFirst(string note)
+    {
+        var id = NewQuestionId();
+        _log.Information("question {Id} under policy auto: consult_first — the consultants come before the person", id);
+
+        return Json(
+            new ConversationAnswer(ConversationAnswer.ConsultFirst, AskUnderAuto.ConsultFirstInstruction, note, string.Empty, []),
+            ServerJsonContext.Default.ConversationAnswer);
+    }
+
+    /// <summary>
+    /// Policy auto, the gate's question: no card, no wait, nothing recorded on the session, no proof spent, no batch counted. A held gate is told whose
+    /// hold it is (<see cref="AskUnderAuto.HeldInstruction"/>); a feature review's request window is told the server decides a second round.
+    /// </summary>
+    private string AnsweredAtOnce(PersistedSession session, string notWritten)
+    {
+        var id = NewQuestionId();
+        if (!session.State.HumanGate)
+        {
+            _log.Information(
+                "question {Id} under policy auto: the feature review of session {SessionId} may not be asked for a second round — answered at once", id, session.State.SessionId);
+
+            return Json(new HumanAnswer("no_answer_yet", string.Empty, string.Empty, AskUnderAuto.NoSecondRound), ServerJsonContext.Default.HumanAnswer);
+        }
+
+        var stage = SessionPolicy.StageOf(session);
+        if (notWritten.Length > 0)
+        {
+            _log.Information(
+                "question {Id} under policy auto: the {Stage} hold of session {SessionId} is from before auto and its release could not be written yet ({Why}) — answered at once: call again",
+                id, stage, session.State.SessionId, notWritten);
+        }
+        else
+        {
+            _log.Information(
+                "question {Id} under policy auto: the {Stage} hold of session {SessionId} is the person's — answered at once, pointing at its notice {Notice}",
+                id, stage, session.State.SessionId, AskUnderAuto.NoticeIdOf(session.State));
+        }
+
+        return Json(new HumanAnswer("no_answer_yet", string.Empty, string.Empty, AskUnderAuto.HeldInstruction(session, notWritten)), ServerJsonContext.Default.HumanAnswer);
     }
 
     /// <summary>The door the desk decided before the gate (G1): the gate's question to its card, the AI's own back to its conversation.</summary>
@@ -146,7 +195,7 @@ public sealed class AskHumanService
             ? await ConsultedFirstAsync(spend, repoPath, text, facts.Input.RiskReason, SessionIdOf(session), id, ct)
             : null;
         _desk.Count(facts, id, allowed);
-        _log.Information("question {Id} is the caller's own — asked in its conversation, not in VS Code: {Question}", id, text);
+        _log.Information("question {Id} is the caller's own — asked in its conversation, not in VS Code", id);
 
         return Json(InConversation(allowed, consulted), ServerJsonContext.Default.ConversationAnswer);
     }
@@ -232,7 +281,7 @@ public sealed class AskHumanService
 
         var asked = Card(session, repoPath, branch, text, id, facts);
         await PostedAsync(session, at, repoPath, asked, spend, ct);
-        _log.Information("escalating {Id} to a person: {Question}", id, asked.Question);
+        _log.Information("escalating {Id} to a person", id);
         // The card FIRST, then everything that follows it — the batch counted, the consultants beside a production
         // risk (D8: the person is never delayed by them) — and only then the wait.
         _desk.AfterTheCard(facts, asked, allowed);
