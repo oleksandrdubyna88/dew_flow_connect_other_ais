@@ -4843,12 +4843,20 @@ that already holds `auto` is left as it is. A workspace or folder value is never
 
 - **One witness per location, kept where that location's value lives.** A location with a witness is never cleared
   again, whatever it holds: that is what keeps a choice made afterwards.
-  - The **user layer's witness is a setting in the user layer**, `coai.onExhaustedResetToAuto` (a string naming the version
-    and the run, written by the extension and never by hand). It is written and read back from a fresh configuration
-    BEFORE the value is removed, and written as well when the layer holds nothing to remove, so a choice made on this
-    machine later is kept on the next machine. A run that finds it, written here or carried by Settings Sync, leaves the user
-    value alone; a removal the settings file refuses withdraws it. It is read from `inspect().globalValue` only: a
-    workspace can set a key of this scope, and a workspace value must never certify the user layer.
+  - The **user layer's witness is a setting in the user layer**, `coai.onExhaustedResetToAuto`, and its value is ONE fixed
+    word, `auto` (`USER_WITNESS_WORD`), the same on every machine and in every version: it names no version, no run and
+    no window, so it has no owner (written by the extension and never by hand). It is written BEFORE the value is removed,
+    and written as well when the layer holds nothing to remove, so a choice made on this machine later is kept on the next
+    machine. A run that finds it, written here or carried by Settings Sync, leaves the user value alone. After its own
+    write, `removeUnlessChosen` reads the record and the user value in one synchronous stretch and checks the claim, the
+    recorded value and the current user value — it does NOT re-read the witness or compare who wrote it. A removal the
+    settings file refuses withdraws the witness. A run that LOST THE CLAIM during that await (`afterLostClaim`) withdraws it
+    only when no run completed and the user value is still the recorded one, so a value is never left un-reset under a
+    witness; when the record holds `completed`, or the value is gone or no longer the recorded one (another run removed it,
+    or the person chose), the witness stays with the run that settled it, and the run ends `busy`. A copy that lost its
+    `held` (no record to compare, and no run can have completed from it) withdraws as before, ending `incomplete`. It is
+    read from `inspect().globalValue` only: a workspace can set a key of this scope, and a workspace value must never
+    certify the user layer.
   - It declares **no `scope`**, the scope `coai.onExhausted` has, so it is synced exactly when the value it witnesses is.
     `machine` and `machine-overridable` are left out of Settings Sync by default, so the next machine would not see the
     witness; `application` is shared by every profile, so a witness written in one profile would certify another profile's
@@ -4872,8 +4880,9 @@ that already holds `auto` is left as it is. A workspace or folder value is never
   recorded location is settled, checked with no `await` before the write.
 - **The order.** Claim, then record what each location holds, then each overlay (one write with its witness, one turn of
   the catalog migration's queue, because both migrations rewrite the same record), then the user layer (witness, await,
-  read the witness and the value again; a witness that is not this run's or a value no longer the recorded one stops
-  the step; else remove), then the mirror, then the marker, then the notification. The mirror is called by the run itself
+  then the record and the value read once, together: a claim no longer this run's stops the step, withdrawing the witness
+  only when no run completed and the value is still the recorded one; a copy with no `held` stops it with the witness
+  withdrawn; a value no longer the recorded one stops it with the witness kept; else remove), then the mirror, then the marker, then the notification. The mirror is called by the run itself
   because an overlay clear fires no configuration event, and it comes BEFORE the marker, also in a run that ends
   incomplete. The run starts only when the registry knows `coai.onExhaustedResetToAuto`, because a write of an unregistered
   key is refused; a window updated in place runs it at its next activation.
@@ -4920,8 +4929,12 @@ that already holds `auto` is left as it is. A workspace or folder value is never
 6. "Once" is once per profile of a machine for the overlays and the marker, and once for every machine Settings Sync
    reaches for the user layer.
 7. An overlay left alone because its value changed carries no witness; if the record is lost, a new plan records the later
-   choice as the old value. The notification can appear twice when a host dies between showing it and recording it, or never when the marker is
-   written and showing the notification then fails (the marker is there, so nothing retries it).
+   choice as the old value.
+8. **The notification's two edges.** If `ports.tell` rejects, `told: true` is not stored, so the next activation retries:
+   `completedEntry` answers `'tell'` for a completed record that never told, and `tellFromEntry` takes the record over and
+   tells. Apart from that, the notification can appear twice when it appeared and the host died before `told` was stored
+   (the retry shows it again). It can also never appear when `tell` resolves and showing it then fails: `notify` records the
+   notice and shows it detached, `told` is stored, and nothing retries it.
    No test runs two real windows: the two-window fake is a reading of VS Code's source, and the owner's hand check is the
    only observation there can be.
 

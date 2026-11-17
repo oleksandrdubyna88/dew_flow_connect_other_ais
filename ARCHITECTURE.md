@@ -80,8 +80,9 @@ Without a rule, three verbose reviewers guarantee escalation forever. So:
 Defaults (`DEFAULTS` in `settingsShape.ts`): one round for every role — two for the feature review —
 and a threshold of 6 for the plan role and 5 for every other role. When the rounds run out there are
 five answers: **Auto**, the default (the gate raises no new hold, never waits and never writes a
-card; a round nobody answered proceeds as `not_reviewed`, spent rounds as `good_enough`; only the
-AI's own question, after its consultants or when no consultant can be had, can still reach a person), ask a human, continue and say
+card; a round nobody answered proceeds as `not_reviewed` — a feature review's first round of two is retried first —, spent rounds as `good_enough`; only the
+AI's own question can still reach a person — after its consultants, when no consultant can be had, or at once when it
+declares `productionRisk: true` with a reason in the Planning or Released phase, where `AskGate` asks no consultant), ask a human, continue and say
 so, **good enough** (read the findings, apply the ones that are true, move on), or climb the
 escalation ladder.
 
