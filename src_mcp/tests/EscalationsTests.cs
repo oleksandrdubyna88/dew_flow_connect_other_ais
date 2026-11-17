@@ -465,4 +465,49 @@ public sealed class EscalationsTests : IDisposable
         File.Exists(_escalations.AnswerPath("qR")).Should().BeFalse("no answer file is created or touched");
         File.Exists(_escalations.AnswerPath("qE")).Should().BeFalse();
     }
+
+    /// <summary>
+    /// CodeRabbit on #1011: a card was read under one turn of its file and written under another, so a second PROCESS could write
+    /// between the two and have its change undone by the stale copy. The interleaving cannot be driven from here (the turn gives up
+    /// after forty tries and then writes without it), so the test asserts what closes it: while the write runs, the turn of the card
+    /// is held — the same scope that read it — and a second taker is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("withdraw")]
+    [InlineData("restore")]
+    [InlineData("expire")]
+    [InlineData("attach")]
+    [InlineData("offer")]
+    public void ACardIsReadAndRewritten_UnderOneTurnOfItsFile(string how)
+    {
+        var card = how == "offer" ? NoticeCard("qT") with { Decisions = [] } : Question("qT");
+        _escalations.Notify(card);
+        if (how == "restore")
+        {
+            _escalations.Expire("qT", DateTime.UtcNow).Should().BeTrue();
+        }
+
+        var held = new List<bool>();
+        var probing = new Escalations(_data)
+        {
+            Writer = (file, text) =>
+            {
+                using var other = SessionTurn.Take(file);
+                held.Add(!other.Held);
+                AtomicJson.WriteUnderTurn(file, text);
+            },
+        };
+
+        var done = how switch
+        {
+            "withdraw" => probing.Withdraw("qT", DateTime.UtcNow) == Withdrawal.Withdrawn,
+            "restore" => probing.Restore("qT") == Restoration.Restored,
+            "expire" => probing.Expire("qT", DateTime.UtcNow),
+            "attach" => probing.Attach("qT", []),
+            _ => probing.OfferDecisions("qT"),
+        };
+
+        done.Should().BeTrue();
+        held.Should().Equal([true], "the one write of the card ran while its turn was held, so nobody else could have written between the read and it");
+    }
 }

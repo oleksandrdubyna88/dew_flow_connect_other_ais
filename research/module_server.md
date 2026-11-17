@@ -2371,7 +2371,7 @@ cannot be read runs `auto` and releases nothing until it reads. A hold this buil
 short circuit; `Withdrawals` carries who was withdrawn and who failed), then `NotWithdrawn`, `AnsweredMeanwhile` (the second read) or `Saved` (`ReleasedOf`, the save, the
 projection, the line) — the operation order is unchanged. `CurrentUnclaimed` is `Unclaimed` (the eligibility, `WouldRestore`, the pure decision) and `UnderTheClaim`
 (`ClaimIsBusy` when the claim is taken, else the read under it). `Decided` still answers `Release?`: null is "the pure steps decided nothing, go on to the write", the spec's
-§ S1.5 shape. `Escalations.Withdraw` and `Restore` are two mappings over one `Rewriting` (peek under the file's turn, then `Rewritten`). `AskHumanService.AskHumanAsync`
+§ S1.5 shape. `Escalations.Withdraw`, `Restore` and (since CodeRabbit on #1011, 2026-11-17) the older `Rewrite` behind `Expire`, `Attach` and `OfferDecisions` are mappings over one `Rewriting`: the file's turn is taken ONCE and held across the read (`Peek`) and the write (`Writer`, now `AtomicJson.WriteUnderTurn` by default; `Post` and `Notify` take the turn themselves) — read and written under two turns, a second process could write between them and the stale copy would put an expiry back `AskHumanService.AskHumanAsync`
 validates and loads; `FactsOf` builds the desk's facts with the policy on them and `DecidedAsync` answers what the gate decided.
 
 ## Only an answer on the notice card releases the gate (2026-10-22)

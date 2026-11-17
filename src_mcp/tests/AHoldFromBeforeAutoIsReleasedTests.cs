@@ -145,7 +145,7 @@ public sealed class AHoldFromBeforeAutoIsReleasedTests : HoldFromBeforeAutoFixtu
             Writer = (path, text) =>
             {
                 seen.Add((path, text));
-                AtomicJson.Write(path, text);
+                AtomicJson.WriteUnderTurn(path, text);
                 if (seen.Count == 1)
                 {
                     ThePersonAnswers(id, decision);

@@ -123,7 +123,7 @@ public sealed class SessionPolicyTests : IDisposable
         }
 
         seen?.Invoke(file);
-        AtomicJson.Write(file, text);
+        AtomicJson.WriteUnderTurn(file, text);
     }
 
     // ---------- T30, T31: the order, and a failure of either half ----------
@@ -244,7 +244,7 @@ public sealed class SessionPolicyTests : IDisposable
                     throw new IOException("the disk refused the write");
                 }
 
-                AtomicJson.Write(file, text);
+                AtomicJson.WriteUnderTurn(file, text);
             },
         };
 
@@ -452,7 +452,7 @@ public sealed class SessionPolicyTests : IDisposable
                     throw new IOException("the disk refused the write");
                 }
 
-                AtomicJson.Write(file, text);
+                AtomicJson.WriteUnderTurn(file, text);
                 if (number == 1)
                 {
                     Answer("n-1", "discuss");
@@ -471,7 +471,7 @@ public sealed class SessionPolicyTests : IDisposable
         FileText().Should().Be(bytes, "nothing is saved");
 
         var writesAfter = new List<string>();
-        var working = new Escalations(_data.Path) { Writer = (file, text) => { writesAfter.Add(file); AtomicJson.Write(file, text); } };
+        var working = new Escalations(_data.Path) { Writer = (file, text) => { writesAfter.Add(file); AtomicJson.WriteUnderTurn(file, text); } };
         var policy = PolicyOver(Store(), working);
 
         policy.Released(session).NotWritten.Should().BeEmpty();

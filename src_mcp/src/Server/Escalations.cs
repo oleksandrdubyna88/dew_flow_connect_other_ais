@@ -250,16 +250,19 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     public bool Expire(string id, DateTime nowUtc) =>
         Rewrite(id, question => question with { Status = EscalationStatuses.Expired, ExpiredUtc = nowUtc.ToString("O") });
 
-    /// <summary>The write every question file goes through — a seam for a failing write, as <c>SessionStore.FileWriter</c> is for a session.</summary>
-    internal Action<string, string> Writer { get; init; } = AtomicJson.Write;
+    /// <summary>
+    /// The write every question file goes through, called while this process HOLDS the file's turn (<see cref="AtomicJson.WriteUnderTurn"/>
+    /// by default; the turn is not re-entrant, so a replacement must not take it again) — a seam for a failing write, as
+    /// <c>SessionStore.FileWriter</c> is for a session.
+    /// </summary>
+    internal Action<string, string> Writer { get; init; } = AtomicJson.WriteUnderTurn;
 
     /// <summary>
     /// Takes the card of a hold that no longer stands out of the active set: <c>expired</c>, stamped, the question kept for the log.
     /// Unlike <see cref="Expire"/> it tells a card that is not there (or is already expired, which it does not rewrite) from a write that failed.
     /// </summary>
     /// <remarks>
-    /// Reads under the file's turn and RELEASES the turn before it writes: <see cref="AtomicJson.Write"/> takes the turn itself and the
-    /// turn is not re-entrant.
+    /// Reads and writes under ONE turn of the file (see <see cref="Rewriting"/>).
     /// </remarks>
     public Withdrawal Withdraw(string id, DateTime nowUtc) =>
         Rewriting(
@@ -290,14 +293,20 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     private enum Rewrote { Done, NotThere, Failed }
 
     /// <summary>
-    /// The one read-then-write of a card, for <see cref="Withdraw"/> and <see cref="Restore"/>: no card, or a card <paramref name="applies"/> does
-    /// not hold of, is <see cref="Rewrote.NotThere"/>; a card that cannot be read or written is <see cref="Rewrote.Failed"/>.
+    /// The one read-then-write of a card, for <see cref="Withdraw"/>, <see cref="Restore"/> and <see cref="Rewrite"/>: no card, or a card
+    /// <paramref name="applies"/> does not hold of, is <see cref="Rewrote.NotThere"/>; a card that cannot be read or written is <see cref="Rewrote.Failed"/>.
     /// </summary>
+    /// <remarks>
+    /// The file's turn is taken ONCE and held across the read and the write: taken twice, another process could write the card between them
+    /// (an expiry, say) and the stale copy would put it back. The turn is not re-entrant, so <see cref="Peek"/> and <see cref="TryWrite"/>
+    /// do not take it.
+    /// </remarks>
     private Rewrote Rewriting(string id, Func<EscalationQuestion, bool> applies, Func<EscalationQuestion, EscalationQuestion> to)
     {
         lock (RewriteGate)
         {
             var path = QuestionPath(id);
+            using var turn = SessionTurn.Take(path);
             var (found, card) = Peek(path);
 
             return found == Peeked.Failed ? Rewrote.Failed : Rewritten(path, card, applies, to);
@@ -311,13 +320,11 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
 
     private enum Peeked { Read, Failed }
 
-    /// <summary>The card as it sits on disk, told apart: absent and malformed are no card (null), a file that cannot be read is a failure.</summary>
+    /// <summary>The card as it sits on disk, told apart: absent and malformed are no card (null), a file that cannot be read is a failure. Under the caller's turn.</summary>
     private static (Peeked Found, EscalationQuestion? Card) Peek(string path)
     {
         try
         {
-            using var turn = SessionTurn.Take(path);
-
             return (Peeked.Read, JsonSerializer.Deserialize(SharedRead.Text(path), EscalationJsonContext.Default.EscalationQuestion));
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or JsonException)
@@ -334,7 +341,7 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     {
         try
         {
-            WriteAtomic(path, JsonSerializer.Serialize(card, EscalationJsonContext.Default.EscalationQuestion));
+            Writer(path, JsonSerializer.Serialize(card, EscalationJsonContext.Default.EscalationQuestion));
 
             return true;
         }
@@ -385,27 +392,8 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     /// </summary>
     private static readonly Lock RewriteGate = new();
 
-    private bool Rewrite(string id, Func<EscalationQuestion, EscalationQuestion> change)
-    {
-        lock (RewriteGate)
-        {
-            if (ReadQuestion(QuestionPath(id)) is not { } question)
-            {
-                return false;
-            }
-
-            try
-            {
-                WriteAtomic(QuestionPath(id), JsonSerializer.Serialize(change(question), EscalationJsonContext.Default.EscalationQuestion));
-
-                return true;
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                return false;
-            }
-        }
-    }
+    private bool Rewrite(string id, Func<EscalationQuestion, EscalationQuestion> change) =>
+        Rewriting(id, static _ => true, change) == Rewrote.Done;
 
     /// <summary>The button an answer carries, as the decision it is — one parser for every reader of the file.</summary>
     internal static HumanDecision DecisionOf(EscalationAnswer? answer) =>
@@ -480,7 +468,11 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     /// measurement is the READER taking the turn — this side is symmetry, and it is what protects
     /// the file from a reader that is not this code.
     /// </remarks>
-    private void WriteAtomic(string path, string content) => Writer(path, content);
+    private void WriteAtomic(string path, string content)
+    {
+        using var turn = SessionTurn.Take(path);
+        Writer(path, content);
+    }
 }
 
 /// <summary>
