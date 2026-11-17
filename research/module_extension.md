@@ -4853,8 +4853,9 @@ that already holds `auto` is left as it is. A workspace or folder value is never
     settings file refuses withdraws the witness. A run that LOST THE CLAIM during that await (`afterLostClaim`) withdraws it
     only when no run completed and the user value is still the recorded one, so a value is never left un-reset under a
     witness; when the record holds `completed`, or the value is gone or no longer the recorded one (another run removed it,
-    or the person chose), the witness stays with the run that settled it, and the run ends `busy`. A copy that lost its
-    `held` (no record to compare, and no run can have completed from it) withdraws as before, ending `incomplete`. It is
+    or the person chose), the witness stays with the run that settled it, and the run ends `busy`. A run that lost the claim
+    and whose copy has no `held` (nothing to compare, and no `completed`) withdraws too and ends `busy`; a run that still
+    holds the claim but whose copy lost its `held` withdraws and ends `incomplete`. It is
     read from `inspect().globalValue` only: a workspace can set a key of this scope, and a workspace value must never
     certify the user layer.
   - It declares **no `scope`**, the scope `coai.onExhausted` has, so it is synced exactly when the value it witnesses is.
@@ -4881,8 +4882,8 @@ that already holds `auto` is left as it is. A workspace or folder value is never
 - **The order.** Claim, then record what each location holds, then each overlay (one write with its witness, one turn of
   the catalog migration's queue, because both migrations rewrite the same record), then the user layer (witness, await,
   then the record and the value read once, together: a claim no longer this run's stops the step, withdrawing the witness
-  only when no run completed and the value is still the recorded one; a copy with no `held` stops it with the witness
-  withdrawn; a value no longer the recorded one stops it with the witness kept; else remove), then the mirror, then the marker, then the notification. The mirror is called by the run itself
+  only when no run completed and the value is still the recorded one; a claim still this run's on a copy with no `held` stops it with the
+  witness withdrawn, ending `incomplete`; a value no longer the recorded one stops it with the witness kept; else remove), then the mirror, then the marker, then the notification. The mirror is called by the run itself
   because an overlay clear fires no configuration event, and it comes BEFORE the marker, also in a run that ends
   incomplete. The run starts only when the registry knows `coai.onExhaustedResetToAuto`, because a write of an unregistered
   key is refused; a window updated in place runs it at its next activation.
