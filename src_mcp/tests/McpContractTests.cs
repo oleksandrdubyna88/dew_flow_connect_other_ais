@@ -261,7 +261,8 @@ public sealed class McpContractTests : IDisposable
     public async Task AskHuman_WithNobodyListening_WaitsThenSaysToAskInTheChat()
     {
         HeldGateAtNowhere();
-        using var server = Start(escalationSeconds: 3);
+        // The card and its wait are the policies that ask a person's; policy auto (the default) answers a held gate at once.
+        using var server = Start("debug", 3, ("COAI_ON_EXHAUSTED", "human"));
         try
         {
             await RoundTrip(server, """
@@ -328,7 +329,7 @@ public sealed class McpContractTests : IDisposable
     public async Task AskHuman_AnsweredInVsCode_ReturnsThePersonsWords()
     {
         HeldGateAtNowhere();
-        using var server = Start(escalationSeconds: 60);
+        using var server = Start("debug", 60, ("COAI_ON_EXHAUSTED", "human"));
         try
         {
             await RoundTrip(server, """
