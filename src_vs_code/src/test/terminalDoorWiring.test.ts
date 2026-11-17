@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { SKIP_SHELL_IDS } from '../skipShell';
 import { bodyOf, sourceOf } from './sourceReading';
 
 /**
@@ -273,4 +274,19 @@ test('S2-T3: no other Ctrl+Alt+G binding can fire under terminal focus', () => {
       `${row.command} bound to ${row.key} when "${row.when}" can still fire in a terminal, where the terminal go-to must win`,
     );
   }
+});
+
+test('the skip-shell check knows exactly the commands the manifest binds under terminal focus (S3-T9)', () => {
+  const skipped = MANIFEST.contributes.configurationDefaults?.[SKIP_LIST];
+  const bound = new Set(MANIFEST.contributes.keybindings.filter((row) => requiresTerminalFocus(row.when)).map((row) => row.command ?? ''));
+
+  // The scan's own proof: the derivation still finds the door, so a reformatted `when` cannot empty it and pass for ever.
+  assert.ok(bound.has(DOOR), 'the derivation no longer finds the terminal door among the terminalFocus bindings');
+  for (const command of bound) {
+    assert.ok((SKIP_SHELL_IDS as readonly string[]).includes(command), `the skip-list check does not know ${command}`);
+  }
+  for (const id of SKIP_SHELL_IDS) {
+    assert.ok(bound.has(id), `the skip-list check names ${id}, which is not bound under terminalFocus in the manifest`);
+  }
+  assert.deepEqual([...SKIP_SHELL_IDS], skipped, 'SKIP_SHELL_IDS is not exactly the manifest default of terminal.integrated.commandsToSkipShell, in order');
 });

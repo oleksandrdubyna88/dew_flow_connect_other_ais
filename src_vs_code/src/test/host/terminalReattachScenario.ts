@@ -28,15 +28,17 @@ export async function aTerminalTakesBackItsConversationInARealEditor(): Promise<
     const panels = new ChatPanels();
     bindReattach({ subscriptions }, panels);
 
+    // The names are this scenario's own: an earlier scenario disposes two terminals called `Creds: h / s` without waiting for them to close,
+    // and a leftover of that name would make this one's count of terminals wrong. They still pass `credsSession`.
     // (1) A conversation restored before its terminal opens: the open trigger binds it.
-    const one = 'Creds: h / s';
+    const one = 'Creds: h / reattach-1';
     const restored = registeredChat(panels, {}, 'host-reattach-one', sourceOfTerminal(one));
     const terminal = open(one);
     await until(() => panels.get(terminal)?.id === restored, 'a terminal that opened after its chat was restored did not take the chat back', 5000);
 
     // (2) Case A in a real editor: the first terminal of a name binds, the second undoes it. Waiting between the two is what makes
     // the undo, not a never-bind, the thing tested.
-    const two = 'Creds: h / t';
+    const two = 'Creds: h / reattach-2';
     const second = registeredChat(panels, {}, 'host-reattach-two', sourceOfTerminal(two));
     const first = open(two);
     await until(() => panels.get(first)?.id === second, 'the first terminal of the name did not take the conversation', 5000);

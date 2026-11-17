@@ -14,11 +14,13 @@ import {
   type ReattachView,
   type ReattachWindow,
   confirmBound,
+  guarded,
   orphansOf,
   reasonOf,
   reattachIn,
   reattachOnce,
   reattachPlan,
+  reattachRestoredIn,
   viewOf,
 } from '../terminalReattach';
 import { type LiveTerminal, terminalMatch } from '../terminalSource';
@@ -279,40 +281,125 @@ function door(world: World, terminal: object, name: string): { readonly kind: st
   return { kind: match.kind, leave: answer };
 }
 
-test('S1-T10: the race, in both orders, over a real registry', () => {
-  // (a) the orphan was registered first, then the terminal opens.
-  const a = newWorld();
-  const first = a.orphan(NAME);
-  const terminalA = a.terminal(NAME);
+/** The two triggers a window has for a name, each as the host runs it: a terminal opens, a conversation is restored. */
+function triggers(world: World): {
+  readonly open: (name: string) => { readonly terminal: object; readonly answer: Reattach };
+  readonly restore: (name: string) => { readonly orphan: { readonly key: object; readonly id: object }; readonly answer: Reattach };
+} {
+  return {
+    // `bindReattach`: the terminal appears in the window, then `reattachByName(panels, opened.name)`.
+    open: (name) => {
+      const terminal = world.terminal(name);
 
-  assert.equal(reattachIn(a.win, NAME).kind, 'bind', 'a terminal that opened after its chat was restored did not find it');
-  assert.equal(a.panels.get(terminalA)?.id, first.id, 'a terminal that opened after its chat was restored did not get it');
-  assert.equal(a.panels.get(first.key), undefined, 'the conversation sits under two keys');
+      return { terminal, answer: reattachIn(world.win, name) };
+    },
+    // `restoreChatTab`: the conversation is registered under a key of its own, then `reattachRestored` over its source.
+    restore: (name) => {
+      const orphan = world.orphan(name);
+
+      return { orphan, answer: reattachRestoredIn(world.win, sourceOfTerminal(name)) };
+    },
+  };
+}
+
+test('S1-T10: the race, in both orders, over a real registry, each trigger run as the host runs it', () => {
+  // (a) the conversation was restored first (its trigger finds no terminal), then the terminal opens.
+  const a = newWorld();
+  const ta = triggers(a);
+  const first = ta.restore(NAME);
+
+  assert.equal(first.answer.kind, 'leave', 'a restored conversation bound a terminal that was not there');
+  const opened = ta.open(NAME);
+
+  assert.equal(opened.answer.kind, 'bind', 'a terminal that opened after its chat was restored did not find it');
+  assert.equal(a.panels.get(opened.terminal)?.id, first.orphan.id, 'a terminal that opened after its chat was restored did not get it');
+  assert.equal(a.panels.get(first.orphan.key), undefined, 'the conversation sits under two keys');
 
   // (b) the terminal opened first (its trigger finds no orphan), then the restore trigger for that record's name.
   const b = newWorld();
-  const terminalB = b.terminal(NAME);
+  const tb = triggers(b);
+  const early = tb.open(NAME);
 
-  leaves(reattachIn(b.win, NAME), 'no orphan', 'a terminal bound a conversation that did not exist');
-  const second = b.orphan(NAME);
+  leaves(early.answer, 'no orphan', 'a terminal bound a conversation that did not exist');
+  const late = tb.restore(NAME);
 
-  assert.equal(reattachIn(b.win, NAME).kind, 'bind', 'a terminal that opened before its chat was restored stayed apart');
-  assert.equal(b.panels.get(terminalB)?.id, second.id, 'a terminal that opened before its chat was restored stayed apart');
+  assert.equal(late.answer.kind, 'bind', 'a terminal that opened before its chat was restored stayed apart');
+  assert.equal(b.panels.get(early.terminal)?.id, late.orphan.id, 'a terminal that opened before its chat was restored stayed apart');
 
-  // (c) a second terminal of the name is already open: never bound, in either order of the two triggers.
-  for (const order of ['restore first', 'terminal first'] as const) {
+  // (c) two terminals of the name and one conversation, the two triggers in every order the restore can fall in: whatever binds on the way
+  // is undone when the second terminal opens, and nothing is left bound.
+  const orders: readonly (readonly ('open' | 'restore')[])[] = [
+    ['restore', 'open', 'open'],
+    ['open', 'restore', 'open'],
+    ['open', 'open', 'restore'],
+  ];
+  for (const order of orders) {
     const c = newWorld();
-    const [x, y] = [c.terminal(NAME), c.terminal(NAME)];
-    const third = c.orphan(NAME);
-    const answers = order === 'restore first' ? [reattachIn(c.win, NAME), reattachIn(c.win, NAME)] : [reattachIn(c.win, NAME)];
-
-    for (const answer of answers) {
-      leaves(answer, 'several terminals', `a conversation was bound with two terminals of its name (${order})`);
+    const tc = triggers(c);
+    const seen: Reattach[] = [];
+    const terminals: object[] = [];
+    let orphan: { readonly key: object; readonly id: object } | undefined;
+    for (const step of order) {
+      if (step === 'open') {
+        const opened2 = tc.open(NAME);
+        terminals.push(opened2.terminal);
+        seen.push(opened2.answer);
+      } else {
+        const restored = tc.restore(NAME);
+        orphan = restored.orphan;
+        seen.push(restored.answer);
+      }
     }
-    assert.equal(c.panels.get(x), undefined);
-    assert.equal(c.panels.get(y), undefined);
-    assert.ok(c.panels.get(third.key) !== undefined, 'the conversation left its own key');
+    const label = order.join(', ');
+
+    for (const terminal of terminals) {
+      assert.equal(c.panels.get(terminal), undefined, `a conversation stayed on one of two terminals of its name (${label})`);
+    }
+    assert.equal(seen[seen.length - 1]?.kind === 'bind', false, `the last trigger bound with two terminals of the name (${label})`);
+    // An undo moves the conversation to a fresh key of its own, so it is found by its id, not by the key it was restored under.
+    const own = c.panels.keyOf(orphan!.id);
+
+    assert.ok(own !== undefined && !terminals.includes(own), `the conversation is not open on a key of its own (${label})`);
   }
+});
+
+test('S1-T10: only a terminal source is looked at by the restore trigger, and nothing is read for any other', () => {
+  const world = newWorld();
+  const a = world.orphan(NAME);
+  world.terminal(NAME);
+  let looks = 0;
+  const counting: ReattachWindow = { ...world.win, terminals: () => { looks += 1; return world.win.terminals(); } };
+
+  for (const source of [{ kind: 'claude', sessionId: 's' }, sourceOfFile('file:///a/b.md'), { kind: 'none' }] as const) {
+    leaves(reattachRestoredIn(counting, source), 'not creds', `a ${source.kind} source was re-attached by the restore trigger`);
+  }
+  assert.equal(looks, 0, 'the window was read for a source that is not a terminal');
+  assert.equal(reattachRestoredIn(counting, sourceOfTerminal(NAME)).kind, 'bind');
+  assert.equal(world.panels.get(a.key), undefined);
+});
+
+test('S1-T19: a re-attach step that throws answers its fallback and says why', () => {
+  const warned: string[] = [];
+
+  assert.equal(guarded(() => 7, 0, (reason) => warned.push(reason)), 7);
+  assert.equal(guarded((): number => { throw new Error('the registry broke'); }, 0, (reason) => warned.push(reason)), 0, 'a failing re-attach step reached its caller');
+  assert.deepEqual(warned, ['the registry broke'], 'the failure was not said, or was said for a step that worked');
+  assert.equal(guarded((): number => { throw 'plain'; }, 1, (reason) => warned.push(reason)), 1);
+  assert.equal(warned[1], 'plain');
+});
+
+test('S1-T20: a confirmation is judged under the name the door read, not the terminal’s name now', () => {
+  const world = newWorld();
+  const a = world.orphan(NAME);
+  const t = world.terminal(NAME);
+  reattachIn(world.win, NAME);
+
+  assert.equal(world.panels.get(t)?.id, a.id);
+  // The terminal is retitled while the door waits for the clipboard or ssh: the list now shows the new name.
+  world.list.splice(0, 1, { key: t, name: 'Creds: h / renamed', exited: false });
+
+  assert.equal(confirmBound(world.win, t, NAME), false, 'a terminal renamed between the read and the confirm was made final under the old name');
+  assert.equal(holdsOn(world, t), 'provisional', 'the mark went although the name had changed');
 });
 
 test('S1-T11 companion: the console line is said for the ambiguous answers and the undo only', () => {

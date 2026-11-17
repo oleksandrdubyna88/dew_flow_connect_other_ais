@@ -292,3 +292,25 @@ export function reasonOf(answer: Reattach): string | undefined {
 
   return answer.kind === 'leave' && AMBIGUOUS.includes(answer.why) ? `not re-attached: ${answer.why} carry that name` : undefined;
 }
+
+/**
+ * The restore trigger: a conversation the serializer just brought back may find its terminal, which can have opened before the
+ * conversation existed (the serializer first waits up to 5 s for the migration). A source that is not a terminal's reads nothing.
+ */
+export function reattachRestoredIn(win: ReattachWindow, source: ConversationSource): Reattach {
+  return source.kind === 'terminal' ? reattachIn(win, source.name) : leave('not creds');
+}
+
+/**
+ * Run one re-attach step so that a defect in it never reaches the caller: a restore and a press of the door must not fail
+ * because housekeeping did. The failure is said by `warn` (the host's `console.warn`) and the step answers `fallback`.
+ */
+export function guarded<T>(step: () => T, fallback: T, warn: (reason: string) => void): T {
+  try {
+    return step();
+  } catch (reason) {
+    warn(reason instanceof Error ? reason.message : String(reason));
+
+    return fallback;
+  }
+}

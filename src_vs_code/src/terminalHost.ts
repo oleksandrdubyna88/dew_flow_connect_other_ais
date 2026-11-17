@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { ChatPanels } from './chatPanels';
-import { type Marks, type Reattach, type ReattachWindow, confirmBound, reasonOf, reattachIn } from './terminalReattach';
+import type { ConversationSource } from './chatStore';
+import { type Marks, type Reattach, type ReattachWindow, confirmBound, guarded, reasonOf, reattachIn, reattachRestoredIn } from './terminalReattach';
 import type { LiveTerminal } from './terminalSource';
 
 /**
@@ -36,33 +37,50 @@ function said(name: string, answer: Reattach): void {
   }
 }
 
+/** What a step that failed answers: nothing was done. */
+const HELD: Reattach = { kind: 'leave', why: 'held' };
+
+/** A failed step is one `console.warn` line; it never reaches the caller (`guarded`). */
+const warnOf = (what: string) => (reason: string): void => {
+  console.warn(`ConnectOtherAIs: ${what} failed: ${reason}`);
+};
+
+/** One re-attach look at the window for `name`, said in the console when it is ambiguous, and guarded: it never throws. */
+function reattachBy(panels: ChatPanels, name: string, look: (win: ReattachWindow) => Reattach): Reattach {
+  return guarded(() => {
+    const answer = look(windowOf(panels));
+    said(name, answer);
+
+    return answer;
+  }, HELD, warnOf(`re-attaching a conversation to the terminal “${name}”`));
+}
+
 /**
  * Re-attach the conversation of the terminal called `name`, when nothing is in doubt: the window is read twice by `reattachOnce`
  * and the re-key follows the second read with no `await` between. `panels.rekey` itself still refuses a taken destination; that
  * refusal answers `leave`, not an error. Said in the console for the ambiguous answers only — it is housekeeping, not a notification.
+ * A defect in it is a `console.warn` and `leave` `held`, never a thrown error: the door and the restore go on.
  */
-export function reattachByName(panels: ChatPanels, name: string): Reattach {
-  const answer = reattachIn(windowOf(panels), name);
-  said(name, answer);
+export const reattachByName = (panels: ChatPanels, name: string): Reattach => reattachBy(panels, name, (win) => reattachIn(win, name));
 
-  return answer;
+/** The restore trigger (`reattachRestoredIn`): a restored terminal conversation finds its terminal. Guarded like `reattachByName`. */
+export function reattachRestored(panels: ChatPanels, source: ConversationSource): Reattach {
+  return reattachBy(panels, source.kind === 'terminal' ? source.name : '', (win) => reattachRestoredIn(win, source));
 }
 
 /**
  * The person used a conversation from its terminal (the door, *take* or *add* found it, or go-to showed it): its bind is final —
- * but only while the plan for the terminal's name still answers `bound` for THIS terminal (`confirmBound`).
+ * but only while the plan for `name` still answers `bound` for THIS terminal (`confirmBound`). `name` is the name the caller judged the
+ * terminal under (the door reads it ONCE, before it awaits), never the terminal's name now: a rename in between confirms nothing.
+ * Guarded: a defect is a `console.warn`, never a failed press.
  */
-export function confirmReattach(panels: ChatPanels, terminal: vscode.Terminal, name: string = terminal.name): void {
-  confirmBound(windowOf(panels), terminal, name);
+export function confirmReattach(panels: ChatPanels, terminal: vscode.Terminal, name: string): void {
+  guarded(() => confirmBound(windowOf(panels), terminal, name), false, warnOf(`confirming the conversation of the terminal “${name}”`));
 }
 
 /** Activation: the trigger of a terminal that opens — creds opens its terminals late, after the serializer restored the chats. */
 export function bindReattach(context: Pick<vscode.ExtensionContext, 'subscriptions'>, panels: ChatPanels): void {
   context.subscriptions.push(vscode.window.onDidOpenTerminal((opened) => {
-    try {
-      reattachByName(panels, opened.name);
-    } catch (reason) {
-      console.warn(`ConnectOtherAIs: re-attaching a conversation to the terminal “${opened.name}” failed: ${reason instanceof Error ? reason.message : String(reason)}`);
-    }
+    reattachByName(panels, opened.name);
   }));
 }
