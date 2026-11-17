@@ -4857,8 +4857,8 @@ that already holds `auto` is left as it is. A workspace or folder value is never
     no longer its own. What is compared is that value, read from the settings file after the run confirmed it was the
     recorded one and just before the write, and never anything in the record (the marker `mark` writes carries no `held`,
     and a stale copy may have lost it). A value that is gone or no longer that one (another run removed it, or the person chose) is left alone and the witness stays, the run
-    ending `busy` if the claim was lost. A run that still holds the claim but whose copy lost its `held` withdraws and ends
-    `incomplete`. It is
+    ending `busy` if the claim was lost. A run that still holds the claim but whose copy lost its `held` attempts to withdraw the witness (a
+    withdrawal the settings file refuses is logged, and the next start keeps the value) and ends `incomplete`. It is
     read from `inspect().globalValue` only: a workspace can set a key of this scope, and a workspace value must never
     certify the user layer.
   - It declares **no `scope`**, the scope `coai.onExhausted` has, so it is synced exactly when the value it witnesses is.
@@ -4884,8 +4884,8 @@ that already holds `auto` is left as it is. A workspace or folder value is never
   recorded location is settled, checked with no `await` before the write.
 - **The order.** Claim, then record what each location holds, then each overlay (one write with its witness, one turn of
   the catalog migration's queue, because both migrations rewrite the same record), then the user layer (witness, await,
-  then the record and the value read once, together: a claim still this run's on a copy with no `held` stops it with the
-  witness withdrawn, ending `incomplete`; a value no longer the recorded one leaves the witness kept and removes nothing;
+  then the record and the value read once, together: a claim still this run's on a copy with no `held` stops it, attempting to
+  withdraw the witness (a withdrawal the settings file refuses is logged, and the next start keeps the value), ending `incomplete`; a value no longer the recorded one leaves the witness kept and removes nothing;
   a value that is the recorded one is removed, whoever holds the claim and whether or not another run completed, and the
   witness stays; a claim no longer this run's ends the run `busy` after that), then the mirror, then the marker, then the notification. The mirror is called by the run itself
   because an overlay clear fires no configuration event, and it comes BEFORE the marker, also in a run that ends
