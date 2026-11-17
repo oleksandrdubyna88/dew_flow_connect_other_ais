@@ -444,6 +444,7 @@ flowchart TD
   failure --> which
   which -- yes --> revise["revise, 1 round left — the ground on the state"]
   which -- no --> human["call_human, the gate held<br/>a blocking finding still standing · a failure again · nobody answered again"]
+  which -- "no, under policy auto" --> auto["good_enough with its reason (a ground) · not_reviewed (nobody answered)<br/>no hold — AdvanceOnResolve"]
   person["ApplyPersonsRequest(state, Continue|Fix)<br/>feature · no gate · one round run · no ground yet"] --> asked["SecondRound = PersonAsked"]
   revise --> begin["BeginFeatureRound: round 2 admitted on the ground, and on nothing else"]
   asked --> begin
@@ -455,6 +456,7 @@ flowchart TD
   completes, because completing it spends it. `ReviewerFailure` and `BlockingFinding` are written by
   `CompleteRound`; `PersonAsked` only by `ApplyPersonsRequest`, from a `HumanDecision` — the same
   `Continue`/`Fix` a held gate is answered with — and never from an argument.
+- **Policy auto never reaches `call_human` here** (`AutoVerdicts.FeatureAtItsCap`, 2026-11-17, `todo/PLAN_auto_never_asks_a_person_E1.md` § 8). A feature review at its cap with a ground is `good_enough` — its `Reason` says which ground ("policy auto: …"), `HumanGate` stays false and `SecondRound` is spent — or `not_reviewed` when `reviewers.Answered == 0`: nothing was reviewed, and the verdict says so. The round-1 retry is unchanged (below its cap a round nobody answered still answers `revise`: that is not a `call_human` site). The same two verdicts close the other stages: `CompleteRound` answers `not_reviewed` for a round nobody answered and `Exhausted` answers `good_enough` for spent rounds, each setting `AwaitingResolve` and `AdvanceOnResolve`, so one empty `resolve` moves the stage. Every other policy is as before. Policy auto is `PanelConfig.IsAutonomous`, written with `OnExhausted = GoodEnough` and never apart from it; `NotReviewed` carries a reason, `GoodEnough` an optional one (empty for every non-auto `good_enough`).
 - **`CompleteRound` routes the feature stage to `CompleteFeatureRound`.** Everything the gate computed
   stays; what changes is which verdict it becomes. No ground closes the review on `resolve` however
   many findings gate (`good_enough` over the threshold, `proceed` at or under it): the findings are
