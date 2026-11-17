@@ -39,6 +39,10 @@ test('AnUnreviewedRound_ShowsWhyWhenOpened', () => {
 
   assert.match(rows, /class="reviewer roundnote"/, 'the note of a round that ran is not drawn');
   assert.match(rows, /no reviewer answered/, 'the reason policy auto recorded is not on the page');
+  // § 9.1: under the asked-by lines and ABOVE the reviewers — a note drawn after them reads as one reviewer's line.
+  const who = rows.indexOf('class="who"');
+  assert.ok(who > 0, 'the fixture drew no reviewer, so the order is not tested');
+  assert.ok(rows.indexOf('roundnote') < who, 'the note is drawn below the reviewers');
 });
 
 test('AReleasedHold_SaysItWasReleased', () => {
