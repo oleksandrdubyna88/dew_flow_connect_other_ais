@@ -196,4 +196,9 @@ public sealed class AutoNeverCallsAPersonTests
     public void NotReviewedMayProceed() =>
         RoundCommands.MayProceed(new RoundVerdict.NotReviewed(GateResult.Empty, Nobody, "x")).Should().BeTrue(
             "or an operator's split order vanishes after an auto plan round");
+
+    /// <summary>The extension writes nothing for auto only when this binary lists it (the parent's § 4.6): the entry is the last commit of the epic.</summary>
+    [Fact]
+    public void TheBinaryListsOnExhaustedAuto() =>
+        FeaturesMode.Listed.Should().Contain("onExhaustedAuto", "the extension asks --features before it leaves COAI_ON_EXHAUSTED unwritten for auto");
 }
