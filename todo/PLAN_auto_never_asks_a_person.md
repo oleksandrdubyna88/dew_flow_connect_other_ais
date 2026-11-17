@@ -433,7 +433,7 @@ string and asserts it is absent from the log file). The existing `InTheConversat
 
   **The notification**: one per completed run, non-modal, and true for the window that shows it (point (e)). When the
   value that window runs is `auto`:
-  *"When the rounds run out is now Auto — the gate raises no new hold and never waits for you; it logs and moves on. Your AI may still ask you a question its consultants could not settle. Change it in Reviews › The gate."*
+  *"When the rounds run out is now Auto — the gate raises no new hold and never waits for you; it logs and moves on. Your AI may still ask you a question its consultants could not settle, or when no consultant can be had. Change it in Reviews › The gate."*
   When another value stays in force there — a choice made after the migration on this machine or another, a workspace
   value (Q1), a side's own value the run left because it had changed, or a user value a crashed run left (residual i) —
   it names it instead:
@@ -501,7 +501,7 @@ All of these are static or per-reply text that today promise a person; each is r
 ~:1862), `research/module_core.md` (~:442-460), `research/module_extension.md`. `src_vs_code/CHANGELOG.md`: a
 *Server* entry and an *Extension* entry in the was/now style of 0.31.6 (`src_vs_code/CHANGELOG.md:3584`), saying plainly that
 **a value you chose is reset to Auto once** — a choice made afterwards is kept, also on the other machines Settings
-Sync reaches — and that the extension is updated on every side (each WSL or SSH remote) together (§ 4.6, residual iv).
+Sync reaches, outside the rare windows § 4.6 names (residuals i–iii) — and that the extension is updated on every side (each WSL or SSH remote) together (§ 4.6, residual iv).
 `research/module_extension.md` carries § 4.6's residuals.
 
 ## 5. Compatibility
@@ -701,7 +701,7 @@ so a dead host's claim needs no sweep; a run that died leaves its record, which 
 - [ ] Panel and server defaults agree, and a test reads both.
 - [ ] The migration cleared the user value once for every machine Settings Sync reaches (its witness in the user
       settings) and every overlay once per profile of a machine (its witness in the record); a later choice is kept on
-      this machine and on the others; the announcement is true for the window that shows it; § 4.6's residuals are
+      this machine and on the others, except in § 4.6's residuals (i)–(iii), each named; the announcement is true for the window that shows it; § 4.6's residuals are
       written down where E2 documents the migration.
 - [ ] Old server + new panel runs `good_enough` and says so; old panel + new server runs `auto`; a downgrade keeps the trail.
 - [ ] Under `human`, behaviour is byte-for-byte today's (the existing hold suites pass unchanged).
@@ -820,15 +820,18 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
   3. the migration clears the user value and the value in every side's overlay, leaving a location that holds `auto`;
      each location's witness is written with its clear (an overlay) or before it (the user layer, in the user
      settings), so a resumed run, a second activation and a second machine Settings Sync reaches each keep a choice
-     made afterwards; its marker is written only after every location is settled and the mirror ran, so an interrupted
-     run resumes; two windows activating together leave one result, and one notification when each hears the other's
-     write within the claim's pause (§ 4.6, residual iii); a stale window's write that brings a cleared overlay back is
+     made afterwards — except in § 4.6's residuals (i) and (ii), each named in the documents (a host that dies between
+     the user witness and its removal keeps the OLD value; a stale window or a Sync delivery in the windows § 4.6 names
+     can lose a later choice); its marker is written only after every location is settled and the mirror ran, so an interrupted
+     run resumes; two windows activating together leave one result; they show one notification when each hears the other's
+     write within the claim's pause, and may show two when they do not (§ 4.6, residual iii) — the claim is a best
+     effort, no protocol available to an extension selects one winner without that delivery, and none is promised; a stale window's write that brings a cleared overlay back is
      cleared by the next activation; a second activation does nothing. **A workspace-scoped value is NOT migrated
      (Q1)**: it stays, and the gate section names it. All of it is tested without the panel ever being opened, the two
      windows and the two machines through a fake of `globalState` as VS Code's source reads it (DoD item 6);
      *[narrowed at the re-review for epoch 3: the one notification and the kept choice hold within § 4.6's residuals]*
   4. the notification and the help state the guarantee as requirement 5 does — the gate does not hold, wait or write
-     a card; the AI's own question still reaches the person after the consultants (O3) — and never "never asks you
+     a card; the AI's own question still reaches the person after the consultants, or when no consultant can be had (O3) — and never "never asks you
      anything"; the notification says Auto only in a window that runs Auto, and elsewhere names the value in force and
      where it is set (§ 4.6);
   5. the rounds-log page shows the note on a row that was not skipped and filters `not_reviewed`, tested by RUNNING
