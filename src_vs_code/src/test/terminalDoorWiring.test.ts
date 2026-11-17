@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { SKIP_SHELL_IDS } from '../skipShell';
 import { bodyOf, sourceOf } from './sourceReading';
 
 /**
@@ -216,4 +217,19 @@ test('S4-T7: the two items sit in the terminal panel overflow, only when the ter
   }
   // The proof that this reads the right rows: the E1 button is still there, and it IS in navigation.
   assert.equal(rows.find((row) => row.command === DOOR)?.group, 'navigation@90');
+});
+
+test('the skip-shell check knows exactly the commands the manifest binds under terminal focus (S3-T9)', () => {
+  const skipped = MANIFEST.contributes.configurationDefaults?.[SKIP_LIST];
+  const bound = new Set(MANIFEST.contributes.keybindings.filter((row) => requiresTerminalFocus(row.when)).map((row) => row.command ?? ''));
+
+  // The scan's own proof: the derivation still finds the door, so a reformatted `when` cannot empty it and pass for ever.
+  assert.ok(bound.has(DOOR), 'the derivation no longer finds the terminal door among the terminalFocus bindings');
+  for (const command of bound) {
+    assert.ok((SKIP_SHELL_IDS as readonly string[]).includes(command), `the skip-list check does not know ${command}`);
+  }
+  for (const id of SKIP_SHELL_IDS) {
+    assert.ok(bound.has(id), `the skip-list check names ${id}, which is not bound under terminalFocus in the manifest`);
+  }
+  assert.deepEqual([...SKIP_SHELL_IDS], skipped, 'SKIP_SHELL_IDS is not exactly the manifest default of terminal.integrated.commandsToSkipShell, in order');
 });
