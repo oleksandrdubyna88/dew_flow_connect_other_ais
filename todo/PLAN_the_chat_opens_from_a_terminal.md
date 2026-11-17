@@ -522,6 +522,7 @@ what stage 3 touches and the text above did not name:
 | R10 | Ctrl+Alt+G in a `Creds:` tmux terminal opens go-to and prints nothing in the pane. | E3 |
 |  | 2026-11-17, VSIX 0.87.901 (b3abb791, the merged E3 head): PASSED — the owner's report. |  |
 | R11 | With a user-level `commandsToSkipShell` that lacks the ids, the notification appears once, *Add* appends them, and R1 then passes. | E3 |
+|  | 2026-11-17, VSIX 0.87.901 (b3abb791): PASSED — the owner's report. With `["workbench.action.quickOpen"]` in the user `settings.json`: one notification naming both ids; *Add* left the person's entry first and `coai.askFromTerminal`, `coai.goToFromTerminal` after it, once each; the comments and the layout of the file stayed as they were; with `cat -v` in a `Creds:` tmux pane Ctrl+Alt+A opened the chat and Ctrl+Alt+G opened go-to, and nothing was printed. The second run (closed without *Add*) was not done: after the *Add* the answer is remembered, so putting the list back showed no notification, as designed; the closed-without-*Add* path is covered by the unit tests. |  |
 
 ## Definition of Done
 
