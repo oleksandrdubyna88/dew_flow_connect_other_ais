@@ -14,8 +14,26 @@ import { readOverlay } from './sideSettings';
  * notifications — and awaits it. The run starts from `activate`, never from the panel.
  */
 
+/** What the tell reads of the window's ONE `FeaturesCache` (extension.ts): its last settled list, and its question. */
+export interface FeaturesPort {
+  settled(): readonly string[] | undefined;
+  ask(): Promise<unknown>;
+}
+
+/** Resolves when `answer` does — or rejects, which is the same here — or after `capMs`; the timer is cleared either way. */
+function settledWithin(answer: Promise<unknown>, capMs: number): Promise<void> {
+  return new Promise((done) => {
+    const timer = setTimeout(done, capMs);
+    const finish = (): void => {
+      clearTimeout(timer);
+      done();
+    };
+    answer.then(finish, finish);
+  });
+}
+
 /** The ports over the real editor. `inForce` makes the three reads `readerFor` makes, asked at the moment it tells. */
-function portsOf(context: vscode.ExtensionContext, version: string, after: () => void): MigrationPorts {
+function portsOf(context: vscode.ExtensionContext, version: string, after: () => void, features: FeaturesPort): MigrationPorts {
   return {
     store: context.globalState,
     user: userLayerOf(() => vscode.workspace.getConfiguration('coai'), vscode.ConfigurationTarget.Global),
@@ -36,6 +54,8 @@ function portsOf(context: vscode.ExtensionContext, version: string, after: () =>
         readOverlay(context.globalState, thisSide(context.globalStorageUri)),
       );
     },
+    features: () => features.settled(),
+    settleFeatures: (capMs) => settledWithin(features.ask(), capMs),
     tell: (sentence) => notify({ as: 'information', class: 'outcome', source: 'onExhaustedMigrationHost', code: 'on-exhausted-migrated', title: sentence }),
     refused: (why) => notify({ as: 'warning', class: 'failure', source: 'onExhaustedMigrationHost', code: 'on-exhausted-not-reset', title: NOT_RESET, detail: why }),
     log: (what, error) => {
@@ -48,8 +68,13 @@ function portsOf(context: vscode.ExtensionContext, version: string, after: () =>
  * Called once from `activate`. Never rejects: the run itself never does, and an outcome other than the ones a person is
  * told about goes to the extension host's console, as activation logs a refused side stamp.
  */
-export async function startOnExhaustedMigration(context: vscode.ExtensionContext, version: string, after: () => void): Promise<void> {
-  const outcome = await migrateOnExhausted(portsOf(context, version, after));
+export async function startOnExhaustedMigration(
+  context: vscode.ExtensionContext,
+  version: string,
+  after: () => void,
+  features: FeaturesPort,
+): Promise<void> {
+  const outcome = await migrateOnExhausted(portsOf(context, version, after, features));
   if (outcome === 'incomplete' || outcome === 'not-ready') {
     console.error(`ConnectOtherAIs: the reset of "When the rounds run out" to Auto ended ${outcome}; it is tried again at the next start`);
   }

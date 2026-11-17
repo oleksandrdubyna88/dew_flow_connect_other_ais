@@ -13,6 +13,7 @@ import {
   recordOf,
   userLayerOf,
 } from '../onExhaustedMigration';
+import { FEATURES } from '../binaryFeatures';
 import { inForceOf } from '../onExhaustedTold';
 import { readOverlay, writeOverlay } from '../sideSettings';
 
@@ -444,6 +445,12 @@ export interface RigOptions {
   readonly settings: FakeUserSettings;
   readonly pauses?: Pauses;
   readonly version?: string;
+  /**
+   * What the window's `FeaturesCache` says: `now` is its settled list (`undefined` = not settled; the default is a binary
+   * that lists `onExhaustedAuto`), `later` the list it settles on when the tell waits for it. Without `later`, an
+   * unsettled cache stays unsettled for the whole cap.
+   */
+  readonly features?: { readonly now: readonly string[] | undefined; readonly later?: readonly string[] };
   /** The per-side switch; off unless said. */
   readonly perSide?: boolean;
   readonly side?: Side;
@@ -471,6 +478,9 @@ export class Rig {
   onAfter: () => void = () => undefined;
 
   private turnCount = 0;
+  private featureList: readonly string[] | undefined;
+  /** The caps the tell waited for features with, in order. */
+  readonly waits: number[] = [];
 
   constructor(private readonly options: RigOptions) {
     this.window = options.window ?? options.client.window();
@@ -478,6 +488,7 @@ export class Rig {
     if (options.auto === true) {
       this.pauses.auto();
     }
+    this.featureList = options.features === undefined ? [FEATURES.onExhaustedAuto] : options.features.now;
     this.ports = this.build();
   }
 
@@ -561,6 +572,13 @@ export class Rig {
         this.onAfter();
       },
       inForce: () => inForceOf(options.settings.config().inspect('onExhausted'), options.perSide === true, readOverlay(window, side)),
+      features: () => this.featureList,
+      settleFeatures: (capMs) => {
+        this.waits.push(capMs);
+        this.featureList = options.features?.later ?? this.featureList;
+
+        return Promise.resolve();
+      },
       tell: (sentence) => {
         events.push({ kind: 'tell', sentence });
 

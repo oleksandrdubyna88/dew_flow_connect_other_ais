@@ -62,7 +62,7 @@ export function workspacePolicyOf(
   return knownOverride(inspected.workspaceFolderValue ?? inspected.workspaceValue);
 }
 
-const PREDATES =
+export const PREDATES =
   'This coai-mcp predates Auto: it runs Good enough and still asks a person when no reviewer answers — update it in Setup › MCP server.';
 
 /** Whether the person is on Auto while the binary has SAID it does not list it — not while it has not said anything yet. */

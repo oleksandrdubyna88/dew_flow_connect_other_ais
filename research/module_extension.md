@@ -4881,10 +4881,17 @@ that already holds `auto` is left as it is. A workspace or folder value is never
   `globalState` holds the change, its next activation at the latest. Another open window is woken by the configuration
   event of the run's own settings write, and none fires when the witness was already there.
 - **The notification** is non-modal, one per completed run, and true for the window that shows it. A pure function chooses
-  the sentence from the value that window runs and where it is set (the shared reader, `inspect`, this side's overlay).
-  In a window that runs Auto: *"When the rounds run out is now Auto — the gate raises no new hold and never waits for
+  the sentence from the value that window runs, where it is set (the shared reader, `inspect`, this side's overlay) and, for a
+  window on Auto, what the binary has SETTLED to say (`--features`, the window's one `FeaturesCache`: `settled()`, never a
+  second cache). The tell is the run's last step, off the activation path (`void startOnExhaustedMigration`), so a window whose
+  features are unsettled awaits `FeaturesCache.of` for at most 20 s (`FEATURES_WAIT_MS`, one timer, no polling) before it
+  chooses. Three forms for a window on Auto. Settled WITH `onExhaustedAuto`: *"When the rounds run out is now Auto — the gate raises no new hold and never waits for
   you; it logs and moves on. Your AI may still ask you a question its consultants could not settle, or when no
-  consultant can be had. Change it in Reviews › The gate."* Where another value stays in force: *"When the rounds run
+  consultant can be had. Change it in Reviews › The gate."* Settled WITHOUT it (the panel sends `good_enough`, so the first form would promise
+  what that server does not do; the tail is the gate section's own line): *"When the rounds run out is now Auto, but this coai-mcp
+  predates Auto: it runs Good enough and still asks a person when no reviewer answers — update it in Setup › MCP server."* Still
+  unsettled after the cap: *"When the rounds run out is now Auto. Reviews › The gate shows what this coai-mcp runs."* Where another
+  value stays in force (it never waits for the features): *"When the rounds run
   out now defaults to Auto, but {label} stays in force in this window: {where} sets it. Change it in Reviews › The
   gate."*, `{where}` being "this side's own settings", "this workspace's .vscode/settings.json" or "your user settings".
   A fresh install is told too, because nothing the extension keeps tells it from an upgrade and both sentences are true

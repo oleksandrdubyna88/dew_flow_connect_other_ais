@@ -4,12 +4,14 @@ import { test } from 'node:test';
 import {
   ON_EXHAUSTED_MIGRATION_KEY as KEY,
   OVERLAY_WITNESS,
+  FEATURES_WAIT_MS,
   SETTLE_MS,
   USER_WITNESS,
   USER_WITNESS_WORD,
 } from '../onExhaustedMigration';
 import { labelOf } from '../onExhaustedPanel';
-import { NOW_AUTO, staysInForce, WHERE } from '../onExhaustedTold';
+import { FEATURES } from '../binaryFeatures';
+import { NOW_AUTO, NOW_AUTO_OLD_SERVER, NOW_AUTO_UNCONFIRMED, staysInForce, WHERE } from '../onExhaustedTold';
 import {
   activation,
   afterADeath,
@@ -432,6 +434,40 @@ test('T37 TheNotificationNamesAValueThatStaysInForce', async () => {
   const cleared = activation(four, 'A');
   assert.equal(await cleared.run(), 'migrated');
   assert.deepEqual(cleared.tells(), [NOW_AUTO]);
+});
+
+test('T37b TheNotificationIsTrueForTheServerTheWindowRuns', async () => {
+  const bound = FEATURES_WAIT_MS;
+  assert.equal(bound, 20_000, 'the wait is capped at 20 s');
+
+  // A binary whose features settle late, within the cap: the settled sentence is told, after one bounded wait.
+  const late = activation(world(false, {}), 'A', { features: { now: undefined, later: [FEATURES.onExhaustedAuto] } });
+  assert.equal(await late.run(), 'migrated');
+  assert.deepEqual(late.tells(), [NOW_AUTO]);
+  assert.deepEqual(late.waits, [bound]);
+
+  // An older binary that settles late says so.
+  const old = activation(world(false, {}), 'A', { features: { now: undefined, later: [] } });
+  assert.equal(await old.run(), 'migrated');
+  assert.deepEqual(old.tells(), [NOW_AUTO_OLD_SERVER]);
+
+  // Settled without `onExhaustedAuto` from the start: no wait, and the old-server sentence.
+  const settledOld = activation(world(false, {}), 'A', { features: { now: [] } });
+  assert.equal(await settledOld.run(), 'migrated');
+  assert.deepEqual(settledOld.tells(), [NOW_AUTO_OLD_SERVER]);
+  assert.deepEqual(settledOld.waits, []);
+
+  // Still unsettled after the cap: the sentence that promises nothing about the server.
+  const never = activation(world(false, {}), 'A', { features: { now: undefined } });
+  assert.equal(await never.run(), 'migrated');
+  assert.deepEqual(never.tells(), [NOW_AUTO_UNCONFIRMED]);
+  assert.deepEqual(never.waits, [bound]);
+
+  // A window where another value stays in force never waits for the features.
+  const stays = activation(world(), 'A', { features: { now: undefined } });
+  assert.equal(await stays.run(), 'migrated');
+  assert.deepEqual(stays.tells(), [staysInForce('Continue, and say so', WHERE.workspace)]);
+  assert.deepEqual(stays.waits, []);
 });
 
 test('T38 ASettingsFileThatRefusesTheWitness_RemovesNothing', async () => {

@@ -451,7 +451,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   void startOnExhaustedMigration(context, extensionVersion(context), () => {
     mirrorSettings(settingsSync);
     void panel.render();
-  });
+  }, { settled: () => features.settled(), ask: askFeatures });
   // The named data root came back — made again, or its drive mounted — and a probe CONFIRMED it: the mirror, which stood
   // aside (`no-data-root`), writes now, with no settings edit (E5.7, risk item F).
   onDataRootBack(() => { mirrorSettings(settingsSync); });

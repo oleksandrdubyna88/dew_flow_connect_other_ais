@@ -1,7 +1,7 @@
 import { isRecord } from './catalogLaunch';
 import { overlayKeyOf } from './coaiInstall';
 import { unknownKeysOf, unregisteredKeyIn } from './catalogMigrationRun';
-import { InForce, sentenceFor } from './onExhaustedTold';
+import { InForce, runsAuto, sentenceFor } from './onExhaustedTold';
 
 /**
  * The one-time migration that resets every saved *When the rounds run out* to Auto (E2.S2; the decisions are
@@ -16,6 +16,8 @@ export const USER_WITNESS = 'onExhaustedResetToAuto';
 /** What the witness says: one fixed word, the same on every machine and in every version (the parent's entry 3.1). */
 export const USER_WITNESS_WORD = 'auto';
 export const SETTLE_MS = 2000;
+/** How long the tell waits for the binary's features to settle, for a window that runs Auto (E2.S2, plan § 4.6 (e)). */
+export const FEATURES_WAIT_MS = 20_000;
 export const CLAIM_STALE_MS = 60_000;
 export const CLAIM_TRIES = 3;
 export const OVERLAY_TURNS = 64;
@@ -64,6 +66,10 @@ export interface MigrationPorts {
   readonly turn: <T>(work: () => Promise<T>) => Promise<T>;
   readonly after: () => void;
   readonly inForce: () => InForce;
+  /** The window's settled `--features`, or `undefined` while the binary has not answered. */
+  readonly features: () => readonly string[] | undefined;
+  /** Resolves when the features settle or after `capMs`, whichever is first; never rejects. */
+  readonly settleFeatures: (capMs: number) => Promise<void>;
   readonly tell: (sentence: string) => Promise<void>;
   readonly refused: (why: string) => Promise<void>;
   readonly log: (what: string, error?: unknown) => void;
@@ -564,6 +570,15 @@ async function tellFromEntry(ports: MigrationPorts): Promise<MigrationOutcome> {
   return tellAfterPause(ports);
 }
 
+/** The sentence for this window as it is NOW: a window on Auto waits, bounded, for the features it tells by. */
+async function sentenceNow(ports: MigrationPorts): Promise<string> {
+  if (runsAuto(ports.inForce()) && ports.features() === undefined) {
+    await ports.settleFeatures(FEATURES_WAIT_MS);
+  }
+
+  return sentenceFor(ports.inForce(), ports.features());
+}
+
 /** Step 7: tell only after the marker was read back with this window's name, and choose the sentence THEN (D11). */
 async function tellAfterPause(ports: MigrationPorts): Promise<MigrationOutcome> {
   await ports.pause(SETTLE_MS);
@@ -576,7 +591,7 @@ async function tellAfterPause(ports: MigrationPorts): Promise<MigrationOutcome> 
   if (seen.by !== ports.window || seen.told === true) {
     return 'already';
   }
-  await ports.tell(sentenceFor(ports.inForce()));
+  await ports.tell(await sentenceNow(ports));
   await ports.store.update(ON_EXHAUSTED_MIGRATION_KEY, { ...read(ports), told: true });
 
   return 'migrated';

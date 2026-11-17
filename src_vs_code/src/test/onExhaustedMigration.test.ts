@@ -9,7 +9,8 @@ import { sideKey } from '../coaiInstall';
 import { settingsFrom, ConfigReader } from '../settingsShape';
 import { KeyValueStore, sideConfigReader } from '../sideSettings';
 import { userLayerReader } from '../modelKeys';
-import { labelOf } from '../onExhaustedPanel';
+import { FEATURES } from '../binaryFeatures';
+import { labelOf, PREDATES } from '../onExhaustedPanel';
 import { stampSide } from '../sidesSeen';
 import {
   heldText,
@@ -21,7 +22,7 @@ import {
   USER_WITNESS_WORD,
   userLayerOf,
 } from '../onExhaustedMigration';
-import { HeldLayers, inForceOf, NOT_RESET, NOW_AUTO, sentenceFor, SetWhere, staysInForce, WHERE } from '../onExhaustedTold';
+import { HeldLayers, inForceOf, NOT_RESET, NOW_AUTO, NOW_AUTO_OLD_SERVER, NOW_AUTO_UNCONFIRMED, runsAuto, sentenceFor, SetWhere, staysInForce, WHERE } from '../onExhaustedTold';
 import {
   ClientState,
   FakeUserSettings,
@@ -104,6 +105,24 @@ test('T5 TheSentencesAreTheParentsAndNothingWider', () => {
   }
 });
 
+test('T5b TheNotificationIsTrueForTheServerTheWindowRuns', () => {
+  const auto = inForceOf(undefined, false, {});
+  const human = inForceOf({ globalValue: 'human' }, false, {});
+
+  assert.equal(NOW_AUTO_OLD_SERVER, 'When the rounds run out is now Auto, but this coai-mcp predates Auto: it runs Good enough and still asks a person '
+    + 'when no reviewer answers — update it in Setup › MCP server.');
+  assert.ok(NOW_AUTO_OLD_SERVER.endsWith(PREDATES.slice('This '.length)), 'it ends as the Reviews page\'s own line does');
+  assert.equal(NOW_AUTO_UNCONFIRMED, 'When the rounds run out is now Auto. Reviews › The gate shows what this coai-mcp runs.');
+  assert.equal(sentenceFor(auto, [FEATURES.onExhaustedAuto, 'other']), NOW_AUTO, 'settled with onExhaustedAuto');
+  assert.equal(sentenceFor(auto, []), NOW_AUTO_OLD_SERVER, 'settled without it: an older binary');
+  assert.equal(sentenceFor(auto, ['other']), NOW_AUTO_OLD_SERVER, 'settled with other names only');
+  assert.equal(sentenceFor(auto, undefined), NOW_AUTO_UNCONFIRMED, 'not settled');
+  assert.equal(sentenceFor(human, undefined), staysInForce('Ask a human', WHERE.user), 'another value stays in force whatever the binary says');
+  assert.equal(sentenceFor(human, []), staysInForce('Ask a human', WHERE.user));
+  assert.equal(runsAuto(auto), true);
+  assert.equal(runsAuto(human), false);
+});
+
 test('T6 TheUserLayerReadsAndWritesThePersonsOwnLayerOnly', async () => {
   const settings = new FakeUserSettings();
   settings.declare('onExhausted', 'auto');
@@ -180,7 +199,7 @@ test('T39 TheValueInForceIsTheOneTheReaderAnswers_AndItsPlace', () => {
     const expected = answered === 'auto' ? NOW_AUTO : staysInForce(labelOf(answered as Parameters<typeof labelOf>[0]), WHERE[row.where ?? 'user']);
 
     assert.equal(inForce.where, row.where, `${row.name}: where`);
-    assert.equal(sentenceFor(inForce), expected, `${row.name}: the sentence rests on what the reader answers (${answered})`);
+    assert.equal(sentenceFor(inForce, [FEATURES.onExhaustedAuto]), expected, `${row.name}: the sentence rests on what the reader answers (${answered})`);
   }
   assert.equal(readerAnswer(ROWS.find((row) => row.name === 'nothing held') as InForceRow), 'auto',
     'with nothing held the reader answers auto, never the registry\'s old default — S1\'s fix forward');

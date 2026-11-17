@@ -1,3 +1,4 @@
+import { FEATURES } from './binaryFeatures';
 import { ON_EXHAUSTED_CHOICES, labelOf } from './onExhaustedPanel';
 
 /**
@@ -10,6 +11,17 @@ import { ON_EXHAUSTED_CHOICES, labelOf } from './onExhaustedPanel';
 export const NOW_AUTO = 'When the rounds run out is now Auto — the gate raises no new hold and never waits for you; '
   + 'it logs and moves on. Your AI may still ask you a question its consultants could not settle, or when no '
   + 'consultant can be had. Change it in Reviews › The gate.';
+
+/**
+ * The notification in a window that runs `auto` on a coai-mcp whose settled `--features` lack `onExhaustedAuto`: the panel
+ * sends it `good_enough` (onExhaustedWire.ts), so the first sentence would promise what the server does not do. The tail is
+ * the Reviews page's own `PREDATES` line.
+ */
+export const NOW_AUTO_OLD_SERVER = 'When the rounds run out is now Auto, but this coai-mcp predates Auto: it runs Good enough and still asks a '
+  + 'person when no reviewer answers — update it in Setup › MCP server.';
+
+/** The notification in a window that runs `auto` when the binary has not said what it runs within the wait. */
+export const NOW_AUTO_UNCONFIRMED = 'When the rounds run out is now Auto. Reviews › The gate shows what this coai-mcp runs.';
 
 /** The warning when the settings file refused the change. */
 export const NOT_RESET = 'When the rounds run out could not be reset to Auto in your settings: the settings file '
@@ -72,15 +84,34 @@ function inLayers(layers: HeldLayers): InForce {
   return isHeld(layers.globalValue) ? { value: layers.globalValue, where: 'user' } : { value: undefined };
 }
 
+/** The choice that stays in force in place of Auto, when the window runs one. */
+function stayingChoice(inForce: InForce): (typeof ON_EXHAUSTED_CHOICES)[number] | undefined {
+  return ON_EXHAUSTED_CHOICES.find((choice) => choice.value === inForce.value && choice.value !== 'auto');
+}
+
+/** Whether the window runs `auto` — no value, `auto`, or a word that is no choice (the reader answers `auto` for it). */
+export function runsAuto(inForce: InForce): boolean {
+  return stayingChoice(inForce) === undefined || inForce.where === undefined;
+}
+
 /**
- * `NOW_AUTO` when the window runs `auto` — no value, `auto`, or a word that is no choice (the reader answers `auto` for
- * it) — else the second sentence, naming the value and where it is set.
+ * For a window that runs `auto`: `NOW_AUTO` when the binary's settled features list `onExhaustedAuto`, `NOW_AUTO_OLD_SERVER`
+ * when they are settled without it, `NOW_AUTO_UNCONFIRMED` when they are not settled (`undefined`). Otherwise the second
+ * sentence, naming the value and where it is set.
  */
-export function sentenceFor(inForce: InForce): string {
-  const stays = ON_EXHAUSTED_CHOICES.find((choice) => choice.value === inForce.value && choice.value !== 'auto');
+export function sentenceFor(inForce: InForce, features: readonly string[] | undefined): string {
+  const stays = stayingChoice(inForce);
   if (stays === undefined || inForce.where === undefined) {
-    return NOW_AUTO;
+    return autoSentence(features);
   }
 
   return staysInForce(labelOf(stays.value), WHERE[inForce.where]);
+}
+
+function autoSentence(features: readonly string[] | undefined): string {
+  if (features === undefined) {
+    return NOW_AUTO_UNCONFIRMED;
+  }
+
+  return features.includes(FEATURES.onExhaustedAuto) ? NOW_AUTO : NOW_AUTO_OLD_SERVER;
 }
