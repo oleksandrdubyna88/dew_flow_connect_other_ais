@@ -81,7 +81,7 @@ Defaults (`DEFAULTS` in `settingsShape.ts`): one round for every role — two fo
 and a threshold of 6 for the plan role and 5 for every other role. When the rounds run out there are
 five answers: **Auto**, the default (the gate raises no new hold, never waits and never writes a
 card; a round nobody answered proceeds as `not_reviewed`, spent rounds as `good_enough`; only the
-AI's own question after its consultants can still reach a person), ask a human, continue and say
+AI's own question, after its consultants or when no consultant can be had, can still reach a person), ask a human, continue and say
 so, **good enough** (read the findings, apply the ones that are true, move on), or climb the
 escalation ladder.
 

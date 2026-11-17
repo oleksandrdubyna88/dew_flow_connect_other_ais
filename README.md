@@ -167,7 +167,7 @@ identity in history. Missing lane answers are recorded explicitly. See
 Five answers, and you choose which one this repository gets. **Auto** is the default: the gate
 raises no new hold, never waits for a person and never writes a card, so a round nobody answered
 proceeds as `not_reviewed` (never a pass) and spent rounds proceed as `good_enough`, each logged
-and noted on the round. A hold raised under *ask a human* before you switched stays yours to
+and noted on the round. A hold this version raised under *ask a human* stays yours to
 answer, and your AI may still ask you a question its consultants could not settle, or when no
 consultant can be had: that question is the only road to a person under Auto. The other four are
 **ask a human** (the gate stops and puts the decision in front of you), **continue anyway** (it

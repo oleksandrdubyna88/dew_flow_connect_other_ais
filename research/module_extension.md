@@ -4830,9 +4830,9 @@ block stays as it is.
 it runs Good enough and still asks a person when no reviewer answers — update it in Setup › MCP server."* for a person on
 Auto whose binary has SAID it does not list `onExhaustedAuto` (never while the answer is pending), and *"This workspace
 sets When the rounds run out to {label} in its .vscode/settings.json, which wins over the choice above. Remove it there to
-use your own."* whenever a folder or workspace value other than Auto is the value in force, Auto included
-(`workspacePolicyOf`; a value this side's overlay holds wins over it, so the line does not appear then). A value that is
-not one of the choices never reaches the page.
+use your own."* whenever the folder-else-workspace value is a known choice in force, Auto included, unless this side's
+overlay holds the key (`workspacePolicyOf`: an overlay value wins over it, so the line does not appear then). A value that
+is not one of the choices never reaches the page.
 
 **The migration** (`src/onExhaustedMigration.ts` pure, `src/onExhaustedMigrationHost.ts` the host; started from
 `activate` after the first `mirrorSettings`, never from the panel, and it never rejects). It clears the saved
@@ -4913,7 +4913,8 @@ that already holds `auto` is left as it is. A workspace or folder value is never
 6. "Once" is once per profile of a machine for the overlays and the marker, and once for every machine Settings Sync
    reaches for the user layer.
 7. An overlay left alone because its value changed carries no witness; if the record is lost, a new plan records the later
-   choice as the old value. The notification can appear twice when a host dies between showing it and recording it.
+   choice as the old value. The notification can appear twice when a host dies between showing it and recording it, or never when the marker is
+   written and showing the notification then fails (the marker is there, so nothing retries it).
    No test runs two real windows: the two-window fake is a reading of VS Code's source, and the owner's hand check is the
    only observation there can be.
 
