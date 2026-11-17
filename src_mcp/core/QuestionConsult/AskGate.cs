@@ -149,27 +149,15 @@ public static class AskGate
     /// consultants first, in every phase and mode, unless a verified consultId or a stand-down lets it through to the person. The
     /// phase rule and the free batches decide nothing here; the batches stay a record of what reached the person.
     /// </summary>
-    private static AskDecision Autonomously(AskGateInput input)
-    {
-        if (input.Door == AskDoor.Card)
+    private static AskDecision Autonomously(AskGateInput input) =>
+        input switch
         {
-            return new AskDecision.Allowed(string.Empty, Counted: false, ConsultBeside: false);
-        }
-
-        if (input.ProductionRisk)
-        {
-            return Decide(input with { Autonomous = false });
-        }
-
-        if (input.Proof is ConsultProof.Verified verified)
-        {
-            return new AskDecision.Allowed(verified.Note, CountsToday(input), ConsultBeside: false);
-        }
-
-        return input.Unavailable.Length > 0
-            ? new AskDecision.Allowed(StoodDown(input), CountsToday(input), ConsultBeside: false)
-            : new AskDecision.ConsultFirst(Rejected(input).Trim());
-    }
+            { Door: AskDoor.Card } => new AskDecision.Allowed(string.Empty, Counted: false, ConsultBeside: false),
+            { ProductionRisk: true } => Decide(input with { Autonomous = false }),
+            { Proof: ConsultProof.Verified verified } => new AskDecision.Allowed(verified.Note, CountsToday(input), ConsultBeside: false),
+            { Unavailable.Length: > 0 } => new AskDecision.Allowed(StoodDown(input), CountsToday(input), ConsultBeside: false),
+            _ => new AskDecision.ConsultFirst(Rejected(input).Trim()),
+        };
 
     private static bool CountsToday(AskGateInput input) =>
         input.Phase == AskPhase.Building && input.Mode != QuestionMode.Off && !input.PhaseUnreadable;
