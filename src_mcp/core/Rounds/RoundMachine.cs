@@ -423,14 +423,16 @@ public static class RoundMachine
             ? s with { SecondRound = SecondRoundGround.PersonAsked, RequestQuestions = [] }
             : s;
 
-    public static Transition CompleteRound(SessionState s, GateResult gate, ReviewerSummary reviewers)
+    /// <param name="awaiting">How many findings the round leaves for <c>resolve</c> to decide — all of them, the lane's included, as the
+    /// ordinary reviewers' <paramref name="reviewers"/> count does not say. Only the words of a round nobody ordinary answered read it.</param>
+    public static Transition CompleteRound(SessionState s, GateResult gate, ReviewerSummary reviewers, int awaiting = 0)
     {
         // The feature stage has its own rule for what a round's outcome MEANS (D23): one round unless a
         // second is needed, two at most. Everything the gate computed is the same; what changes is which
         // verdict it becomes and what the state remembers about why.
         if (s.Stage == Stage.FeatureReview)
         {
-            return CompleteFeatureRound(s, gate, reviewers);
+            return CompleteFeatureRound(s, gate, reviewers, awaiting);
         }
 
         var roundsRun = s.RoundsRunThisStage + 1;
@@ -443,7 +445,7 @@ public static class RoundMachine
         if (reviewers.Answered == 0)
         {
             // Under policy auto nobody is asked either: the stage proceeds WITHOUT a review, and says so (AutoVerdicts).
-            return s.Config.IsAutonomous ? AutoVerdicts.NobodyAnswered(s, gate, reviewers, roundsRun) : new Transition.Ok(
+            return s.Config.IsAutonomous ? AutoVerdicts.NobodyAnswered(s, gate, reviewers, roundsRun, awaiting) : new Transition.Ok(
                 // AwaitingResolve stays TRUE even though there are no findings to decide on: the
                 // round completed, and `resolve` is the only door a human's "proceed" can come
                 // through. With it false the verdict was unresolvable — the gate answered
@@ -494,7 +496,7 @@ public static class RoundMachine
     /// <para>A blocking finding outranks a failure as the ground: a fix wants every reviewer's eyes, while a
     /// retry asks only the ones that failed.</para>
     /// </remarks>
-    private static Transition CompleteFeatureRound(SessionState s, GateResult gate, ReviewerSummary reviewers)
+    private static Transition CompleteFeatureRound(SessionState s, GateResult gate, ReviewerSummary reviewers, int awaiting)
     {
         var roundsRun = s.RoundsRunThisStage + 1;
         var ground = GroundFor(gate, reviewers);
@@ -515,7 +517,7 @@ public static class RoundMachine
 
         // At its cap with a ground: a person under every policy but auto, which decides and says what it decided.
         return s.Config.IsAutonomous
-            ? AutoVerdicts.FeatureAtItsCap(next, gate, reviewers, ground, roundsRun)
+            ? AutoVerdicts.FeatureAtItsCap(next, gate, reviewers, ground, roundsRun, awaiting)
             : new Transition.Ok(
                 next with { HumanGate = true, SecondRound = SecondRoundGround.None },
                 new RoundVerdict.CallHuman(gate, reviewers, FeatureCallHumanReason(ground, gate, reviewers, roundsRun)));

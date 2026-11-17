@@ -25,7 +25,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     private static string Exe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
     private static readonly FileDiff[] Files = [new("Query.cs", "@@ -1 +1 @@\n-old\n+database.Query(value);")];
 
-    internal sealed class Reviewers(ProcessLauncher real, bool failOrdinary, bool failLane) : IProcessLauncher
+    internal sealed class Reviewers(ProcessLauncher real, bool failOrdinary, bool failLane, string? laneAnswer = null) : IProcessLauncher
     {
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
@@ -33,7 +33,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
             var lane = request.Arguments.Any(a => a.Contains("finding-schema-security", StringComparison.Ordinal));
             var env = request.Environment.ToDictionary();
             env["FAKECLI_MODE"] = "vendor";
-            env["FAKECLI_STDOUT"] = lane ? "{\"status\":\"SECURE\",\"findings\":[]}" : "{\"findings\":[]}";
+            env["FAKECLI_STDOUT"] = lane ? laneAnswer ?? "{\"status\":\"SECURE\",\"findings\":[]}" : "{\"findings\":[]}";
             env["FAKECLI_OUTFILE_TEXT"] = env["FAKECLI_STDOUT"];
             env["FAKECLI_EXIT"] = (lane ? failLane : failOrdinary) ? "7" : "0";
             return real.RunAsync(request with { Environment = env }, ct);
@@ -57,7 +57,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
 
     private PanelService Service(bool failOrdinary = false, bool failLane = false, Noticing? noticing = null,
         TimeSpan roundTimeout = default, SecurityLaneSetting? laneSetting = null, PanelConfig? rounds = null,
-        bool providerEnabled = true, ProviderSettings? secondRow = null)
+        bool providerEnabled = true, ProviderSettings? secondRow = null, string? laneAnswer = null)
     {
         var lane = laneSetting ?? SecurityLaneSetting.Parse("""
             {"enabled":true,"prompts":[{"id":"redteam-general"}],"runs":[{"vendor":"codex","prompt":"redteam-general"}]}
@@ -73,7 +73,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
             RoundTimeout = roundTimeout,
             CodeWorkspace = "none",
         };
-        return new(settings, VaultKeys.None("fixture"), default, new Reviewers(_real, failOrdinary, failLane),
+        return new(settings, VaultKeys.None("fixture"), default, new Reviewers(_real, failOrdinary, failLane, laneAnswer),
             Serilog.Core.Logger.None, noticing ?? Noticing.None);
     }
 
@@ -178,6 +178,58 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
         using var answer = JsonDocument.Parse(await Run(Service(), laneOnly: true));
         answer.RootElement.TryGetProperty("error", out _).Should().BeFalse(answer.RootElement.ToString());
         answer.RootElement.GetProperty("verdict").GetString().Should().Be("proceed");
+    }
+
+    /// <summary>A lane answer with one blocking finding that carries a complete reproduction, so it is not capped and it gates.</summary>
+    private const string LaneBlocks = """
+        {"status":"FINDINGS","findings":[{"severity":"blocking","category":"security","file":"Query.cs","line":1,
+        "title":"Fixture tenant boundary regression","why":"Fixture evidence","fix":"Restore tenant scope",
+        "trigger":"Read endpoint with another tenant's id","mechanism":"Tenant filter removed",
+        "consequence":"Another tenant's row is returned",
+        "reproduction":{"preconditions":"Two tenants","steps":"Read tenant B's id as tenant A","expected":"Refused","actual":"Row returned"}}]}
+        """;
+
+    /// <summary>
+    /// A code round under policy auto whose ordinary reviewer failed while the security lane answered with a blocking finding is
+    /// <c>not_reviewed</c> — nobody ORDINARY answered — but the finding is pending, and the instruction must not say there is nothing to
+    /// decide: <c>resolve</c> refuses an empty list while a finding awaits (todo/PLAN_auto_never_asks_a_person_E1.md, § 8, the S2 fix).
+    /// </summary>
+    [Fact]
+    public async Task Under_auto_a_round_only_the_lane_answered_says_what_awaits_a_decision_and_resolve_advances_it()
+    {
+        var service = Service(failOrdinary: true, laneAnswer: LaneBlocks, rounds: PanelConfig.Uniform(3, 2));
+        using var answer = JsonDocument.Parse(await Run(service));
+        var reply = answer.RootElement;
+        reply.TryGetProperty("error", out _).Should().BeFalse(reply.ToString());
+        reply.GetProperty("verdict").GetString().Should().Be("not_reviewed", reply.ToString());
+        var instruction = reply.GetProperty("instruction").GetString()!;
+        instruction.Should().NotContain("nothing to decide", "a finding of the security lane awaits a decision, and resolve refuses an empty list")
+            .And.Contain("1 finding(s)").And.Contain("security lane").And.Contain("resolve with a decision for each");
+        var note = new SessionStore(_data).Load(_repo.Path, "main")!.Rounds[^1].Note;
+        note.Should().Contain("no reviewer answered").And.Contain("policy auto:").And.NotContain("nothing was reviewed");
+
+        var refused = JsonDocument.Parse(await service.ResolveAsync(_repo.Path, "main", "[]")).RootElement;
+        refused.TryGetProperty("error", out _).Should().BeTrue("an empty resolve is refused while the lane's finding awaits");
+
+        var decided = JsonDocument.Parse(await service.ResolveAsync(_repo.Path, "main",
+            """[{"finding":0,"action":"accept"}]""")).RootElement;
+        decided.TryGetProperty("error", out _).Should().BeFalse(decided.ToString());
+        new SessionStore(_data).Load(_repo.Path, "main")!.State.Stage.Should().NotBe(Stage.CodeReview, "resolve with a decision advances the stage");
+    }
+
+    /// <summary>The feature stage's twin: round 2 of a feature review is the cap, and a lane finding stands beside a failed ordinary reviewer.</summary>
+    [Fact]
+    public async Task Under_auto_a_feature_round_at_its_cap_only_the_lane_answered_says_the_lane_finding_stands()
+    {
+        var service = Service(failOrdinary: true, laneAnswer: LaneBlocks, rounds: PanelConfig.Uniform(3, 2));
+        using var answer = JsonDocument.Parse(await RunFeature(service, roundsRun: 1, ground: SecondRoundGround.ReviewerFailure));
+        var reply = answer.RootElement;
+        reply.TryGetProperty("error", out _).Should().BeFalse(reply.ToString());
+        reply.GetProperty("verdict").GetString().Should().Be("not_reviewed", reply.ToString());
+        reply.GetProperty("instruction").GetString()!.Should().NotContain("nothing to decide").And.Contain("1 finding(s)");
+        new SessionStore(_data).Load(_repo.Path, SessionKey.FeatureBranch, "", "plan.md")!.Rounds[^1].Note
+            .Should().Contain("no reviewer answered").And.Contain("the security lane's 1 finding(s) stand and await a decision")
+            .And.NotContain("blocking finding still stands").And.NotContain("nothing was reviewed");
     }
 
     [Fact]
