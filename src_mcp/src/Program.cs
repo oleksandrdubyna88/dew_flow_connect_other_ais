@@ -2187,6 +2187,8 @@ internal static class Program
             // code rounds (issue #115).
             var storage = PanelSettings.StorageNotes(Environment.GetEnvironmentVariable);
             StartupNotices.Record(settings, storage, noticing, log);
+            // A policy a client's env block pins other than auto: the process environment only, as the panel's own value is no note.
+            StartupNotices.PinnedPolicy(PanelSettings.PinnedPolicy(Environment.GetEnvironmentVariable), noticing, log);
 
             try
             {

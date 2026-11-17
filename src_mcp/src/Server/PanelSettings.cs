@@ -1235,6 +1235,22 @@ public sealed record PanelSettings
               + "ConnectOtherAIs > MCP server.")]
             : [];
 
+    /// <summary>
+    /// A policy the PROCESS environment pins — a client's <c>env</c> block, which wins over the panel (<c>SettingsFile.Over</c>) and so is outside the
+    /// extension's one-time migration. One note for a known word other than <c>auto</c>; none for <c>auto</c>, absent or empty, and none for an unknown
+    /// word, which <see cref="WhyExhausted"/> already says — one value is never two notes. Only the process environment is read: the same value in the
+    /// settings file is the panel's own choice.
+    /// </summary>
+    internal static IReadOnlyList<UnrecognisedSetting> PinnedPolicy(Func<string, string?> processEnv) =>
+        processEnv(Key.Exhausted) is { Length: > 0 } policy
+        && PolicyOf(policy) is { } named
+        && (named != StagePolicy.Human || string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase))
+            ? [new UnrecognisedSetting(
+                Key.Exhausted,
+                $"{Key.Exhausted} is '{policy}' in this server's own environment — your MCP client's `env` block — which overrides the panel; "
+              + "Auto is the default now. Remove it from that `env` block to follow the panel.")]
+            : [];
+
     private static IReadOnlyList<UnrecognisedSetting> WhyWorkspace(Func<string, string?> env) =>
         env(Key.Workspace) is { Length: > 0 } workspace && !AWorkspaceWeKnow(workspace)
             ? [new UnrecognisedSetting(
