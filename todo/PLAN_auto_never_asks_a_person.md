@@ -1,6 +1,8 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **epoch 2 stopped for re-review, 2026-11-17, at its second change (entry 2.2, Settings Sync and the
+> Status: **epoch 3 open, 2026-11-17 — approved by the owner (the revision is `Narrowed: yes`), after the interim document
+> review of the whole plan returned `proceed` (4 of 4 reviewers; three wording findings folded). E2 resumes: the S1 fix
+> forward and Fable's S2 spec revision, then S2, then S3.** Before that: **epoch 2 stopped for re-review, 2026-11-17, at its second change (entry 2.2, Settings Sync and the
 > migration's witness). No new code on any epic until the whole plan is reviewed again. The whole plan was revised the
 > same day (§ *Re-review for epoch 3*: consulted — consultation `70202c20…`, each point verified or marked unverified in
 > § 11; the done work sorted by an Opus judge, nothing cut from `main`, one fix forward in E2.S1 and one in the E2.S2
@@ -50,7 +52,7 @@ Narrowed: no — DoD item 4 and § 8 step 4 grew; scope, goals, merge conditions
 | E1 stories document, 1f0ae332 | feat/auto-mode-e1, pushed | fits | revised in place after re-approval (§ 4.3, N3, C4) |
 | E1.S1 cornerstone spec, 4cab5375 | feat/auto-mode-e1, pushed | fits | revised in place after re-approval (U1 settled, the note, the tests) |
 
-> Epoch 2 · approved 2026-11-16 · by reviewers · state: stopped
+> Epoch 2 · approved 2026-11-16 · by reviewers · state: closed
 
 - 2.1 · 2026-11-17 · agent · epics, approach — the copied MCP block carries only COAI_DATA_DIR and COAI_DATA_SIDE (since a0eee1ca; install.test.ts and theDirectoryAPersonChose.test.ts), so no pasted block pins a policy: E2 adds no wait for features and no COAI_ON_EXHAUSTED to it, and done-when 2's second clause becomes "the copied block carries no COAI_ON_EXHAUSTED"
   (found by the E2 stories document, § 2.1 and § 10 R1; verified by the coordinator against extension.ts and install.test.ts.)
@@ -76,6 +78,8 @@ Narrowed: yes — E2 done-when 3 and DoD item 6 keep every clause, but "two wind
 | the stop, entry 2.2, 33e88bf4 | feat/auto-mode-e2, pushed | fits | kept |
 | E2.S3 page slice, ff158372 | feat/auto-mode-e2-s3-page, pushed | fits | kept; merged into feat/auto-mode-e2 after re-approval |
 | E2.S3 page test and module-tests row, 726a2981 | feat/auto-mode-e2-s3-page, pushed | fits | kept, with ff158372 |
+
+> Epoch 3 · approved 2026-11-17 · by owner · state: open
 
 ## 1. What the owner asked for (2026-11-16)
 
