@@ -147,7 +147,8 @@ export const toldTitle = (layer: RepositoryLayer, ids: readonly string[]): strin
 
 /** The write failed. */
 export const notAddedSentence = (ids: readonly string[], reason: string): string =>
-  `${named(ids)} could not be added to terminal.integrated.commandsToSkipShell: ${reason}. Nothing else in the setting was changed.`;
+  // VS Code's own write errors already end with a period; one is stripped so the sentence does not end a clause with two.
+  `${named(ids)} could not be added to terminal.integrated.commandsToSkipShell: ${reason.replace(/\.$/u, '')}. Nothing else in the setting was changed.`;
 
 /** The write answered, and the setting does not show the ids when it is read back. */
 export const notReadBackSentence = (ids: readonly string[]): string =>
@@ -205,7 +206,13 @@ const userListHolds = (inspected: Inspected | undefined, ids: readonly string[])
   return state.kind === 'user' && state.missing.length === 0;
 };
 
-async function writeAndReadBack(seams: SkipShellSeams, list: readonly string[], ids: readonly string[]): Promise<SkipShellOutcome> {
+/** Writes `ids` after the person's list and reads them back; `byHand` are the asked ids the person added themselves while the notice was open. */
+async function writeAndReadBack(
+  seams: SkipShellSeams,
+  list: readonly string[],
+  ids: readonly string[],
+  byHand: readonly string[],
+): Promise<SkipShellOutcome> {
   try {
     await seams.update(withIds(list, ids));
   } catch (error) {
@@ -218,7 +225,7 @@ async function writeAndReadBack(seams: SkipShellSeams, list: readonly string[], 
 
     return 'failed';
   }
-  await remember(seams, ids, 'added');
+  await remember(seams, [...byHand, ...ids], 'added');
 
   return 'added';
 }
@@ -230,13 +237,12 @@ async function writeAfterPress(seams: SkipShellSeams, asked: readonly string[]):
     return 'nothing';
   }
   const ids = fresh.missing.filter((id) => asked.includes(id));
+  // The ids the person put there themselves while the notice was open are there: remembered as added, never offered again.
+  const byHand = asked.filter((id) => !fresh.missing.includes(id));
   if (ids.length > 0) {
-    return writeAndReadBack(seams, fresh.list, ids);
+    return writeAndReadBack(seams, fresh.list, ids, byHand);
   }
-  if (fresh.missing.length > 0) {
-    return 'nothing';
-  }
-  await remember(seams, asked, 'added');
+  await remember(seams, byHand, 'added');
 
   return 'added';
 }

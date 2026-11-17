@@ -60,3 +60,18 @@ test('the skip-shell test door is built only behind the test-mode check', () => 
   assert.match(text, /readonly skipShell\?:\s*SkipShellTestDoor/u, 'the field of CoaiExports is not optional, so production would have to supply it');
   assert.equal([...text.matchAll(/bindSkipShell\(/gu)].length, 1, 'the check is not bound exactly once');
 });
+
+test('the skip-shell door identifier appears only at its declaration, its binding and inside the test-mode ternary', () => {
+  const text = sourceOf('extension.ts');
+  const uses = [...text.matchAll(/\bskipShell\b/gu)];
+  const allowed = (at: number): boolean => {
+    const before = text.slice(Math.max(0, at - 60), at);
+
+    return /readonly $/u.test(before) || /const $/u.test(before) || /remoteSessions: testDoorOf\(remote\), $/u.test(before);
+  };
+  const stray = uses.filter((one) => !allowed(one.index ?? 0));
+
+  // The scan's own proof: it finds the three allowed uses, so a reformat cannot empty it and pass for ever.
+  assert.equal(uses.length - stray.length, 3, `the scan expected three allowed uses of skipShell in extension.ts, found ${uses.length - stray.length}`);
+  assert.deepEqual(stray.map((one) => text.slice(Math.max(0, (one.index ?? 0) - 40), (one.index ?? 0) + 20)), [], 'skipShell is used outside its declaration, its binding and the test-mode ternary: the door can leave test mode');
+});

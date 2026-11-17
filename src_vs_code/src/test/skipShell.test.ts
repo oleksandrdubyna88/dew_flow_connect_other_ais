@@ -280,3 +280,45 @@ test('S3-T12 a workspace or folder list is named once, with no button, and never
   assert.equal(await checkSkipShell(fine.seams), 'nothing');
   assert.equal(fine.told.length, 0);
 });
+
+test('S3-T5b ids the person added by hand while the notice was open are remembered as added', async () => {
+  // (a) both asked, one added by hand during the notice, the other written by the press.
+  const some = fake({ layers: (call) => ({ globalValue: call === 0 ? ['a'] : ['a', ASK] }), answer: ADD });
+  assert.equal(await checkSkipShell(some.seams), 'added');
+  assert.deepEqual(some.writes, [['a', ASK, GOTO]], 'the id the person had added was written again, or the other was not');
+  assert.deepEqual(offered(BOTH, some.memory), [], 'an id added by hand while the notice was open was not remembered, so it would be offered again');
+
+  // (b) one id asked (the other was dismissed earlier), added by hand while the dismissed one is still missing.
+  const one = fake({
+    layers: (call) => ({ globalValue: call === 0 ? ['a'] : ['a', ASK] }),
+    answer: ADD,
+    memory: rememberedWith([], [GOTO], 'dismissed', NOW),
+  });
+  assert.equal(await checkSkipShell(one.seams), 'added');
+  assert.deepEqual(one.asked, [[ASK]]);
+  assert.equal(one.writes.length, 0, 'an id the person had added was written again');
+  assert.deepEqual(offered([ASK], one.memory), [], 'an id added by hand while another was still missing was not remembered');
+  assert.ok((one.memory as readonly { id: string; answer: string }[]).some((row) => row.id === ASK && row.answer === 'added'), 'the id added by hand has no added row');
+});
+
+test('S3-T4b the memory keeps one row per slot and drops the rows of ids that left the list', () => {
+  const dismissed = rememberedWith([], [ASK], 'dismissed', NOW);
+  const added = rememberedWith(dismissed, [ASK], 'added', NOW);
+  assert.deepEqual(added.map((row) => `${row.id}:${row.answer}`), [`${ASK}:added`], 'an answer was appended beside the one it replaces');
+  assert.equal(rememberedWith(added, [ASK], 'added', NOW).length, 1, 'the same answer twice made two rows');
+
+  const old = [{ id: 'coai.gone', answer: 'dismissed', askedUtc: NOW.toISOString() }, ...added];
+  assert.deepEqual(rememberedWith(old, [GOTO], 'dismissed', NOW).map((row) => row.id), [ASK, GOTO], 'a row of an id no longer in SKIP_SHELL_IDS was kept');
+
+  // A `told` row's slot is its id AND its layer; it never replaces an added/dismissed row.
+  const told = rememberedWith(rememberedWith(added, [ASK], 'told', NOW, 'workspace'), [ASK], 'told', NOW, 'folder');
+  assert.equal(told.length, 3, 'a told row replaced a row of another layer or answer kind');
+  assert.equal(rememberedWith(told, [ASK], 'told', NOW, 'workspace').length, 3, 'a told row for the same layer was appended instead of replacing its slot');
+});
+
+test('S3-T6b the failure sentence does not end the reason with two periods', async () => {
+  const run = fake({ layers: user('a'), answer: ADD, reject: true });
+  await checkSkipShell({ ...run.seams, update: async () => { throw new Error('Unable to write to User Settings because the file is dirty.'); } });
+  assert.ok(run.failures[0]?.includes('the file is dirty. Nothing else'), `the sentence is not "reason. Nothing else": ${run.failures[0]}`);
+  assert.ok(!run.failures[0]?.includes('..'), `the failure sentence has a double period: ${run.failures[0]}`);
+});

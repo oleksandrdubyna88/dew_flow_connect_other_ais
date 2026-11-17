@@ -25,6 +25,10 @@ const WANTED = [THEIRS, 'coai.askFromTerminal', 'coai.goToFromTerminal'];
 
 const userValue = (): unknown => vscode.workspace.getConfiguration(SECTION).inspect<unknown>(SETTING)?.globalValue;
 
+/** Whether the bound memory holds an `added` row for every one of the wanted ids — written only after the read-back saw them. */
+const rememberedAsAdded = (memory: unknown): boolean =>
+  Array.isArray(memory) && WANTED.slice(1).every((id) => memory.some((row: { id?: unknown; answer?: unknown }) => row.id === id && row.answer === 'added'));
+
 export async function theSkipListAddAppendsToTheUserSettingOnce(): Promise<void> {
   const extension = vscode.extensions.getExtension<CoaiExports>('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
@@ -47,9 +51,20 @@ export async function theSkipListAddAppendsToTheUserSettingOnce(): Promise<void>
     assert.deepEqual(userValue(), WANTED, 'the real inspect().globalValue is not the person\'s entry first and the two ids after it, once each');
     assert.equal(asks, 1, `the offer was shown ${asks} times for one list, not once`);
 
+    // The memory is written after the read-back saw the ids in the real user value: its added rows are the proof that the read-back passed.
+    await until(() => rememberedAsAdded(door.memory.read()), 'the answer was never remembered as added for both ids, so the write was not read back');
+
     await door.check();
     assert.equal(asks, 1, 'the offer came back after the ids were added');
     assert.deepEqual(userValue(), WANTED, 'a second check changed the user value');
+
+    // Now the LIST asks again (the ids are gone from it) and only the MEMORY can say no: the listener and an explicit check both run.
+    await vscode.workspace.getConfiguration(SECTION).update(SETTING, [THEIRS], vscode.ConfigurationTarget.Global);
+    await until(() => JSON.stringify(userValue()) === JSON.stringify([THEIRS]), 'the user value never went back to the person\'s entry alone');
+    await door.check();
+    await new Promise((settle) => setTimeout(settle, 500)); // NOSONAR — lets the change listener's own check finish
+    assert.equal(asks, 1, 'the offer came back for ids the person had already answered: the memory did not stop it');
+    assert.deepEqual(userValue(), [THEIRS], 'a remembered answer did not stop a second write of the ids');
   } finally {
     door.replaceAsk(undefined);
     await vscode.workspace.getConfiguration(SECTION).update(SETTING, savedValue, vscode.ConfigurationTarget.Global);
