@@ -441,22 +441,16 @@ public static class RoundMachine
         // failed — one vendor out of quota, the other refusing an untrusted folder — so no
         // findings arrived and the round answered 'proceed'. A panel that did not review is not a
         // panel that approved; an empty result set is the ABSENCE of evidence, not evidence of
-        // absence. One answer is enough to judge on; none is a person's call.
-        if (reviewers.Answered == 0)
-        {
-            // Under policy auto nobody is asked either: the stage proceeds WITHOUT a review, and says so (AutoVerdicts).
-            return s.Config.IsAutonomous ? AutoVerdicts.NobodyAnswered(s, gate, reviewers, roundsRun, awaiting) : new Transition.Ok(
-                // AwaitingResolve stays TRUE even though there are no findings to decide on: the
-                // round completed, and `resolve` is the only door a human's "proceed" can come
-                // through. With it false the verdict was unresolvable — the gate answered
-                // call_human and then refused the human, which is a dead end rather than a gate.
-                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, HumanGate = true },
-                new RoundVerdict.CallHuman(
-                    gate,
-                    reviewers,
-                    $"no reviewer answered — nothing was reviewed. {reviewers.Sentence}"));
-        }
+        // absence. One answer is enough to judge on; none is a person's call — or, under policy auto,
+        // the stage proceeds WITHOUT a review and says so (RoundCompletion, AutoVerdicts).
+        return reviewers.Answered == 0
+            ? RoundCompletion.NobodyAnswered(s, gate, reviewers, roundsRun, awaiting)
+            : Judged(s, gate, reviewers, roundsRun);
+    }
 
+    /// <summary>A round some reviewer answered: passed, revised, or its rounds exhausted.</summary>
+    private static Transition Judged(SessionState s, GateResult gate, ReviewerSummary reviewers, int roundsRun)
+    {
         if (gate.Passed)
         {
             return new Transition.Ok(
@@ -516,11 +510,7 @@ public static class RoundMachine
         }
 
         // At its cap with a ground: a person under every policy but auto, which decides and says what it decided.
-        return s.Config.IsAutonomous
-            ? AutoVerdicts.FeatureAtItsCap(next, gate, reviewers, ground, roundsRun, awaiting)
-            : new Transition.Ok(
-                next with { HumanGate = true, SecondRound = SecondRoundGround.None },
-                new RoundVerdict.CallHuman(gate, reviewers, FeatureCallHumanReason(ground, gate, reviewers, roundsRun)));
+        return RoundCompletion.FeatureAtItsCap(s, next, gate, reviewers, ground, roundsRun, awaiting);
     }
 
     /// <summary>

@@ -126,22 +126,18 @@ public abstract record AskDecision
 /// </remarks>
 public static class AskGate
 {
-    public static AskDecision Decide(AskGateInput input)
-    {
-        if (input.ProductionRisk && string.IsNullOrWhiteSpace(input.RiskReason))
-        {
-            return new AskDecision.Refused(
-                "productionRisk needs a riskReason — say in one sentence what a wrong answer could do to production. "
-                + "Without it the question is an ordinary one, and goes through the question consultant like any other in its phase");
-        }
+    public static AskDecision Decide(AskGateInput input) =>
+        RiskWithoutAReason(input) ? new AskDecision.Refused(NeedsAReason)
+        : input.Autonomous ? Autonomously(input)
+        : AsksNoConsultant(input) ? new AskDecision.Allowed(string.Empty, Counted: false, ConsultBeside: false)
+        : Building(input);
 
-        if (input.Autonomous)
-        {
-            return Autonomously(input);
-        }
+    /// <summary>A production risk with no reason is refused in every mode and under every policy, before anything else is asked.</summary>
+    private static bool RiskWithoutAReason(AskGateInput input) => input.ProductionRisk && string.IsNullOrWhiteSpace(input.RiskReason);
 
-        return AsksNoConsultant(input) ? new AskDecision.Allowed(string.Empty, Counted: false, ConsultBeside: false) : Building(input);
-    }
+    private const string NeedsAReason =
+        "productionRisk needs a riskReason — say in one sentence what a wrong answer could do to production. "
+        + "Without it the question is an ordinary one, and goes through the question consultant like any other in its phase";
 
     /// <summary>
     /// Policy auto (O3) — the person is never asked first. A held gate's card is answered by the service at once, so no consultant
