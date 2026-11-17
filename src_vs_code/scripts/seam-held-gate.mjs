@@ -111,7 +111,9 @@ async function theLeg({ scope, start, answerOf, fakeCli }) {
   const settings = { ...DEFAULTS, onExhausted: 'human', thresholds: { ...DEFAULTS.thresholds, PlanCritique: 0 } };
   writeFileSync(join(root, 'settings.json'), serverSettingsJson(settings, vendorsFrom([{ ...ROW, executablePath: fakeCli }]), '9.9.9'), 'utf8');
 
+  // The leg must hold because of the FILE alone: an inherited COAI_* (a person's COAI_ON_EXHAUSTED, say) is removed, bar the one set here.
   const session = start({
+    ...inheritedCoaiKeysRemoved(),
     COAI_DATA_DIR: root,
     HOME: home,
     USERPROFILE: home,
@@ -134,6 +136,11 @@ async function theLeg({ scope, start, answerOf, fakeCli }) {
   if (released.why !== '') return { why: released.why };
 
   return { why: '', decisions: offered.decisions, stage: released.stage };
+}
+
+/** Every COAI_* key this process inherited, each mapped to `undefined` — which `sessionsFor` takes as "remove it". */
+function inheritedCoaiKeysRemoved() {
+  return Object.fromEntries(Object.keys(process.env).filter((key) => key.startsWith('COAI_')).map((key) => [key, undefined]));
 }
 
 /** Claim 1: `open`, then a plan round that ends in `call_human`. Answers why it did not, or `''`. */

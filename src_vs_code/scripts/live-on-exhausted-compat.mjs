@@ -2,7 +2,7 @@
  * current one (todo/PLAN_auto_never_asks_a_person.md § 4.6, E2.S1). No reviewer is run. Build the current server (the
  * Release configuration or Debug) and compile the extension first (`npm run test:on-exhausted-compat` compiles). Set
  * COAI_OLD_SERVER or pass --tag=mcp-v0.65.4; --new=<path> names the current binary when it is not in the usual build
- * folder. Exit 2 means a binary could not be obtained, or the released one already knows Auto; it is not a passing
+ * folder. Exit 2 means a binary could not be obtained, a binary did not settle its --features answer, or the released one already knows Auto; it is not a passing
  * compatibility result.
  */
 import assert from 'node:assert/strict';
@@ -57,12 +57,21 @@ const featuresOf = (binary) => readBinaryFeatures(async (args) => {
 
   return { code: reply.code, output: reply.out };
 });
+/** An answer that did not settle (a timeout, a garbled list) says nothing about the binary: no result, not a pass. */
+function unsettled(which, answer) {
+  if (!answer.settled) {
+    console.error(`the ${which} server did not settle --features (${answer.why}). No result.`);
+    process.exit(2);
+  }
+}
 const olderAnswer = await featuresOf(old);
+unsettled('released', olderAnswer);
 if (olderAnswer.features.includes(FEATURES.onExhaustedAuto)) {
   console.error(`The released server ${oldVersion} already knows Auto; pass --tag=mcp-v0.65.4 or older. No result.`);
   process.exit(2);
 }
 const currentAnswer = await featuresOf(current);
+unsettled('current', currentAnswer);
 assert.ok(currentAnswer.features.includes(FEATURES.onExhaustedAuto), 'the current server must list onExhaustedAuto (--features)');
 
 /** `--providers` of one binary over a settings file with exactly this content. */
@@ -81,7 +90,7 @@ const complainsAbout = (reply) => (reply.unrecognised ?? []).some((entry) => JSO
 /** The settings file the extension's OWN writer makes for a pristine panel, given what a binary said. */
 function writtenFor(answer) {
   return serverSettingsJsonWith(DEFAULTS, vendorsFrom([]), {
-    writtenBy: '', installedServerVersion: '', priceOf: () => undefined, features: answer.features, featuresSettled: true,
+    writtenBy: '', installedServerVersion: '', priceOf: () => undefined, features: answer.features, featuresSettled: answer.settled,
   });
 }
 
