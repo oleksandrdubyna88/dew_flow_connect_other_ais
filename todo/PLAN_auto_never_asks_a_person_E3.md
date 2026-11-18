@@ -842,6 +842,14 @@ entry 3.1, so one change stops the parent.
   no consultant can be had"). E3's rule text says what the server does ("a production risk keeps its own path").
   Recommended: record it at promotion as a deviation of E1 against requirement 5. If it is instead read as a change to
   requirement 5 or to E1's done-when 5, it is the second change of epoch 3 and stops the plan.
+  **Decided 2026-11-18 by the coordinator: a wording erratum, not a change** (consultants `df932f5e…`, 2 of 2 for it).
+  § 4.4's `productionRisk: true` row has stood since the plan's first commit (#1007, e829bba8), approved with
+  requirement 5 in the same baseline; what was built follows that row, and nothing built or to be built changes. The
+  conventions precedent is a wording repair that is not counted (`common/plan-change-control.md`;
+  `research/PLAN_plan_change_control_E2.md`, the "every other session sees the stop" repair). It is recorded at the
+  promotion as an erratum of requirement 5 and of § 4.4's parenthesis, and the next extension CHANGELOG entry (E3.S2's
+  patch release) says plainly that a production-risk question keeps its own path and may reach the person without the
+  consultants first. Requirement 5's text is not edited before the promotion.
 - **P4 — E3.S1 edits more of `coai-review-gate.md` than "step 6" (not a change).** The intro sentence `:42-43`, step 4
   and the `consult_first` paragraph are needed for the file to be true under `auto`; they are within the intended story
   "The wording in the four rule files".
