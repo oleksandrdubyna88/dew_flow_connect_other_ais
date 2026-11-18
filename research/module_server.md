@@ -1558,6 +1558,11 @@ prompt names the checkout by its path (`ConsultantPromptInput.Checkout`) and the
 its path; and a consultation whose read-only folder cannot be prepared is refused before the launch
 (`AntigravityConsultant.PrepareAsync`, `vendor-refused` with the reason).
 
+*(Note 2026-11-18, `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`: the hook that answers an agy question row or consultation knows the
+coai folder from where it runs, not from the payload's `cwd`, so a checkout that sorts before the coai folder is readable. It looks at no network or
+device path, and on Windows it denies a `Path` with a `.` or `..` segment. A checkout on a UNC path, a mapped network drive or `\\wsl$\…`
+(on Unix, under `/net/`, `/misc/` or `/Network/`) gets no agy reads. RESULTS_agy_read_file.md §7, SECURITY.md.)*
+
 **What it does not prove.** The scenario tests drive a fake CLI: they prove the block is served, the conversation is
 continued, the tree check runs and the billing; they do not prove the real model writes the block. That is the live
 record, [RESULTS_agy_searches_through_coai.md](RESULTS_agy_searches_through_coai.md).

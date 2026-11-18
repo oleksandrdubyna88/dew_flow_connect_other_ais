@@ -34,6 +34,9 @@ public sealed class TheServerBinaryAnswersTheAgyHookTests : IDisposable
     {
         Directory.CreateDirectory(At("home", ".agents"));
         Put("job-1", "inside.txt");
+        Directory.CreateDirectory(At("job-1", "sub"));
+        Put("aaa", "inside.txt");
+        Put(Path.Combine("home", ".agents"), "hooks.json");
         Put("job-10", "secret.txt");
         Put("outside", "secret.txt");
     }
@@ -85,15 +88,45 @@ public sealed class TheServerBinaryAnswersTheAgyHookTests : IDisposable
         (await Answer("read_file", At("job-1", "leak"))).Should().Be(("deny", PathReason));
     }
 
-    /// <summary>The payload as agy sends it: cwd = the coai folder, workspacePaths = [cwd, root], the Path the model chose.</summary>
-    private string Payload(string tool, string? path, bool oldPayload) => oldPayload
+    [Fact]
+    public async Task S7_TheServerBinary_ReadsARootThatSortsBeforeTheCoaiFolder() =>
+        (await Answer("read_file", At("aaa", "inside.txt"), cwd: At("aaa"), entries: [At("aaa"), At("home")])).Decision.Should().Be("allow");
+
+    [Fact]
+    public async Task S8_TheServerBinary_DeniesTheCoaiFolder_WhereverThePayloadsCwdIs() =>
+        (await Answer("read_file", At("home", ".agents", "hooks.json"), cwd: At("aaa"), entries: [At("aaa"), At("home")])).Should().Be(("deny", PathReason));
+
+    [Fact]
+    public async Task S10_TheServerBinary_DeniesAPathOnANetworkPlace()
+    {
+        var remote = Path.Combine(OperatingSystem.IsWindows() ? @"\\coai-no-such-host\share" : "/net/coai-no-such-host/share", "x.txt");
+
+        (await Answer("read_file", remote)).Should().Be(("deny", PathReason), "this only keeps the routing honest: a child process cannot show that no look was made");
+    }
+
+    [Fact]
+    public async Task S11_TheServerBinary_DeniesADotDotWhereTheOsFoldsText_AndAllowsItElsewhere() =>
+        (await Answer("read_file", Path.Combine(At("job-1"), "sub", "..", "inside.txt"))).Should()
+            .Be(OperatingSystem.IsWindows() ? ("deny", PathReason) : ("allow", string.Empty), "it shows the real flag reaches the rule");
+
+    [Fact]
+    public async Task S9_TheServerBinary_ThatDoesNotRunFromAnAgentsFolder_DeniesAndSaysWhy()
+    {
+        var run = await Run("read_file", At("job-1", "inside.txt"), oldPayload: false, cwd: null, entries: null, workingFolder: At("home"));
+
+        run.Said.Should().Be(("deny", PathReason));
+        run.StdErr.Should().Contain("coai --agy-hook: denied, this hook does not run from its own .agents folder");
+    }
+
+    /// <summary>The payload as agy sends it: cwd = the first of the sorted workspacePaths, the Path the model chose.</summary>
+    private string Payload(string tool, string? path, bool oldPayload, string? cwd = null, string[]? entries = null) => oldPayload
         ? $$"""{"toolCall":{"name":"{{tool}}","args":{} } }"""
         : new JsonObject
         {
-            ["cwd"] = At("home"),
+            ["cwd"] = cwd ?? At("home"),
             ["hookEventName"] = "PreToolUse",
             ["toolCall"] = new JsonObject { ["args"] = new JsonObject { ["Path"] = path }, ["id"] = "call-1", ["name"] = tool },
-            ["workspacePaths"] = new JsonArray(At("home"), At("job-1")),
+            ["workspacePaths"] = new JsonArray([.. (entries ?? [At("home"), At("job-1")]).Select(entry => (JsonNode?)JsonValue.Create(entry))]),
         }.ToJsonString();
 
     /// <summary>Starts the server binary as agy's hook does, for one tool call, and returns its <c>decision</c> and <c>reason</c>.</summary>
@@ -102,7 +135,10 @@ public sealed class TheServerBinaryAnswersTheAgyHookTests : IDisposable
     /// whole tree killed when the bound is exceeded — a server that ignored the argument and started the web host
     /// would otherwise serve for ever and hang the suite.
     /// </remarks>
-    private async Task<(string Decision, string Reason)> Answer(string tool, string? path = null, bool oldPayload = false)
+    private async Task<(string Decision, string Reason)> Answer(string tool, string? path = null, bool oldPayload = false, string? cwd = null, string[]? entries = null, string? workingFolder = null) =>
+        (await Run(tool, path, oldPayload, cwd, entries, workingFolder)).Said;
+
+    private async Task<((string Decision, string Reason) Said, string StdErr)> Run(string tool, string? path, bool oldPayload, string? cwd, string[]? entries, string? workingFolder)
     {
         var exe = Path.Combine(AppContext.BaseDirectory, "coai-server" + (OperatingSystem.IsWindows() ? ".exe" : ""));
         File.Exists(exe).Should().BeTrue($"the test needs the server binary beside it, at {exe}");
@@ -110,13 +146,13 @@ public sealed class TheServerBinaryAnswersTheAgyHookTests : IDisposable
         var answer = await new ProcessLauncher().RunAsync(
             // The literal, not AntigravityReadOnly.HookArgument: the hook files already written on a host name it, so a
             // rename that moved the constant and the routing together must still fail here.
-            new ProcessRequest(exe, ["--agy-hook"], At("home", ".agents")) { StdIn = Payload(tool, path, oldPayload), Timeout = TimeSpan.FromSeconds(60) },
+            new ProcessRequest(exe, ["--agy-hook"], workingFolder ?? At("home", ".agents")) { StdIn = Payload(tool, path, oldPayload, cwd, entries), Timeout = TimeSpan.FromSeconds(60) },
             TestContext.Current.CancellationToken);
 
         answer.TimedOut.Should().BeFalse($"the hook answers in milliseconds and must not start the web host. It said: {answer.StdOut}{answer.StdErr}");
         answer.ExitCode.Should().Be(0, $"the hook always exits 0 and says the decision in JSON. It said: {answer.StdOut}{answer.StdErr}");
         var said = JsonDocument.Parse(answer.StdOut).RootElement;
 
-        return (said.GetProperty("decision").GetString()!, said.TryGetProperty("reason", out var reason) ? reason.GetString()! : string.Empty);
+        return ((said.GetProperty("decision").GetString()!, said.TryGetProperty("reason", out var reason) ? reason.GetString()! : string.Empty), answer.StdErr);
     }
 }

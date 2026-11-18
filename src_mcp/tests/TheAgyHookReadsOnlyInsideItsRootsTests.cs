@@ -14,132 +14,18 @@ namespace CoaiMcp.Tests;
 /// folder it runs from (research/PLAN_the_agy_hook_checks_the_path.md, story S1).
 /// </summary>
 /// <remarks>
-/// <para>The fixture stands the coai folder in as <c>W/home</c> (the payload's <c>cwd</c>); the roots are
-/// <c>W/job-1</c> and <c>W/second</c>. Every deny test first proves, with a control payload, that the fixture is one
-/// the rule accepts — so a deny is the rule speaking, not a rejected fixture. Links are real links
-/// (<see cref="File.CreateSymbolicLink"/>) and skip where the machine cannot make one.</para>
+/// <para>The fixture and its helpers are <see cref="AgyHookFixture"/>'s. The hook knows the coai folder (<c>W/home</c>) from where it runs
+/// (<see cref="HookSite"/>); the payload's <c>cwd</c> is validated and names nothing (<see cref="TheAgyHookKnowsItsOwnFolderTests"/>).</para>
 /// </remarks>
-public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
+public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : AgyHookFixture
 {
-    private readonly TempDir _temp = TempDir.For("coai-agy-hook-paths-");
-    private readonly string _w;
-
-    public TheAgyHookReadsOnlyInsideItsRootsTests()
-    {
-        // Resolved once: on a machine whose temp folder is itself behind a link, the fixture is spelled the way the hook sees it.
-        _w = RealPath.Resolve(_temp.Path) is { Ok: true } real ? real.Path : _temp.Path;
-        Put("home/.agents/hooks.json");
-        Put("job-1/inside.txt");
-        Put("job-1/secret.txt");
-        Put("job-1/sub/deep.txt");
-        Put("job-10/secret.txt");
-        Put("second/b.txt");
-        Put("outside/secret.txt");
-        Put("outside/deeper/x.txt");
-    }
-
-    public void Dispose() => _temp.Dispose();
-
-    // ---------- the fixture ----------
-
-    private string At(string relative) => Path.Combine(_w, relative.Replace('/', Path.DirectorySeparatorChar));
-
-    private string Home => At("home");
-
-    private string Job1 => At("job-1");
-
-    private string Second => At("second");
-
-    private string Inside => At("job-1/inside.txt");
-
-    private string Outside => At("outside/secret.txt");
-
-    private void Put(string relative)
-    {
-        var full = At(relative);
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        File.WriteAllText(full, "text of " + relative);
-    }
-
-    private void Link(string relative, string text, bool folder = false)
-    {
-        try
-        {
-            if (folder)
-            {
-                Directory.CreateSymbolicLink(At(relative), text);
-            }
-            else
-            {
-                File.CreateSymbolicLink(At(relative), text);
-            }
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            Assert.Skip($"this machine cannot create a symbolic link: {e.Message}");
-        }
-    }
-
-    /// <summary>A folder link inside the fixture to the fixture itself, its target spelled as <see cref="TempDir"/> spells it.</summary>
-    /// <remarks>Not <c>_w</c>: where the temp folder is behind a link (macOS: <c>/var</c> → <c>/private/var</c>), the teardown
-    /// walks the unresolved spelling and must recognise the link's target as its own parent, or it stops the deletion
-    /// (<c>LinkTargetLostException</c>, the macOS job of the 0.65.4 release PR). The hook resolves either spelling alike.</remarks>
-    private void LinkToTheFixture(string relative) => Link(relative, _temp.Path, folder: true);
-
-    // ---------- payloads and answers ----------
-
-    /// <summary>The payload as agy 1.5.9 sends it: cwd, hookEventName, toolCall { args { Path }, id, name }, workspacePaths = [cwd, ..roots].</summary>
-    private JsonObject Doc(string? path, string tool = "read_file", string? cwd = null, string[]? roots = null) => new()
-    {
-        ["cwd"] = cwd ?? Home,
-        ["hookEventName"] = "PreToolUse",
-        ["toolCall"] = new JsonObject
-        {
-            ["args"] = new JsonObject { ["Path"] = path },
-            ["id"] = "call-1",
-            ["name"] = tool,
-        },
-        ["workspacePaths"] = new JsonArray([.. Entries(cwd ?? Home, roots ?? [Job1, Second]).Select(entry => (JsonNode?)JsonValue.Create(entry))]),
-    };
-
-    private static IEnumerable<string> Entries(string cwd, string[] roots) => [cwd, .. roots];
-
-    private string Call(string? path, string tool = "read_file", string? cwd = null, string[]? roots = null) =>
-        Doc(path, tool, cwd, roots).ToJsonString();
-
-    private static JsonObject Args(JsonObject doc) => (JsonObject)doc["toolCall"]!["args"]!;
-
-    private static (string Decision, string Reason) Answer(string payload, EntryReader? read = null)
-    {
-        var root = JsonDocument.Parse(AntigravityReadOnly.Decide(payload, read)).RootElement;
-
-        return (root.GetProperty("decision").GetString()!, root.TryGetProperty("reason", out var reason) ? reason.GetString()! : string.Empty);
-    }
-
-    private static void Allowed(string payload, string? why = null, EntryReader? read = null) =>
-        Answer(payload, read).Decision.Should().Be("allow", why ?? payload);
-
-    /// <summary>The control is allowed FIRST, then the payload is denied with the path reason.</summary>
-    private void Denied(string payload, string? control = null, string? why = null, EntryReader? read = null)
-    {
-        Answer(control ?? Call(Inside)).Decision.Should().Be("allow", "the control is the same call with the one thing under test repaired");
-
-        var (decision, reason) = Answer(payload, read);
-        decision.Should().Be("deny", why ?? payload);
-        reason.Should().Be(AntigravityReadOnly.DenyOutsideReason, why ?? payload);
-    }
-
-    private static string Reasonless(string payload)
+    private string Reasonless(string payload)
     {
         var decision = Answer(payload).Decision;
         decision.Should().Be("deny", payload);
 
         return decision;
     }
-
-    /// <summary>A reader that looks at the real disk and answers differently for ONE entry, matched by its last name.</summary>
-    private static EntryReader Standing(string lastName, Func<string, Entry> answer) =>
-        path => Path.GetFileName(path) == lastName ? answer(path) : RealPath.Lstat(path);
 
     // ---------- A: allowed ----------
 
@@ -162,11 +48,7 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
     }
 
     [Fact]
-    public void A3_ADeeperFile_AndADotDotThatStaysInside_AreAllowed()
-    {
-        Allowed(Call(At("job-1/sub/deep.txt")));
-        Allowed(Call(Path.Combine(Job1, "sub", "..", "inside.txt")));
-    }
+    public void A3_ADeeperFile_IsAllowed() => Allowed(Call(At("job-1/sub/deep.txt")));
 
     [Fact]
     public void A4_ALinkInsideTheRoot_ToAFileInsideTheRoot_IsAllowed()
@@ -281,23 +163,10 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
     [Fact]
     public void B12_ARootThatContainsTheCoaiFolder_StillDoesNotOpenIt()
     {
-        var wide = new[] { _w };
+        var wide = new[] { W };
 
         Denied(Call(At("home/.agents/hooks.json"), roots: wide), control: Call(Inside, roots: wide));
         Allowed(Call(At("job-10/secret.txt"), roots: wide));
-    }
-
-    [Fact]
-    public void B13_TheCwdAndAnEntryNamingOneFolderThroughALink_AreTheSameFolder()
-    {
-        LinkToTheFixture("via");
-        var viaHome = At("via/home");
-
-        var spelledAsLink = new[] { Home, Job1 };
-        Denied(Call(At("home/.agents/hooks.json"), cwd: viaHome, roots: spelledAsLink), control: Call(Inside, cwd: viaHome, roots: spelledAsLink));
-
-        var reverse = new[] { viaHome, Job1 };
-        Denied(Call(At("home/.agents/hooks.json"), cwd: Home, roots: reverse), control: Call(Inside, cwd: Home, roots: reverse));
     }
 
     [Fact]
@@ -516,7 +385,7 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
         var (_, reason) = Answer(Call(Outside));
 
         reason.Should().Be("coai: this consultation reads only inside the folders it was given");
-        reason.Should().NotContain(_w).And.NotContain("secret");
+        reason.Should().NotContain(W).And.NotContain("secret");
     }
 
     [Fact]
@@ -526,7 +395,7 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
         {
             using var output = new StringWriter();
 
-            AntigravityReadOnly.RunHook(new StringReader(payload), output).Should().Be(0);
+            AntigravityReadOnly.RunHook(new StringReader(payload), output, Site()).Should().Be(0);
 
             JsonDocument.Parse(output.ToString()).RootElement.GetProperty("decision").GetString().Should().Be(expected);
         }
@@ -575,7 +444,7 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
     {
         using var output = new StringWriter();
 
-        AntigravityReadOnly.RunHook(new StringReader("""{"toolCall":{"name":"\uD800"}}"""), output).Should().Be(0);
+        AntigravityReadOnly.RunHook(new StringReader("""{"toolCall":{"name":"\uD800"}}"""), output, Site()).Should().Be(0);
 
         var root = JsonDocument.Parse(output.ToString()).RootElement;
         root.GetProperty("decision").GetString().Should().Be("deny");
@@ -587,7 +456,7 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
     {
         using var log = new StringWriter();
 
-        var answer = AntigravityReadOnly.Decide("""{"toolCall":{"name":"\uD800","args":{"Path":"/secret/place"}}}""", log: log);
+        var answer = AntigravityReadOnly.Decide("""{"toolCall":{"name":"\uD800","args":{"Path":"/secret/place"}}}""", Site(), log: log);
 
         JsonDocument.Parse(answer).RootElement.GetProperty("decision").GetString().Should().Be("deny");
         log.ToString().Should().Be("coai --agy-hook: denied after InvalidOperationException" + Environment.NewLine);
@@ -599,7 +468,7 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
         using var log = new StringWriter();
         var payload = Call(Inside).Replace("inside.txt", "inside" + LoneSurrogate + ".txt", StringComparison.Ordinal);
 
-        AntigravityReadOnly.Decide(payload, log: log).Should().Contain(AntigravityReadOnly.DenyOutsideReason);
+        AntigravityReadOnly.Decide(payload, Site(), log: log).Should().Contain(AntigravityReadOnly.DenyOutsideReason);
 
         log.ToString().Should().Be("coai --agy-hook: denied after InvalidOperationException" + Environment.NewLine);
     }
@@ -609,8 +478,8 @@ public sealed class TheAgyHookReadsOnlyInsideItsRootsTests : IDisposable
     {
         using var log = new StringWriter();
 
-        AntigravityReadOnly.Decide(Call(Inside), log: log).Should().Contain("allow");
-        AntigravityReadOnly.Decide(Call(Outside), log: log).Should().Contain("deny");
+        AntigravityReadOnly.Decide(Call(Inside), Site(), log: log).Should().Contain("allow");
+        AntigravityReadOnly.Decide(Call(Outside), Site(), log: log).Should().Contain("deny");
 
         log.ToString().Should().BeEmpty();
     }

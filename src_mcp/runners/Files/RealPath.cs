@@ -59,7 +59,7 @@ public readonly record struct RealPathResult(bool Ok, string Path, string Why)
 /// absolute target restarts at its own root (another drive or share is fine for RESOLVING; whether it is a place the caller may
 /// use is the caller's decision on the final path), a relative one continues from the link's directory. <c>.</c> is skipped, and
 /// <c>..</c> goes to the parent of the path resolved SO FAR — never above its root — which is the parent the disk would use,
-/// not the one the text suggests.</para>
+/// not the one the text suggests. That is the Unix rule, the parent a Unix kernel uses. Win32 folds <c>.</c> and <c>..</c> as TEXT before it follows any link, so a caller that authorises a spelling for another program to open on Windows must refuse dot segments itself, as the agy hook does (research/RESULTS_agy_read_file.md §7); this rule does not change.</para>
 /// <para><b>A segment that is not there ends the walk, and a <c>..</c> after it fails.</b> Nothing below a missing entry
 /// exists, so the rest is appended as written (once, not re-resolved). But the kernel answers ENOENT for <c>missing/..</c>, and
 /// a lexical pop would answer the folder that holds <c>missing</c> — so a link text <c>nonexistent/../evil</c> would resolve to
