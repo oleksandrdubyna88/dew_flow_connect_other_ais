@@ -1,8 +1,8 @@
 # PLAN — the agy read-only hook on Windows folds `..` as text and never opens a network path
 
 > Status: **plan only, nothing implemented yet, 2026-11-16; plan gate `proceed` 2026-11-18 (session 6830eaba, 2 reviewers, 4 findings accepted and folded in: §2 "Gate round 1"); allowed over the PR cap by the owner on 2026-11-18.** Scope: `src_mcp/runners/Files/RealPath.cs` (or the hook's call of it),
-> `src_mcp/runners/Reviewers/AntigravityReadOnly.cs`, their tests, and the documents that list the hook's limits. Windows only; Linux,
-> the Team server and WSL are not affected.
+> `src_mcp/runners/Reviewers/AntigravityReadOnly.cs`, their tests, and the documents that list the hook's limits. W1 and W2 are Windows
+> only. W3 (change 1.1) affects every OS, the Team server included, as a latent denial.
 >
 > Found by the Opus review of the parent plan's branch, 2026-11-16; parent:
 > [PLAN_the_agy_hook_checks_the_path.md](../research/PLAN_the_agy_hook_checks_the_path.md). The parent's path check ships with these two gaps stated as
@@ -72,10 +72,15 @@ No deployment of today is hit:
 
 A root at `/data/…`, `/code/…` or `~/.cache/…`, or one at `C:\Projects\…` or `…\AppData\Local\Temp\…` on Windows, is hit.
 
-The fix direction: the hook identifies the coai folder by itself, not from the payload. It is the folder the launcher prepared for this
-binary (`AntigravityReadOnly.DefaultBase` and `HookHandler.Key()`). The hook process also runs in its `.agents` subfolder. The roots are
-every `workspacePaths` entry except that folder, resolved. A path inside that folder is denied. The payload's `cwd` is no longer
-trusted for this.
+The fix direction: the hook identifies the coai folder by itself, not from the payload. It is the parent of the hook process's own
+working folder. agy starts the hook's relative command (`sh ./coai-hook.sh`, `.\coai-hook.cmd`) in the folder's `.agents` subfolder,
+so the command only runs from there. The roots are every `workspacePaths` entry except that folder, resolved. A path inside that
+folder is denied, and an undeterminable folder denies. The payload's `cwd` is no longer trusted for this.
+
+(Corrected the same day, within change 1.1, with the same cause. This paragraph first named the launcher's
+`AntigravityReadOnly.DefaultBase` and `HookHandler.Key()`. That does not hold: the S1 spec shows the hook process's `DefaultBase` differs
+from the launcher's on the Team server, where each vendor slot has its own `HOME`, and on a question row whose environment drops
+`XDG_DATA_HOME`.)
 
 ### The Windows measurement of step 1 (2026-11-18, agy 1.5.11 and coai-mcp 0.66.0 on this machine's Windows host)
 
@@ -184,3 +189,40 @@ The plan was approved with these four. They are part of the approved plan, not c
 - [ ] `RealPath.cs` ~61's remark is correct.
 - [ ] The Windows limits in `SECURITY.md`, `RESULTS_agy_read_file.md` §6 and the changelog are replaced by a dated note, history kept.
 - [ ] The plan is promoted to `research/` with its deviations recorded.
+
+## Epics
+
+One epic: one branch, one pull request, the coai code gate once. The split adds no scope. Every story is a box of the Definition
+of Done above, and the three stories change one function (`AntigravityReadOnly.Decide`) and one test fixture. Half of them released
+alone would leave a hook that is still wrong on one OS. Cornerstone quota: Q = ⌈2·1/5⌉ = 1.
+
+*Question consultants (2026-11-18, two vendors), asked before this split; each point checked against the code.* Both said one
+epic. What is important, as areas:
+- **(a) Locality where the disk is touched.** The guard belongs on the reader the hook hands to `RealPath`, not on the spelling of
+  `Path`: a local junction can point at a share. `RealPath` can finish a bare root with no look at all, so the resolved result is
+  checked too. The proof is a recording reader that sees no look, not a timing.
+- **(b) The spelling the hook authorises is the spelling Windows reads.** Dot segments are refused in `Path` on Windows.
+  `RealPath`'s shared `..` rule does not change.
+- **(c) A real Windows run**, with the real hook and a real junction, where the hook's own denial is seen and not agy's.
+
+*Added by this split:* **(d) the hook's own folder** (W3, change 1.1). It is the defect people meet, on every OS. The stories
+document decides how the hook knows the folder, with what each launch path gives the hook process.
+
+Cornerstones: 1 of 1 — E1.S2
+
+### E1 — The hook knows its own folder, looks only at local paths, and refuses a spelling Windows reads elsewhere · depends on nothing
+
+- **Stories document.** [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md),
+  written 2026-11-18 with one spec per story. All three are security stories, so each spec is Fable's; code by Sonnet, review by Opus.
+- **Goal.** The agy hook allows a reader exactly where coai granted it, on every OS: in every granted root wherever it sorts, never
+  in coai's own folder, never by looking at a network or device path, and never on a spelling that Windows opens somewhere else.
+- **Stories.**
+  - **S1 — the hook knows its own folder** (W3, area d). The coai folder is the parent of the hook's working folder; the payload's
+    `cwd` names nothing; an unknown folder denies.
+  - **S2 — CORNERSTONE: the hook looks only at local paths** (W2, gate findings 1 and 2, area a). One guarded reader, and every
+    resolved path local. Its failure is silent and cannot be taken back, so the proof design is the cornerstone.
+  - **S3 — no dot segment where text folds, the documents, and the real Windows run** (W1, gate findings 3 and 4, areas b and c).
+- **Done when.** Every box of the Definition of Done above is ticked: the three specs' rows are green on Linux and on the Windows
+  job, each red-again table is observed in the pull request, the existing scenarios still pass, S1's Linux run and S3's Windows run
+  are in `research/RESULTS_agy_read_file.md` (or the documents say what was not run, and the Windows limits stay), and the limits in
+  `SECURITY.md`, the RESULTS file and the changelog say what is true.
