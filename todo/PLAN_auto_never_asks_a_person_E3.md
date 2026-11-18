@@ -279,10 +279,11 @@ New:
    which you declined. Verdict `escalated` → apply the named step and run a fresh round.
 
    Verdict `call_human` → surface the open findings to the person and stop.
-   **Do not proceed on your own judgement.** It comes only from a policy for *When the rounds run
-   out* that asks a person. Under `auto` — the default of every server that knows it — this gate
-   asks nobody: a plan, code or document round nobody answered ends `not_reviewed`, spent rounds end
-   `good_enough`, and no hold is raised. So `call_human` is the operator's choice: `human` or another
+   **Do not proceed on your own judgement.** It comes only under a policy other than `auto`:
+   `human` (and `escalate`, once its ladder is spent) when the rounds run out, and any other value
+   when nobody answered or a feature review reached its cap. Under `auto` — the default of every
+   server that knows it — this gate asks nobody: a plan, code or document round nobody answered ends
+   `not_reviewed`, spent rounds end `good_enough`, and no hold is raised. So `call_human` is the operator's choice: `human` or another
    value they set, including one a repository's workspace settings keep in force — or a server too
    old to know `auto`, which still asks a person by default.
 
@@ -313,7 +314,8 @@ only when the session records one (`AskUnderAuto.cs:50-53`).
    when one is recorded: tell the person, and stop as above. Any other hold from a build that predates
    `auto` is released by the next call that reads it. The next review call says so (or why it could
    not be released yet: call again), and `status` shows it in the held round's note; `ask_human`'s
-   reply says nothing about a release. Then call `resolve` once — with your decisions, or none — and
+   reply says nothing about a release that went through. One it could not write yet is answered
+   `no_answer_yet` with the reason: call again. Then call `resolve` once — with your decisions, or none — and
    the stage advances.
 ```
 
@@ -431,6 +433,26 @@ third. Under policy `auto` the person cannot ask for a second round, so only the
   release, and it is never a pass.
 ```
 
+**(c2) The `proceed` or `good_enough` bullet itself, `:57-61` (added after the S1 judge, 2026-11-18).** "On
+`good_enough` the findings gate but none is blocking" is not true under `auto` at the cap: `AutoVerdicts.FeatureAtItsCap`
+(`AutoVerdicts.cs:40-50`) ends the review `good_enough` whenever a reviewer answered, whatever the second round still
+carries (a `blocking` finding included). Without a sentence the file contradicts itself under `auto` — the parent's
+done-when 2, "no wider promise". The bullet's last sentences, now:
+
+```markdown
+  rewriting merged epics, and reject the rest with reasons. Your summary says what you took and what
+  you declined.
+```
+
+New:
+
+```markdown
+  rewriting merged epics, and reject the rest with reasons — except under policy `auto` at the cap,
+  where `good_enough` can carry a `blocking` finding the second round did not clear: land it as a NEW
+  pull request like the rest and name it in your summary. Your summary says what you took and what
+  you declined.
+```
+
 **(d) `:68-71`, the person's request.** Now:
 
 ```markdown
@@ -499,6 +521,9 @@ Under policy `auto` the floor rises to this rule's bar: in every phase, your own
 `consultId` the server accepts is answered `consult_first`, unless no consultant can be had or it is a
 production risk.
 ```
+
+(The paragraph is reflowed around the insertion, so no line is left short: the whole of `:20-26`, from
+"`ask_consultants` first." to "decide.", is re-wrapped at the file's usual width and its words are the old ones.)
 
 **(c) Step 6, `:53-56`.** Now:
 
@@ -576,7 +601,7 @@ Under `auto` the same decision is taken (`:155`), except that a held round's car
   asks the consultants itself and returns their answers in `consultantAnswers` — show those beside your
   question. While the plan is being formed, after the release, with the question consultants switched
   off, or when none can be had, it reaches the person at once with no consultant, under every policy.
-  On a round held under policy `auto` it writes no card: the hold is answered `no_answer_yet` at once.
+  On a held round, while the policy is `auto`, it writes no card: the hold is answered `no_answer_yet` at once.
 ```
 
 **(g) After `:68`, the workflow step.** `:66-68` say a skill's or workflow's step that asks the person still asks. Under
@@ -584,7 +609,7 @@ Under `auto` the same decision is taken (`:155`), except that a held round's car
 no notion of a workflow step). One sentence is added at the end of that bullet:
 
 ```markdown
-  Under policy `auto` `mcp__coai__ask_human` answers such a question `consult_first` too, when it brings
+  Under policy `auto`, `mcp__coai__ask_human` answers such a question `consult_first` too, when it brings
   no accepted `consultId` and a consultant can be had: consult once for the step's batch, then bring the
   `consultId` and put the step's questions to the person.
 ```
@@ -663,7 +688,7 @@ Its content, carried over rather than linked (cross-repository citations are pat
 here, in a paragraph); the source, cited as `dew_flow_connect_other_ais · todo/PLAN_auto_never_asks_a_person.md`
 § *E3* and this document; the wording of § 4.1–4.4 as a table of file · lines · what changes; § 4.5's markers; § 4.6's
 checks; the two-way reading of § 4.8 in brief; the release, the promotion pre-checks and the nine bumps of § 5.1–5.2;
-a Definition of Done that includes § 5.4a's post-deploy run against a bumped consumer. Its ledger opens at its first approval (its plan round's first passing verdict).
+a Definition of Done that includes § 5.4a's post-deploy run against a bumped consumer. Its ledger opens at its first approval (its plan round's first passing verdict): `## Plan changes` and `> Epoch 1 · approved <date> · by reviewers · state: open` directly under the status block, no entries — the plan round's own accepted findings and the judge's, folded in the commit that records the approval, are not changes (§ 8).
 
 **A boundary on both sides.** `todo/PLAN_product_manuals_go_home.md` has `common/coai-review-gate.md` and
 `common/coai-document-gate.md` in its scope and plans to move "tool names, arguments, verdict words" to the product. The
@@ -671,8 +696,10 @@ new plan carries, and the older plan gains as a section of its own (a boundary, 
 
 | Item | Built by | The other plan's part |
 |---|---|---|
-| The verdict and status words for `auto` (`not_reviewed`, `consult_first`) in the four coai rules | the new plan (E3 of the coai plan) | when it runs, moves them with the rest of the protocol; the server already carries them on its own surfaces (instructions and tool texts, coai-mcp 0.66.0) |
-| Merging `coai-caller-model.md` and `coai-document-gate.md` back, their "frozen" blockquotes | `PLAN_product_manuals_go_home.md`, step 4 | none — the new plan leaves both blockquotes as they are |
+| The verdict and status words for `auto` (`not_reviewed`, `consult_first`) in the four coai rules | the new plan (E3 of the coai plan) | for `coai-review-gate.md` and `coai-document-gate.md`, the two that plan names: when it runs, moves them with the rest of the protocol. The feature and question rules are outside that plan. |
+| Merging `coai-caller-model.md` and `coai-document-gate.md` back (which removes the blockquotes), and their "frozen" blockquotes | `PLAN_product_manuals_go_home.md`, step 4 | none — the new plan leaves both blockquotes as they are |
+
+(The same table, seen from its own side, is a section of the new plan too: `common/planning-docs.md` asks for the table in both documents.)
 
 Order: the new plan first (it edits in place); the manuals plan later moves whatever is there. Disjoint otherwise.
 
@@ -689,7 +716,7 @@ match their text.
 | gate step 4 names `revise` and `proceed`; document step 4 lists no `not_reviewed` | `not_reviewed` arrives with its instruction (`RoundEngine.cs:954-962`), and the server instructions name it (`Program.cs:2452`) | silent, not contradicted: the reply says what to do |
 | gate step 6, `call_human` → stop, `ask_human`, the hold | never `call_human` under `auto` | the step never fires |
 | gate step 6, "Call `ask_human`. Their answer decides", on a hold the person owns (raised under a policy asking a person by a server that knows `auto`, or a hold from before `auto` the person already answered) | `no_answer_yet` at once, naming the notice when one is recorded | the old text expects a wait; the reply comes at once and says the same thing to do — the person answers on the notice |
-| the same step on a hold from before `auto` that nobody answered | released by the first call that reads it; a review call answers with the release's sentence; `ask_human`'s reply is silent about it (§ 4.1, what (e) rests on) | the old text says to ask the person; an AI that calls `ask_human` first gets `consult_first` or the conversation door for its question and no word of the release, and learns it at its next review call or `status`. Nothing is passed wrongly: one `resolve` is still needed to advance. Recorded as an E1 residual, § 9 P6 |
+| the same step on a hold from before `auto` that nobody answered | released by the first call that reads it; a review call answers with the release's sentence; `ask_human`'s reply is silent about a release that went through, and answers `no_answer_yet` with the reason for one it could not write yet (§ 4.1, what (e) rests on) | the old text says to ask the person; an AI that calls `ask_human` first gets `consult_first` or the conversation door for its question and no word of the release, and learns it at its next review call or `status`. Nothing is passed wrongly: one `resolve` is still needed to advance. Recorded as an E1 residual, § 9 P6 |
 | question `:66-68`, a workflow step's questions go to the person | `consult_first` for them too, without an accepted `consultId` while a consultant can be had | the old text does not say to consult first for them; the reply says so, and the questions reach the person after one consultation |
 | feature `:68-71`, the person's request as a third ground; question `:60-62`, the request "on a card directly" | under `auto` the request is answered at once: no second round on request, the review closes on `resolve` (`AskUnderAuto.cs:17-19`) | **the one stale promise**: the AI asks, is told at once, and resolves. Nothing waits and nothing passes that should not; the PR names it as the window's residual |
 | feature `:72-74`, `call_human` at the cap | `good_enough`, or `not_reviewed` when nobody answered | the old sentence describes another policy; under `auto` it never fires and the reply instructs |
@@ -704,13 +731,14 @@ match their text.
 | step 6, `not_reviewed` → … ; feature and document `not_reviewed` | never emitted; nobody answering is `call_human` there | the step never fires; the `call_human` step after it is still there and true |
 | "Under `auto` — the default of every server that knows it — this gate asks nobody … or a server too old to know `auto`, which still asks a person by default" | knows no `auto`; asks a person | true as written: the clause names this server |
 | "Under `auto` this call never waits …"; `consult_first`; "Under policy `auto` the floor rises …"; "only the first two grounds remain" | never under `auto` | conditional on `auto`; never fires. The old blocking behaviour is still what `ask_human`'s own reply describes |
+| the question rule's production-risk sentence: while the plan is being formed, after the release, with the question consultants off, or when none can be had, `productionRisk` reaches the person at once with no consultant, "under every policy" | at `mcp-v0.65.4` `AskGate.AsksNoConsultant` (`:170-172`) lets such a question through in every phase but building or with the mode off, and `Risk` (`:179-180`) asks the person at once when no consultant could be asked (`git show mcp-v0.65.4:src_mcp/core/QuestionConsult/AskGate.cs`) | true unconditionally: the one new sentence that does not depend on `auto`, and what the older server does |
 
 No sentence of either text tells an AI to do the opposite of what the server it meets will do; the one stale
 sentence (A, the person's request) is answered by the reply at once.
 
 ### 4.9 Done when
 
-- [ ] The four files carry § 4.1–4.4 word for word (a reviewer's accepted finding may change a word; it is recorded in
+- [ ] The four files carry § 4.1–4.4 word for word, as revised on 2026-11-18 after the S1 judge (§ 8; the blocks above are the revised ones; a reviewer's accepted finding may change a word; it is recorded in
       the conventions PR and, if it widens or narrows a promise, put to the coordinator before it is accepted).
 - [ ] The markers are v6, v4, v4, v2; `research/rule-bodies.json` moved in the same commit; § 4.6 steps 1–7 green, each
       RED seen first; step 8 run and its result in the PR; step 9 read.
@@ -927,7 +955,8 @@ Nothing in E3 waits for an `mcp-v*` release, and E3 ships none.
   plan's own § 4.7 change makes them false.
 - The extension release that carries the snippet is the patch release after the feature review (N1: "which extension
   release carries the regenerated snippet").
-- The conventions plan is a new `todo/` plan with a boundary section in the manuals plan (§ 4.7).
+- The conventions plan is a new `todo/` plan with a boundary section in the manuals plan (§ 4.7), and the same table in the new plan.
+- The S1 judge's finding 3 adds one feature-gate sentence (§ 4.3 (c2): `good_enough` at the cap under `auto` can carry a `blocking` finding) because the file otherwise contradicts itself under `auto` — the parent's "no wider promise" / done-when 2 requires it; it satisfies the plan as written, so it is not a change. The judge's other findings (§ 4.1 (d) and (e), § 4.4 nits, the plan's boundary, ledger and line ranges, the PR body) are wording or accuracy fixes of the same kind. The conventions plan's ledger opens at the plan round's approval with no entry.
 
 ## 9. Findings for the parent plan
 
