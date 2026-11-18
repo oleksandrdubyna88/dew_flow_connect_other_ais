@@ -326,7 +326,9 @@ only when the session records one (`AskUnderAuto.cs:50-53`).
 **Your OWN question to `ask_human`** — not one this gate asks — is answered `consult_first` under
 `auto` when it brings no `consultId` the server accepts, unless no consultant can be had or it is a
 production risk: call `ask_consultants`, settle it with them, and call `ask_human` again with their
-`consultId` only for what you did not settle; then it reaches the person (`ask_in_conversation`).
+`consultId` for what you did not settle and for what the question rule always sends to the person
+(an action outside this working copy, a change to the person's machine, a pure preference); then it
+reaches the person (`ask_in_conversation`).
 When no consultant can be had it reaches the person at once, and its `note` says why. A production
 risk keeps its own path: the question rule, `common.coai-question-consultant`, says which.
 ```
