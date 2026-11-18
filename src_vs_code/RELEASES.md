@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.88.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.87.0...extension-v0.88.0) (2026-11-17)
+
+
+### Features
+
+* **extension:** the chat finds its terminal again, go-to from a terminal, skip-shell health (E3 of the terminal door) ([#1015](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1015)) ([b3abb79](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b3abb7916fa076f2f255c33c5161240f8dc95f00))
+* policy auto — the server never asks a person when the rounds run out (E1 of the auto plan) ([#1011](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1011)) ([92f1fa8](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/92f1fa8f07940d3e4740fb22bfdd1bb3a4591f82))
+
+
+### Bug Fixes
+
+* **extension:** the title fallback asks when its scan did not read every session; R8, R10, R11 recorded ([#1019](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1019)) ([b717335](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b717335975041d47fe4dd55a14c75968fefed82c))
+
 ## [0.87.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.86.0...extension-v0.87.0) (2026-11-12)
 
 

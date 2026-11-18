@@ -1,5 +1,23 @@
 # Changelog
 
+## Extension 0.88.0 — 2026-11-18
+
+**Added: after a reload, a `Creds:` chat finds its terminal again.** When VS Code or CredsForDevs brings a `Creds: <host> / <session>` terminal back, the chat of that name is tied to it again. This happens only when exactly one open terminal and exactly one chat carry the name. When a second terminal or a second chat of the name appears before you first use the terminal, the tie is undone, and nothing is guessed. Other terminals stay as in 0.87.0.
+
+**Added: go to a terminal's conversation.** `Ctrl+Alt+G` in a terminal, or **CoAI: go to this terminal's conversation** in the overflow menu (the three dots) of the terminal panel, opens that terminal's chat. If there is no chat yet, it opens the list or offers to start one. A chat is never moved from one open terminal to another of the same name. The road back from a chat (`Ctrl+Alt+G` in a chat) no longer fires while a terminal has focus.
+
+**Added: the terminal keys reach CoAI even with your own skip list.** If your user setting `terminal.integrated.commandsToSkipShell` hides CoAI's two terminal commands, one notification offers **Add**. Only the press writes anything. The two ids are appended after your own entries, and your answer is remembered. A workspace or folder list gets one notice with no button, and CoAI never writes workspace or folder settings. Only the focused window asks.
+
+**Fixed: the title fallback asks when it could not read everything.** When the exact session cannot be found and the session titles are searched, a single match from a scan that stopped early (too many sessions, too slow, or a session skipped) is now offered as a list of one. The list says that not every session on the host was read. Before, that match was taken without asking.
+
+**Known: a rare false "not read back" warning after Add.** In CI, the host scenario for *Add* failed in two of five runs with identical code: the ids were written, but the answer was not remembered. The likely cause is that VS Code still shows the old value right after the write. You may then see "… were written … but the setting does not show them" although the ids are there. A follow-up todo tracks it.
+
+**Rollback:** 0.87.0 reads the same conversations and ignores the remembered skip-list answers. Ids that *Add* wrote stay in your user settings and do no harm there.
+
+**The MCP server to pair it with is `coai-mcp` 0.66.0.** This release also lists *policy auto* (#1011). That change is in the server and the MCP package. In the extension it touched only a test script.
+
+**Not in this release: the extension side of policy Auto.** Server 0.66.0 below says the next extension release resets a chosen *When the rounds run out* value and says so in a notification. That is not 0.88.0: it comes in the extension release after it. Until then, the advice under Server 0.66.0 still holds. To keep a person in the loop, put `COAI_ON_EXHAUSTED=human` in the MCP client's env block.
+
 ## Server 0.66.0 — 2026-11-17
 
 **Added: policy Auto for *When the rounds run out*, now the default. Under Auto the gate never asks a person: it logs and moves on (#1011).** It is meant for an unattended orchestrator, which must never be blocked by the gate. Auto replaces every point where the gate called a person:
