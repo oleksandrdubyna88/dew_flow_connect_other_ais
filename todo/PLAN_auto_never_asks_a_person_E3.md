@@ -544,7 +544,8 @@ New (one sentence added at the end):
    ask the person in this conversation, with your own question tool. Without an accepted `consultId`,
    under policy `auto`, it answers `consult_first` instead and reaches nobody — when a consultant can
    be had and the question is not a production risk: ask the consultants, as above, and come back with
-   the `consultId` only for what they did not settle.
+   the `consultId` for what they did not settle and for the three kinds of step 4, which go to the
+   person whatever the consultants said.
 ```
 
 **(d) `:60-62`.** Now:
@@ -611,8 +612,8 @@ no notion of a workflow step). One sentence is added at the end of that bullet:
 
 ```markdown
   Under policy `auto`, `mcp__coai__ask_human` answers such a question `consult_first` too, when it brings
-  no accepted `consultId` and a consultant can be had: consult once for the step's batch, then bring the
-  `consultId` and put the step's questions to the person.
+  no accepted `consultId`, a consultant can be had and it is not a production risk: consult once for the
+  step's batch, then bring the `consultId` and put the step's questions to the person.
 ```
 
 `questionSnippet.test.ts` keeps passing on its phrases (`:38-68`; "`productionRisk: true` with a `riskReason`" is kept
