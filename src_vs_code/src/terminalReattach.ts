@@ -7,7 +7,7 @@ import type { LiveTerminal } from './terminalSource';
 
 /**
  * Re-attach a conversation to its terminal after a reload — the decision, with no `vscode` in it
- * (todo/PLAN_the_chat_opens_from_a_terminal_E3.md, S1, contract C1).
+ * (research/PLAN_the_chat_opens_from_a_terminal_E3.md, S1, contract C1).
  *
  * <p>A reload gives a restored chat tab a key of its own, and creds brings the terminal back as a NEW object. Nothing joins the
  * two, so the next press of the door would start a second conversation beside the restored one. This module joins them — but

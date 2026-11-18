@@ -266,20 +266,20 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // refusal. The restore never runs on its own — a missing value looks the same whoever removed it.
 // 166 -> 167 on 2026-10-17 (E6 of research/PLAN_kimi_and_vibe_on_linux.md): the Kimi card's *Clear the stuck Kimi marker* says what its one-shot
 // mode answered (`kimi-marker-cleared`, class outcome) — one outcome, routed through `notify`; the press is the only thing that speaks.
-// 167 -> 170 on 2026-11-10 (E1.S3 of todo/PLAN_the_chat_opens_from_a_terminal_E1.md): the terminal door says three things, each a refusal or a
+// 167 -> 170 on 2026-11-10 (E1.S3 of research/PLAN_the_chat_opens_from_a_terminal_E1.md): the terminal door says three things, each a refusal or a
 // failure routed through `notify` — there is no terminal to read (`no-terminal-here`), nothing was selected or the copy failed
 // (`nothing-selected-in-terminal`), and the whole command failed (`terminal-door-failed`).
 // 170 -> 171 on 2026-11-10 (E1 review): a terminal whose name is not an identity — empty, over 500 units, or holding a control
 // character — is refused before its selection is captured (`terminal-name-unusable`), because the chat it would open is saved
 // with no source and so has no road back and no protection against a Claude tab taking it.
-// 171 -> 174 on 2026-11-11 (E2.S3 of todo/PLAN_the_chat_opens_from_a_terminal_E2.md): the road to a terminal's remote Claude session asks the person
+// 171 -> 174 on 2026-11-11 (E2.S3 of research/PLAN_the_chat_opens_from_a_terminal_E2.md): the road to a terminal's remote Claude session asks the person
 // once for each host (`read-remote-session`, a modal confirmation), asks again from the panel's *hosts read over ssh* list
 // (`change-remote-host-answer`, a modal with **Forget**), and says that no host has been asked yet (`no-remote-host-asked`, an outcome) —
 // all three through `notifyAndAsk` / `notify`.
-// 174 -> 177 on 2026-11-11 (E2.S4 of todo/PLAN_the_chat_opens_from_a_terminal_E2.md): the two terminal doors say what they found — a refusal when there is no
+// 174 -> 177 on 2026-11-11 (E2.S4 of research/PLAN_the_chat_opens_from_a_terminal_E2.md): the two terminal doors say what they found — a refusal when there is no
 // question to hand over (`no-question-from-terminal`, one site for both verbs) — and each fails with a fixed sentence and no error text
 // (`question-not-taken-from-terminal`, `question-not-added-from-terminal`).
-// 177 -> 182 on 2026-11-17 (E3.S2 and E3.S3 of todo/PLAN_the_chat_opens_from_a_terminal_E3.md), five sites. S2: go-to pressed in a terminal says there is no
+// 177 -> 182 on 2026-11-17 (E3.S2 and E3.S3 of research/PLAN_the_chat_opens_from_a_terminal_E3.md), five sites. S2: go-to pressed in a terminal says there is no
 // terminal to go from (`no-terminal-for-goto`, a refusal), and its command fails with the same fixed sentence as go-to's (`conversation-not-opened`). S3: the skip-list
 // check of the terminal keys offers **Add** for the person's own user list (`skip-list-hides-terminal-keys`, a `notifyAndAsk`), says once, with no button, that a workspace
 // or folder list hides them (`skip-list-hidden-by-workspace`), and says when the write did not take (`skip-list-not-written`).

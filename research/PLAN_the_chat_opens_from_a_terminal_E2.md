@@ -1,8 +1,9 @@
 # PLAN — E2 stories: the remote Claude session, read over ssh
 
-> Status: **coded and tested on `feat/chat-from-a-terminal-e2` (PR #982), 2026-11-11; plan gate `proceed`, its findings
+> Status: **IMPLEMENTED, 2026-11-18 — promoted with its parent.** Coded and tested on `feat/chat-from-a-terminal-e2` (PR #982), 2026-11-11; plan gate `proceed`, its findings
 > folded in; coai code gate `proceed`. Merged (#982, e060d77e); the owner's R6 and R7 passed on VSIX 0.86.901 (2026-11-12);
-> released from release PR #986 as extension 0.87.0. M-O2…M-O7 not reported yet, still owed.** Epic E2 of
+> released from release PR #986 as extension 0.87.0 on 2026-11-12. Deviations: change 2.1 (the ssh call pins `StrictHostKeyChecking=yes`) and change 2.2
+> (it stopped the plan before E3 code). M-O2…M-O7 were not reported (none is a release condition). Epic E2 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics`, its § *Stage 2*, its
 > § *Security* and its ledger entry 1.1). Written by Opus when the epic started, on `feat/chat-from-a-terminal-e2` from
 > `main` `45b070a2`. A stories document keeps no change ledger: a change to this epic is an entry in the parent (epoch 2,
@@ -276,7 +277,7 @@ Build order and its gates: § 6.
 ### E2.S2 — The remote reader's contract: the ssh argv, the stdin script and the typed result (CORNERSTONE)
 
 `model: fable` — the scenarios, the brief AND the security judgement on the ssh edge are Fable's, in
-`todo/PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md`. The cornerstone counts once against the quota (2 of 2); the
+`research/PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md`. The cornerstone counts once against the quota (2 of 2); the
 security judgement inside it is the security row's, outside the quota. Coder: sonnet · review: opus (of the spec first,
 gate G6; then of the code) · areas (d) and (e).
 
@@ -794,6 +795,7 @@ Open, for the people named:
 - [ ] The pull request merged; **R6 and R7 measured on a VM with the pre-release VSIX of the merged head, before the tag**,
       and recorded in the parent's R-table — R6 with the record that no `ssh` process is left after a read and after a
       killed read.
-- [ ] The extension release cut from `main`: its changelog prose in the release-please pull request, the tag pushed alone,
+- [x] The extension release cut from `main`: its changelog prose in the release-please pull request, the tag pushed alone,
       its run observed.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+      Recorded 2026-11-18: extension 0.87.0 from release PR #986, tag `extension-v0.87.0` on `4efa0a90`, release run 43268314149 (`POST_DEPLOY.md`).
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.

@@ -19,7 +19,7 @@ import {
 } from '../skipShell';
 
 /**
- * The skip-shell check, over its seams (todo/PLAN_the_chat_opens_from_a_terminal_E3.md, S3-T1…T8 and T12).
+ * The skip-shell check, over its seams (research/PLAN_the_chat_opens_from_a_terminal_E3.md, S3-T1…T8 and T12).
  *
  * <p>The road is pure: every effect — the layers of the setting, the offer, the notice, the write, the memory — is a fake that
  * records what it was asked and when. The write target (the user layer) belongs to the host and is held by `skipShellWiring.test.ts`.</p>

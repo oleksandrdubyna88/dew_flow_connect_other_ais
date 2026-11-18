@@ -1,7 +1,7 @@
 # PLAN — E3 stories: the chat finds its terminal again, go-to from a terminal, the skip list
 
-> Status: **written by Opus 2026-11-12 when the epic started; revised 2026-11-13 for the parent's re-review (epoch 2
-> stopped at change 2.2); coai plan gate round 1 `proceed` on 2a2f21fe (session 167eb40d, 0 findings); epoch 3 opened by the owner 2026-11-16; coded and merged (#1015, b3abb791, 2026-11-17; coai code gate `proceed`); the owner's R8, R10 and R11 passed on VSIX 0.87.901 (2026-11-17).** Epic E3 of
+> Status: **IMPLEMENTED, 2026-11-18 — promoted with its parent.** Written by Opus 2026-11-12 when the epic started; revised 2026-11-13 for the parent's re-review (epoch 2
+> stopped at change 2.2); coai plan gate round 1 `proceed` on 2a2f21fe (session 167eb40d, 0 findings); epoch 3 opened by the owner 2026-11-16; coded and merged (#1015, b3abb791, 2026-11-17; coai code gate `proceed`); the owner's R8, R10 and R11 passed on VSIX 0.87.901 (2026-11-17); `review_feature` over E1–E3 `proceed` 2026-11-17, its one Minor finding fixed as change 3.1 in #1019 (b7173359); the owner's smoke on VSIX 0.87.902 passed 2026-11-18; released as extension 0.88.0 on 2026-11-18 (release PR #1013). **Known issue shipped:** the host scenario S3-H1 flakes in CI's real-editor job (the write is not read back at once); the follow-up is [PLAN_the_skip_list_add_reads_back_after_the_write.md](../todo/PLAN_the_skip_list_add_reads_back_after_the_write.md); the parent's status has the runs. Epic E3 of
 > [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (its `## Epics` § *E3*, its § *Stage 3*,
 > the stage-3 rows of its § *Test plan*, its real-window checks R8, R10 and R11, its DoD items 5–7 and its ledger entry 1.1).
 > Written on `feat/chat-from-a-terminal-e3` from `main` `4efa0a90` (extension 0.87.0). A stories document keeps no change
@@ -685,13 +685,16 @@ the parent (§ *What the code does today*, its re-verified list, and the E3 scop
       (the user-setting write) updated; the help in five languages.
 - [x] The pull request merged; **R8, R10 and R11 measured on the pre-release VSIX of the merged head, before the tag**, and
       recorded in the parent's R-table with what § 8 says to record beside them.
-- [ ] `review_feature` run over the three epics after the merge and R8, R10 and R11, and BEFORE the tag (parent change 2.2);
+- [x] `review_feature` run over the three epics after the merge and R8, R10 and R11, and BEFORE the tag (parent change 2.2);
       every finding resolved; an accepted fix that changes the product landed as a new pull request and was verified on a
       new pre-release VSIX.
-- [ ] The extension release cut from `main`: its changelog prose in the release-please pull request, the tag pushed alone,
+      Recorded 2026-11-18: `proceed` on 2026-11-17 with one Minor finding, accepted as change 3.1, fixed in #1019 (b7173359) and verified by the owner on VSIX 0.87.902.
+- [x] The extension release cut from `main`: its changelog prose in the release-please pull request, the tag pushed alone,
       its run observed.
-- [ ] The plan promoted with its deviations — the parent, the three stories documents and the two spec documents together
+      Recorded 2026-11-18: release PR #1013 (squash 5b9ab66c); the tag `extension-v0.88.0` was cut by a release-please dispatch; release run 44360357872 green; Marketplace publish 17:38:57 UTC.
+- [x] The plan promoted with its deviations — the parent, the three stories documents and the two spec documents together
       (parent DoD items 6–7).
-- [ ] The completion question of `post-deploy-checks.md` asked: does E3 change what must be true on the installed extension
+- [x] The completion question of `post-deploy-checks.md` asked: does E3 change what must be true on the installed extension
       that a green build would hide? (R8, R10 and R11 are the manual answer for this release.)
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+      Asked 2026-11-18: no new POST_DEPLOY item — what E3 adds lives in each person's window and settings (re-attach, go-to, the skip list) and no check of the installed extension can see it; R8, R10 and R11 are the manual answer, and item 2 checks the Marketplace serves 0.88.0.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
