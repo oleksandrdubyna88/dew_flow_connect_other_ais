@@ -534,6 +534,9 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.migratedFrom': 'a copy of them as they were',
   // The chat presets' move (E4.6a): its record.
   'coai.chatPresetsMoved': 'remembers which chat presets moved',
+  // The one-time reset of When the rounds run out to Auto (E2.S2): the witness the extension writes, by the words the gate
+  // article uses for it — the words S3's own sentence keeps.
+  'coai.onExhaustedResetToAuto': 'reset to auto once',
 };
 
 test('every command is described in the help, or declared self-evident with a reason', () => {

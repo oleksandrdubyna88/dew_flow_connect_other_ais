@@ -354,13 +354,21 @@
         "coai.onExhausted": {
           "type": "string",
           "enum": [
+            "auto",
             "human",
             "continue",
             "good_enough",
             "escalate"
           ],
-          "default": "human",
-          "markdownDescription": "When rounds run out with findings still gating: `continue` as-is (said out loud), call a `human`, or `escalate` the ladder (reviewer effort → reviewer model → arbiter model)."
+          "enumDescriptions": [
+            "Auto: the gate raises no new hold and never waits for a person; a round nobody answered proceeds as not_reviewed, spent rounds as good_enough, each logged and noted on the round.",
+            "Ask a human: stop and ask you.",
+            "Continue as-is, said out loud.",
+            "Good enough: apply what is true, reject the rest with reasons.",
+            "Climb the ladder: reviewer effort, then reviewer model, then arbiter model."
+          ],
+          "default": "auto",
+          "markdownDescription": "When rounds run out with findings still gating, or nobody answered: `auto` (the default) — the gate raises no new hold and never waits for a person; a round nobody answered proceeds as `not_reviewed`, spent rounds as `good_enough`, each logged and noted on the round, and your AI may still ask you a question its consultants could not settle, or when no consultant can be had; `human` — stop and ask you; `continue` as-is (said out loud); `good_enough` — apply what is true, reject the rest with reasons; `escalate` the ladder (reviewer effort → reviewer model → arbiter model)."
         },
         "coai.maxConcurrency": {
           "type": "integer",
@@ -991,6 +999,10 @@
           ],
           "markdownDescription": "Written by ConnectOtherAIs, not by hand. `migrated`: the consultant and question-consultant models in these settings were moved into the reviewer list (the model catalog). `restored`: they were put back with **ConnectOtherAIs: Restore settings from before the catalog**, and are not moved again by themselves."
         },
+        "coai.onExhaustedResetToAuto": {
+          "type": "string",
+          "markdownDescription": "Written by ConnectOtherAIs, not by hand. It records that **When the rounds run out** in these settings was reset to Auto once. While it is here, a value you choose afterwards is kept — also on the other machines Settings Sync carries your settings to."
+        },
         "coai.chatPresetsMoved": {
           "type": "array",
           "default": [],
@@ -1441,6 +1453,7 @@
     "test:paths-per-side-compat": "npm run compile && node scripts/live-paths-per-side-compat.mjs",
     "test:gauge-compat": "npm run compile && node scripts/live-gauge-compat.mjs",
     "test:command-models-compat": "npm run compile && node scripts/live-command-models-compat.mjs",
+    "test:on-exhausted-compat": "npm run compile && node scripts/live-on-exhausted-compat.mjs",
     "test:vibe-runtime-compat": "npm run compile && node scripts/live-vibe-runtime-compat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
     "measure:image": "npm run compile && node scripts/measure-image.mjs",

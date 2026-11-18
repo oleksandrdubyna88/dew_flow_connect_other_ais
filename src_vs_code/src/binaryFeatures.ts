@@ -18,6 +18,8 @@ import type { Run } from './roundsDbRead';
 export const FEATURES = {
   /** E2.1: `--collect-bugs --runtime <runtime>` — the Bugz ranking model allowed by its row's runtime. */
   bugzRuntime: 'bugzRuntime',
+  /** E1 of the auto plan: the policy auto, the meaning of an absent COAI_ON_EXHAUSTED. */
+  onExhaustedAuto: 'onExhaustedAuto',
   /** E2.2: a row's `systemPrompt`, delivered in the prompt body after the product's instruction. */
   systemPrompt: 'systemPrompt',
   /** E2.2: a CLI row's `timeoutMinutes`, its launch timeout in place of the round's. */
@@ -152,6 +154,11 @@ export class FeaturesCache {
   /** What the binary last settled on saying, without spawning — empty until it has. */
   known(): readonly string[] {
     return this.last.features;
+  }
+
+  /** What the binary last settled on saying — `undefined` until this file has answered, so empty means an older binary. */
+  settled(): readonly string[] | undefined {
+    return this.last.key === '' ? undefined : this.last.features;
   }
 
   /** What another file said is not this one's: an updated binary claims nothing until it has answered. */

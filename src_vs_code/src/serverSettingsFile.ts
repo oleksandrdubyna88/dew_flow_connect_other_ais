@@ -18,8 +18,9 @@ export const WRITTEN_BY = 'COAI_WRITTEN_BY';
  * parser on the server: a second encoding would be a second thing to keep in step.</p>
  *
  * <p><b>Plus one key the env block does not carry.</b> `COAI_WRITTEN_BY` is provenance, and it
- * belongs to the FILE rather than to `envBlock`, because `envBlock` also builds the block a person
- * pastes into an MCP client — a stamp there is noise in something a human reads. The server is
+ * belongs to the FILE rather than to `envBlock`, so the stamp is one place the writer adds and no caller of
+ * `envBlock` has to remember. (Settings no longer reach a client through a pasted block at all: the block a person
+ * copies carries only `serverEnv()`, the data folder and the side, since `a0eee1ca`.) The server is
  * unaffected: `PanelSettings.UnknownValues` reports unknown VALUES of known keys, never unknown
  * keys, so nothing is raised by its presence.</p>
  */
@@ -99,7 +100,7 @@ export function serverSettingsJson(
   /** What an `api` row's model costs by the list — its price crosses with the row (S3.7). */
   priceOf: RowPriceLookup = () => undefined,
 ): string {
-  return serverSettingsJsonWith(settings, vendors, { writtenBy, installedServerVersion, priceOf, features: [] });
+  return serverSettingsJsonWith(settings, vendors, { writtenBy, installedServerVersion, priceOf, features: [], featuresSettled: false });
 }
 
 /** Everything a write of the settings file is decided by, besides the settings and the rows — each said, none defaulted. */
@@ -111,12 +112,14 @@ export interface SettingsWrite {
   readonly priceOf: RowPriceLookup;
   /** What the installed `coai-mcp` lists in `--features` — a catalog field crosses only when listed (E2). */
   readonly features: readonly string[];
+  /** Whether `features` is the binary's settled answer — an empty list then means an older binary, not "not asked yet". */
+  readonly featuresSettled: boolean;
 }
 
 /** The settings file for a write that knows what the binary takes — the sync's road. */
 export function serverSettingsJsonWith(settings: CoaiSettings, vendors: readonly Vendor[], write: SettingsWrite): string {
   return JSON.stringify(
-    stamped(envBlock(settings, vendors, write.installedServerVersion, write.priceOf, write.features), write.writtenBy),
+    stamped(envBlock(settings, vendors, write.installedServerVersion, write.priceOf, write.features, write.featuresSettled), write.writtenBy),
     null,
     2,
   );

@@ -48,7 +48,8 @@ import {
 } from './commandModels';
 import { chatProvidersFromPresets, type ChatProviderList } from './chatModels';
 import { mainPrompt } from './chatPresets';
-import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, keptPerSide, roleIsOn } from './settingsShape';
+import { ON_EXHAUSTED_CHOICES, gateNotes } from './onExhaustedPanel';
+import { CoaiSettings, GatePer, LANGUAGES, OnExhausted, enabledCodeRoles, keptPerSide, roleIsOn } from './settingsShape';
 import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
@@ -321,6 +322,11 @@ export interface PanelState {
    * page tells apart from an empty list so a cold start never reads as an older binary (PLAN_one_model_catalog.md E3.1).
    */
   readonly serverFeatures?: readonly string[] | undefined;
+  /**
+   * A policy the workspace's `.vscode/settings.json` sets for When the rounds run out, which wins over the choice the
+   * panel shows — `undefined` when it sets none, or this side's own overlay is the value in force.
+   */
+  readonly workspacePolicy?: OnExhausted | undefined;
   /**
    * EVERY catalog row, the ones that review nothing included — `vendors` is the reviewers only
    * (`isReviewerRow`). The Settings page's tabs read this one (PLAN_one_model_catalog.md E4, epic 3's missed row).
@@ -1630,6 +1636,20 @@ function editorWay(place: string, label: string): string {
   return `<button type="button" class="run" data-goto="${place}">${label}</button>`;
 }
 
+/** The select's options, drawn from the one list of choices (`onExhaustedPanel.ts`), the stored one selected. */
+function onExhaustedOptions(stored: OnExhausted): string {
+  return ON_EXHAUSTED_CHOICES.map(
+    (choice) => `    <option value="${choice.value}"${stored === choice.value ? ' selected' : ''}>${escapeHtml(choice.label)}</option>`,
+  ).join('\n');
+}
+
+/** What the gate section says under the select: a binary that predates Auto, and a workspace value that wins (`stopLocalSkew`'s shape). */
+function onExhaustedNotes(state: PanelState): string {
+  return gateNotes(state.settings.onExhausted, state.serverFeatures, state.workspacePolicy)
+    .map((note) => `  <div class="stale">${escapeHtml(note)}</div>`)
+    .join('\n');
+}
+
 /**
  * The gate tab: what happens when the rounds run out. The Settings page draws it at Reviews › The gate.
  */
@@ -1641,11 +1661,9 @@ export function gateBody(state: PanelState): string {
   return `<div class="field">
   ${labelled('onExhausted', 'When the rounds run out', 'onExhausted')}
   <select id="onExhausted" data-setting="onExhausted">
-    <option value="human"${s.onExhausted === 'human' ? ' selected' : ''}>Ask a human</option>
-    <option value="continue"${s.onExhausted === 'continue' ? ' selected' : ''}>Continue, and say so</option>
-    <option value="good_enough"${s.onExhausted === 'good_enough' ? ' selected' : ''}>Good enough \u2014 take what\u2019s true and move on</option>
-    <option value="escalate"${s.onExhausted === 'escalate' ? ' selected' : ''}>Climb the ladder</option>
+${onExhaustedOptions(s.onExhausted)}
   </select>
+${onExhaustedNotes(state)}
 </div>
 <div class="field">
   <div class="check-row"><label class="check"><input type="checkbox" data-setting="stopLocalWhenQuiet"${s.stopLocalWhenQuiet ? ' checked' : ''}> Stop the local reviewer when the cloud reviewers found almost nothing</label>${help('stopLocalWhenQuiet')}</div>

@@ -92,6 +92,8 @@ import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
 import { bugzServerThisSide, noticeIgnoredWorkspaceModels, readerFor, storageReadsThisSide } from './sideConfig';
 import { MIGRATION_TRIGGERS, restoreFromBeforeTheCatalog, scheduleCatalogMigration, startCatalogMigration } from './catalogMigrationHost';
+import { ON_EXHAUSTED_MIGRATION_KEY } from './onExhaustedMigration';
+import { startOnExhaustedMigration } from './onExhaustedMigrationHost';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
 
@@ -112,6 +114,11 @@ export interface CoaiExports {
    * mode, for the same reason: in production no other extension can answer the offer or write this profile's memory. `skipShellWiring.test.ts` holds that.
    */
   readonly skipShell?: SkipShellTestDoor;
+  /**
+   * What the one-time reset of When the rounds run out keeps in this profile's `globalState`, for a host scenario (E2.S2, T31) — a host
+   * has no other way into this extension's `globalState`. Present ONLY in test mode, as `remoteSessions` is.
+   */
+  readonly onExhaustedMigration?: () => unknown;
 }
 
 /**
@@ -415,6 +422,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     panel.forgetQconsultRootAnswers();
     mirrorSettings(settingsSync);
   });
+  // The sidebar asks THIS cache too — a page that meets an updated binary re-asks the one the file is written from.
+  panel.useFeatures(features);
   const askFeatures = (): ReturnType<FeaturesCache['of']> => features.of(serverPath(context.globalStorageUri)?.fsPath, serverRun);
   const settingsSync = new ServerSettingsSync(
     () => readCoaiConfiguration(context),
@@ -431,11 +440,18 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // asking the row's own provider first when its endpoint names one.
     () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
     // A catalog field crosses only when the binary lists it; what it last settled on, never a spawn per write.
-    () => features.known(),
+    () => features.settled(),
     // Never written into a NAMED data root that is missing (E5.7): the watch's answer, waited for (bounded).
     () => pathWatch.dataRootMissing(),
   );
   mirrorSettings(settingsSync);
+  // Every saved choice of When the rounds run out is reset to Auto once, per profile and for the user settings once for every
+  // machine Settings Sync reaches — from activation, never from the panel (onExhaustedMigrationHost.ts). The overlay clear fires
+  // no configuration event, so its `after` mirrors and redraws the panel, as the catalog migration's does.
+  void startOnExhaustedMigration(context, extensionVersion(context), () => {
+    mirrorSettings(settingsSync);
+    void panel.render();
+  }, { settled: () => features.settled(), ask: askFeatures });
   // The named data root came back — made again, or its drive mounted — and a probe CONFIRMED it: the mirror, which stood
   // aside (`no-data-root`), writes now, with no settings edit (E5.7, risk item F).
   onDataRootBack(() => { mirrorSettings(settingsSync); });
@@ -917,6 +933,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   return {
     sidesSeen: () => sidesIn(context.globalState, Date.now()),
     ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote), skipShell } : {}),
+    // A second spread beside the first, not a member of it: `remoteExportGuard.test.ts` and `skipShellWiring.test.ts` pin the shape of that one.
+    ...(context.extensionMode === vscode.ExtensionMode.Test ? { onExhaustedMigration: () => context.globalState.get(ON_EXHAUSTED_MIGRATION_KEY) } : {}),
   };
 }
 

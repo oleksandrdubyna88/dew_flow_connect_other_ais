@@ -2,6 +2,9 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { copyWouldReplace, ignoredWorkspaceValues, Inspected, MODEL_KEYS, SAFETY_KEYS, userLayerReader } from '../modelKeys';
+import { settingsFrom } from '../settingsShape';
+import { KeyValueStore, sideConfigReader } from '../sideSettings';
+import { overlayKey, Side } from '../coaiInstall';
 
 /**
  * The settings that name a model — and therefore a program to run — are read from the person's own
@@ -112,4 +115,43 @@ test('Copy is offered only where it would replace nothing — this side\'s own s
     'this side keeps its own settings and already holds vendors: a copy there would replace them (PR #681 review)');
   assert.equal(copyWouldReplace({ ...ignored, userHasOne: true }, {}), false,
     'the copy lands in the overlay, which holds nothing; the user layer is not where it goes');
+});
+
+/**
+ * `onExhausted` is read from the layers that HOLD a value (parent § 4.6, U3): a window VS Code updated in place keeps the OLD
+ * settings registry, whose default for it is `human`, and that must not be read as something the person chose.
+ */
+const STALE_REGISTRY = (): unknown => 'human';
+
+test('AWindowWhoseRegistryStillSaysHumanReadsAuto', () => {
+  const read = userLayerReader(STALE_REGISTRY, inspector({ onExhausted: { defaultValue: 'human' } }));
+
+  assert.equal(read('onExhausted'), undefined, 'a registry default is not a held value');
+  assert.equal(settingsFrom(read).onExhausted, 'auto');
+});
+
+test('TheLayersThatHoldAValueKeepTheirOrder', () => {
+  const held = { defaultValue: 'human', globalValue: 'good_enough', workspaceValue: 'escalate', workspaceFolderValue: 'continue' };
+  const read = (layers: Inspected): unknown => userLayerReader(STALE_REGISTRY, inspector({ onExhausted: layers }))('onExhausted');
+
+  assert.equal(read(held), 'continue');
+  assert.equal(read({ ...held, workspaceFolderValue: undefined }), 'escalate');
+  assert.equal(read({ ...held, workspaceFolderValue: undefined, workspaceValue: undefined }), 'good_enough');
+});
+
+test('ThisSidesOwnValueStillWins', () => {
+  // A guard: green before the change, because the overlay wraps the door whatever the door answers.
+  const side: Side = { remoteName: undefined, hostname: 'DESKTOP', storagePath: 'C:/coai' };
+  const seen: Record<string, unknown> = { [overlayKey(side)]: { onExhausted: 'good_enough' } };
+  const store: KeyValueStore = { get: <T,>(key: string) => seen[key] as T | undefined, update: () => Promise.resolve() };
+  const door = userLayerReader(STALE_REGISTRY, inspector({ onExhausted: { defaultValue: 'human', workspaceValue: 'escalate' } }));
+
+  assert.equal(sideConfigReader(door, true, store, side)('onExhausted'), 'good_enough');
+});
+
+test('TheOtherKeysAreReadAsBefore', () => {
+  // A guard: green before the change, next to "every other setting is read as VS Code merges it".
+  assert.equal(userLayerReader(() => 7, inspector({ maxConcurrency: { defaultValue: 3 } }))('maxConcurrency'), 7);
+  assert.equal(userLayerReader(() => 'x', inspector({ chatModel: { defaultValue: 'preset' } }))('chatModel'), 'preset');
+  assert.equal(userLayerReader(() => true, inspector({ kimiAllowNetworkSignIn: { defaultValue: false } }))('kimiAllowNetworkSignIn'), false);
 });

@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import { CriticalSection, ExistingFile, ServerSettingsSync } from '../serverSettingsSync';
 import { CoaiSettings, DEFAULTS } from '../settingsShape';
+import { FEATURES } from '../binaryFeatures';
+import { serverSettingsJson, serverSettingsJsonWith } from '../serverSettingsFile';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
 
 /**
@@ -546,4 +548,33 @@ test('a stamp from a corrupted file cannot produce a dialog nobody can read', as
   assert.equal(refusals.length, 1);
   assert.ok(!refusals[0]!.includes(String.fromCharCode(7)), 'control characters are stripped');
   assert.ok(refusals[0]!.length <= 64, 'and the length is capped');
+});
+
+test('TheFileForASettledOlderBinarySaysGoodEnough', () => {
+  const settled = JSON.parse(serverSettingsJsonWith(DEFAULTS, DEFAULT_VENDORS, {
+    writtenBy: '', installedServerVersion: '', priceOf: () => undefined, features: [], featuresSettled: true,
+  })) as Record<string, string>;
+  assert.equal(settled['COAI_ON_EXHAUSTED'], 'good_enough', 'a binary that cannot read auto is sent the nearest policy it has');
+
+  const pristine = JSON.parse(serverSettingsJson(DEFAULTS, DEFAULT_VENDORS)) as Record<string, string>;
+  assert.equal('COAI_ON_EXHAUSTED' in pristine, false, 'a writer that has not asked a binary writes no policy');
+});
+
+test('TheSyncRewritesTheFileWhenTheAnswerSettles', async () => {
+  const answers: (readonly string[] | undefined)[] = [undefined, [], [FEATURES.onExhaustedAuto]];
+  let at = 0;
+  const written: string[] = [];
+  const it = new ServerSettingsSync(
+    () => ({ settings: DEFAULTS, vendors: DEFAULT_VENDORS }),
+    async (json: string) => { written.push(json); },
+    '', undefined, undefined, undefined, undefined, undefined,
+    () => answers[at],
+  );
+
+  for (at = 0; at < answers.length; at += 1) {
+    await it.sync();
+  }
+
+  const policies = written.map((json) => (JSON.parse(json) as Record<string, string>)['COAI_ON_EXHAUSTED']);
+  assert.deepEqual(policies, [undefined, 'good_enough', undefined], 'nothing before the answer, good_enough for an older binary, nothing for one that lists Auto');
 });

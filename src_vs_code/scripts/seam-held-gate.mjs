@@ -106,10 +106,14 @@ async function theLeg({ scope, start, answerOf, fakeCli }) {
     return { why: `the scratch repository for the held-gate leg could not be made: ${e.message}` };
   }
   // The panel's own writer: one plan round, a threshold of zero, the stand-in CLI as the only vendor. Nothing is typed as JSON here.
-  const settings = { ...DEFAULTS, thresholds: { ...DEFAULTS.thresholds, PlanCritique: 0 } };
+  // Ask a human, chosen through the panel's own writer. Since policy auto is the default, the writer writes `human` (it
+  // differs), and this leg is about a HELD gate: only a policy that asks a person holds one.
+  const settings = { ...DEFAULTS, onExhausted: 'human', thresholds: { ...DEFAULTS.thresholds, PlanCritique: 0 } };
   writeFileSync(join(root, 'settings.json'), serverSettingsJson(settings, vendorsFrom([{ ...ROW, executablePath: fakeCli }]), '9.9.9'), 'utf8');
 
+  // The leg must hold because of the FILE alone: an inherited COAI_* (a person's COAI_ON_EXHAUSTED, say) is removed, bar the one set here.
   const session = start({
+    ...inheritedCoaiKeysRemoved(),
     COAI_DATA_DIR: root,
     HOME: home,
     USERPROFILE: home,
@@ -118,9 +122,6 @@ async function theLeg({ scope, start, answerOf, fakeCli }) {
     FAKECLI_STDOUT: ONE_BLOCKING_FINDING,
     FAKECLI_OUTFILE_TEXT: ONE_BLOCKING_FINDING,
     FAKECLI_EXIT: '0',
-    // Pinned: the panel's writer leaves the policy out at its default (Ask a human), and a server since policy auto reads
-    // "no policy named" as auto, which never holds (todo/PLAN_auto_never_asks_a_person.md, N4). This leg is about a HELD gate.
-    COAI_ON_EXHAUSTED: 'human',
   });
 
   const held = await hold(session, repo, answerOf);
@@ -135,6 +136,11 @@ async function theLeg({ scope, start, answerOf, fakeCli }) {
   if (released.why !== '') return { why: released.why };
 
   return { why: '', decisions: offered.decisions, stage: released.stage };
+}
+
+/** Every COAI_* key this process inherited, each mapped to `undefined` — which `sessionsFor` takes as "remove it". */
+function inheritedCoaiKeysRemoved() {
+  return Object.fromEntries(Object.keys(process.env).filter((key) => key.startsWith('COAI_')).map((key) => [key, undefined]));
 }
 
 /** Claim 1: `open`, then a plan round that ends in `call_human`. Answers why it did not, or `''`. */
