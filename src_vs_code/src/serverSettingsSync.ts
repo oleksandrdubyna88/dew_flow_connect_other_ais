@@ -151,9 +151,10 @@ export class ServerSettingsSync {
     private readonly priceOf: () => RowPriceLookup = () => () => undefined,
     /**
      * What the installed `coai-mcp` last settled on listing in `--features`, read at every sync without spawning
-     * (PLAN_one_model_catalog.md E2): a catalog field crosses into the file only when listed.
+     * (PLAN_one_model_catalog.md E2): a catalog field crosses into the file only when listed. `undefined` until the
+     * answer has settled — an EMPTY list is an older binary, which Auto is not sent to (`onExhaustedWire.ts`).
      */
-    private readonly features: () => readonly string[] = () => [],
+    private readonly features: () => readonly string[] | undefined = () => undefined,
     /**
      * Whether the NAMED data root is missing, asked before every write (research/PLAN_paths_per_side.md E5.7, D3): a
      * settings file written into a root that is not there would create it — in a bare `/mnt/z` mount point, hiding the
@@ -167,11 +168,14 @@ export class ServerSettingsSync {
   private contentNow(): string {
     const { settings, vendors } = this.read();
 
+    const answer = this.features();
+
     return serverSettingsJsonWith(settings, vendors, {
       writtenBy: this.version,
       installedServerVersion: this.installedServerVersion(),
       priceOf: this.priceOf(),
-      features: this.features(),
+      features: answer ?? [],
+      featuresSettled: answer !== undefined,
     });
   }
 

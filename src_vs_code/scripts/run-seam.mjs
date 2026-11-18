@@ -417,7 +417,7 @@ async function apiStreamSeam() {
     // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
     const dir = mkdtempSync(join(tmpdir(), 'coai-seam-stream-'));
     try {
-      const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features };
+      const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features, featuresSettled: false };
       writeFileSync(join(dir, 'settings.json'), serverSettingsJsonWith(DEFAULTS, vendorsFrom([row]), write), 'utf8');
       const answer = await providersIn({ COAI_DATA_DIR: dir, COAI_VENDORS: '', COAI_PROVIDERS: '' });
 
@@ -448,7 +448,7 @@ async function fastModeSeam() {
     // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
     const dir = mkdtempSync(join(tmpdir(), 'coai-seam-fast-'));
     try {
-      const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features };
+      const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features, featuresSettled: false };
       writeFileSync(join(dir, 'settings.json'), serverSettingsJsonWith(DEFAULTS, vendorsFrom([row]), write), 'utf8');
       const answer = await providersIn({ COAI_DATA_DIR: dir, COAI_VENDORS: '', COAI_PROVIDERS: '' });
 
@@ -497,7 +497,7 @@ async function fastTierSeam() {
   // testsToDelete-exempt: raw-temp — runs inside this script's own run folder, startOwnedRun moved TEMP there
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-tier-'));
   try {
-    const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: ['fastMode'] };
+    const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: ['fastMode'], featuresSettled: false };
     writeFileSync(join(dir, 'settings.json'), serverSettingsJsonWith(DEFAULTS, vendorsFrom(rows), write), 'utf8');
     const answer = await providersIn({ COAI_DATA_DIR: dir, COAI_VENDORS: '', COAI_PROVIDERS: '' });
     const served = new Map((answer.providers ?? []).map((one) => [one.provider, one.fast !== undefined]));

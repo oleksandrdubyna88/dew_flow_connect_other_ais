@@ -27,7 +27,7 @@ function sync(dataRootMissing: () => Promise<boolean>): { readonly it: ServerSet
     async (work) => { entered.push(1); await work(); return true; },
     () => '',
     () => () => undefined,
-    () => [],
+    () => undefined,
     dataRootMissing,
   );
 

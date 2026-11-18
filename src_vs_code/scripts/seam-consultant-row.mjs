@@ -50,7 +50,7 @@ async function writtenAndAsked(binary, features, timeoutMs) {
   try {
     const stored = { vendors: ROWS, consultants: { codex: { vendor: 'consult-codex' } } };
     const read = (key) => stored[key];
-    const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features };
+    const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features, featuresSettled: false };
     writeFileSync(join(dir, 'settings.json'), serverSettingsJsonWith(settingsFrom(read), vendorsFrom(ROWS), write), 'utf8');
     // The env values are JSON written INTO the settings file as strings: parse twice, never search the text.
     const consultants = JSON.parse(JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8'))['COAI_CONSULTANTS'] ?? '{}');

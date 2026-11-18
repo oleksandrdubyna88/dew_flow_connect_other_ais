@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULTS, enabledCodeRoles, envBlock, settingsFrom } from '../settingsShape';
+import { ON_EXHAUSTED_CHOICES } from '../onExhaustedPanel';
 import { DEFAULT_VENDORS, normaliseId, Vendor, vendorsFrom } from '../vendors';
 import { vendorsEnv } from '../vendorsWire';
 import { ROLES } from '../prompts';
@@ -35,7 +36,7 @@ test('defaults match the master plan configuration table', () => {
   assert.equal(DEFAULTS.dealPlanLenses, false, 'every vendor answers the same question');
   assert.equal(DEFAULTS.dealCodeLenses, false);
   assert.equal(DEFAULTS.codeWorkspace, 'none', 'Fast — the diff, not a checkout');
-  assert.equal(DEFAULTS.onExhausted, 'human');
+  assert.equal(DEFAULTS.onExhausted, 'auto', 'policy auto: the gate raises no new hold and never waits for a person');
   assert.equal(DEFAULTS.maxConcurrency, 3);
   assert.equal(DEFAULTS.maxPerProvider, 2);
   assert.equal(DEFAULTS.reviewerTimeoutMinutes, 10);
@@ -200,6 +201,33 @@ test('good enough is a real choice, not a string the reader drops', () => {
   // whole feature quietly missing.
   assert.equal(settingsFrom(reader({ onExhausted: 'good_enough' })).onExhausted, 'good_enough');
   assert.equal(settingsFrom(reader({ onExhausted: 'panic' })).onExhausted, DEFAULTS.onExhausted);
+});
+
+test('auto is a real choice: the reader keeps it, and a word it does not know reads as the default', () => {
+  for (const choice of ON_EXHAUSTED_CHOICES) {
+    assert.equal(settingsFrom(reader({ onExhausted: choice.value })).onExhausted, choice.value, `${choice.value} is dropped by the reader`);
+  }
+  assert.notEqual(DEFAULTS.onExhausted, 'human', 'Ask a human is a choice now, not the default');
+  assert.equal(settingsFrom(reader({ onExhausted: 'humna' })).onExhausted, DEFAULTS.onExhausted);
+});
+
+test('the manifest offers exactly the choices the select draws, in its order, Auto first', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { enum?: unknown; enumDescriptions?: unknown[] }> } };
+  };
+  const declared = manifest.contributes.configuration.properties['coai.onExhausted']!;
+
+  assert.deepEqual(declared.enum, ON_EXHAUSTED_CHOICES.map((c) => c.value));
+  assert.equal(declared.enumDescriptions?.length, ON_EXHAUSTED_CHOICES.length, 'every choice is described');
+});
+
+test('APristinePanelWritesNoPolicy', () => {
+  assert.equal('COAI_ON_EXHAUSTED' in envBlock(DEFAULTS), false, 'a pristine panel names no policy: the server runs auto');
+  assert.equal(
+    envBlock(DEFAULTS, DEFAULT_VENDORS, '', undefined, [], true)['COAI_ON_EXHAUSTED'],
+    'good_enough',
+    'a binary settled WITHOUT Auto is told the nearest policy it has',
+  );
 });
 
 test('the choice travels to the server under the name the server parses', () => {

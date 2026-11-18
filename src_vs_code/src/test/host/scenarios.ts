@@ -16,6 +16,7 @@ import { aRevisionInARealEditor } from './revisionScenario';
 import { aBugzCollectIsRefusedInARealEditor } from './bugzCollectScenario';
 import { theDefaultPhrasesInARealEditor } from './defaultPhrasesScenario';
 import { theMigrationKeysAreKnownInARealEditor } from './migrationKeysScenario';
+import { theOnExhaustedMigrationCompletesInARealEditor } from './onExhaustedMigrationScenario';
 import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingNamedDataRootStaysAbsent } from './missingDataRootScenario';
 import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathSaidOnceScenario';
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
@@ -909,6 +910,13 @@ const SCENARIOS: readonly Scenario[] = [
     // migration waits on, read from the real editor. What it does and does not drive is in `migrationKeysScenario.ts`.
     name: 'every key the catalog migration writes is known to the real settings registry, and an undeclared one is not',
     run: theMigrationKeysAreKnownInARealEditor,
+  },
+  {
+    // todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md T31 (D16): the one-time reset of When the rounds run out completes in the real
+    // editor — the witness setting known to the registry, the record complete and told, the settings file holding the witness.
+    // What it does and does not drive is in `onExhaustedMigrationScenario.ts`.
+    name: 'the one-time reset of When the rounds run out completes, and a real settings file takes its witness',
+    run: theOnExhaustedMigrationCompletesInARealEditor,
   },
   {
     // research/PLAN_paths_per_side.md E2.4 (E0.2's release requirement): activation stamps this window's side into the shared
