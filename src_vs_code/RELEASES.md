@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.89.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.88.0...extension-v0.89.0) (2026-11-18)
+
+
+### Features
+
+* **extension:** policy Auto is the default — the one-time reset, what the server is sent, and what a person reads (E2 of the auto plan) ([#1018](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1018)) ([a5855ec](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a5855ec1c06d24bd3f70af96ec2f47a65fc7ad22))
+
 ## [0.88.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.87.0...extension-v0.88.0) (2026-11-17)
 
 
