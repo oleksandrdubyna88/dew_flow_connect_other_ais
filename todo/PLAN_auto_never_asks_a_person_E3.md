@@ -1,6 +1,6 @@
 # PLAN — E3 stories: the conventions, the words every consumer's AI reads (`dew_flow_conventions` and the pins)
 
-> Status: **plan only, nothing built — written 2026-11-18 by Opus when the epic started, on branch `docs/auto-mode-e3`
+> Status: **E3.S1 merged in conventions 2026-11-18 as #182 (`25d551b8`) and NOT yet promoted to the `release` branch (it waits for the owner's word on in-flight consumer releases and on the PR cap, § 5.1). This repository's bump is built on `docs/auto-mode-e3` (the pin at `25d551b8`, the snippet v19, the constants and the tests green; not yet a PR). Remaining: the promotion, the nine pin bumps, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **plan only, nothing built — written 2026-11-18 by Opus when the epic started, on branch `docs/auto-mode-e3`
 > at `origin/main` `82a4eeac` (E1 merged as #1011 and released as mcp 0.66.0 by #1012; E2 merged as #1018 and released
 > as extension 0.89.0 by #1022).** Epic E3 of [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md)
 > (its `## Epics`, § *E3*; the design is its § 4.7 snippet item, § 8 PR 3 and note N1). A stories document keeps no
