@@ -19,7 +19,41 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-11-16 · server **0.16.2** deployed (run 43720859407, 2026-11-15) — the box serves 0.16.2 · mcp
+Last verified: 2026-11-18 · server **0.16.3** deployed (run 44349602108) — the box served 0.16.2 before the deploy and
+serves 0.16.3 after it · mcp **0.66.0** (the newest; 0.65.4 carries the same hook fix) · extension **0.87.0** as the
+target, unchanged. Before the deploy the canary token had expired (`--check-token`: HTTP 401, the file dated
+2026-11-09); the owner pasted a fresh one on 2026-11-18 and `--check-token` said `canary token: accepted`. The claude
+slot answered `OK` to `claude -p` with its own environment (2026-11-17). The deploy's canary said `codex: done`,
+`antigravity: done`, `claude: done`; loopback and public `/api/health` both `{"ok":true,"version":"0.16.3"}`. Run locally:
+`MCP_VERSION=0.66.0 SERVER_VERSION=0.16.3 node .agents/conventions/tools/post-deploy-check.mjs --target 0.87.0`, which
+printed `PASS 1`, `PASS 2`, `PASS 6` (client-config 200, the catalog 401 without a session), `PASS 9 — all six RIDs
+present` and `PASS 10 — 200 {"ok":true,"version":"0.16.3"}`. In this release: #1006 (the agy read-only hook allows a
+reader only inside the folders it was given) and #1010 (its macOS test fixture). Beyond the table, the plan's own checks
+(research/PLAN_the_agy_hook_checks_the_path.md, "Release" steps 3 and 4), each run on the box with agy 1.5.9, two
+`/tmp/coai-server-job-*` folders (one granted, one not) and one agy run per probe, the model's attempted `read_file`
+call and `Path` taken from agy's output:
+- **Before the deploy, the RELEASE binary** (2026-11-17, `coai-server-0.16.3-linux-x64.tar.gz`, sha256 checked; the
+  hook folder copied from the server's with its script pointed at that binary — not a folder that binary prepared; the
+  server's own folder is the check after the deploy, below). Each probe made two `read_file` calls with the `Path` shown:
+  - in-root `/tmp/coai-server-job-TMdBg0/inside.txt`: allowed, the inside marker read;
+  - absolute `/tmp/coai-server-job-1M3HTm/secret.txt`: denied;
+  - `..` `/tmp/coai-server-job-IxoDp7/../coai-server-job-Q72BEw/secret.txt`: denied;
+  - link `/tmp/coai-server-job-IxoDp7/leak.txt` (→ the other job's `secret.txt`): denied.
+  Every denial read `denied by pre-tool hook: coai: this consultation reads only inside the folders it was given`; the
+  secret marker was read in none. (The first two probes and the last two ran in two batches with fresh folders: the
+  host's 30 s command limit cut the first batch.)
+- **After the deploy, the server's OWN hook folder** (`/root/.local/share/coai-agy/hab3a05e932d9`, written by 0.16.3
+  for the canary's agy review, its script `exec /opt/coai/releases/0.16.3-20261118T163920Z/coai-server --agy-hook`),
+  two `read_file` calls per probe:
+  - in-root `/tmp/coai-server-job-5o4sJM/inside.txt`: allowed, the inside marker read;
+  - absolute `/tmp/coai-server-job-fdmYAc/secret.txt`: denied;
+  - `..` `/tmp/coai-server-job-5o4sJM/../coai-server-job-fdmYAc/secret.txt`: denied;
+  - link `/tmp/coai-server-job-5o4sJM/leak.txt` (→ the other job's `secret.txt`): denied.
+  Every denial read the same sentence; the secret marker was read in none. The journal of `coai-server` since the deploy
+  holds no `ERR`, `WRN`, `fail` or `Unhandled` line.
+Manual items 3, 4, 5, 8 and 12 were not run; items 7 and 11 observed on the canary above.
+
+Previously verified: 2026-11-16 · server **0.16.2** deployed (run 43720859407, 2026-11-15) — the box serves 0.16.2 · mcp
 **0.65.3** released (`mcp-v0.65.3`) · extension **0.87.0** as the target, unchanged. Run locally:
 `MCP_VERSION=0.65.3 SERVER_VERSION=0.16.2 node .agents/conventions/tools/post-deploy-check.mjs --target 0.87.0`, which
 printed `PASS 1 — all six RIDs present`, `PASS 2 — marketplace serves 0.87.0`, `PASS 6` (the row labelled 7) —
