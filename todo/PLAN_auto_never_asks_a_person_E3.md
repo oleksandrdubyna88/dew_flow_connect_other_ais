@@ -733,7 +733,7 @@ open pull request"). So, after S1 merged and before the dispatch:
 
 1. **In-flight consumer releases.** For each of the nine, look for an open release pull request
    (`gh pr list --state open --search "release in:title"`) and a release workflow running, and ask — the consultants
-   first, then the owner — whether any consumer is mid-release. A consumer mid-release is bumped after its release.
+   first, then the owner — whether any consumer is mid-release. The promotion waits until no consumer is mid-release: its release finishes first, because a promotion reddens its `pin-check` while the release still needs green checks (plan round 1, finding 2).
 2. **Open PRs per repository**, counted again that day against the cap of three (`common/pull-requests.md` rule 7). A
    bump that would put a repository over three needs the owner's agreement, asked in one sentence that names what is
    queued there. coai is over the cap today (§ 2.5).
