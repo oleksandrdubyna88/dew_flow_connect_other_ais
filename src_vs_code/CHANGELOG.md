@@ -1,5 +1,43 @@
 # Changelog
 
+## Extension 0.89.0 — 2026-11-18
+
+**Auto is now what *When the rounds run out* starts on, and a value you chose before is reset to Auto once.** Under Auto the
+gate raises no new hold, never waits for a person and never writes a card. A round nobody answered proceeds as
+`not_reviewed`, which is never a pass, and spent rounds proceed as `good_enough`, each logged and noted on the round.
+
+| | was | now |
+|---|---|---|
+| *When the rounds run out*, default | Ask a human | **Auto** |
+| A value you chose (your settings, each side's own settings) | kept | **reset to Auto once**; a choice made afterwards is kept, also on the other machines Settings Sync reaches, and the reset is told with one notification, both outside the rare windows `research/module_extension.md` names |
+| A value in a workspace's `.vscode/settings.json` | in force | in force, never changed, and named in Reviews › The gate |
+| Ask a human chosen in the panel | written as nothing (it was the default), so Server 0.66.0 ran Auto | written as `human` and honoured |
+| A coai-mcp older than 0.66.0 | — | sent Good enough, and The gate says "predates Auto" |
+| The rounds log | a note only on a skipped round | the note of every round, `not_reviewed` among the verdicts |
+
+What Auto promises, exactly: coai raises no new hold, never waits and never writes a card. A hold this version raised under
+Ask a human stays yours to answer. The one road left to a person is your AI's own question after its
+consultants, or when no consultant can be had, which the AI chooses to ask.
+
+The extension writes one key, `coai.onExhaustedResetToAuto`, into your user settings; Settings Sync carries it. Design
+decision: the witness's value is one fixed word, the same on every machine, so Settings Sync merges two machines'
+witnesses without a conflict.
+
+This is the extension side of policy Auto that 0.88.0 named as not yet released: the reset and its notification that Server 0.66.0 promised.
+
+If you put `COAI_ON_EXHAUSTED=human` in your MCP client's env block, as the Server 0.66.0 note suggested, choose Ask a human
+in the panel and remove it there.
+
+The MCP server to pair it with is `coai-mcp` 0.66.0.
+
+To go back: 0.88.0 shows Ask a human but writes nothing, so a 0.66.0 server runs Auto for it.
+
+Update the extension on every side — each WSL or SSH remote — together: a side still on 0.88.0 or earlier keeps writing its settings
+file the old way.
+
+The help is rewritten in English, German, Spanish, Russian and Ukrainian, and the READMEs, `ARCHITECTURE.md` and
+`research/module_extension.md` describe Auto.
+
 ## Extension 0.88.0 — 2026-11-18
 
 **Added: after a reload, a `Creds:` chat finds its terminal again.** When VS Code or CredsForDevs brings a `Creds: <host> / <session>` terminal back, the chat of that name is tied to it again. This happens only when exactly one open terminal and exactly one chat carry the name. When a second terminal or a second chat of the name appears before you first use the terminal, the tie is undone, and nothing is guessed. Other terminals stay as in 0.87.0.
