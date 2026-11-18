@@ -33,12 +33,24 @@ reader only inside the folders it was given) and #1010 (its macOS test fixture).
 `/tmp/coai-server-job-*` folders (one granted, one not) and one agy run per probe, the model's attempted `read_file`
 call and `Path` taken from agy's output:
 - **Before the deploy, the RELEASE binary** (2026-11-17, `coai-server-0.16.3-linux-x64.tar.gz`, sha256 checked; the
-  hook folder copied from the server's with its script pointed at that binary): in-root read allowed and its marker read;
-  the other job's file by absolute path, by `..` and through a link inside the root each `denied by pre-tool hook: coai:
-  this consultation reads only inside the folders it was given`; the secret marker read in none.
+  hook folder copied from the server's with its script pointed at that binary — not a folder that binary prepared; the
+  server's own folder is the check after the deploy, below). Each probe made two `read_file` calls with the `Path` shown:
+  - in-root `/tmp/coai-server-job-TMdBg0/inside.txt`: allowed, the inside marker read;
+  - absolute `/tmp/coai-server-job-1M3HTm/secret.txt`: denied;
+  - `..` `/tmp/coai-server-job-IxoDp7/../coai-server-job-Q72BEw/secret.txt`: denied;
+  - link `/tmp/coai-server-job-IxoDp7/leak.txt` (→ the other job's `secret.txt`): denied.
+  Every denial read `denied by pre-tool hook: coai: this consultation reads only inside the folders it was given`; the
+  secret marker was read in none. (The first two probes and the last two ran in two batches with fresh folders: the
+  host's 30 s command limit cut the first batch.)
 - **After the deploy, the server's OWN hook folder** (`/root/.local/share/coai-agy/hab3a05e932d9`, written by 0.16.3
-  for the canary's agy review, its script `exec /opt/coai/releases/0.16.3-20261118T163920Z/coai-server --agy-hook`): the
-  same four results. The journal of `coai-server` since the deploy holds no `ERR`, `WRN`, `fail` or `Unhandled` line.
+  for the canary's agy review, its script `exec /opt/coai/releases/0.16.3-20261118T163920Z/coai-server --agy-hook`),
+  two `read_file` calls per probe:
+  - in-root `/tmp/coai-server-job-5o4sJM/inside.txt`: allowed, the inside marker read;
+  - absolute `/tmp/coai-server-job-fdmYAc/secret.txt`: denied;
+  - `..` `/tmp/coai-server-job-5o4sJM/../coai-server-job-fdmYAc/secret.txt`: denied;
+  - link `/tmp/coai-server-job-5o4sJM/leak.txt` (→ the other job's `secret.txt`): denied.
+  Every denial read the same sentence; the secret marker was read in none. The journal of `coai-server` since the deploy
+  holds no `ERR`, `WRN`, `fail` or `Unhandled` line.
 Manual items 3, 4, 5, 8 and 12 were not run; items 7 and 11 observed on the canary above.
 
 Previously verified: 2026-11-16 · server **0.16.2** deployed (run 43720859407, 2026-11-15) — the box serves 0.16.2 · mcp
