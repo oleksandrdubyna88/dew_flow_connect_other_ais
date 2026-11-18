@@ -505,6 +505,11 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
   folder's hook starts this binary (`Program.cs` routes `--agy-hook` before the web host), and on agy 1.5.9 — which
   renamed `view_file` to `read_file` — `AntigravityReadOnly.Decide` allows exactly those two tools and denies every other
   (#995). `TheServerBinaryAnswersTheAgyHookTests` runs the built server binary and pins it, so a server release carries the fix. Since 2026-11-16 `Decide` also allows a reader only inside the job's granted roots and outside the coai folder, so one job's reviewer cannot read another job's folder under `/tmp` (RESULTS_agy_read_file.md §6, SECURITY.md).
+  *(Note 2026-11-18, `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`: the hook now knows the coai folder from where it runs, so the
+  Team server's per-slot `HOME` and `XDG_DATA_HOME` do not matter; it looks at no network or device path; and `TheServerBinaryAnswersTheAgyHookTests`
+  gains the cases S7 to S11 — a root that sorts before the coai folder, the coai folder denied wherever it stands, a hook run outside `.agents`,
+  a network `Path`, and a `Path` with a `..`. Today's job roots sort after `/root/.local/share`, so the server cannot show the old defect; the release runs the
+  `POST_DEPLOY.md` hook probes as before. A job folder on a network mount is not supported. See RESULTS_agy_read_file.md §7.)*
 
 ```mermaid
 sequenceDiagram
