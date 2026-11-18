@@ -313,7 +313,7 @@ public static class AntigravityReadOnly
 
     private static bool KnowsItsFolder(HookSite site, TextWriter? log)
     {
-        if (AgyHookPlaces.CoaiFolderOf(site) is not null)
+        if (AgyHookPlaces.CoaiFolderOf(site).Ok)
         {
             return true;
         }

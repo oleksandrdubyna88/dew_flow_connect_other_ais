@@ -24,11 +24,12 @@ public sealed record HookSite(string? CoaiFolder, EntryReader Read, Func<string,
 
     /// <summary>The coai folder for a hook working in <paramref name="workingDirectory"/>: its parent when it is a fully qualified <c>.agents</c> folder, else null. Text only, no disk.</summary>
     internal static string? CoaiFolderOf(string workingDirectory) =>
-        Path.IsPathFullyQualified(workingDirectory) && Path.TrimEndingDirectorySeparator(workingDirectory) is var trimmed
-        && string.Equals(Path.GetFileName(trimmed), ".agents", DocumentId.Comparison)
-        && Path.GetDirectoryName(trimmed) is { Length: > 0 } parent
-            ? parent
-            : null;
+        Path.IsPathFullyQualified(workingDirectory) ? ParentOfAgentsFolder(Path.TrimEndingDirectorySeparator(workingDirectory)) : null;
+
+    private static string? ParentOfAgentsFolder(string trimmed) =>
+        string.Equals(Path.GetFileName(trimmed), ".agents", DocumentId.Comparison) ? ParentOf(trimmed) : null;
+
+    private static string? ParentOf(string folder) => Path.GetDirectoryName(folder) is { Length: > 0 } parent ? parent : null;
 
     private static string WorkingFolder()
     {

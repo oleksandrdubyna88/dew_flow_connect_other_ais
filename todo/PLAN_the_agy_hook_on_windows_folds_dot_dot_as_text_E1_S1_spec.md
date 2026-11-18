@@ -36,6 +36,8 @@ Three steps of the parent rule change. The rest stays
   error when null): `coai --agy-hook: denied, this hook does not run from its own .agents folder`. A constant. No path. Reason: a
   hook that denies everything is otherwise silent, and that is how W3 itself went unseen. A folder that is named but does not resolve
   writes nothing, like every other failed resolve.
+  **Deviation 2026-11-18 (review fix F13, PR #1023):** a folder that is named but does not resolve (the disk cannot look at it, or it is not
+  local) now writes the same `UnknownFolderLine` once and denies; the "writes nothing" text above is the old rule and no longer holds.
 - **The tool is judged first.** A tool that is not a reader gets `DenyReason`, whatever the site is, and writes no line.
 - **Why `cwd` is still validated.** Every agy from 1.5.9 to 1.5.11 sends it, and it is one of `workspacePaths`. A payload without it
   is one this code does not understand, and it was denied before. Rows B19 and D4 keep that.

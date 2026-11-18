@@ -34,7 +34,9 @@ public sealed class TheAgyHookLooksOnlyAtLocalPathsTests : AgyHookFixture
         private Entry Look(string path) =>
             isRemote(path) ? Entry.Missing
             : !OperatingSystem.IsWindows() && path == "/net" ? Entry.Directory
-            : standIn?.Invoke(Path.TrimEndingDirectorySeparator(path)) ?? RealPath.Lstat(path);
+            : Standing(path);
+
+        private Entry Standing(string path) => standIn?.Invoke(Path.TrimEndingDirectorySeparator(path)) ?? RealPath.Lstat(path);
     }
 
     /// <summary>The host the tests name, spelled as a literal: what counts as a remote look does not depend on the rule under test.</summary>
