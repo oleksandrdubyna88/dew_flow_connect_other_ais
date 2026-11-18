@@ -27,6 +27,12 @@ In CI the host scenario S3-H1 (`src_vs_code/src/test/host/skipShellScenario.ts:5
 The code under test was the same in every row. The ids WERE written each time (the scenario reads the setting after);
 only the memory was missing.
 
+Reported by the session that shipped extension 0.89.0 (2026-11-18): the scenario also failed on #1018 (a66e7420,
+passed on re-run) and twice in a row on release PR #1022 (13c93522). Attempt 1 failed with the same "never remembered
+as added … waited 15s". Attempt 2 failed with a second shape of the same miss: "the offer came back for ids the person
+had already answered … 2 !== 1". Over the last 25 CI runs, 7 first attempts failed, including on 5b9ab66c, 838fdf8d,
+ec52e27f and 550ec09d. Main with that release's E2 (a5855ec1, 97372ed6) passed.
+
 ## What is not known yet
 
 The likely cause: `WorkspaceConfiguration.update()` resolves before `inspect()` shows the new value — the settings file
@@ -50,7 +56,7 @@ a fresh `getConfiguration()` (instead of the one held by the seam) sees the valu
 ## Test plan
 
 - The unit test of step 3, with its first RED recorded.
-- S3-H1 green in 20 consecutive runs of `extension · a real editor` (the runs listed above: 3 failures in 7).
+- S3-H1 green in 20 consecutive runs of `extension · a real editor` (the 25 runs reported above: 7 first-attempt failures).
 - The "not read back" sentence still appears when the setting truly does not hold the ids (the existing unit test
   stays green).
 
