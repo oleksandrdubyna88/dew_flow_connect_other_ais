@@ -140,3 +140,12 @@ The parent plan's Definition of Done is ticked box by box. Promotion to `researc
   measured; `mklink /J` does not write one.
 - **Whether agy cleans a path before it opens it** is not measured. The rule does not depend on it.
 - **One Windows build** was measured for section 1. Microsoft's own description of path normalisation says the same.
+
+## Amendments from the cadence consultation (2026-11-18, consultation 54f49926, codex)
+
+This repairs the spec so that it does what the plan says. It is not a plan change.
+
+1. **The fallback replay runs from `.agents`.** The direct replay of a payload through the hook (`cmd /c .\coai-hook.cmd`) must run with
+   its working folder set to `<hook folder>\.agents`, where the script lives. Run from the hook folder itself, the command is missing.
+   Run by its full path from elsewhere, it gets S1's unknown-folder denial, which would look like a W1 denial. Replay an ALLOWED control
+   first (an in-root `Path`), so that a later denial is known to be the W1 rule.

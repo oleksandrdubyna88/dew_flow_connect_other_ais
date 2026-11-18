@@ -156,3 +156,17 @@ A child process cannot show that no look was made, so these two only keep the ro
 - **Two tests of locality exist** in this repository: `Junctions.IsLocal` (runners) and `LocalPaths.IsLocalRooted`
   (`src_mcp/src/Store`). Their Unix lists differ. The hook must use the first: the server binary has no access to the second.
   Making them one is not this story.
+
+## Amendments from the cadence consultation (2026-11-18, consultation 54f49926, codex)
+
+These repair this spec so that it does what the plan says. They are not plan changes.
+
+1. **The Unix arm of the locality test is TEXT only.** Today `IsLocalUnixPath` uses `Path.IsPathRooted`, which depends on the host: on
+   Windows it answers true for `C:x` and `\x`. With `windows: false`, a path is rooted only when it starts with `/`. Fix the helper so
+   N12 holds when run on Windows (`C:x` and `\x` give false with `windows: false`).
+2. **A `Path` that starts with two separators is denied on every OS, by its spelling, before it is resolved.** That means `//` or `\\`,
+   in either order or mixed. `RealPath` folds `//tmp/x` to `/tmp/x` before the reader sees it, so neither the guard nor the result check
+   would refuse it on Linux. Add a test through `Decide` on every OS: `//<fixture>/job-1/inside.txt` is denied, with the control
+   `/<fixture>/job-1/inside.txt` allowed. A link's TARGET text that starts with `//` on Linux is left to the kernel's own reading (`//x`
+   is `/x` there). On Windows the guard refuses it. This closes a contract gap: the policy says `//` is non-local. It is not a measured
+   Linux leak.
