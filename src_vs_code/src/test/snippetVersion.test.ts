@@ -88,18 +88,19 @@ test('a copy from the FUTURE is not called old', () => {
  * pinned to the text. Editing the snippet fails this test until both are changed together, which is
  * the only moment either is cheap.</p>
  *
- * <p><b>`SNIPPET_VERSION` is not one of the numbers that can move.</b> It is the marker written
- * inside `coai-review-gate.md`, one of the 24 rule bodies the conventions repository hashes against
- * its migration baseline — so that file cannot be edited and its number cannot be raised. What
- * records a change to one RULE is the marker of the half that changed: `DOCUMENT_VERSION` when the
- * document rule moves, `CALLER_VERSION` when the caller rule does. A change that arrives as a WHOLE
- * NEW half brings its own marker with it, and raising one of the others as well would claim a rule
- * changed that did not — a paste missing the new half is already reported as older by its absence.</p>
+ * <p><b>Every half's marker can move, `SNIPPET_VERSION` included.</b> It is the marker written
+ * inside `coai-review-gate.md`, which the conventions repository held against its migration baseline
+ * (so the number stayed 5) until the freeze ended on 2026-09-15 (conventions `747887d`); it moved to 6
+ * with the words for policy `auto` (conventions `25d551b8`). What records a change to one RULE is the
+ * marker of the half that changed: `SNIPPET_VERSION` when the gate rule moves, `DOCUMENT_VERSION` when
+ * the document rule does, and so on. A change that arrives as a WHOLE NEW half brings its own marker
+ * with it, and raising one of the others as well would claim a rule changed that did not — a paste
+ * missing the new half is already reported as older by its absence.</p>
  *
  * <p><b>`ARTEFACT_VERSION` moves for ALL of them, and that is what this test is now the forcing
  * function for.</b> Every case above changes what the clipboard carries, and the number a person
  * reads in the ⋯ menu has to change with it — that number stalled at (v5) across three of these
- * because it was pinned to the one constant that is frozen. So this failure names it, and names the
+ * because it was pinned to the one constant that was then frozen. So this failure names it, and names the
  * static `package.json` title that has to be typed by hand alongside it.</p>
  */
 test('the snippet text and its version numbers move together', () => {
@@ -108,7 +109,7 @@ test('the snippet text and its version numbers move together', () => {
   // hashed into the body while the list quietly said there were four. (Code round.)
   const body = claudeSnippet().replace(/<!-- coai-[a-z-]+ v\d+ -->\n?/g, '');
   const sha = createHash('sha256').update(body).digest('hex').slice(0, 16);
-  const raisable = KNOWN_HALVES.filter((half) => !half.frozen)
+  const raisable = KNOWN_HALVES
     .map((half) => `${half.id} to v${half.version + 1}`)
     .join(', ');
 
@@ -121,9 +122,8 @@ test('the snippet text and its version numbers move together', () => {
       + `half whose rule changed: ${raisable}. All of them, together: a version that does not move `
       + 'with the text tells every pasted copy it is current forever, which is the defect this exists '
       + 'to catch. A change that adds a whole new rule file brings its own marker and raises no '
-      + `other half. (SNIPPET_VERSION stays ${SNIPPET_VERSION}: the gate rule is frozen against the `
-      + 'migration baseline, so its marker cannot be raised — which is what `frozen` says in '
-      + 'KNOWN_HALVES, and why this sentence is built from that table rather than typed here.)',
+      + 'other half. (The list of halves is built from KNOWN_HALVES rather than typed here, so a '
+      + 'half added to the table is named by this sentence without anybody editing it.)',
   );
 });
 
@@ -417,7 +417,7 @@ test('a paste from the future says to update the extension, not to overwrite the
  * <p>They mount the gate rule from the conventions submodule and have never pasted anything, so the
  * gate half is current and the other three are absent. Before this was fixed the panel printed "The
  * CLAUDE.md snippet in this workspace is v5; v5 is current", which is not a sentence anybody can
- * act on — the gate half's frozen marker was being used as the version of the whole paste. A paste
+ * act on — the gate half's own marker was being used as the version of the whole paste. A paste
  * carries no number for the artefact as a whole, so the honest answer names the halves.</p>
  */
 test('a mounting repository is not told two different numbers', () => {
@@ -601,7 +601,7 @@ test('every row of the table carries the rule its own marker names', () => {
 });
 
 /**
- * The frozen gate half cannot be told apart by its marker, so a retired sentence does it.
+ * A paste whose gate text changed while its marker did not is told apart by a retired sentence.
  *
  * <p>Found by review (CodeRabbit, PR #956): the gate rule's old text told the agent to pass
  * `humanDecision: "proceed"` to `resolve`, the new text says never to, and the marker stayed at 5.
@@ -610,7 +610,7 @@ test('every row of the table carries the rule its own marker names', () => {
  */
 test('a v17-shaped paste, whose gate half carries a retired sentence, is older on that half', () => {
   const retired = RETIRED_TEXT.find((row) => row.half === 'coai-snippet');
-  assert.ok(retired !== undefined, 'the table has no row for the frozen gate half');
+  assert.ok(retired !== undefined, 'the table has no retired-sentence row for the gate half');
   const gate = KNOWN_HALVES[0].text;
   const stale = claudeSnippet().replace(gate, `${gate}\nPass ${retired.text}.\n`);
 

@@ -7020,8 +7020,9 @@ refused its operator's checkpoint gate to keep the last one, and on 2026-09-22/2
   `status` carried counts only.
 
 The shared gate rule tells agents the same thing, since conventions release a847ab7 (2026-09-24). The
-rule is `coai-review-gate.md`, step 5, and its marker is still `coai-snippet v5` because the marker is
-frozen. Step 5 now says:
+rule is `coai-review-gate.md`, step 5. Its marker stayed `coai-snippet v5` for that change, but not because it
+was frozen: the migration freeze ended on 2026-09-15 (conventions `747887d`), and the marker moved to v6 on
+2026-11-18 with the words for policy `auto` (conventions `25d551b8`, extension artefact v19). Step 5 then said:
 
 - only committed changes are reviewed;
 - an empty diff is refused, never passed;

@@ -4196,10 +4196,13 @@ So `src_vs_code/src/consultantRule.md` is ours, `prepare-gate.mjs` emits it besi
 > mount like the other three halves; the local file is gone. See *The consultant rule is read from the
 > mount* below.
 
-**Every half carries its own marker, and that is not a preference either.** `coai-review-gate.md` is
-one of the 24 rule bodies the conventions repository hashes against its migration baseline, so its
-`<!-- coai-snippet v5 -->` cannot be raised: the gate half is frozen at v5 and will be until that
-inventory retires. A change that arrives as a whole new half therefore brings a marker of its own —
+**Every half carries its own marker, and that is not a preference either.** `coai-review-gate.md` was
+one of the 24 rule bodies the conventions repository hashed against its migration baseline, so its
+`<!-- coai-snippet v5 -->` could not be raised and the gate half sat at v5; that freeze ended on
+2026-09-15 (conventions `747887d`), and the gate half moved to v6 with E3 of the auto plan (the words for
+policy `auto`, conventions `25d551b8`, artefact v19). The halves stay separate files each with a marker of
+its own (merging some back is the conventions' manuals plan's step 4). A change that arrives as a whole
+new half therefore brings a marker of its own —
 `coai-document`, `coai-caller`, `coai-consultant`, each at v1 when it arrived, and each raised since
 by a change to its own rule (v3, v2 and v2 as of 2026-09-16 — `KNOWN_HALVES` in
 `claudeSnippet.ts` is the live answer, and these numbers are a record of one day rather than a
@@ -4207,8 +4210,9 @@ claim about today) — and `snippetStatus` compares a pasted
 copy half by half. A paste missing one of them is `older` by its ABSENCE rather than by a number,
 which is what lets a copy made before a half existed be recognised at all.
 
-A marker cannot tell an old paste of the FROZEN gate half from a current one, because that marker never
-moves — so a rule change there (the 2026-11 pin made the gate say "Never pass `humanDecision` yourself"
+A marker could not tell an old paste of the gate half from a current one while it stayed at v5, because
+the marker did not move — `RETIRED_TEXT` remains for a paste whose text changed and whose marker did not,
+and the rule change there (the 2026-11 pin made the gate say "Never pass `humanDecision` yourself"
 where it had said to pass `humanDecision: "proceed"` to `resolve`) left a v17 paste reading `current`.
 `RETIRED_TEXT` in `claudeSnippet.ts` is the answer: a table of sentences an old paste carried, per half,
 and a half whose own SEGMENT — from each copy of its marker to the next `<!-- coai-… v<n> -->` marker, or the end of the text — contains one of its own is `older` exactly as if its marker were lower. The phrase outside that segment (a person's notes, a changelog, another half) counts for nothing. A test holds
