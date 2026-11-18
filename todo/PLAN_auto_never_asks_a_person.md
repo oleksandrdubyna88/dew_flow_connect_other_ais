@@ -1,6 +1,6 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **E2 built 2026-11-17 in PR #1018 (S1, S2, S3; the coai code gate `proceed`); not yet merged or released. E3 not started.** Before that: **epoch 3 open, 2026-11-17 — approved by the owner (the revision is `Narrowed: yes`), after the interim document
+> Status: **E3 started 2026-11-18: its stories document, [PLAN_auto_never_asks_a_person_E3.md](PLAN_auto_never_asks_a_person_E3.md), written by Opus; nothing built. E2 merged 2026-11-18 as #1018 and released as extension 0.89.0 (#1022).** Before that: **E2 built 2026-11-17 in PR #1018 (S1, S2, S3; the coai code gate `proceed`); not yet merged or released. E3 not started.** Before that: **epoch 3 open, 2026-11-17 — approved by the owner (the revision is `Narrowed: yes`), after the interim document
 > review of the whole plan returned `proceed` (4 of 4 reviewers; three wording findings folded). E2 resumes: the S1 fix
 > forward and Fable's S2 spec revision, then S2, then S3.** Before that: **epoch 2 stopped for re-review, 2026-11-17, at its second change (entry 2.2, Settings Sync and the
 > migration's witness). No new code on any epic until the whole plan is reviewed again. The whole plan was revised the
@@ -872,6 +872,10 @@ No cornerstone in E3: it is rule text, reviewed as every rule change is, and a w
 
 ### E3 — The conventions: the words every consumer's AI reads · depends on E1 released, after E2
 
+- **Stories document.** [PLAN_auto_never_asks_a_person_E3.md](PLAN_auto_never_asks_a_person_E3.md) — written by Opus
+  2026-11-18 when the epic started: the two stories below, no cornerstone; S1 gives the wording of the four rule files
+  verbatim, the markers (v6, v4, v4, v2) and the two-way reading; S2 the release, the nine pin bumps, this repository's
+  snippet, the feature review and the promotion. N1 settled there (its § 2.3, § 4.5); its findings for this plan are its § 9.
 - **Goal.** The shared gate text is true for `auto`: an AI that meets `not_reviewed` says so and goes on, one that
   meets `consult_first` consults and comes back, and nothing promises a person the default never calls.
 - **Scope.** `dew_flow_conventions` (PR 3 of § 8, its own release) and the pins. `common/coai-review-gate.md`, step 6:
