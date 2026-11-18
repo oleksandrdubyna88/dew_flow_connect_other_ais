@@ -1,6 +1,6 @@
 # PLAN — the agy read-only hook on Windows folds `..` as text and never opens a network path
 
-> Status: **plan only, nothing implemented yet, 2026-11-16; plan gate `proceed` 2026-11-18 (session 6830eaba, 2 reviewers, 4 findings accepted and folded in: §2 "Gate round 1"); allowed over the PR cap by the owner on 2026-11-18.** Scope: `src_mcp/runners/Files/RealPath.cs` (or the hook's call of it),
+> Status: **coded and tested, 2026-11-18 (E1 on branch `fix/agy-hook-windows-dot-dot`, 33050c8f + review fixes); real runs on Linux and Windows passed (RESULTS §7); not merged, not released. History: plan written 2026-11-16; plan gate `proceed` 2026-11-18 (session 6830eaba, 2 reviewers, 4 findings accepted and folded in: §2 "Gate round 1"); allowed over the PR cap by the owner on 2026-11-18.** Scope: `src_mcp/runners/Files/RealPath.cs` (or the hook's call of it),
 > `src_mcp/runners/Reviewers/AntigravityReadOnly.cs`, their tests, and the documents that list the hook's limits. W1 and W2 are Windows
 > only. W3 (change 1.1) affects every OS, the Team server included, as a latent denial.
 >

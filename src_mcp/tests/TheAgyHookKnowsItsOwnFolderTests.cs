@@ -112,6 +112,39 @@ public sealed class TheAgyHookKnowsItsOwnFolderTests : AgyHookFixture
     }
 
     [Fact]
+    public void F13_AFolderThatIsNamedRightButCannotBeResolved_SaysTheSameLine_AndDenies()
+    {
+        var payload = Sent(Inside, Job1, [Job1, Second]).ToJsonString();
+        using var quietControl = new StringWriter();
+        Parse(AntigravityReadOnly.Decide(payload, Site(), quietControl)).Decision.Should().Be("allow", "the control: a resolvable folder");
+        quietControl.ToString().Should().BeEmpty("a folder that resolves says nothing");
+
+        EntryReader cannotLookAtTheFolder = path => Path.TrimEndingDirectorySeparator(path) == Home ? throw new IOException("the disk said no, with " + Inside) : RealPath.Lstat(path);
+        var sites = new Dictionary<string, HookSite>
+        {
+            ["the disk cannot look at it"] = SiteAt(Home, cannotLookAtTheFolder),
+            ["it is not local"] = SiteAt(Home, isLocal: text => !text.StartsWith(Home, StringComparison.Ordinal) && Local(text)),
+        };
+
+        foreach (var (why, site) in sites)
+        {
+            using var log = new StringWriter();
+
+            Parse(AntigravityReadOnly.Decide(payload, site, log)).Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason), why);
+            log.ToString().Should().Be(UnknownFolderLine + Environment.NewLine, why);
+        }
+    }
+
+    [Fact]
+    public void F14_APathThatCannotBeResolved_IsDeniedInSilence_WhileTheFolderIsFine()
+    {
+        EntryReader cannotLookAtTheRoot = path => Path.TrimEndingDirectorySeparator(path) == Job1 ? throw new IOException("the disk said no") : RealPath.Lstat(path);
+        using var log = new StringWriter();
+
+        Parse(AntigravityReadOnly.Decide(Call(Inside), Site(cannotLookAtTheRoot), log)).Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason));
+        log.ToString().Should().BeEmpty("only a folder the hook cannot determine is worth a line; the line names no path");
+    }
+    [Fact]
     public void F10_TheSiteFolderAndAnEntryNamingOneFolderThroughALink_AreTheSameFolder()
     {
         LinkToTheFixture("via");

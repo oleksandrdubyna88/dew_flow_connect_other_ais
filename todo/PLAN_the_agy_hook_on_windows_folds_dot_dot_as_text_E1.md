@@ -1,6 +1,6 @@
 # PLAN — E1 stories: the agy hook knows its own folder, looks only at local paths, and refuses a spelling Windows reads elsewhere
 
-> Status: **plan only, nothing implemented yet, 2026-11-18.** Parent:
+> Status: **coded and tested, 2026-11-18 (E1 on branch `fix/agy-hook-windows-dot-dot`, 33050c8f + review fixes); real runs on Linux and Windows passed (RESULTS §7); not merged, not released. Stories written 2026-11-18.** Parent:
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md) (its `## Epics`, E1; epoch 1,
 > one change recorded: 1.1). The only epic of the plan. Three stories, all three security stories, each with a spec written before
 > its code. **Cornerstone: E1.S2.** The parent's ledger line reads `Cornerstones: 1 of 1 — E1.S2`.

@@ -305,12 +305,15 @@ public static class AntigravityReadOnly
         }
     }
 
-    /// <summary>What a hook that does not run from its own <c>.agents</c> folder says, once, to standard error: without it a hook that denies everything is silent.</summary>
+    /// <summary>
+    /// What a hook that cannot determine its coai folder says, once, to standard error: without it a hook that denies everything is silent. A constant — no path, no type —
+    /// for a hook that does not run from its own <c>.agents</c> folder AND for one whose folder is named right but does not resolve (the disk cannot look at it, or it is not local).
+    /// </summary>
     internal const string UnknownFolderLine = $"coai {HookArgument}: denied, this hook does not run from its own .agents folder";
 
     private static bool KnowsItsFolder(HookSite site, TextWriter? log)
     {
-        if (site.CoaiFolder is not null)
+        if (AgyHookPlaces.CoaiFolderOf(site) is not null)
         {
             return true;
         }

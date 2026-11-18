@@ -88,12 +88,24 @@ delete may touch — go through `src_mcp/runners/Files/RealPath.cs`. A few other
   - A network file system mounted into the Unix tree at an ordinary folder (nfs, cifs) is spelled like a local path and is not detected.
     Its credentials are the mount's own. A custom autofs map on another root is not detected either.
   - The dot rule covers `Path` only, and only on Windows. A harmless `..` in a Windows `Path` is denied too, and the model can resend the
-    path without it. A dot segment in a link's own text is not judged. What NT does with an absolute link target that holds `..` is not measured.
-  - Another spelling of one entry (an 8.3 short name, a trailing dot or space, an NTFS stream name) is a different string. It does not
-    leave a root. Under a wide root that contains the coai folder, such a spelling of the coai folder's files is not seen as inside it.
-    The folder holds no secret.
-  - Windows: an 8.3 short name is a different string, so it is refused wrongly. Case is ignored, as `DocumentId.Comparison` does, so in a
-    directory made case-sensitive a sibling that differs only by case would be accepted. On macOS a different case is refused wrongly.
+    path without it.
+  - **A dot segment in a link's own text is not judged, and on Windows that is a probable escape (found by the Opus review of epic E1,
+    2026-11-18; not measured on a real machine).** On Windows a relative SYMBOLIC link inside a granted root whose stored text contains `..`
+    is walked by coai's resolver with the Unix rule: `..` goes to the parent of the path resolved so far, so the hook judges the target
+    inside the root. NT folds the same link text as text, so it reads outside. Example: `R\a` is a symlink to `b\..\..\outside\secret.txt`
+    and `R\b` is another symlink, to `deep\er`. The resolver walks `R\b` to `R\deep\er`, applies the two `..` to that, and lands inside `R`;
+    NT applies them to the text `b\..\..` and lands above `R`. Preconditions: symbolic links (not junctions: a junction cannot hold a
+    relative or dotted text) inside the root, which need Developer Mode or administrator rights, or a git checkout with
+    `core.symlinks=true` that holds such a link. The follow-up plan is
+    `todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md`. History, kept: until 2026-11-18 this limit read "A dot segment in a
+    link's own text is not judged. What NT does with an absolute link target that holds `..` is not measured." The absolute-target case is
+    still not measured.
+  - **Another spelling of one entry** (an 8.3 short name, a trailing dot or space, an NTFS stream name) is a different string, and it
+    fails in one of two directions. An 8.3 alias of a ROOT is refused, which is a false denial. An alias of the COAI FOLDER under a wide
+    root (for example `home.`, an 8.3 name, or `::$INDEX_ALLOCATION`) is not seen as inside the coai folder, so that folder's files can be
+    read. The folder holds no secret. Neither spelling leaves a root.
+  - Case is ignored, as `DocumentId.Comparison` does, so on Windows in a directory made case-sensitive a sibling that differs only by case
+    would be accepted. On macOS a different case is refused wrongly.
   - Windows measured 2026-11-18 on one build (10.0.26300) with agy 1.5.11: the payload has the same fields as on Linux, agy denies a read
     in the user profile by itself and allows a read under the temp folder, and the model sent no `.` or `..` in 11 ordinary runs. Whether
     agy cleans a path before it opens it is not measured. That Windows sends no NTLM handshake is shown by a recording reader in the tests;

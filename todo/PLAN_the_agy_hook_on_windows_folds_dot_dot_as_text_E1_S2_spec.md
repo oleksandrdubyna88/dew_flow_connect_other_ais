@@ -1,6 +1,6 @@
 # SPEC — E1.S2 (CORNERSTONE): the agy hook looks only at local paths (W2, gate findings 1 and 2)
 
-> Status: **spec only, nothing implemented yet, 2026-11-18.** Parent:
+> Status: **spec written 2026-11-18; its story is coded and tested, 2026-11-18 (E1 on branch `fix/agy-hook-windows-dot-dot`, 33050c8f + review fixes); real runs on Linux and Windows passed (RESULTS §7); not merged, not released.** Parent:
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md) (story S2), of
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md) (W2, "Gate round 1").
 > The cornerstone of the epic: spec by Fable, code by Sonnet, review by Opus. It builds on S1 (`HookSite`, `AgyHookPlaces`).

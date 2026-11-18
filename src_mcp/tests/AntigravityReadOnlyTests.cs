@@ -162,6 +162,7 @@ public sealed class AntigravityReadOnlyTests : IDisposable
     {
         var at = Made();
 
+        Said(await RunTheHook(ReaderCallOf(Path.Combine(at.Aaa, "inside.txt"), at.Aaa, at.Aaa, at.Home), at.AgysCwd)).Decision.Should().Be("allow", "the control: the same payload shape, a file inside a root");
         Said(await RunTheHook(ReaderCallOf(Path.Combine(at.Home, ".agents", "hooks.json"), at.Aaa, at.Aaa, at.Home), at.AgysCwd))
             .Should().Be(("deny", AntigravityReadOnly.DenyOutsideReason), "the coai folder is where the hook runs, not the payload's cwd");
     }

@@ -1,6 +1,6 @@
 # SPEC — E1.S1: the agy hook knows its own folder, and the payload's `cwd` names nothing (W3)
 
-> Status: **spec only, nothing implemented yet, 2026-11-18.** Parent:
+> Status: **spec written 2026-11-18; its story is coded and tested, 2026-11-18 (E1 on branch `fix/agy-hook-windows-dot-dot`, 33050c8f + review fixes); real runs on Linux and Windows passed (RESULTS §7); not merged, not released.** Parent:
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md) (story S1), of
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md) (W3, change 1.1).
 > A security story: spec by Fable, code by Sonnet, review by Opus. Not the cornerstone.

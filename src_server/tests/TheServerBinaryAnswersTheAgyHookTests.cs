@@ -93,8 +93,11 @@ public sealed class TheServerBinaryAnswersTheAgyHookTests : IDisposable
         (await Answer("read_file", At("aaa", "inside.txt"), cwd: At("aaa"), entries: [At("aaa"), At("home")])).Decision.Should().Be("allow");
 
     [Fact]
-    public async Task S8_TheServerBinary_DeniesTheCoaiFolder_WhereverThePayloadsCwdIs() =>
+    public async Task S8_TheServerBinary_DeniesTheCoaiFolder_WhereverThePayloadsCwdIs()
+    {
+        (await Answer("read_file", At("aaa", "inside.txt"), cwd: At("aaa"), entries: [At("aaa"), At("home")])).Decision.Should().Be("allow", "the control: the same payload shape, a file inside a root");
         (await Answer("read_file", At("home", ".agents", "hooks.json"), cwd: At("aaa"), entries: [At("aaa"), At("home")])).Should().Be(("deny", PathReason));
+    }
 
     [Fact]
     public async Task S10_TheServerBinary_DeniesAPathOnANetworkPlace()

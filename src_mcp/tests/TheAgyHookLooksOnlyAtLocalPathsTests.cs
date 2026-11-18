@@ -43,8 +43,18 @@ public sealed class TheAgyHookLooksOnlyAtLocalPathsTests : AgyHookFixture
     /// <summary>A recorder whose remote places are the ones under <see cref="RemoteHost"/> — independent of <see cref="Local"/>, which is the rule under test.</summary>
     private static Recorder Seeing(Func<string, Entry?>? standIn = null) => new(path => path.StartsWith(RemoteHost, StringComparison.OrdinalIgnoreCase), standIn);
 
-    /// <summary>A recorder whose remote places are whatever the locality rule refuses on this OS (the Windows spellings, which have no one host).</summary>
-    private static Recorder SeeingNonLocal(Func<string, Entry?>? standIn = null) => new(path => !Local(path), standIn);
+    /// <summary>
+    /// A recorder whose remote places are the Windows spellings of a share or a device, written as LITERAL text: two leading separators of either kind (a share, a
+    /// device, <c>\\?\</c>, <c>\\.\</c>, <c>//</c>), the NT prefix <c>\??\</c>, or a place under <see cref="RemoteHost"/>. Not <c>Junctions.IsLocal</c> — that is the rule under test, and a
+    /// recorder that asked it would call a path remote exactly when the rule refuses it, so a rule that said "local" to everything would pass these rows.
+    /// </summary>
+    private static Recorder SeeingNonLocal(Func<string, Entry?>? standIn = null) => new(IsSpelledRemote, standIn);
+
+    private static bool IsSpelledRemote(string path) =>
+        path.StartsWith(@"\\", StringComparison.Ordinal)
+        || path.StartsWith("//", StringComparison.Ordinal)
+        || path.StartsWith(@"\??\", StringComparison.Ordinal)
+        || path.StartsWith(RemoteHost, StringComparison.OrdinalIgnoreCase);
 
     private static string RemoteFile => Path.Combine(Remote, "x.txt");
 
@@ -258,6 +268,23 @@ public sealed class TheAgyHookLooksOnlyAtLocalPathsTests : AgyHookFixture
         var recorder = Seeing();
 
         DeniedWithoutALook(Call(doubled), recorder, Watched(recorder), control: Call(Inside));
+    }
+
+    [Fact]
+    public void N16_TheWindowsRecorder_CallsEverySpellingRemote_AndALocalPathNot_OnEveryOs()
+    {
+        // The recorder's judge is its own literal text, so it is alive on every host even though rows N20-N25 run on Windows only: a judge that matched nothing would pass them for ever.
+        foreach (var spelling in WindowsSpellings)
+        {
+            IsSpelledRemote(spelling).Should().BeTrue(spelling);
+        }
+
+        foreach (var local in new[] { Inside, W, @"C:\x", "/data/x", @"\x", "x" })
+        {
+            IsSpelledRemote(local).Should().BeFalse(local);
+        }
+
+        IsSpelledRemote(Path.Combine(RemoteHost, "x.txt")).Should().BeTrue();
     }
 
     // ---------- Windows only: the paths mean what Windows means by them ----------

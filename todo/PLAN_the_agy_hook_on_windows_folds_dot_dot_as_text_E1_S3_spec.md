@@ -1,6 +1,6 @@
 # SPEC — E1.S3: no dot segment where text folds, the documents, and the real Windows run (W1, gate findings 3 and 4)
 
-> Status: **spec only, nothing implemented yet, 2026-11-18.** Parent:
+> Status: **spec written 2026-11-18; its story is coded and tested, 2026-11-18 (E1 on branch `fix/agy-hook-windows-dot-dot`, 33050c8f + review fixes); real runs on Linux and Windows passed (RESULTS §7); not merged, not released.** Parent:
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text_E1.md) (story S3), of
 > [PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md](PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md) (W1, option A).
 > A security story: spec by Fable, code by Sonnet, review by Opus. It builds on S1 and S2. Not the cornerstone.

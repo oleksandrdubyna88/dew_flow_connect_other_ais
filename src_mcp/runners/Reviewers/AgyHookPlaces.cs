@@ -44,11 +44,16 @@ internal static class AgyHookPlaces
 
     private static Places? Placed(JsonObject call, HookSite site) =>
         Real(PathText(call, site), site) is { } target
-        && Real(Qualified(call["cwd"]), site) is not null
-        && Real(Qualified(site.CoaiFolder), site) is { } coai
+        && CwdResolves(call, site)
+        && CoaiFolderOf(site) is { } coai
         && Roots(call["workspacePaths"], site) is { } roots
             ? new Places(target, coai, roots)
             : null;
+
+    /// <summary>The coai folder the hook runs from, resolved the way every other path is; null when the site has none or it does not resolve (then every read is denied, and <see cref="AntigravityReadOnly"/> says so once).</summary>
+    internal static string? CoaiFolderOf(HookSite site) => Real(Qualified(site.CoaiFolder), site);
+
+    private static bool CwdResolves(JsonObject call, HookSite site) => Real(Qualified(call["cwd"]), site) is not null;
 
     /// <summary>
     /// The <c>Path</c> argument, fully qualified and admitted by its SPELLING: not two leading separators (a share or a device where Windows reads it, a path

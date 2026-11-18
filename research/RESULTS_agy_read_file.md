@@ -307,10 +307,10 @@ The hook of this change knows three things by itself, and the payload's `cwd` is
   supported: the payload is denied whole.
 - **W1 (S3).** On Windows a `Path` with a `.` or `..` segment is denied, before anything is resolved. `RealPath`'s own `..` rule does
   not change, because other sites rely on it. Off Windows the kernel is the walk, and nothing changes. The rule covers `Path` only: roots,
-  `cwd` and the coai folder are text from coai and agy, and a dot segment in a link's own text is left to the kernel.
+  `cwd` and the coai folder are text from coai and agy. A dot segment in a link's own text was first written down as "left to the kernel"; **that is wrong for Windows (correction 2026-11-18, review of E1)**: NT folds a relative link's text as text, while `RealPath` walks it with the Unix rule, so a relative symbolic link inside a root whose text holds `..` (`R\a` to `b\..\..\outside\secret.txt`, with `R\b` another link to `deep\er`) is judged inside and read outside. This is the probable escape of SECURITY.md, not measured on a real machine; the follow-up plan is `todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md`. On Unix the kernel is the walk and the Unix rule agrees with it.
 
 **Tests.** Rows are named in the specs and listed in `research/module_tests.md`. The classes are
-`TheAgyHookKnowsItsOwnFolderTests` (F1-F12; M1-M4 and S7-S9 with the built binaries), `TheAgyHookLooksOnlyAtLocalPathsTests` (N1-N25;
+`TheAgyHookKnowsItsOwnFolderTests` (F1-F14, F13 and F14 added by the review fixes of 2026-11-18; M1-M4 and S7-S9 with the built binaries), `TheAgyHookLooksOnlyAtLocalPathsTests` (N1-N25, N16 added by the review fixes;
 M5 and S10) and `TheAgyHookRefusesDotSegmentsWhereTextFoldsTests` (T1-T8; M6 and S11), on the shared fixture `AgyHookFixture`.
 
 
@@ -407,7 +407,7 @@ junction was removed afterwards.
 - **A harmless `..` is lost on Windows.** The model can send the path again without it.
 - **Another spelling of one entry** (an 8.3 short name, a trailing dot or space, an NTFS stream name) is a different string. Under a
   wide root it can name the coai folder's own files without being seen as inside it. The folder holds no secret.
-- **A dot segment in a link's own text** is not judged. What NT does with an absolute link target that holds `..` is not measured.
+- **A dot segment in a link's own text** is not judged, and on Windows that is a probable escape (correction 2026-11-18, review of E1; the first text read "What NT does with an absolute link target that holds `..` is not measured", which is still true of the absolute case): a relative symbolic link inside a root whose text holds `..` is walked with the Unix rule and read by NT with the text folded. Not measured on a real machine. Follow-up: `todo/PLAN_the_agy_hook_on_windows_judges_a_links_dot_text.md`.
 - **Whether agy cleans a path before it opens it** is not measured. The rule does not depend on it.
 - **One Windows build** was measured. Microsoft's description of path normalisation says the same.
 - **The wire.** That Windows sends no NTLM handshake is shown by the recording reader in the tests, not by a packet capture: the real run above could not take one (`pktmon` needs administrator rights).
