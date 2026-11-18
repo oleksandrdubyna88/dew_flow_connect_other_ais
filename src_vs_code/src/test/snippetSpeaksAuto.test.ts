@@ -72,10 +72,30 @@ test('the question half spells the production risk by phase and the workflow ste
   assert.ok(text.includes("consult once for the step's batch"), 'the workflow-step bullet never says to consult once for the batch');
 });
 
+/**
+ * The promises the released server does not make true: that nobody is ever asked, or that the AI's own question is the
+ * only road to a person (a question declared a production risk keeps its own path), or that nothing reaches a person.
+ */
+const WIDER_PROMISE = /never asks (you|a person|the person)|nobody is ever asked|only (road|way|path) (to|left to) (you|a person|the person)|never reaches (you|a person|the person)/i;
+
+test('the no-wider-promise pattern catches each shape it is there for', () => {
+  for (const shape of [
+    'The gate never asks a person.',
+    'Nobody is ever asked under auto.',
+    'That question is the only road to a person under Auto.',
+    "The AI's own question is the only way to you.",
+    'The only path to a person is your own question.',
+    'A question never reaches the person under auto.',
+  ]) {
+    assert.match(shape, WIDER_PROMISE, `the pattern misses: ${shape}`);
+  }
+  assert.doesNotMatch('A production risk keeps its own path to the person.', WIDER_PROMISE, 'the pattern catches a sentence the server makes true');
+});
+
 test('no half promises that nobody is ever asked', () => {
   for (const id of [GATE, DOCUMENT, FEATURE, QUESTION]) {
-    assert.doesNotMatch(half(id), /never asks (you|a person|the person)|nobody is ever asked/i,
-      `${id} promises that nobody is ever asked — an AI's own question still reaches the person after its consultants`);
+    assert.doesNotMatch(half(id), WIDER_PROMISE,
+      `${id} promises that nobody is ever asked, or that one road is the only road — an AI's own question still reaches the person after its consultants, and a production risk keeps its own path`);
   }
 });
 

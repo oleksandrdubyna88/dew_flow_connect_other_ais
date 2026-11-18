@@ -65,8 +65,8 @@ test('no paragraph is printed twice', () => {
 });
 
 test('the ordering contract is still stated, because the server does enforce it', () => {
-  // Making the gate additive must not soften what IS true: review_code refuses without a passed
-  // plan round, and an agent that does not know that meets it as a confusing error.
+  // Making the gate additive must not soften what IS true: review_code refuses until a plan round
+  // advanced and was resolved, and an agent that does not know that meets it as a confusing error.
   // Newline-tolerant: the sentence wraps in the snippet, and asserting its line breaks
   // would make this a test about formatting.
   assert.match(claudeSnippet().replace(/\s+/g, ' '), /REFUSES until a plan round has reached/);

@@ -23,8 +23,8 @@ export const DOCUMENT_SOURCE = '.agents/conventions/common/coai-document-gate.md
  *
  * <p>A third file for the same reason as the second: `coai-review-gate.md` was frozen against the
  * conventions migration baseline, so the sentence asking an AI to declare its own model could not
- * be added to step 1 where it belongs. The rule file says so, and says where it goes when the
- * inventory retires.</p>
+ * be added to step 1 where it belonged. The rule file said so, and said where it would go when the
+ * inventory retired.</p>
  */
 export const CALLER_SOURCE = '.agents/conventions/common/coai-caller-model.md';
 export const OUTPUT = 'src_vs_code/src/generated/gateRule.ts';
