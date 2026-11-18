@@ -313,10 +313,11 @@ only when the session records one (`AskUnderAuto.cs:50-53`).
    the person has already answered — is answered `no_answer_yet` at once, naming the hold's notice
    when one is recorded: tell the person, and stop as above. Any other hold from a build that predates
    `auto` is released by the next call that reads it. The next review call says so (or why it could
-   not be released yet: call again), and `status` shows it in the held round's note; `ask_human`'s
+   not be released yet: call again once), and `status` shows it in the held round's note; `ask_human`'s
    reply says nothing about a release that went through. One it could not write yet is answered
-   `no_answer_yet` with the reason: call again. Then call `resolve` once — with your decisions, or none — and
-   the stage advances.
+   `no_answer_yet` with the reason: call again once. If the release still cannot be written, tell the
+   person that reason and stop as above. Once it is released, call `resolve` once — with your decisions,
+   or none — and the stage advances.
 ```
 
 **(f) Before `:108` ("Report the verdicts and the reviewer counts"), a new paragraph:**
