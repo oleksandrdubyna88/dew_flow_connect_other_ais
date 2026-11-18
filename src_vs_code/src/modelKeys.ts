@@ -36,6 +36,18 @@ export const MODEL_KEYS: readonly string[] = [
  */
 export const SAFETY_KEYS: readonly string[] = ['kimiAllowNetworkSignIn'];
 
+/**
+ * The settings read from the layers that HOLD a value — folder, workspace, user — never from the registry's default.
+ *
+ * <p>VS Code can update the extension in place before it activates, and that window keeps the OLD settings registry until a
+ * reload. `onExhausted` is read through `config.get`, which answers the registry's default when no layer holds a value: the
+ * old default `human` there, which differs from this version's `auto` — so a window nobody chose anything in would write
+ * `COAI_ON_EXHAUSTED=human` and the server would raise holds that `auto` never releases. With none held, {@link settingsFrom}
+ * supplies this version's default (`DEFAULTS`). It is NOT in {@link USER_LAYER_KEYS}: a workspace value stays in force
+ * (parent plan § 4.6, "The value is read from the layers that HOLD one").</p>
+ */
+export const HELD_ONLY_KEYS: readonly string[] = ['onExhausted'];
+
 /** Every key the user-layer door answers: the model-bearing ones and the safety ones. */
 export const USER_LAYER_KEYS: readonly string[] = [...MODEL_KEYS, ...SAFETY_KEYS];
 
@@ -59,11 +71,20 @@ export interface IgnoredValue {
 type Inspect = (key: string) => Inspected | undefined;
 
 /**
- * A reader that answers a model key or a safety key from the user layer (then the manifest default), and every other
- * key exactly as `merged` does.
+ * A reader that answers a model key or a safety key from the user layer (then the manifest default), a held-only key
+ * from the layers that hold a value (folder, workspace, user — never the registry's default), and every other key
+ * exactly as `merged` does.
  */
 export function userLayerReader(merged: ConfigReader, inspect: Inspect): ConfigReader {
-  return (section) => (USER_LAYER_KEYS.includes(section) ? userLayerValue(inspect(section)) : merged(section));
+  return (section) => readKey(section, merged, inspect);
+}
+
+function readKey(section: string, merged: ConfigReader, inspect: Inspect): unknown {
+  if (USER_LAYER_KEYS.includes(section)) {
+    return userLayerValue(inspect(section));
+  }
+
+  return HELD_ONLY_KEYS.includes(section) ? heldValue(inspect(section)) : merged(section);
 }
 
 /** The two reads of a configuration this rule needs — `vscode.WorkspaceConfiguration`'s, narrowed so this stays vscode-free. */
@@ -85,6 +106,13 @@ export function userChatPresets(config: LayeredConfig): unknown {
 /** The user layer's value, or the manifest default when the person set none. */
 function userLayerValue(inspected: Inspected | undefined): unknown {
   return inspected?.globalValue ?? inspected?.defaultValue;
+}
+
+/** The value a layer HOLDS, folder over workspace over user — `undefined` when none does; never the registry's default. */
+function heldValue(inspected: Inspected | undefined): unknown {
+  const layers = inspected ?? {};
+
+  return layers.workspaceFolderValue ?? layers.workspaceValue ?? layers.globalValue;
 }
 
 /** Every model key a workspace or folder tried to set, in {@link MODEL_KEYS} order. */

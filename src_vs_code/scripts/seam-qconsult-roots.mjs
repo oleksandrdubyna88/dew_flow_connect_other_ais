@@ -121,7 +121,7 @@ function write(dataDir, roots, fakeCli) {
     }],
     qconsultRoots: roots,
   };
-  const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: [] };
+  const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: [], featuresSettled: false };
   writeFileSync(join(dataDir, 'settings.json'), serverSettingsJsonWith(settingsFrom((key) => stored[key]), vendorsFrom([]), write), 'utf8');
 }
 

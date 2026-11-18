@@ -10,6 +10,11 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 
+/** An `extraEnv` value of `undefined` REMOVES the inherited variable — a leg that must hold from its files alone says so. */
+function withoutUndefined(env) {
+  return Object.fromEntries(Object.entries(env).filter(([, value]) => value !== undefined));
+}
+
 /**
  * ONE live server, driven over the transport a real client uses.
  *
@@ -27,14 +32,14 @@ import { join } from 'node:path';
 export function sessionsFor({ command, args, dataDir, timeoutMs }) {
   return function serverSession(extraEnv = {}) {
     const child = spawn(command, args, {
-      env: {
+      env: withoutUndefined({
         ...process.env,
         COAI_DATA_DIR: dataDir,
         CLAUDE_CODE_SESSION_ID: '',
         CODEX_SESSION_ID: '',
         GEMINI_CLI_SESSION_ID: '',
         ...extraEnv,
-      },
+      }),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     const waiting = new Map();

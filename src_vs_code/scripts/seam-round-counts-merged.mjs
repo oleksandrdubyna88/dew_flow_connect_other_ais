@@ -80,7 +80,7 @@ function writeSettings(dataDir, cli) {
     baseUrl: '', executablePath: cli, pricePerMillionIn: 0, pricePerMillionOut: 0,
   }]);
   writeFileSync(join(dataDir, 'settings.json'), serverSettingsJsonWith({ ...DEFAULTS }, rows, {
-    writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: Object.values(FEATURES),
+    writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: Object.values(FEATURES), featuresSettled: false,
   }), 'utf8');
 }
 

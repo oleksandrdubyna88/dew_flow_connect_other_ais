@@ -48,6 +48,10 @@ export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
   // `restored` marker would stop a migration the importer never declined.
   migratedFrom: 'this machine\'s own copy of its settings from before the model catalog',
   catalogMigration: 'whether this machine\'s settings were moved into the model catalog',
+  // The witness of the one-time reset of When the rounds run out to Auto (E2.S2, onExhaustedMigration.ts): carried across, it would
+  // settle the importer's user layer without its value ever having been cleared — on a machine whose own run ended refused or
+  // incomplete. Settings Sync is different: it carries the value and the witness as one file.
+  onExhaustedResetToAuto: 'whether this machine\'s settings were reset to Auto once',
 };
 
 /**

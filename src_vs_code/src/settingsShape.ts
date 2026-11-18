@@ -26,9 +26,11 @@ import { CADENCE_SETTINGS, CadenceSettings, DEFAULT_CADENCE, cadenceEnv, cadence
 import { DEFAULT_QCONSULT, QCONSULT_SETTINGS, QconsultSettings, qconsultEnv, qconsultSettingsFrom } from './qconsultSettings';
 import { CommandModels, commandModelsEnv, commandModelsFrom } from './commandModels';
 import { commandsFrom, type CommandRow } from './commands';
+import { ON_EXHAUSTED_CHOICES, type OnExhausted } from './onExhaustedPanel';
+import { onExhaustedEnv } from './onExhaustedWire';
 import { DEFAULT_SECURITY, securityEnv, securityLaneFrom, type SecurityLane } from './securityLane';
 
-export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
+export type { OnExhausted };
 
 /** How often split work is gated (issue #131) — `COAI_GATE_PER` on the wire. */
 export type GatePer = 'epic' | 'task';
@@ -273,7 +275,7 @@ export const DEFAULTS: CoaiSettings = {
   bugzServer: '',
   vibeHomesDirectory: '',
   kimiAllowNetworkSignIn: false,
-  onExhausted: 'human',
+  onExhausted: 'auto',
   maxConcurrency: 3,
   maxPerProvider: 2,
   reviewerTimeoutMinutes: 10,
@@ -471,6 +473,8 @@ export function envBlock(
    * when it is listed. Empty — nothing new — when it is not known yet.
    */
   features: readonly string[] = [],
+  /** Whether `features` is the binary's SETTLED answer — empty then means an older binary, not "not asked yet". */
+  featuresSettled = false,
 ): Record<string, string> {
   const env: Record<string, string> = securityEnv(settings.securityLane, installedServerVersion, features);
   // "Differs from the shipped list" is asked of what CROSSES — both lists as the server would read
@@ -548,9 +552,8 @@ export function envBlock(
       env[`COAI_ENABLED_${role.toUpperCase()}`] = 'false';
     }
   }
-  if (settings.onExhausted !== DEFAULTS.onExhausted) {
-    env['COAI_ON_EXHAUSTED'] = settings.onExhausted;
-  }
+  // What a binary is told about the policy depends on whether it can read Auto (onExhaustedWire.ts holds the table).
+  Object.assign(env, onExhaustedEnv(settings.onExhausted, features, featuresSettled));
   // The consultant's key, only when a caller differs from its shipped pair (consultantsWire.ts holds the rule and its reasons).
   Object.assign(env, consultantsEnv(settings.consult, vendors, installedServerVersion, priceOf, features));
   if (settings.consult.turns !== DEFAULT_CONSULT.turns) {
@@ -625,9 +628,7 @@ function asCount(value: unknown, fallback: number): number {
 
 
 function asOnExhausted(value: unknown): OnExhausted {
-  return value === 'continue' || value === 'escalate' || value === 'human' || value === 'good_enough'
-    ? value
-    : DEFAULTS.onExhausted;
+  return ON_EXHAUSTED_CHOICES.some((choice) => choice.value === value) ? (value as OnExhausted) : DEFAULTS.onExhausted;
 }
 
 
