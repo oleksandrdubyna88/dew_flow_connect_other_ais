@@ -6,7 +6,9 @@
 > (its `## Epics`, § *E3*; the design is its § 4.7 snippet item, § 8 PR 3 and note N1). A stories document keeps no
 > change ledger: a change to this epic is an entry in the parent. Epoch 3 of the parent is open with entry 3.1, so
 > **one more accepted change stops the parent**. This document records no change; § 9 lists what it found for the
-> parent and says, for each, why it is or is not a change.
+> parent and says, for each, why it is or is not a change. **Revised 2026-11-18** after its coai plan round (`proceed`;
+> four findings accepted: G0–G3) and an Opus judge (M1–M6, m1–m7 and the nits), each verified against the code
+> before it was folded.
 >
 > Scope: four rule files and their records in `dew_flow_conventions`, a short conventions plan that names the change
 > there, one conventions release and its promotion, a pin bump in each of the nine consumers, and in this repository
@@ -19,7 +21,7 @@
 When E3 is done, the shared gate text is true under `auto`. An AI that meets `not_reviewed` says in its summary that
 the stage was not reviewed and why, resolves, and goes on. An AI that meets `consult_first` asks the consultants and
 comes back with the `consultId`. No sentence promises a person that the default never calls, and no sentence promises
-more than the released server does. The parent's E3 done-when 1–5 are the bar (§ 10 maps them).
+more than the released server does. The parent's E3 done-when 1–5 are the bar (§ 11 maps them).
 
 The parent's two stories are kept:
 
@@ -85,7 +87,7 @@ Checked and **not** changed, each with the reason:
 - `tools/ownership-check.mjs:36`, `:48`, `:59` — product words, `mcp__*__*` names, and `the|its|our` + `gate`,
   `panel`, `extension`. New text uses bare tool names (`ask_consultants`), "this gate" and "the ConnectOtherAIs panel"
   shapes only, and adds no undeclared name.
-- Size caps: `tools/rules.test.mjs:522-532` caps the always core, one gpu scope and five rules by id; none selects a
+- Size caps: `tools/rules.test.mjs:522-532` caps the always core, one gpu scope and seven rules by id; none selects a
   coai rule (their `tasks` exclude `gpu`, and none is `always`). The resolver's per-response 32 KiB is read with
   `--only`.
 
@@ -237,7 +239,9 @@ has reached a verdict that advances the stage (`proceed`, `continue_anyway`, `go
 ```
 
 (It keeps "REFUSES until a plan round has reached", which `snippetIsAdditive.test.ts:72` asserts. It is true of an
-older server too: three of the four words advance there, § 2.1's last row, and the fourth never comes.)
+older server too: three of the four words advance there, § 2.1's last row, and the fourth never comes. A held plan round
+the person releases with Proceed also unlocks `review_code` after its `resolve`; step 6 says to resolve then, so the
+sentence does not repeat it.)
 
 **(c) Step 4, `:61-62`.** Now:
 
@@ -289,25 +293,45 @@ New:
 The rest of that paragraph (`:88-96`, from "After `call_human`, `review_plan` and `review_code` REFUSE" to "ignores one
 that would not.") is kept word for word.
 
+What (e) below rests on, read at coai `82a4eeac`: a legacy hold is released only when no answer of the person's is on
+file (`SessionPolicy.cs:123-135`, "The person's answer wins"; `LegacyHold.cs:7`, `Stands` = held and predating
+`auto`). The release's sentence is returned by a review entry (`RoundEngine.cs:272`, `:283-285`) and by the
+fresh-document check (`PanelService.cs:1163-1165`); `status` returns the rounds with the held round's note
+(`LegacyHold.Note`, "released by policy auto: …", `LegacyHold.cs:31`). `ask_human` releases through
+`CurrentUnclaimed` (`AskHumanService.cs:104-105`) and then decides on the released session: with `HumanGate` false
+the door is the conversation (`AskGateDesk.cs:156-157`), so its reply is the AI's-own-question answer —
+`consult_first` without a `consultId` — and does not mention the release. Only a release that could not be written
+reaches the card door and says "call again" (`AskUnderAuto.cs:32-37`). The person's-hold sentence names the notice
+only when the session records one (`AskUnderAuto.cs:50-53`).
+
 **(e) After `:96`, a new paragraph inside step 6** (before "This is enforced because it was not", `:98`):
 
 ```markdown
-   Under `auto` this call never waits and writes no card. On a hold the person owns — one raised
-   while a policy asked a person — `ask_human` answers `no_answer_yet` at once and names the hold's
-   notice: tell the person, and stop as above. A hold left by a build that predates `auto` is
-   released by the next call that reads it, and the reply says so (or why not yet: call again); then
-   call `resolve` once — with your decisions, or none — and the stage advances.
+   Under `auto`, `ask_human` never waits and writes no card. A hold the person owns — one raised
+   under a policy that asks a person by a server that knows `auto`, or one from before `auto` that
+   the person has already answered — is answered `no_answer_yet` at once, naming the hold's notice
+   when one is recorded: tell the person, and stop as above. Any other hold from a build that predates
+   `auto` is released by the next call that reads it. The next review call says so (or why it could
+   not be released yet: call again), and `status` shows it in the held round's note; `ask_human`'s
+   reply says nothing about a release. Then call `resolve` once — with your decisions, or none — and
+   the stage advances.
 ```
 
 **(f) Before `:108` ("Report the verdicts and the reviewer counts"), a new paragraph:**
 
 ```markdown
 **Your OWN question to `ask_human`** — not one this gate asks — is answered `consult_first` under
-`auto` when it brings no `consultId` the server accepts: call `ask_consultants`, settle it with them,
-and call `ask_human` again with their `consultId` only for what you did not settle. Then it reaches
-the person (`ask_in_conversation`), as it does when no consultant can be had. The question rule,
-`common.coai-question-consultant`, says how; a production risk keeps its own path there.
+`auto` when it brings no `consultId` the server accepts, unless no consultant can be had or it is a
+production risk: call `ask_consultants`, settle it with them, and call `ask_human` again with their
+`consultId` only for what you did not settle; then it reaches the person (`ask_in_conversation`).
+When no consultant can be had it reaches the person at once, and its `note` says why. A production
+risk keeps its own path: the question rule, `common.coai-question-consultant`, says which.
 ```
+
+Checked against every case of `AskGate.Autonomously` (`AskGate.cs:152-160`): the card door (no card, answered at once —
+(e)); a production risk (today's decision — "its own path", spelled out in § 4.4 (f)); a verified `consultId` (the
+person); no consultant can be had (the person, with the stand-down note); otherwise `consult_first`. Nothing in (d)–(f)
+says `consult_first` comes in the second, fourth or first case.
 
 Kept as they are, and why: `:21-40` (additive, commands); `:63-82` step 5 — "refused … when … `call_human` awaits a
 person" is conditional and true under every policy; `:98-106` (the measured case, "Stop" means stop shipping).
@@ -392,16 +416,19 @@ New:
 ```markdown
 **What the verdicts mean.** One round is the budget. A second runs only on one of three grounds — a
 reviewer failure, a `blocking` finding, or the person asking for it — and no request of yours adds a
-third. Under policy `auto` the person is never asked, so only the first two grounds remain.
+third. Under policy `auto` the person cannot ask for a second round, so only the first two grounds remain.
 ```
 
 **(c) After `:61` (the end of the `proceed` or `good_enough` bullet), a new bullet:**
 
 ```markdown
-- `not_reviewed` — under policy `auto`, nobody answered in the round that closes the review (a retry
-  that failed again, or the only round of a budget of one). Nothing was reviewed: resolve with
-  `feature`, say in your summary that the feature review did NOT review the work and why, and carry
-  on — it does not block the release, and it is never a pass.
+- `not_reviewed` — under policy `auto`, nobody answered the round that closes the review: a second
+  round (after a reviewer failure or a `blocking` finding in the first) or the only round of a budget
+  of one. That closing round reviewed nothing; a first round that was answered stays what it was, with
+  your decisions on its findings. Resolve with `feature` — a decision for each finding the reply still
+  carries (the security lane's), otherwise none — and say in your summary that the closing round was
+  NOT reviewed and why, apart from what an earlier round reviewed and found. It does not block the
+  release, and it is never a pass.
 ```
 
 **(d) `:68-71`, the person's request.** Now:
@@ -489,8 +516,9 @@ New (one sentence added at the end):
    — it is accepted once, from this session, for 30 minutes — and with `document` or `feature` when the
    question belongs to one of those reviews. For your own question it answers `ask_in_conversation`:
    ask the person in this conversation, with your own question tool. Without an accepted `consultId`,
-   under policy `auto`, it answers `consult_first` instead and reaches nobody: ask the consultants, as
-   above, and come back with the `consultId` only for what they did not settle.
+   under policy `auto`, it answers `consult_first` instead and reaches nobody — when a consultant can
+   be had and the question is not a production risk: ask the consultants, as above, and come back with
+   the `consultId` only for what they did not settle.
 ```
 
 **(d) `:60-62`.** Now:
@@ -528,8 +556,41 @@ New:
       by asking the person. The review gate's own question and a production risk took their own paths.
 ```
 
-`questionSnippet.test.ts` keeps passing on its phrases (`:38-68`). Kept as they are: `:63-65` (a production risk keeps
-its own path — exactly the server's § 2.1 row), `:72-83` (no consultant: the server stands down, `AskGate.cs:158`).
+**(f) `:63-65`, a production risk.** Now:
+
+```markdown
+- **A production risk keeps its own path.** When a wrong answer could take production down, pass
+  `productionRisk: true` with a `riskReason` to `mcp__coai__ask_human`: it asks the consultants itself
+  and returns their answers in `consultantAnswers` — show those beside your question.
+```
+
+New — the old text holds only while the work is being built (`AskGate.cs:214-217`: no consultant in the planning or
+released phase, with the question mode off, or on a held round's card without a risk; `:223-232`: in the building
+phase, the consultants first with their answers in the reply, or beside the card; none to be had, the person at once).
+Under `auto` the same decision is taken (`:155`), except that a held round's card door writes no card (`:154`,
+`AskHumanService.cs:128`):
+
+```markdown
+- **A production risk keeps its own path.** When a wrong answer could take production down, pass
+  `productionRisk: true` with a `riskReason` to `mcp__coai__ask_human`. While the work is being built it
+  asks the consultants itself and returns their answers in `consultantAnswers` — show those beside your
+  question. While the plan is being formed, after the release, with the question consultants switched
+  off, or when none can be had, it reaches the person at once with no consultant, under every policy.
+  On a round held under policy `auto` it writes no card: the hold is answered `no_answer_yet` at once.
+```
+
+**(g) After `:68`, the workflow step.** `:66-68` say a skill's or workflow's step that asks the person still asks. Under
+`auto`, `ask_human` answers such a question `consult_first` like any other of the AI's own (`AskGate.cs:159`: it has
+no notion of a workflow step). One sentence is added at the end of that bullet:
+
+```markdown
+  Under policy `auto` `mcp__coai__ask_human` answers such a question `consult_first` too, when it brings
+  no accepted `consultId` and a consultant can be had: consult once for the step's batch, then bring the
+  `consultId` and put the step's questions to the person.
+```
+
+`questionSnippet.test.ts` keeps passing on its phrases (`:38-68`; "`productionRisk: true` with a `riskReason`" is kept
+in (f)). Kept as they are: `:72-83` (no consultant: the server stands down, `AskGate.cs:158`).
 
 ### 4.5 The markers (N1)
 
@@ -555,12 +616,13 @@ repository's pin bump lands. That is the panel saying the truth during the casca
 
 ### 4.6 Tests and checks — RED first
 
-1. **RED.** After the four edits, before recording them: `node --test tools/rules.test.mjs` fails *"EVERY rule's live
-   body matches research/rule-bodies.json"* naming each of the four ids ("the body changed without its bodySha256").
-   Watch it name exactly those four — a fifth id means an unintended edit.
+1. **RED.** After the four edits, before recording them: `node tools/rule-bodies.mjs` (verify mode) exits 1 and names
+   every drifted rule — exactly the four ids; a fifth means an unintended edit. (The test *"EVERY rule's live body
+   matches research/rule-bodies.json"*, `tools/rules.test.mjs:153-176`, asserts in a loop and stops at the first
+   mismatch, so it cannot show the set.)
 2. **GREEN.** `node tools/rule-bodies.mjs --update common.coai-review-gate common.coai-document-gate
-   common.coai-feature-gate common.coai-question-consultant`; the test passes. **Break it:** revert one marker
-   (`v6` → `v5`) without `--update`: the same test names that id; restore.
+   common.coai-feature-gate common.coai-question-consultant`; verify mode exits 0 and `node --test tools/rules.test.mjs`
+   passes. **Break it:** revert one marker (`v6` → `v5`) without `--update`: verify mode names that id alone; restore.
 3. `node --test tools/canonical-markers.test.mjs` — each body still starts with its marker and heading.
 4. `node tools/ownership-check.mjs` exit 0; and a grep of the added lines for `\b(the|its|our)\s+(gate|panel|extension)\b`
    finds nothing.
@@ -569,10 +631,15 @@ repository's pin bump lands. That is the panel saying the truth during the casca
 7. `node tools/rules.mjs read --repo . --task implement --only common.coai-review-gate` shows the new body between
    BEGIN and END with the recorded hash; the same for the other three.
 8. **A dry run of the consumer's build, before the conventions PR merges** — the step that would have caught the
-   2026-09 marker displacement upstream: in a throwaway local branch of this coai worktree (never pushed), point
-   `.agents/conventions` at the conventions branch head and commit the gitlink (`prepare-gate` refuses a dirty
-   submodule), then `npm run compile` and the § 5.3 tests. Expected: the hash guard and the version pins red exactly
-   as § 5.3 step 2 predicts, `prepare-gate` itself green. Delete the branch after.
+   2026-09 marker displacement upstream. In a throwaway local branch of this coai worktree (never pushed):
+   (i) write § 5.3 scenario 1's file, `src_vs_code/src/test/snippetSpeaksAuto.test.ts`, and commit it at the old pin —
+   it goes RED as § 5.3 scenario 1 says; (ii) fetch the conventions branch head into the submodule
+   (`git -C .agents/conventions fetch <the conventions worktree> docs/coai-gate-words-for-auto`), check it out and
+   commit the gitlink (`prepare-gate` runs `rules check`, which refuses a gitlink that differs from the checked-out
+   commit); (iii) `npm run compile` and the snippet tests. Expected: `prepare-gate` green; the new file GREEN; red
+   only where a test compares a constant with a marker (§ 5.3 scenario 2's list); any red in a phrase or content
+   assertion is a defect in S1's text, fixed in conventions before its merge. The file is carried to § 5.3 unchanged
+   (cherry-picked onto `docs/auto-mode-e3`); delete the throwaway branch after.
 9. **The held-gate moments, by reading** (the Opus review): after the new step 6, moment 1 (`call_human` just returned)
    still prescribes `ask_human`; 2 `point_to_notice_card` or `ask_human`; 3 `resolve`; 4 `ask_human`
    (`tools/fixtures/behaviour/held-gate.json`).
@@ -596,7 +663,7 @@ Its content, carried over rather than linked (cross-repository citations are pat
 here, in a paragraph); the source, cited as `dew_flow_connect_other_ais · todo/PLAN_auto_never_asks_a_person.md`
 § *E3* and this document; the wording of § 4.1–4.4 as a table of file · lines · what changes; § 4.5's markers; § 4.6's
 checks; the two-way reading of § 4.8 in brief; the release, the promotion pre-checks and the nine bumps of § 5.1–5.2;
-a Definition of Done. Its ledger opens at its first approval (its plan round's first passing verdict).
+a Definition of Done that includes § 5.4a's post-deploy run against a bumped consumer. Its ledger opens at its first approval (its plan round's first passing verdict).
 
 **A boundary on both sides.** `todo/PLAN_product_manuals_go_home.md` has `common/coai-review-gate.md` and
 `common/coai-document-gate.md` in its scope and plans to move "tool names, arguments, verdict words" to the product. The
@@ -621,7 +688,9 @@ match their text.
 | gate `:42-43`, "REFUSES until a plan round has reached `proceed`" | a plan round may end `good_enough` or `not_reviewed`; after `resolve`, `review_code` runs | narrower than the server, not opposite: the reply's own instruction ends "then proceed", and the call is accepted. The sentence was already narrower before E1 (`continue_anyway` and `good_enough` advanced then) |
 | gate step 4 names `revise` and `proceed`; document step 4 lists no `not_reviewed` | `not_reviewed` arrives with its instruction (`RoundEngine.cs:954-962`), and the server instructions name it (`Program.cs:2452`) | silent, not contradicted: the reply says what to do |
 | gate step 6, `call_human` → stop, `ask_human`, the hold | never `call_human` under `auto` | the step never fires |
-| gate step 6, "Call `ask_human`. Their answer decides", on a hold that a policy asking a person raised before the switch | `no_answer_yet` at once, naming the notice; a hold from before `auto` is released with a sentence | the old text expects a wait; the reply comes at once and says the same thing to do — the person answers on the notice |
+| gate step 6, "Call `ask_human`. Their answer decides", on a hold the person owns (raised under a policy asking a person by a server that knows `auto`, or a hold from before `auto` the person already answered) | `no_answer_yet` at once, naming the notice when one is recorded | the old text expects a wait; the reply comes at once and says the same thing to do — the person answers on the notice |
+| the same step on a hold from before `auto` that nobody answered | released by the first call that reads it; a review call answers with the release's sentence; `ask_human`'s reply is silent about it (§ 4.1, what (e) rests on) | the old text says to ask the person; an AI that calls `ask_human` first gets `consult_first` or the conversation door for its question and no word of the release, and learns it at its next review call or `status`. Nothing is passed wrongly: one `resolve` is still needed to advance. Recorded as an E1 residual, § 9 P6 |
+| question `:66-68`, a workflow step's questions go to the person | `consult_first` for them too, without an accepted `consultId` while a consultant can be had | the old text does not say to consult first for them; the reply says so, and the questions reach the person after one consultation |
 | feature `:68-71`, the person's request as a third ground; question `:60-62`, the request "on a card directly" | under `auto` the request is answered at once: no second round on request, the review closes on `resolve` (`AskUnderAuto.cs:17-19`) | **the one stale promise**: the AI asks, is told at once, and resolves. Nothing waits and nothing passes that should not; the PR names it as the window's residual |
 | feature `:72-74`, `call_human` at the cap | `good_enough`, or `not_reviewed` when nobody answered | the old sentence describes another policy; under `auto` it never fires and the reply instructs |
 | question `:28-29`, "no question reaches the person before the consultants have had it" | `consult_first` for an own question with no accepted `consultId` | the same bar, now enforced: they agree |
@@ -658,8 +727,9 @@ with numbers that say it moved. Then the whole feature is reviewed and the plan 
 
 ### 5.1 Before the promotion — asked and counted (MANDATORY)
 
-A promotion reddens every consumer's `pin-check` at once (conventions `README.md` § *Editing discipline*). So, after S1
-merged and before the dispatch:
+A promotion reddens `pin-check` at once in all nine consumers — on `main` and on every open pull request there, each
+of which then needs a rebase onto its repository's bump (conventions `README.md` § *Editing discipline*, "reddened every
+open pull request"). So, after S1 merged and before the dispatch:
 
 1. **In-flight consumer releases.** For each of the nine, look for an open release pull request
    (`gh pr list --state open --search "release in:title"`) and a release workflow running, and ask — the consultants
@@ -682,7 +752,15 @@ each from its own worktree and branch: `git submodule update --init .agents/conv
 `git -C .agents/conventions fetch origin release && git -C .agents/conventions checkout <sha>` (or
 `git submodule update --remote` — watch for `pin-check`'s `LOCAL OVERRIDE`), `git add .agents/conventions`, commit,
 `node .agents/conventions/tools/pin-check.mjs` after the commit, push, PR, CI, CodeRabbit read, threads resolved, merge.
-A CI check present and green on the head sha before each merge, never "no failure found".
+A CI check present and green on the head sha before each merge, never "no failure found". Each PR body records,
+as conventions `README.md` § *Editing discipline* asks ("validation and rollback recorded"):
+
+```markdown
+Bumps `.agents/conventions` <old sha8> → <new sha8> (release; the coai gate's words for policy auto —
+coai todo/PLAN_auto_never_asks_a_person.md E3, conventions <PR>).
+Validation: rules check <output line>; pin-check <output line>; gate-snippet-check <output line, "(v6)">; CI <run url>.
+Rollback: a forward release in conventions (revert there, promote), then bump again — never a pin moved back by hand.
+```
 
 Order, the F41 precedent (§ 2.5): `dew_flow_benchmark`, `dew_flow_mcp`, `dew_flow_sidecar_rust`, `dew_flow_vscode_kit`,
 `wsl_care`, `dew_flow_creds_for_devs`, `dew_flow_amd_r9700_tuning_ai`; then **`dew_flow_rag_qln` after benchmark and
@@ -708,23 +786,32 @@ this document's and the parent's status lines and `todo/README.md`.
    - the document half contains `` `not_reviewed` `` and "NOT reviewed";
    - the feature half contains `` `not_reviewed` `` and "only the first two grounds remain";
    - the question half contains `` `consult_first` `` and "the floor rises to this rule's bar";
-   - **no wider promise**: no half matches `/never asks (you|a person|the person)|nobody is ever asked/i`, and the gate
-     half names "a server too old to know `auto`".
+   - the question half says "While the plan is being formed" in its production-risk bullet, and "consult once for the
+     step's batch";
+   - **no wider promise**: no half matches `/never asks (you|a person|the person)|nobody is ever asked/i`; the gate
+     half names "a server too old to know `auto`" and, whitespace-normalised, "unless no consultant can be had or it
+     is a production risk".
 
-   Run it: RED, each assertion failing on the missing phrase (not on a compile error).
-2. **Move the gitlink to the promoted sha**, `npm run compile`, run the snippet tests. Expected RED, and only these: the
-   hash guard (`snippetVersion.test.ts:105-128`) names the new sha and asks for `ARTEFACT_VERSION` 19 and `(v19)`;
-   `featureSnippet.test.ts:44` (the paste no longer contains `coai-feature v3`); `questionSnippet.test.ts:36`
-   (`coai-question v1`); `snippetVersion.test.ts`'s `the snippet carries a version a machine can read` (the paste says
-   v6, the constant 5). The new file is GREEN now. Any other red is a defect in S1's text and goes back to conventions
-   as a fix, not into a test here.
+   Run it: RED on every new phrase, each failing on the missing phrase (not on a compile error). Green from the start,
+   and staying green: "Do not proceed on your own judgement", "REFUSES until a plan round has reached", and the
+   no-wider-promise pattern. (Written first in § 4.6 step 8's throwaway branch and cherry-picked here.)
+2. **Move the gitlink to the promoted sha**, `npm run compile`, run the snippet tests. Expected RED: every test that
+   compares a constant with a marker in the text. At `82a4eeac` that is the hash guard (`snippetVersion.test.ts:105-128`,
+   naming the new sha, `ARTEFACT_VERSION` 19 and `(v19)`); in `snippetVersion.test.ts` also `:35-37` and `:39-44`
+   (`snippetVersionIn` reads 6 against the constant 5), `:46-53`, `:68-70` and `:72-80` (they build an older or newer
+   paste by replacing `coai-snippet v${SNIPPET_VERSION}`, which is no longer in the text, so the status is wrong), and
+   `:590-600` (each half's marker against its row's version); `snippetDiscovery.test.ts:39` and `:59` (the same
+   replacement); `featureSnippet.test.ts:44` (`coai-feature v3`); `questionSnippet.test.ts:36` (`coai-question v1`).
+   The new file is GREEN now. A red outside that class — a phrase or content assertion — is a defect in S1's text and
+   goes back to conventions as a fix, not into a test here.
 3. **GREEN**, in `claudeSnippet.ts`: `SNIPPET_VERSION = 6`, `SNIPPET_BODY_SHA` = the printed value,
    `ARTEFACT_VERSION = 19`, `DOCUMENT_VERSION = 4`, `FEATURE_VERSION = 4`, `QUESTION_VERSION = 2`; remove `frozen`
    from every `KNOWN_HALVES` row and the `!half.frozen` filter in the hash test (every half is raisable). In
    `package.json`: `"Copy the CLAUDE.md snippet (v19)"`. In the version tests: `featureSnippet.test.ts:37-48` → v4 (and
    its comment's history line), `questionSnippet.test.ts:28-36` → v2.
-4. **Break it.** Put the gitlink back at `b1746499` (the old pin) and compile: scenario 1's file goes RED on every
-   phrase, and the version tests go RED. Restore.
+4. **Break it.** Put the gitlink back at `b1746499` (the old pin) and compile: scenario 1's file goes RED on every new
+   phrase (the two kept phrases and the no-wider-promise pattern stay green), and the constant-against-marker tests of
+   scenario 2 go RED the other way. Restore.
 5. **Words that were true of the freeze**, rewritten as history in the same commit — the freeze ended 2026-09-15
    (conventions `747887d`), the halves stay separate files each with its marker, and merging some back is the
    conventions' manuals plan's step 4: `claudeSnippet.ts` docblocks at `:45-67`, `:115-128`, `:131-141`, `:191-210`,
@@ -740,7 +827,9 @@ this document's and the parent's status lines and `todo/README.md`.
    full run; `gate-snippet-check.mjs` prints `OK — … (v6)`; `pin-check.mjs` green after the commit.
 
 Commit type: `fix(extension): the CLAUDE.md snippet speaks policy auto — not_reviewed, consult_first, call_human as the
-operator's choice (v19; E3 of the auto plan)`, so release-please opens an extension release for it (§ 5.4). Then the
+operator's choice (v19; E3 of the auto plan)`, so release-please opens an extension release for it (§ 5.4). The PR is
+merged by squash, so **the PR's title is that line** — release-please reads the squashed commit, whose subject is the
+title, not the branch's commit messages. Then the
 gate's `review_code` over this branch, an Opus review beside it, the PR (over the cap: the owner's agreement, § 5.1),
 CI with its checks present and green, merge.
 
@@ -754,15 +843,34 @@ next one, and `common.coai-feature-gate` asks for the feature review **before th
    #1011); `epics` E1 (#1011, `feat/auto-mode-e1`), E2 (#1018, `feat/auto-mode-e2`), E3 (this branch's PR and the
    conventions PR); `lessons` honest in all three arrays — among the findings: a reviewer of this repository sees E3's
    rule text only as a moved gitlink and the snippet constants, so the conventions PR is named in E3's summary; the
-   stale-promise residual of § 4.8 A; § 9's P2 and P3. `callerModel` your own id. `resolve` every finding with
+   stale-promise residual of § 4.8 A; § 9's P2, P3 and P6; and that the range `e829bba8..main` also holds work outside this
+plan, named so reviewers leave it alone: #1015 and #1019 (the terminal door), #1017 (the agy hook plan's promotion),
+#1013 (extension 0.88.0) and #1020 (the server 0.16.3 deploy record). #1012, #1014 and #1022 are this plan's release
+bookkeeping (the parent's re-review table keeps #1014 as `fits`). `callerModel` your own id. `resolve` every finding with
    `feature`; accepted fixes land as NEW PRs, never by rewriting a merged epic.
 2. **The extension release.** The release-please PR the `fix(extension)` commit opens (0.89.1 by its count), with a
    `## Extension 0.89.1 — <date>` section written into `src_vs_code/CHANGELOG.md` in that PR: the snippet is v19; what
-   changed for an AI that reads it (`not_reviewed`, `consult_first`, `call_human` only under a policy that asks a
-   person); that a repository's mounted rule or paste at the old numbers reads `older` until its pin bump; the server
-   to pair it with (coai-mcp 0.66.0). Merged by squash, the tag pushed alone, the new run's id checked against the ids
+   changed for an AI that reads it (`not_reviewed`; `consult_first`; `call_human` only under a policy that asks a
+   person); the correction § 9 P3 decided, in plain words: under Auto **the gate** never asks a person, while **your
+   AI's own question** reaches the person after its consultants, or at once when none can be had — and a question it
+   marks as a production risk keeps its own path and may reach the person without the consultants first, which
+   0.89.0's entry did not say; that a repository's mounted rule or paste at the old numbers reads `older` until its pin
+   bump; the server to pair it with (coai-mcp 0.66.0). Merged by squash, the tag pushed alone, the new run's id checked against the ids
    recorded before (`common.task-lifecycle` § 3), and `POST_DEPLOY.md` run against the published version, as for
    0.89.0.
+
+### 5.4a The conventions' post-deploy check
+
+The conventions deliver through gitlinks, so their `POST_DEPLOY.md` names a consumer checkout as the target. After
+coai's bump (§ 5.3) merges, from a pulled checkout of coai `main`:
+
+```bash
+node .agents/conventions/tools/post-deploy-check.mjs --target <that checkout>
+```
+
+Items 1–2 are automatic (`rules check` on the target, and `gate-snippet-check`, which prints `(v6)`); item 3 is the
+manual native-agent smoke and is run or recorded as not run, with the reason. The result, its date and the delivered
+sha go into the conventions plan; the conventions plan's Definition of Done carries this run.
 
 ### 5.5 The promotion of the plan
 
@@ -780,6 +888,8 @@ conventions plan is promoted in its own repository once its release and nine bum
       points at S1's merge sha.
 - [ ] Nine bump PRs merged with their checks present and green; rag_qln's code pins moved after benchmark and mcp.
 - [ ] coai's bump: § 5.3 scenarios 1–4 seen RED, GREEN and broken; 5 and 6 done; `snippetVersion.test.ts` green.
+- [ ] The conventions' `post-deploy-check.mjs --target` ran against coai `main` after its bump (§ 5.4a), recorded in the
+      conventions plan.
 - [ ] `review_feature` ran over the three epics before the extension release, every finding resolved.
 - [ ] The extension release carrying v19 is published and checked; the plan is promoted with its deviations.
 
@@ -790,7 +900,8 @@ conventions plan is promoted in its own repository once its release and nine bum
    branch here, beside it.)
 3. § 5.1, then the promotion.
 4. § 5.2's eight bumps and § 5.3's coai PR in parallel; rag_qln after benchmark and mcp.
-5. § 5.4: the feature review, then the extension release.
+5. § 5.4a: the conventions' post-deploy check against coai `main` once its bump merged; § 5.4: the feature review,
+   then the extension release.
 6. § 5.5: the promotion of the five coai documents and this one; the conventions plan's promotion in its repository.
 
 Nothing in E3 waits for an `mcp-v*` release, and E3 ships none.
@@ -850,11 +961,27 @@ entry 3.1, so one change stops the parent.
   promotion as an erratum of requirement 5 and of § 4.4's parenthesis, and the next extension CHANGELOG entry (E3.S2's
   patch release) says plainly that a production-risk question keeps its own path and may reach the person without the
   consultants first. Requirement 5's text is not edited before the promotion.
+  *Added 2026-11-18 at the fold of the plan round and the judge.* The erratum also covers the parent's **E3 done-when
+  2** ("`ask_human` reaches the person only after the consultants (O3)"), which is wide in the same way; § 11 below
+  keeps E3's wording and points here. The reasoning holds on two further facts: E1's stories § 9.1 item (3) built the
+  production-risk case as "exactly today's decision for the same input with `Autonomous = false`", which is § 4.4's
+  row taken literally, and the epoch-3 re-review sorted #1011 as `fits` (the parent's table, row "E1, the server") — a
+  re-review's baseline is not counted (`common/plan-change-control.md`, *The full stop*, step 4). § 4.4's parenthesis
+  "(consultants asked beside, answers returned)" was wrong outside the building phase, and the erratum says so. The
+  server's own `ask_human` text is equally wide — `Tools.cs:410-411`, "the consultants of a production risk still run,
+  and their answers come back before this call returns" — and is server text outside E3: a deviation for the
+  promotion, not a fix here. E3's question rule says what the server does (§ 4.4 (f)).
 - **P4 — E3.S1 edits more of `coai-review-gate.md` than "step 6" (not a change).** The intro sentence `:42-43`, step 4
   and the `consult_first` paragraph are needed for the file to be true under `auto`; they are within the intended story
   "The wording in the four rule files".
 - **P5 — a boundary in conventions (not a change).** The manuals plan there has two of E3's files in its scope; § 4.7's
   table goes into both conventions plans. The parent's § 7 is about coai plans and gains nothing.
+- **P6 — `ask_human` is silent about a legacy hold it released (an E1 residual; a deviation, not a change).** The parent's
+  E1 done-when 4 and requirement 4 name `ask_human` among the calls that release a hold from before
+  `auto`, and it does. But its reply then answers the question on the released session's conversation door and never
+  says the hold went (§ 4.1, what (e) rests on). Requirement 4 asks for the release, its log line, the withdrawn notice
+  and the note — all built; it does not ask `ask_human` to announce it. E3's rule text says where the release is told
+  (the next review call, `status`'s round note). Recorded at the promotion as an E1 deviation; no code here.
 
 ## 10. Open questions, each with the assumption this document takes
 
@@ -883,7 +1010,8 @@ entry 3.1, so one change stops the parent.
 - [ ] **Done-when 2** — no wider promise: `call_human` only from a policy that asks a person, `human` or another value
       including a workspace's, or a server too old to know `auto`; under `auto` the gate asks nobody; `ask_human` reaches
       the person only with an accepted `consultId` or when none can be had, a production risk on its own path: § 4.1
-      (d)–(f), § 4.4; the no-wider-promise assertion of § 5.3 scenario 1.
+      (d)–(f), § 4.4; the no-wider-promise assertion of § 5.3 scenario 1. The parent's own done-when 2 is wider about a
+      production risk; that is § 9 P3's erratum, and this line, not the parent's, is what E3 is held to.
 - [ ] **Done-when 3** — § 4.8, both tables, in the conventions PR.
 - [ ] **Done-when 4** — conventions checks green (§ 4.6), the release cut and promoted after § 5.1, nine bumps merged,
       coai's with the regenerated snippet and `snippetVersion.test.ts` green (§ 5.2–5.3).
