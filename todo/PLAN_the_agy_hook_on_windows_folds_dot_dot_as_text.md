@@ -10,6 +10,10 @@
 
 ## Plan changes
 > Epoch 1 · approved 2026-11-18 · by reviewers · state: open
+- 1.1 · 2026-11-18 · agent · scope, stories — step 1's measurement found W3, so the payload's `cwd` is no longer taken as the coai folder (§1 W3)
+  agy sorts `workspacePaths` and sets `cwd` to its first entry, not to its own working folder: measured on agy 1.5.11 on Windows and
+  on agy 1.5.9 on Linux. A granted root that sorts before the coai folder is therefore taken for the coai folder, and every read in it
+  is denied. The shipped hook (mcp 0.65.4, 0.66.0; server 0.16.3) has this defect.
 
 ## 1. Problem
 
@@ -45,6 +49,51 @@ disk. `Path.IsPathFullyQualified` admits `\\?\C:\...`, `\\.\...`, `\\server\shar
 
 With `Path = \\attacker\share\x`, `RealPath.Resolve` looks the entry up over SMB. That can send the user's NTLM credentials to that host. It can
 also stall past the hook's 10 s timeout. The hook would deny the path afterwards, but the lookup has already happened.
+
+### W3. The payload's `cwd` is not the coai folder (found 2026-11-18 by step 1's measurement; plan change 1.1)
+
+The parent rule's D3 and D6 take the payload's `cwd` to be the coai-owned hook folder. They deny a path inside it, and they treat every
+other `workspacePaths` entry as a root. That reading came from Linux runs in which the coai folder happened to sort first.
+
+What agy actually does: it SORTS `workspacePaths` and sets `cwd` to its first entry. Its process working folder and its `init` event's
+`cwd` stay the coai folder.
+
+- **Windows, agy 1.5.11.** The coai-like folder `coaip` and one root `aaa` gave `cwd` = `aaa`. Root `R` gave `cwd` = `R`. Roots `rootp`
+  and `zzz` gave `cwd` = `coaip`. The order is ordinal, uppercase before lowercase.
+- **Linux, agy 1.5.9.** A probe folder under `/tmp/…` and one root `/home/jinx/.cache/coai-sortprobe-root` gave
+  `"cwd":"/home/jinx/.cache/coai-sortprobe-root"`, `"workspacePaths":["/home/jinx/.cache/coai-sortprobe-root","/tmp/…/sortprobe"]`.
+
+So when a granted root sorts before the coai folder, the hook takes that root for the coai folder and denies every read in it. Replayed
+through the real hook on Windows, such a payload was denied with `coai: this consultation reads only inside the folders it was given`.
+
+No deployment of today is hit:
+- Here, the coai folder `/home/jinx/.local/share/coai-agy/…` sorts before `/home/jinx/git/…` and `/tmp/…`.
+- On the Team server, `/root/.local/share/…` sorts before `/tmp/coai-server-job-…`.
+
+A root at `/data/…`, `/code/…` or `~/.cache/…`, or one at `C:\Projects\…` or `…\AppData\Local\Temp\…` on Windows, is hit.
+
+The fix direction: the hook identifies the coai folder by itself, not from the payload. It is the folder the launcher prepared for this
+binary (`AntigravityReadOnly.DefaultBase` and `HookHandler.Key()`). The hook process also runs in its `.agents` subfolder. The roots are
+every `workspacePaths` entry except that folder, resolved. A path inside that folder is denied. The payload's `cwd` is no longer
+trusted for this.
+
+### The Windows measurement of step 1 (2026-11-18, agy 1.5.11 and coai-mcp 0.66.0 on this machine's Windows host)
+
+These go into `research/RESULTS_agy_read_file.md` (S3).
+- **Payload.** The same fields as on Linux. `Path` is absolute, with backslashes and an uppercase `C:`, and is the model's text. The
+  reader tool is `read_file`.
+- **agy's own boundary.** It denied a read of `C:\Users\strug\…` outside its roots (`denied_actions`). It allowed and returned a read
+  under the temp folder outside its roots, as `/tmp` on Linux.
+- **The model's `..`.** It sent no `.` or `..` in any ordinary path over 11 runs.
+- **W1 in the real hook.** It is confirmed: a junction `R\nm\foo` → `R\deep\a\b\c\d\e\f\g` and 7 `..` segments are folded by Win32 as text
+  to `C:\Users\strug\coai-winprobe-outside\secret.txt`, outside R. `cmd /c type` printed its marker. The hook allowed that path. agy then
+  denied it by itself, because the target was in the user profile, so W1 was not exploitable end to end in that run. A W1 target under
+  the temp folder, which agy reads by itself, was not measured.
+- **W2.** The hook denied, each within about 60 ms with process start-up:
+  - `\\127.0.0.1\…`, `//127.0.0.1/…`, `\\?\C:\…`, `\\.\C:\…` and `\\?\UNC\127.0.0.1\…`;
+  - `D:\…`, another local drive.
+
+  Timing cannot show whether an SMB lookup happened. That proof is the reader guard and its tests.
 
 ## 2. Options
 
@@ -117,6 +166,12 @@ The plan was approved with these four. They are part of the approved plan, not c
   evidence, once, on a Windows machine, and goes into the RESULTS file.
 
 ## Definition of Done
+
+- [ ] W3 (change 1.1). The coai folder is identified by the hook itself, not by the payload's `cwd`, on every OS. Tests cover:
+  - a root that sorts BEFORE the coai folder, in the order agy sends it (`cwd` = that root): its reads are allowed;
+  - the coai folder in any position in `workspacePaths`: its reads are denied;
+  - the server binary, through its own hook.
+  Linux and the Team server are fixed too, in the next mcp and server release.
 
 - [ ] Step 1 measured on a Windows machine and written to `research/RESULTS_agy_read_file.md`, or the plan states it was not possible and why.
 - [ ] A `Path` with a `..` after a link or junction that leaves the root by Win32's text rule is denied. The reader-seam test runs on every OS.
