@@ -3,7 +3,7 @@ import { ON_EXHAUSTED_CHOICES, labelOf } from './onExhaustedPanel';
 
 /**
  * What a person is told when *When the rounds run out* is reset to Auto once, and which sentence a window is shown
- * (todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.3). Pure and `vscode`-free: the host hands over what it read,
+ * (research/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.3). Pure and `vscode`-free: the host hands over what it read,
  * and each sentence is a value a test can hold. The words are the parent plan's § 4.6, and only the coordinator changes them.
  */
 

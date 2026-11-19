@@ -38,7 +38,7 @@ import {
 
 /**
  * Two windows of one profile over ONE client store and ONE settings file
- * (todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.8.3).
+ * (research/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.8.3).
  */
 
 test('T29 TheFakesBehaveAsTheEditorIsRead', async () => {

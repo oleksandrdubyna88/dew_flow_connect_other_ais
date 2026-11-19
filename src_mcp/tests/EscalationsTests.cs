@@ -378,7 +378,7 @@ public sealed class EscalationsTests : IDisposable
         _escalations.Read("q1").Should().BeNull("a question file nobody can open is nothing yet, never a throw");
     }
 
-    // ---------- withdrawn by policy auto, and put back (todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md, § S1.4) ----------
+    // ---------- withdrawn by policy auto, and put back (research/PLAN_auto_never_asks_a_person_E1_S1_spec.md, § S1.4) ----------
 
     private static EscalationQuestion NoticeCard(string id) =>
         Question(id) with { Kind = EscalationKinds.Notice, Decisions = EscalationDecisions.Notice };

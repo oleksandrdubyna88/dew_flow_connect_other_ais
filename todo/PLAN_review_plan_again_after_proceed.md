@@ -447,4 +447,4 @@ approved plan is identified once, before the transition, and carried on `StageRu
 
 > Added 2026-11-17 by the auto plan's E1.S3 (its § 7, the same table shortened in each of the four documents it touches) — a boundary section, not a change to this plan's scope.
 
-[PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) adds the verdict `not_reviewed`. It is **disjoint** from this plan; `not_reviewed` counts as a plan stage that advanced.
+[PLAN_auto_never_asks_a_person.md](../research/PLAN_auto_never_asks_a_person.md) adds the verdict `not_reviewed`. It is **disjoint** from this plan; `not_reviewed` counts as a plan stage that advanced.

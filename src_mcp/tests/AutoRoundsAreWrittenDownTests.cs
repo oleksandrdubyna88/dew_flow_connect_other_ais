@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Every decision policy auto makes in a round that ran is written down three times: the session file's note, <c>coai.db</c>'s
-/// <c>rounds.note</c> and a Serilog line — a Warning when nothing was reviewed (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c>, § 8.2).
+/// <c>rounds.note</c> and a Serilog line — a Warning when nothing was reviewed (<c>research/PLAN_auto_never_asks_a_person_E1.md</c>, § 8.2).
 /// </summary>
 /// <remarks>Real plan rounds over the fake CLI, in a throwaway repository and data folder, with a sink that keeps what was logged.</remarks>
 [Collection("fakecli-env")]

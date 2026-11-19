@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// Under policy auto the round machine never calls a person: nobody answering is <c>not_reviewed</c>, a feature review at its cap
 /// is <c>good_enough</c> (or <c>not_reviewed</c> when nobody answered), and the rounds running out is <c>good_enough</c> with its reason
-/// (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c>, § 8.2).
+/// (<c>research/PLAN_auto_never_asks_a_person_E1.md</c>, § 8.2).
 /// </summary>
 /// <remarks>
 /// Pure machine: every state is built in code, and a config with no policy named IS policy auto (<see cref="PanelConfig.Uniform"/>).

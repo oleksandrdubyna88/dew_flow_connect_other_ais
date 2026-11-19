@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Whichever call reads a hold from before policy auto first releases it, and says so
-/// (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.6, § S1.10.9, § S1.10.11 and § S1.10.13).
+/// (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.6, § S1.10.9, § S1.10.11 and § S1.10.13).
 /// </summary>
 /// <remarks>
 /// The fixture is a hold the REAL code raised under <c>human</c>, made a hold from before policy auto by editing its file

@@ -1,6 +1,6 @@
 # PLAN — E3 stories: the conventions, the words every consumer's AI reads (`dew_flow_conventions` and the pins)
 
-> Status: **E3.S1 merged in conventions 2026-11-18 as #182 (`25d551b8`); pre-checks in conventions #183; `release` promoted to `5d2d5ec` on 2026-11-19 with the owner's approval. This repository's bump with the regenerated snippet (v19) is PR #1024 (pin `5d2d5ec`); the other eight bumps are open or merging. Remaining: the bumps merged, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3.S1 merged in conventions 2026-11-18 as #182 (`25d551b8`) and NOT yet promoted to the `release` branch (it waits for the owner's word on in-flight consumer releases and on the PR cap, § 5.1). This repository's bump is built on `docs/auto-mode-e3` (the pin at `25d551b8`, the snippet v19, the constants and the tests green; not yet a PR). Remaining: the promotion, the nine pin bumps, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **plan only, nothing built — written 2026-11-18 by Opus when the epic started, on branch `docs/auto-mode-e3`
+> Status: **IMPLEMENTED, 2026-11-19** — epic E3 of the `auto` plan: conventions #182 and #183, `release` at `5d2d5ec`, nine pin bumps merged (this repository's #1024), extension 0.89.1 released (#1025); post-deploy check passed against `main` `4ec6cf3d`; `review_feature` `proceed`, 0 findings. Before that: **E3.S1 merged in conventions 2026-11-18 as #182 (`25d551b8`); pre-checks in conventions #183; `release` promoted to `5d2d5ec` on 2026-11-19 with the owner's approval. This repository's bump with the regenerated snippet (v19) is PR #1024 (pin `5d2d5ec`); the other eight bumps are open or merging. Remaining: the bumps merged, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3.S1 merged in conventions 2026-11-18 as #182 (`25d551b8`) and NOT yet promoted to the `release` branch (it waits for the owner's word on in-flight consumer releases and on the PR cap, § 5.1). This repository's bump is built on `docs/auto-mode-e3` (the pin at `25d551b8`, the snippet v19, the constants and the tests green; not yet a PR). Remaining: the promotion, the nine pin bumps, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **plan only, nothing built — written 2026-11-18 by Opus when the epic started, on branch `docs/auto-mode-e3`
 > at `origin/main` `82a4eeac` (E1 merged as #1011 and released as mcp 0.66.0 by #1012; E2 merged as #1018 and released
 > as extension 0.89.0 by #1022).** Epic E3 of [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md)
 > (its `## Epics`, § *E3*; the design is its § 4.7 snippet item, § 8 PR 3 and note N1). A stories document keeps no
@@ -162,7 +162,7 @@ coai 11 (#1021, #1016, #1003, #1002, #966, #928, #927, #926, #925, #923, #922). 
   rule files, a JSON record, a plan and a README row: not a small edit), review by Opus. S2's coai change: Sonnet coder,
   Opus review. A pin bump with nothing else is one gitlink line in one file: a small edit the main session may make.
 - **The gate, in both repositories.** This document: `review_plan` on `docs/auto-mode-e3` with
-  `plan: todo/PLAN_auto_never_asks_a_person.md`, `epic: 3/3`. The conventions branch: `open`, `review_plan` with the
+  `plan: research/PLAN_auto_never_asks_a_person.md`, `epic: 3/3`. The conventions branch: `open`, `review_plan` with the
   conventions plan, then `review_code` over its diff before the PR (`common/pull-requests.md` rule 2). S2's coai
   commits: `review_code` over this branch's diff. Every finding resolved; a rejection with a reason. Your own Opus
   review runs beside each, at the same time.
@@ -689,7 +689,7 @@ promoted to `research/` when the release and the nine bumps are merged.** Why:
   `research/PLAN_agent_models_1_4_0.md`).
 
 Its content, carried over rather than linked (cross-repository citations are paths): the status line; the goal (§ 1
-here, in a paragraph); the source, cited as `dew_flow_connect_other_ais · todo/PLAN_auto_never_asks_a_person.md`
+here, in a paragraph); the source, cited as `dew_flow_connect_other_ais · research/PLAN_auto_never_asks_a_person.md`
 § *E3* and this document; the wording of § 4.1–4.4 as a table of file · lines · what changes; § 4.5's markers; § 4.6's
 checks; the two-way reading of § 4.8 in brief; the release, the promotion pre-checks and the nine bumps of § 5.1–5.2;
 a Definition of Done that includes § 5.4a's post-deploy run against a bumped consumer. Its ledger opens at its first approval (its plan round's first passing verdict): `## Plan changes` and `> Epoch 1 · approved <date> · by reviewers · state: open` directly under the status block, no entries — the plan round's own accepted findings and the judge's, folded in the commit that records the approval, are not changes (§ 8).
@@ -789,7 +789,7 @@ as conventions `README.md` § *Editing discipline* asks ("validation and rollbac
 
 ```markdown
 Bumps `.agents/conventions` <old sha8> → <new sha8> (release; the coai gate's words for policy auto —
-coai todo/PLAN_auto_never_asks_a_person.md E3, conventions <PR>).
+coai research/PLAN_auto_never_asks_a_person.md E3, conventions <PR>).
 Validation: rules check <output line>; pin-check <output line>; gate-snippet-check <output line, "(v6)">; CI <run url>.
 Rollback: a forward release in conventions (revert there, promote), then bump again — never a pin moved back by hand.
 ```
@@ -871,7 +871,7 @@ There is no open extension release: 0.89.0 shipped on 2026-11-18 (#1022). The sn
 next one, and `common.coai-feature-gate` asks for the feature review **before the release**. So:
 
 1. **`review_feature`**, from a checkout of coai `main`, pulled, after § 5.3 merged: `planPath`
-   `todo/PLAN_auto_never_asks_a_person.md`; `baseRef` **`e829bba8`** (the plan's merge #1007, the commit before E1's
+   `research/PLAN_auto_never_asks_a_person.md`; `baseRef` **`e829bba8`** (the plan's merge #1007, the commit before E1's
    #1011); `epics` E1 (#1011, `feat/auto-mode-e1`), E2 (#1018, `feat/auto-mode-e2`), E3 (this branch's PR and the
    conventions PR); `lessons` honest in all three arrays — among the findings: a reviewer of this repository sees E3's
    rule text only as a moved gitlink and the snippet constants, so the conventions PR is named in E3's summary; the

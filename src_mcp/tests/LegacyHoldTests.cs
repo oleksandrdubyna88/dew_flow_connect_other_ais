@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The pure half of the hold's authority: which hold policy auto may release, and what the release leaves
-/// (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.3).
+/// (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.3).
 /// </summary>
 /// <remarks>
 /// A hold from before policy auto is a held session whose config has no <c>autonomous</c> member. Pure: no store, no service, no clock.

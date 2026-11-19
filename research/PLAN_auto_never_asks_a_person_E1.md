@@ -1,6 +1,6 @@
 # PLAN — E1 stories: the server, the whole `auto` contract (`coai-mcp`)
 
-> Status: **merged 2026-11-17 as #1011 and released as mcp 0.66.0 (#1012), verified.** Before that: **built 2026-11-17 on `feat/auto-mode-e1`, in PR #1011. S1–S3 were coded, each story was judged by Opus,
+> Status: **IMPLEMENTED, 2026-11-19** — epic E1 of the `auto` plan: merged 2026-11-17 as #1011, released as coai-mcp 0.66.0 (#1012). Before that: **merged 2026-11-17 as #1011 and released as mcp 0.66.0 (#1012), verified.** Before that: **built 2026-11-17 on `feat/auto-mode-e1`, in PR #1011. S1–S3 were coded, each story was judged by Opus,
 > and the coai code gate returned `proceed` (session 50ab0468, epic 1/3). Not yet merged or released.** Before that:
 > **plan only, nothing coded — revised to epoch 2 of the parent, 2026-11-16.** Written by Opus when the epic
 > started, on branch `feat/auto-mode-e1`; the parent then stopped at its second change (entry 1.2, the released
@@ -304,7 +304,7 @@ cannot tell `ask_human`'s two held cases apart (§ 2.1).
 
 ## 6. Order, and what may run in parallel
 
-1. **S1 first.** Fable wrote `todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md` (the cornerstone ledger already counts
+1. **S1 first.** Fable wrote `research/PLAN_auto_never_asks_a_person_E1_S1_spec.md` (the cornerstone ledger already counts
    it) and revised it to epoch 2. Then a Sonnet coder builds it, in the spec's commit order (§ S1.11: 1–9 with 6a and
    6b). S2 and S3 do not start coding before S1's contracts C1–C5 are committed.
 2. **S2 after S1.** It changes `RoundMachine.cs`, two new core files, `RoundEngine.cs` (`AnswerFor`, the record, the
@@ -761,10 +761,10 @@ answered (the reason C4 keeps the `Release`). **Must stay green unchanged:** `As
   `auto` and the absent meaning at `:1862`; and, handed on by the S1 spec (§ S1.8), one paragraph in § *Persistence*:
   `autonomous` absent is a meaning, not a default, and a release that renames it must keep reading the old name. `research/module_core.md`: add the auto outcomes to the feature flowchart and bullets at
   `:436-470`. The boundary table of the parent's § 7, shortened, in each of
-  [PLAN_only_a_person_releases_the_gate.md](PLAN_only_a_person_releases_the_gate.md),
-  [PLAN_a_signed_answer_releases_the_gate.md](PLAN_a_signed_answer_releases_the_gate.md),
-  [PLAN_a_cancelled_review_stops_its_round.md](PLAN_a_cancelled_review_stops_its_round.md) and
-  [PLAN_review_plan_again_after_proceed.md](PLAN_review_plan_again_after_proceed.md) — a boundary section, not a
+  [PLAN_only_a_person_releases_the_gate.md](../todo/PLAN_only_a_person_releases_the_gate.md),
+  [PLAN_a_signed_answer_releases_the_gate.md](../todo/PLAN_a_signed_answer_releases_the_gate.md),
+  [PLAN_a_cancelled_review_stops_its_round.md](../todo/PLAN_a_cancelled_review_stops_its_round.md) and
+  [PLAN_review_plan_again_after_proceed.md](../todo/PLAN_review_plan_again_after_proceed.md) — a boundary section, not a
   change to their scope (the both-sides rule). Run `plan-lifecycle.mjs` after.
 - **The CHANGELOG *Server* entry**: drafted in the PR description, with N4's paragraph (§ 5), the five values, the
   sentence that a value chosen before is reset by the NEXT extension, not by this server, one sentence on the release
@@ -777,7 +777,7 @@ Append to `FeaturesMode.Listed` (`FeaturesMode.cs:49`):
 
 ```csharp
 // The policy `auto` for When the rounds run out, the meaning of an absent COAI_ON_EXHAUSTED: no hold, no wait, no card;
-// not_reviewed, consult_first (todo/PLAN_auto_never_asks_a_person.md, E1).
+// not_reviewed, consult_first (research/PLAN_auto_never_asks_a_person.md, E1).
 "onExhaustedAuto",
 ```
 

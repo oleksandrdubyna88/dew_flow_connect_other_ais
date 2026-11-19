@@ -35,7 +35,7 @@ import {
 
 /**
  * The decisions of the one-time migration that reset every saved *When the rounds run out* to Auto: the record, which
- * location is due, the user layer's port, and what a person is told (todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md
+ * location is due, the user layer's port, and what a person is told (research/PLAN_auto_never_asks_a_person_E2_S2_spec.md
  * § S2.8.1). None of it needs the panel, a window or an editor.
  */
 

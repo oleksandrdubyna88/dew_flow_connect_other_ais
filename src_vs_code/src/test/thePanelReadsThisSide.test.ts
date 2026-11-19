@@ -98,7 +98,7 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   // round, finding 6) — still the user layer, built from the configuration it is handed.
   'modelKeys.ts forwarding reader': { count: 1, why: 'userChatPresets — the chat presets as the move, Chat and a choice read them: the user layer, the shipped ones included (E4.6a, R7)' },
   'catalogMigrationHost.ts global write': { count: 1, why: 'the migration writes the user layer it read, and no other' },
-  // The one-time reset of When the rounds run out to Auto (E2.S2, todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md D15): like the catalog
+  // The one-time reset of When the rounds run out to Auto (E2.S2, research/PLAN_auto_never_asks_a_person_E2_S2_spec.md D15): like the catalog
   // migration it reads the person's OWN layer raw — `inspect().globalValue`, never a workspace's — and writes only the Global target,
   // because a workspace value is not the person's to have reset (the owner's decision on Q1). The host half reads the three layers
   // once more, to say which value stays in force in this window — the same three reads `readerFor` makes.

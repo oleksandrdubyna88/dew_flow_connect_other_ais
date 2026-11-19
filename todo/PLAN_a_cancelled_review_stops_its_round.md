@@ -284,7 +284,7 @@ the success save is `RoundEngine.cs:597`, outside `_gate`; the scheduler reports
 
 > Added 2026-11-17 by the auto plan's E1.S3 (its § 7, the same table shortened in each of the four documents it touches) — a boundary section, not a change to this plan's scope.
 
-[PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) adds the verdict `not_reviewed` (no reviewer answered, policy `auto`). It is **disjoint** from this plan: a cancelled round produces no verdict, so `not_reviewed` never covers it. Both change `RoundMachine.cs` and `RoundEngine.cs`; whichever merges second rebases them.
+[PLAN_auto_never_asks_a_person.md](../research/PLAN_auto_never_asks_a_person.md) adds the verdict `not_reviewed` (no reviewer answered, policy `auto`). It is **disjoint** from this plan: a cancelled round produces no verdict, so `not_reviewed` never covers it. Both change `RoundMachine.cs` and `RoundEngine.cs`; whichever merges second rebases them.
 
 ## Epics
 

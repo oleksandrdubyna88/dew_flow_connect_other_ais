@@ -14,7 +14,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// <c>ask_human</c> under policy auto never waits and never writes a card (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c> § 9.2 and N3, owner
+/// <c>ask_human</c> under policy auto never waits and never writes a card (<c>research/PLAN_auto_never_asks_a_person_E1.md</c> § 9.2 and N3, owner
 /// decision O3): the AI's own question is answered <c>consult_first</c>; with the consultants' id, or when none can be had, it reaches the
 /// person in the conversation as today; a held gate is answered at once — the person's hold names its notice, a hold from before policy auto
 /// whose release could not be written yet says to call again; a feature review's request window says the server decides.

@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The static text an AI reads says what policy auto does (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c> § 9.3, the parent's § 4.7): the
+/// The static text an AI reads says what policy auto does (<c>research/PLAN_auto_never_asks_a_person_E1.md</c> § 9.3, the parent's § 4.7): the
 /// instructions are sent once at <c>initialize</c> and the policy can change mid-session, so every sentence is true under every policy.
 /// </summary>
 /// <remarks>

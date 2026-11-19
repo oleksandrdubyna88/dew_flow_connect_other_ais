@@ -1,6 +1,6 @@
 # PLAN — `auto`: the gate never asks a person, logs what went wrong and moves on
 
-> Status: **E3: S1 merged in conventions 2026-11-18 as #182 (`25d551b8`); the release pre-checks recorded in conventions #183 and, with the owner's approval, `release` promoted to `5d2d5ec` on 2026-11-19. This repository's bump with the regenerated snippet (v19) is PR #1024 (pin `5d2d5ec`); the other eight bumps are open or merging. Remaining: the eight bumps and #1024 merged, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3: S1 merged in conventions 2026-11-18 as #182 (`25d551b8`) and NOT yet promoted to the `release` branch (it waits for the owner's word on in-flight consumer releases and on the PR cap, § 5.1). This repository's bump is built on `docs/auto-mode-e3` (the pin at `25d551b8`, the snippet v19, the constants and the tests green; not yet a PR). Remaining: the promotion, the nine pin bumps, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3 started 2026-11-18: its stories document, [PLAN_auto_never_asks_a_person_E3.md](PLAN_auto_never_asks_a_person_E3.md), written by Opus; nothing built. E2 merged 2026-11-18 as #1018 and released as extension 0.89.0 (#1022).** Before that: **E2 built 2026-11-17 in PR #1018 (S1, S2, S3; the coai code gate `proceed`); not yet merged or released. E3 not started.** Before that: **epoch 3 open, 2026-11-17 — approved by the owner (the revision is `Narrowed: yes`), after the interim document
+> Status: **IMPLEMENTED, 2026-11-19.** E1: #1011, released as coai-mcp 0.66.0 (#1012), 2026-11-17. E2: #1018, released as extension 0.89.0 (#1022), 2026-11-18; verified (VSIX: default `auto`, the witness key and the migration bundled; Marketplace 0.89.0). E3: conventions #182 (rule text: `coai-snippet` v6, `coai-document` v4, `coai-feature` v4, `coai-question` v2) and #183 (the release pre-checks); `release` promoted to `5d2d5ec` on 2026-11-19 with the owner's approval; nine pin bumps merged — benchmark #229, mcp #83, sidecar_rust #82, vscode_kit #36, wsl_care #200, creds #384, amd_r9700 #38, rag_qln #134 (also its benchmark and mcp code pins) and this repository's #1024 (the regenerated snippet, v19); extension 0.89.1 released (#1025, tag `extension-v0.89.1`; the VSIX carries v6/v4/v4/v2 and "Copy the CLAUDE.md snippet (v19)"). The conventions post-deploy check against coai `main` `4ec6cf3d`, 2026-11-19: items 1–2 PASS; item 3, the native-agent smoke: the claude and codex inspect runs `allSourcesRead` true, and the held-gate behaviour smoke on the v6 text PASS (answers `ask_human`, `point_to_notice_card`, `resolve`, `ask_human`; USD 0.90). `review_feature` over the three epics (baseRef `e829bba8`): `proceed`, 2 of 2 reviewers, 0 findings; both noted their source budget did not reach every file. The change ledger is closed: epoch 3 stands as recorded, entry 3.1 its last change. **What shipped differently is in § *Deviations*, just before `## Epics`.** The rest of this block is the plan's history, kept as written. Before that: **E3: S1 merged in conventions 2026-11-18 as #182 (`25d551b8`); the release pre-checks recorded in conventions #183 and, with the owner's approval, `release` promoted to `5d2d5ec` on 2026-11-19. This repository's bump with the regenerated snippet (v19) is PR #1024 (pin `5d2d5ec`); the other eight bumps are open or merging. Remaining: the eight bumps and #1024 merged, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3: S1 merged in conventions 2026-11-18 as #182 (`25d551b8`) and NOT yet promoted to the `release` branch (it waits for the owner's word on in-flight consumer releases and on the PR cap, § 5.1). This repository's bump is built on `docs/auto-mode-e3` (the pin at `25d551b8`, the snippet v19, the constants and the tests green; not yet a PR). Remaining: the promotion, the nine pin bumps, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3 started 2026-11-18: its stories document, [PLAN_auto_never_asks_a_person_E3.md](PLAN_auto_never_asks_a_person_E3.md), written by Opus; nothing built. E2 merged 2026-11-18 as #1018 and released as extension 0.89.0 (#1022).** Before that: **E2 built 2026-11-17 in PR #1018 (S1, S2, S3; the coai code gate `proceed`); not yet merged or released. E3 not started.** Before that: **epoch 3 open, 2026-11-17 — approved by the owner (the revision is `Narrowed: yes`), after the interim document
 > review of the whole plan returned `proceed` (4 of 4 reviewers; three wording findings folded). E2 resumes: the S1 fix
 > forward and Fable's S2 spec revision, then S2, then S3.** Before that: **epoch 2 stopped for re-review, 2026-11-17, at its second change (entry 2.2, Settings Sync and the
 > migration's witness). No new code on any epic until the whole plan is reviewed again. The whole plan was revised the
@@ -23,11 +23,11 @@
 > one-time migration, the env block and the rounds-log page in `src_vs_code`; the shared gate snippet in
 > `dew_flow_conventions` (a second PR there). No Team-server wire change.
 >
-> Related docs: [PLAN_only_a_person_releases_the_gate.md](PLAN_only_a_person_releases_the_gate.md) (the hold's security
-> property this plan carves an exception out of — § *Boundaries*), [PLAN_a_signed_answer_releases_the_gate.md](PLAN_a_signed_answer_releases_the_gate.md),
-> [PLAN_a_cancelled_review_stops_its_round.md](PLAN_a_cancelled_review_stops_its_round.md),
-> [PLAN_review_plan_again_after_proceed.md](PLAN_review_plan_again_after_proceed.md),
-> [module_server.md](../research/module_server.md) (*`call_human` stops the review*), [module_core.md](../research/module_core.md).
+> Related docs: [PLAN_only_a_person_releases_the_gate.md](../todo/PLAN_only_a_person_releases_the_gate.md) (the hold's security
+> property this plan carves an exception out of — § *Boundaries*), [PLAN_a_signed_answer_releases_the_gate.md](../todo/PLAN_a_signed_answer_releases_the_gate.md),
+> [PLAN_a_cancelled_review_stops_its_round.md](../todo/PLAN_a_cancelled_review_stops_its_round.md),
+> [PLAN_review_plan_again_after_proceed.md](../todo/PLAN_review_plan_again_after_proceed.md),
+> [module_server.md](module_server.md) (*`call_human` stops the review*), [module_core.md](module_core.md).
 
 ## Plan changes
 
@@ -83,6 +83,7 @@ Narrowed: yes — E2 done-when 3 and DoD item 6 keep every clause, but "two wind
 
 - 3.1 · 2026-11-17 · agent · approach — Settings Sync merges a key added on two machines with different values as a conflict it asks the person to resolve (settingsMerge.ts, read by the S2 spec, U10), so a witness naming its run would put a conflict on a key the person never wrote: the witness is one fixed word on every machine, and the read-back after the await is the value test alone
   (the coordinator's decision; the first change of epoch 3.)
+  (At the plan's promotion, 2026-11-19: 3.1 stayed the only change of epoch 3. The epoch stays `open`, as an epoch closes only when a later one opens — the conventions precedents keep it so at promotion.)
 
 ## 1. What the owner asked for (2026-11-16)
 
@@ -236,7 +237,7 @@ Everything that lists verdicts learns the new one in the same commit:
 AND the session's stored config has `Autonomous == null` as loaded (§ 4.1) — a hold raised by a build that never knew
 `auto`. A hold this build raised (the operator chose `human`, then something switched the setting) stays the person's:
 otherwise the gated agent could release its own hold by writing `COAI_ON_EXHAUSTED=auto` into `settings.json`, which is
-exactly the road [PLAN_only_a_person_releases_the_gate.md](PLAN_only_a_person_releases_the_gate.md) closed for arguments.
+exactly the road [PLAN_only_a_person_releases_the_gate.md](../todo/PLAN_only_a_person_releases_the_gate.md) closed for arguments.
 The marker is read BEFORE `CurrentPolicy` stamps the config, in the same helper, and as `Load` left it — absent stays absent (§ 4.1).
 
 `RoundEngine.ApplyAnyHumanDecision` (:93-120) is the one reader every review entry passes; for such a hold it releases
@@ -531,7 +532,7 @@ Sync reaches, outside the rare windows § 4.6 names (residuals i–iii) — and 
 
 ## 6. Security
 
-The hold was made a security property by [PLAN_only_a_person_releases_the_gate.md](PLAN_only_a_person_releases_the_gate.md):
+The hold was made a security property by [PLAN_only_a_person_releases_the_gate.md](../todo/PLAN_only_a_person_releases_the_gate.md):
 the gated AI must not release it with an argument. This plan keeps that (requirement 8) and makes **configuration** a
 second release road under `auto` (O2). The configuration lives in `<dataDir>/settings.json` and in the client's `env`,
 both writable by any process running as the user — including the agent. That was already true of the policy for every
@@ -539,7 +540,7 @@ NEW session (and of the answer file itself, which the signed-answer plan exists 
 a settings change decide how FUTURE rounds of an existing session end — but it never releases a hold this build raised
 (§ 4.3): the configuration road releases only holds from before `auto` existed, which the owner chose to release (O2).
 A hold raised under `human` stays the person's whatever the settings later say; the residual for that operator is the
-answer-file forgery class, closed by [PLAN_a_signed_answer_releases_the_gate.md](PLAN_a_signed_answer_releases_the_gate.md),
+answer-file forgery class, closed by [PLAN_a_signed_answer_releases_the_gate.md](../todo/PLAN_a_signed_answer_releases_the_gate.md),
 which this plan names on its side — and, rarer, the downgrade edge written at the end of § 4.3. Fail-open is deliberate
 and visible: `not_reviewed` is its own verdict, a Warning line and a note.
 
@@ -579,10 +580,10 @@ and the next deciding load runs `human`; a malformed file releases nothing until
 
 | Item | Built by | The other plan's part |
 |---|---|---|
-| Hold released only by the person's answer, `ClaimRefusal` | [only a person releases](PLAN_only_a_person_releases_the_gate.md) | this plan adds the `Autonomous` release in `ApplyAnyHumanDecision` and leaves every refusal of the AI's claim as it is |
-| Signing the answer file | [a signed answer](PLAN_a_signed_answer_releases_the_gate.md) | must also treat `settings.json`'s policy as an input the agent can write (§ 6) |
-| A cancelled round (`cancelled`, no verdict) — draft PR #923 | [a cancelled review](PLAN_a_cancelled_review_stops_its_round.md) | disjoint: a cancelled round produces no verdict, so `not_reviewed` never covers it; whichever merges second rebases `RoundMachine.cs`/`RoundEngine.cs` |
-| `review_plan` again after `proceed` | [review_plan again](PLAN_review_plan_again_after_proceed.md) | disjoint; `not_reviewed` counts as a plan stage that advanced |
+| Hold released only by the person's answer, `ClaimRefusal` | [only a person releases](../todo/PLAN_only_a_person_releases_the_gate.md) | this plan adds the `Autonomous` release in `ApplyAnyHumanDecision` and leaves every refusal of the AI's claim as it is |
+| Signing the answer file | [a signed answer](../todo/PLAN_a_signed_answer_releases_the_gate.md) | must also treat `settings.json`'s policy as an input the agent can write (§ 6) |
+| A cancelled round (`cancelled`, no verdict) — draft PR #923 | [a cancelled review](../todo/PLAN_a_cancelled_review_stops_its_round.md) | disjoint: a cancelled round produces no verdict, so `not_reviewed` never covers it; whichever merges second rebases `RoundMachine.cs`/`RoundEngine.cs` |
+| `review_plan` again after `proceed` | [review_plan again](../todo/PLAN_review_plan_again_after_proceed.md) | disjoint; `not_reviewed` counts as a plan stage that advanced |
 
 The same table, shortened, is added to each of those four documents in the plan's first PR.
 
@@ -720,12 +721,24 @@ so a dead host's claim needs no sweep; a run that died leaves its record, which 
 - [ ] Docs, help in five languages, CHANGELOG entries; boundary tables in the four related plans.
 - [ ] Rollout reported as committed / built / released / running, per side.
 
+## Deviations (recorded at promotion, 2026-11-19)
+
+What shipped differently from the plan as approved, or was found while building it. Each line says where it is detailed.
+
+- **P3 — an erratum in requirement 5 and § 4.4's parenthesis.** They were wider than what was built: a production-risk question reaches the person, in the Planning or Released phase or with the mode off, without the consultants first. Decided a wording erratum (consultants `df932f5e…`), not a plan change; corrected in the README and the help (five languages) in #1024 and in 0.89.1's CHANGELOG. The server's own text at `Tools.cs:410-411` is equally wide and was not changed. Detailed: the E3 stories document § 9 P3, and #1024.
+- **P6 — `ask_human` is silent about a legacy hold it released** (review calls and `status` say it): an E1 deviation. Detailed: the E3 stories document § 9 P6 (it is an E1 residual).
+- **P7 — the released feature rule is silent about a false finding.** It tells an AI to land a blocking `good_enough` finding as a new PR without saying a false one may be rejected. Queued for the next conventions release. Detailed: the E3 stories document § 9 P7.
+- **P2 — `plan-change-control` is silent about what opens an epoch when every plan round ends `not_reviewed`.** A conventions follow-up, not built here. Detailed: the E3 stories document § 9 P2.
+- **E2 deviations from its spec, as recorded in #1018's body:** no RED-first for some E2.S2 scenarios; `onExhaustedMigration.ts` is over the spec's size; an extra source scan; a second `ExtensionMode.Test` spread. Detailed: PR #1018 and the E2 stories document.
+- **§ 4.8, residual A — an old rule promised a second feature round on the person's request until its bump.** Closed by the nine bumps of E3. Detailed: § 4.8 A and the E3 stories document (the stale-promise residual).
+- **The coai MCP server lost the conventions gate session twice;** the plan and code rounds were rerun. Detailed: nowhere beyond this line (the rounds rerun left no document).
+
 ## Epics
 
 Three epics on the three release boundaries of § 8, in that order: one pull request and one release each, and an epic
 starts only after the release of the epic before it. The server is NOT split: `auto` is one behavioural contract, and
 `--features` may not list `onExhaustedAuto` before `ask_human` is done, so half a server would be a release nobody can
-use. Stories documents are NOT written now: one per epic, `todo/PLAN_auto_never_asks_a_person_E<n>.md`, written by Opus
+use. Stories documents are NOT written now: one per epic, `research/PLAN_auto_never_asks_a_person_E<n>.md`, written by Opus
 when that epic starts (`subagent-models.md`, pipeline step 3). The stories named under each epic are the intended cut,
 one line each, so the scope can be checked today. Cornerstone quota: Q = ⌈2·E/5⌉ = ⌈2·3/5⌉ = 2. *DoD item n* below
 counts the boxes of § 13 from the top (1–10).

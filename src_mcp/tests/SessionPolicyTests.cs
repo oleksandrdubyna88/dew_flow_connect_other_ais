@@ -13,7 +13,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Policy auto's release of a hold from before it: what it writes, in which order, and what it leaves alone
-/// (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.5, § S1.10.9, § S1.10.10 and T63).
+/// (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.5, § S1.10.9, § S1.10.10 and T63).
 /// </summary>
 /// <remarks>
 /// No CLI: the holds are planted through the real <see cref="SessionStore"/> and <see cref="Escalations"/> of a folder of the test's own, and the

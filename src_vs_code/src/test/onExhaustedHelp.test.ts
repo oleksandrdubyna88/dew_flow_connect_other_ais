@@ -7,7 +7,7 @@ import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 
 /**
  * The help for When the rounds run out under policy Auto, in five languages (E2.S3 of
- * todo/PLAN_auto_never_asks_a_person_E2.md, section 9.2). The guarantee is requirement 5's, exactly: the gate raises no
+ * research/PLAN_auto_never_asks_a_person_E2.md, section 9.2). The guarantee is requirement 5's, exactly: the gate raises no
  * new hold, never waits and never writes a card; the AI's own question after its consultants can still reach a person.
  * No text may promise that nothing ever asks.
  */

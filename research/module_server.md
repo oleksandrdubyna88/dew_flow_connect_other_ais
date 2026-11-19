@@ -1405,10 +1405,10 @@ draws every card, as before.
 sweep asks; the gate's wiring and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497
 (the default's constant and its remark paid for by the surplus blank lines beside it).
 
-## ask_human never waits under policy auto (2026-11-17, `todo/PLAN_auto_never_asks_a_person_E1.md` § 9, owner decision O3)
+## ask_human never waits under policy auto (2026-11-17, `research/PLAN_auto_never_asks_a_person_E1.md` § 9, owner decision O3)
 
-> Plan: [PLAN_auto_never_asks_a_person.md](../todo/PLAN_auto_never_asks_a_person.md) § 4.4 (the design) and
-> [PLAN_auto_never_asks_a_person_E1.md](../todo/PLAN_auto_never_asks_a_person_E1.md) § 9 and N3 (the words).
+> Plan: [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) § 4.4 (the design) and
+> [PLAN_auto_never_asks_a_person_E1.md](PLAN_auto_never_asks_a_person_E1.md) § 9 and N3 (the words).
 
 Under policy `auto` the person is never asked first and nothing waits. Whether the policy is `auto` is read from the SETTINGS
 (`_settings.Rounds.IsAutonomous`), not from the session: a session raised under `human` is still `HumanGate` while the settings say
