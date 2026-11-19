@@ -56,6 +56,10 @@ test('the feature half names not_reviewed and says only two grounds remain under
 
   assert.ok(text.includes('`not_reviewed`'), 'the feature half never names the verdict a closing round nobody answered ends with');
   assert.ok(text.includes('only the first two grounds remain'), 'the feature half still promises the person a second round under `auto`');
+  // v5 (conventions #185): a blocking good_enough finding at the cap is verified like any other, not always landed.
+  assert.ok(text.includes('Verify it like any other finding: land a true one as a NEW pull request'), 'the feature half does not say a blocking good_enough finding at the cap is verified first');
+  assert.ok(text.includes('reject a false one with its reason'), 'the feature half does not say a false blocking finding is rejected with its reason');
+  assert.ok(!/land it as a NEW pull request like the rest/.test(text), 'the feature half still says a blocking good_enough finding is always landed');
 });
 
 test('the question half raises the floor under `auto` and names consult_first', () => {
