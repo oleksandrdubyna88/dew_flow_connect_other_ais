@@ -175,7 +175,8 @@ export const CONSULTANT_VERSION = 4;
  * gate does under policy `auto`: an unreviewed round is `not_reviewed`, and only the first two grounds remain.
  * v5 (conventions #185, release c598a11) says a `blocking` finding that `good_enough` carries at the cap under `auto` is
  * verified like any other finding: a true one lands as a NEW pull request and is named in the summary, a false one is
- * rejected with its reason — v4 said to land it.</p>
+ * rejected with its reason — v4 said to land it. It ships in extension 0.89.2: #1027 merged as `chore`, which
+ * release-please does not release, so a separate `Release-As: 0.89.2` commit cut it (the #605 shape).</p>
  *
  * <p>Not cosmetic: a copy pasted before it carries no feature marker, and the AI obeying it never calls
  * `review_feature` — the whole feature is then released having only ever been reviewed in slices.</p>
