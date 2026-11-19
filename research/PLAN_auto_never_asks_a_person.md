@@ -79,11 +79,11 @@ Narrowed: yes — E2 done-when 3 and DoD item 6 keep every clause, but "two wind
 | E2.S3 page slice, ff158372 | feat/auto-mode-e2-s3-page, pushed | fits | kept; merged into feat/auto-mode-e2 after re-approval |
 | E2.S3 page test and module-tests row, 726a2981 | feat/auto-mode-e2-s3-page, pushed | fits | kept, with ff158372 |
 
-> Epoch 3 · approved 2026-11-17 · by owner · state: closed
+> Epoch 3 · approved 2026-11-17 · by owner · state: open
 
 - 3.1 · 2026-11-17 · agent · approach — Settings Sync merges a key added on two machines with different values as a conflict it asks the person to resolve (settingsMerge.ts, read by the S2 spec, U10), so a witness naming its run would put a conflict on a key the person never wrote: the witness is one fixed word on every machine, and the read-back after the await is the value test alone
   (the coordinator's decision; the first change of epoch 3.)
-  (Closed at the plan's promotion, 2026-11-19: 3.1 was the only change of epoch 3, so the plan was never stopped a third time.)
+  (At the plan's promotion, 2026-11-19: 3.1 stayed the only change of epoch 3. The epoch stays `open`, as an epoch closes only when a later one opens — the conventions precedents keep it so at promotion.)
 
 ## 1. What the owner asked for (2026-11-16)
 
