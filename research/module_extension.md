@@ -4200,7 +4200,7 @@ So `src_vs_code/src/consultantRule.md` is ours, `prepare-gate.mjs` emits it besi
 one of the 24 rule bodies the conventions repository hashed against its migration baseline, so its
 `<!-- coai-snippet v5 -->` could not be raised and the gate half sat at v5; that freeze ended on
 2026-09-15 (conventions `747887d`), and the gate half moved to v6 with E3 of the auto plan (the words for
-policy `auto`, conventions `25d551b8`, artefact v19). The halves stay separate files each with a marker of
+policy `auto`, conventions `25d551b8`, artefact v19; the feature half moved to v5 and the artefact to v20 with conventions release `c598a11`: a `blocking` `good_enough` finding at the cap under `auto` is verified like any other, not always landed). The halves stay separate files each with a marker of
 its own (merging some back is the conventions' manuals plan's step 4). A change that arrives as a whole
 new half therefore brings a marker of its own —
 `coai-document`, `coai-caller`, `coai-consultant`, each at v1 when it arrived, and each raised since

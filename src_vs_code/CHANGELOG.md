@@ -1,5 +1,15 @@
 # Changelog
 
+## Extension 0.89.2 — 2026-11-19
+
+**The CLAUDE.md snippet is now v20: its feature half is `coai-feature` v5.** The text your AI reads comes from the conventions release `c598a11`; one rule changed in it, and the clipboard moved from v19 to v20 with it.
+
+What the feature half now says, for an AI that reads it: under policy Auto, at the cap, a `good_enough` verdict can carry a `blocking` finding the second round did not clear. v4 said to land it as a new pull request like the rest. v5 says to **verify it like any other finding**: land a true one as a NEW pull request and name it in the summary, reject a false one with its reason. The summary still says what was taken and what was declined.
+
+A paste reads `older` until it is pasted again, and a mounted rule until its repository's pin bump (move the pin, don't paste); nothing is rewritten for you. The menu says "Copy the CLAUDE.md snippet (v20)".
+
+Nothing else in the extension changed: the help, in five languages, and the README never said a blocking finding is always landed, so they stay as they are. The MCP server to pair it with is `coai-mcp` 0.66.0, unchanged.
+
 ## Extension 0.89.1 — 2026-11-19
 
 **The CLAUDE.md snippet now speaks policy Auto: the clipboard is v19.** The text your AI reads — the gate, the document gate, the feature gate and the question rule, from the conventions release `5d2d5ec` — says what a server running Auto does, so a repository that pastes it, or mounts it, no longer tells its AI to wait for a person the gate will never ask.
