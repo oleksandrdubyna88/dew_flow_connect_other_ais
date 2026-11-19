@@ -1,34 +1,34 @@
 # PLAN — the terminal panel shows the AI accounts of the open ssh hosts, and their usage
 
-> Status: **plan only, nothing implemented yet, 2026-11-19.** Step 0 (epic E0, a measurement with no code) ran on one VM
-> on 2026-11-19 and the owner answered the open points O1–O7 the same day; both are folded in below. Scope:
-> `src_vs_code` only — one command with an icon in the terminal panel's title bar, a list of the Claude Code, Codex and
-> Antigravity accounts on the hosts of the open `Creds: <host> / <session>` terminals with their usage, and a background
-> round over those hosts every 10 minutes (one read-only ssh call per host, one host at a time). The consent is the
-> session reader's own per-host answer, with no second question (the owner's O3). The Claude usage is printed by Claude
-> Code itself on the VM (road (a), measured). The round runs by itself from the start of the extension, over each
-> distinct host of those terminals that the person has not refused (the owner's N2 and Q1): **a host with no answer
-> is allowed by itself**, with no question. No change to `src_mcp`, `src_server` or CredsForDevs. The accounts script
-> writes nothing on a VM. **One thing is installed there: `jq`, from the host's own package manager, at once, when it
-> is missing, an AI CLI is there to read, and the ssh user may install it** (N5, Q2); where the user may not, the
-> list shows the command to run. **Both automatic steps are user settings, on by default (owner decision 20)**:
-> turned off, a new host is asked first and nothing is installed. Three epics (E0 is the measurement), one extension
-> release. **Not approved yet:** no
-> plan round has run. The owner answered the questions N1–N5 and Q1–Q2 on 2026-11-19 and the answers are folded in,
-> as are the measurements W1–W5 (§ 5). **No question for the owner is open. The text is ready for the question
-> consultants and the plan round.** Still owed, and named so: the consultants' answer on what is important before
-> the epic split is final; the plan round; the process check W7 before the E1.S2 spec is final; and the measurements
-> W6 and W8, which are recorded and stop nothing.
-> The change ledger (the `Plan changes` section of `.agents/conventions/common/plan-change-control.md`) opens
-> here, directly under this block, with its epoch 1 line in the commit of the first approval; until then the section
-> is not written, because a ledger with no epoch line is a finding of `plan-lifecycle.mjs`.
+> Status: **plan only, nothing implemented yet, 2026-11-19.** The plan gate ran on `653140c3` on 2026-11-19 (session
+> `bce68565`): verdict `proceed`, with ONE of two reviewers — codex answered; antigravity did not receive the plan
+> whole, at 154 KB. Its 7 findings were accepted and are folded into this text. So are the reply's commands and the
+> answer of both question consultants on the split (consult `f4af076c`): at most two epics, and the installer only
+> after the read-only path is proven. Scope: `src_vs_code` only — an icon in the terminal panel's title bar, a list of
+> the Claude Code, Codex and Antigravity accounts on the hosts of the open `Creds: <host> / <session>` terminals with
+> their usage, and a round over those hosts every 10 minutes that starts by itself. **Epics E1 and E2 only read.** The
+> install of `jq` (owner decisions 17, 19 and 20) stands and ships in the same release; it is built after E2, as
+> candidate C1. No change to `src_mcp`, `src_server` or CredsForDevs. Step 0 and the measurements W1–W5 are done
+> ([../research/RESULTS_accounts_and_usage_on_a_vm.md](../research/RESULTS_accounts_and_usage_on_a_vm.md)). The owner
+> answered O1–O7, N1–N5, Q1–Q2 and decision 20; no question for the owner is open. This text was cut from 154 KB:
+> the decision history, the findings F1 and F2 in full, the step 0 tables and the installer's design are in
+> [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md),
+> word for word where they were moved.
 
 Related: [../research/RESULTS_accounts_and_usage_on_a_vm.md](../research/RESULTS_accounts_and_usage_on_a_vm.md) (step 0
-of this plan, measured 2026-11-19), [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md)
+and W1–W5, measured 2026-11-19), [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md)
 (its E2 built the read-only ssh reader and the per-host consent this plan reuses),
-[../research/RESULTS_vendor_quota_gauges.md](../research/RESULTS_vendor_quota_gauges.md)
-(where each vendor states its quota gauge, measured 2026-10-10),
+[../research/RESULTS_vendor_quota_gauges.md](../research/RESULTS_vendor_quota_gauges.md) (where each vendor states its
+quota gauge, measured 2026-10-10),
 [../research/PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) (the gauge of coai's own rounds).
+
+## Plan changes
+
+> Epoch 1 · approved 2026-11-19 · by reviewers · state: open
+
+  The gate's round 1 on `653140c3`: `proceed`, codex only; antigravity did not receive the plan whole. Its 7
+  findings, the reply's commands and the consultants' answer on the split are folded into this approved text. They
+  are not entries.
 
 ## The goal
 
@@ -45,76 +45,42 @@ or how much of its limit is left. To learn it the owner opens each session and a
 
 ## Owner decisions (2026-11-19)
 
-1. **An icon beside the chat icon** in the terminal panel's title bar opens the list.
-2. **No real time.** A round over ssh every 10 minutes is enough.
-3. **Claude usage: let Claude Code itself make the call on the VM**, so our script never touches the token. The
-   agent-models mod does that inside Claude Code. Step 0 measures whether a non-interactive Claude Code command prints
-   the usage. If none does, the fallback order is: the script reads the VM's credential and calls the endpoint itself
-   (needs the owner's yes and a security judgement); then the account only, with no usage.
-4. **Several hosts may share one account.** The list groups by account and shows which hosts use it. Usage is read once
-   for each account in a round, where the road allows it.
-5. **The same numbers as the mod line.** The owner's mod line today reads
-   `5h — · resets in — · week 80% left · Fable 85% left`. The list shows the numbers as "left", with the same dash for a
-   missing value and never a zero, so both views agree.
+Each decision is one line here. The owner's words, the planner's recommendation beside each answer, and the questions
+as they were asked are in the appendix, § A, word for word. Where the owner decided against the planner's
+recommendation, the plan follows the owner.
 
-**The owner's answers to the open points O1–O7 (2026-11-19).** They settle those points. The questions themselves are
-kept in *Open points for the owner*, with the answer beside each.
+1. An icon beside the chat icon in the terminal panel's title bar opens the list.
+2. No real time: a round over ssh every 10 minutes.
+3. Claude usage: Claude Code itself makes the call on the VM, so our script never touches the token.
+4. Several hosts may share one account: the list groups by account, and usage is read once for each account in a round.
+5. The same numbers as the agent-models mod line: "left", a dash for a missing value, never a zero.
+6. **O1:** the `curl` road (b) is allowed as a fallback. Road (a) works, so (b) is not built.
+7. **O2:** full email addresses are shown, in the list only.
+8. **O3:** no separate consent: the session reader's per-host answer is the answer for the accounts read.
+9. **O4:** the interval is a fixed 10 minutes.
+10. **O5:** the passive Codex read is enough.
+11. **O6:** the icon is always visible.
+12. **O7:** step 0 ran on the host `ai2-root`, Linux user `root`, on 2026-11-19.
+13. **N1, "everything is acceptable":** the four cache files Claude Code writes on a read are accepted, and so is a
+    rewrite of `~/.claude.json`, even on every read. The answer is about writes. It does not cover a live session
+    that is disturbed, and — the gate's finding 4 — it does not cover files that grow without bound.
+14. **N2:** the round runs by itself over every distinct host of the open `Creds:` terminals, from the start of the
+    extension. No first-press switch.
+15. **N3:** answered by the run of W1–W5.
+16. **N4, "with the version":** `agy --version` runs in every round.
+17. **N5:** where `jq` is missing it is installed, when the ssh user may; where the user may not, the list shows the
+    exact command to run and runs nothing.
+18. **Q1, "new hosts are allowed by themselves":** a host with no answer is read with no modal and no press; a daily
+    notice names such hosts; a "no" is never overridden.
+19. **Q2, "install at once":** the install needs no press, also on an old "yes".
+20. **"Yes, but on by default":** two user-level settings, both on by default —
+    `coai.terminalAccountsAllowNewHosts` and `coai.terminalAccountsInstallMissingTools`. Off, they restore ask-first
+    and no-install.
 
-6. **O1 — the Claude usage road: "may also use curl".** Road (b) is **allowed** as a fallback. Step 0 then showed that
-   road (a) works, so this plan takes **road (a)**. Road (b) stays written here as allowed and is **not built**.
-   Building it later is a change of this plan with its own security judgement. The planner's recommendation against
-   road (b) stays in the Security section, so it is read before anyone builds it.
-7. **O2 — full email addresses are shown in the list.** In the list only: never logged, never stored, never sent on.
-8. **O3 — the consent is shared with the session reader: no separate consent.** A host that is already allowed for the
-   session read (the answer to the `read-remote-session` question of the terminal-door plan's E2) is read for accounts
-   too, **without a new question**. § 3 is designed on this. The planner's first draft recommended a separate consent;
-   what the decision widens is written as finding F1 in the Security section, for the owner to read, not to reopen.
-9. **O4 — the interval is a fixed 10 minutes.** No setting.
-10. **O5 — the passive Codex read is enough.** No live read.
-11. **O6 — the icon is always visible.**
-12. **O7 — step 0 ran on the host `ai2-root`** (Linux user `root`), on 2026-11-19, with the owner approving each exact
-    command. Its record is [../research/RESULTS_accounts_and_usage_on_a_vm.md](../research/RESULTS_accounts_and_usage_on_a_vm.md).
-
-**The owner's answers to the new questions N1–N5 (2026-11-19; given in Russian, translated here).** The questions are
-kept in *Open points for the owner*, with the answer beside each.
-
-13. **N1 — "Everything is acceptable."** The four cache files are accepted, and so is a rewrite of `~/.claude.json` by
-    a read, even on every read. So W6 is a measurement to record, not a gate. The answer is about what is WRITTEN.
-    That the live sessions on a host stay undisturbed is not a write question; it is the product working, and
-    real-window check R7 (b) still holds it.
-14. **N2 — "The round goes automatically over all unique ssh sessions in the terminal."** The round runs by itself
-    over every distinct host of the open `Creds:` terminals, from the start of the extension. The first-press switch
-    of the earlier revision is removed. "Unique" is one read for each host, however many terminals name it. The
-    consent stays shared (O3): the owner did not say to read a host that nobody allowed. So a host is read when its
-    answer is "yes", and not when it is "no" or forgotten. A host with no answer was not read in that revision; the owner then
-    decided that it is (item 18).
-15. **N3 — answered by the run** of W1–W5.
-16. **N4 — "With the version."** The list shows the Antigravity version: the script starts `agy` with its version flag
-    in every round. The risk the planner named, a self-update on a start, is recorded in Security and Growth.
-17. **N5 — "Install what is needed yourself, and that is all"; then: "and only if there are no rights, write to the
-    person: run this command".** Where `jq` is missing, the extension installs it, when the ssh user may. Where the
-    user may not, the list tells the person the exact command to run, and runs nothing. **This reverses the earlier
-    line "nothing is installed on a VM".** The design is in § 4 and the judgement is finding F2.
-
-**The owner's answers to Q1 and Q2 (2026-11-19; given in Russian, translated here).**
-
-18. **Q1 — "New hosts are allowed by themselves."** A host of an open `Creds:` terminal that has no answer is read by
-    the round, with no modal and no press. Once a day one notice, with no question, lists the hosts that were allowed
-    by themselves and says where to forbid them. An explicit "no" (*Not this host*) is never overridden. The planner's
-    recommendation was to keep the question; the owner decided otherwise, and § 3 is designed on the owner's answer.
-19. **Q2 — "Install at once."** The install of `jq` runs by itself, as N5 says, also on a host whose "yes" is older
-    than this release and on a host that was allowed by itself. No press is needed. The planner's recommendation was
-    to wait for one press on an old "yes"; the owner decided otherwise.
-
-**Owner decision 20 (2026-11-19; given in Russian, translated here).** The main session put the risk of findings F1
-and F2 to the owner in plain words — any program can name a terminal `Creds: prod-db / x`, and that leads to an
-automatic ssh login and an install as root — and offered two settings that are off by default.
-
-20. **"Yes, but on by default."** There are two settings, and both are ON by default:
-    `coai.terminalAccountsAllowNewHosts` (a host with no answer is allowed by itself) and
-    `coai.terminalAccountsInstallMissingTools` (`jq` is installed where it is needed). Turning the first off restores
-    ask-first; turning the second off restores no-install. Only a value in the person's own user settings counts.
-    The planner's recommendation stays recorded: off by default (finding F1, finding F2).
+**How decisions 17, 19 and 20 stand after the re-cut.** They are not reopened. The installer is not in E1 or E2: it
+is candidate C1 of the *Epics* section, built after E2 and shipped in the same release. In E1 and E2 a host without
+`jq` shows the fixed command to run. The second setting arrives with the installer, because a setting with no code
+behind it is a control that does nothing.
 
 ## What the code does today — verified on `a057c971` (extension 0.89.1)
 
@@ -168,69 +134,31 @@ All paths are under `src_vs_code/` unless they start with `research/`, `todo/`, 
 - **How a person reads a vendor gauge here.** `src/gaugeWords.ts`: absent is absent, never 0 % (`:13`); `agoWords`
   rounds an age down (`:92-99`). It says "used"; the owner asked for "left" (decision 5).
 
-**The Claude usage read in the agent-models mod** — read in `.agents/conventions/mods/agent-models/` (the rules
-submodule at pin `5d2d5ec`; the same bytes as `dew_flow_conventions` at `61732bb`):
+**Background that was moved.** How the agent-models mod reads the usage, what coai measured about Codex and agy on
+2026-10-10, and the first look at `claude --help` on this machine are in the appendix, § F. They matter for road (b)
+and for the history; the design below stands on step 0.
 
-- The endpoint is `https://api.anthropic.com/api/oauth/usage` (`hooks/limits.tsx:17`), "the usage endpoint the built-in
-  /usage reads" (`:2`). It is internal and its shape can change without notice (`:4-5`).
-- The mod never sees a token. `$.session.authorize()` gives a handle, and `$.http.fetch(LIMITS_URL, { auth: auth.handle,
-  headers: { Accept: 'application/json' } })` makes the call (`:157-160`). The only header the mod sets is `Accept`.
-  What Claude Code adds for the handle is not visible there.
-- Of the answer it keeps `five_hour.utilization`, `seven_day.utilization`, the first `weekly_scoped` entry of `limits`
-  whose model is named `fable`, and `five_hour.resets_at` (`:45-56`, `:69-83`). `resets_at` counts only as ISO 8601
-  with an offset (`:58-66`).
-- The words: `percentLeft` is 100 minus the percent used, rounded and clamped; anything that is not a finite number is
-  null (`:36-40`). A null draws `5h —` with no `% left` (`:105-106`); `resets in —` when the time is unknown or has
-  come (`:86-93`, `:108-111`). The whole line: `5h 87% left · resets in 1h 23m · week 74% left · Fable 82% left` (`:117-118`).
-- The mod reads the ACCOUNT with a Claude Code command, not a file: `claude auth status --json`
-  (`hooks/prompts.ts:96`), of which it takes `loggedIn` and `email` (`:105-120`).
-- On the owner's account the answer has no 5-hour window, and the owner chose to keep the dashes
-  (`.agents/conventions/research/PLAN_agent_models_1_4_0.md:203-207`).
-- A reopen fetches again only after 60 s (`LIMITS_INTERVAL_MS`, `hooks/limits.tsx:19`); one fetch was measured at 306 ms (`:18`).
+### What step 0 and W1–W5 measured — 2026-11-19, on `ai2-root`
 
-**What coai already measured about the other two vendors** (`research/RESULTS_vendor_quota_gauges.md`, 2026-10-10,
-codex-cli 0.160.0 and 0.154.0, agy 1.3.3 and 1.3.2):
+One host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 2.1.326, codex-cli 0.162.1, agy
+1.5.12. The record is the RESULTS file; the plan's own tables of it (U1–U11, M1–M8, the six conditions of road (a),
+W1–W5) are in the appendix, § D. What the design uses:
 
-- **Codex has a live gauge read, with a cost.** `codex app-server`, method `account/rateLimits/read`, answers in 0.7 s
-  with `rateLimits.primary.usedPercent`, `windowDurationMins`, `resetsAt` (epoch seconds), `secondary` (null on that
-  plan) and `planType` (`:83-116`). The read writes a log database and a models cache into `CODEX_HOME` (`:118-137`).
-  Whether it rotates the refresh token when the access token has expired was not measured, so the rule there is: it runs
-  only while no other `codex` of the same store is in flight (`:133-137`, `:293-301`). The raw stream carries the
-  account id and machine names; a reader keeps the numbers only (`:174-178`).
-- **`codex exec --json` carries no rate limit** (`:61-81`). Codex keeps session files at
-  `~/.codex/sessions/…/rollout-*.jsonl` (`research/RESULTS_fast_mode_measured_2026-10-07.md:31`).
-- **agy has no gauge but its refusal.** `agy --help` (1.3.3) lists no status, usage or quota command, and its state and
-  settings files hold no quota keys (`:211-217`). agy keeps its state under `~/.gemini`
-  (`src_server/src/Slots/SlotEnvironment.cs:54`: `~/.gemini/antigravity-cli/`;
-  `research/RESULTS_agy_allow_rule.md:23`; its sign-in is there too, `research/RESULTS_agy_question_row_follow_up.md:55`).
-- `~/.claude.json` is one file with every project's entries and the MCP servers of the user
-  (`src/mcpClientsRead.ts:10`, `:25`), so it can hold values a person would not want printed.
-
-**Read on this machine, 2026-11-19, as a hint only** (`claude --help`, Claude Code 2.1.328; written before step 0,
-which then found 2.1.326 on the measured VM): there is no `usage` subcommand; `claude auth status` takes `--json`; `-p` has `--output-format json`,
-`--no-session-persistence`, `--strict-mcp-config`, `--setting-sources` and `--max-budget-usd`; `--bare` never reads
-the OAuth login, so it cannot be used for a usage read.
-
-### What step 0 measured — 2026-11-19, on `ai2-root`
-
-The record, with every command, file list and timing, is
-[../research/RESULTS_accounts_and_usage_on_a_vm.md](../research/RESULTS_accounts_and_usage_on_a_vm.md). It is one
-host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 2.1.326, codex-cli 0.162.1 and agy
-1.5.12, and one run of each command form. The rows below were this plan's "not verified" list.
-
-| # | The claim | What step 0 found | State |
-|---|---|---|---|
-| U1 | A Codex rollout file holds `token_count` events with `rate_limits` (`primary` and `secondary`: `used_percent`, `window_minutes`, `resets_at`) | True, with these names: a line of `type` `event_msg`, `payload.type` `token_count`, `payload.rate_limits`. **`primary` was the weekly window (10 080 minutes) and `secondary` was `null`**, so a window is named by its length, never by its slot. The line holds counts only, no text of a conversation. `rate_limits` also has `plan_type` (`prolite`) | **resolved** |
-| U2 | The folder layout under `~/.codex/sessions`, and how to find the newest file without listing them all | `~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl`; 60 files; the newest is 527 525 bytes, 2 days old, with 7 such lines. W5: the file has 65 lines, the last record is line 64, with 991 bytes after it; its `timestamp` is ISO 8601 with milliseconds and `Z` | **resolved** |
-| U3 | `codex login status` exists and names an account without a secret | It exists and prints only `Logged in using ChatGPT`. It names **no** account | **resolved**: the script does not run it |
-| U4 | `~/.claude.json` holds `oauthAccount` with `emailAddress` and an organization name | True, by key name. Not needed, because of U5 | **resolved**: the script opens no Claude file |
-| U5 | Whether `claude auth status --json` prints an organization, and whether it prints anything secret | Exit code 0 in 278 ms. It prints `loggedIn`, `email`, `orgId`, `orgName`, `subscriptionType` and nine more keys, and no token or secret. W3: it writes no file | **resolved** |
-| U6 | Whether a non-interactive Claude Code command prints the usage, whether it makes a model call, what it starts and what it writes | `claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config --setting-sources ""` prints it in 3.6 s with **no model call** (`num_turns` 0, cost 0), also from the working folder `/` (W1). No transcript in any read with the three flags. **It rewrites four cache files of Claude Code's own on every read**, the same four, with no growth (W4). **In one read of four, `~/.claude.json` was rewritten too, with a backup; who wrote it is not proven.** `claude --help` has no usage subcommand; `--bare` never reads the login | **resolved, road (a) taken**; two points are not settled: the `~/.claude.json` write (W6) and one process of unknown origin (W7) |
-| U7 | The path and the key names of the Claude credential file on a Linux VM, and the headers the usage endpoint needs | `~/.claude/.credentials.json`, mode 600; key names recorded. The headers were not measured | **half open, and not needed**: road (b) is not built |
-| U8 | Where agy keeps the account on the VM's version, and whether any file or command states usage | agy 1.5.12 has no usage, quota or account command, and no file with a quota. An email address appears only in its log file | **resolved**: no usage; the account is not read |
-| U9 | Whether `claude`, `codex`, `agy`, `curl` and `timeout` are found by `ssh <host> sh -s`, which `sh` the VM has, and whether its `printf` is a builtin | `sh` is `dash`; `printf` is a builtin. **`claude` and `agy` are not on the `PATH` of a shell that is not a login shell**: they are in `~/.local/bin`, which `~/.profile` adds. `codex` is in `/usr/local/bin`. `curl`, `timeout`, `stat` and `jq` are in `/usr/bin` | **resolved**: the script adds `$HOME/.local/bin` itself |
-| U10 | That a QuickPick label draws `$(name)` as an icon | Not part of step 0 | **open**: the host scenario of E2 measures it |
-| U11 | The Claude Code version on the VMs and the flags it has | 2.1.326 on this host; every flag used above was accepted | **resolved for this host**; the script reports the version of each host |
+- `sh` is `dash`. `claude` and `agy` are in `~/.local/bin`, which a shell that is not a login shell does not have on
+  its `PATH`. `jq`, `timeout` and `stat` are in `/usr/bin`.
+- `claude auth status --json` names the account in 0.3 s with no secret, and writes no file (W3).
+- `claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config --setting-sources ""` prints
+  the usage in 3.6 s with **no model call**, also from the working folder `/` (W1). It writes no transcript. It
+  rewrites four cache files of Claude Code's own, with no growth (W4).
+- **Not settled:** during one read of four, `~/.claude.json` was rewritten with a new backup file, and it is not
+  proven whether the read or a live session wrote it (W6). One sample showed no child process of `claude`; one young
+  `node` process of unknown origin was seen after a read (W7).
+- Codex: the last `token_count` record of a session file holds the limits; `primary` was the WEEKLY window. The record
+  sat 991 bytes from the end of its file (W5). `codex login status` names no account.
+- agy has no usage, quota or account command. `agy --version` printed 1.5.12.
+- **Still open:** U10, whether a QuickPick label draws `$(name)` as an icon — E1's host scenario measures it. **New,
+  from the gate's finding 0:** U12, how soon one VS Code window sees a `globalState` write of another — E2 measures
+  it (R12).
 
 ## The design
 
@@ -241,14 +169,10 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
   command palette. It has no chord, so the skip-shell list does not change.
 - **The icon is always there**, like the chat icon (O6). With no `Creds:` terminal open the list says one sentence: *"No
   `Creds: <host> / <session>` terminal is open, so there is no host to read."*
-- **The view is a QuickPick instance (`createQuickPick`), not a webview.** The reasons:
-  1. It is a short read-only list: today five hosts and three vendors, at most a few dozen rows.
-  2. It needs what `conversationPickerCommand.ts` already needs: title buttons and new rows without closing, when a
-     host's read lands. That pattern is in the code and reads well.
-  3. A webview is a new bundled page with its own CSP, nonce and a test that runs the page. That cost buys only colour
-     and layout, which the owner did not ask for.
-  4. What a QuickPick cannot do is named under *What this plan does NOT do*: no colour for each number, and a long
-     row is cut in a narrow window. If the real-window check R3 shows the rows cannot be read, a webview is a plan change.
+- **The view is a QuickPick instance (`createQuickPick`), not a webview.** It is a short read-only list, and it needs
+  what `conversationPickerCommand.ts` already has: title buttons and new rows without closing. A webview is a new
+  bundled page with its own CSP, nonce and a test that runs the page, for colour and layout nobody asked for. If R3
+  shows that the rows cannot be read, a webview is candidate C2. (The four reasons in full: the appendix, § H.)
 - **The rows are grouped by account** (decision 4). A separator names the vendor and the account; under it one row holds
   the usage line, and the row's second line names the hosts and the age of the reading:
 
@@ -265,9 +189,7 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
   ai1-root — the last read failed 3 min ago: “ai1-root” did not answer over ssh within 30 s.
   ai2-dev2 — allowed automatically on 2026-11-20. Choose this row to change that.
   ai2-root — turned off: your answer for this host is “Not this host”.
-  ai2-dev3 — jq is missing, and this ssh user may not install it. Run there: sudo apt-get install -y jq     [copy]
-  ── Changes CoAI made on a host ──
-  ai1-dev3 — installed jq on this host, 2026-11-20 (apt-get, as root)
+  ai2-dev3 — jq is missing on this host. Run there: sudo apt-get install -y jq     [copy]
   ```
 
   - **The account** is the full email and the organization's name for Claude Code (O2), never a secret. Two hosts are
@@ -293,20 +215,14 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
     in its account group, and the group's second line says the later read failed.
   - **Usage that was not read says why**, in its own words: *usage not read: Claude Code 2.1.326 on this host printed
     no usage line this version understands*, *agy states no usage*. It is never a row of dashes with no reason.
-  - **A host without `jq` has its own sentences** (§ 4): that `jq` was installed; or that it is missing and the ssh
-    user may not install it, with the exact command to run there; or that it is missing and installing is turned off
-    (the setting of § 3), with the same command; or that the install failed, with the reason and the
-    same command. The command is a fixed string from a closed table. The row has a copy button (a QuickPick item
-    button) that puts that string on the clipboard. The extension never runs it for the person.
-  - **The part *Changes CoAI made on a host*** lists every installation the extension made: the host, the day, the
-    package manager, and whether it ran as root or through `sudo`. It comes from a stored record, so it is still
-    there after a reload.
+  - **A host without `jq` says so, with the exact command to run there** (§ 4). The command is a fixed string from
+    a closed table, chosen by the package manager the host has. The row has a copy button (a QuickPick item button)
+    that puts that string on the clipboard. The extension never runs it, and in E1 and E2 it installs nothing.
   - **Choosing a host's row** in the *Hosts* part opens that host's three choices — *Read*, *Not this host*, *Forget*
-    — as *CoAI: hosts read over ssh* does, so a host can be forbidden from where it is seen (§ 3). Choosing the row
-    of a failed install tries it once more. Choosing any other row does nothing.
+    — as *CoAI: hosts read over ssh* does, so a host can be forbidden from where it is seen (§ 3). Choosing any other row
+    does nothing.
   - **A setting that a workspace or a folder tried to set** is said in one row at the top of the list: *This
     workspace sets `coai.terminalAccountsAllowNewHosts`. It is ignored: only your own user settings count.* (§ 3).
-
   - **Two title buttons**: *Refresh now*, and *Stop the accounts round* (§ 3). While the round is stopped the list
     holds one row: *The accounts round is stopped. Choose this row to start it.*
 - **Text from a VM is made plain at one road in**: control and format characters are taken out, the length is cut, and
@@ -327,7 +243,7 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
 - **The answer is read again just before every call**, from the store, as the session reader checks the terminal's
   name again before every spawn. A "no" given while a round runs stops the next call to that host. A *Forget* does not
   stop anything any more: the host then has no answer, and the round allows it again (§ 3).
-- **One ssh call for each host in a round**: the pinned options of `SSH_OPTIONS`, unchanged, then
+- **One ssh call for each host in a round — two in the one case below**: the pinned options of `SSH_OPTIONS`, unchanged, then
   `-- <host> sh -s -- <mode>`, the script on stdin. `<mode>` is one of two fixed words (below).
 - **Every 10 minutes, counted from the END of a round** to the start of the next, so two rounds never overlap. The
   value is a constant, `600 000 ms`, not a setting (O4).
@@ -335,8 +251,25 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
   host had at its last read. When a host's account already has a usage reading from this round, that host is called
   with the mode `no-claude-usage` and the script reads the account only; else the mode is `claude-usage`. A host never
   read is called with `claude-usage`. If the first host of an account fails, the next host of that account reads the
-  usage in the same round. If a host turns out to have another account than last time, its usage waits for the next
-  round. Codex usage is a local file read with no cost, so it is read on every host.
+  usage in the same round. Codex usage is a local file read with no cost, so it is read on every host.
+- **A host whose account changed gets one more call in the same round (the gate's finding 3).** When a host that was
+  called with `no-claude-usage` answers with an account that has no usage reading in this round, the round calls
+  that host once more, with `claude-usage`, before it goes on. So a new account's usage is not a round late. It is
+  bounded: at most ONE extra call for a host in a round, and none when that account's usage was already read in this
+  round. An earlier revision named "a second ssh call for a host in a round" as outside the plan. This is that call,
+  and it is inside the plan now, for this one case only.
+- **How often the usage command runs follows from W6 (the gate's finding 4).** The owner accepted what a read writes
+  (N1); a file for each read that nobody retires is growth, which N1 was not asked about. The accounts are read
+  every 10 minutes in any case. The usage command runs by this table:
+
+  | What W6 shows about `~/.claude/backups/` | The usage command runs |
+  |---|---|
+  | A read makes no backup (a live session made the one that was seen), or one only at a host's first read from `/` | In every round |
+  | A read makes a backup each time, and Claude Code keeps a fixed number of them | In every round; that number is the bound, and `SECURITY.md` states it |
+  | A read makes a backup each time, and nothing retires them | **Not by a timer in every round.** At most once an hour for each account, and only under a budget the owner approves, in files and megabytes a day (§ Growth has the numbers). Until the owner approves one: only on a press of *Refresh now* |
+
+  The interval is one constant of the round's planner, so the release build is set from what W6 found. The
+  pre-release build of E2 reads in every round, on the owner's hosts only.
 - **A usage read that went wrong is not repeated blindly.** When a host's reply says the usage command made a model
   call (`:turns` is not 0) or printed no line the pattern knows, the extension calls that host with `no-claude-usage`
   from then on, until the window is reloaded or the host reports another Claude Code version. So a Claude Code version
@@ -344,9 +277,8 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
 - **The first round starts with the extension, with no press** (N2): 30 s after activation, when the window has a
   `Creds:` terminal of a host that is not refused; else 30 s after the first such terminal opens. The 30 s let the
   window restore its terminals first. It is not started by a reload alone with no such host.
-- **An install step, once for each host** (N5, § 4). When a host's reply says `jq` is missing and the extension has
-  not tried that host yet, the round makes one install call to it right after the read, and reads the host once more
-  when `jq` was installed. That is three ssh calls to one host in one round, once in that host's life.
+- **No install step in E1 and E2.** A host whose reply says `jq` is missing shows the command to run (§ 4). The
+  installer is candidate C1.
 - **It stops when no `Creds:` terminal is open.** With no live terminal of a host that is not refused the timer is cleared, not
   left idle. `onDidOpenTerminal` arms it again; `onDidCloseTerminal` checks again. A host whose last terminal closed is
   dropped from the next round, and its reading is dropped from memory. A read in flight is not killed by a close; its
@@ -359,180 +291,115 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
 - **Results are in memory only.** Nothing of a reading is written to disk, to `globalState`, to a ledger or to a log:
   the readings hold email addresses and the usage of a person's accounts, they are 10 minutes old at most, and after a
   reload the next round brings them back within a minute. What is persisted is the shared consent, which exists
-  today; one small row of state (§ 3); and the record of what was installed on which host (§ 4).
+  today, and one small row of state (§ 3).
 - **Limits of one read call**: killed at 30 s (the tree, as today), stdout capped at 64 KiB. Both are ceilings. The
   ceiling was 20 s before `agy` was started (N4). Measured on the VM: the account command 0.3 s, the usage command
   3.6 s with the flags (6.3 s without), whole calls between 3 and 10 s. Inside the script each command has its own
   limit: `claude --version` 2 s, the account command 3 s, the usage command 8 s, `agy --version` 4 s (§ 4); with ssh's
   5 s to connect that stays under 30 s. The time of `agy --version` and the time of a whole call from Windows with the
-  pinned options were not measured; R9 measures both. A round over five hosts is at most 150 s. The install call has
-  limits of its own (§ 4).
+  pinned options were not measured; R9 measures both. A round over five hosts is at most 150 s, and 180 s when one
+  host needs its second call.
 - **A failed read is logged once, not every round.** The runner's one log line is written when a host's failure
   sentence changes, and once when it reads again. A host that is down for a day is two lines, not 144.
 - **Not serialized with the session reader.** A press of *take the question* can run while the round reads the same
   host: two ssh children to one host, both read-only. Each VS Code window runs its own round, so two windows with
   terminals of one host read it twice in 10 minutes. Both are named, not prevented.
 
-### 3. The consent — one shared answer for each host, and a new host is allowed by itself (O3, N2, Q1)
+### 3. The consent — one shared store, a "no" that always wins, and a new host allowed by itself (O3, N2, Q1)
 
-**Decisions (the owner, 2026-11-19).** O3: there is no separate consent; the per-host answer of the session reader is
-the answer for the accounts read too. N2: the round runs by itself over every distinct host of the open `Creds:`
-terminals. Q1: a host with no answer is allowed by itself. N5 and Q2: where `jq` is missing, it is installed, at once.
-
-**What the store is from this release.** Until now `coai.terminalHosts` held the answers to a question, and no ssh
-child started before a "yes". From this release it is two things: **the list of hosts the person refused, which
-nothing overrides**; and a record of the hosts that are read, with how each one came to be allowed. For the accounts
-read it no longer comes first. Only a "no" stops a host.
+**What the store is from this release.** `coai.terminalHosts` held the answers to a question, and no ssh child
+started before a "yes". From this release it is: **the list of hosts the person refused, which nothing overrides**;
+and a record of the hosts that are read, with how each came to be allowed. For the accounts read only a "no" stops a
+host.
 
 | The host's row | What the round does |
 |---|---|
-| "yes", written by a press (*Read*) | Reads it, from the first round after the extension starts. No press and no question. Installs `jq` there at once when it is needed (§ 4) |
-| none — a new host, or a host after *Forget* | **Allows it by itself**, while `coai.terminalAccountsAllowNewHosts` is on (the default): writes a "yes" row marked as automatic, with the time, and reads the host in the same round. No modal and no press. Installs `jq` as on any allowed host. **With that setting off:** nothing; the host says *not asked yet*, and a press on its row asks |
-| "no" (*Not this host*) | Nothing. No ssh call of any kind. **Never overridden**: not by the round, not by another terminal of that host, not by the cap, not by a reload |
+| "yes", written by a press (*Read*) | Reads it, from the first round after the extension starts. No press, no question |
+| none — a new host, or a host after *Forget* | **Allows it by itself**, while `coai.terminalAccountsAllowNewHosts` is on (the default): writes a "yes" row marked as automatic, with the time, and reads the host in the same round. **With the setting off:** nothing; the host says *not asked yet*, and a press on its row asks |
+| "no" (*Not this host*) | Nothing. No ssh call of any kind. **Never overridden**: not by the round, not by another terminal or another window, not by the cap, not by a reload |
 
-**How a host that was allowed by itself is stored: in the same store, with a marker.** The row is
-`{ host, answer: 'yes', askedUtc, how: 'auto' }`. A row written by a press has no `how`, so every row of today reads as
-a person's answer. The reasons for one store and not a second one:
+**The row.** `{ host, answer, askedUtc }` as today; a row the round wrote has `how: 'auto'`. One store, not two:
+`consentOf` stays the one function that says whether a host may be contacted, so a "no" is looked up in one place; a
+host has one row, so a "no" and an automatic "yes" cannot both exist; and the person's three choices act on an
+automatic row as on any other. The appendix, § G, has the longer argument.
 
-1. **One road in.** `consentOf` is the one function that says whether a host may be contacted. A second store would
-   be a second place where a "no" has to be looked up, by every caller, every time — the shape `security.md` calls a
-   measure applied at some of its sites.
-2. **A "no" and an automatic "yes" cannot both exist for one host**: a host has one row.
-3. **The person's three choices act on it as on any row**, with no new code path: *CoAI: hosts read over ssh* shows
-   *allowed automatically on <day>*, and *Not this host* turns it into a refusal.
-4. **The marker is what the rest needs**: the list can say how a host came in, the daily notice knows which hosts to
-   name, and the cap can tell a person's answer from an automatic one.
+**Every write is one commit that re-reads and merges (the gate's finding 0).** Two windows can each hold a copy of the
+list. If a window wrote a whole list it had read earlier, it would erase a "no" that the person gave in the other
+window in between. So:
 
-**The cap protects the person's answers.** The store holds 100 rows, and today the oldest row goes when it is full.
-From this release **an automatic row never pushes out a row a person wrote**: at the cap the oldest AUTOMATIC row
-goes; when there is none, the new host is not allowed and not contacted, and the list says that the list of hosts is
-full. Without this rule a program that opens a hundred terminals with invented names could push a person's "no" out
-of the store, and the refused host would be allowed by itself in the next round.
+1. **One function writes the store**, and nothing else does. It takes a CHANGE for one host — never a list. At the
+   moment of the write it reads the stored list again, applies the change to that fresh list, and writes the result.
+   No list that was read before an `await` is ever written.
+2. **The merge rule, for one host:** a person's "no" beats everything. A person's "yes" beats an automatic "yes". An
+   automatic "yes" is written ONLY when the fresh list has no row for that host; it never replaces a row. Only a
+   person's own press (*Read*, *Forget*) changes a "no".
+3. **A refusal is repaired, never lost.** A window remembers, while it lives, the hosts it wrote a "no" for. Before
+   every call and after every commit it re-reads the store; if one of its refusals is missing, it writes it again.
+4. **The round reads the store again just before every call** (§ 2), so a "no" from another window stops the next
+   call as soon as this window can see it.
+5. **What is not measured (U12):** how soon one window sees another window's `globalState` write. VS Code is expected
+   to hand it over within moments. Until that moment a round in the other window can still make one call to the host.
+   E2 measures it with two windows (R12). If the delay is long enough to matter, the store moves to one file with an
+   exclusive lock; that is a change of this plan.
 
-**The automatic "yes" covers the session read too. That is the recommended reading, and it is a widening.** The store
-is shared since O3: one row, one answer. So on a host the round allowed, *take the question* and *add the question*
-read the session without asking. The other reading — an automatic row that means "yes" for accounts and "ask" for a
-session — makes one row mean two things, and `consentOf` would have to be told who is asking. A session read still
-starts only on a press in that terminal. What it costs: the round meets a new host within 30 s to 10 minutes, so the
-question *"Read the Claude session…"* is in practice no longer asked while the round runs. It is still asked when a
-door is pressed on a host that has no row yet — before the round met it, or while the round is stopped. Finding F1
-names this.
+**The cap protects the person's answers.** 100 rows. An automatic row never pushes out a row a person wrote: at the
+cap the oldest AUTOMATIC row goes; with none to drop, the new host is not allowed and not contacted, and the list
+says that the list of hosts is full. Else a program that opens a hundred terminals with invented names could push a
+"no" out of the store.
 
-**What a host gets from this release, with a "yes" of any kind, with no press:**
+**The automatic "yes" covers the session read too.** One row, one answer: on a host the round allowed, *take the
+question* and *add the question* read the session without asking. A session read still starts only on a press in
+that terminal. The cost: while the round runs, the question *"Read the Claude session…"* is in practice no longer
+asked; it is asked only when a door is pressed on a host that has no row yet.
 
-- a read that a timer starts, from the start of the extension, every 10 minutes while a `Creds:` terminal of that
-  host is open;
-- the names of the accounts signed in there;
-- a start of Claude Code on that host, which asks Anthropic with that host's own login;
-- a start of `agy` on that host, for its version;
-- **one installation of `jq` on that host, at once**, when an AI CLI was found there, `jq` is missing, and the ssh
-  user is root or has `sudo` without a password.
+**What a host with a "yes" of any kind gets, with no press:** a read by a timer every 10 minutes while a `Creds:`
+terminal of it is open; the names of the accounts signed in there; a start of Claude Code, which asks Anthropic with
+that host's own login; a start of `agy` for its version. Until this release a "yes" covered one read that a press
+starts. (With candidate C1, an install of `jq` is added to this list.)
 
-Until this release a "yes" covered one read that a press starts. For the owner the list above is the decisions O3, N2,
-N4, N5, Q1 and Q2. For another person who installed the extension, each line is wider than what they were ever asked,
-and for a new host they are not asked at all. The Security section holds this as findings F1 and F2.
+**What the person is told — every one of these comes after the first read, not before it.**
 
-**What the person is told, and where. Every one of these comes after the first read, not before it.**
+- **A daily notice of the hosts that were allowed by themselves.** At most one in 24 hours, only when there is such a
+  host, shown at once for the first. No question. It lists those hosts, says where to forbid one (*CoAI: hosts read
+  over ssh*, *Not this host*), names the setting `coai.terminalAccountsAllowNewHosts` and that it is on, and has one
+  button, *Open settings*, which decides nothing.
+- **One notice, once for each installation of the extension**, at its first accounts round, for the hosts with a
+  "yes" from before: their accounts are now read every 10 minutes, and where to stop it.
+- **The question's words**, where it is still asked: same code (`read-remote-session`), same buttons, same store; the
+  title is *"Read the Claude session and the AI accounts on “x” over ssh?"* and the detail lists what a "yes" covers.
+- ***CoAI: hosts read over ssh***: *the Claude session and the AI accounts are read*; *allowed automatically on
+  <day>: …*; or *not read*. Beside *Forget* it says that a forgotten host is allowed again by itself.
+- **The help in five languages**, **`SECURITY.md`** and the release notes (the Security section).
 
-- **A daily notice of the hosts that were allowed by themselves (Q1).** At most one in 24 hours, and only when there
-  is such a host. It is information: no question, and no button that decides anything. It lists the hosts that were
-  allowed automatically since the last such notice, and says where to forbid one: *CoAI: hosts read over ssh*, the
-  choice *Not this host*. It names the two settings — `coai.terminalAccountsAllowNewHosts` and
-  `coai.terminalAccountsInstallMissingTools` — says that both are on, and that they are turned off in the user
-  settings; its one button, *Open settings*, opens the user settings at these two keys and decides nothing. The
-  notice of an install names the second setting in the same way. The first daily notice is shown as soon as the first
-  host was allowed.
-- **One notice, once for each installation of the extension**, at its first accounts round, for the hosts that have a
-  "yes" from before: their AI accounts are now read every 10 minutes, `jq` is installed where it is missing, and
-  where to stop it.
-- **A notice for every installation of `jq`**, when it was made and when it failed, through the one door, so it is
-  kept in the notifications ledger like every notice. The list keeps it too (*Changes CoAI made on a host*).
-- **The question's words change**, where it is still asked. Same code (`read-remote-session`), same buttons, same
-  store. The title becomes *"Read the Claude session and the AI accounts on “x” over ssh?"*, and the detail says what
-  a "yes" covers: the lines of the list above. It does not say "read-only" without the install clause.
-- ***CoAI: hosts read over ssh*** names it in each row: *the Claude session and the AI accounts are read*; *allowed
-  automatically on <day>: the Claude session and the AI accounts are read*; or *not read*. Its three choices stay.
-  Beside *Forget* it says that a forgotten host is allowed again by itself.
-- **The accounts list** shows, for each open host, how it is allowed, and opens its three choices (§ 1).
-- **The help, in five languages**: the new command; the paragraph on the per-host question, which today says the
-  first read of a host asks once — that is no longer so; and the sentence *"They only read: they change nothing on
-  that machine"*, which is rewritten with the one exception.
-- **`SECURITY.md`** and the release notes say the same (the Security section).
+**The setting `coai.terminalAccountsAllowNewHosts`** (boolean, default `true`, owner decision 20). Off, it restores
+ask-first: no host is contacted without a person's "yes", and an automatic row counts as no answer — for the accounts
+read and for the session read — until a person presses *Read*; the row is kept.
 
-**Two settings, both on by default (owner decision 20).** With both on, everything above is as written. Each one
-takes one automatic step back:
+- **The name** is flat camelCase, like the 68 other `coai.*` settings; none is a dotted group.
+- **Only the person's own user-level value counts.** It follows `SAFETY_KEYS` in `src/modelKeys.ts`: the read goes
+  through the user-layer door (`inspect().globalValue`, else the default), never the merged value; and the manifest
+  gives it `"scope": "application"`, so a workspace cannot set it and a WSL or remote window does not fall back to
+  another machine's value. What a remote window really reads is not measured; E2 observes it (R11). A workspace or
+  folder value is ignored, and the list says so in one row.
+- **Registered in** `package.json`, `src/settingsShape.ts`, `SAFETY_KEYS`, `NEVER_TRANSFERRED` of
+  `src/configTransfer.ts` (an imported file cannot decide it), and the help in five languages
+  (`helpCoverage.test.ts`). It is read before every call.
+- The second setting of decision 20, `coai.terminalAccountsInstallMissingTools`, arrives with the installer (C1).
+- The appendix, § G, has the arguments for the name and the scope in full.
 
-| Setting | Default | On | Off |
-|---|---|---|---|
-| `coai.terminalAccountsAllowNewHosts` | `true` | A host with no answer is allowed by the round itself (Q1) | **Ask-first, as before Q1.** No host is contacted without a person's "yes". A host with no answer says *not asked yet*; a press on its row raises the shared question; the timer never asks. A row the round wrote by itself (`how: 'auto'`) then counts as no answer — for the accounts read and for the session read — until a person presses *Read*. The row is kept, not deleted |
-| `coai.terminalAccountsInstallMissingTools` | `true` | `jq` is installed at once where it is needed (N5, Q2) | **No install.** No install call is made and no install record is written. The host's row says that `jq` is missing and shows the fixed command of § 4's table for that host's package manager, with its copy button, as the no-rights path does. Nothing is run |
+**The stop button is kept.** *Stop the accounts round* is one title button of the list. It clears the timer and drops
+the readings; while it is stopped no host is contacted for accounts and no host is allowed by itself. It is the only
+way to keep the session read of a host and stop the accounts read, and the way out when a read does harm on a VM. It
+does not come before the first round. The state is one `globalState` row, `coai.terminalAccountsState`:
+`{ toldUtc, lastAutoNoticeUtc, stoppedUtc }`, written by the same kind of commit.
 
-- **The names.** Every one of the 68 `coai.*` settings is one flat camelCase word (`coai.kimiAllowNetworkSignIn`,
-  `coai.consultEnabled`); none is a dotted group. So the names offered to the owner,
-  `coai.terminalAccounts.allowNewHosts` and `coai.terminalAccounts.installMissingTools`, keep their words and lose the
-  dot. "MissingTools" stays although the one tool is `jq`: the description says that today it is `jq` and nothing
-  else, and another tool is a change of this plan.
-- **Only the person's own user-level value counts.** A repository's `.vscode/settings.json` must not be able to turn
-  either setting on for the person — or off. This repository already has the rule for a setting that switches a
-  protection: `SAFETY_KEYS` in `src/modelKeys.ts` (today `kimiAllowNetworkSignIn`). Two layers hold it, and both are
-  taken here:
-  1. **The read goes through the user-layer door**: `inspect().globalValue`, else the manifest default — never the
-     merged value. Both keys join `SAFETY_KEYS`, and the test that refuses any other read of such a key covers them.
-  2. **A manifest scope.** Here it is `"scope": "application"`, as `coai.teamServers` has, and not `"machine"` as the
-     Kimi key has. The Kimi key is a decision about one machine's home folder. These two are a person's decision
-     about their own servers: one value for every window, which a workspace cannot set. With `machine`, a WSL or
-     remote window would read its own machine's value, and a person who turned a setting off on Windows would have
-     it on again there without knowing. What a remote window really reads for an application-scoped key is not
-     measured here; the host scenario and R11 observe it.
-- **A workspace or folder value is ignored, and said.** Where `inspect()` shows such a value, the list says so in one
-  row, in the words `sideConfig.ts` uses for an ignored layer: *This workspace sets `<key>`. It is ignored: only your
-  own user settings count.* If VS Code does not hand the extension that value at all for an application-scoped key,
-  the row never appears and VS Code's own Settings editor says it; in both cases the value is not read.
-- **Read before every call.** A setting turned off takes effect at the next call of the round. An install that is
-  already running is not killed (§ 4).
-- **Where each is registered:** `package.json`, with a description that says what it does, that it is on by default
-  and what turning it off restores; `src/settingsShape.ts`; `SAFETY_KEYS`; `NEVER_TRANSFERRED` in
-  `src/configTransfer.ts`, so an imported config file cannot decide either for the person; and the help in five
-  languages, which `helpCoverage.test.ts` requires for every setting.
-- **The planner's recommendation was off by default, and it stays recorded.** On by default, a person who never
-  opens the settings gets both automatic steps. What the settings change is that each step can be taken back, by the
-  person and by nobody else.
+**How a person forbids a host.** ***Not this host*** — in the hosts list, in a host's row of the accounts list, or
+in the question — stops every ssh call to it, and its reading is dropped at once. ***Forget* no longer stops the
+accounts read**: it removes the row, and the next round allows the host again. A read that is already running ends
+within its 30 s and its result is dropped.
 
-**The stop button is kept, and this is why.** The round is on by default and nobody has to press anything for it.
-*Stop the accounts round* is one title button of the list. It clears the timer and drops the readings from memory;
-while it is stopped no host is contacted for accounts or for an install, and **no host is allowed by itself**. The
-reasons to keep it:
-
-1. It is the only way to keep the session read of a host and stop the accounts read. *Not this host* stops both.
-2. It is the way out when a read does harm on a VM — a Claude Code or agy update that disturbs the live sessions
-   (R7 (b)) — without uninstalling the extension or closing the terminals.
-3. It costs little: one button, one stored row, three tests. It is a title button and not a command or a setting,
-   because each of those needs its own help entry in five languages, and a setting a control.
-
-What it does **not** do: it does not come before the first round. The first read of every host, and an install with
-it, start 30 s after the extension starts or within 10 minutes of a new terminal, before anyone can press a button.
-
-**The state** is one `globalState` row, key `coai.terminalAccountsState`: `{ toldUtc, lastAutoNoticeUtc, stoppedUtc }`.
-
-**How a person forbids a host — and what no longer does.**
-
-- ***Not this host*** — in the hosts list, in a host's row of the accounts list, or in the question: no ssh call of
-  any kind goes to that host: no session read, no accounts read, no install. Its reading is dropped from memory at
-  once. The row stays a refusal until the person changes it.
-- ***Forget* no longer stops the accounts read.** It removes the row, as before. The host then has no answer, and the
-  next round allows it again by itself. A person who wants a host left alone has to say *Not this host*.
-- A "no" given while a round runs takes effect before the next call (§ 2). A read that is already running ends
-  within its 30 s, and its result is dropped. An install that is already running is not killed: stopping a package
-  manager half-way is worse than letting it end (§ 4).
-
-**What a person can no longer choose.** They cannot allow the session read on a host and refuse the accounts read or
-the install on the same host: the per-host answer is one answer. And they are no longer asked before a host is
-contacted for the first time: they can only refuse it afterwards.
-
-**No second store, no reach number.** The first draft had a second `globalState` key and a "reach" for each row. Both
-are gone with O3. The store stays `coai.terminalHosts`, with its row `{ host, answer, askedUtc }`, which gains the
-marker `how`; its cap of 100 rows, which gains the rule above; and its pure functions (`consentOf`, `withAnswer`,
-`withoutHost`, `answersOf`).
+**What a person can no longer choose.** They cannot allow the session read on a host and refuse the accounts read on
+the same host. With the setting on, they are not asked before a host is contacted for the first time.
 
 ### 4. The remote script and its reply — the cornerstone
 
@@ -543,8 +410,7 @@ marker `how`; its cap of 100 rows, which gains the rule above; and its pure func
   text without the spec must turn a test red.
 - **No write by the accounts script, no `cd` to a folder a person owns, no background job, no temporary file, no
   here-document.** Every tool it needs is checked first; a missing tool is said, never read as "nothing found". The
-  one thing the extension changes on a VM, the install of `jq`, is a second script with its own text and hash
-  (below), so this one stays read-only and its tests stay about reading.
+  install of `jq` is not in this script, and not in E1 or E2 (candidate C1).
 - **The `PATH`.** `ssh <host> sh -s` is not a login shell, and on the measured VM its `PATH` has no `~/.local/bin`,
   where `claude` and `agy` are. The script's first line inside the function puts `$HOME/.local/bin` in front of the
   `PATH`, as that VM's `~/.profile` does for a login shell. Nothing else of a profile is read.
@@ -552,10 +418,20 @@ marker `how`; its cap of 100 rows, which gains the rule above; and its pure func
   not known for the others. **`jq` is required, and the reason is safety by construction**: a field is printed because
   it was named, so nothing beside it in a JSON document can leave the VM. Cutting JSON with `sed` would be a pattern
   next to private text (the person's activity in `/usage`, a transcript line of Codex), and one wrong pattern there is
-  a leak with no error. A host without `jq` gets the state `unreadable no-jq` for Claude and Codex. The accounts script
-  does not install it; the extension then makes the install call, once (N5, below). With `jq` missing the accounts
-  script also says which package manager the host has — one closed word, from the existence of the four fixed paths
-  of the install table — so that the row can show the fixed command when no install is made.
+  a leak with no error. A host without `jq` gets the state `unreadable no-jq` for Claude and Codex. **With `jq` missing, the script
+  also says which package manager the host has**: one closed word, from the existence of four fixed paths
+  (`/usr/bin/apt-get`, `/usr/bin/dnf`, `/usr/bin/yum`, `/sbin/apk`), or `none`. The parser takes that word only from
+  this list, and the row shows the fixed string that belongs to it. **No text from a VM is ever part of a command
+  that is shown**, and the extension runs none of them:
+
+  | Manager word | The row shows |
+  |---|---|
+  | `apt-get` | `sudo apt-get install -y jq` |
+  | `dnf` | `sudo dnf install -y jq` |
+  | `yum` | `sudo yum install -y jq` |
+  | `apk` | `apk add jq`, to be run as root |
+  | `none` | no command: *Install `jq` on this host. CoAI found none of apt-get, dnf, yum and apk there.* |
+
 - **The operand** is one of two fixed words, `claude-usage` or `no-claude-usage`, checked by a closed list on this side
   and again in `sh`. No value from a terminal's name or from a VM is ever an operand.
 - **The reply is line-based, fixed and small.** A marker line names a vendor and a state from a closed list; a data
@@ -623,19 +499,12 @@ marker `how`; its cap of 100 rows, which gains the rule above; and its pure func
 
   - **stdin is `/dev/null`**, and the command runs under `timeout` (8 s; measured 3.6 s). A command that is killed is
     `failed timeout`.
-  - **The working folder is `/`.** The reasons: the script may not write, and a temporary folder is a write that a
-    kill at the time limit leaves behind, on every host, every 10 minutes; `$HOME` is wrong, because Claude Code would
-    take `~/.claude` for a project's folder; `/` exists on every VM and holds no project. **W1 measured `/`, and it
-    stays.** From `/` the command gave the numbers with no model call, rewrote the same four cache files as from a
-    temporary folder, and left nothing in `/`. In that one read `~/.claude.json` was rewritten too; the two reads
-    right after it, from the same `/`, did not rewrite it, and neither did step 0's read from a temporary folder. So
-    the folder does not cause that write on every read, and who made it is not proven (the Security section, W6). One
-    reading, the planner's and not proven either: Claude Code records a folder the first time it starts there. If so,
-    a FIXED folder costs one such write for each host, and a temporary folder would cost one on every read. No
-    reading of the point argues for a temporary folder.
-  - **`TZ=UTC` is set for this one command.** The reset text names its zone, `(UTC)` on the measured VM. Setting `TZ`
-    is a request to Claude Code; its effect on a VM in another zone was not observed. So the parser does not trust
-    it: it reads a reset only when the text ends in `(UTC)`.
+  - **The working folder is `/`.** The script may not write, and a temporary folder is a write that a kill leaves
+    behind, on every host, every 10 minutes; `$HOME` is wrong, because Claude Code would take `~/.claude` for a
+    project's folder. W1 measured `/`: the same numbers, the same four cache files, nothing left in `/`. (The
+    argument in full, and what W1 saw of `~/.claude.json`: the appendix, § H.)
+  - **`TZ=UTC` is set for this one command**, as a request. Its effect on a VM in another zone was not observed, so
+    the parser reads a reset only when the text ends in `(UTC)`.
   - **Only matched lines leave the VM.** `jq` prints `num_turns` and the `result` text. Of the text, `grep` keeps the
     lines that fit one of three anchored patterns over a closed alphabet, and at most eight of them:
     `Current session: <n>% used · resets <text> (<zone>)`, `Current week (all models): …`, and
@@ -697,474 +566,177 @@ marker `how`; its cap of 100 rows, which gains the rule above; and its pure func
   - **The account is not taken from `cli.log`**: an email address appears there, but a log's form is no contract and
     a log holds other text. The list says *agy states no usage, and its account is not read*.
 
-**Installing `jq` — a second script, the only one that changes a VM (the owner's N5).**
+### 5. What is still to be measured — in E2, on the owner's hosts
 
-- **When — at once, and only where it is needed (N5, Q2).** A host's read says that Claude Code or Codex was found
-  there and that `jq` is missing (`unreadable no-jq`); the host's answer is "yes", whether a person gave it, it is
-  older than this release, or the round wrote it by itself; the round is not stopped; and the install record has no
-  row for that host. Then the round makes ONE install call to that host, right after its read, with no press, and
-  reads the host once more when the reply says `installed`. **A host on which neither Claude Code nor Codex was found
-  gets no install**: `jq` would read nothing there. This is the planner's reading of "install what is needed", and it
-  keeps a server that has no AI CLI — one that a terminal merely names — at a read-only login.
-- **With `coai.terminalAccountsInstallMissingTools` off, none of this runs.** No install call, no record. The row
-  says `jq` is missing and shows the fixed command for the manager word the accounts script sent. The table below is
-  then only a table of sentences.
-
-- **Once for each host, and the record is written first.** `globalState` key `coai.terminalAccountsInstalls`, rows
-  `{ host, state, manager, as, utc }`, at most 100. The row is written as `started` BEFORE the ssh call is spawned, and
-  rewritten with the outcome. So a reload or a crash in the middle does not start a second install: a row that is
-  still `started` is shown as *an install was started on <day>; how it ended is not known*. Whatever the outcome, the
-  timer never calls the install for that host again. Only a press on the host's row tries once more.
-- **Fixed text, its own constant, its own hash.** POSIX `sh`, in the shape of the accounts script, with one fixed
-  operand, `install-jq`, the same pinned ssh options, and a sha256 that is in its spec and in a test. Its limits are
-  its own: the extension waits 180 s and reads at most 4 KiB. A stop of the round or a changed answer does not kill
-  an install that is running.
-- **What it does, in this order.**
-  1. `jq` is found: the reply is `present`, and nothing is done.
-  2. **The package manager** is the first that exists of four fixed absolute paths: `/usr/bin/apt-get`, `/usr/bin/dnf`,
-     `/usr/bin/yum`, `/sbin/apk`. It is never looked up on the `PATH`, and this script does not put `~/.local/bin` on
-     its `PATH`: a program that will run as root is not taken from a folder a user can write. None of the four: the
-     reply is `no-manager`.
-  3. **The rights.** `id -u` is 0: the command runs as it is. Else `sudo -n true` succeeds: the command runs through
-     `sudo -n`. Else the reply is `no-rights <manager>` and **nothing is run**. `-n` and a stdin of `/dev/null` mean a
-     password is never asked for.
-  4. **One command**, from the table below, with its output dropped on the VM, non-interactive, under `timeout`
-     (150 s). For `apt-get` it waits up to 60 s for the package lock instead of failing at once.
-  5. If that fails with `apt-get` or `apk`, the package lists are refreshed once (`apt-get update`, `apk update`) and
-     the same command is tried once more. `dnf` and `yum` refresh their lists by themselves. This is the planner's
-     reading of "install what is needed": without it a VM with old or empty lists fails every time.
-  6. `jq` is looked for again. The reply is `installed <manager> <root|sudo>` **only when `jq` is found now**. Else it
-     is `failed <word>` — `locked`, `timeout` or `exit` — with the manager's exit code as a number.
-- **What it never does.** No installer piped from `curl`, no downloaded binary, no build from source. No new
-  repository, key or source, and no option that turns off the manager's signature check. No package but `jq` (and
-  what the manager itself adds as its dependencies). No upgrade of anything else, no removal. No retry by a timer.
-- **The table is closed.** The left column is the only word of the reply that chooses anything. The parser takes it
-  only from this list, and the strings in the other columns are constants of the extension. **No text from a VM is
-  ever part of a command that is shown or run.**
-
-  | Manager | What the script runs (as root, or through `sudo -n`) | What the list shows when the user has no rights |
-  |---|---|---|
-  | `apt-get` | `apt-get install -y --no-install-recommends jq` | `sudo apt-get install -y jq` |
-  | `dnf` | `dnf install -y jq` | `sudo dnf install -y jq` |
-  | `yum` | `yum install -y jq` | `sudo yum install -y jq` |
-  | `apk` | `apk add jq` | `apk add jq`, to be run as root |
-  | none of the four | nothing | no command: *Install `jq` on this host. CoAI found none of apt-get, dnf, yum and apk there.* |
-
-- **No rights: the person gets the exact command, and the extension runs nothing** (the owner's second sentence on
-  N5). The host's row says that `jq` is missing, that this ssh user is not root and has no `sudo` without a password,
-  and the command of the table for the manager that was found. A copy button on the row puts that fixed string on the
-  clipboard. The extension never runs it for the person and never asks for a password. When the install failed
-  although the user had the rights, the row gives the reason and the same command.
-- **What the list and the log say.** *Changes CoAI made on a host* gets the row *installed jq on this host*, with the
-  day, the manager and "as root" or "through sudo". One notice says it at once (§ 3). The extension's log gets one
-  line: the host, the manager, the outcome and the exit code. The package manager's own output never leaves the VM: it
-  can hold the addresses of private repositories.
-- **None of this is measured.** The measured VM has `jq`. Every sentence above about what a package manager does is
-  what we ask of it. It is observed in the container tests of the test plan and in real-window check R10, before the
-  release.
-
-### 5. Step 0 — the measurement: done 2026-11-19; W1–W5 measured the same day; one check and two records owed
-
-Step 0 ran on `ai2-root` on 2026-11-19, with the owner approving each exact command in the Creds dialog. Nothing was
-installed. No value of a secret file was printed: key names, sizes, modes and times only.
-
-| # | What was to be measured | Result |
-|---|---|---|
-| M1 | The shell and the tools under `ssh <host> sh -s` (U9, U11) | **Measured**: `dash`, a builtin `printf`, `claude` and `agy` only in `~/.local/bin`, the versions |
-| M2 | `claude auth status --json`: the key names, the time, the exit code, an organization or not, and whether a file changed (U5) | **Measured**, but for the last part, which step 0 did not record. W3 measured it later: no file changes |
-| M3 | Road (a): `claude --help`, what `-p` does with a slash command, and the six conditions (U6) | **Measured**: two runs. See the table of conditions below |
-| M4 | The key names of `~/.claude.json` and its account object (U4); the credential file only if road (a) failed (U7) | **Measured**, key names only. The credential file's key names were listed although road (a) held; the RESULTS file records that as a deviation |
-| M5 | Codex: the layout, the newest file, the rate-limit records, `codex login status` (U1–U3) | **Measured** |
-| M6 | agy: its version, its help, the file names, the keys that could name the account (U8) | **Measured** |
-| M7 | The draft script from Windows with the pinned ssh options: the time of one read, twice, and the size of the reply | **Not run.** It is real-window check R9 |
-| M8 | `ps` from a second Linux user shows no secret in any argument | **Not run.** On road (a) the script holds no secret, so its arguments are the fixed words of § 4. That is a reason, not an observation; the marker-token test shows it for the exact text |
-
-**The six conditions of road (a), as measured** (the command of § 4: one read in step 0, and the reads of W1, W2 and W4):
-
-| Condition | Result |
-|---|---|
-| It prints the numbers | Met |
-| It makes no model call | Met: `num_turns` 0, cost 0, API time 0 |
-| It starts no hook, no MCP server and no plugin of the person | **Not settled.** Step 0 reported it as met, from the flags, the shorter time and the shorter list of changed files. The VM has a `PreToolUse` hook, the plugin `feature-dev` and three MCP servers at user level. W2 took one sample, 1.5 s after the start: the `claude` process had **no child**. That is one moment; a child that lived for less is not seen (W7) |
-| It writes no session file and leaves no process | No transcript in any of the four reads with the flags. **Not met as first written ("nothing written"): four cache files of Claude Code's own are rewritten on every read** — the same four, with no growth (W4). **`~/.claude.json` was rewritten, with a backup, during one read of four; who wrote it is not proven** (W6). After the W2 read ended, one `node` process, 1 s old, was seen: its origin is not known and it is **not attributed** to the read or to anything else (W7) |
-| It ends within the time limit with no terminal and an empty stdin | Met in the `creds_exec` calls: 3.6 s, stdin `/dev/null`; the fifth call, with at least three usage reads in it, took 12.1 s. From Windows over the pinned ssh call it is R9 |
-| A strict pattern can read the output | Met: JSON, with one fixed line for each window. The reset has no year (§ 4) |
-
-**W1–W5, measured 2026-11-19 at about 12:40 UTC** on `ai2-root`, in one `creds_exec` call whose exact text the owner
-approved (12 094 ms). The record is § 11 of the RESULTS file. The middle column is what this plan wrote, before the
-run, that a bad result would mean.
-
-| # | What was measured | If the result is bad | Result |
-|---|---|---|---|
-| W1 | The usage command from the working folder `/`: the same numbers, the same four changed files, nothing written in `/` | The folder goes to the owner as a question. No silent fallback to a temporary folder | **`/` passes, with one point not settled.** Exit code 0, no model call, three usage lines (80 %, 81 % and 52 % used: the numbers had moved since step 0, so the read is live). The same four cache files; nothing new in `/`. **`~/.claude.json` was rewritten too, with a new backup file.** The two reads right after it, from the same `/`, did not rewrite it. Not proven who wrote it → W6 |
-| W2 | A list of processes while the usage command runs and after it: no MCP server, no hook process, nothing left | Road (a) fails that condition: Claude usage is off for every host (road (c)) until the owner decides | **Not settled — neither bad nor proven good.** One sample at 1.5 s: no child of the `claude` process, at any depth. After the read: one `node` process, 1 s old, among the processes younger than 15 s; its parent was not checked. It started after the sample, so the sample does not rule the read out, and nothing ties it to the read either: the host has live Claude Code sessions. **Not attributed** → W7 |
-| W3 | Whether `claude auth status --json` and `claude --version` change any file | The files are named in the Security section and put to the owner with N1. If a file of the person changes (`~/.claude.json`, a transcript), that command is not run | **Passes.** After both commands, nothing under `~/.claude` and not `~/.claude.json` was newer than the marker |
-| W4 | Two usage reads in a row: is `~/.claude/plugins/store/cc-plugin-agents-md_builtin-*.json` ONE file written again, or a new file each time | A new file each time is growth of 144 files a day for each account's host. Road (a) then fails, as for W2 | **Passes.** Both reads rewrote the same file (the same name, with one fixed 12-character part). The store held 2 such files before and 2 after. These two reads wrote only the four cache files |
-| W5 | Codex: how far from the end of a session file its last `token_count` line is, and the form of its `timestamp` | Sets the tail's bound and the time rule in the spec. No bad result: with no usable `timestamp` the file's own time is used and named | **Measured.** The newest file has 65 lines; the last record is line 64, with 991 bytes after it; `timestamp` is `2026-11-17T19:32:36.474Z`. The tail is 1 MiB and the time rule is in § 4 |
-
-**The `~/.claude.json` point, written as it is.** Four reads with the three flags have a list of changed files: step
-0's (a temporary folder), W1's (`/`), and W4's two (`/`). One of the four, W1's, shows `~/.claude.json` rewritten with
-a new `~/.claude/backups/.claude.json.backup.<n>`. The list of changed files says THAT a file changed during the read,
-not WHO changed it. Three readings, none proven:
-
-1. **A live session wrote it.** The owner has Claude Code sessions running in tmux on this host, and they rewrite
-   `~/.claude.json` on their own.
-2. **Claude Code rewrites it on some starts**, for a reason of its own.
-3. **Claude Code recorded the folder `/`** the first time it started there (the planner's reading). It fits the order:
-   W1 was the first read from `/`, and the two after it wrote nothing. It is not shown: whether step 0's read used a
-   new temporary folder is not recorded.
-
-This plan takes none of them as true. The owner has since accepted the write whoever makes it, even on every read
-(N1). So the point decides nothing any more. W6 still measures it, for the record and for `SECURITY.md`.
-
-**Three measurements are owed.** Each needs the owner's go for its exact text. They run after the plan round. **Only
-W7 can stop anything**; this text says now what its bad result means, so that it is not a surprise then.
+Step 0 and W1–W5 are done; their tables are in the appendix, § D. Three measurements are owed. Each needs the
+owner's go for its exact text. They are pass criteria of E2, and **two of them are gates for the release**.
 
 | # | What is measured | What the result does |
 |---|---|---|
-| W6 | As a Linux user with **no live Claude Code session**: the time of `~/.claude.json` and the number of files in `~/.claude/backups/`, before and after each of several usage reads from `/`; and whether `~/.claude.json` has an entry for the folder `/` (a key name, no value) | **A record, not a gate** (N1: the owner accepted the write, also on every read). The result goes into the RESULTS file, and `SECURITY.md` then says which reading holds. One thing N1 was not asked about is reported to the owner with its number if it is seen: backups that rise with every read (144 a day for each account's host) |
-| W7 | **A stronger process check than one sample.** The usage command is run under `timeout`, which by its documentation puts the command in a process group of its own; the processes of that group are listed several times a second while it runs, and once more after it ended. Where `strace` is already on the VM, one read is also run with every program start traced. Nothing is installed for this | **A gate, before the E1.S2 spec is final.** A process in the read's own group that is not Claude Code itself — an MCP server, a hook — or a process of the group that outlives the read: road (a) fails that condition, and the Claude usage read is off until the owner decides. N1 was about what is written, not about what is started, so it does not cover this |
-| W8 | `agy --version` from `/` with stdin `/dev/null`: its time; the files under `~/.gemini` and the agy program itself that are newer than a marker; the processes it leaves | **A record, not a gate** (N4: the owner chose the version knowing the risk). If a start with the version flag downloads or replaces the program, the owner is told with the size |
+| W6 | **Backups: who makes them, and are they retired** (the gate's finding 4). As a Linux user with **no live Claude Code session**: the time of `~/.claude.json`, the number and total size of the files in `~/.claude/backups/`, before and after each of 12 usage reads from `/`; whether `~/.claude.json` has an entry for the folder `/` (a key name, no value); and, on a host with a long history, how many backup files Claude Code keeps | **A gate for GROWTH only.** The owner accepted the writes (N1), not files that pile up for ever. The usage policy of § 2 follows from the result, before the release turns automatic usage reads on for anybody |
+| W7 | **A trace of every program start** (the gate's finding 5). One usage read is run under `strace -f -e trace=execve` (or a tool of the same kind that is already on the VM), with stdin `/dev/null` and from `/`. `-f` follows children that live for milliseconds and children that detach. The trace is read for every path that was started. If no such tool is on a VM, W7 runs on a VM that has one; nothing is installed for it | **A gate.** Any program that is not Claude Code's own — a hook's command, an MCP server's command — fails the condition "starts nothing of the person's": the Claude usage read is then off and the list shows the account only, until the owner decides. **Until W7 has run, this plan does not claim that condition.** A list of a process group, which the earlier text proposed, does not prove it: it misses a child that is gone between two samples and a child that left the group |
+| W8 | `agy --version` from `/` with stdin `/dev/null`: its time; the files under `~/.gemini` and the agy program itself that are newer than a marker; under the same trace as W7, what it starts | **A record** (N4: the owner chose the version knowing the risk). If a start with the version flag downloads or replaces the program, the owner is told with the size |
 
-**Does the spec need the stronger check? Yes.** One sample at one moment cannot show that nothing was started, and a
-list filtered by process name cannot say whose a process is. The process group says whose. The shipped script relies on
-the same thing: `timeout` is documented to signal the whole group, so a child that stays in the group should die with
-a killed read. That is what we ask of `timeout`, not what we have seen: the script test with a false `claude` that
-starts a child and hangs observes it.
-
-Within the plan as written: the field names, the limits under the ceilings, the bounds of W5, the exact options of
-the four install commands. Outside it, and so a change once the plan is approved: anything installed on a VM **but
-`jq` by the install script of § 4**; any other package manager or way to install; a third kind of ssh call; a file
-with a secret that this plan does not name; a write by the accounts script; road (b).
+Within the plan as written: the field names, the limits under the ceilings, the usage policy that W6 selects.
+Outside it, and so a change: anything installed on a VM before candidate C1 is taken up; a third kind of ssh call; a
+file with a secret that this plan does not name; a write by the accounts script; road (b).
 
 ## What this plan does NOT do
 
 - No change to `src_mcp`, `src_server` or CredsForDevs.
-- **Nothing is installed on a VM but `jq`**, and that only by the host's own package manager, only where the ssh user
-  is root or has `sudo` without a password, and once for each host (N5). No installer from the network, no downloaded
-  binary, no new repository, no other package, no upgrade, no removal, never a password prompt. The command that is
-  shown to a person without the rights is never run for them.
-- Nothing is written on a VM by the accounts script.
+- **No install in epics E1 and E2.** Nothing is written or installed on a VM by our script. The installer of owner
+  decisions 17, 19 and 20 is candidate C1; its design is in the appendix, § E.
 - No real time, no push from the VM, no setting for the interval.
 - No colour for the numbers (the mod colours them), and no webview.
 - No history, no chart, no ledger of the readings, no alert when a limit runs low.
 - No reading of a host that has no open `Creds:` terminal, and none of this machine's own accounts.
-- No reading of a host whose answer is "no", ever. No question raised by the timer: a host with no answer is allowed
-  by itself (Q1).
-- No install on a host where neither Claude Code nor Codex was found.
-- No switch that a first press must turn on: the round runs by itself (N2).
-- No setting that a workspace or a folder can set for the person: the two settings of § 3 count at the user level
-  only. No setting that turns the whole round off: that is the stop button.
-
+- No reading of a host whose answer is "no", ever. No question raised by the timer.
+- No setting that a workspace or a folder can set for the person. No setting that turns the whole round off: that is
+  the stop button.
 - No live Codex read (`codex app-server`), no `codex login status`, and no opening of `~/.codex/auth.json`, ever.
 - No start of `agy` but with its version flag, no reading of agy's log, and no opening of its sign-in file.
 - No opening of `~/.claude.json` or of the Claude credential file by our script.
 - **No road (b).** The owner allowed it (O1); this plan does not build it.
-- No separate consent for accounts, and so no way to allow the session read and refuse the accounts read or the
-  install on one host.
-- No question for several hosts at once.
+- No separate consent for accounts, and no question for several hosts at once.
 - No refresh of any login by our script. An expired login is said as it is.
 - No grouping of accounts that are not known, no grouping by host alias, and no guess that two hosts share an account
   from equal numbers.
 - No change to `SSH_OPTIONS`. Connection sharing is still not pinned, as `SECURITY.md` says today.
-- No lock between VS Code windows: each window with `Creds:` terminals runs its own round.
+- No lock between VS Code windows for the round: each window with `Creds:` terminals runs its own round. (The consent
+  store is different: its writes merge, § 3.)
 - No change to the session reader's pick list (the `$(` note in § 1) without the owner's word.
 
 ## Security
 
-This section is the security judgement of the plan (Fable, `subagent-models.md`: the security row). The cornerstone
-spec repeats it for the exact script text, and it must stand before any E1 code.
+This section is the security judgement of the plan (Fable, `subagent-models.md`: the security row). The specs of
+E1.S1 and E1.S2 repeat it for the exact store rules and the exact script text, before any code.
 
 **The new edges.** (1) A read-only ssh call that a TIMER starts, with no press, from the start of the extension, to
 every host of an open `Creds:` terminal that the person has not refused — for a new host, the terminal's NAME is
-enough. (2) On each usage read, a start of Claude Code on the VM, which calls Anthropic
-with the VM's own Claude login. (3) In every round, a start of `agy` on the VM, for its version. (4) **Once for each
-host that has no `jq`: an ssh call that CHANGES the VM** — a package manager run as root or through `sudo`, which
-fetches a package from the host's repositories and installs it. (5) Text from a VM drawn in a list.
+enough. (2) On each usage read, a start of Claude Code on the VM, which calls Anthropic with the VM's own Claude
+login. (3) In every round, a start of `agy` on the VM, for its version. (4) Text from a VM drawn in a list. Candidate
+C1 adds a fifth, an ssh call that changes the VM.
 
 **Road (a) is taken: no secret passes through our script.** The script opens no credential file, holds no token in a
-variable and gives none to any program. Claude Code reads its own login inside its own process, as it does when the
-person starts it by hand.
-
-**Every secret and private thing the script comes near, and where it goes:**
+variable and gives none to any program. Claude Code reads its own login inside its own process.
 
 | What | Where it is | What our script does with it |
 |---|---|---|
-| The Claude OAuth access token and refresh token | `~/.claude/.credentials.json` on the VM (mode 600) | Never opened. Claude Code reads it in its own process. With a valid login the file was not among the files changed by a usage read (step 0, run 2). With an expired access token Claude Code may refresh it and write the file, as on any start; that case was not measured |
-| `~/.claude.json` (holds every project's entries and the MCP servers of the user) | the VM | Never opened by our script. The plain command wrote it, with a backup — that is why the flags are part of the pinned command. With the flags it was **not** written in three reads and **was rewritten, with a new backup, during one** (W1). Who wrote it then is not proven: that read, or a live Claude Code session on the host. This plan does not claim the file is untouched. The owner accepted the write whoever makes it (N1); W6 records which |
-| The person's activity: requests, top subagents, top MCP servers | the `result` text of `/usage`, after the three usage lines | Passes through a pipe on the VM, inside the person's own ssh login, and is **dropped on the VM**. Only lines that fit the three anchored patterns leave it. The marker-token test puts a marker in that section and fails if it is in the reply |
+| The Claude OAuth access token and refresh token | `~/.claude/.credentials.json` on the VM (mode 600) | Never opened. With a valid login the file was not among the files a usage read changed. With an expired access token Claude Code may refresh it and write the file, as on any start; that case was not measured |
+| `~/.claude.json` (every project's entries and the MCP servers of the user) | the VM | Never opened by our script. With the three flags it was not written in three reads and was rewritten, with a new backup, during one; who wrote it is not proven (W6). The owner accepted the write (N1) |
+| The person's activity: requests, top subagents, top MCP servers | the `result` text of `/usage`, after the usage lines | Dropped **on the VM**. Only lines that fit three anchored patterns leave it; a marker test holds that |
 | `~/.codex/auth.json` | the VM | Never opened. Only tested for existence |
-| Codex session files (a transcript: private, not a credential) | the VM | A bounded tail of at most three files is read. `jq` prints named numbers of the last `token_count` record and nothing else; a transcript line prints nothing |
-| agy's sign-in file and its log (the log holds an email address) | `~/.gemini/antigravity-cli/` on the VM | Never opened by our script. The sign-in file is only tested for existence. `agy` itself is started with its version flag (N4) and reads what it reads on a start; of its output only a version of digits and dots leaves the VM |
-| The package manager's output (it can hold the addresses of private repositories, and a token inside one) | the install call, on the VM | Dropped on the VM. The reply holds closed words and one exit code |
-| Root on the VM | the install call | Used for one fixed command from a closed table, by a fixed absolute path, only when the ssh user already is root or has `sudo` without a password. Our script holds no password and asks for none |
+| Codex session files (a transcript: private, not a credential) | the VM | A bounded tail of at most three files is read. `jq` prints named numbers of the last `token_count` record and nothing else |
+| agy's sign-in file and its log (the log holds an email address) | `~/.gemini/antigravity-cli/` on the VM | Never opened by our script. `agy` is started with its version flag; of its output only a version of digits and dots leaves the VM |
 | The person's ssh keys and agent | this machine | Used by `ssh` as today; `ForwardAgent=no` |
 | The account email and organization name (personal data, not a secret) | the reply | In memory and in the list (O2). Never logged, never stored, never sent on |
 
-**What Claude Code writes on the VM on each usage read — measured, and not ours to prevent.** Our script writes
-nothing. The usage command, with the three flags, rewrote exactly these four files in each of the four reads whose
-changed files were listed (step 0, W1, and W4's two):
+**What Claude Code writes on each usage read — measured, and not ours to prevent.** Four cache files of its own, in
+each of the four reads whose changed files were listed: `~/.claude/plugins/store/cc-plugin-agents-md_builtin-*.json`,
+`~/.claude/policy-limits.json.stamp.json`, `~/.claude/policy-limits.json.signature.json` and
+`~/.claude/remote-settings.json.signature.json`. They do not grow (W4). The account and version commands write no file
+(W3). **`~/.claude.json` and a backup of it were written during one read; by whom is not proven.** The owner accepted
+those writes (N1). Two things N1 does not cover, and this plan holds both: **growth without bound** — a backup file
+for each read with nobody to retire it — which W6 measures and the usage policy of § 2 answers; and **a live session
+that is disturbed** — it asks to sign in again, loses its settings or MCP servers, or stops — which R7 holds.
 
-- `~/.claude/plugins/store/cc-plugin-agents-md_builtin-*.json`
-- `~/.claude/policy-limits.json.stamp.json`
-- `~/.claude/policy-limits.json.signature.json`
-- `~/.claude/remote-settings.json.signature.json`
+**"Starts no hook, no MCP server and no plugin of the person" is NOT claimed yet.** Step 0 concluded it from the
+flags; W2 saw no child in one sample and one `node` process of unknown origin afterwards. Neither proves it. W7's
+trace of every program start does, and it is a gate (§ 5).
 
-They are Claude Code's own caches, in its own folder, owned by the same Linux user. The names say Claude Code fetched
-its policy limits and its remote settings on that start; those calls were not observed. **They do not grow** (W4):
-the first file keeps its name from read to read, and the store held the same number of files before and after two
-reads. **How often:** once for each Claude account in a round, on the one host of that account that reads the usage —
-at most 6 times an hour for each account and window. The account command and the version command run on every
-allowed host in every round, and **they write no file** (W3).
+**A start of `agy` in every round (N4).** What agy does on a start beside printing its version was not measured (W8).
+The known risk is a self-update: agy has updated itself on another machine (`research/RESULTS_agy_read_file.md`). If
+a start with the version flag can set that off, our timer decides when a 269 MB program on a VM is replaced, under
+live agy sessions too. The owner chose the version knowing this. The start has a 4 s limit; R7 notes the time and
+size of the agy program over two hours.
 
-**`~/.claude.json` was rewritten during one of those four reads, and it is not proven by whom.** In W1's read the
-file changed and a new backup appeared in `~/.claude/backups/`. In the other three reads it did not change. The host
-has live Claude Code sessions, which rewrite that file on their own; a list of changed files cannot tell their write
-from the read's. § 5 holds the three readings. If the read wrote it, then our timer makes Claude Code rewrite a file
-that holds the person's projects and MCP servers, while live sessions use the same file. Claude Code does that on
-every start by hand too, and keeps a backup; whether two starts at once can lose a change of one of them was not
-measured.
+**Finding F1, for the owner: the consent no longer comes first** — in full in the appendix, § B. An old "yes" is used
+with no press (N2), and a host nobody was asked about is allowed by a terminal's name (Q1); because the row is
+shared, the session reader's question is in practice no longer asked while the round runs. No rule of `.agents/`
+forbids it. It reverses `SECURITY.md` (*"No ssh child is started before a "yes""*, *"a name is a request, never
+proof"*) and the terminal-door plan (*The person agrees to each host once*), and this plan changes both texts openly.
+**What a terminal's name can set off:** any program that can open a terminal in the window can call it
+`Creds: <host> / x`; within 30 s to 10 minutes the extension logs in to that host as the person and runs the fixed
+script. What limits it: the name chooses only the host, from an alphabet with no option and no shell character; ssh
+refuses a host whose key is not in the person's `known_hosts`, asks for no password and forwards no agent; nothing of
+the reply goes back to whoever opened the terminal. What does not: every host the person has ever logged in to with a
+key can be reached this way. **On by default, as the owner chose (decision 20); turning
+`coai.terminalAccountsAllowNewHosts` off restores ask-first. The planner's recommendations — a separate consent, then
+a round that waits for one press, then the question kept for a new host, then the setting off by default — stay
+recorded; the owner decided otherwise each time.**
 
-**The first draft's condition was "nothing written". It is not met, and the owner accepted that (N1, "everything is
-acceptable"):** the four cache files, and a rewrite of `~/.claude.json` by a read, even on every read. The planner had
-recommended to accept the second only if it is rare; the owner's answer is wider, and it stands. Two things follow.
-W6 is a record: it says which reading holds, and nothing stops on it. **And the answer is about writes.** A live
-session that is DISTURBED by a read — it asks to sign in again, loses its settings or its MCP servers, or stops — is
-not a write the owner accepted; it is the product breaking what the person works in. R7 (b) holds that, and a
-disturbed session stops the usage read until the owner decides.
-
-**A start of `agy` in every round (N4).** `agy --version` is asked for one line. What else agy does when it starts is
-agy's choice and was not measured: a file written, a call to the network, a look for an update (W8). The known risk is
-a self-update: agy has updated itself on another machine (`research/RESULTS_agy_read_file.md`). If a start with the version flag can set an
-update off, then our timer, not the person, decides when the 269 MB program on a VM is replaced — under live agy
-sessions too. The owner chose the version knowing this. What this plan does about it: the start has a 4 s limit, and
-`timeout` is asked to end its whole group, so a download should be cut short and not left running (what a cut
-download leaves behind is not known);
-R7 notes the time and size of the agy program over an hour; W8 records what one start touches.
-
-**Finding F1, for the owner: the consent no longer comes first. An old "yes" is used with no press (N2), and a host
-nobody was asked about is allowed by a terminal's name (Q1).**
-
-**On by default, as the owner chose (decision 20). Turning `coai.terminalAccountsAllowNewHosts` off restores
-ask-first:** no host is contacted without a person's "yes", and an automatic row counts as no answer. What follows
-describes the extension as it ships, with the setting on. The planner's recommendation was off by default, and it
-stays recorded here: with the default on, a person who never opens the settings is in the position this finding
-describes.
-
-- **No rule of `.agents/` forbids it.** `common/security.md` has no rule on consent. The conflict is with texts of
-  this repository that say the opposite, and this plan changes them openly:
-  1. `SECURITY.md`, *The extension's one outward ssh call*: *"Read-only, to a host the person agreed to. The first read
-     for a host asks once (a modal naming the host)"*; *"No ssh child is started before a "yes""*; *"a name is a
-     request, never proof"*.
-  2. The terminal-door plan: *The person agrees to each host once*, and in its Security section: *"The terminal name
-     chooses the host, and a name is not proof, which is why the consent exists."*
-- **Three widenings, in the order the owner decided them.**
-  1. **O3:** a "yes" that was given to one read — *"Read the Claude session…"*, started by a press — also covers
-     another kind of read.
-  2. **N2:** and with no press. After the update the same row is used by a timer from the first start of the
-     extension.
-  3. **Q1:** and a host with NO answer is allowed by itself. From then on the store does not stand before the
-     accounts read at all; it only remembers refusals. Because the row is shared, the session reader's own question
-     is in practice not asked any more while the round runs (§ 3).
-- **What a terminal's name can now set off.** Any program that can open a terminal in the window — another
-  extension, a task of an opened workspace — can call it `Creds: <host> / x`. Within 30 s to 10 minutes the extension
-  then logs in to that host over ssh, as the person, with the person's keys; runs the fixed script there; and
-  installs `jq` when F2's conditions hold. **What limits it:** the name chooses only the host, from an alphabet with
-  no option and no shell character; ssh refuses a host whose key is not already in the person's `known_hosts`, never
-  asks for a password and forwards no agent; the script is fixed; and nothing of the reply goes back to whoever
-  opened the terminal. **What does not limit it:** every host the person has ever logged in to with a key can be
-  reached this way, a production server among them.
-- **For the owner's own installation, O3, N2 and Q1 are the consent**, given on 2026-11-19 knowing what they cover.
-  The extension is public. For any other person, after an update: nothing asks them, about an old "yes" or about a
-  new host.
-- **What is left to tell them, since nothing asks them:** the daily notice of the hosts that were allowed by
-  themselves; the one notice at the first round; the list and the hosts list, which say how each host is allowed; the
-  stop button; the help in five languages, `SECURITY.md` and the release notes (§ 3). All of it comes after the first
-  read, and a notice can be missed.
-- **The planner recommended a separate consent, then a round that waits for one press, then to keep the question for
-  a new host. The owner decided otherwise each time, and this plan follows the owner.**
-
-**Finding F2, for the owner: the install changes the machine, as root, at once (Q2) — and with Q1, on a host nobody
-was asked about.**
-
-**On by default, as the owner chose (decision 20). Turning `coai.terminalAccountsInstallMissingTools` off restores
-no-install:** no install call is made, and the row shows the command for the person to run. What follows describes
-the extension as it ships, with the setting on. The planner's recommendation was off by default, and it stays
-recorded here.
-
-- **No rule of `.agents/` forbids installing software on a remote host.** `common/security.md` has no rule on it. Two
-  of its rules bear on HOW it is done:
-  1. *External processes run with a time limit that kills the process tree.* A package manager that is killed
-     half-way can leave the package database in need of a repair (`dpkg --configure -a`). So this one process has a
-     long limit (150 s on the VM, 180 s here), it is not killed by a stop of the round, and a kill is the rare case —
-     named, and reported as `failed timeout` with that sentence.
-  2. *A measure you have not observed working is a comment.* Nothing of the install was measured: the measured VM has
-     `jq`. Every sentence of § 4 about what `apt-get`, `dnf`, `yum`, `apk` or `sudo -n` do is what we ask of them,
-     until the container tests and R10 have seen it.
-- **The conflict is with three texts that say the extension only reads**, and this plan changes them openly:
-  1. `SECURITY.md`: *"Read-only, to a host the person agreed to"*, and *"The remote script is one function that reads,
-     writes and starts nothing in the background, and leaves nothing on the VM."*
-  2. The help, in five languages: *"They only read: they change nothing on that machine."*
-  3. This plan's own earlier line, *"nothing is installed on a VM"*, and step 0's list of what is outside the plan.
-- **F1 and F2 together: what happens to another person who updates the extension.** They open a `Creds:` terminal to
-  a server, as they did the day before. Nothing asks them anything, then or later. Within minutes the extension logs
-  in to that server. If Claude Code or Codex is found there, `jq` is missing, and their ssh user is root or has `sudo`
-  without a password, a package is installed as root, and its scripts run as root. The first they hear of it is a
-  notice afterwards. If the terminal's name came from a program and not from them, the same happens on a host they
-  did not choose. Nobody agreed to that, and the stop button is too late for it.
-- **What the install can do beyond adding a small program.** It runs the package's own scripts as root. It can run
-  the distribution's hooks; on some systems a hook restarts services that were waiting for a restart. Refreshing the
-  package lists changes what a later upgrade by the person sees. On a machine with several Linux users — and two
-  aliases can be one machine — an install through one alias changes the machine for every user of it. The package
-  comes from whatever repositories the host is set up with, checked as the host's package manager checks them; we add
-  no repository and switch no check off.
-- **What this plan does inside the owner's decisions:** the smallest install there is — one package, the host's own
-  manager by a fixed path, a fixed command from a closed table, no password ever, once for each host, a record
-  written before the call; **only where it is needed** — a host with no Claude Code and no Codex gets no install, so
-  a server that a terminal merely names is logged in to and not changed; a notice and a list row for every install;
-  the new words of the question, the help and `SECURITY.md`; and, where the user has no rights, a command for the
-  person and nothing run.
-- **The planner recommended that an install on an old "yes" waits for one press (Q2). The owner decided "install at
-  once", and this plan follows the owner.**
+**Finding F2, for the owner: the install changes the machine, as root** — in full in the appendix, § B. It belongs to
+candidate C1 and is not in E1 or E2. It stands as written for the day the installer is built: on by default, as the
+owner chose; the planner recommended a press on an old "yes" and the setting off by default.
 
 **What an attacker gains.**
 
-- **Someone who is that Linux user on the VM, or root.** They already hold every file the script reads. What is new: they
-  can make the list show wrong accounts or numbers (a false `claude` or `jq` in `~/.local/bin` or on the `PATH`, an
-  edited file). They cannot reach this machine through the reply: it is bounded (30 s, 64 KiB, 64 lines), parsed by a
-  closed vocabulary, never run, never a path, shown with control characters and `$(` taken out. The script runs
-  `claude` by its name every 10 minutes; a false `claude` there already runs whenever the person types it.
-- **Another Linux user on the same VM** (the owner has several users on one VM, and two aliases can be one machine).
-  They can list processes and read every argument. **No secret is ever an argument**: the arguments are the fixed
-  words of § 4. They cannot read another user's files, variables or pipes. The script writes no file, so nothing is
-  left in a shared folder.
-- **Someone on the network.** Between this machine and the VM: ssh, with `StrictHostKeyChecking=yes`, so an unknown or
-  changed host key is a refusal. Between the VM and the vendor: TLS, by Claude Code itself.
-- **A program that opens a terminal named `Creds: evil / x`.** A name is not proof — and from this release a name is
-  enough (Q1, finding F1). The round logs in to `evil` unless the person refused that host. What the program gains:
-  it chooses a host and nothing else. If `evil` is a server of its own that has one of the person's public keys, it
-  sees a login from the person's machine and the text of the fixed script; `ForwardAgent=no`, so it gets no agent,
-  and it gets no password: `BatchMode=yes` makes a password prompt a refusal. Its reply can only become text in a
-  list. If the name is one of the person's own servers, the program has made the extension log in there and, where
-  F2's conditions hold, install `jq` — on a host the person did not open. It cannot push a person's "no" out of the
-  store (the cap, § 3).
+- **Someone who is that Linux user on the VM, or root.** They already hold every file the script reads. They can make
+  the list show wrong accounts or numbers (a false `claude` or `jq` on the `PATH`, an edited file). They cannot reach
+  this machine through the reply: it is bounded (30 s, 64 KiB, 64 lines), parsed by a closed vocabulary, never run,
+  never a path, shown with control characters and `$(` taken out.
+- **Another Linux user on the same VM** (two aliases can be one machine). They can list processes and read every
+  argument. **No secret is ever an argument.** The script writes no file, so nothing is left in a shared folder.
+- **Someone on the network.** ssh with `StrictHostKeyChecking=yes` between this machine and the VM; TLS by Claude
+  Code itself between the VM and the vendor.
+- **A program that opens a terminal named `Creds: evil / x`.** A name is enough (F1). It chooses a host and nothing
+  else. If `evil` is its own server and has one of the person's public keys, it sees a login and the text of the
+  fixed script; it gets no agent and no password. If the name is one of the person's own servers, it has made the
+  extension log in there and read. It cannot push a person's "no" out of the store (the cap), and it cannot undo one
+  through a second window (the merge, § 3).
+- **A second window, or a reload, racing a refusal** (the gate's finding 0). The commit of § 3 re-reads and merges, a
+  "no" beats an automatic "yes", and the window that wrote a "no" writes it again if it is ever missing.
 - **A hostile reply.** It can only become text in a list, or `unreadable`. The credential-shape rule of the parser is
-  a net under the script: if a defect ever printed a token, it would not reach the screen. It is a net, not the
-  measure; the measure is that the script has no line that opens a credential file.
-- **The install, seen from each of them.** *That Linux user, or root:* the install gives them nothing; it runs only
-  where they already are root or have `sudo` without a password. A false `jq` on their `PATH` only hides that `jq` is
-  missing. *Another Linux user of the machine:* the manager is run by a fixed absolute path, never from the `PATH`, so
-  a file they plant in a folder they can write is not run as root. *Someone on the network, or whoever controls a
-  repository the host trusts:* they are in the position they are in whenever the person installs a package by hand;
-  the install is one more such moment, at a time the person did not choose. *A hostile VM:* its reply can only name
-  one of four managers or one of a few states. That chooses among fixed strings of the extension; it cannot put a
-  word into the command the list shows. It can say "no `jq`" on every read; the install is still called once.
-- **Logs.** A failed read logs the host, how it ended and ssh's own last line. An install logs the host, the manager,
-  the outcome and the exit code. The scripts' stderr goes to `/dev/null`, so no vendor or package-manager text
-  reaches ssh's stderr. stdout is never logged.
+  a net, not the measure; the measure is that the script has no line that opens a credential file.
+- **Logs.** A failed read logs the host, how it ended and ssh's own last line. The script's stderr goes to
+  `/dev/null`. stdout is never logged.
 
-**Judgement on road (a): yes.** It runs the vendor's own client with the person's own login on the person's own VM —
-what the person does by hand. Our script handles no credential. Measured: no model call (`num_turns` 0 in each of
-the three reads whose JSON was recorded) and no transcript (in each of the four reads with the flags); from the
-working folder `/` as well (W1); the plugin store does not grow (W4); the account and version
-commands write nothing (W3). Not met as first written: nothing written (the four cache files, N1). **Not settled, and
-not assumed away:** who rewrote `~/.claude.json` during one read (W6), and whether a read starts or leaves a process
-— no child was seen in one sample, and one young `node` process of unknown origin was seen after it (W7). Not
-measured: a login that needs a refresh. The judgement stands on what is measured. Of the two open points, the first no longer decides
-anything: the owner accepted the write (N1), and W6 only records it. The second, W7, is the one way the road can still
-fail: a hook or an MCP server of the person started by our timer is not worked around; the usage read is then off and
-the list shows the account only. A live session disturbed by a read (R7 (b)) stops the usage read in the same way.
+**Judgements.** *Road (a):* yes, on what is measured — no model call, no transcript, no secret through our script —
+and with W7 as the gate that can still fail it. *Road (b):* allowed by the owner, not built, and the planner still
+recommends against it; its conditions are in the appendix, § C. *The consent:* the owner's decisions, with F1; what
+is left of a gate is the refusal, and this plan makes that one hold — one road in, a merge on every write, a cap that
+cannot drop it. *The setting:* it makes the automatic allow something the person can take back, and nobody else.
+*Persistence:* nothing of a reading is stored. *Codex:* the passive file read. *agy:* no file is opened; the program
+is started with its version flag only, by the owner's choice.
 
-**Judgement on road (b): the owner allowed it (O1); it is not built, and the planner still recommends against
-building it.** If it is ever built, it is a change of this plan, and these are its conditions, each with a test:
-`printf` is a shell builtin on that VM (measured true on `ai2-root`; checked by the script, else the usage is off); the
-token goes from a shell variable that is not exported to `curl -q -K -` on stdin, never an argument (another user's
-`ps` reads those), never the environment, and not a header file either, because a file is a write on the VM that a
-killed call can leave behind; `-q` so a `~/.curlrc` cannot reshape the call; https only, the one fixed URL, no
-redirect, a time limit and a size limit; the script cuts the numbers out and never prints the body; **never a
-refresh** — an expired token is `failed expired`, and Claude Code refreshes it on its own next use; and the consent
-question is weighed again, because the script would then read the Claude login. What cannot be contained: it is a
-client that is not Claude Code, calling an internal endpoint with a subscription login, every 10 minutes, around the
-clock, on every account. The asset at risk is the account itself, and the vendor can change or refuse that endpoint
-without notice (`hooks/limits.tsx:4-5`). It also puts a credential into our script, so one defect in one line becomes
-a leak. The headers that endpoint needs were not measured.
+**Residuals, named.** A person's `ControlMaster` can make the call a persisting master on Linux or macOS, as today.
+Every host of an open `Creds:` terminal gets a login every 10 minutes, whether an AI CLI is there or not, until the
+person refuses it; a VM's ssh log shows it. The list shows an email on screen (O2). Each usage read is a start of
+Claude Code, with what Claude Code does on a start: its caches, its own network calls, possibly its own update check.
+A VM that prints the reset in another zone than UTC shows the percent and a dash for the reset. Until another
+window's refusal is visible in this one, one more call can go to that host (U12).
 
-**Judgement on the consent: the owner's decisions — shared (O3), used with no press (N2), and a new host allowed by
-itself (Q1) — with finding F1 above. What is left of a gate is the refusal, and this plan makes that one hold: a "no"
-is checked on the one road in, before every call, and no cap, reload or terminal name removes it.** **Judgement on the
-install: the owner's decisions (N5, Q2), built as the smallest install there is and only where an AI CLI is there to
-read, with finding F2 above. The planner would not have started it without a press; the owner decided.**
-**Judgement on the two settings (decision 20): they make each automatic step something the person can take back, and
-nobody else — they are read from the person's own layer only, and no workspace, folder or imported file sets them.
-They are on by default, so they change nothing for a person who never opens the settings; the planner recommended
-off by default.**
-**Judgement on persistence: nothing
-of a reading is stored; the shared answers exist today; added are one row of state and the record of installs, which
-holds host names and no secret.** **Judgement on Codex: the passive file read**, because the live read can refresh a
-login that live sessions share, and that case was never measured. **Judgement on agy: no file is opened; the program
-is started with its version flag only, by the owner's choice (N4), with its risk named above.**
-
-**Residuals, named.** A person's `ControlMaster` can make the call a persisting master on Linux or macOS, as today. The
-timer makes one ssh login for each host every 10 minutes while a terminal is open, which a VM's ssh log will show. The
-list shows an email on screen, so a screenshot shows it (O2). Each usage read is a start of Claude Code, with whatever
-Claude Code does on a start: its caches above, its own network calls, and possibly its own update check — none was
-seen in step 0's file list, and none is ours to switch off. A VM that prints the reset in another zone than UTC shows
-the percent and a dash for the reset. A Claude Code version that changes the three lines shows *usage not read* with
-the version. Each round starts `agy` once on each allowed host; a self-update set off by that start is possible and
-not measured. An install can leave more than `jq`: its dependencies, refreshed package lists, and whatever the
-distribution's hooks do; a package manager that is cut off can leave its database in need of a repair. A host where
-the install was made through one alias has `jq` for every Linux user of that machine. Every host of an open `Creds:`
-terminal gets a login every 10 minutes, whether an AI CLI is there or not, until the person refuses it; *Forget* does
-not stop that.
-
-`SECURITY.md`: the section *The extension's one outward ssh call* becomes three kinds of call, and it no longer says
-"read-only" for the third. Its sentences *"No ssh child is started before a "yes""* and *"The first read for a host
-asks once"* are rewritten: a host is contacted unless it was refused. It gains: the timer, which starts by itself;
-that a new host is allowed by itself, how that is stored and shown, and that only *Not this host* stops a host; that
-the per-host answer now covers the session read, the accounts read and the install, and what that widens (F1, F2);
-the daily notice; the two settings, that both are on by default, what each restores when it is off, and that only a
-user-level value counts; the stop button; road (a) and what
-the VM then calls; the four files Claude Code writes on a read, and what is known about `~/.claude.json`; the start
-of `agy`; the person's activity dropped on the VM; **the install — when, by which fixed commands, with which rights,
-once, what it never does, and the command a person without the rights is shown**; and the residuals above. Its
-sentence that the remote script leaves nothing on the VM is rewritten to be true of the two reading scripts only.
+`SECURITY.md`: the section *The extension's one outward ssh call* becomes two kinds of call in this release's first
+epics, and three with C1. Its sentences *"No ssh child is started before a "yes""* and *"The first read for a host
+asks once"* are rewritten: a host is contacted unless it was refused. It gains: the timer; how a new host is allowed,
+stored and shown, and that only *Not this host* stops a host; the merge of the store; the setting and that only a
+user-level value counts; the daily notice; the stop button; road (a) and what the VM then calls; what Claude Code
+writes on a read; the start of `agy`; the person's activity dropped on the VM; and the residuals above. What it says
+about W6 and W7 is written after E2, from what was seen.
 
 ## Growth surfaces
 
 - **The readings**: in memory, one for each host with an open `Creds:` terminal, a few hundred bytes each, dropped when
-  the host's last terminal closes, when its answer is no longer "yes", when the round is stopped, and with the window.
-  Bounded by the number of open hosts; today five.
-- **The consent**: no new store. `coai.terminalHosts` stays capped at 100 rows, and now the round writes rows too: one
-  for each new host of an open `Creds:` terminal. At the cap the oldest automatic row goes, never a person's answer;
-  with no automatic row to drop, a new host is not allowed. So the store cannot grow past its cap, and a flood of
+  the host's last terminal closes, when its answer becomes "no", when the round is stopped, and with the window.
+- **The consent**: no new store. `coai.terminalHosts` stays capped at 100 rows. The round writes rows too; at the cap
+  the oldest automatic row goes, never a person's answer. So the store cannot grow past its cap, and a flood of
   terminal names cannot empty it of refusals.
-- **The state of the accounts round**: one `globalState` row, `{ toldUtc, lastAutoNoticeUtc, stoppedUtc }`, under 150 bytes. It does not
-  grow.
-- **The record of installs**: one `globalState` list, a row for each host where an install was tried, about 100 bytes
-  a row, capped at 100 rows; at the cap the oldest row goes, and that host can then be tried once more. Under 12 KiB.
-  A row left at `started` by a reload or a crash is not swept: it is shown as it is, and a press tries again.
-- **The ssh child**: one for each host in a round, killed at 30 s with its tree, stdout capped at 64 KiB. At most one
-  alive at a time for each window. The install child: one in a host's life (and one for each press on its row), up to
-  180 s, 4 KiB.
-- **The timer**: one for each window, cleared when no `Creds:` terminal of an allowed host is open or the round is
-  stopped, disposed with the extension. A round that is interrupted by a reload leaves nothing: its child is killed
-  with the extension host's tree, and memory is gone.
+- **The state of the accounts round**: one `globalState` row, under 150 bytes.
+- **The ssh child**: one for each host in a round, two in the one case of § 2, killed at 30 s with its tree, stdout
+  capped at 64 KiB. At most one alive at a time for each window.
+- **The timer**: one for each window, cleared when no `Creds:` terminal of a host that is not refused is open or the
+  round is stopped, disposed with the extension. A round interrupted by a reload leaves nothing.
 - **Log lines**: one when a host starts to fail and one when it reads again — not one for each round.
 - **On the VM, by the accounts script**: nothing.
-- **On the VM, by the install**: the package `jq` and what its manager adds as dependencies — a few megabytes, not
-  measured — once for each machine, and refreshed package lists where the first try failed. Nobody retires them: they
-  stay until the person removes the package. *Changes CoAI made on a host* is the record of it.
-- **On the VM, by `agy` on a start**: not measured (W8). If a start with the version flag can set off a self-update,
-  each update replaces a program of 269 MB; whether agy keeps the old one is not known. R7 notes the size of agy's
-  files over an hour.
-- **On the VM, by Claude Code on a usage read**: four cache files (the Security section). **They do not grow** (W4,
-  measured): two reads in a row rewrote the same four names, and the plugin store held 2 such files before and after.
-  This plan does not delete a file of Claude Code.
-- **On the VM, `~/.claude/backups/`**: one new backup file appeared with the one rewrite of `~/.claude.json` (W1). If
-  our read causes such rewrites, each one adds a backup file. **Not known:** whether our read causes them, and whether
-  Claude Code retires old backups. W6 counts the backups before and after several reads. The owner accepted the
-  rewrite (N1), so nothing stops on it; a count that rises with every read would be 144 files a day for each
-  account's host with nobody to retire them, and is reported to the owner with that number.
+- **On the VM, by Claude Code on a usage read**: four cache files, rewritten in place; they do not grow (W4).
+- **On the VM, `~/.claude/backups/` — the one surface that may grow without bound (the gate's finding 4).** One backup
+  of `~/.claude.json` appeared with the one rewrite that was seen. That file was 164 969 bytes on the measured VM. If
+  every usage read makes one and nothing retires them, a host that reads an account's usage gains 144 files and about
+  24 MB a day at one read in 10 minutes, and 24 files and about 4 MB a day at one read an hour. **Who retires them:**
+  not known. W6 measures who makes a backup and whether Claude Code keeps a fixed number. The policy of § 2 says what
+  follows from each result. This plan does not delete a file of Claude Code.
+- **On the VM, by `agy` on a start**: not measured (W8). A self-update replaces a program of 269 MB; whether agy keeps
+  the old one is not known. R7 notes the size of agy's files.
 - **Calls to the vendor**: at most 6 an hour for each Claude account and window, made by Claude Code. None by our code.
 
 ## Boundaries with other plans
@@ -1176,7 +748,7 @@ what is whose, so it is read as complete:
 | Item | Built by | The other plan's part |
 |---|---|---|
 | The pinned ssh call, the session script, *take*, *add*, *Asked* | [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (shipped in 0.87.0) | This plan widens the runner so a call needs no session operand. The session read itself does not change |
-| The per-host consent: the store `coai.terminalHosts`, the question `read-remote-session`, *CoAI: hosts read over ssh* | the same plan | **This plan changes its meaning (O3, N2, N5, Q1, Q2)**: the same answer also allows the accounts read, by a timer with no press, and one install of `jq`; and a host with no answer is allowed by the round itself, for the session read too, so the question is in practice no longer asked first. This plan rewrites the question's title and detail, the rows of the hosts list, the help paragraph — with its sentence that the doors only read and change nothing on that machine — and `SECURITY.md`. The store's key, the question's code and the buttons do not change; a row gains the marker `how`, and the cap gains the rule that an automatic row never pushes out a person's answer |
+| The per-host consent: the store `coai.terminalHosts`, the question `read-remote-session`, *CoAI: hosts read over ssh* | the same plan | **This plan changes its meaning (O3, N2, Q1; with candidate C1 also N5 and Q2)**: the same answer also allows the accounts read, by a timer with no press — and, once C1 is built, one install of `jq`; and a host with no answer is allowed by the round itself, for the session read too, so the question is in practice no longer asked first. This plan rewrites the question's title and detail, the rows of the hosts list, the help paragraph — with its sentence that the doors only read and change nothing on that machine — and `SECURITY.md`. The store's key, the question's code and the buttons do not change; a row gains the marker `how`, and the cap gains the rule that an automatic row never pushes out a person's answer, and every write becomes a commit that re-reads and merges |
 | The gauge of coai's own rounds on this machine and on a Team server (`gaugeWords.ts`, the Team server's capture) | [../research/PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) and [PLAN_the_round_counter_tail.md](PLAN_the_round_counter_tail.md) | Nothing. That gauge counts coai's rounds; this list shows a person's accounts on other machines. No shared store, no shared reader |
 | The account and limits line inside Claude Code | `dew_flow_conventions · mods/agent-models` | Nothing is changed there. This plan carries its word rules over and tests them against its cases |
 
@@ -1190,321 +762,237 @@ latest, its text names this plan beside *The person agrees to each host once*.
 
 ## Build order
 
-1. **Done 2026-11-19:** the owner answered the open points O1–O7 and the new questions N1–N5. Still owed from this
-   step: the question consultants are asked what is important before the epic split is final. The owner also
-   answered Q1 and Q2; no question for the owner is open.
-2. **E0 — step 0. Done 2026-11-19** on `ai2-root`: the RESULTS file is written and folded in here.
-3. **Done 2026-11-19:** W1–W5, in one call the owner approved; the results are in the RESULTS file (§ 11) and in § 5.
-   Owed: the gate W7 before the E1.S2 spec is final, and the records W6 and W8.
-4. The plan round (`review_plan`) and our own Opus review, at the same time. The first passing verdict opens epoch 1.
-5. **E1 — the remote accounts reader.** The stories by Opus; the cornerstone spec by Fable before its code; one PR.
-6. **E2 — the round and the list.** The stories by Opus; one PR. E1's code has no door until E2 merges.
-7. A pre-release VSIX from the merged head; the owner's real-window checks R1–R11 on it, before the tag, as change 1.1
-   of the terminal-door plan did (no real VS Code can start on the build machine); a failed check is fixed first.
-8. `review_feature` over the three epics, every finding resolved; an accepted fix that changes the product is a new PR
+1. **Done 2026-11-19:** step 0 and W1–W5; the owner's answers; the plan round (`proceed`, codex only); the question
+   consultants' answer on the split (consult `f4af076c`).
+2. **E1 — the read-only feature, end to end.** The stories by Opus; the two specs by Fable before their code (E1.S1
+   by the security row, E1.S2 as the cornerstone); the code gate; merged.
+3. A pre-release VSIX from E1's merged head, installed by the owner (no real VS Code can start on the build machine).
+4. **E2 — run it for real** on the owner's hosts: the criteria R1–R12 and W6–W8, each with a recorded result. A gate
+   that fails is not worked around: its stated consequence is applied, and a fix that changes the product is a new PR
    and a new pre-release VSIX.
-9. The extension release: the tag pushed alone and its run observed; `POST_DEPLOY.md` run; the plan promoted with its
-   deviations and its stories documents.
+5. **Candidate C1, the installer**, is taken up as this plan's next epic: its stories, its cornerstone spec by Fable,
+   its code gate, a new pre-release VSIX and its own real-host checks (the appendix, § E).
+6. `review_feature` over the built epics — three with C1, so it is owed — every finding resolved.
+7. The extension release, one for the whole plan: the tag pushed alone and its run observed; `POST_DEPLOY.md` run;
+   the plan promoted with its deviations, its appendix and its stories documents.
 
 ## Test plan
 
-- **The script, run for real** (`npm test`, Linux CI): the exported text run by `sh -s` (`dash`) and by `bash --posix`
-  against a temporary `HOME` with false `claude`, `codex` and `agy` programs, as `remoteScriptRuns.test.ts` does with
-  `tmux` and `ps`; `jq` is the real one. Cases: each vendor found, absent, signed out; each usage state; each operand;
-  a wrong operand; `jq` missing; a vendor command that hangs (the time limit ends it), and one that starts a child and hangs (neither is left); a cut script does nothing;
-  `claude` only in `$HOME/.local/bin` is found; the false `claude` records its arguments, its working folder (`/`),
-  its stdin (empty) and `TZ`, and the test holds them to § 4 word for word. The false `agy` records the same, and the
-  test fails if it was started with anything but its version flag.
-- **The version is the only thing kept.** A false `agy` and a false `claude` print a version line with other words on
-  it, an update banner before it, and more lines after it with a marker. The reply holds the digits and dots of the
-  version and nothing else of that output. A version of 40 characters, of letters, or with no dot is "not known" on
-  this side, and the vendor is still found. An `agy` that hangs is ended by its limit and the round goes on.
+- **The accounts script, run for real** (`npm test`, Linux CI): the exported text run by `sh -s` (`dash`) and by
+  `bash --posix` against a temporary `HOME` with false `claude`, `codex` and `agy` programs, as
+  `remoteScriptRuns.test.ts` does with `tmux` and `ps`; `jq` is the real one. Cases: each vendor found, absent, signed
+  out; each usage state; each operand; a wrong operand; `jq` missing, with each of the four manager words and with
+  none; a vendor command that hangs, and one that starts a child and hangs (the limit ends both); a cut script does
+  nothing; `claude` only in `$HOME/.local/bin` is found; the false `claude` and `agy` record their arguments, working
+  folder (`/`), stdin (empty) and `TZ`, and the test holds them to § 4 word for word; `agy` is started with nothing
+  but its version flag, and `codex` is never started.
 - **No secret leaves, seen and not assumed.** The temporary `HOME` holds false credential files (`.credentials.json`,
-  `.claude.json`, `auth.json`, agy's sign-in file and log) with a marker token. The false programs record their
-  arguments and environment. The test fails if the marker is in any argument, in any environment, in the script's
-  stdout or stderr, or in a log line; and if `codex` was started at all. The test is seen RED once with a
-  line that prints a file.
-- **The person's activity does not leave.** The false `claude` prints the measured JSON, with a second marker inside a
-  *"What's contributing to your usage?"* section and inside a line that starts with `Current ` but fits no pattern.
-  The test fails if that marker is in the reply. It is seen RED once with the filter removed. The same for Codex: a
-  session file whose transcript lines hold a marker and the word `rate_limits`.
+  `.claude.json`, `auth.json`, agy's sign-in file and log) with a marker token. The test fails if the marker is in any
+  argument, in any environment, in stdout or stderr, or in a log line. It is seen RED once with a line that prints a
+  file.
+- **The person's activity does not leave.** The false `claude` prints the measured JSON with a second marker inside
+  the *"What's contributing to your usage?"* section and inside a line that starts with `Current ` but fits no
+  pattern. The same for Codex: transcript lines that hold a marker and the word `rate_limits`. Seen RED once with the
+  filter removed.
+- **The version is the only thing kept.** A false `agy` and a false `claude` print a version line with other words, a
+  banner before it and a marker after it. The reply holds the digits and dots only. A version of 40 characters, of
+  letters, or with no dot is "not known", and the vendor is still found.
 - **The hash**: a test holds the sha256 of the script text; the spec holds the same value.
 - **The parser**: a banner before the begin line; every marker and key; an unknown marker, an unknown key, a line too
   long, too many lines, an exit code that is not 0 — each `unreadable` with its reason; a percent of 101, `-1`, `1e3`,
-  `NaN`; a value with control characters, with `$(`, of 10 KB; a credential-shaped value is dropped. A missing number
-  is `null`, and a test fails if any path turns it into 0.
+  `NaN`; a value with control characters, with `$(`, of 10 KB; a credential-shaped value is dropped; a manager word
+  outside the closed list. A missing number is `null`, and a test fails if any path turns it into 0.
 - **The Claude usage lines**, as a table: the three measured lines; `3pm`, `3am`, `2:59am`; 12am and 12pm; a reset on
-  1 January read on 30 December (the next year); a reset more than eight days ahead, in the past, with another zone,
-  with no zone — each a dash with the percent kept; no session line (a dash for `5h`); two model lines; no matched
-  line (`failed format`); `:turns 1` (`failed model-call`, and the next call to that host is `no-claude-usage`).
-- **The Codex record**: `primary` weekly and `secondary` null (the measured case); both windows; a 300-minute window;
-  another length; a reset that has passed; no record; a record further from the end than the tail; a time with milliseconds and `Z`
-  (the measured form); the record's time and the file's time; of two files the newer record wins.
-- **The words**: the mod's cases carried over as a table — `5h 87% left`, the dash with no `% left`, `resets in —`,
-  `1h 0m`, `<1m`, a reset that has come; Codex windows named by length; the grouping (two hosts with one account are one
-  group; two unknown accounts are two groups; two hosts with equal numbers and different accounts are two groups);
-  each host sentence.
-- **The round** (pure, with seams for the clock, the call and the terminals): one call at a time, never two; the start
-  moves one host each round; a failed host does not stop the round; usage is asked once for each account in a round and
-  moves to the next host when the first fails; no call to a host with a "no"; no timer with no terminal; a closed
-  host is dropped with its reading; the 60 s floor of *Refresh now*; a result that lands after its host closed is dropped;
-  three terminals of one host are one read; the first round starts with no press, 30 s after activation.
-- **The consent, the automatic "yes", the stop button and the notices**: a "yes" allows the accounts read with no
-  question and no press; **a host with no row is given an automatic "yes" by the round** — the row has the marker and
-  the time, it is written before the call is spawned, and the host is read in the same round; a "no" starts no ssh of
-  any kind and is never replaced by an automatic row — not by a round, not by a reload, not by a second terminal of
-  that host; *Forget* removes the row and the next round allows the host again; a "no" given during a round stops
-  the next call; a press of *Read* or *Not this host* on an automatic row writes a person's row with no marker; **the
-  cap**: with 100 rows, a new host drops the oldest automatic row and never a person's row, and with 100 rows of a
-  person the new host is not allowed and not contacted (a test with 100 invented hosts and one "no" holds the "no");
-  the session door on an automatically allowed host reads without asking, and on a host with no row it asks; the
-  timer raises no question (a test fails if the ask seam is called from a tick); the stop button clears the timer,
-  drops the readings and holds through a reload, and while it is stopped no read, no install and no automatic "yes"
-  follows; **the daily notice** is shown at once for the first automatically allowed host, then at most once in 24
-  hours, names exactly the hosts allowed since the last one, has no button that decides anything, and is not shown
-  when there is no such host; the one notice of the first round is shown once for an installation; the question's
-  title and detail name the accounts read and the install.
-- **The two settings, each at both values** (pure, with a seam for the layered configuration): with
-  `terminalAccountsAllowNewHosts` on, a host with no row is allowed and read; with it off, it is not contacted, its
-  row says *not asked yet*, a press asks, and an automatic row counts as no answer for the accounts read and for the
-  session door, while a person's "yes" still counts; turned on again, the automatic row counts again. With
-  `terminalAccountsInstallMissingTools` on, the install call follows a `no-jq` reply; with it off, no install call
-  and no record, and the row shows the fixed command for the manager word. **Only the user layer:** with the user
-  value off and a workspace or folder value on, the setting is off; with the user value unset and a workspace value
-  off, it is on (the default) — a test for each of the four mixes, for each key; the ignored layer gives its one
-  row; an imported config file that carries either key is refused that key by name. Both keys are in the manifest
-  with `"scope": "application"` and a default of `true`, in `SAFETY_KEYS`, and in the help of all five languages. A
-  setting turned off between two calls of one round stops the next call's automatic step.
-
-- **The install, decided on this side** (pure, with a seam for the call and for the store): no install call without a
-  `no-jq` reply, to a refused host, to a host where neither Claude Code nor Codex was found, or while the round is
-  stopped; an install call with no press on a "yes" of any kind — a person's, one older than the release, an
-  automatic one; the row is `started` in the store BEFORE the call
-  seam is entered (a test fails on the other order); with any row for the host, a timer never calls the install
-  again — after `installed`, after `no-rights`, after `failed`, after a row left at `started`; a press on the row
-  calls it once; after `installed` the host is read once more in the same round; the cap of 100 rows.
-- **The install reply and the shown command**: every state and every manager word; an unknown manager word, a state
-  with extra text, a command-looking value in the reply — each `unreadable`, and none of that text is in a row; for
-  each of the four managers the row shows exactly the fixed string of the table in § 4; with no manager it shows no
-  command; the copy button puts that same string on the clipboard; **a test fails if any string that came from the
-  reply is part of the shown command**, and if the extension starts any process for a `no-rights` reply.
-- **The install script, run for real, in containers** (its own run on CI's Linux runner, with the network; not part of
-  `npm test`): a Debian or Ubuntu image, a Fedora image and an Alpine image, each without `jq`. As root: `jq` is
-  there afterwards and the reply says `installed` with the right manager. As a user with no `sudo`: `no-rights` with
-  the manager's word, and no package changed. With `jq` already there: `present`, and the package manager was not
-  started. With empty package lists on the Debian image: the one refresh, then installed. With the package lock
-  held: `failed locked` after the wait, and nothing half-installed. A `yum` image is run if one is still published;
-  if none is, the summary says that `yum` was not run. What is seen here is what § 4 only asks for.
-- **The install script's hash**: a test holds its sha256; its spec holds the same value.
-- **The runner**: the accounts argv is the pinned options, `--`, the host, `sh -s --` and the mode, with no `-n`; a host
-  that fails the host class never reaches ssh; the session reader's argv and sentences are unchanged (its tests stay green).
-- **The manifest and the help**: the button with `view == terminal` and its group; the command, and the changed
-  paragraph on the per-host answer and the sentence that the doors only read, in the help of all five languages;
-  `notification-sites.json` generated again with the new notices; the
-  log scan (`remoteLogScan.test.ts`'s rule) covers the new modules.
-- **Host scenario** (`npm run test:host`): with two terminals of two hosts and the call replaced through the test door,
-  the false call is made once for each host, one after the other; with the terminals closed no call follows; the list
-  holds the rows of both. U10 is measured here: what a label with `$(` draws.
+  1 January read on 30 December; a reset more than eight days ahead, in the past, with another zone, with no zone —
+  each a dash with the percent kept; no session line; two model lines; no matched line (`failed format`); `:turns 1`
+  (`failed model-call`, and the next call to that host is `no-claude-usage`).
+- **The Codex record**: `primary` weekly and `secondary` null; both windows; a 300-minute window; another length; a
+  reset that has passed; no record; a record further from the end than the tail; a time with milliseconds and `Z`;
+  the record's time and the file's time; of two files the newer record wins.
+- **The words and the rows**: the mod's cases as a table — `5h 87% left`, the dash with no `% left`, `resets in —`,
+  `1h 0m`, `<1m`, a reset that has come; Codex windows named by length; the grouping (one account on two hosts is
+  one group; two unknown accounts are two; equal numbers and different accounts are two); each host sentence; for a
+  host without `jq`, the row shows exactly the fixed string of § 4's table for its manager word, the copy button
+  gives that same string, and **a test fails if any text that came from the reply is part of the shown command**.
+- **The round** (pure, with seams for the clock, the call and the terminals): one call at a time; the start moves
+  one host each round; a failed host does not stop the round; three terminals of one host are one read; no call to
+  a host with a "no"; no timer with no terminal; a closed host is dropped with its reading; the 60 s floor of
+  *Refresh now*; the first round starts with no press, 30 s after activation. **The account that changed (the gate's
+  finding 3):** host B was last seen with account X; X's usage is read on host A; B is called with `no-claude-usage`
+  and answers account Y — B is called once more, with `claude-usage`, in the SAME round; never a third time; and not
+  at all when Y's usage was already read in this round. **The usage policy:** with the hourly constant, the usage
+  command is asked at most once in six rounds for an account; with "on a press", never by a tick.
+- **The consent store's commit and merge (the gate's finding 0)** — pure, with two views of one backing store, of
+  which one can be stale: a "no" in window A against an automatic "yes" in window B, in both orders, and with B
+  holding a list from before A's write — after both commits the store holds the "no", and B makes no call once the
+  "no" is visible to it; B's whole-list write is impossible by construction (a test fails if the write seam is ever
+  given a list that was not read in the same step); a "no" that goes missing is written again by the window that
+  wrote it; a person's "yes" replaces an automatic one; an automatic "yes" never replaces any row; only a person's
+  press changes a "no".
+- **The automatic "yes", the cap, the stop button and the notices**: a host with no row gets the marked row before
+  its call is spawned and is read in the same round; a "no" is never replaced — not by a round, a reload, or a second
+  terminal; *Forget* removes the row and the next round allows the host again; **the cap**: with 100 rows a new host
+  drops the oldest automatic row and never a person's, and with 100 rows of a person it is not allowed and not
+  contacted (100 invented hosts and one "no": the "no" holds); the session door on an automatically allowed host
+  reads without asking, and on a host with no row it asks; the timer raises no question (a test fails if the ask seam
+  is called from a tick); the stop button clears the timer, drops the readings, holds through a reload, and stops
+  the automatic "yes" too; the daily notice is shown at once for the first such host, then at most once in 24 hours,
+  names exactly the hosts allowed since the last one, and is not shown with none; the first-round notice is shown
+  once.
+- **The setting, at both values, user layer only**: on, a host with no row is allowed and read; off, it is not
+  contacted, says *not asked yet*, a press asks, and an automatic row counts as no answer for the round and for the
+  session door, while a person's "yes" still counts; on again, the automatic row counts again; a workspace or folder
+  value never decides (the four mixes of a user value and a workspace value), and the ignored layer gives its one
+  row; an imported config file is refused the key by name; the key is in the manifest with `"scope": "application"`
+  and a default of `true`, in `SAFETY_KEYS`, and in the help of five languages.
+- **The runner**: the accounts argv is the pinned options, `--`, the host, `sh -s --` and the mode, with no `-n`; a
+  host that fails the host class never reaches ssh; the session reader's argv and sentences are unchanged.
+- **The manifest and the help**: the button with `view == terminal` and its group; the command, the setting and the
+  changed paragraph on the per-host answer in the help of five languages; `notification-sites.json` generated again;
+  the log scan (`remoteLogScan.test.ts`'s rule) covers the new modules.
+- **Host scenario** (`npm run test:host`): with two terminals of two hosts and the call replaced through the test
+  door, the false call is made once for each host, one after the other; with the terminals closed no call follows.
+  U10 is measured here: what a label with `$(` draws.
 - **Webview pages are not changed**; if one must be, it is tested by running it (`bundledPage.test.ts`).
-
-## Real-window checks (the owner, on the pre-release VSIX, recorded in this plan when measured)
-
-| # | Check |
-|---|---|
-| R1 | The icon sits beside *Ask other AI* in the terminal panel's title bar and opens the list. With no `Creds:` terminal the list says so |
-| R2 | After the update, with no press: the one notice appears and names the hosts with an earlier "yes"; about 30 s after the start the first round reads each host that is not refused once (the VM's ssh log), also when two terminals name one host. **A host that was never asked is read too, with no question**; the list and *CoAI: hosts read over ssh* show it as *allowed automatically* with the day; the daily notice names it and says where to forbid it; a day later no second notice comes for the same host. *Not this host*: no ssh to it of any kind, also after a reload and after its terminal is opened again |
-| R3 | A round runs, one host after the other. The Claude numbers equal the built-in `/usage` on that VM, and the mod line within one point — the same dashes. The Antigravity group shows the version `agy --version` prints on that VM. Every row can be read at the owner's window width |
-| R4 | Two hosts that share an account are one group that names both hosts, and its usage was read once in the round |
-| R5 | A host that cannot be reached says so in its own sentence, and the other hosts are still read |
-| R6 | All `Creds:` terminals closed: no further ssh login on the VM (its ssh log). One opened again: a round follows. *Stop the accounts round*: no further login either, also after a reload; started again from the list, a round follows |
-| R7 | Left open for an hour: rounds about 10 minutes apart. Two parts. **(a) A record, on a Linux user with NO live Claude Code session** (it is W6 on the real build): the time of `~/.claude.json` and the number of files in `~/.claude/backups/` before and after each usage read; no new session file; the plugin store still holds the same number of files; the time and size of the agy program and of its folder; the processes of that user left after a read. The owner accepted the writes (N1), so this part is written down and stops nothing — but for a leftover process or a started hook or MCP server, which is W7's condition. **(b) A condition, on a host WITH live sessions** (as `ai2-root` has): the live Claude, Codex and agy sessions go on undisturbed — no session asks to sign in again, none loses its settings or MCP servers, none stops or restarts. A disturbed session stops the usage read (or the start of agy, if that is the cause) until the owner decides |
-| R8 | *Take the question* in a `Creds:` terminal still works (the widened runner); on a host the round allowed by itself it reads without asking. *CoAI: hosts read over ssh* shows the new words; *Not this host* there stops the accounts read of that host; *Forget* there does not — the host is allowed again in the next round, and the list says so |
-| R9 | The plan's M7: the time of one whole read from Windows with the pinned ssh options, twice, the time of `agy --version` in it, and the size of the reply; a host of an account with no 5-hour window shows `5h —` |
-| R10 | **The install, on real hosts.** (a) A VM or container without `jq`, reached as root or with `sudo` without a password: within the first round `jq` is installed once; the notice and the row *installed jq on this host* appear; the next read shows the accounts; the VM's package log shows one install of `jq` and nothing else installed, upgraded or removed; no service was restarted; no second install call in the next rounds (the ssh log). (b) A Linux user with no rights: nothing is installed; the row shows the exact command for that VM's manager; the copy button gives that string; after the owner runs it there, the next round reads the accounts. (c) After a reload in each state: no new install call. (d) A host with no `jq`, no Claude Code and no Codex: it is logged in to and nothing is installed. (e) The install on a host that was allowed by itself, with no press at any point |
-| R11 | **The two settings.** With `coai.terminalAccountsAllowNewHosts` off in the user settings: a new `Creds:` terminal's host is not contacted (the VM's ssh log) and says *not asked yet*; a press asks; a host that was allowed automatically before is not contacted either, until *Read* is pressed. With `coai.terminalAccountsInstallMissingTools` off: on a host without `jq` nothing is installed and the row shows the command. A workspace `settings.json` that sets either key the other way changes nothing, and the list or VS Code's Settings editor says it is ignored. The same in a WSL or remote window, if the owner uses one. The daily notice names both settings and its button opens them |
+- The installer's tests are with its design, in the appendix, § E.
 
 ## Definition of Done
 
-- [x] `research/RESULTS_accounts_and_usage_on_a_vm.md` records step 0 on one VM, and every row U1–U11 is answered or
-      says what was checked and what was not (written 2026-11-19).
-- [x] W1–W5 are measured and recorded in the same file, or each says why it was not (measured 2026-11-19, § 11 of
-      that file; W1 and W2 each left a point that is not settled).
-- [ ] W7 is measured and recorded there before the E1.S2 spec is final; W6 and W8 are recorded there.
-- [ ] The icon in the terminal panel's title bar opens a list of the accounts of Claude Code, Codex and Antigravity on
-      the hosts of the open `Creds:` terminals, grouped by account, each group naming its hosts; Antigravity shows its
-      version.
-- [ ] Usage is shown as "left" with the mod's words and its dash; a missing value is never a zero; usage that was not
-      read says why.
-- [ ] Every host says how it stands in its own sentence: turned off, allowed automatically and when, never read,
-      failed, or `jq` missing — with the exact command where the ssh user may not install it.
+- [x] `research/RESULTS_accounts_and_usage_on_a_vm.md` records step 0 and W1–W5 on one VM (2026-11-19).
+- [ ] **E1.** The icon opens a list of the Claude Code, Codex and Antigravity accounts on the hosts of the open
+      `Creds:` terminals, grouped by account, each group naming its hosts; usage as "left" in the mod's words, a
+      missing value never a zero, usage that was not read saying why; Antigravity with its version.
+- [ ] Every host says how it stands in its own sentence: turned off, allowed automatically and when, not asked yet
+      (the setting off), never read, failed, or `jq` missing with the exact command to run.
 - [ ] A round runs by itself from the start of the extension, every 10 minutes, one host at a time, one read for each
-      distinct host with the pinned options, for every host that is not refused; a host with no answer is allowed by
-      itself, stored with its marker, and named in a notice at most once a day; a "no" is never overridden, by
-      anything; it stops with the last `Creds:` terminal and with the stop button; a failed host does not stop it;
-      the timer asks nobody.
-- [ ] The accounts script is fixed, its hash is in the spec and in a test, and it writes nothing on the VM. No secret
-      is in an argument, the environment, the reply or a log; the person's activity is not in the reply; of a version
-      command only the version is — shown by the marker tests.
-- [ ] `jq` is installed only by the install script: one package, the host's own manager by a fixed path, a fixed
-      command, never a password prompt, once for each host with the record written first; every install is in the
-      list and in a notice; a user without the rights is shown a fixed command and nothing is run. Seen in the
-      container run and in R10.
-- [ ] `coai.terminalAccountsAllowNewHosts` and `coai.terminalAccountsInstallMissingTools` exist, are on by default,
-      are read from the user layer only, and are in the help of five languages; off, the first restores ask-first
-      and the second restores no-install — shown by the tests for both values and by R11.
-
-- [ ] The Claude usage road is road (a), with the pinned command of § 4. Road (b) is not in the code.
-- [ ] Nothing of a reading is persisted. The consent is the session reader's own store; its question, the hosts list,
-      the help and `SECURITY.md` say that a "yes" covers the accounts read and the install, that a new host is allowed
-      by itself, and that only *Not this host* stops a host.
-- [ ] The session reader behaves as before, but for the words of its question and of its hosts list (its tests green, R8).
-- [ ] Docs with the change: the help in five languages, with the sentence "they only read" made true again;
-      `research/module_extension.md`, `research/module_tests.md`, `research/architecture.md` (the new edges: a VM to a
-      vendor, and a change of a VM); `SECURITY.md`, which no longer says "read-only" of every call; the
-      `POST_DEPLOY.md` question asked.
-- [ ] R1–R11 recorded here; `review_feature` run before the tag and every finding resolved; one extension release cut and
-      verified; the plan promoted with its deviations.
-
-## Open points for the owner
-
-**O1–O7 are answered (2026-11-19).** The table keeps each question with the owner's answer.
-
-| # | The question | The planner recommended | The owner answered |
-|---|---|---|---|
-| O1 | **Claude usage.** Allow the script to make the VM ask `api.anthropic.com` with the VM's Claude login, returning only the percentages? By which road: (a) Claude Code itself makes the call; (b) our script reads the login and calls with `curl`; (c) the account only | **(a), yes** — if step 0 shows a command that prints the usage with no model call, nothing started and nothing written. If (a) fails: **(c)**, not (b). (b) only on an explicit yes after the Security section's paragraph on it | **"May also use curl"**: (b) is allowed as a fallback. Step 0 showed (a) works, so (a) is taken and (b) is not built |
-| O2 | May the list show the full email of each account? | **Yes**, in the list only. It is never logged, stored or sent on. It is the point of the list: to tell the accounts apart | **Yes**: full emails, in the list only, never logged or stored |
-| O3 | The consent: a separate question for each host for the accounts read, independent of the session reader's answer, raised only by a press; and one question for all open hosts at once is allowed? | **Yes** to both. A timer that reads accounts is not what the first question asked | **No: shared with the session reader.** A host allowed for the session read is read for accounts with no new question (§ 3, finding F1). The second half was not answered; with no accounts question left to ask, this revision does not build a question for several hosts |
-| O4 | The interval: a fixed 10 minutes, or a setting? | **Fixed.** A setting costs a help entry in five languages and a control, and nobody asked for another value | **Fixed** |
-| O5 | Codex usage is as old as the last Codex turn on that host (a local file, no network). Is that enough, or is the live read wanted? | **Enough.** The live read writes into the Codex home and can refresh a login that live sessions share | **Enough** |
-| O6 | The icon: always in the title bar, or only while a `Creds:` terminal is open? | **Always**, like the chat icon | **Always** |
-| O7 | Which VM and which Linux user is step 0 run on, and when? | The owner's choice; a host where all three CLIs are signed in | **`ai2-root`, user `root`, 2026-11-19.** Claude Code and Codex are signed in there; agy has a sign-in file |
-
-**N1–N5 are answered (2026-11-19).** They came from step 0 and from O3. The table keeps each question with the
-planner's recommendation and the owner's answer. Where the two differ, the plan follows the owner.
-
-| # | The question | The planner recommended | The owner answered |
-|---|---|---|---|
-| N1 | **What Claude Code writes on the VM on a usage read**, at most 6 reads an hour for each account. The first draft's condition was "nothing written". **(a)** Four cache files of its own, on every read: the same four names, rewritten in place, no growth (measured in four reads, W4). **(b)** During one of those four reads `~/.claude.json` was rewritten too, with a new backup file in `~/.claude/backups/`. It is **not proven** who wrote it: that read, or one of the live Claude Code sessions on the host. Is (a) accepted? And is (b) accepted, if W6 or R7 shows that our read itself rewrites `~/.claude.json`? | **(a) Yes.** They are the vendor's own caches, and every start by hand writes them too. **(b) Yes only if it is rare** — once for each host, at the first read from `/`, or as seldom. **No if it is every read**: then the Claude usage read is off and the list shows the account only, until the owner decides. Until W6 is measured this plan does not claim that `~/.claude.json` is untouched, and R7 holds the live sessions to "undisturbed" | **"Everything is acceptable."** (a) and (b) are accepted, (b) also on every read. W6 is a record and stops nothing. R7 (b), live sessions undisturbed, still holds: it is not a write question |
-| N2 | **Answers given before this release.** With O3, a "yes" that was given to *"Read the Claude session…"* also allows the accounts read. May the accounts round stay off until the first press of the icon, with one button in the list to stop it again? It asks nothing. The other way: the round starts with the update for every host with a "yes", and the person is told by one notice | **Yes: off until the first press, with the stop button.** The owner presses the icon once and never sees a difference. Another person's old "yes" is then not used by a timer they never heard of | **No: "the round goes automatically over all unique ssh sessions in the terminal."** It starts with the extension, with no press, one read for each distinct host. The switch is removed; the notice of "the other way" and the stop button are kept (§ 3). The consent stays shared: only a host with a "yes" is read |
-| N3 | May W1–W5 (§ 5) run now on `ai2-root`, each command approved as in step 0, before the plan round? | **Yes.** Else they run at the E1.S2 spec, and a bad result is a change of an approved plan | **Answered by the run:** the owner approved the one call and it ran on 2026-11-19 (§ 5) |
-| N4 | **Antigravity shows no version**, because the script does not start `agy`: a start was not measured, and agy updated itself on a start on another machine. Is "installed, no usage, account not read" enough? | **Yes.** A version is not worth a start of that program on every host every 10 minutes | **No: "with the version."** `agy --version` runs in every round, with a limit, an empty stdin and the folder `/`. The risk is recorded in Security and Growth, and W8 measures a start. (The question's words "on a start" said more than the source: it records that agy updated itself, not what set it off) |
-| N5 | **A host without `jq`** shows *`jq` is not installed on this host* for Claude and Codex, and we install nothing. Is that accepted, or should the script cut JSON with `sed` where `jq` is missing? | **Accepted, `jq` only.** Naming a field is safe by construction; a `sed` pattern next to private text is where a leak with no error starts | **Neither: "install what is needed yourself, and that is all"; "and only if there are no rights, write to the person: run this command".** `jq` stays the only reader, and it is installed where it is missing (§ 4, finding F2). Without the rights, the list shows the command and runs nothing |
-
-**Q1 and Q2 are answered (2026-11-19). No question for the owner is open.** They came from N2 and from finding F2.
-In both the owner decided against the planner's recommendation, and the plan follows the owner.
-
-| # | The question | The planner recommended | The owner answered |
-|---|---|---|---|
-| Q1 | **A host with no answer yet.** Should the round ask once, by a modal, when it first meets a host of an open `Creds:` terminal that has no answer? The default then was: no question, and the host is not read until a press on its row asks | **Keep that default.** A modal that a terminal's NAME can set off, with no press, is what the terminal-door plan avoided: any program can open a terminal called `Creds: x / y`. And with five hosts it is five modals at the start | **Neither: "new hosts are allowed by themselves."** No modal and no press: the round allows a new host and reads it. Once a day a notice with no question names the hosts allowed that way and says where to forbid them. A "no" is never overridden (§ 3, finding F1) |
-| Q2 | **An install on an old "yes"** (finding F2). On a host whose "yes" was given before this release — to *"Read the Claude session…"* — should the install of `jq` wait for one press on that host's row? | **Yes, wait for the press on an old "yes".** For the owner that is at most one press for each host without `jq`, once. For another person it is the difference between software installed as root on their server after an update, and a row that offers it | **No: "install at once."** The install runs by itself on every allowed host where it is needed and the ssh user may — an old "yes" and an automatic one included (§ 4, finding F2) |
-
-**After Q1 and Q2 the main session put findings F1 and F2 to the owner again, with two settings that are off by
-default.** The owner answered: *"Yes, but on by default"* (decision 20). The settings are in § 3. The planner's
-recommendation, off by default, is recorded in both findings.
+      distinct host that is not refused — two in the one case of § 2; a host with no answer is allowed by itself,
+      stored with its marker and named in a notice at most once a day; it stops with the last `Creds:` terminal and
+      with the stop button; the timer asks nobody.
+- [ ] **A "no" always wins**: every write of the store re-reads and merges; no round, reload, second terminal, second
+      window or full store removes a refusal — shown by the merge tests and by R12.
+- [ ] `coai.terminalAccountsAllowNewHosts` exists, is on by default, is read from the user layer only, and is in the
+      help of five languages; off, it restores ask-first.
+- [ ] The accounts script is fixed, its hash is in the spec and in a test, and it writes and installs nothing on the
+      VM. No secret is in an argument, the environment, the reply or a log; the person's activity is not in the
+      reply; of a version command only the version is.
+- [ ] Road (a) with the pinned command of § 4. Road (b) is not in the code. Nothing of a reading is persisted.
+- [ ] The session reader behaves as before, but for the words of its question and of its hosts list.
+- [ ] Docs with the change: the help in five languages; `research/module_extension.md`, `research/module_tests.md`,
+      `research/architecture.md` (the new edge from a VM to a vendor); `SECURITY.md`; the `POST_DEPLOY.md` question
+      asked.
+- [ ] **E2.** R1–R12 and W6–W8 each have a recorded result in this plan and in the RESULTS file. The gates W6
+      (growth) and W7 (program starts) passed, or their stated consequence is in the release build. `SECURITY.md`
+      says what was seen.
+- [ ] **C1**, the installer of owner decisions 17, 19 and 20, is built by its own stories and spec and passed its
+      own checks (the appendix, § E); `coai.terminalAccountsInstallMissingTools` exists and is on by default.
+- [ ] `review_feature` ran before the tag and every finding is resolved; one extension release is cut and verified;
+      the plan is promoted with its deviations.
 
 ## Epics
 
-Three epics in the build order above. E0 has no code and is done. E1 and E2 are one PR each and ship in ONE extension
-release. Stories documents are not written now: one for each epic,
-`todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E<n>.md`, written by Opus when that epic starts
-(`subagent-models.md`, pipeline step 3). The stories named below are this plan's proposal for that writer. Cornerstone
-quota: Q = ⌈2·E/5⌉ = ⌈2·3/5⌉ = 2.
+**Two epics, by the gate's command and the question consultants' answer** (consult `f4af076c`, both consultants). The
+earlier cut — a reader and an installer, then a round and a list — was layers: nothing ran end to end until the last
+story. Now **E1 is the smallest thing that runs end to end on real input**, and **E2 runs it for real and tests what
+this plan believes**, with pass criteria written here, before any code. What comes after is a list of candidates,
+one line each, with the E2 result that would justify it.
 
-*The split is a draft until the question consultants were asked what is important* (`subagent-models.md`, pipeline
-step 2). The areas Fable names as cornerstones: **(a)** what the script touches on the VM and what it prints — the only
-place a secret or the person's activity can leak, and a leak gives no error; **(b)** the reply's frame and the parser —
-the only place wrong or hostile data can arrive and look right; **(c)** who is contacted and when — a refused host
-is never contacted and never allowed again by anything, the answer is read again before every call, the cap never
-trades a person's answer for an automatic one, the stop button, and a timer that never asks; **(d)** absent, signed out, no usage
-source, skipped, failed and unreadable are different results, and a missing number is never a zero; **(e)** the one
-place the extension changes a VM — what the install runs as root, that it runs once, and that the command a person is
-shown is never made from VM text. A mistake there is made on somebody's server, with root, and cannot be taken back
-by a release.
+**Step 0 is not an epic any more.** It was E0 in the earlier revisions. It had no code and is done; it is recorded in
+*What step 0 and W1–W5 measured* above, in the RESULTS file, and — with what did not go as written — in the appendix,
+§ D. The ceiling of two epics is why it is a section and not a heading here.
 
-Cornerstones: 2 of 2 — E1.S2, E1.S4
+Stories documents are written by Opus when an epic starts:
+`todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E<n>.md` (`subagent-models.md`, pipeline step 3).
+Cornerstone quota: Q = ⌈2·E/5⌉ = ⌈2·2/5⌉ = 1. The cornerstone areas Fable names: **(a)** what the script touches on
+the VM and what it prints — the only place a secret or the person's activity can leak, and a leak gives no error;
+**(b)** the reply's frame and the parser — the only place wrong or hostile data can arrive and look right; **(c)** who
+is contacted and when — a refused host is never contacted and never allowed again by anything, every write of the
+store merges, the cap never trades a person's answer for an automatic one; **(d)** absent, signed out, no usage
+source, skipped, failed and unreadable are different results, and a missing number is never a zero. Area (c) is
+authorisation: its spec is Fable's by the security row of `subagent-models.md`, outside the quota.
 
-### E0 — Step 0, the measurement · done 2026-11-19
+Cornerstones: 1 of 1 — E1.S2
 
-- **Goal.** Know, from one real VM, what each CLI stores and prints, what can be read with no secret, which Claude usage
-  road holds, and what one read costs in time and bytes.
-- **Result.** [../research/RESULTS_accounts_and_usage_on_a_vm.md](../research/RESULTS_accounts_and_usage_on_a_vm.md):
-  step 0 on `ai2-root`, four read-only calls and a fifth for W1–W5, each approved by the owner. Road (a) is taken. U1–U6, U8, U9 and U11
-  are resolved; U7 is half open and not needed; U10 waits for E2's host scenario; M7 is real-window check R9; M8 was not run. The owner's answers to O1–O7
-  are recorded above.
-- **What did not go as this epic was written.** No E0 stories document was written: the commands were approved one by
-  one in the Creds dialog. The credential file's key names were listed although road (a) held. Five points were left
-  open (W1–W5, § 5); they were measured later the same day in a fifth call, and two of them left a point that is not
-  settled (W6, W7). The RESULTS file and the first revision were committed as `2edfe1c7`; the W1–W5 results were
-  folded in after that commit.
-- **Cornerstone areas.** None: it is a measurement.
+### E1 — The read-only feature, end to end
 
-### E1 — The remote accounts reader and the install · depends on E0
-
-- **Goal.** One call that reads the accounts and usage of one host over ssh and gives a typed result, and one call
-  that installs `jq` there and says how it ended — with nothing that calls either yet.
-- **Scope.** `src/remoteSsh.ts` (the runner widened: one argv builder and one run for its callers, the sentence's
-  subject and the limits as parameters, `SSH_OPTIONS` untouched); `src/remoteFrame.ts` (the framing extracted for its
-  callers); NEW pure modules for the accounts script, its frame and typed result, the Claude usage lines and the mode
-  operand; NEW pure modules for the install script, its reply, the closed table of managers and commands, and the
-  install record; the shared consent's new words (`src/remoteSessionHost.ts`: the question's title and detail, the
-  rows of *CoAI: hosts read over ssh*); their tests and the container run; `research/module_extension.md`,
-  `research/module_tests.md`.
-- **Depends on.** E0's RESULTS file; W7 measured before the E1.S2 spec is final; the terminal-door plan's last
-  release cut.
-- **Done when.** The script, version, parser, usage-line, Codex-record, runner, consent and install rows of the test
-  plan are green; the marker tests were seen RED once; both hashes are in their specs and in tests; the install script
-  was seen installing, refusing and failing in the containers; the session reader's tests are green, changed only
-  where they hold the question's words; the code gate passed; the PR is merged.
-- **Cornerstone areas.** (a) and (b) together — the first cornerstone; (e) — the second; (c) the shared answer; (d)
-  the result's arms.
+- **Goal.** The icon, the list, and the round that fills it by itself, reading real hosts — with nothing installed
+  and nothing written on a VM by our code.
+- **Scope.** `src/remoteSsh.ts` (the runner widened for a second caller, `SSH_OPTIONS` untouched);
+  `src/remoteFrame.ts` (the framing extracted); `src/remoteRead.ts` and `src/remoteSessionHost.ts` (the store's commit
+  and merge, the marker, the cap, the question's words, the hosts list); NEW pure modules for the accounts script,
+  its reply and typed result, the usage lines, the round, the words and rows; a NEW host module with the `vscode`
+  seams (the timer, the terminal events, the QuickPick with its buttons, the state row, the notices, the test door);
+  `package.json` (the command, its icon, the `view/title` entry, the setting with its scope); `src/settingsShape.ts`,
+  `src/modelKeys.ts` (`SAFETY_KEYS`), `src/configTransfer.ts`; the help in five languages; `notification-sites.json`;
+  the tests and the host scenario; the module documents, `research/architecture.md`, `SECURITY.md`; the
+  `POST_DEPLOY.md` question (the file is at its cap of twelve, so a new item needs a named one to leave).
+- **Depends on.** The terminal-door plan's last release cut.
+- **Done when.** Every row of the test plan is green; the marker tests were seen RED once; the hash is in the spec and
+  in a test; the session reader's tests are green, changed only where they hold the question's words; the code gate
+  passed; the PR is merged; a pre-release VSIX of the merged head is built.
 - **Stories.**
-  - **E1.S1 — the runner serves its callers.** `runRemote` keeps its checks and its words; a shared run and argv
-    builder under it; the accounts call and the install call beside it, each with its own limits. By Opus's brief,
-    coded by Sonnet.
-  - **E1.S2 — the accounts script, its reply and its parser (CORNERSTONE, `model: fable`).** Fable writes the spec
-    before any code: the exact script text and its sha256, the tools it needs, the pinned Claude commands with their
-    flags, folder and limits, the `agy` version command and the rule that keeps only a version, the three line
-    patterns, the Codex record rule, the reply's grammar and limits, the typed result with one arm for each state,
-    the parser's rules with the reset parse, the scenarios (the test plan's script, version, marker, hash, parser,
-    usage-line and Codex rows), the results of W1–W8, and the security judgement on the exact text — outside the
-    quota, by the security row. Sonnet codes; Opus reviews.
-  - **E1.S3 — the shared store: what a "yes" covers, the automatic "yes", and the refusal that holds.** The
-    question's new title and detail; the row's marker `how` and the three texts of the hosts list; the pure rule that
-    allows a host with no row only while its setting is on, and reads an automatic row as no answer while it is off;
-    the cap that never drops a person's answer; and the tests that hold a "no" against a
-    round, a reload, a second terminal and a full store.
-  - **E1.S4 — the install of `jq` (CORNERSTONE, `model: fable`).** Fable writes the spec before any code: the exact
-    script text and its sha256, the four fixed paths, the rights check, the one command for each manager with its
-    exact options, the one refresh of the lists, the limits, the reply's grammar, the closed table of shown commands,
-    the record and its "written first" rule, the sentences of each state, the scenarios (the test plan's install
-    rows and the container run), and the security judgement on the exact text. Sonnet codes; Opus reviews.
+  - **E1.S1 — the shared store: a "no" that always wins, the automatic "yes", the setting (SECURITY SPEC by Fable,
+    outside the quota).** The one commit function that re-reads and merges; the merge rule; the refusal that is
+    repaired; the marker `how`; the cap that never drops a person's answer; the user-layer read of
+    `coai.terminalAccountsAllowNewHosts`; the question's new words and the hosts list. Fable writes the spec and the
+    scenarios before any code; Sonnet codes; Opus reviews.
+  - **E1.S2 — the accounts script, its reply and its parser (CORNERSTONE, `model: fable`).** The exact script text
+    and its sha256; the pinned Claude commands with their flags, folder and limits; the `agy` version command and the
+    rule that keeps only a version; the three line patterns; the Codex record rule; the manager word for a host
+    without `jq`; the reply's grammar; the typed result; the parser's rules with the reset parse; the scenarios; and
+    the security judgement on the exact text. Sonnet codes; Opus reviews.
+  - **E1.S3 — the runner and the round.** One argv builder and one run for both callers; the pure planner: the
+    distinct hosts, the order, the mode for each host, the one extra usage call, the usage policy's constant, start
+    and stop.
+  - **E1.S4 — the list and the icon.** The words and rows, the grouping, the host sentences, the fixed command for a
+    host without `jq` with its copy button, the notices, the two title buttons, the command and its manifest entry.
+  - **E1.S5 — the documents.** The help, the module documents, `research/architecture.md`, `SECURITY.md` but for
+    what E2 has to see first.
 
-### E2 — The round and the list · depends on E1
+### E2 — Run it for real, on the owner's hosts
 
-- **Goal.** The icon, the list grouped by account, and the 10-minute round that fills it by itself.
-- **Scope.** NEW pure modules for the round (the distinct hosts, the order, the mode for each host, the table in
-  memory, start and stop, the install step) and for the words and rows (the mod's rules, the grouping, the host
-  sentences, the install sentences with their fixed commands, the plain-text road for VM text); a NEW host module with
-  the `vscode` seams (the timer, the terminal events, the QuickPick with its two title buttons and the copy button of
-  a row, the state and the install record in `globalState`, the notices, the test door) bound in `src/extension.ts`;
-  `package.json` (the command, its icon, the `view/title` entry, the two settings with their scope);
-  `src/settingsShape.ts`, `src/modelKeys.ts` (`SAFETY_KEYS`) and `src/configTransfer.ts` for the two settings; the help in five languages; `notification-sites.json`;
-  the host scenario; `research/module_extension.md`, `research/module_tests.md`, `research/architecture.md`,
-  `SECURITY.md`; the `POST_DEPLOY.md` question (the file is at its cap of twelve, so a new item needs a named one to
-  leave).
-- **Depends on.** E1 merged.
-- **Done when.** The words, round, stop-button, notice, install-decision, manifest, help and host-scenario rows of the
-  test plan are green; the Definition of Done's items hold; the PR is merged; R1–R11 are recorded on the pre-release
-  VSIX of the merged head; `review_feature` ran from the merged head and every finding is resolved; the release is cut
-  and verified; the plan is promoted.
-- **Cornerstone areas.** (c) the timer never asks, never contacts a refused host, allows a new host only by the one
-  rule of E1.S3, and does nothing while the round is stopped; (e) the install is called once and its record is written first; (d) the sentences. No cornerstone story is
-  recommended here: the rules are pure, small and fixed by this plan, and both quota places are used in E1.
-- **Stories.**
-  - **E2.S1 — the round.** The pure planner, its table in memory, the stop state and the install step.
-  - **E2.S2 — the words and the rows.** The mod's rules, the grouping by account, the host sentences, the install
-    sentences and the part *Changes CoAI made on a host*.
-  - **E2.S3 — the host and the door.** The timer and the terminal events, the list, *Refresh now*, *Stop the accounts
-    round*, the copy button, the notices, the question raised from a host's row, the command and its icon.
-  - **E2.S4 — the documents and the release.** The help, the module documents, `SECURITY.md`, the pre-release VSIX,
-    R1–R11, `review_feature`, the tag, the promotion.
+- **Goal.** Know, from the owner's own hosts and a real VS Code window, whether what this plan believes is true —
+  before anybody else gets the build.
+- **Scope.** No product code. The pre-release VSIX of E1's merged head; the owner's window on Windows and the
+  owner's hosts; the measurements below, each with the owner's go where a command runs on a VM; the results written
+  into this plan and into the RESULTS file; the last sentences of `SECURITY.md`. A criterion that fails is fixed by a
+  new PR and measured again.
+- **Depends on.** E1 merged, and its pre-release VSIX installed by the owner.
+- **Done when.** Every row below has a recorded result. **W6, W7 and R12 are gates:** each passed, or its stated
+  consequence is in the build.
+
+| # | What is run | Pass |
+|---|---|---|
+| R1 | The icon in the terminal panel's title bar | It sits beside *Ask other AI* and opens the list; with no `Creds:` terminal the list says so |
+| R2 | The first start after the install, with no press | Within 60 s: exactly 1 ssh login on each host that is not refused (the VM's ssh log), also for a host with two terminals; 0 on a refused host; the first-round notice shown once; a host that was never asked is read and shown as *allowed automatically*; the daily notice names it once, and not again the next day |
+| R3 | The numbers, on at least 3 hosts | Each Claude percent equals `/usage` run on that VM in the same minute, and the mod line within 1 point, with the same dashes; the Codex percent equals the record; the agy version equals `agy --version` there; no row is cut at the owner's window width |
+| R4 | Two hosts of one account, 6 rounds | One group naming both hosts; in each round `policy-limits.json.stamp.json` changes on exactly one of the two hosts |
+| R5 | A host that cannot be reached | Its own sentence within 30 s, and every other host is still read in that round |
+| R6 | Stopping | Every `Creds:` terminal closed: 0 logins in the next 20 minutes. *Stop the accounts round*: 0 logins in 20 minutes, also after a reload; started again, a round follows within 60 s |
+| R7 | Two hours, at least 12 rounds, on a host WITH live sessions | **0** live Claude, Codex or agy sessions that ask to sign in again, lose their settings or MCP servers, or stop or restart. The time and size of the agy program before and after: recorded |
+| R8 | The session door and the hosts list | *Take the question* still works, and on an automatically allowed host it reads without asking. *Not this host*: 0 logins in 20 minutes, also after a reload and after the terminal is opened again. *Forget*: exactly 1 login in the next round, and the list says the host was allowed again |
+| R9 | The time of a read (the plan's M7): 10 reads of each host from Windows with the pinned options | None is killed at 30 s; the slowest is under 20 s; `agy --version` is under 4 s; a reply is at most 64 lines and 8 KiB. The median is recorded. A host of an account with no 5-hour window shows `5h —` |
+| R10 | **Which hosts lack `jq`** — every host of the owner's `Creds:` terminals | A table: `jq` there or not, the manager word, root or `sudo` without a password. A host without `jq` shows the fixed command for its manager; after the owner runs it, the next round reads the accounts. The count of hosts without `jq` is recorded for C1 |
+| R11 | The setting off, in the user settings | 0 logins to a new terminal's host in 20 minutes, and it says *not asked yet*; 0 logins to a host that was allowed automatically, until *Read* is pressed; a workspace `settings.json` that says the opposite changes nothing; the same in a WSL or remote window, if the owner uses one |
+| R12 | **Two windows (the gate's finding 0, U12).** *Not this host* is pressed in window A while window B's round is running | **Gate.** At most 1 login to that host after the press, and 0 from B's next round on. The "no" is in the store after B's next write, in both windows, and after a reload of both. The delay until B saw it: recorded. A lost "no", or a delay longer than one round: the store moves to a file with an exclusive lock before the release — a change of this plan |
+| W6 | Backups (§ 5) | **Gate for growth.** The row of § 2's policy table that the result selects is the release build's policy |
+| W7 | The trace of every program start (§ 5) | **Gate.** No program is started that is not Claude Code's own. Else the Claude usage read is off until the owner decides |
+| W8 | A start of `agy` (§ 5) | A record |
+
+### Candidates after E2
+
+One line each. A candidate becomes an epic only with the result named beside it. Taking one up is a change of this
+plan (kind `epics`), recorded in the ledger — **but for C1, which this approved text already schedules**.
+
+- **C1 — the `jq` installer** (owner decisions 17, 19 and 20; the setting `coai.terminalAccountsInstallMissingTools`,
+  on by default). **The owner's decision stands, and the installer ships in the same release.** It is built after E2
+  only so that the read-only path is proven first; R10's table says on how many hosts it will act. Its design, with
+  the gate's findings 1, 2 and 6 folded in, is in the appendix, § E. It is a cornerstone when it is built: a change
+  of a machine with root, spec by Fable under the security row, finding F2 beside it.
+- **C2 — a webview instead of the QuickPick.** Justified by R3 failing on "no row is cut".
+- **C3 — hosts with no AI CLI are read once an hour, not every 10 minutes.** Justified by R10 or R2 showing such
+  hosts among the owner's terminals, and by their logins being a nuisance in the ssh log.
+- **C4 — the consent store in one file with an exclusive lock.** Justified by R12 failing.
+- **C5 — the Claude usage only on a press, or road (b), or the account only.** Justified by W7 failing; the planner
+  recommends the account only.
+- **C6 — one lock between VS Code windows for the round.** Justified by R2 or R9 showing that two windows doubling
+  the logins matters.
