@@ -140,6 +140,17 @@ test('a paste made before the feature half is OLDER, naming it', () => {
   assert.match(snippetNote(status), /the feature gate/);
 });
 
+test('a paste of the v4 feature half (before conventions #185) is OLDER, naming the feature gate alone', () => {
+  // 0.89.2: the feature half moved v4 → v5 (a blocking good_enough finding at the cap is verified first); a 0.89.1 paste
+  // carries v4 and must read older until it is pasted again, as the CHANGELOG promises.
+  const v4 = claudeSnippet().replace(/<!-- coai-feature v5 -->/, '<!-- coai-feature v4 -->');
+  assert.notEqual(v4, claudeSnippet(), 'the current paste carries the v5 marker');
+  const status = snippetStatus(v4);
+
+  assert.deepEqual(status, { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION });
+  assert.deepEqual(snippetStatus(claudeSnippet()).kind, 'current', 'the regenerated paste reads current');
+});
+
 /**
  * A repository that MOUNTS the shared rules is judged on every half again (S3.5; six since the question half).
  *
