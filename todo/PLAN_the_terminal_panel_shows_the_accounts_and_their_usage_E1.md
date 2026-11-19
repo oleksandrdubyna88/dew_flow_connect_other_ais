@@ -453,7 +453,9 @@ X10, X14–X16; S2 X2, X3, X8, X9, X12, X14) **and gate G2's § 4.**
 - **Goal.** One argv builder and one run for both callers, with the pinned options untouched; and a pure round that calls
   every distinct host that is not refused, one at a time, at most once — twice in the one case — usage once for each
   account, 30 s after the start and 10 minutes after the end of each round, never asking anybody, and stopping when no
-  `Creds:` terminal is left or the person stops it.
+  `Creds:` terminal is left or the person stops it. **A reading never comes back after a Stop, a refusal or a Forget
+  while its call was in flight** (gate finding, 2026-11-19), and **a host whose account is not known is first called
+  without usage**, so the first round reads one account's usage once, however many hosts it is signed in on.
 - **Files and functions (what and how).**
   1. **`src/remoteSsh.ts` — the runner widened, not copied.**
      - A private `argvWith(host, words)` that returns `[...SSH_OPTIONS, '--', host, 'sh', '-s', '--',
@@ -514,12 +516,17 @@ X10, X14–X16; S2 X2, X3, X8, X9, X12, X14) **and gate G2's § 4.**
      - `modeFor(memory, host, roundUsage: ReadonlySet<string>, policy, now, trigger): AccountsMode` — `no-claude-usage`
        when: the host's last `claudeAccount` is in `roundUsage` (its usage was READ in this round); or the host is blocked
        (`usageBlockedAt` equals the version of its last reading); or the policy says the account is not due. Else
-       `claude-usage`. A host never read, or whose last read failed, has no account → `claude-usage` (unless the policy
-       says no). `due(policy, lastUsageAtMs, now, trigger)`: `every-round` always; `hourly` when no usage of that account is
+       `claude-usage`. **A host never read, or whose last read failed, has no remembered account → `no-claude-usage`
+       FIRST** (gate finding, 2026-11-19: the second of two unread hosts signed in to one account would otherwise read that
+       account's usage a second time, because it has no remembered account to find in `roundUsage`). What its reply says
+       decides the rest: `needsSecondCall` (below) gives it the ONE extra `claude-usage` call when the account it returned
+       has not had its usage read in this round — the parent's one-extra-call rule (§ 2, finding 3), not a new one. So an
+       unknown host costs at most two calls in a round, and one usage read for each account stays true from the first round. `due(policy, lastUsageAtMs, now, trigger)`: `every-round` always; `hourly` when no usage of that account is
        known or it is `HOURLY_MS` old; `on-press` only for `trigger === 'refresh'`; `off` never, for any trigger.
      - `needsSecondCall(sentMode, read, roundUsage, memory, host, policy, now, trigger): boolean` — true only when
        `sentMode` was `no-claude-usage`, the reply is `found` with an account whose key is NOT in `roundUsage`, the account
-       is due, and the host is not blocked (parent § 2, finding 3). At most ONE extra call for a host in a round. With
+       is due, and the host is not blocked (parent § 2, finding 3). It covers two cases with ONE rule: the account that
+       changed since the last round, and the first call of a host whose account was not known. At most ONE extra call for a host in a round. With
        the policy `off` no account is ever due, so there is no extra call: a switch that is off is not gone round by
        finding 3 (S2 X14; G2, S-3).
      - `blockedAfter(read)` — a reply whose usage is `failed` with `why` `model-call` or `format` blocks the host at its
@@ -532,11 +539,29 @@ X10, X14–X16; S2 X2, X3, X8, X9, X12, X14) **and gate G2's § 4.**
        `read` clears it; (4) `run = await seams.call(host, mode)`; (5) an `answered` run → `seams.parse(run, mode)` with
        the SAME mode — the seam's type is `(run, mode: AccountsMode) => AccountsRead`, and the host binds it as `(run,
        mode) => readAccounts(run, mode, seams.now())`, so the parser gets the round's clock and reads none itself (S2
-       X2; G2, C-7); (6) the memory
+       X2; G2, C-7); (6) **the result is checked before it is published** (below) and the memory
        updated; (7) `needsSecondCall` → steps (1)–(6) once more with `claude-usage`; (8) `seams.landed()` after each host, so
        the list redraws. A host whose terminal closed while its call ran: its result is DROPPED (`seams.live()` read after the
-       call). `RoundResult = { memory; allowedNow: readonly string[]; endedMs }`. `RoundSeams = { live; stopped; admit; call;
-       parse; now; landed }` — **no ask seam**.
+       call). `RoundResult = { memory; allowedNow: readonly string[]; endedMs; abandoned: boolean }`. `RoundSeams = { live;
+       stopped; admit; call; parse; now; landed; generation; dropped }` — **no ask seam**.
+     - **The generation token (gate finding, 2026-11-19).** Until now `runRound` held its earlier immutable `Memory` and,
+       after a call, checked only that the terminal was still open: a *Stop* or a refusal given while that host's `ssh`
+       was running could not keep the reading from being published. Now each round takes `token = seams.generation()` at
+       its start. The host keeps ONE counter, `generation`, and bumps it on a *Stop* (`stop()`), on a refusal (the change
+       signal of S1 showing a host that is now refused, in this window or another) and on a *Forget* of any host (the
+       same signal showing a standing removed). Before a result is published (step 6, for the first call and for the
+       extra one) the round checks, IN THIS ORDER: (a) `seams.generation() === token`; (b) `!seams.stopped()` (read again);
+       (c) the host's admission again, through `seams.admit(host)` — S1's one consent caller, not a second one (S1 X14) —
+       and only a `read` answer passes. The order matters: a host that was *forgotten* in flight fails (a) first, so (c)
+       never runs for it and cannot write an automatic row where a person just took one away. A result that fails any
+       of the three is DROPPED: its reading is not stored, its `failure` is not stored, `landed` is not called for it,
+       and the host's `HostMemory.admission` keeps the kind (c) answered (`refused` also drops the host's older
+       reading, as step 3). A failure of (a) or (b) ends the round: `abandoned: true`, the rest of the hosts are not
+       called (the next round is the timer's, or none after a stop). **The host never stores the memory of an abandoned
+       round**: `stop()` cleared `Memory`, and the earlier immutable memory the round held must not come back over it.
+       The drop is logged ONCE for each dropped result through `seams.dropped(host)`, which the host binds to the log
+       gate: one fixed line, `ConnectOtherAIs: accounts read host=<host> dropped: stopped, refused or forgotten while it
+       ran`, written through the same default seam (no new `console.`).
      - The timer, as pure decisions: `armFor({ eligible, armed, stopped, running }): 'arm-first' | 'clear' | 'keep'` (an
        eligible host = a live `Creds:` terminal of a host for which `sessions.hostStandings()` holds no "no". **S3
        never calls `consentOf`**: it is S1's one function, the setting is its third argument, and A1-T2 scans for a
@@ -613,11 +638,11 @@ X10, X14–X16; S2 X2, X3, X8, X9, X12, X14) **and gate G2's § 4.**
 | A3-T11 | one call at a time | a fake `call` that resolves after a tick logs start and end: no start before the previous end; three hosts → three calls in order | `Promise.all` → `two reads ran at once` |
 | A3-T12 | a failed host does not stop the round | host `a` `refused` with *“a” did not answer over ssh within 30 s.* → its `failure` holds that sentence and the time; `b` and `c` are still called; `a`'s older `reading` is kept | `return` on a refusal → `the round stopped at the first failed host` |
 | A3-T13 | the door is asked before EVERY call, and its "no" holds | `admit` answers `refused`, `not-asked`, `full`, `damaged` → 0 calls to that host; `admit` answers `read` for `a` and, after `a`'s call, `refused` for `b` → 1 call; a `refused` drops `b`'s reading; each of the four kinds is kept in that host's `HostMemory.admission`, and a later `read` clears it (G2, C-4) | ask `admit` once per round → `a "no" given during a round did not stop the next call` |
-| A3-T14 | the mode for each host (usage once for each account) | `a` and `b` of account X: `a` → `claude-usage`, its usage read → `b` → `no-claude-usage`; `a`'s usage `failed timeout` → `b` → `claude-usage`; a host never read → `claude-usage`; three hosts of one account → ONE `claude-usage`. **Two hosts whose account is not known (`email` `''`) and whose `org` is equal → two keys, BOTH `claude-usage`, and the second host's usage is read (G2, C-1).** A known account with `org` `null` and the same email with an `org` → two keys | send `claude-usage` to every host → `one account's usage was read twice in a round`; key an unknown account by its `org` → `two unknown accounts were merged, and the second host's usage was never read` |
+| A3-T14 | the mode for each host (usage once for each account) | `a` and `b` of account X, both remembered: `a` → `claude-usage`, its usage read → `b` → `no-claude-usage`; `a`'s usage `failed timeout` → `b` → `claude-usage`; **a host never read, or whose last read failed → `no-claude-usage` first (gate finding, 2026-11-19; A3-T31 has the round)**; three remembered hosts of one account → ONE `claude-usage`. **Two hosts whose account is not known (`email` `''`) and whose `org` is equal → two keys; each is called `no-claude-usage` first and each, its key not in `roundUsage`, gets the one extra `claude-usage`, so the second host's usage is read (G2, C-1).** A known account with `org` `null` and the same email with an `org` → two keys | send `claude-usage` to every host, or to a host never read → `one account's usage was read twice in a round`; key an unknown account by its `org` → `two unknown accounts were merged, and the second host's usage was never read` |
 | A3-T15 | the account that changed gets ONE more call (finding 3) | `b` last seen with X; X read on `a`; `b` called `no-claude-usage` answers Y → `b` called once more with `claude-usage` in the SAME round, before `c`; the extra call answers Z → no third; Y's usage already read on another host this round → no extra call; `b` blocked → no extra call | omit the extra call → `a new account's usage was a round late`; loop → `a host was called three times in a round` |
 | A3-T16 | a usage read that went wrong is not repeated blindly | a reply `failed model-call` at version V → `b`'s next rounds are `no-claude-usage`; a reading at version W → `claude-usage` again once; `failed format` the same; `failed timeout` does not block; a new `Memory` (a reload) is unblocked | ignore `model-call` → `a model call was made six times an hour` |
-| A3-T17 | the usage policy is one constant | `every-round` → `claude-usage` in each of 6 rounds 10 min apart; `hourly` → at most once in those 6 rounds for one account (fake clock); `on-press` → never on `timer` or `open`, once on `refresh`; **`off` → `no-claude-usage` for every host and every trigger, `refresh` among them, and `needsSecondCall` is false for a host whose account changed (S2 X8, X14)**; `USAGE_POLICY` is `every-round` | read the policy from a setting → red (no such setting); let finding 3's extra call run with `off` → `a usage read was made while the usage read is off` |
-| A3-T18 | the calls of a round are bounded | five hosts, one of which changed account → at most 6 calls, at most 2 to one host; a companion counts the calls of A3-T15's round exactly | — |
+| A3-T17 | the usage policy is one constant | `every-round` → usage read once in each of 6 rounds 10 min apart (the first round by the extra call of a host that was never read, the later ones as the first call); `hourly` → at most once in those 6 rounds for one account (fake clock); `on-press` → never on `timer` or `open`, once on `refresh`; **`off` → `no-claude-usage` for every host and every trigger, `refresh` among them, and `needsSecondCall` is false for a host whose account changed (S2 X8, X14)**; `USAGE_POLICY` is `every-round` | read the policy from a setting → red (no such setting); let finding 3's extra call run with `off` → `a usage read was made while the usage read is off` |
+| A3-T18 | the calls of a round are bounded | five remembered hosts, one of which changed account → at most 6 calls, at most 2 to one host; **five hosts never read, five accounts → exactly 10 calls, 2 to each, 5 usage reads**; a companion counts the calls of A3-T15's round exactly | a third call to one host → `a host was called three times in a round` |
 | A3-T19 | a closed host is dropped, and a result in flight too | `b`'s last terminal closes before the round → no call, its memory dropped; it closes while its call runs → the result is not stored | store a late result → `a closed terminal's host kept its reading` |
 | A3-T20 | the first round and the gap (fake clock) | an eligible host at activation → `arm-first`, a round at +30 s; none → no timer, and a reload with none starts nothing; the first `Creds:` terminal opens at T → a round at T+30 s; a round that ends at E → the next at E+600 s, also when it took 150 s; an open while armed → `keep` | count the gap from the start → `the next round began before 10 minutes after the last ended` |
 | A3-T21 | the timer goes with the last terminal | the last eligible terminal closes → `clear`; only refused hosts left → `clear`; a terminal opens → `arm-first` again | leave the timer idle → `a timer ran with no Creds terminal` |
@@ -628,22 +653,24 @@ X10, X14–X16; S2 X2, X3, X8, X9, X12, X14) **and gate G2's § 4.**
 | A3-T26 | the parser reads the mode that was sent, and the round's clock | a fake `parse` of the seam's type `(run, mode)` records both: every call's mode equals the one passed to `call` for it, the extra call's included. A scan of `remoteAccountsHost.ts` with its companion: `readAccounts(` is called once, with three arguments, inside the `parse` seam (S2 X2; G2, C-7) | parse with `claude-usage` always → `the reply was read against another mode` |
 | A3-T27 | the test door is built only in test mode, and in test mode no round arms itself and no call reaches ssh (`remoteExportGuard.test.ts`, extended; `remoteAccountsRound.test.ts`) | ONE place builds `terminalAccounts: …TestDoorOf(`, right after `extensionMode === vscode.ExtensionMode.Test ? {`, in a spread of its own; the `CoaiExports` field is optional; `bindTerminalAccounts(` appears once, and its third argument is `context.extensionMode === vscode.ExtensionMode.Test` and nothing else. **Both locks (G2, § 4):** `timerFor(decision, true)` is `none` for every decision of `armFor`, and `timerFor('arm-first', false)` is not; `callFor(true, real, undefined)` answers `refused` with the fixed sentence and `real` was NOT called; `callFor(true, real, fake)` calls `fake`; `callFor(false, real, undefined)` is `real`. A scan of `remoteAccountsHost.ts` with its companion: the one `setTimeout(` of the round is reached only through `timerFor(`, and `runAccounts(` only through `callFor(` | build it unconditionally → red; `timerFor` ignores `test` → `a round armed itself in a test run`; `callFor` ignores `test` → `an accounts call reached ssh in a test run` |
 | A3-T28 | one rule takes control and format characters out (`remoteLogScan.test.ts`, extended; S2 X12) | a scan of `src/*.ts`, tests left out: the character class `[\p{Cc}\p{Cf}]` stands in ONE file, `remoteAccountsReply.ts`; `remoteSsh.ts` and `remoteRead.ts` each import `withoutControls` from `./remoteAccountsReply`, and that file imports neither of them. Companion: the scan finds the class in a sample string. The tests of `remoteSsh.test.ts` and `remoteRead.test.ts` that hold a bidi mark, a zero-width space and a bell are green with no edit | keep the private copy in `remoteSsh.ts` → `the plain rule stands in two files` |
+| A3-T29 | a Stop while a call is held open publishes nothing, and memory stays cleared | hosts `a`, `b`; the fake `call` for `a` is a promise held open by the test; while it is open the test does what `stop()` does (bumps the fake generation, clears the host's fake `Memory`, `stopped()` now true); the call then resolves with a good reply → `parse` is not asked for a reading to keep, no reading of `a` is stored, `landed` was not called for `a`, `b` was NOT called, `RoundResult.abandoned` is true, the memory the host holds afterwards is still empty (the host does not store an abandoned round's memory), `seams.dropped('a')` was called ONCE; a companion: the Stop comes BEFORE the call is made → 0 calls, as A3-T23. **RED today:** `runRound` held its earlier immutable memory and checked only `seams.live()` after the call, so the reading of `a` is stored, `landed` fires and `b` is called after the Stop | drop check (a), the generation → `a reading came back after Stop`; drop check (b), `stopped()` read again, with the generation unchanged (a Stop by the state row of another window) → `a stopped round published a reading`; let the host store `result.memory` of an abandoned round → `a stopped round's memory came back`; log on every check → `one drop was logged twice` |
+| A3-T30 | a refusal while a call is held open publishes nothing | the same fake held call for `a`; during it the test (1) bumps the generation and `admit('a')` now answers `refused` (a "no" from this window or from another) → the result is dropped: no reading, no `failure`, `a`'s older reading dropped, `HostMemory.admission` is `refused`, no extra call, `dropped('a')` ONCE; (2) **a Forget** (generation bumped, `admit` would answer `not-asked` or write a row) → dropped, and `admit` was NOT called again for `a` after the call (check (a) comes first: no automatic row is written where a person took one away); (3) the generation unchanged and `admit('a')` answers `refused` at the check (a refusal not yet signalled) → dropped, the same; (4) `admit('a')` answers `read` and nothing was bumped → published as today (the companion). **RED today:** the round calls `admit` before the call only, so after the refusal the reading is stored and shown | skip check (c) → `a refused host's reading was published`; run check (c) before check (a) → `a forgotten host was admitted again by the check`; keep the reading on a refusal → `a refused host kept its reading`; call `consentOf` to re-check → A1-T2's scan is red |
+| A3-T31 | the first round reads one account's usage once (gate finding, 2026-11-19) | two hosts `a`, `b`, both never read, both answering the SAME account X, round 0 with an empty `Memory`: calls in order `a no-claude-usage`, `a claude-usage` (X is not in `roundUsage`: the one extra call), `b no-claude-usage` (X now in `roundUsage`: no extra call) → THREE calls in all, ONE `claude-usage`, `a` ≤ 2 and `b` = 1; round 1 (both remembered, X read on `a` again) → `a claude-usage`, `b no-claude-usage`: two calls. Companion: the same two hosts with two different accounts → four calls, two usage reads; `a` blocked or the policy `off` → no extra call (A3-T17); the usage of X `failed timeout` on `a` → `b` is called `no-claude-usage` and then `claude-usage`, as A3-T14. **RED today:** `b` has no remembered account, so `modeFor` sends it `claude-usage`, as it does `a`: two calls in all, and X's usage is read twice | send `claude-usage` first to a host never read → `one account's usage was read twice in a round`; no `roundUsage` check in `needsSecondCall` → `b was called a second time for an account already read`; give no extra call to a host never read → `a new account's usage was a round late` |
 
 - **Host scenario A3-H1** (NEW `src/test/host/terminalAccountsScenario.ts`, registered in `scenarios.ts:234`): with the call
   replaced through the test door by a fake that answers a fixed reply and logs start and end, terminals `Creds: hA / s1`,
-  `Creds: hA / s2` and `Creds: hB / s1` opened → `runRoundNow('timer')` → the fake was called ONCE for `hA` and ONCE for
-  `hB`, one after the other, `hA` first; the store holds an automatic row for each (the setting's default); all three
+  `Creds: hA / s2` and `Creds: hB / s1` opened → `runRoundNow('timer')` → the fake was called TWICE for `hA` (`no-claude-usage`, then the one extra `claude-usage`: its account was not yet read in the round) and ONCE for `hB` (`no-claude-usage`: the same account's usage is already read), three calls, one after the other, `hA`'s two first; the store holds an automatic row for each (the setting's default); all three
   terminals closed → `armed()` false, and `runRoundNow('timer')` calls nothing. The scenario never waits for a timer:
   in test mode there is none, and `armed()` says what `armFor` answered. In a `finally`: the terminals disposed, the
   store put back with the road's test door — `restore(before)`, where `before = stored()` was taken before the
   scenario started (S1 X10) — and the call put back with `replaceCall(undefined)`, which in test mode is the stub
   again. CI only (§ 8).
 - **Docs.** S5 writes them (the runner, the round, the timer, the log gate).
-- **Done when.** A3-T1…T28 green, each break-it seen red; the existing `remoteSsh.test.ts`, `remoteLogScan.test.ts` and
+- **Done when.** A3-T1…T31 green, each break-it seen red, A3-T29 to T31 also seen RED today; the existing `remoteSsh.test.ts`, `remoteLogScan.test.ts` and
   `remoteRead.test.ts` green with no edit beyond S1's; `sonarExclusions.test.ts` green with `remoteAccountsHost.ts` listed;
   `npm run compile` exit 0; the whole suite and lint green; A3-H1 green in CI's real-editor job on the head commit, read from
   that job.
-- **Size.** About 1000 lines (≈ 120 runner, ≈ 300 round, ≈ 150 host, ≈ 430 tests).
+- **Size.** About 1100 lines (≈ 120 runner, ≈ 340 round, ≈ 170 host, ≈ 470 tests).
 
 ### E1.S4 — The list and the icon
 
@@ -924,7 +951,7 @@ from the two specs and this document). No product code.
 | The Claude usage lines | S2 | A2-T18 |
 | The Codex record | S2 | A2-T19 |
 | The words and the rows | S4 | A4-T1–T12 |
-| The round | S3 | A3-T9–T22, T26; A3-H1 |
+| The round | S3 | A3-T9–T22, T26, T29–T31; A3-H1 |
 | The consent store's commit and merge | S1 | A1-T1–T9, T16, T17 |
 | The automatic "yes", the cap, the stop button and the notices | S1, S3, S4 | A1-T7, T10, T13, T15; A3-T23, T25; A4-T13 |
 | The setting, at both values, user layer only | S1 | A1-T10, T11; A1-H2 |
@@ -1040,9 +1067,10 @@ entry 1.1; K3 and K6 are fitted to the parent's text, and are not changes.** The
 - [ ] The accounts script is fixed, its hash is in the S2 spec and in a test, and it writes and installs nothing (A2-T2,
       T13). No secret is in an argument, the environment, the reply or a log; the person's activity is not in the reply; of a
       version command only the version is.
-- [ ] One ssh call for each host in a round, two only in finding 3's case; the pinned options untouched; usage once for each
-      account; 30 s, then 600 000 ms from the end of a round; the timer asks nobody and stops with the last terminal and
-      with the stop button (A3-T1…T28). A state row that cannot be read is a stopped round.
+- [ ] One ssh call for each host in a round, two only in finding 3's case (an account that changed, or a host whose account is
+      not yet known: A3-T31); the pinned options untouched; usage once for each
+      account, in the first round too; 30 s, then 600 000 ms from the end of a round; the timer asks nobody and stops with the last terminal and
+      with the stop button (A3-T1…T31). A result in flight never outlives a Stop, a refusal or a Forget (A3-T29, T30). A state row that cannot be read is a stopped round.
 - [ ] The list: grouped by account; "left" in the mod's words; a missing value a dash and never 0; usage that was not read
       says why; every host its own sentence; the fixed `jq` command from a closed table only (A4-T1…T19).
 - [ ] Nothing of a reading is persisted (A3-T24). Road (b) is not in the code.

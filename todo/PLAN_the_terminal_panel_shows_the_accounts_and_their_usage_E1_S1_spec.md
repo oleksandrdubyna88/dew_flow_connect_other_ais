@@ -732,10 +732,15 @@ first row. A workspace cannot write `globalState`. What a workspace can still do
    old row and undone. It fails closed, with the notice.
 10. **With the setting on, the first contact comes before any telling.** That is F1 and the owner's decision; this
     story does not change it.
+11. **A stale whole-list write can erase a refusal before the repair** (the plan gate's rejected finding, 2026-11-19).
+    Another window that holds an older copy of the list and writes the whole list back can, within one instant, erase a
+    "no" that was just given; the window that gave it writes it again only at its next check (residual 1). The worst case
+    is ONE read-only `ssh` read of that host in that gap. The cure is a store in a locked file, which is the parent's
+    candidate C4 and is decided by E2's R12; E1 does not build it.
 
 **`SECURITY.md`** is S5's (stories document, S5 item 5). From this spec it takes: the merge and the cap; that a
 window re-writes a refusal it gave, and when; that *Forget* from another window does not hold; that a damaged list
-contacts nobody; the setting, with "we declare" for the scope and "we read" for the user layer; residuals 1–9.
+contacts nobody; the setting, with "we declare" for the scope and "we read" for the user layer; residuals 1–11.
 
 ## S1.11 — Scenarios
 
