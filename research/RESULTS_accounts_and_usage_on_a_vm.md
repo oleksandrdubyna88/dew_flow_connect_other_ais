@@ -400,3 +400,22 @@ last record. The list says "from a Codex session <age> ago" from the record's `t
 - Whether a read starts a short-lived process, and whose the `node` process was.
 - Whether Claude Code retires old files in `~/.claude/backups/`.
 - Everything else of § 9 that carries no "measured later" note.
+
+## 12. Decisions that changed after these measurements (the owner, 2026-11-19)
+
+Nothing in this section is a measurement. The "Decided by it" lines above say what the plan decided on the day of
+each run. The owner then answered the plan's questions, and three of those lines no longer say what the plan does.
+They are kept as written; this section says what replaced them.
+
+- **§ 4 and § 11, W1 — a write of `~/.claude.json` by a read.** The owner accepted it, also on every read. The check
+  that can say who wrote the file (a Linux user with no live Claude Code session) is still run, as a record. It stops
+  nothing.
+- **§ 7 — Antigravity.** § 7 decided to show agy "as installed" and not to start it. The owner wants the version, so
+  the script starts `agy --version` in every round. § 2 measured that command once: it printed 1.5.12 in a shell that
+  is not a login shell. **What that start writes, fetches or updates was not measured.** § 9 says agy updated itself
+  "on a start" on another machine; the source ([RESULTS_agy_read_file.md](RESULTS_agy_read_file.md)) says only that
+  it updated itself, not what set it off.
+- **§ 2 — a host without `jq`.** § 2 decided that the script says when `jq` is missing. The owner wants it installed:
+  from the host's own package manager, where the ssh user is root or has `sudo` without a password; where the user
+  has no rights, the list shows the command to run. **Nothing of that was measured here**: this host has `jq`, and no
+  package manager was run in any of the five calls.
