@@ -229,7 +229,7 @@ Build order and its gates: § 6.
 
 ### E1.S1 — The shared store: a "no" that always wins, the automatic "yes", the setting
 
-`model: fable` — **spec: Fable, `todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S1_spec.md`**
+`model: fable` — **spec: Fable, [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S1_spec.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S1_spec.md)**
 (security judgement, area (c), the security row of `subagent-models.md`, outside the quota). Coder: sonnet · review:
 opus (of the spec first, gate G2; then of the code). Depends on nothing in this epic; S3 and S4 depend on it.
 
@@ -302,7 +302,7 @@ finding F1 says the consent no longer comes first; what is left of a gate is the
 
 ### E1.S2 — The accounts script, its reply and its parser (CORNERSTONE)
 
-`model: fable` — **spec: Fable, `todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S2_spec.md`**
+`model: fable` — **spec: Fable, [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S2_spec.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S2_spec.md)**
 — the scenarios, the brief, the exact script text with its sha256, and the security judgement on that text. The
 cornerstone of the quota (`Cornerstones: 1 of 1 — E1.S2`, unchanged). Coder: sonnet · review: opus (of the spec first,
 gate G2; then of the code) · areas (a), (b) and (d). Depends on nothing in this epic; S3 and S4 depend on it.
