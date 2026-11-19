@@ -1,14 +1,18 @@
 # PLAN — E1.S2 spec: the accounts script, its reply and its parser (CORNERSTONE)
 
-> Status: **plan only, nothing implemented yet, 2026-11-19.** Written by Fable before any code of the story; the Opus
-> review of this text (gate G2) is owed. Cornerstone spec of story E1.S2 of
+> Status: **plan only, nothing implemented yet, 2026-11-19.** Written by Fable before any code of the story; reviewed
+> by Opus at gate G2 on 2026-11-19
+> ([PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_G2.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_G2.md)).
+> Its findings on this text (S-1, S-4, S-6, S-7, S-8, C-9, C-11) are applied here: **the script block of § A2.3 was
+> changed after its measurements and has not been run since** (§ A2.0 says what was run and what was not). Cornerstone
+> spec of story E1.S2 of
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md)
 > (parent [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md),
 > § 2, § 4, § 5, § *Security*, § *Growth surfaces*; the gate's findings 3, 4 and 5 are folded in there). It holds the
 > exact script text, the reply's grammar, the parser's rules, the scenarios and the security judgement on that text
 > (§ A2.9), which must stand before any S2 code. Its own file, because the stories document goes whole to a review
-> gate and must stay short. It keeps no change ledger: a change is an entry in the parent (epoch 1, 0 changes; the
-> next accepted change is 1.1 and the one after it is a full stop). It is promoted with the E1 document.
+> gate and must stay short. It keeps no change ledger: a change is an entry in the parent (epoch 1, one change: 1.1,
+> which is K5 of the S1 spec; the next accepted change is a full stop). It is promoted with the E1 document.
 >
 > Scope: `src_vs_code` only, and one step of `.github/workflows/ci.yml`. NEW pure `src/remoteFraming.ts`,
 > `src/remoteAccountsScript.ts`, `src/remoteAccountsUsage.ts`, `src/remoteAccountsReply.ts`; `src/remoteFrame.ts` (its
@@ -18,7 +22,11 @@
 
 ## Changes to the parent plan — none
 
-The parent allows one change in epoch 1 before a full stop, and the E1.S1 spec may need it. This spec needs **zero**:
+Epoch 1 of the parent has its one change (1.1: K5 of the E1.S1 spec, recorded at gate G2 on 2026-11-19); a second is
+a full stop. This spec needs **zero**, and gate G2 judged the same (its § 1.2: R1–R5 and X1–X11 are inside the
+parent's text). What gate G2 changed in this spec (the brace group of the last line, the readers' limits, the word
+`no-stat`, two tests) is a fix that satisfies the parent's text as written — "a cut script does nothing", "each
+command has its own limit … under 30 s", "a missing tool is said":
 
 | Kind of change (parent § 5, last paragraph; stories document § 6, G1) | In this spec |
 |---|---|
@@ -34,7 +42,7 @@ caller's call and not this spec's.** Each has a way back that costs nothing in t
 
 | # | What | Why it is inside the text | The way back |
 |---|---|---|---|
-| R1 | The script runs `stat -c %Y` once, as an OPTIONAL tool, for the time of the newest Codex session file | The parent's reply sends "the file's time and the word `file`" when a record's own time does not parse (§ 4, *The time rule*), and its measured host has `stat` in `/usr/bin` (§ *What step 0 measured*). The parent's tool sentence does not list it. It is read-only metadata of a file the plan already reads; without `stat` the fact is `-` | Take the `stat` line and its `case` out and set `ftime=-`: the time is then the record's own or not known |
+| R1 | The script runs `stat -c %Y` once, as an OPTIONAL tool, for the time of the newest Codex session file | The parent's reply sends "the file's time and the word `file`" when a record's own time does not parse (§ 4, *The time rule*), and its measured host has `stat` in `/usr/bin` (§ *What step 0 measured*). The parent's tool sentence does not list it. It is read-only metadata of a file the plan already reads; a host without `stat` says so, with the closed word `no-stat` in place of the file's time (gate G2, S-7) | Take the `stat` lines and their `case` out and set `ftime=-`: the time is then the record's own or not known |
 | R2 | The reply has more words than the parent's sketch: `COAI-JQ`, `unreadable auth`, `unreadable timeout`, `failed error`, `failed no-sessions` | The parent says "the spec fixes the exact words", and the stories document asks for "every word of the reply" | — |
 | R3 | Each vendor command runs under `timeout -k 1 <n>`: a KILL one second after the TERM | The parent's limits are the TERM (2, 3, 8, 4 s). Without `-k` a program that ignores TERM is never ended. The ceiling of 30 s holds (§ A2.3, the time table) | Drop `-k 1` |
 | R4 | Codex is `found` when `codex` is on the `PATH` OR the folder `~/.codex` exists | The parent reads session FILES and never starts `codex`. A `codex` installed where a shell that is not a login shell does not look would else read as "absent" while its files are there | Test the `PATH` only |
@@ -43,7 +51,9 @@ caller's call and not this spec's.** Each has a way back that costs nothing in t
 ## Changes to § 4 of the stories document (for gate G2)
 
 The caller puts these into § 4 of the stories document and into the briefs of S3 and S4 in ONE commit, before S3 or S4
-is coded. The rows are X1…X11 (the stories document uses C for contracts, K for conflicts and G for gates).
+is coded. The rows are X1…X15 (the stories document uses C for contracts, K for conflicts and G for gates). X12…X15
+were added at gate G2, from its findings C-11, S-5, S-4, S-3 and S-7. **All fifteen are in the stories document since
+2026-11-19** (its § 4 and its S3 and S4 briefs).
 
 | # | Contract | The stories document says | This spec says | Why | Who must follow |
 |---|---|---|---|---|---|
@@ -58,6 +68,10 @@ is coded. The rows are X1…X11 (the stories document uses C for contracts, K fo
 | X9 | C3 (S3 owns), K17 | `ACCOUNTS_LIMITS` = 30 s, 64 KiB | unchanged; A3-T4 gains one assertion: `ACCOUNTS_LIMITS.maxStdoutBytes >= ACCOUNTS_REPLY_BYTES_MAX` (33 858) | The runner's cap is over the whole stdout, a banner included; the reply's own caps are this spec's. The two must not cross in silence | S3 |
 | X10 | Scope | S2: new modules and `remoteFrame.ts` | adds `.github/workflows/ci.yml` (one step, K12) and `src/notifications.ts` (one exported name) | § A2.10; § A2.7, the credential net | — (the stories document gives neither file to S1) |
 | X11 | C2, exports | — | `ACCOUNTS_PROTOCOL`, `ACCOUNTS_SECONDS`, `ACCOUNTS_LINES_MAX`, `ACCOUNTS_LINE_BYTES_MAX`, `ACCOUNTS_REPLY_BYTES_MAX`, `MANAGER_WORDS`, `ACCOUNTS_UNREADABLE_SAID` | S4's sentence *"Claude Code did not answer within 8 s"* takes its number from `ACCOUNTS_SECONDS.usage`, not from a literal | S4 |
+| X12 | C2 and C6, one rule in one home (gate G2: C-5, C-11 and N1) | two private copies of "control and format characters out" (`remoteRead.ts:67`, `remoteSsh.ts:216`), and two homes proposed for a third | `withoutControls(text)` is exported from `remoteAccountsReply.ts`. It is the first step of `plainValue` and the ONE place of `src/` that holds the character class of that rule. S2 exports it and does not touch the two older copies | One rule, one home; S2's files stay disjoint from S1's and S3's | **S3** folds both copies in one commit: the private `withoutControls` of `remoteSsh.ts` goes and the exported one is imported; `plainOf` of `remoteRead.ts` calls it (A3-T28). `remoteAccountsReply.ts` imports neither of those two files |
+| X13 | C6 (S4 owns), the runner's sentence (gate G2, S-5) | VM text reaches a row through `forList` | The runner's failure sentence is VM-influenced text too: it can end with the last line of ssh's stderr, which has lost its control characters and kept `$(`. S4 passes that sentence through `forList` (so `plainValue`) | A remote login shell's rc file can print on stderr | S4; A4-T12's scan covers the failure sentence |
+| X14 | C3 and C4 (S3 owns), the ceiling and the switch (gate G2, S-4 and S-3) | `ACCOUNTS_LIMITS` = 30 s; `UsagePolicy` with `off` (X8) | `ACCOUNTS_CEILING_SECONDS` (30) and `ACCOUNTS_READ_SECONDS` are exported by `remoteAccountsScript.ts`; A3-T4 asserts `ACCOUNTS_LIMITS.ms === ACCOUNTS_CEILING_SECONDS * 1000`. With `USAGE_POLICY` `off`, `needsSecondCall` is false as well (A3-T17) | The script's own limits are summed against the runner's ceiling in ONE test (A2-T26), so the two numbers cannot part; a switch that is off must not be gone round by finding 3's extra call | S3 |
+| X15 | C2, Codex (gate G2, S-7) | `asOf: { ms; from } \| null` (X4) | the `read` arm gains `statMissing: boolean`: the reply's `:as-of` ended with the word `no-stat` | A missing tool is said, never read as a time that is not known | S4: with `asOf === null` and `statMissing`, the age is `—` and the row says that this host has no `stat` |
 
 ## A2.0 — What was read and what was measured
 
@@ -110,6 +124,17 @@ observed** (§ A2.14, U1); the code story's first real run on CI is where it is 
 | M-J1 | The usage program in `gojq`: the measured JSON; exit 124; exit 137; exit 1; `is_error` true; `num_turns` 2; a stream with no result object; a `result` that is no string; no exit record | `=read 0 4` and every line with a `-` before it; `=timeout`; `=timeout`; `=error`; `=error`; `=read 2 1` and NO line; `=error`; `=error`; `=error` |
 | M-J2 | The account program in `gojq`: the measured keys with a marker in `orgId`; `loggedIn` false with exit 1; exit 124 and no object; no object; a number as `email`, an `orgName` with a line break and a false marker line in it, a `subscriptionType` of 200 characters | `found` with three keys and no `orgId`; `signed-out`; `unreadable timeout`; `unreadable auth`; no `:email`, ONE `:org` line, `:plan` cut at 120 |
 | M-J3 | The Codex program in `gojq`: the measured record after an older one, between a cut line and two transcript lines with a marker; two windows with an older record later; equal times; no record; wrong types | `:plan prolite`, the marker line, `:window 14 10080 1795518850`, `:as-of <the newest time> <file time>`; `33.46` (two decimals) and the newer record; the later line; `COAI-USAGE codex failed none`; `:window - - -` and `:as-of -` |
+| M-G1 | **By the judge of gate G2**, with `dash -s` in a scratch folder (the verdict, § 3, S-1): `printf 'f() { echo ran; }\n</dev/null 2>./nu' \| dash -s` | It created `./nu`. A line that holds only redirections is a command, and a cut inside the path of `2>` opens the cut path for writing |
+| M-G2 | **When gate G2 was applied, 2026-11-19, with a TOY function** (`f() { echo ran; }`, never the accounts script), `dash -s` and `bash --posix -s`, in an owned scratch folder that held `dev/null`. (a) The last line as ONE brace group, `{ <S/dev/null 2>S/dev/null f "$@"; printf 'END\n'; }`, cut at every one of its 277 byte positions. (b) The last line as it was (the call alone, redirections first), cut at every byte inside the scratch part of the `2>` path | (a) Both shells: `f` ran in 1 of 277 cuts — the whole line without its line end — and only that one printed `END`; no entry was created. A cut group ends the shell with code 2 and a syntax error on ITS stderr. (b) Both shells created `d`, `de`, `dev/n`, `dev/nu` and `dev/nul` |
+
+**What was NOT run again after gate G2.** The block of § A2.3 changed on 2026-11-19, and M-A1…M-A14 were run on the
+text BEFORE that change. What changed: (1) the call and the end line became one brace group on the last line (S-1);
+(2) the readers' limits were lowered, and `ls`, `stat` and the Codex `tail` got a limit of their own (S-4); (3) a host
+without `stat` says `no-stat`, and an empty list of session files is `failed error` (S-7). The text as it stands was
+PARSED by `dash -n` and by `bash --posix -n` (both exit 0) and was not executed. So M-A8's result for the last two
+lines no longer describes this text — M-G2 (a) is what a brace group does, seen with a toy function — and M-A4's
+times were taken with the old readers' limits, which those runs never reached. A2-T1, A2-T8, A2-T12 and A2-T19 are
+where the text of § A2.3 is first run as it stands.
 
 ## A2.1 — Decisions
 
@@ -120,18 +145,28 @@ observed** (§ A2.14, U1); the code story's first real run on CI is where it is 
 2. **Every data line starts with `:`; every other line of the frame starts with `COAI-`.** So no byte of an email, an
    organization's name or a usage line can end a section or look like a marker. The sentinels are NOT the session
    reader's (`COAI-ACCOUNTS 1`, `COAI-ACCOUNTS-END`): the answer of one script can never be read by the other parser.
-3. **The whole script is one function, `coai_accounts`, with its helpers INSIDE it.** Nothing runs before the last two
-   lines are read. The end line is printed by the LAST line, outside the function: it proves that the whole text
+3. **The whole script is one function, `coai_accounts`, with its helpers INSIDE it.** Nothing runs before the last
+   line is read whole. The end line is printed by the LAST line, outside the function: it proves that the whole text
    arrived, that the function returned, and that no command ate the rest of the script.
-4. **The call is written `</dev/null 2>/dev/null coai_accounts "$@"`: the redirections first.** In `sh` they may stand
-   before the command. Written after it (as `REMOTE_SCRIPT` has them, F3), a text cut between `"$@"` and the first `<`
-   runs the function with the script's own pipe as stdin and with stderr open. Written first, no cut can (M-A8, M-A9).
-   The session script reads files; this one starts a vendor program, so here the order matters.
+4. **The last line is ONE brace group: `{ </dev/null 2>/dev/null coai_accounts "$@"; printf 'COAI-ACCOUNTS-END\n'; }`
+   — the call with its redirections first, then the end line** (gate G2, S-1). Two things are held by it.
+   *The redirections first:* in `sh` they may stand before the command. Written after it (as `REMOTE_SCRIPT` has
+   them, F3), a text cut between `"$@"` and the first `<` runs the function with the script's own pipe as stdin and
+   with stderr open (M-A9). *The brace group:* the shell parses a compound command whole before it runs any of it. As
+   two lines, a cut inside `2>/dev/null` left a line of redirections alone, and the shell opened the cut path for
+   writing: as root that creates `/d`, `/dev/nu` and the like on the VM (M-G1; M-A8 could not see it — it ran as a user
+   who cannot write `/` or `/dev`, and listed `HOME` only). In a brace group a cut before the `}` is a syntax error:
+   nothing runs and nothing is created (M-G2). The session script reads files; this one starts a vendor program and
+   may run as root, so here the form matters. The session script's own call line is a todo of its own (§ A2.14, N2).
 5. **Every vendor command is written out in full in the text.** No helper that takes a command as words: the four
    command lines are what a reviewer reads and what A2-T6 holds word for word.
 6. **Every vendor command's stdout goes into a pipe whose reader has a limit of its own.** `timeout` ends the command
    and, by its documentation, the command's process group. A child that left the group can still hold the pipe open;
-   the reader's own limit (2 s later) then ends the read, so the script never waits for a program it did not start.
+   the reader's own limit then ends the read, so the script never waits for a program it did not start. The reader of
+   the account command and of the usage command has one second more than its command, so the exit record of a command
+   that ended at its TERM is still read. The reader of a version command has the command's own limit: it reads one
+   line and nothing after it. **The readers' limits, summed with ssh's 5 s to connect, stay under the runner's 30 s**
+   (§ A2.3, the time table; gate G2, S-4): else one slow host would lose its whole reply to the runner's kill.
 7. **The exit code of a vendor command travels in the JSON stream.** `sh` has no `pipefail`. After the command, the
    script prints one line, `{"coai_exit":<code>}`, into the same pipe, and `jq` reads it as a second value. So a killed
    command (124, or 137 after the KILL) is `timeout`, and the usage JSON is never held in a shell variable.
@@ -156,7 +191,8 @@ observed** (§ A2.14, U1); the code story's first real run on CI is where it is 
     has the procedure. The session script has none (its spec's decision 14); this script starts a vendor program.
 15. **The shell language is POSIX; the tools are those of a Linux VM.** `timeout -k`, `tail -c`, `ls -tr`, `grep -E`
     with `{n,m}` and `stat -c %Y` are GNU, uutils or busybox forms. On a system without one of them the answer is
-    `COAI-BAD tool`, `unreadable`, `failed error` or a time of `-` — never another account's numbers (§ A2.14).
+    `COAI-BAD tool`, `unreadable`, `failed error`, a time of `-` or the word `no-stat` — never another account's
+    numbers (§ A2.14).
 
 ## A2.2 — The operand: one of two fixed words (`src/remoteAccountsScript.ts`)
 
@@ -180,16 +216,20 @@ export function isAccountsMode(word: string): word is AccountsMode;   // members
 
 ## A2.3 — `ACCOUNTS_SCRIPT`, exact (`src/remoteAccountsScript.ts`)
 
-`export const ACCOUNTS_SCRIPT: string` is the text below, byte for byte: **218 lines**, 8100 bytes, each line ends
-with LF, ASCII only. This text was run for M-A1…M-A14. The coder may write the constant in any form (the text holds
-`${` six times, 57 backslashes and no backtick, so a template literal needs every backslash twice and every `${`
-escaped); the hash test checks the result.
+`export const ACCOUNTS_SCRIPT: string` is the text below, byte for byte: **222 lines**, 8311 bytes, each line ends
+with LF, ASCII only. **The text of 218 lines and 8100 bytes that stood here before gate G2 was run for M-A1…M-A14;
+this text was parsed and not run** (§ A2.0). The coder may write the constant in any form (the text holds `${` six
+times, 58 backslashes and no backtick, so a template literal needs every backslash twice and every `${` escaped);
+the hash test checks the result.
 
 Pinned sha256: PENDING — the code story writes the value here and in the test, in one commit (the procedure below).
 
-Provenance, not the pin: when M-A1…M-A14 were run, this block hashed to
-`eeb2e82975f9cc04004eae2d2d7c3a81363c3ab05268453053cd60625a13efe6`. If step 0 of the brief gets another value, the text changed
-after the measurements, and the review says why.
+Provenance, not the pin: when M-A1…M-A14 were run, the block that stood here hashed to
+`eeb2e82975f9cc04004eae2d2d7c3a81363c3ab05268453053cd60625a13efe6`. **The block changed after those measurements, at
+gate G2 on 2026-11-19, so step 0 of the brief gets ANOTHER value, and that is expected.** The reasons are the
+verdict's S-1 (the last line), S-4 (the readers' limits; a limit for `ls`, `stat` and the Codex `tail`) and S-7
+(`no-stat`; an empty list of files). No hash of the changed block is written here: the pin stays PENDING, and the
+code story's step 0 prints the value it then pins.
 
 ```sh
 coai_accounts() {
@@ -277,7 +317,7 @@ coai_accounts() {
       {
         timeout -k 1 3 claude auth status --json
         printf '\n{"coai_exit":%s}\n' "$?"
-      } | timeout -k 1 5 tail -c 65536 | timeout -k 1 5 jq -n -r "$jq_auth"
+      } | timeout -k 1 4 tail -c 65536 | timeout -k 1 4 jq -n -r "$jq_auth"
     )
     case $auth in
       'COAI-VENDOR claude found'|'COAI-VENDOR claude found'"$nl":*) ;;
@@ -285,7 +325,7 @@ coai_accounts() {
       *) printf 'COAI-VENDOR claude unreadable auth\n'; return 0 ;;
     esac
     printf '%s\n' "$auth" || return 0
-    coai_version "$(timeout -k 1 2 claude --version | LC_ALL=C timeout -k 1 4 sed -n -e "$version" -e 1q)"
+    coai_version "$(timeout -k 1 2 claude --version | LC_ALL=C timeout -k 1 2 sed -n -e "$version" -e 1q)"
     if [ "$mode" != claude-usage ]; then
       printf 'COAI-USAGE claude skipped\n'
       return 0
@@ -294,7 +334,7 @@ coai_accounts() {
       {
         TZ=UTC timeout -k 1 8 claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config --setting-sources ""
         printf '\n{"coai_exit":%s}\n' "$?"
-      } | timeout -k 1 10 tail -c 1048576 | timeout -k 1 10 jq -n -r "$jq_usage" |
+      } | timeout -k 1 9 tail -c 1048576 | timeout -k 1 9 jq -n -r "$jq_usage" |
         LC_ALL=C grep -E -e '^=timeout$' -e '^=read [0-9]{1,6} [0-9]{1,6}$' -e "^-Current session: $window" -e "^-Current week \\([A-Za-z0-9][A-Za-z0-9 ._-]{0,39}\\): $window"
     )
     head=${kept%%"$nl"*}
@@ -352,17 +392,22 @@ coai_accounts() {
       printf 'COAI-USAGE codex failed no-sessions\n'
       return 0
     fi
-    three=$(LC_ALL=C ls -tr -- "$@" | tail -n 3)
-    ftime=$(stat -c %Y -- "${three##*"$nl"}")
-    case $ftime in
-      ''|*[!0-9]*) ftime=- ;;
-    esac
+    three=$(LC_ALL=C timeout -k 1 1 ls -tr -- "$@" | tail -n 3)
+    [ -n "$three" ] || { printf 'COAI-USAGE codex failed error\n'; return 0; }
+    if command -v stat >/dev/null; then
+      ftime=$(timeout -k 1 1 stat -c %Y -- "${three##*"$nl"}")
+      case $ftime in
+        ''|*[!0-9]*) ftime=- ;;
+      esac
+    else
+      ftime=no-stat
+    fi
     record=$(
       printf '%s\n' "$three" | while IFS= read -r one; do
         [ -f "$one" ] || continue
-        tail -c 1048576 <"$one"
+        timeout -k 1 1 tail -c 1048576 <"$one"
         printf '\n'
-      done | timeout -k 1 10 jq -n -R -r --arg ft "$ftime" "$jq_codex"
+      done | timeout -k 1 3 jq -n -R -r --arg ft "$ftime" "$jq_codex"
     )
     case $record in
       'COAI-USAGE codex failed none'|'COAI-USAGE codex read'"$nl":*|:plan\ *"$nl"'COAI-USAGE codex read'"$nl":*) printf '%s\n' "$record" ;;
@@ -374,7 +419,7 @@ coai_accounts() {
   coai_agy() {
     command -v agy >/dev/null || { printf 'COAI-VENDOR agy absent\n'; return 0; }
     printf 'COAI-VENDOR agy found\n' || return 0
-    coai_version "$(timeout -k 1 4 agy --version | LC_ALL=C timeout -k 1 6 sed -n -e "$version" -e 1q)"
+    coai_version "$(timeout -k 1 4 agy --version | LC_ALL=C timeout -k 1 4 sed -n -e "$version" -e 1q)"
     coai_sign_in "$HOME/.gemini/antigravity-cli/antigravity-oauth-token"
     printf 'COAI-USAGE agy none\n'
     return 0
@@ -408,8 +453,7 @@ coai_accounts() {
   coai_agy
   return 0
 }
-</dev/null 2>/dev/null coai_accounts "$@"
-printf 'COAI-ACCOUNTS-END\n'
+{ </dev/null 2>/dev/null coai_accounts "$@"; printf 'COAI-ACCOUNTS-END\n'; }
 ```
 
 **The pin — the procedure and the test (A2-T2).**
@@ -420,7 +464,8 @@ printf 'COAI-ACCOUNTS-END\n'
    node -e 'const fs=require("fs"),c=require("crypto");const t=fs.readFileSync(process.argv[1],"utf8");const a=t.indexOf("```sh\n",t.indexOf("\n## A2.3"))+6;const s=t.slice(a,t.indexOf("\n```",a)+1);console.log(c.createHash("sha256").update(s).digest("hex"),s.split("\n").length-1,Buffer.byteLength(s))' todo/PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_S2_spec.md
    ```
 
-   It prints the hash, `218` and `8100`. The hash must be the provenance value above.
+   It prints the hash, `222` and `8311`. The hash is NOT the provenance value above: the block changed at gate G2.
+   The summary gives the value step 0 printed, and that value is the one this procedure pins.
 2. Write the constant. After `npm run compile`, print the hash of the COMPILED constant:
 
    ```bash
@@ -442,9 +487,10 @@ printf 'COAI-ACCOUNTS-END\n'
 
 **The rules the text keeps** (each has a test in § A2.11):
 
-1. **One function, read whole, then called.** Line 1 is `coai_accounts() {`. The second-last line is
-   `</dev/null 2>/dev/null coai_accounts "$@"`. The last line is `printf 'COAI-ACCOUNTS-END\n'`. Every other line is
-   inside the function.
+1. **One function, read whole, then called.** Line 1 is `coai_accounts() {`. The last line is the ONE brace group
+   `{ </dev/null 2>/dev/null coai_accounts "$@"; printf 'COAI-ACCOUNTS-END\n'; }`: the call, then the end line. Every
+   other line is inside the function. A text cut anywhere before the last `}` is a syntax error to the shell, so no
+   cut runs a program, opens a path for writing or prints a line (decision 4).
 2. **No command reads the script.** Every command inside has `/dev/null` as stdin, or a pipe, or `<"$one"` (a Codex
    session file).
 3. **No write and nothing left**: every `>` in the text is `>/dev/null`; no `<<`, no `&` but `&&`, no backtick, no
@@ -456,7 +502,9 @@ printf 'COAI-ACCOUNTS-END\n'
    of a profile is read. `HOME` must start with `/`, else `COAI-BAD home`. With an empty `PATH` no empty part is
    added (an empty part would mean the current folder).
 6. **A tool that is not there is said, never read as "nothing found"**: `timeout tail ls sed grep` are checked first
-   (`COAI-BAD tool`); `jq` by its own marker; `stat` is optional (a time of `-`).
+   (`COAI-BAD tool`); `jq` by its own marker; `stat` is optional, and a host without it says `no-stat` where the
+   file's time would stand — a `stat` that is there and fails says `-`, so the two are told apart (gate G2, S-7). A
+   list of session files that comes back empty (an `ls` that failed or was ended) is `failed error`, not "no record".
 7. **The mode decides one thing**: whether the usage command runs. Nothing else differs between the two replies.
 8. **`jq` is the only reader of a vendor's JSON and of a Codex session file**, and each of its three programs prints
    lines it builds from named fields. No program prints its input, a whole object or a field it does not name.
@@ -470,16 +518,41 @@ the ONE call line), under `timeout -k 1 <n>`: a TERM after `n` seconds, a KILL o
 
 | # | The command, word for word | Limit | Its output goes to | Its reader's limit | Runs |
 |---|---|---|---|---|---|
-| 1 | `claude auth status --json` | 3 s | `tail -c 65536`, then `jq` (the account program) | 5 s each | when `claude` is found and `jq` is there |
-| 2 | `claude --version` | 2 s | `sed`: of the FIRST line, the first run of digits and dots, at most 32 bytes | 4 s | when the account is signed in |
-| 3 | `claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config --setting-sources ""`, with `TZ=UTC` for this one command | 8 s | `tail -c 1048576`, then `jq` (the usage program), then `grep` (the status line and the three forms) | 10 s each | when the account is signed in AND the mode is `claude-usage` |
-| 4 | `agy --version` | 4 s | `sed`, as for command 2 | 6 s | when `agy` is found |
+| 1 | `claude auth status --json` | 3 s | `tail -c 65536`, then `jq` (the account program) | 4 s each, side by side | when `claude` is found and `jq` is there |
+| 2 | `claude --version` | 2 s | `sed`: of the FIRST line, the first run of digits and dots, at most 32 bytes | 2 s | when the account is signed in |
+| 3 | `claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config --setting-sources ""`, with `TZ=UTC` for this one command | 8 s | `tail -c 1048576`, then `jq` (the usage program), then `grep` (the status line and the three forms) | 9 s each, side by side | when the account is signed in AND the mode is `claude-usage` |
+| 4 | `agy --version` | 4 s | `sed`, as for command 2 | 4 s | when `agy` is found |
 | — | no `codex` command, ever | — | — | — | — |
 
-The slowest run that still answers: 3 + 2 + 8 + 4 = 17 s, or 21 s when every program needs its KILL; with ssh's 5 s
-to connect that is under the 30 s ceiling (parent § 2). When a program leaves a child that holds its pipe, the
-readers' limits apply instead (5 + 4 + 10 + 6 = 25 s); the runner's 30 s kill is the last bound, and the host then
-says it did not answer.
+**The time of one call, with the sum shown (gate G2: C-9 and S-4).** The runner kills the call at 30 s, and then the
+whole reply is lost, every vendor of that host. So the script's own limits must end every step before that. Each
+step ends at its reader's limit at the latest, also when a vendor program left a child that holds its pipe:
+
+| Step | The vendor command's limit | The step ends, at the latest, after | `ACCOUNTS_READ_SECONDS` |
+|---|---|---|---|
+| the Claude account | 3 s | 4 s (`tail` and `jq`, side by side) | `account: 4` |
+| the Claude version | 2 s | 2 s (`sed`) | `version: 2` |
+| the Claude usage | 8 s | 9 s (`tail` and `jq`, side by side; `grep` ends with `jq`) | `usage: 9` |
+| the Codex files: the list | — | 1 s (`ls`) | `codexList: 1` |
+| the Codex files: the newest file's time | — | 1 s (`stat`) | `codexTime: 1` |
+| the Codex files: the read | — | 3 s (`jq`; beside it at most three `tail`, 1 s each, one after another) | `codexFile: 1`, `codexRecord: 3` |
+| the agy version | 4 s | 4 s (`sed`) | `agy: 4` |
+| **the sum** | 17 s | **24 s** = 4 + 2 + 9 + 1 + 1 + 3 + 4 | |
+| with ssh's 5 s to connect | 22 s | **29 s**, under the ceiling of 30 s (`ACCOUNTS_CEILING_SECONDS`) | |
+
+- The slowest run that still answers with every number is unchanged: 3 + 2 + 8 + 4 = 17 s for the vendor commands.
+  The Codex read is three reads of local files; its time was not measured (R9 measures a whole call).
+- Before gate G2 the readers' limits were 5 + 4 + 10 + 6 and the Codex `jq` had 10: 35 s, 40 s with the connect, and
+  `ls`, `stat` and the Codex `tail` had no limit at all. That is finding S-4.
+- **What the sum does not hold, said and not hidden.** (1) A vendor program that ignores its TERM is KILLed one
+  second later (`-k 1`). For the account and the usage that second is inside the reader's limit. For each of the two
+  version commands it is one second more than the table (3 s and 5 s). With both of them AND every other step at its
+  limit the call takes 31 s, and the runner's kill is then the bound: that host says it did not answer. (2) After a
+  KILL, the exit record of the account or usage command and the end of its reader fall in the same second: the reply
+  then says `timeout`, or — when the reader was ended first — `unreadable auth` or `failed error`. Each is a failure
+  that is said; none is a reading. (3) What the shell does itself — a glob, a `[ -f … ]` test, the open of `<"$one"`
+  — runs under no `timeout`: a home folder on a network that hangs is ended by the runner's kill and by nothing here.
+- The limits are part of the text, so A2-T26 holds each number of this table to the text and asserts the sum.
 
 **The Codex read.** No program of Codex is started. The script takes the day folders
 `~/.codex/sessions/<4 digits>/<2 digits>/<2 digits>/`, keeps the LAST TWO in name order (the two newest days), and of
@@ -491,13 +564,18 @@ is `event_msg`, whose `payload.type` is `token_count` and whose `payload.rate_li
 takes the one with the greatest `timestamp` text (the later line on a tie, so the newer file wins). Of that ONE
 record it prints `plan_type`, and of `primary` and of `secondary` the three numbers `used_percent` (two decimals at
 most), `window_minutes` and `resets_at`. A day folder, a file or a record that is not there is said (`failed
-no-sessions`, `failed none`), and a `jq` that fails or is killed is `failed error`.
+no-sessions`, `failed none`), and a `jq` that fails or is killed is `failed error`. `ls` and `stat` have a limit of
+one second each, every `tail` of a session file one second, and `jq` three (gate G2, S-4). A `tail` that is ended at
+its limit has sent a part of its megabyte: its last line is then cut, `fromjson?` gives nothing for it, and the record
+that is found is an older one, with its own time (§ A2.14, residual 9).
 
 **The bounds.**
 
 | What | Bound | In the script | The TypeScript constant it must equal (A2-T26 holds each) |
 |---|---|---|---|
 | the account command, the version, the usage, agy | 3 s, 2 s, 8 s, 4 s | `timeout -k 1 3`, `2`, `8`, `4` | `ACCOUNTS_SECONDS` = `{ account: 3, version: 2, usage: 8, agy: 4 }` |
+| the readers of those four, and the four tools of the Codex read | 4 s, 2 s, 9 s, 4 s; `ls` 1 s, `stat` 1 s, each `tail` 1 s, `jq` 3 s | `timeout -k 1 4 tail` and `… 4 jq`; `… 2 sed`; `… 9 tail` and `… 9 jq`; `… 4 sed`; `timeout -k 1 1 ls`, `… 1 stat`, `… 1 tail`, `… 3 jq` | `ACCOUNTS_READ_SECONDS` = `{ account: 4, version: 2, usage: 9, agy: 4, codexList: 1, codexTime: 1, codexFile: 1, codexRecord: 3 }` |
+| the whole call | the sum of the readers' limits and ssh's 5 s is under 30 s (the time table above) | — | `ACCOUNTS_CEILING_SECONDS` = 30; S3's `ACCOUNTS_LIMITS.ms` equals it (X14) |
 | the account JSON given to `jq` | 64 KiB | `tail -c 65536` | `ACCOUNT_JSON_MAX` |
 | the usage JSON given to `jq` | 1 MiB; a longer output is cut at its start, does not parse, and is `failed error` | `tail -c 1048576` (in the usage pipe) | `USAGE_JSON_MAX` |
 | the usage lines sent | 8 | `1,8p`; `-le 8`, `sent=8` | `USAGE_LINES_MAX` |
@@ -524,7 +602,7 @@ pattern keeps its line, or because the script made it from a test of its own.
 | `:unmatched` | a count | how many lines that start with `Current ` were not sent — never their text |
 | `:sign-in-file` | `[ -e <path> ]` | `present` or `absent` |
 | `:plan` (Codex), `:window` | the ONE newest `token_count` record: `plan_type`, and three numbers of each window | one line of 120 characters; numbers or `-` |
-| `:as-of` | that record's `timestamp` (40 characters), and the file time of the newest file read | a text and digits |
+| `:as-of` | that record's `timestamp` (40 characters), and the file time of the newest file read — or `-` when `stat` gave none, or `no-stat` when the host has no `stat` | a text, and digits or one of two closed words |
 
 **The three anchored forms, in two `grep` patterns** (`grep -E` under `LC_ALL=C`, each line with the `-` that `jq` put before it; `·` is the
 two bytes `0xC2 0xB7`):
@@ -576,7 +654,7 @@ first space, the value is the rest (it may be empty). Any other line makes the a
 | `line` | one usage line | no — the parser's line rule; a line that fits no form counts as unmatched |
 | `sign-in-file` | `present` · `absent` | yes |
 | `window` | exactly three words: used, minutes, reset — each digits (used may have a dot) or `-` | the count of words, yes |
-| `as-of` | at least two words: the LAST is the file's time in epoch seconds or `-`; the words before it are the record's time, as the record has it, or `-` | at least two words, yes |
+| `as-of` | at least two words: the LAST is the file's time in epoch seconds, or `-` (it was not read), or `no-stat` (the host has no `stat`); the words before it are the record's time, as the record has it, or `-` | at least two words, and the last one, yes |
 
 The parent's sketch of the reply, with these words (the Claude account of the measured host, made anonymous):
 
@@ -673,7 +751,8 @@ export type ClaudeSide =
 export interface CodexWindow { readonly minutes: number; readonly usedPercent: number | null; readonly resetsAtMs: number | null }
 export type CodexUsage =
   | { readonly state: 'read'; readonly windows: readonly CodexWindow[];
-      readonly asOf: { readonly ms: number; readonly from: 'record' | 'file' } | null }
+      readonly asOf: { readonly ms: number; readonly from: 'record' | 'file' } | null;
+      readonly statMissing: boolean }   // the host has no `stat`: said, never read as "a time that is not known" (X15)
   | { readonly state: 'failed'; readonly why: 'no-sessions' | 'none' | 'error' };
 export type CodexSide =
   | { readonly state: 'absent' }
@@ -693,6 +772,7 @@ export type AccountsRead =
 
 export function readAccounts(run: { readonly code: number; readonly stdout: string }, mode: AccountsMode, nowMs: number): AccountsRead;
 export function plainValue(text: string): string;          // THE road by which VM text becomes a value (X7)
+export function withoutControls(text: string): string;     // its first step, and the ONE home of that rule (X12)
 export function credentialShaped(value: string): boolean;
 export const ACCOUNTS_UNREADABLE_SAID: Readonly<Record<AccountsUnreadable, string>>;
 ```
@@ -716,9 +796,14 @@ pass. It has no `console`, no `notify`, no file call, no `eval`, no `new Functio
 | 10 | Each value becomes its typed field by the value rules below. A value that fails its rule is `null` — or `''` for the email — and never 0 | — |
 
 **`plainValue(text)`** — one function, three steps, in this order: every character of the classes `Cc` and `Cf` is
-taken out (control characters, bidi marks, a zero-width space — the rule of `plainOf` and `withoutControls`, F6);
-every `$(` is written `$ (`, so nothing a VM sent can be drawn as an icon by a list; the text is cut at 200
-characters. It is idempotent.
+taken out (control characters, bidi marks, a zero-width space); every `$(` is written `$ (`, so nothing a VM sent can
+be drawn as an icon by a list; the text is cut at 200 characters. It is idempotent.
+
+**`withoutControls(text)`** is that first step by itself, exported: `text.replace(/[\p{Cc}\p{Cf}]/gu, '')`. It is the
+rule that `plainOf` (`remoteRead.ts:67`) and the runner's private `withoutControls` (`remoteSsh.ts:216`) each hold a
+copy of today (F6). **One home (gate G2: C-11, N1):** this module, and no other file of `src/` holds that character
+class once S3 has folded the two copies into calls of this function (X12; A3-T28). S2 exports it and changes neither
+of those files. This module imports neither of them, so the fold makes no import circle.
 
 **`credentialShaped(value)`** is true when ONE of these holds. It is a net, not the measure: the measure is that the
 script has no line that opens a credential file (§ A2.9, J2).
@@ -746,7 +831,7 @@ script has no line that opens a credential file (§ A2.9, J2).
 | `plan` (Claude, Codex) | `^[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}$` | `null` |
 | `turns` | digits; **not 0 → the usage is `failed` `model-call`**, whatever lines came with it | — |
 | a Codex window | `minutes`: digits, 1 to 527 040 (366 days) — else the line is no window and is left out. `used`: the percent rule. `reset`: 1 to 11 digits, epoch seconds → `resetsAtMs` | `usedPercent` `null`; `resetsAtMs` `null` |
-| `as-of` | the record's time (every word but the last) when it fits `^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,9})?(Z\|[+-]\d\d:\d\d)$`, `Date.parse` gives a number, and it is between 2020-01-01 and one day after `nowMs` → `from: 'record'`. Else the file's time (the last word), 1 to 11 digits in the same range → `from: 'file'` | `asOf` `null` |
+| `as-of` | the record's time (every word but the last) when it fits `^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,9})?(Z\|[+-]\d\d:\d\d)$`, `Date.parse` gives a number, and it is between 2020-01-01 and one day after `nowMs` → `from: 'record'`. Else the file's time (the last word), 1 to 11 digits in the same range → `from: 'file'`. The last word `no-stat` is no time and sets `statMissing`; any last word that is not digits, `-` or `no-stat` is the fault `value` (rule 8) | `asOf` `null` |
 
 **A Claude usage line** (`:line`) is read by ONE pattern, the twin of the script's:
 
@@ -811,7 +896,8 @@ timeout` — *the account command of Claude Code did not answer within 3 s*; usa
 the usage command of Claude Code <version> ended with an error*; Codex `failed no-sessions` — *no Codex session file
 is on this host*; `failed none` — *no usage record is near the end of the newest Codex sessions* (the parent's
 words); `failed error` — *the Codex session files could not be read*; any vendor `unreadable credential-shape` — *not
-shown: a value in the answer looked like a credential*.
+shown: a value in the answer looked like a credential*; Codex `read` with `asOf` `null` and `statMissing` (X15) — the
+age is `—`, and the row says *this host has no stat, so the time of the Codex session file was not read*.
 
 ## A2.8 — W6 and W7: what the code does until E2 has run
 
@@ -826,6 +912,7 @@ flags; W2 saw no child in one sample and one `node` process of unknown origin af
 | A child of a read that ENDS IN TIME, and a child that left the group | Nothing. The script does not look for it and cannot end it | Named as not covered, in § A2.14 and in `SECURITY.md` |
 | The one switch | The usage command runs ONLY for the operand `claude-usage`. The round's planner (S3) reads ONE constant, `USAGE_POLICY`, to choose the operand. E1 ships `{ kind: 'every-round' }`, for the pre-release build that runs on the owner's hosts only | — |
 | **If W7 fails** | The release build is cut with `USAGE_POLICY = { kind: 'off' }` (X8): every host gets `no-claude-usage`, Claude Code is started for its account and its version only, and the list shows the account with `usage` `skipped`. No line of the script, the reply or the parser changes | the parent's stated consequence, "until the owner decides" |
+| **The order in E2 (gate G2, S-3)** | E1 ships `every-round`, so the pre-release VSIX runs the usage command by a timer from its first start. The trace has to come BEFORE that. **W7 is run before the pre-release VSIX is installed**: it needs no window — one usage read with the pinned command of § A2.3 under the trace, by hand, on one of the owner's hosts, with the owner's go for its exact text (parent § 5). R2 (the first start after the install) and R7 (two hours on a host with live sessions) come after W7's result is recorded. If W7 fails, its consequence is applied before the install: the pre-release is built from a head with `USAGE_POLICY = { kind: 'off' }`, and with `off` the extra call of finding 3 is not made either (X14) | "Until W7 has run, this plan does not claim that condition" (parent § 5). It is an order inside E2 and NOT a default of `off` in E1: the parent has the pre-release build read in every round (§ 2), and has a gate that fails answered by its stated consequence in a new pre-release VSIX (*Build order*, step 4). The E2 stories document carries this order as its first step; until then it stands here and in the E1 stories document, § 6 |
 
 **W6 — the growth gate's effect on the code is that same constant, and nothing in S2.** A usage read may leave a
 backup of `~/.claude.json` behind each time (parent § *Growth surfaces*). Which row of the parent's § 2 table W6
@@ -908,12 +995,17 @@ answer. `/` holds no project of a person; W1 measured that the usage command lea
 
 **J8 — The limits are requests to `timeout`.** That it ends a command and the command's child was seen here with
 uutils 0.10.0 (M-A4) and is held on CI with GNU coreutils (A2-T8). Not seen: GNU `timeout` on a real VM, busybox
-`timeout`, a child that left the process group (§ A2.14, U5). The readers' own limits and the runner's 30 s kill are
-the bounds that do not depend on it.
+`timeout`, a child that left the process group (§ A2.14, U4). The readers' own limits and the runner's 30 s kill are
+the bounds that do not depend on what a vendor program does with its group. Summed, the readers' limits end every
+step within 24 s, 29 s with ssh's connect (§ A2.3, the time table) — on the text as it stands, which was not run
+(§ A2.0); A2-T8 and A2-T26 are where that is seen.
 
-**J9 — The frame is a second line of defence against a cut or mixed stream.** A script cut on the way starts nothing
-(M-A8); a reply cut on the way has no end line and is `cut`; a banner before the reply is skipped; a line of data can
-never be a marker (decision 2).
+**J9 — The frame is a second line of defence against a cut or mixed stream.** A script cut on the way starts no
+program, opens no path for writing and prints no line: the function is not called before the last line is whole, and
+that line is one brace group (decision 4; seen with a toy function, M-G2; A2-T1 holds it for this text). The shell
+then ends with a syntax error and a code that is not 0, which the parser says as `exit`. **Before gate G2 this spec
+said "no cut can", and that was wrong for a cut inside `2>/dev/null` (finding S-1).** A reply cut on the way has no
+end line and is `cut`; a banner before the reply is skipped; a line of data can never be a marker (decision 2).
 
 **The judgement.** *What the script reads and prints:* accepted — one kind of file is opened, and only named fields
 and anchored lines leave. *The parser:* accepted — closed, bounded, never run. *Road (a):* as the parent judges it,
@@ -955,11 +1047,11 @@ until those are green, the judgement on "only named fields leave" stands on the 
 **The time the script's own limits cost a test (point 3 of the stories document).** The limits are part of the text
 under test, so a case that hangs a false vendor waits for the real limit. The bound:
 
-- The hang cases are FIVE runs, started together inside ONE test and awaited together (`Promise.all`): under `sh` —
+- The hang cases are SIX runs, started together inside ONE test and awaited together (`Promise.all`): under `sh` —
   (i) `claude --version` hangs, 2 s; (ii) the account command hangs, 3 s; (iii) the usage command starts a child and
-  hangs, 8 s; (iv) `agy --version` hangs by `exec sleep`, a single process, 4 s; under `bash --posix` — (iii) again,
-  8 s. They sleep; they use no CPU. The test ends after the longest, about 8.5 s; one after another they would take
-  25 s.
+  hangs, 8 s; (iv) `agy --version` hangs by `exec sleep`, a single process, 4 s; (v) the read of the newest Codex
+  session file hangs, 1 s (added at gate G2 with the limit it tests); under `bash --posix` — (iii) again, 8 s. They
+  sleep; they use no CPU. The test ends after the longest, about 8.5 s; one after another they would take 26 s.
 - That test has `{ timeout: 40_000 }`, and every other test of the file `{ timeout: 20_000 }`. An ordinary run of the
   script takes about 0.3 s. The whole file stays under 30 s here and under 60 s on a CI runner; a file that needs
   more is a finding to report, not a limit to raise.
@@ -1004,10 +1096,10 @@ no generated input uses `Math.random` (a seeded generator, so a failure can be r
 
 | # | Name | Input → expected result | RED today |
 |---|---|---|---|
-| A2-T2 | the script is the text of its spec, and both are pinned | § A2.3, the test: the sha256 of `ACCOUNTS_SCRIPT` is `PINNED`; the spec (in `todo/` or in `research/`, exactly one) has the line `Pinned sha256:` with that value; the spec's `sh` block after `## A2.3` equals the constant, and a difference names its first line. 218 lines; the text ends with LF | no module; with a stub: `the spec's pin line still says PENDING` |
+| A2-T2 | the script is the text of its spec, and both are pinned | § A2.3, the test: the sha256 of `ACCOUNTS_SCRIPT` is `PINNED`; the spec (in `todo/` or in `research/`, exactly one) has the line `Pinned sha256:` with that value; the spec's `sh` block after `## A2.3` equals the constant, and a difference names its first line. 222 lines; the text ends with LF | no module; with a stub: `the spec's pin line still says PENDING` |
 | A2-T3 (the TypeScript half) | the modes are two words, by a closed list | `ACCOUNTS_MODES` deep-equals `['claude-usage', 'no-claude-usage']`; `isAccountsMode` is true for both and false for `''`, `usage`, `Claude-usage`, `claude-usage ` (a space), `claude-usage;id`, `constructor`; the script holds the `case` line that is built from `ACCOUNTS_MODES` — each word with `1:` before it, joined by the `case` separator, then `) ;;` — so the two lists cannot part | no module |
-| A2-T25 | the script keeps its own rules (a scan of the TEXT, with a companion for each) | The first line is `coai_accounts() {`; the last two are exactly the call line (redirections first) and the end line; every other line is empty, `}` or starts with two spaces; it ends with LF, holds no CR and no character over 127; no `<<`, no backtick, no `eval`, no `trap`, no line that starts with `~` after its spaces; every `>` is the start of `>/dev/null`; no `&` that is not `&&`; ONE `cd `, and it is `cd / `; ONE `export`, and it is `export PATH`; ONE `TZ=`, on the usage line; every `LC_ALL=C` stands right before `grep`, `sed`, `ls` or `timeout -k 1 <n> sed`. The four vendor command lines of § A2.3 are in the text word for word (typed ONCE in the test, from the parent's § 4); `claude` follows a `timeout -k 1 <n> ` three times and `agy` once, and neither is started anywhere else; the only `codex` in a command is `command -v codex`. `.credentials.json`, `.claude.json` and `cli.log` are NOT in the text; `auth.json` and `antigravity-oauth-token` are in it once each, as the argument of `coai_sign_in`. No `jq` program holds `tojson`, `@json`, `@text`, `keys`, `to_entries`, `env`, `$ENV`, `input_filename` or `debug` (the words that print a whole value, a list of keys or the environment). Companions: `</dev/null 2>/dev/null` is there once; `\|\| return 0` 7 times; the first `set` is `set -f`, and each of the two `set +f` has a `set -f` two lines after it | no module |
-| A2-T26 | the numbers in the script are the constants | In the text: `timeout -k 1 ${ACCOUNTS_SECONDS.account} claude auth`, `… ${ACCOUNTS_SECONDS.version} claude --version`, `… ${ACCOUNTS_SECONDS.usage} claude -p`, `… ${ACCOUNTS_SECONDS.agy} agy`; `tail -c ${ACCOUNT_JSON_MAX}` once; `tail -c ${USAGE_JSON_MAX}` and `tail -c ${CODEX_TAIL_MAX}` (the same number: the text holds it exactly twice); `tail -n ${CODEX_FILES_MAX}`; `1,${USAGE_LINES_MAX}p`; `COAI-ACCOUNTS ${ACCOUNTS_PROTOCOL}`. `ACCOUNTS_REPLY_BYTES_MAX === (ACCOUNTS_LINES_MAX + 2) * (ACCOUNTS_LINE_BYTES_MAX + 1)`. The four limits, one KILL second each and ssh's 5 s are under 30 s. Each name of `ACCOUNTS_TOOLS` is in the `for tool in` line and no other name is. `MANAGER_WORDS` are exactly the words `coai_manager` can print (taken from its `printf` lines), in that order, and the four absolute paths are in the text in the order `apt-get`, `dnf`, `yum`, `apk` | no module |
+| A2-T25 | the script keeps its own rules (a scan of the TEXT, with a companion for each) | The first line is `coai_accounts() {`; the last line is exactly the ONE brace group `{ </dev/null 2>/dev/null coai_accounts "$@"; printf 'COAI-ACCOUNTS-END\n'; }` (the call with its redirections first, then the end line), and neither `coai_accounts "$@"` nor `COAI-ACCOUNTS-END` stands in any other line; every other line is empty, `}` or starts with two spaces; it ends with LF, holds no CR and no character over 127; no `<<`, no backtick, no `eval`, no `trap`, no line that starts with `~` after its spaces; every `>` is the start of `>/dev/null`; no `&` that is not `&&`; ONE `cd `, and it is `cd / `; ONE `export`, and it is `export PATH`; ONE `TZ=`, on the usage line; every `LC_ALL=C` stands right before `grep` or `sed`, or before `timeout -k 1 <n> ` and then `sed` or `ls`. **No package manager is ever run (gate G2, S-6):** the words `apt-get`, `dnf`, `yum` and `apk` stand only in the eight lines of `coai_manager` — four `[ -x /… ]` tests and four `printf '<word>'` — and the text holds no `sudo`, no `install`, no `upgrade` and no `add` as a word. The four vendor command lines of § A2.3 are in the text word for word (typed ONCE in the test, from the parent's § 4); `claude` follows a `timeout -k 1 <n> ` three times and `agy` once, and neither is started anywhere else; the only `codex` in a command is `command -v codex`. `.credentials.json`, `.claude.json` and `cli.log` are NOT in the text; `auth.json` and `antigravity-oauth-token` are in it once each, as the argument of `coai_sign_in`. No `jq` program holds `tojson`, `@json`, `@text`, `keys`, `to_entries`, `env`, `$ENV`, `input_filename` or `debug` (the words that print a whole value, a list of keys or the environment). Companions: `</dev/null 2>/dev/null` is there once; `\|\| return 0` 7 times; the first `set` is `set -f`, and each of the two `set +f` has a `set -f` two lines after it | no module |
+| A2-T26 | the numbers in the script are the constants | In the text: `timeout -k 1 ${ACCOUNTS_SECONDS.account} claude auth`, `… ${ACCOUNTS_SECONDS.version} claude --version`, `… ${ACCOUNTS_SECONDS.usage} claude -p`, `… ${ACCOUNTS_SECONDS.agy} agy`; `tail -c ${ACCOUNT_JSON_MAX}` once; `tail -c ${USAGE_JSON_MAX}` and `tail -c ${CODEX_TAIL_MAX}` (the same number: the text holds it exactly twice); `tail -n ${CODEX_FILES_MAX}`; `1,${USAGE_LINES_MAX}p`; `COAI-ACCOUNTS ${ACCOUNTS_PROTOCOL}`. `ACCOUNTS_REPLY_BYTES_MAX === (ACCOUNTS_LINES_MAX + 2) * (ACCOUNTS_LINE_BYTES_MAX + 1)`. The four limits, one KILL second each and ssh's 5 s are under 30 s. **The readers' limits (gate G2, S-4):** each number of `ACCOUNTS_READ_SECONDS` is in the text where § A2.3's time table has it — `timeout -k 1 ${account} tail` and `timeout -k 1 ${account} jq -n -r "$jq_auth"`; `timeout -k 1 ${version} sed` after `claude --version`; `timeout -k 1 ${usage} tail` and `… ${usage} jq -n -r "$jq_usage"`; `timeout -k 1 ${agy} sed` after `agy --version`; `timeout -k 1 ${codexList} ls`, `… ${codexTime} stat`, `… ${codexFile} tail`, `… ${codexRecord} jq -n -R` — and the text holds no `ls -tr`, no `stat -c` and no `tail -c ${CODEX_TAIL_MAX} <` that does not follow a `timeout -k 1 <n> `. Each reader's limit is at least its command's. **The sum:** `account + version + usage + agy + codexList + codexTime + max(codexRecord, CODEX_FILES_MAX × codexFile)`, plus the seconds of the `ConnectTimeout=` word of `SSH_OPTIONS` (the test reads the number from that option's text: 5), is under `ACCOUNTS_CEILING_SECONDS` (24 + 5 < 30); the failure says the sum. Each name of `ACCOUNTS_TOOLS` is in the `for tool in` line and no other name is. `MANAGER_WORDS` are exactly the words `coai_manager` can print (taken from its `printf` lines), in that order, and the four absolute paths are in the text in the order `apt-get`, `dnf`, `yum`, `apk` | no module |
 
 ### A2.11.3 — `src/test/remoteAccountsUsage.test.ts` (new; pure)
 
@@ -1016,7 +1108,7 @@ no generated input uses `Math.random` (a seeded generator, so a failure can be r
 | # | Name | Input → expected result | RED today |
 |---|---|---|---|
 | A2-T18 | the Claude usage lines, as a table | **The three measured lines** → `5h` 56 `2026-11-19T15:00Z`; `week` 77 `2026-11-22T03:00Z`; `{ model: 'Fable' }` 49 `2026-11-22T02:59Z`. **The hour**: `3pm` → 15:00; `3am` → 03:00; `2:59am` → 02:59; `12am` → 00:00; `12pm` → 12:00. **The year**: read on `2026-12-30T12:00Z`, `resets Jan 1, 3am (UTC)` → `2027-01-01T03:00Z`; read on `2028-02-27T12:00Z`, `Feb 29, 3am` → `2028-02-29T03:00Z`, and read on `2026-02-27T12:00Z` → a dash. **The range**: `Nov 19, 11:30am` (30 minutes ago) → that moment; `Nov 19, 10am` (2 hours ago; next year is a year ahead) → a dash; `Nov 27, 12pm` (8 days ahead) → that moment; `Nov 28, 3am` (more) → a dash. **The zone**: `(PST)`, `(Europe/Berlin)`, `(utc)` → a dash. **The form**: `Feb 30, 3am`, `Nov 19, 13pm`, `Nov 19, 0am`, `Nov 19, 3:60pm`, `19 Nov, 3pm`, `Nov 19, 2027, 3pm` → a dash. **In every dash row `usedPercent` is still the line's number.** **The percent**: `100` → 100; `0` → 0 (a real zero stays a zero); `49.5` → 49.5; `101` → `null` and the window is kept. **A line that fits no form** — no zone clause, no reset clause, `1000%`, `-1%`, `1e3%`, `NaN%`, a third word after the zone — is no window and adds 1 to `unmatched`. **The windows**: no session line → no `5h` window; two model lines → two model windows in their order; `Current session` twice → the first, `unmatched` + 1. **No matched line**, `:turns 0` → `failed` `format`. **`:turns 1`** with the three good lines → `failed` `model-call`. Companion (the fixture is accepted): the three measured lines with `:turns 0` → `read`, three windows, `unmatched` 0 | no module |
-| A2-T19 (the parser's half) | the Codex record, as a table | `:window 14 10080 1795518850` alone (**`primary` weekly, `secondary` null**) → one window, `minutes` 10 080, 14, `resetsAtMs` 1 795 518 850 000. **Both windows** → two, in the order sent, and the same two when the lines are swapped. **A 300-minute window**; **another length** (120) → `minutes` as sent. **A reset that has passed** (`1700000000`) → `resetsAtMs` as sent: the sentence is S4's, at draw time; the parser drops nothing. `- 10080 -` → `usedPercent` `null`, `resetsAtMs` `null`. `101 300 1` → `usedPercent` `null`. `14 - 1`, `14 0 1`, `14 600000 1` → no window; alone → `failed` `none`. Two windows of 300 → the first. **The time**: `2026-11-17T19:32:36.474Z 1794938000` → `asOf` that moment, `from: 'record'`; with an offset (`…T20:32:36+01:00`) → the same moment; `- 1794938000` → `from: 'file'`; `not-a-time 1794938000`, `2026-11-17 19:32 1794938000`, `2026-11-17T19:32:36 1794938000` (no zone), `2099-01-01T00:00:00Z 1794938000` (the future) → `from: 'file'`; `- -` → `asOf` `null`. A reply with the words `primary` or `secondary` anywhere is not in the grammar (`marker` or `key`). Companion: the reply of § A2.5 → `read`, one window, `asOf` from the record | no module |
+| A2-T19 (the parser's half) | the Codex record, as a table | `:window 14 10080 1795518850` alone (**`primary` weekly, `secondary` null**) → one window, `minutes` 10 080, 14, `resetsAtMs` 1 795 518 850 000. **Both windows** → two, in the order sent, and the same two when the lines are swapped. **A 300-minute window**; **another length** (120) → `minutes` as sent. **A reset that has passed** (`1700000000`) → `resetsAtMs` as sent: the sentence is S4's, at draw time; the parser drops nothing. `- 10080 -` → `usedPercent` `null`, `resetsAtMs` `null`. `101 300 1` → `usedPercent` `null`. `14 - 1`, `14 0 1`, `14 600000 1` → no window; alone → `failed` `none`. Two windows of 300 → the first. **The time**: `2026-11-17T19:32:36.474Z 1794938000` → `asOf` that moment, `from: 'record'`; with an offset (`…T20:32:36+01:00`) → the same moment; `- 1794938000` → `from: 'file'`; `not-a-time 1794938000`, `2026-11-17 19:32 1794938000`, `2026-11-17T19:32:36 1794938000` (no zone), `2099-01-01T00:00:00Z 1794938000` (the future) → `from: 'file'`; `- -` → `asOf` `null`, `statMissing` false. **A host without `stat` (gate G2, S-7):** `2026-11-17T19:32:36.474Z no-stat` → `from: 'record'`, `statMissing` true; `- no-stat` → `asOf` `null`, `statMissing` true — a different value from `- -`. A reply with the words `primary` or `secondary` anywhere is not in the grammar (`marker` or `key`). Companion: the reply of § A2.5 → `read`, one window, `asOf` from the record | no module |
 
 ### A2.11.4 — `src/test/remoteAccountsReply.test.ts` (new; pure)
 
@@ -1028,13 +1120,13 @@ windows, Codex `read` and agy `found`, so each negative row changes one thing of
 
 | # | Name | Input → expected result | RED today |
 |---|---|---|---|
-| A2-T15 | every marker and every key, and each fault by its own word | *Derived*: for every marker of the grammar and every word it takes, a frame that holds it in its place is `read`; for every key of every marker, a frame with it is `read`. Then, each from `GOOD`: `code` 3 → `exit`; no begin line → `no-sentinel`; `COAI-ACCOUNTS 2` → `version`; no end line → `cut`; a 65th line (data lines of a legal key repeated) → `too-many`; a line of 513 bytes made of `:org ` and 254 `é` (259 characters, so a count of characters would let it pass) → `too-long`, and the same with 253 `é` is read; a line `hello` → `line`; a data line before any marker → `line`; `COAI-NEW x` → `marker`; `COAI-VENDOR claude maybe` → `marker`; `COAI-VENDOR gemini found` → `marker`; `:token x` under any marker → `key`; `:email` under `COAI-USAGE claude read` → `key`; `:email` twice → `key`; nine `:line` → `key`; `:turns x`, `:turns 1234567`, `:unmatched -1`, `:sign-in-file maybe`, `:window 1 2`, `:as-of 1` → `value`. *Derived*: every key of `ACCOUNTS_UNREADABLE_SAID` was reached by a test of this file (a set the tests fill, compared at the end); every clause is not empty and all differ | no module |
+| A2-T15 | every marker and every key, and each fault by its own word | *Derived*: for every marker of the grammar and every word it takes, a frame that holds it in its place is `read`; for every key of every marker, a frame with it is `read`. Then, each from `GOOD`: `code` 3 → `exit`; no begin line → `no-sentinel`; `COAI-ACCOUNTS 2` → `version`; no end line → `cut`; a 65th line (data lines of a legal key repeated) → `too-many`; a line of 513 bytes made of `:org ` and 254 `é` (259 characters, so a count of characters would let it pass) → `too-long`, and the same with 253 `é` is read; a line `hello` → `line`; a data line before any marker → `line`; `COAI-NEW x` → `marker`; `COAI-VENDOR claude maybe` → `marker`; `COAI-VENDOR gemini found` → `marker`; `:token x` under any marker → `key`; `:email` under `COAI-USAGE claude read` → `key`; `:email` twice → `key`; nine `:line` → `key`; `:turns x`, `:turns 1234567`, `:unmatched -1`, `:sign-in-file maybe`, `:window 1 2`, `:as-of 1`, `:as-of - soon` → `value`. *Derived*: every key of `ACCOUNTS_UNREADABLE_SAID` was reached by a test of this file (a set the tests fill, compared at the end); every clause is not empty and all differ | no module |
 | A2-T16 | no secret-shaped value passes the parser, and the values are plain | **The marker-token test.** Four tokens: `sk-ant-oat01-` + `MARK` 15 times; `M4RK` 10 times (a bare run of 40); `eyJ` + 20 token characters + `.MARK.MARK`; `ya29.` + `MARK` 5 times. *Derived*: for every (marker, key) of the grammar, `GOOD` with that key's value replaced by each token, and for every marker a frame with the token as one of its words. In EVERY one: `JSON.stringify(readAccounts(…))` holds neither `MARK` nor `M4RK`; a `console` spy saw no call; a text key (`email`, `org`, `plan`, `version`, `line`, and `as-of` with the token as the record's time before a file time) → that vendor is `unreadable` `credential-shape` and the two others are as in `GOOD`; a closed key → the answer is `unreadable` `value`; a marker word → `marker`. Companion: the same frames with `someone@example.com` and `Example Org` give those texts back. **Plain values**: an `:org` with a bell, an escape, U+202E and U+200B (built with `String.fromCodePoint`) → none of them in `org`; `:org Team $(zap)` → `Team $ (zap)`; a value of 10 KB → `too-long`; an `:org` of 300 characters under 512 bytes → 200. **Percents** `101`, `-1`, `1e3`, `NaN` in a `:window` → `usedPercent` `null`, the window kept. **A manager word outside the list** (`COAI-JQ missing brew`, `… apt-get;id`, `… APT-GET`) → `marker` | no module |
 | A2-T17 | absent is not zero | From `GOOD`, each number taken out one at a time (no `:window`, `-` for used, `-` for reset, no reset zone, no `:as-of` time, no `:version`) → that field is `null` (or the window is not there) and NO field of the result is 0. Then 300 replies from a seeded generator that leaves numbers out at random, each built from a model: the typed result equals the one built from the model, and wherever the model has no number the result has `null`. A scan with its companion: `remoteAccountsReply.ts` and `remoteAccountsUsage.ts` hold no `?? 0`, no `\|\| 0` and no `100 -` | no module |
 | A2-T20 | the typed result has one arm for each outcome, and the parser never throws | One frame for each: Claude `absent`, `signed-out`, `unreadable` (`no-jq`, `auth`, `timeout`, `credential-shape`), `found` with usage `read`, `skipped`, `failed` (`timeout`, `error`, `format`, `model-call`); Codex `absent`, `unreadable`, `found` with `read` and `failed` (`no-sessions`, `none`, `error`); agy `absent`, `unreadable`, `found` with `usage.state` `no-source`. All of them differ as JSON; no arm has a key whose value is `undefined`; "no usage source" (agy), "skipped", "failed" and "unreadable" are four different values. **Never throws**: 1000 inputs from the seeded generator — legal lines in a random order, random bytes, a lone surrogate, a line of 1 MiB, 10 000 lines, `code` −1 — each gives a value whose `kind` is `read` or `unreadable`, and an `unreadable` one has a `why` that is a key of `ACCOUNTS_UNREADABLE_SAID`; `JSON.stringify` of it holds no piece of the input longer than 200 characters | no module |
 | A2-T27 | the reply is held to the mode and to its own `COAI-JQ` line | `GOOD` read with `no-claude-usage` → `shape`; `GOOD` with `COAI-USAGE claude skipped` read with `claude-usage` → `shape`, and with `no-claude-usage` → `read`, usage `skipped`. `COAI-JQ missing apt-get` with Claude `found` → `shape`; `COAI-JQ found` with `unreadable no-jq` → `shape`; `COAI-JQ missing dnf`, Claude `unreadable no-jq`, Codex `absent`, agy `found` → `read`, `jqMissing` `'dnf'`; `… missing none` → `'none'`; `COAI-JQ found` → `jqMissing` `undefined`. The vendors in another order, one missing, one twice, a `COAI-USAGE` after a state that is not `found`, a `found` with no `COAI-USAGE`, no `COAI-JQ`, two `COAI-JQ` → `shape`. `COAI-BAD tool` alone → `tool` (and `operands`, `home`, `folder` each by its word); `COAI-BAD tool` with a vendor after it → `shape`; `COAI-BAD nope` → `marker` | no module |
 | A2-T28 | the credential net knows every key shape the product's redactor knows | *Derived*: the alternatives of `VENDOR_KEY_SHAPE.source` (at least 7 are found — the companion), each with 16 token characters after it: `credentialShaped` is true, AND `safeText` changes the same text (so the sample is a key to the redactor too). The same call twice in a row gives the same answer (the pattern's `g` flag). True: a run of 40; `eyJ` + 16; `ya29.` + 16; `-----BEGIN OPENSSH PRIVATE KEY-----`. False: `someone@example.com`, `Example Org`, `Basic Industries`, `Token Engineering Ltd`, `team`, `prolite`, `2.1.326`, a run of 39, and the three measured lines. `notifications.test.ts` is green with no edit | no export `VENDOR_KEY_SHAPE` |
-| A2-T29 | `plainValue` is one rule, and doing it twice changes nothing | For 200 strings from the seeded generator (control and format characters, `$(`, `$$((`, long runs): the result holds no character of `Cc` or `Cf`, no `$(`, at most 200 characters, and `plainValue(plainValue(x)) === plainValue(x)` | no module |
+| A2-T29 | `plainValue` is one rule, and doing it twice changes nothing | For 200 strings from the seeded generator (control and format characters, `$(`, `$$((`, long runs): the result holds no character of `Cc` or `Cf`, no `$(`, at most 200 characters, and `plainValue(plainValue(x)) === plainValue(x)`; `withoutControls(x)` is `x` without the characters of `Cc` and `Cf` and nothing else (a `$(` and the length stay). A scan with its companion (gate G2, C-11): the class `\p{Cc}\p{Cf}` stands ONCE in `remoteAccountsReply.ts`, inside `withoutControls`, and `plainValue` calls `withoutControls(` | no module |
 
 ### A2.11.5 — `src/test/remoteAccountsRuns.test.ts` (new; the REAL script by `sh -s`, and the REAL `jq`)
 
@@ -1062,19 +1154,19 @@ The others run wherever `sh` is.
 
 | # | Name | Setup → expected result | RED today |
 |---|---|---|---|
-| A2-T1 | the script is one function, called last; a script cut on the way does nothing | A whole run: the first line of stdout is `COAI-ACCOUNTS 1`, the last is `COAI-ACCOUNTS-END`, exit code 0. The text cut after EVERY line before the call line (1 to 216): stdout is empty and `fx/log` is empty. The text cut at EVERY byte of its last two lines: no line of `fx/log` has a stdin that is not `/dev/null`; the end line is printed only by the whole text (with or without its last line end); a reply that lost its end line is `cut`. Both shells | no module |
+| A2-T1 | the script is one function, called last; a script cut on the way does nothing: it starts no program, opens no path for writing and prints no line | A whole run: the first line of stdout is `COAI-ACCOUNTS 1`, the last is `COAI-ACCOUNTS-END`, exit code 0. **The cut half runs a text DERIVED from the script** (as A2-T12 (b) derives one): in the LAST line the two `/dev/null` are written as `<T>/dev/null`, where `<T>` is an `ownedTemp` folder that holds `dev/null` (an empty file) and nothing else. A2-T25 holds that the real last line is the brace group with the two absolute paths. (a) The derived text cut after EVERY line of the function (1 to 221): stdout is empty and `fx/log` is empty. (b) The derived text cut at EVERY byte of its last line, the cut right before the closing `}` among them: stdout is empty, `fx/log` is empty (no program was started, with any stdin), the exit code is not 0, and after ALL the cuts `<T>` holds `dev`, `<T>/dev` holds `null`, and neither holds another entry. (c) Only the whole last line, with or without its line end, prints the end line, and the reply is then whole. (d) The parser: a stdout that lost its end line is `cut`; the empty stdout of a cut script, with its code, is `exit`. **The companion — the test can see a created path:** the derived text with its last line written as TWO lines (the call alone, then the end line: the form before gate G2), cut ONLY at the bytes inside `<T>` of the `2>` path → at least one of `<T>/d`, `<T>/de`, `<T>/dev/n`, `<T>/dev/nu`, `<T>/dev/nul` IS created. No cut of this test ever names a path outside `<T>` for writing. Both shells (gate G2, S-1; seen with a toy function, M-G2) | no module |
 | A2-T3 (the `sh` half) | a wrong or missing operand starts nothing, and says so | Operands none, `usage`, `CLAUDE-USAGE`, `claude-usage;id`, `claude-usage x` (two words), `-x` → the reply is the begin line, `COAI-BAD operands`, the end line; `fx/log` is empty; `readAccounts` → `operands`. Companion: `claude-usage` and `no-claude-usage` DO start the false `agy` | no module |
 | A2-T4 | a `claude` and an `agy` only in `$HOME/.local/bin` are found, and no profile is read | The fakes are in `home/.local/bin` only, `PATH` is `bin/` → `COAI-VENDOR agy found` (and, **jq**, `claude found`). A `home/.profile` and a `home/.bashrc` that would create `fx/profile-ran` → the file is not there. Companion: with `home/.local/bin` renamed → both `absent` | no module |
 | A2-T5 **jq** | each vendor's states, each usage state, each mode — through the real parser | Claude: the measured fixtures → `found`, usage `read`, three windows; `{"loggedIn":false}` with code 1 → `signed-out`, and NO `--version` and no `-p` start; no fake → `absent`; an account output that is no JSON → `unreadable` `auth`. Usage: `num_turns` 3 → `:turns 3`, no `:line`, `failed` `model-call`; a `result` with no line of the forms → `failed` `format`; code 1, `is_error` true, an output that is no JSON → `failed` `error`. The mode `no-claude-usage` → `skipped`, and `fx/log` holds NO start with `-p`. Codex: session files → `found`, `read`; no `codex` and no `~/.codex` → `absent`; no `codex` on the `PATH` but `~/.codex` there → `found`; no `sessions` folder → `failed` `no-sessions`; files with no record → `failed` `none`. agy: there → `found`; not there → `absent` | no module |
 | A2-T6 **jq** | every vendor command is the parent's, word for word, from `/`, with an empty stdin | Mode `claude-usage`: `fx/log` holds exactly three `claude` lines, in this order — `[auth][status][--json]`; `[--version]`; `[-p][/usage][--output-format][json][--no-session-persistence][--strict-mcp-config][--setting-sources][]` (eight arguments, the last the EMPTY word) — and one `agy` line, `[--version]`. Every line: folder `/`, stdin `/dev/null`. `TZ` is `UTC` on the `-p` line and `unset` on every other. No `fx/env.*` holds `LC_ALL`. Mode `no-claude-usage`: the first two `claude` lines only. The expected lists are typed ONCE in the test, from the parent's § 4 | no module |
 | A2-T7 | `agy` gets nothing but `--version`; `codex` is never started; no credential file is opened | In both modes, also with Codex session files there: `fx/log` has one `agy` line with the one argument, and NO `codex` line (the false `codex` logs any start, `login status` included). The five false credential files (`.claude/.credentials.json`, `.claude.json`, `.codex/auth.json`, agy's sign-in file and `cli.log`) get an access time in 2001 before the run; after it each still has it. Companion: a probe file treated the same way and then READ by the test has a new access time — on CI's Linux that companion must hold (else the file system does not show a read, and the row proves nothing); elsewhere the access-time half is skipped with that reason | no module |
-| A2-T8 **jq** (but (iv)) | a vendor command that hangs, and one that starts a child and hangs, are ended by the command's own limit | The five runs of § A2.10, started together. (i) version hangs → the reply has NO Claude `:version`, the usage is read, at least 1.8 s; (ii) the account command hangs → `COAI-VENDOR claude unreadable timeout`, no `-p` start, at least 2.8 s; (iii) the usage command starts a child and hangs → `COAI-USAGE claude failed timeout`, at least 7.8 s, under both shells; (iv) `agy` hangs (`exec sleep`) → `COAI-VENDOR agy found`, no `:version`, `COAI-USAGE agy none`, at least 3.8 s. EVERY reply ends with its end line and is `read` by the parser; afterwards no pid of `fx/log` and no child pid a fake wrote is alive (`process.kill(pid, 0)` throws) | no module |
+| A2-T8 **jq** (but (iv)) | a vendor command that hangs, and one that starts a child and hangs, are ended by the command's own limit; a read of a file that hangs is ended by its own | The six runs of § A2.10, started together. (v) the read of the newest of three Codex session files hangs (`bin/tail` is a false `tail` that sleeps when its stdin is the file named in `fx/hang-file`, and else runs the real one by its absolute path) → the reply ends with its end line, `COAI-USAGE codex read` shows the record of ANOTHER file, at least 0.8 s and under 3 s. (i) version hangs → the reply has NO Claude `:version`, the usage is read, at least 1.8 s; (ii) the account command hangs → `COAI-VENDOR claude unreadable timeout`, no `-p` start, at least 2.8 s; (iii) the usage command starts a child and hangs → `COAI-USAGE claude failed timeout`, at least 7.8 s, under both shells; (iv) `agy` hangs (`exec sleep`) → `COAI-VENDOR agy found`, no `:version`, `COAI-USAGE agy none`, at least 3.8 s. EVERY reply ends with its end line and is `read` by the parser; afterwards no pid of `fx/log` and no child pid a fake wrote is alive (`process.kill(pid, 0)` throws) | no module |
 | A2-T9 **jq** | no secret leaves — SEEN | The five false credential files hold `{"accessToken":"sk-ant-oat01-SECRET-MARK…"}`. Both modes, both shells: `SECRET-MARK` is not in stdout, not in stderr, not in `fx/log` (the arguments), not in any `fx/env.*` (the environments), not in `JSON.stringify` of the typed result; a `console` spy around `readAccounts` saw no call; stderr is empty. The account fixture's `ORG-ID-MARK` is not in stdout either. **Seen RED once** (B12) | no module |
 | A2-T10 **jq** | the person's activity does not leave — SEEN | The usage `result` holds `ACTIVITY-MARK` inside the *"What's contributing to your usage?"* section, in `Current sessions of ACTIVITY-MARK`, and in `Current week (all models): 77% used · resets Nov 22, 3am (UTC) ACTIVITY-MARK` → the reply has the three `:line` lines, `:unmatched 2`, and no `ACTIVITY-MARK`. Codex: the session file holds message lines with `TRANSCRIPT-MARK` and the word `rate_limits` in their text, and a `token_count` record whose `info` holds `TRANSCRIPT-MARK` → the reply has the right `:window` and no `TRANSCRIPT-MARK`. **Seen RED once** (B11) | no module |
 | A2-T11 | of a version command only the version leaves | `agy` prints `Antigravity CLI v1.5.12 (stable) VERSION-MARK`, then `Update available: 1.6.0 VERSION-MARK` → `:version 1.5.12`, no mark, no `1.6.0`. A banner LINE first (`Welcome VERSION-MARK`, then `1.5.12`) → no `:version` line; the parser: version `null`, agy `found`. 40 digits → a `:version` of 32 digits; `null`, `found`. `unknown` → no line. `7` → `:version 7`; `null`, `found`. **jq**: the same five for `claude --version` (`2.1.326 (Claude Code)` → `2.1.326`) | no module |
-| A2-T12 | a host without `jq` says so, with its manager word; agy is still read | No `jq` link in `bin/` (this row needs no `jq` and runs everywhere). (a) The real text: `COAI-JQ missing <word>`, where the test takes `<word>` from the same four paths with `accessSync(X_OK)` in the same order (on Ubuntu: `apt-get`); Claude `unreadable no-jq` and NO `claude` start; Codex `unreadable no-jq`; agy `found` with its version; `jqMissing` is that word. (b) The five branches: the lines of `coai_manager` are taken out of `ACCOUNTS_SCRIPT` by their first and last line, the two prefixes `/usr/bin/` and `/sbin/` are written as a temporary folder's, and that text is run by `sh` with each one of the four files there and with none → `apt-get`, `dnf`, `yum`, `apk`, `none`; with `apt-get` and `dnf` both → `apt-get`; with `dnf` and `yum` both → `dnf`. (b) runs a text DERIVED from the script; A2-T26 holds that the real text names the four absolute paths in that order | no module |
+| A2-T12 | a host without `jq` says so, with its manager word; agy is still read | No `jq` link in `bin/` (this row needs no `jq` and runs everywhere). (a) The real text: `COAI-JQ missing <word>`, where the test takes `<word>` from the same four paths with `accessSync(X_OK)` in the same order (on Ubuntu: `apt-get`); Claude `unreadable no-jq` and NO `claude` start; Codex `unreadable no-jq`; agy `found` with its version; `jqMissing` is that word. (b) The five branches: the lines of `coai_manager` are taken out of `ACCOUNTS_SCRIPT` by their first and last line, the two prefixes `/usr/bin/` and `/sbin/` are written as a temporary folder's, and that text is run by `sh` with each one of the four files there and with none → `apt-get`, `dnf`, `yum`, `apk`, `none`; with `apt-get` and `dnf` both → `apt-get`; with `dnf` and `yum` both → `dnf`. (b) runs a text DERIVED from the script; A2-T26 holds that the real text names the four absolute paths in that order. **(c) No package manager is started (gate G2, S-6):** in (a), `bin/` also holds a false `apt-get`, `dnf`, `yum`, `apk` and `sudo`, each of which would append its name and its arguments to `fx/log`; in (b), the four mapped files are such fakes. After every run of (a) and of (b), `fx/log` holds no line of any of the five: the manager is tested for with `-x`, never run. E1 installs nothing | no module |
 | A2-T13 | nothing is written | A listing of the whole `home` tree (path, size, time, mode) before and after one run of each mode, with `jq` (where it is) and without: identical. The tree's root has no new entry outside `fx/`. Every line of `fx/log` has the folder `/` | no module |
-| A2-T19 (the script's half) **jq** | which Codex files are read, how far, and which record wins | **`primary` weekly, `secondary` null** (the measured record) → `:window 14 10080 1795518850` and one `:plan`; **both windows** → two `:window` lines. **No record** → `failed none`. **A record further from the end than the tail**: a file whose only record is followed by 1.1 MiB of lines → `failed none`. **The newer record wins**: the file changed LAST holds the OLDER `timestamp` → the other file's numbers. **Three files, two days**: a fourth file by change time is not read, and a third day folder is not read — each of them holds a record with used 99 and the greatest `timestamp`, and the reply never says 99. **A name outside the form** — `notes.jsonl`, `rollout-x.jsonl`, `rollout-…-<uuid>.jsonl.bak`, a name with a space — each with a 99 record → never 99. A cut first line and a last line with no line end do no harm. The file's time in `:as-of` is the newest file's `mtime` as the test reads it | no module |
+| A2-T19 (the script's half) **jq** | which Codex files are read, how far, and which record wins | **`primary` weekly, `secondary` null** (the measured record) → `:window 14 10080 1795518850` and one `:plan`; **both windows** → two `:window` lines. **No record** → `failed none`. **A record further from the end than the tail**: a file whose only record is followed by 1.1 MiB of lines → `failed none`. **The newer record wins**: the file changed LAST holds the OLDER `timestamp` → the other file's numbers. **Three files, two days**: a fourth file by change time is not read, and a third day folder is not read — each of them holds a record with used 99 and the greatest `timestamp`, and the reply never says 99. **A name outside the form** — `notes.jsonl`, `rollout-x.jsonl`, `rollout-…-<uuid>.jsonl.bak`, a name with a space — each with a 99 record → never 99. A cut first line and a last line with no line end do no harm. The file's time in `:as-of` is the newest file's `mtime` as the test reads it. **Without `stat` (gate G2, S-7):** no `stat` link in `bin/` → the last word of `:as-of` is `no-stat`, the record's own time is still read, and the parser gives `statMissing` true. **A list that comes back empty:** a false `ls` that prints nothing → `COAI-USAGE codex failed error`, not `failed none` | no module |
 | A2-T22 **jq** | the script bounds its own reply | A `result` of 10 MB → `COAI-USAGE claude failed error`. A `result` of 900 KB made of 20 000 good session lines → 8 `:line` lines and `:unmatched 19992`. An `email` of 10 KB and an `orgName` with a line break and `COAI-USAGE claude read` after it → ONE `:email` line and ONE `:org` line. In all three: at most 64 lines in the frame, each at most 512 bytes, and stdout is at most `ACCOUNTS_REPLY_BYTES_MAX` | no module |
 | A2-T23 | on CI's Linux runner the `sh` and `jq` cases RUN | When `process.env.CI === 'true'` and the platform is `linux`: `sh` was found AND `jq` was found — a failure with the reason, not a skip. The test also asserts that this file HAS rows marked `jq` (the count is over 5), so the gate cannot pass on an empty set | no module; here: skipped rows name `no jq on this machine` |
 | A2-T30 | no command waits for the script's stdin, and a reader that is gone stops the script | The test writes the script and does NOT close stdin → the end line comes within 5 s; then stdin is closed → the shell ends with code 0. The test reads the first line and destroys its end of stdout → the shell ends within 5 s, and `fx/log` holds no `-p` start and no `agy` start; the same when the shell was started with `SIGPIPE` ignored (`sh -c "trap '' PIPE; exec <the shell's absolute path> -s -- claude-usage"`) | no module |
@@ -1096,7 +1188,7 @@ A2-T24…T30.
 
 | # | Change | Goes red |
 |---|---|---|
-| B1 | the call line loses ` </dev/null`; then it is written with the redirections AFTER the command | A2-T6 — a `claude` line whose stdin is not `/dev/null`; A2-T30 — the test's own timeout; then A2-T1 — `a cut text started a program with the script as its stdin`; A2-T25 |
+| B1 | the call loses ` </dev/null`; then it is written with the redirections AFTER the command; then the last line loses its braces (the call and the end line as two lines, as before gate G2) | A2-T6 — a `claude` line whose stdin is not `/dev/null`; A2-T30 — the test's own timeout; then A2-T1 — `a cut text started a program with the script as its stdin`; then A2-T1 — `a cut text created <T>/dev/nu`; A2-T25 each time |
 | B2 | the operand `case` is taken out | A2-T3 — `a wrong operand started agy` |
 | B3 | the `PATH` line is taken out | A2-T4 — `a claude in ~/.local/bin was read as absent` |
 | B4 | `cd /` is taken out | A2-T6, A2-T13 — the fakes saw the test's folder |
@@ -1137,6 +1229,11 @@ A2-T24…T30.
 | B39 | a manager word is passed through as it came | A2-T16 — `brew` |
 | B40 | the parser calls `test` on the shared `g` pattern | A2-T28 — the second call answered false |
 | B41 | `console.error(run.stdout)` is added to `readAccounts` | A2-T21; A2-T16 — the spy |
+| B42 | a line `sudo apt-get install -y jq` is added to the branch of `coai_claude` for a missing `jq` | A2-T12 (c) — `a package manager was started on a host without jq`; A2-T25 — `sudo`, `install`; A2-T2 |
+| B43 | the reader of the usage command gets `timeout -k 1 15` | A2-T26 — `the readers' limits and ssh's connect are 35 s, over the ceiling of 30 s` |
+| B44 | the branch for a missing `stat` sets `ftime=-` | A2-T19 — `a host without stat was read as a time that is not known` |
+| B45 | `timeout -k 1 1` is taken off the Codex `tail` | A2-T8 (v) — the test's own timeout, naming the Codex read; A2-T26 |
+| B46 | `withoutControls` gets a second copy of its character class in `plainValue` | A2-T29 — `the character class of the plain rule stands twice in remoteAccountsReply.ts` |
 
 ## A2.13 — The brief: order, files, commands
 
@@ -1146,10 +1243,11 @@ whole suite, lint). Stage by path. **The script text is § A2.3's. The coder add
 vendor command and no field to what leaves the VM: each of those is a change the caller decides.**
 
 **Sizes** (the 800-line limit holds for `src/**`, not for `src/test/**`): `remoteFraming.ts` ≈ 30 lines,
-`remoteAccountsScript.ts` ≈ 300 (218 of them the script), `remoteAccountsUsage.ts` ≈ 200, `remoteAccountsReply.ts` ≈
+`remoteAccountsScript.ts` ≈ 310 (222 of them the script), `remoteAccountsUsage.ts` ≈ 200, `remoteAccountsReply.ts` ≈
 450. If the reply module would pass 650 lines, stop and tell the caller; do not add a file this spec does not name.
 
-0. **Step 0, no commit.** The procedure of § A2.3, step 1: the block's hash, 218 lines, 8100 bytes.
+0. **Step 0, no commit.** The procedure of § A2.3, step 1: the block's hash, 222 lines, 8311 bytes. The hash is a new
+   one (the block changed at gate G2); the summary gives it.
 1. **`ci: jq is there for the accounts script tests`** — `.github/workflows/ci.yml`, the step of § A2.10.
 2. **`refactor(remote): one function finds the frame`** — NEW `remoteFraming.ts`; `remoteFrame.ts` (`framedLines`
    calls it); NEW `remoteFraming.test.ts` (A2-T14, A2-T24). No other test file changes.
@@ -1186,7 +1284,8 @@ node scripts/count-notifications.mjs --write                                    
 - No test reads the clock and none uses `Math.random`. No new temp-API line: every folder comes from `ownedTemp`.
 - Do not touch: `remoteRead.ts`, `remoteSessionHost.ts`, `modelKeys.ts`, `package.json` (S1); `remoteSsh.ts` and the
   round (S3); the rows and the words (S4); `SECURITY.md`, the help and the module documents (S5); `REMOTE_SCRIPT` and
-  its tests. The duplicate of § A2.14, N1 is named there and is NOT fixed in this story.
+  its tests. The duplicate of § A2.14, N1 is NOT folded in this story: S2 exports `withoutControls` (X12), and S3
+  makes the two older copies call it.
 - From the worktree root, before any commit that touches `todo/`: `node .agents/conventions/tools/plan-lifecycle.mjs`.
 
 ## A2.14 — What S2 does not close
@@ -1224,18 +1323,35 @@ node scripts/count-notifications.mjs --write                                    
    instant (§ A2.9, J6). `dash`, `bash` and busybox `ash` have it built in.
 7. **`HOME` is trusted as the VM gives it.** A `HOME` with a `:` adds a `PATH` part; a `HOME` with a line break makes
    the Codex paths fail their tests and nothing is read. Both are that user's own doing.
+8. **The newest Codex record is chosen by comparing `timestamp` as TEXT** (gate G2, S-8). `…36Z` sorts after
+   `…36.474Z`, because `Z` is above `.`. Every measured file carries milliseconds; a file that mixes the two forms
+   could have an older record win within one second. The record that wins is shown with its own time.
+9. **A `tail` of a session file that is ended at its limit of one second** has sent a part of its megabyte. Its last
+   line is cut and gives nothing; the record found is then an older one, shown with its own time, or `failed none`.
+   When all three reads run to their limit, their three seconds and `jq`'s own three end together, and the word is
+   `failed none` or `failed error`.
+10. **After a KILL the word can be the wrong failure.** A vendor program that ignores its TERM is KILLed in the second
+    in which the reader of its exit record ends: the reply says `timeout`, or `unreadable auth` / `failed error`
+    (§ A2.3, the time table). Never a reading.
+11. **What the shell does itself has no limit of its own**: a glob, a file test, the open of a session file. A home
+    folder that hangs is ended by the runner's 30 s kill, and that host then says it did not answer. With every limit
+    reached at once AND both version programs needing their KILL, the call takes 31 s: the same bound.
 
 **Found in the neighbourhood, not changed here (`reuse-first.md`: describe, propose, ask).**
 
-- **N1 — one rule in two private copies.** `plainOf` (`remoteRead.ts:67`) and `withoutControls` (`remoteSsh.ts:216`)
-  are the same expression. This story adds the third reader of that rule and does NOT add a third copy: `plainValue`
-  is exported, and X7 has S4 call it. *As it should be:* the two older functions call `plainValue`'s first step too
-  (one exported `withoutControls` in `remoteFraming.ts`). They are in S1's and S3's files, so it is not done here.
-  **Should it be done — by S3, in `remoteSsh.ts`, and by S1 or S4 in `remoteRead.ts`? The caller decides.**
-- **N2 — the session script's call line** (`remoteScript.ts:428`) has its redirections after the command; a cut in
-  one window of about 25 bytes would run its function with the script as stdin (M-A9, by reasoning). That script
-  starts `tmux` and `ps`, not a vendor program, and its hash is in its promoted spec. Not changed; named for the owner
-  of that plan.
+- **N1 — one rule in two private copies: decided at gate G2 (2026-11-19).** `plainOf` (`remoteRead.ts:67`) and
+  `withoutControls` (`remoteSsh.ts:216`) are the same expression. This story adds the third reader of that rule and
+  does NOT add a third copy: `withoutControls` is exported from `remoteAccountsReply.ts`, `plainValue` calls it, and
+  X7 has S4 call `plainValue`. **The fold is S3's (X12):** in one commit the runner's private copy goes and `plainOf`
+  calls the exported function. Both files are in E1's scope (the parent's E1 *Scope* names `src/remoteSsh.ts` and
+  `src/remoteRead.ts`), and the session reader behaves as before: it is the same expression. The home is NOT
+  `remoteFraming.ts`, which this spec proposed first: two homes for one rule was the gate's finding C-11.
+- **N2 — the session script's call line** (`remoteScript.ts:428`) has its redirections after the command. The gate's
+  judge confirmed it as a real defect of shipped code (G2, § 5): a text cut right after `"$@"` runs the function with
+  the script's pipe as stdin, and a cut inside `2>/dev/null` opens the cut path for writing. That script starts `tmux`
+  and `ps`, not a vendor program, and its hash is in its promoted spec. **Not changed in this plan, and no entry of
+  its ledger:** [PLAN_the_session_script_call_line_cannot_be_cut.md](PLAN_the_session_script_call_line_cannot_be_cut.md)
+  is its own todo.
 
 ## A2.15 — What the Opus reviewer checks
 
@@ -1243,8 +1359,9 @@ node scripts/count-notifications.mjs --write                                    
    of the text since this spec was written is in the summary with its reason.
 2. The script was run by `sh -s` AND by the real `jq` in CI: the job's log shows the rows marked **jq** run, not
    skipped, and prints a `jq` version (the step of § A2.10).
-3. The last two lines of the script are the call with the redirections FIRST and the end line. The four vendor
-   command lines are the parent's § 4, word for word; there is no fifth; `codex` is in no command but `command -v`.
+3. The last line of the script is the ONE brace group: the call with the redirections FIRST, then the end line. The
+   four vendor command lines are the parent's § 4, word for word; there is no fifth; `codex` is in no command but
+   `command -v`. A2-T1's cut half was seen RED with the braces taken off (B1), with the path it created in the message.
 4. Read the three `jq` programs as a person who wants to leak: each prints only strings it builds from NAMED fields;
    none prints its input, an object, a key list or the environment. Then read the three `grep` patterns: each is
    anchored at both ends and holds no `.` that is not escaped.
@@ -1259,17 +1376,19 @@ node scripts/count-notifications.mjs --write                                    
    calls `test` on that object.
 10. The four modules have no `console`, `notify`, `vscode`, process or file import (A2-T21).
 11. The documents the coder touched say "we pass" for the three flags and claim nothing of W7 (§ A2.8).
-12. The hang test is ONE test of five runs and the file's time is inside the bound of § A2.10.
+12. The hang test is ONE test of six runs and the file's time is inside the bound of § A2.10. The readers' limits
+    are those of § A2.3's time table, and A2-T26 asserts their sum (24 s, 29 s with ssh's connect).
 13. Every scenario has its three observations in the summary; each break-it of § A2.12 was applied to the PRODUCTION
-    line named, the script's lines among them (B1…B23).
+    line named, the script's lines among them (B1…B23, B42…B45).
 14. Nothing of S1, S3 or S4 was built: no ssh call, no round, no row, no notice, no setting.
 
 ## Definition of Done — E1.S2
 
-- [ ] This spec was read by the caller and reviewed by Opus (gate G2) BEFORE any S2 code; "Changes to § 4" (X1…X11)
+- [ ] This spec was read by the caller and reviewed by Opus (gate G2) BEFORE any S2 code; "Changes to § 4" (X1…X15)
       is in the stories document and in the briefs of S3 and S4, in one commit; the caller has read R1…R5 and
-      recorded none of them, or the one it reads as a change, in the parent's ledger.
-- [ ] A2-T1…T30 green; each first RED and each break-it B1…B41 observed with its message; A2-T9,
+      recorded none of them, or the one it reads as a change, in the parent's ledger. (Gate G2 ran on 2026-11-19:
+      none of R1…R5 is a change; its findings on this text are applied.)
+- [ ] A2-T1…T30 green; each first RED and each break-it B1…B46 observed with its message; A2-T9,
       A2-T10 and A2-T16 seen RED once; all in the summary.
 - [ ] The pin is written: the sha256 of `ACCOUNTS_SCRIPT` is in § A2.3 and in the test, and A2-T2 holds the spec's
       block, the constant and both values to one another.

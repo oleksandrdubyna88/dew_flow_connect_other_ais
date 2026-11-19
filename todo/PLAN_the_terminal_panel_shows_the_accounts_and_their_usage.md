@@ -13,7 +13,7 @@
 > answered O1–O7, N1–N5, Q1–Q2 and decision 20; no question for the owner is open. This text was cut from 154 KB:
 > the decision history, the findings F1 and F2 in full, the step 0 tables and the installer's design are in
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md),
-> word for word where they were moved.
+> word for word where they were moved. **Epoch 1 open (one change, 1.1):** K5 of E1, recorded at gate G2 on 2026-11-19.
 
 Related: [../research/RESULTS_accounts_and_usage_on_a_vm.md](../research/RESULTS_accounts_and_usage_on_a_vm.md) (step 0
 and W1–W5, measured 2026-11-19), [PLAN_the_chat_opens_from_a_terminal.md](../research/PLAN_the_chat_opens_from_a_terminal.md)
@@ -29,6 +29,9 @@ quota gauge, measured 2026-10-10),
   The gate's round 1 on `653140c3`: `proceed`, codex only; antigravity did not receive the plan whole. Its 7
   findings, the reply's commands and the consultants' answer on the split are folded into this approved text. They
   are not entries.
+
+- 1.1 · 2026-11-19 · reviewer · approach — a Forget given in another window does not lift a refusal while the window that gave it is open: that window cannot tell a Forget from a lost "no", so it writes the refusal again and says so (K5 of E1, gate G2)
+  (J2, W3, W9, X9 and the run condition of R8 share this one cause. The first change of epoch 1: one more stops the plan.)
 
 ## The goal
 
@@ -395,8 +398,11 @@ does not come before the first round. The state is one `globalState` row, `coai.
 
 **How a person forbids a host.** ***Not this host*** — in the hosts list, in a host's row of the accounts list, or
 in the question — stops every ssh call to it, and its reading is dropped at once. ***Forget* no longer stops the
-accounts read**: it removes the row, and the next round allows the host again. A read that is already running ends
-within its 30 s and its result is dropped.
+accounts read**: it removes the row, and the next round allows the host again. **One case is different (ledger entry
+1.1):** a *Forget* given in ANOTHER window does not lift a "no" while the window that gave that "no" is open. That
+window cannot tell the missing row from a refusal that was lost (point 3 above), so it writes the "no" again and says
+so in a notice. *Forget* in the window that gave the "no", *Read* in any window, and a *Forget* after that window was
+closed or reloaded all hold. A read that is already running ends within its 30 s and its result is dropped.
 
 **What a person can no longer choose.** They cannot allow the session read on a host and refuse the accounts read on
 the same host. With the setting on, they are not asked before a host is contacted for the first time.
@@ -831,7 +837,9 @@ latest, its text names this plan beside *The person agrees to each host once*.
   press changes a "no".
 - **The automatic "yes", the cap, the stop button and the notices**: a host with no row gets the marked row before
   its call is spawned and is read in the same round; a "no" is never replaced — not by a round, a reload, or a second
-  terminal; *Forget* removes the row and the next round allows the host again; **the cap**: with 100 rows a new host
+  terminal; *Forget* removes the row and the next round allows the host again, but a *Forget* of a "no" from
+  another window, while the window that gave it is open, is undone by that window with a notice (ledger entry
+  1.1); **the cap**: with 100 rows a new host
   drops the oldest automatic row and never a person's, and with 100 rows of a person it is not allowed and not
   contacted (100 invented hosts and one "no": the "no" holds); the session door on an automatically allowed host
   reads without asking, and on a host with no row it asks; the timer raises no question (a test fails if the ask seam
@@ -970,7 +978,7 @@ Cornerstones: 1 of 1 — E1.S2
 | R5 | A host that cannot be reached | Its own sentence within 30 s, and every other host is still read in that round |
 | R6 | Stopping | Every `Creds:` terminal closed: 0 logins in the next 20 minutes. *Stop the accounts round*: 0 logins in 20 minutes, also after a reload; started again, a round follows within 60 s |
 | R7 | Two hours, at least 12 rounds, on a host WITH live sessions | **0** live Claude, Codex or agy sessions that ask to sign in again, lose their settings or MCP servers, or stop or restart. The time and size of the agy program before and after: recorded |
-| R8 | The session door and the hosts list | *Take the question* still works, and on an automatically allowed host it reads without asking. *Not this host*: 0 logins in 20 minutes, also after a reload and after the terminal is opened again. *Forget*: exactly 1 login in the next round, and the list says the host was allowed again |
+| R8 | The session door and the hosts list | *Take the question* still works, and on an automatically allowed host it reads without asking. *Not this host*: 0 logins in 20 minutes, also after a reload and after the terminal is opened again. *Forget*, pressed in the window that gave the host's answer (ledger entry 1.1; else the record names the window and shows the notice of a refusal written again): exactly 1 login in the next round, and the list says the host was allowed again |
 | R9 | The time of a read (the plan's M7): 10 reads of each host from Windows with the pinned options | None is killed at 30 s; the slowest is under 20 s; `agy --version` is under 4 s; a reply is at most 64 lines and 8 KiB. The median is recorded. A host of an account with no 5-hour window shows `5h —` |
 | R10 | **Which hosts lack `jq`** — every host of the owner's `Creds:` terminals | A table: `jq` there or not, the manager word, root or `sudo` without a password. A host without `jq` shows the fixed command for its manager; after the owner runs it, the next round reads the accounts. The count of hosts without `jq` is recorded for C1 |
 | R11 | The setting off, in the user settings | 0 logins to a new terminal's host in 20 minutes, and it says *not asked yet*; 0 logins to a host that was allowed automatically, until *Read* is pressed; a workspace `settings.json` that says the opposite changes nothing; the same in a WSL or remote window, if the owner uses one |

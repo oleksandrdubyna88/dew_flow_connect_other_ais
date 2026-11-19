@@ -6,7 +6,12 @@
 > § 3 and § *Security*; its appendix, § G). Written by Fable before any S1 code (the security row of
 > `subagent-models.md`: authorisation, outside the cornerstone quota). It holds the security judgement on who is
 > contacted with the person's keys (§ S1.10), which must stand before S1 is coded. It keeps no change ledger: a change
-> is an entry in the parent (epoch 1 is open with 0 changes). It is promoted with the E1 stories document.
+> is an entry in the parent (epoch 1 is open with ONE change, 1.1, which is K5 of this spec; the next accepted change
+> is a full stop). Reviewed by Opus at gate G2 on 2026-11-19
+> ([PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_G2.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_G2.md));
+> its verdict is applied in this text: K5 is the parent's entry 1.1, and a damaged list is mended with no notice and
+> no question of its own. It is promoted with the E1 stories document. Parent line numbers (`:n`) are the parent's
+> as it stands with entry 1.1.
 >
 > Scope: `src_vs_code` only. NEW pure `src/remoteHosts.ts`; `src/remoteRead.ts` (the road's store seam);
 > `src/remoteSessionHost.ts`; `src/modelKeys.ts`; `src/sideConfig.ts`; `src/configTransfer.ts`; `src/extension.ts` (one
@@ -18,7 +23,18 @@
 
 ## Changes to the parent
 
-**None.** This spec needs no entry in the parent's ledger. Epoch 1 stays at 0 changes.
+**One: K5. It is entry 1.1 of the parent's ledger** — 2026-11-19, `reviewer` (the judge of gate G2), kind `approach`:
+a *Forget* given in another window does not lift a refusal while the window that gave it is open. This spec first
+said "none". Gate G2 judged otherwise: the parent could be read both ways (its § 3, point 2 against point 3), the
+stories document had read it the other way (its A1-T6), and in doubt it is a change. The parent's text says it now
+(§ 3, *How a person forbids a host*, `:400-404`; the test plan, `:840-842`; R8, `:981`). J2 (the notice W9), the
+sentence of W3, X9 and R8's run condition have the same cause and are the same entry. **Epoch 1 has one change; one
+more stops the plan.**
+
+**Two things were fitted to the parent's text at gate G2, so that neither is a change.** A damaged list is mended by a
+person's own answer in the change question that exists, with no notice and no question of its own (J3, § S1.3): this
+spec first added the notice `remote-hosts-damaged` and the modal `mend-remote-hosts`, and both are gone. And nothing
+here moves U10 (the stories document, K3).
 
 **K5 is decided without a new row kind.** A person's *Forget* in another window and a lost "no" leave the same store:
 no row. This spec adds nothing to the store that would tell them apart. The window that wrote the "no" treats both as
@@ -29,49 +45,55 @@ is named in § S1.5: a *Forget* does not hold from another window while the wind
 
 **The other way, not taken: a tombstone.** A fourth row kind that reads as "no answer" and that the repair honours
 would make a *Forget* hold from every window. It is a change of the parent — kind `contract`: the parent's row is
-`{ host, answer, askedUtc }` plus `how: 'auto'` (parent `:321`), and *Forget* "removes the row" (parent `:397-398`,
-`:834`). It also costs more than its entry: an older build reads such a row as a real answer or as a damaged list
+`{ host, answer, askedUtc }` plus `how: 'auto'` (parent `:324`), and *Forget* "removes the row" (parent `:400-404`,
+`:840-842`). It would be a second entry, and so a full stop. It also costs more than its entry: an older build reads such a row as a real answer or as a damaged list
 (F2, F3), and it needs its own cap rule and its own retirement. It does not make a refusal safer. If the owner wants
 *Forget* to hold across windows, that is the change to record, and § S1.4 (the merge table) and § S1.5 (rule 2 of the
 repair) are where it goes.
 
 **Inside the parent's text, named so the caller can judge each.** None changes the scope, a goal, the Definition of
-Done, a merge condition or the parent's row.
+Done, a merge condition or the parent's row. Gate G2 judged each (its § 1.2): J1, J4, J5 and J6 are inside; J2 is
+part of entry 1.1; J3 is inside once it has no surface of its own.
 
 | # | What this spec does | The parent's sentence it stands on |
 |---|---|---|
-| J1 | The repair has a third moment: once in 60 s while the window holds a refusal (§ S1.5). The parent names two moments, "before every call and after every commit" (`:337`). A window whose only host was just refused makes no call and no commit: its timer is cleared (parent `:282`). Without the third moment that window never looks | "A refusal is repaired, never lost" (`:336`) |
-| J2 | A notice each time a refusal is written again (§ S1.8, W9). It is how a person learns why a *Forget* did not hold, and it is the record R12 can read | "What the person is told" (`:360`) |
-| J3 | A damaged list contacts nobody, is never written over, and is repaired only by a person's press (§ S1.3). The parent does not discuss a damaged list (K6) | "Never overridden" (`:319`) |
-| J4 | A person's answer is stamped later than the row it replaces (§ S1.4). Two windows of one profile can have two clocks (F20) | "A person's "yes" beats an automatic "yes"… Only a person's own press changes a "no"" (`:333-335`) |
-| J5 | The key is NOT listed in `src/settingsShape.ts` (§ S1.7, K9). The parent lists that file (`:384`). A key there must reach the server's settings file (F14) and is read through a per-side overlay (F13) | "Only the person's own user-level value counts" (`:379`) |
-| J6 | At a full list a person's answer may push out the oldest person's "yes", never a "no" (§ S1.4, K7). The parent speaks only of the automatic row | "The cap protects the person's answers" (`:345`) |
+| J1 | The repair has a third moment: once in 60 s while the window holds a refusal (§ S1.5). The parent names two moments, "before every call and after every commit" (`:340`). A window whose only host was just refused makes no call and no commit: its timer is cleared (parent `:285`). Without the third moment that window never looks | "A refusal is repaired, never lost" (`:339`) |
+| J2 | A notice each time a refusal is written again (§ S1.8, W9). It is how a person learns why a *Forget* did not hold, and it is the record R12 can read. **Part of the parent's entry 1.1:** it exists only to say K5 | "What the person is told" (`:363`) |
+| J3 | A damaged list contacts nobody, is never written over, and is mended only by a person's own answer for a host, in the change question that exists (§ S1.3). The parent does not discuss a damaged list (K6). **Fitted at gate G2:** no notice and no question of its own — a new surface was a change in doubt | "Never overridden" (`:322`) |
+| J4 | A person's answer is stamped later than the row it replaces (§ S1.4). Two windows of one profile can have two clocks (F20) | "A person's "yes" beats an automatic "yes"… Only a person's own press changes a "no"" (`:336-338`) |
+| J5 | The key is NOT listed in `src/settingsShape.ts` (§ S1.7, K9). The parent lists that file (`:387`). A key there must reach the server's settings file (F14) and is read through a per-side overlay (F13) | "Only the person's own user-level value counts" (`:382`) |
+| J6 | At a full list a person's answer may push out the oldest person's "yes", never a "no" (§ S1.4, K7). The parent speaks only of the automatic row | "The cap protects the person's answers" (`:348`) |
 
 ## Changes to § 4 and § 5 of the stories document (for gate G2)
 
 The caller puts these into the stories document and into the S3 and S4 briefs in ONE commit, before S3 or S4 is
-coded. The rows are X1…X13.
+coded. The rows are X1…X16; X14…X16 were added at gate G2, from its findings C-2, C-3 with S-2, and its § 4. **They
+are in the stories document since 2026-11-19** (its § 4 and its S3 and S4 briefs).
 
 | # | Where | The stories document says | This spec says | Who must follow |
 |---|---|---|---|---|
 | X1 | C1, the file | The pure half is in `src/remoteRead.ts` | The store is in NEW pure `src/remoteHosts.ts` (the `remote` prefix, so the log scan covers it). `remoteRead.ts` is 509 lines today and would pass 800 | S3, S4 import from `./remoteHosts` |
-| X2 | C1, `HostChange` | Three kinds: `person`, `forget`, `auto` | Two more, sent only by S1 itself: `repair` (a refusal this window wrote, written again) and `mend` (a person repairs a damaged list) | S3 and S4 send none of the two |
+| X2 | C1, `HostChange` | Three kinds: `person`, `forget`, `auto` | Two more, sent only by S1 itself: `repair` (a refusal this window wrote, written again) and `mend` (a person's answer for one host over a damaged list, which repairs it in the same write) | S3 and S4 send none of the two |
 | X3 | C1, `Committed` | Named, not defined | § S1.4: `written`, `kept`, `full`, `damaged` | S3 (the state row uses its own result type) |
 | X4 | C1, `consentOf` | "stays the one function" | `consentOf(value, host, allowNew)`; `Consent` gains `'damaged'` | — |
 | X5 | § 2, the store seam | `RoadSeams.store` `{ read, write(rows) }`; `AnswerStore`; `RemoteSessions.answers` | `RoadSeams.store` is `{ consent(host), answer(host, answer) }`. `withAnswer`, `withoutHost`, `answersOf`, `AnswerStore.write` and `RemoteSessions.answers` are gone. No function of the product takes a list to write | S3's change-signal listener reads `hostStandings()` |
 | X6 | C1 and C5, the commit primitive | "reusable for another `globalState` key" | The pure `commit(state, key, change, merge)` is exported. S3 writes the state row through the BOUND `sessions.commitKey(key, change, merge)`, never through the pure one: the bound one runs the repair after the write (§ S1.5) | S3 |
 | X7 | C1, for the list | `ignoredLayerOf(key)` (pure, in `modelKeys.ts`) | Pure `ignoredLayerOf(inspect, key)` in `modelKeys.ts`; bound `sessions.ignoredLayer()` and `sessions.allowsNewHosts()` for S4's view | S4 |
-| X8 | C1, `hostStandings()` | each row as the list shows it | Unchanged. Over a damaged list it gives the rows that can be read; S4 learns "damaged" from the admission and draws W11 | S4 |
-| X9 | A1-T6 | "a person's *Read* or *Forget* of that host in another window is not undone" | *Read* is not undone. *Forget* in ANOTHER window IS undone, with a notice (K5). A1-T14 gains a fourth description (an automatic row with the setting off) | The reviewer |
+| X8 | C1, `hostStandings()` | each row as the list shows it | Unchanged. Over a damaged list it gives the rows that can be read. S4 learns "damaged", "full" and "not asked yet" from `HostMemory.admission`, which S3's round sets from each admission that was not `read` (the stories document, C4; gate G2, C-4), and draws W11 | S3, S4 |
+| X9 | A1-T6 | "a person's *Read* or *Forget* of that host in another window is not undone" | *Read* is not undone. *Forget* in ANOTHER window IS undone, with a notice (K5 — the parent's entry 1.1). A1-T14 gains a fourth description (an automatic row with the setting off) | The reviewer |
 | X10 | C7 and A3-H1 | A3-H1 removes its rows "by S1's commit (*Forget*)" | The road's test door has `commit`, `admit`, `standings`, `stored` and `restore`; `answers` is gone. A3-H1 restores with `restore(stored())` taken before it started | S3 |
 | X11 | A1-H1 | one host scenario | A1-H2 added: the setting through the real configuration | — |
 | X12 | C6 | — | `dayOf(askedUtc)` is exported from `remoteHosts.ts`; the hosts list (S1) and the host sentence *allowed automatically on <day>* (S4) both call it | S4 |
-| X13 | § 3, the census | 185 sites | S1 adds three: `remote-host-refusal-restored`, `remote-hosts-damaged`, `mend-remote-hosts`. S4 counts from what S1 leaves | S4 |
+| X13 | § 3, the census | 185 sites | S1 adds ONE: `remote-host-refusal-restored` (W9), so 186 after S1. The two others this spec first added, `remote-hosts-damaged` and `mend-remote-hosts`, do not exist (J3 fitted at gate G2). S4 counts from what S1 leaves | S4 |
+| X14 | S3, `armFor` (gate G2, C-2) | "an eligible host = … a host whose `consentOf` is not `no`" | S3 never calls `consentOf`. A host is eligible for the timer when `sessions.hostStandings()` holds no "no" for it. Whether a host is CONTACTED is `admitHost`'s answer alone, asked before every call | S3; A1-T2's scan stays as written (`consentOf(` in `remoteHosts.ts` and in `readsKey` only) |
+| X15 | C5, the state row (gate G2, C-3 and S-2) | `accountsStateOf` reads a damaged value as `{}`; `withStateChange(state, change)` takes a parsed state | S3's merge for the state row is a `Merge<C, R>` of § S1.4 — over the stored value as `unknown` — given to `sessions.commitKey`. A damaged state row reads as STOPPED, and only a person's *start* or *stop* writes over it: the rule of J-d for this row | S3; A3-T23 |
+| X16 | C7, the open point below (gate G2, § 4) | — | In `ExtensionMode.Test` the round never arms itself, and the default accounts call is a stub that spawns nothing until a scenario replaces it | S3; A3-T27 |
 
-**One open point for S3, found here, not decided here.** Three existing host scenarios open a terminal called
-`Creds: h / s` (`src/test/host/terminalHostsScenario.ts:56`, `src/test/host/terminalDoorsScenario.ts:60`, `:94`). After
-S3, a round armed by such a terminal would start the REAL ssh 30 s later, in CI's real-editor job, unless the round is
-not armed by itself in test mode or its call is replaced for the whole host run. S3 owns that.
+**The open point for S3, found here, was decided at gate G2 (its § 4; X16).** Three existing host scenarios open a
+terminal called `Creds: h / s` (`src/test/host/terminalHostsScenario.ts:56`, `src/test/host/terminalDoorsScenario.ts:60`,
+`:94`). After S3, a round armed by such a terminal would start the REAL ssh 30 s later, in CI's real-editor job. So in
+test mode the round is never armed by itself, AND an accounts call that a scenario has not replaced is a stub that
+never reaches `ssh`: two locks, both in S3's brief (the stories document, S3, and A3-T27).
 
 ## S1.0 — What was read
 
@@ -108,7 +130,7 @@ not armed by itself in test mode or its call is replaced for the whole host run.
 
 | # | What | What the design does about it |
 |---|---|---|
-| V1 | What one `Memento.update` writes: its one key, or the extension's whole state as that window holds it. If it is the whole state, a window's write of ANY key can put back an old list of hosts | The design holds for both: A1-T3 runs against both fakes, and the repair runs after every commit and on a timer. R12 reads the result (parent `:977`: "after B's next write") |
+| V1 | What one `Memento.update` writes: its one key, or the extension's whole state as that window holds it. If it is the whole state, a window's write of ANY key can put back an old list of hosts | The design holds for both: A1-T3 runs against both fakes, and the repair runs after every commit and on a timer. R12 reads the result (parent `:985`: "after B's next write") |
 | V2 | How soon a window sees another window's write (the parent's U12). Only an upper bound is measured (F20) | The parent's residual stands; R12 measures it |
 | V3 | What `inspect()` answers for an `application` key that a workspace file sets; what a WSL or remote window reads for such a key; whether Settings Sync carries it | The read never looks at a workspace or folder value, whatever VS Code hands over. R11 and A1-H2 observe |
 | V4 | That another extension can write this extension's user-level setting | Named as a residual (§ S1.10) |
@@ -130,17 +152,18 @@ not armed by itself in test mode or its call is replaced for the whole host run.
    lack is the merge, a cap that keeps a "no", and a seam that cannot be handed a list.
 4. **The merge, for one host:** a person's "no" beats everything. A person's "yes" beats an automatic "yes". An
    automatic "yes" is written only where the list read in that step has NO row for the host. Only a person's press
-   changes a "no". (The parent's rule 2, `:333-335`, as a table in § S1.4.)
+   changes a "no". (The parent's rule 2, `:336-338`, as a table in § S1.4.)
 5. **A list that cannot be read is not an empty list (K6).** `undefined` — the key was never written — is empty.
    Anything else that is not an array of valid rows is `damaged`: no host is allowed by itself, no host at all is
-   contacted by the round, and no commit writes over it. Only a person's press mends it. (This spec says "mend" for
-   a damaged list and "repair" for a refusal that is written again, so the two are never mixed up.)
+   contacted by the round, and no commit writes over it. Only a person's press mends it: an answer for a host, given
+   in the change question that exists. A damaged list has no notice and no question of its own (gate G2). (This spec
+   says "mend" for a damaged list and "repair" for a refusal that is written again, so the two are never mixed up.)
 6. **A row with a marker this build does not know is not a row.** `how` is absent or `'auto'`. Any other value, and
    an `'auto'` beside a "no", make the list `damaged`. Such a row could mean anything a later build decided; read as
    a person's "yes" it would contact a host on an unknown ground, and read as automatic it could be pushed out.
 7. **The cap never drops a "no", and an automatic row never pushes out a person's row (K7).** § S1.4 has the order.
 8. **A refusal is guarded by the window that wrote it** — before every call, after every commit, and once in 60 s
-   while it holds one. A person's later "yes" releases it; nothing else does (K5, § S1.5).
+   while it holds one. A person's later "yes" releases it; nothing else does (K5, § S1.5; the parent's entry 1.1).
 9. **A person's answer is stamped later than the row it replaces.** So "later" in rule 8 does not depend on two
    clocks agreeing.
 10. **The setting is read from the user layer, afresh, at every call**, through the door that exists, and through
@@ -151,7 +174,7 @@ not armed by itself in test mode or its call is replaced for the whole host run.
 12. **The door of the round never asks.** The keeper's seams have no ask. The session road keeps its question.
 13. **The session road is not serialized with the store beyond its first read**, as today: a "no" given while a
     press runs does not stop that press's later calls. Named (§ S1.10), not changed: the parent says the session
-    reader behaves as before (`:879`).
+    reader behaves as before (`:887`).
 14. **No whole-list write in the product, and one in the test door (K15).** Scenarios set a host's answer by a
     commit. They put the profile back with `restore`, which exists only in test mode.
 15. **The words are in the pure module**, so a unit test holds them (A1-T14). The host file only passes them on.
@@ -173,9 +196,9 @@ export interface HostAnswer {
 | The value | absent, or an array of at most 100 rows | the same |
 | A row | `{ host, answer, askedUtc }` | the same, or with `how: 'auto'` on an automatic "yes" |
 | Who writes a row | a person's press | a person's press; the round's door (automatic); the window that wrote a "no" (the repair) |
-| What a "yes" row allows | one session read, on a press | parent § 3 (`:355-358`) |
+| What a "yes" row allows | one session read, on a press | parent § 3 (`:358-361`) |
 
-**Migration: none on disk.** Every row stored today has no `how`, so it reads as a person's answer (parent `:321`,
+**Migration: none on disk.** Every row stored today has no `how`, so it reads as a person's answer (parent `:324`,
 appendix `:573-575`). Nothing is rewritten at activation. The first commit keeps every other row by reference, as
 `withAnswer` does today (F5), so a key a later build adds to a row survives this build.
 
@@ -211,27 +234,39 @@ export function consentOf(value: unknown, host: string, allowNew: boolean): Cons
 
 In this order: (1) a readable "no" for the host → `no`, also in a damaged list; (2) the list is damaged → `damaged`,
 also for a host whose readable row is a "yes" — an entry that cannot be read may be that host's "no"; (3) a person's
-"yes" → `yes`; (4) an automatic "yes" → `yes` when `allowNew`, else `ask` (parent `:374-376`: with the setting off an
+"yes" → `yes`; (4) an automatic "yes" → `yes` when `allowNew`, else `ask` (parent `:377-379`: with the setting off an
 automatic row counts as no answer, and it is kept); (5) no row → `ask`.
 
 **What a damaged list does, everywhere.**
 
 - **The round's door** answers `refused` for a host with a readable "no" and `damaged` for every other host. No ssh
   call, no automatic row.
-- **Every commit** but the person's `mend` answers `damaged` and writes nothing. The stored value stays the same
+- **Every commit** but a person's `mend` answers `damaged` and writes nothing. The stored value stays the same
   value. So a row a later build wrote is never destroyed by this build.
 - **The session road** does not ask and does not read. It answers W6 (§ S1.8). Today it asks, and the answer
   overwrites the whole value with one row (F3, `src/remoteRead.ts:361`).
 - **The terminal's two overflow items stay shown** (`readsKey` is true unless the answer is `no`): the press says
   what is wrong.
-- **The person is told** in four places: the session door's sentence (W6); the host's row of the accounts list
-  (W11, drawn by S4); ONE notice for each window, the first time its door meets the damage (W8); and *CoAI: hosts
-  read over ssh*, which then opens the mend question in place of the list.
-- **The mend is a person's press and nothing else.** The question W7 says how many answers can be read, how many
-  of them are refusals, how many entries cannot be read, and that one of those may have been a refusal. Its one
-  button, *Keep what can be read*, commits `{ kind: 'mend' }`: the readable rows, one for each host, at most 100 with
-  the refusals first. Escape changes nothing. `changeHost(host)` and `askHost(host)` open the same question while the
-  list is damaged.
+- **The person is told** in three places, each of which exists or is a row of a list — no notice and no question of
+  its own (J3, fitted at gate G2): the session door's sentence (W6); the host's row of the accounts list (W11, drawn
+  by S4); and *CoAI: hosts read over ssh*, whose change question then says what is damaged (W7). Until the person
+  looks at one of the three, nothing tells them: the cost is in § S1.10, residual 8.
+- **The mend is a person's answer for ONE host, in the change question that exists** — code
+  `change-remote-host-answer`, its three buttons *Read*, *Not this host* and *Forget*; no new code, no new button, no
+  new notice site. Over a damaged list the question's detail starts with W7: how many answers can be read, how many
+  of them are refusals, how many entries cannot be read, that one of those may have been a refusal, and that an
+  answer given here repairs the list. *Read*, *Not this host* or *Forget* then commits ONE change,
+  `{ kind: 'mend', host, answer }`: the readable rows, one for each host, at most 100 with the refusals first, and —
+  in the same write — the person's answer for that host, by the merge and the cap of § S1.4. Escape changes nothing.
+  So the mend is what the parent wants of every change to a "no": a person's own press (parent `:338`).
+- **How a person reaches that question.** `changeHost(host)` opens it: from *CoAI: hosts read over ssh*, and from a
+  host's row of the accounts list (S4). `askHost(host)` over a damaged list is `changeHost(host)`. Over a damaged
+  list *CoAI: hosts read over ssh* lists the hosts whose answer can be read AND the hosts of this window's live
+  `Creds:` terminals that have none (the description W4c), so a list in which no answer can be read is still mended
+  from there. The rows are chosen by a pure function of this module, `listedHosts(value, liveHosts)`; the host file
+  hands it the hosts of `liveTerminals`. Over a list that can be read it adds no host: the list is as today. With
+  neither — no readable answer and no `Creds:` terminal — nobody can be contacted in any case, and the command says
+  so with the third wording of W5, under the code that exists (`no-remote-host-asked`).
 
 **Why not read what can be read and go on.** A list with one unreadable entry may have held a refusal in that entry.
 Going on would allow that host by itself in the next round. This is the case K6 names, and A1-T8 holds it.
@@ -239,13 +274,14 @@ Going on would allow that host by itself in the next round. This is the case K6 
 ## S1.4 — The one write: the commit, the merge, the stamp and the cap (K7)
 
 ```ts
-/** A change for ONE host — never a list. `repair` and `mend` are sent only by this module's own keeper. */
+/** A change for ONE host — never a list. `repair` is sent only by this module's own keeper; `mend` only by the change question, over a damaged list. */
 export type HostChange =
   | { readonly kind: 'person'; readonly host: string; readonly answer: 'yes' | 'no' }
   | { readonly kind: 'forget'; readonly host: string }
   | { readonly kind: 'auto'; readonly host: string }
   | { readonly kind: 'repair'; readonly host: string; readonly askedUtc: string }
-  | { readonly kind: 'mend' };
+  /** A person's answer for one host over a damaged list: the readable rows are kept and this answer is applied, in the one write. */
+  | { readonly kind: 'mend'; readonly host: string; readonly answer: 'yes' | 'no' | 'forget' };
 
 export type Committed =
   /** `row`: the host's row after the write, or `undefined` when it was removed. `evicted`: the hosts whose row went at the cap. */
@@ -263,7 +299,7 @@ export async function commit<C, R>(state: KeyValueStore, key: string, change: C,
 
 `KeyValueStore` is the seam of `src/sideSettings.ts:11-14` (F21), imported as a type. `commit` calls `state.get(key)`,
 then `merge`, then — when `next` is given — `state.update(key, next.value)`, and only then awaits. It is the commit
-of the parent's rule 1 (`:330-332`) and the generic primitive of C1 and C5.
+of the parent's rule 1 (`:333-335`) and the generic primitive of C1 and C5.
 
 **The merge, for one host.** "Fresh" is the host's row in the list read in this step.
 
@@ -276,7 +312,14 @@ of the parent's rule 1 (`:330-332`) and the generic primitive of C1 and C5.
 | `repair`, of a "no" written at T | write "no" | write "no" | later than T: kept, and the window lets go of it. Not later: write "no" | kept |
 
 Every write for a host removes all rows of that host and puts one. Over a damaged list every row of this table is
-`damaged`. `mend` writes only over a damaged list (§ S1.3) and is `kept` over a readable one.
+`damaged`.
+
+**`mend` is the one change that writes over a damaged list** (§ S1.3). In the one write: first the readable rows, one
+for each host — the strongest, as § S1.3 reads two rows of one host — at most 100, the refusals first; then its
+answer, as the `person` or the `forget` row of the table above, with the stamp and the cap below. If the answer cannot
+be kept (a hundred refusals and a new host), the commit answers `full` and NOTHING is written: the list stays
+damaged, and the person is told (W6). Over a list that can be read — another window mended it first — a `mend` is its
+plain `person` or `forget` change. No other change, and no operation of the keeper, writes over a damaged value.
 
 **The stamp (J4).** An automatic row is stamped `now`. A person's row, and a repaired "no", are stamped the later of
 `now` and one millisecond after the `askedUtc` of the row they replace (for a repair, `now` is T). An `askedUtc` that
@@ -294,8 +337,8 @@ A "no" is never dropped, by any change. So:
 
 | At 100 rows | The change is automatic | The change is a person's |
 |---|---|---|
-| an automatic row exists | it goes; the new host is allowed (parent `:346`) | it goes |
-| none; a person's "yes" exists | `full`: not allowed, not contacted (parent `:346-347`) | the oldest person's "yes" goes |
+| an automatic row exists | it goes; the new host is allowed (parent `:349`) | it goes |
+| none; a person's "yes" exists | `full`: not allowed, not contacted (parent `:349-350`) | the oldest person's "yes" goes |
 | 100 refusals | `full` | `full`: the answer is not kept, and the person is told (W6) |
 
 A dropped "yes" loses nothing that protects: that host is allowed again by the round, or asked about again. In the
@@ -312,6 +355,9 @@ summary names the three.
 
 ## S1.5 — A refusal that is repaired, and a *Forget* in another window (K5)
 
+**This section is the parent's ledger entry 1.1** (2026-11-19, kind `approach`). The parent's § 3 says the same since
+that entry: a *Forget* given in another window does not lift a "no" while the window that gave it is open.
+
 **The keeper.** One for each window, built once in `bindRemoteSessions`. It is the bound form of this module:
 
 ```ts
@@ -322,8 +368,7 @@ export interface KeeperSeams {
   readonly allowNew: () => boolean;           // coai.terminalAccountsAllowNewHosts, read afresh at every call
   readonly changed: () => void;               // after every commit that wrote
   readonly restored: (host: string) => void;  // a refusal was written again (W9)
-  readonly damaged: () => void;               // the first time this keeper meets a damaged list (W8)
-}
+}                                             // no seam for a damaged list: it has no notice of its own (gate G2)
 
 export interface HostKeeper {
   readonly stored: () => unknown;
@@ -346,7 +391,7 @@ export const GUARD_MS = 60_000;
 **What a window remembers.** A map from a host to the `askedUtc` of the "no" this window wrote for it. An entry is
 set when this window's commit of a person's "no" was `written`. It is removed when this window commits a person's
 "yes" or a `forget` for that host — BEFORE the guard that follows the commit — and when a repair finds a person's
-later "yes". It lives while the window lives (parent `:336`).
+later "yes". It lives while the window lives (parent `:339`).
 
 **When it looks.** `guard()` commits one `repair` for each remembered host. It runs:
 
@@ -386,8 +431,9 @@ them. The second mistake is seen and has two ways out; the first is the silent f
 
 **What it costs, said plainly.** With two windows open, *Forget* pressed in the window that did NOT give the "no"
 is undone within a minute. If B's round runs first, B allows the host by itself and reads it once; then A's "no"
-replaces B's automatic row. For E2: R8's *Forget* (parent `:973`) is pressed in the window that gave the "no", or
-the record says which window and shows the notice. No criterion changes.
+replaces B's automatic row. For E2: since entry 1.1 the parent's R8 (`:981`) says that its *Forget* is pressed in the
+window that gave the host's answer, or that the record names the window and shows the notice of a refusal written
+again.
 
 **What the repair is for.** Rule 1 of the parent makes a stale VARIABLE harmless: the commit reads at the write.
 It cannot make a stale WINDOW harmless: a window's read of `globalState` answers what that window holds (V1, V2).
@@ -417,9 +463,10 @@ export interface HostStanding {
    `damaged`. Else read the store ONCE more, in the step that answers: `yes` → `read`, `how` from the row,
    `allowedNow` true only when this commit was `written`; `no` → `refused`.
 
-So the marked row is in the store before S3 can spawn (parent `:832-833`), and an automatic row is never written
-over a row (the merge). The keeper calls `seams.damaged()` ONCE in its life: the first time `admit` or `consent`
-answers `damaged`. `admit` has no way to ask a person: `KeeperSeams` has no ask.
+So the marked row is in the store before S3 can spawn (parent `:838-839`), and an automatic row is never written
+over a row (the merge). Over a damaged list `admit` and `consent` answer `damaged` and raise nothing: the keeper has
+no seam for a notice of damage (J3, fitted at gate G2). S4 draws W11 from the admission that S3's round keeps for the
+host (X8). `admit` has no way to ask a person: `KeeperSeams` has no ask.
 
 **The session road** (`src/remoteRead.ts`). Its store seam becomes:
 
@@ -441,7 +488,8 @@ calls, the picked id, the sentences.
 **The bound road** (`src/remoteSessionHost.ts`): `RemoteSessions` loses `answers` and gains `commitHost` (the
 keeper's `commit`), `commitKey`, `admitHost`, `hostStandings`, `changeHost(host)` (the three choices for one host;
 the body of today's `changed`, `:136-141`, with commits), `askHost(host)` (the question for a host with no answer,
-committed), `allowsNewHosts()` and `ignoredLayer()`. `changeHosts` stays. The change signal of today (`:165`) is the
+committed), `allowsNewHosts()` and `ignoredLayer()`. Over a damaged list `changeHost` opens the change question with
+W7 before its detail and commits a `mend`, and `askHost` is `changeHost` (§ S1.3). `changeHosts` stays. The change signal of today (`:165`) is the
 keeper's `changed`. `setReadsKey` reads `stored()`.
 
 ## S1.7 — The setting `coai.terminalAccountsAllowNewHosts` (K9)
@@ -486,7 +534,7 @@ second layer. The first is the read.
   configuration object at every call. An object taken once would answer the value of that moment for ever.
 
 **The ignored-layer sentence**, drawn by S4 as the first row of the accounts list when `ignoredLayer()` names a
-layer (parent `:224-225`). The value is not read in either case, and the row may never appear (V3):
+layer (parent `:227-228`). The value is not read in either case, and the row may never appear (V3):
 
 - workspace: *This workspace sets `coai.terminalAccountsAllowNewHosts`. It is ignored: only your own user settings
   count.*
@@ -501,9 +549,9 @@ export never carries the key (`:108`) and an import refuses it by name with that
 
 | Place | Listed | Why |
 |---|---|---|
-| `package.json`, `"scope": "application"`, default `true` | yes | the parent, `:380-381` |
-| `SAFETY_KEYS` → `USER_LAYER_KEYS` | yes | the parent, `:379`, `:384`; the read and the scan follow from the list (F12, F17) |
-| `NEVER_TRANSFERRED` | yes | the parent, `:384-385` |
+| `package.json`, `"scope": "application"`, default `true` | yes | the parent, `:383-384` |
+| `SAFETY_KEYS` → `USER_LAYER_KEYS` | yes | the parent, `:382`, `:387`; the read and the scan follow from the list (F12, F17) |
+| `NEVER_TRANSFERRED` | yes | the parent, `:387-388` |
 | `SETTING_ALIAS`, and its phrase in the English help | yes | F18. The phrase is `allow new hosts by themselves` |
 | `src/settingsShape.ts`: `CoaiSettings`, `DEFAULTS`, `settingsFrom` | **no** (J5) | A key there must change the server's env block (`settingsReach.test.ts:104-116`); this one is not the server's, and nothing in `src_mcp` reads it. `settingsFrom` is fed by `readerFor`, the overlay road (F13). The other `application` keys are not there either (F15) |
 | `NOT_FOR_THE_SERVER` (`settingsReach.test.ts:102`) | no | It lists keys OF `CoaiSettings`; this is not one |
@@ -531,13 +579,14 @@ when it cannot be read. `<n>` and the like are numbers.
 | W3 | The change question: the detail — how the host stands, then W2, then *Forget* | One of: *Your answer now: Read, given <askedUtc>.* · *This host was allowed automatically on <day>; nobody was asked.* · *Your answer now: Not this host, given <askedUtc>.* Then W2. Then, setting on: *“Forget” removes the answer: the host then has none, and the next accounts round allows it again by itself.* Setting off: *“Forget” removes the answer: the host is then not read until you answer the question about it.* Then: *A “Not this host” is guarded by the window it was given in: after “Forget” in another window, that window writes it again. “Read” holds from every window.* |
 | W4 | *CoAI: hosts read over ssh*: a row's description | a person's "yes": *the Claude session and the AI accounts are read* · automatic, setting on: *allowed automatically on <day>: the Claude session and the AI accounts are read* · automatic, setting off: *allowed automatically on <day>; not read while coai.terminalAccountsAllowNewHosts is off* · "no": *not read* |
 | W4b | The same row: its detail | a person's row: *asked <askedUtc>* (as today) · automatic: *nobody was asked; written <askedUtc>* |
-| W5 | The notice of an empty list, code `no-remote-host-asked` (today: *"…asks once"*, `remoteSessionHost.ts:113`) | setting on: *No host is in the list yet. The host of a “Creds: <host> / <session>” terminal is allowed by itself at the first accounts round and is listed here then; choose it here to forbid it.* · setting off: *No host is in the list yet. The host of a “Creds: <host> / <session>” terminal is listed here once you answer the question about it.* |
-| W6 | The session door, a list that cannot be read; and an answer that could not be kept | *The list of hosts read over ssh cannot be read, so nothing was read. Run CoAI: hosts read over ssh to repair it.* · *The list of hosts read over ssh holds 100 hosts you refused, which is all it keeps, so your answer for “<host>” was not kept and nothing was read. Forget one of them in CoAI: hosts read over ssh, then answer again.* |
-| W7 | The mend question, NEW code `mend-remote-hosts`, modal, one button *Keep what can be read* | Title: *The list of hosts read over ssh is damaged, so no host is read by itself until it is repaired.* Detail: *<n> answers can still be read, <m> of them “Not this host”. <u> entries cannot be read, and one of them may have been a “Not this host”: after the repair such a host has no answer, and with coai.terminalAccountsAllowNewHosts on it is allowed again by itself. Look through the list afterwards.* |
-| W8 | The notice of a damaged list, NEW code `remote-hosts-damaged`, a warning, once for each window | *The list of hosts read over ssh is damaged, so no host is read by itself. Run CoAI: hosts read over ssh to repair it.* |
+| W4c | The same list over a damaged list: the row of a host of a live `Creds:` terminal for which no answer can be read | *no answer can be read for this host* |
+| W5 | The notice of an empty list, code `no-remote-host-asked` (today: *"…asks once"*, `remoteSessionHost.ts:113`) | setting on: *No host is in the list yet. The host of a “Creds: <host> / <session>” terminal is allowed by itself at the first accounts round and is listed here then; choose it here to forbid it.* · setting off: *No host is in the list yet. The host of a “Creds: <host> / <session>” terminal is listed here once you answer the question about it.* · the list is damaged, no answer in it can be read and no `Creds:` terminal is open: *The list of hosts read over ssh cannot be read, and no answer in it can be read. No host is read over ssh while that is so. Open a “Creds: <host> / <session>” terminal and run this again: your answer for its host repairs the list.* |
+| W6 | The session door, a list that cannot be read; and an answer that could not be kept | *The list of hosts read over ssh cannot be read, so nothing was read. Run CoAI: hosts read over ssh and answer for a host there: your answer repairs the list.* · *The list of hosts read over ssh holds 100 hosts you refused, which is all it keeps, so your answer for “<host>” was not kept and nothing was read. Forget one of them in CoAI: hosts read over ssh, then answer again.* |
+| W7 | The change question over a damaged list — the SAME code `change-remote-host-answer`, the same title W1 and the same three buttons: what its detail starts with, before W3 | *The list of hosts read over ssh is damaged, so no host is read by itself until it is repaired. <n> answers can still be read, <m> of them “Not this host”. <u> entries cannot be read, and one of them may have been a “Not this host”. Your answer here repairs the list: the answers that can be read are kept, and the entries that cannot are dropped. A host of a dropped entry has no answer afterwards, and with coai.terminalAccountsAllowNewHosts on it is allowed again by itself. Look through the list afterwards.* (Before gate G2 this was a question of its own, with the code `mend-remote-hosts` and one button. That code and that button do not exist.) |
+| W8 | — | **Dropped at gate G2** (J3 fitted): a damaged list has no notice of its own, and the code `remote-hosts-damaged` does not exist. The number stays empty so that W9…W11 keep theirs |
 | W9 | The notice of a refusal written again, NEW code `remote-host-refusal-restored`, a warning, `subject` the host | Title: *“<host>” is not read again: your “Not this host” was missing from the list of hosts, and this window wrote it again.* Cure: *If you chose Forget for it in another window: choose Read there, or Forget in this window.* |
 | W10 | The accounts list, the ignored layer (S4 draws it) | § S1.7 |
-| W11 | The accounts list, a host's row over a damaged list (S4 draws it) | *the list of hosts cannot be read, so this host is not read. Run CoAI: hosts read over ssh to repair it.* |
+| W11 | The accounts list, a host's row over a damaged list (S4 draws it) | *the list of hosts cannot be read, so this host is not read. Choose this row and answer for this host: that repairs the list.* |
 
 The buttons *Read*, *Not this host* and *Forget*, the list's title and its placeholder do not change. No word of a
 `notify(` argument in the two `remote*.ts` files is one the log scan refuses (F23): a notice is passed
@@ -589,7 +638,7 @@ Decided before any S1 code. Each item says the decision, what it stands on, and 
 effect is VS Code's and not ours, the words are "we declare" and "we read", not "it protects".
 
 **What this story guards.** Since the owner's decisions O3, N2 and Q1 the store no longer stands before a host is
-contacted (parent, finding F1, `:653-666`). What is left of a gate is the refusal. This story makes that one hold,
+contacted (parent, finding F1, `:659-672`). What is left of a gate is the refusal. This story makes that one hold,
 and it makes the automatic "yes" something only the person can take back.
 
 **An attacker who can name a terminal** — a program that can open a terminal in the window and call it
@@ -610,7 +659,7 @@ a store of a hundred person's rows answers `full` (A1-T7). The cost is noise: up
 notice a day that names them.
 
 One thing a name gains beyond the login, with the setting on: on that host the session door no longer asks (parent
-`:350-353`). A session read still needs a person's press in that terminal.
+`:353-356`). A session read still needs a person's press in that terminal.
 
 With the setting off, a name gains one thing: the host appears in the list as *not asked yet*, and a person may
 press it. The question then names the host and what a "yes" covers (W1, W2).
@@ -641,12 +690,14 @@ first row. A workspace cannot write `globalState`. What a workspace can still do
 - **J-b. An automatic "yes" is written only over no row, in the step of the write.** So a refusal that this window
   can see is never replaced, whatever was read before an `await`. *Not observed:* a refusal this window cannot see
   yet (V2). That is the parent's residual, and the repair's job.
-- **J-c. A missing "no" is written again by the window that wrote it, and "no row" counts as missing (K5).** It
-  fails closed. *Not observed:* whether a "no" ever goes missing on a real machine (V1, V2). The measure is therefore
+- **J-c. A missing "no" is written again by the window that wrote it, and "no row" counts as missing (K5; the
+  parent's entry 1.1).** It fails closed. *Not observed:* whether a "no" ever goes missing on a real machine (V1, V2). The measure is therefore
   described as what the window DOES — it looks, and it writes — not as "a refusal cannot be lost". It can: when the
   window that wrote it is closed, nobody looks.
 - **J-d. A list that cannot be read contacts nobody and is never written over (K6).** The alternative that reads
-  what it can is one unreadable entry away from allowing a refused host.
+  what it can is one unreadable entry away from allowing a refused host. It is mended only by a person's own answer
+  for a host, and it has no notice and no question of its own (gate G2): so the damage is said where a person looks
+  — a host's row, the session door, the hosts list — and nowhere else.
 - **J-e. The cap drops no refusal (K7).** Finding 6 of the gate round gave the installer's record the same rule: a
   row that goes takes its guard with it (appendix `:380-383`).
 - **J-f. A marker this build does not know makes the list unreadable.** It is the same rule as J-d, applied to one
@@ -660,12 +711,12 @@ first row. A workspace cannot write `globalState`. What a workspace can still do
 **Residuals, named.**
 
 1. **One more call before a refusal is seen.** Until this window can see a "no" given in another window, its round
-   can call that host once more (parent `:340-343`, `:706-707`). If its write then erases the "no", the window that
+   can call that host once more (parent `:343-346`, `:712-713`). If its write then erases the "no", the window that
    gave it writes it again within 60 s — if that window is open.
 2. **A refusal is guarded only while the window that gave it lives.** After a close or a reload the row is in the
    store and nobody re-writes it.
-3. **A *Forget* in another window does not hold** while the window that gave the "no" is open (K5). Said in the
-   question and in a notice.
+3. **A *Forget* in another window does not hold** while the window that gave the "no" is open (K5; the parent's
+   entry 1.1). Said in the question and in a notice.
 4. **A window still running an older build** reads an automatic row as a person's "yes", also with the setting off;
    drops the oldest row at its cap, a "no" among them; and guards nothing (§ S1.2). Until it is reloaded.
 5. **A hundred refusals.** The next person's answer is not kept. Said to the person; that host is not contacted by
@@ -674,7 +725,9 @@ first row. A workspace cannot write `globalState`. What a workspace can still do
 7. **The setting can be written by other code in the editor** (V4), and Settings Sync may carry it to the person's
    other machines (V3). It is still the person's own layer.
 8. **A damaged list** stops every accounts read until a person repairs it, and the repair can drop a refusal that
-   could not be read. The question says so.
+   could not be read. The question says so. **No notice says that the list is damaged** (gate G2): a person learns
+   it from a host's row of the accounts list, from the session door or from *CoAI: hosts read over ssh*. Until they
+   look, every host is not read and nothing has told them why. It fails closed, and silently.
 9. **Two clocks.** A person's *Read* in a window whose clock is behind AND whose view is stale can be taken for an
    old row and undone. It fails closed, with the notice.
 10. **With the setting on, the first contact comes before any telling.** That is F1 and the owner's decision; this
@@ -714,19 +767,19 @@ scans of host code, each with a companion that the scan finds what it looks for)
 | A1-T3 | a "no" against an automatic "yes", in both orders, with a stale view (RH) | Windows A and B over one backing. **(a) auto, then no:** B admits `h` (an automatic row, `allowedNow` true); A commits "no" → the backing holds ONE row for `h`, the "no"; B syncs → B's `admit` is `refused`. **(b) no, then auto, B's view fresh:** A commits "no"; B syncs; B admits → `refused`, 0 updates by B. **(c) no, then auto, B holding a list from before A's write:** A commits "no"; B, not synced, admits → B's ONE admission is `read` (the one call the parent's U12 names) and the backing has lost the "no"; A syncs and guards → the backing holds the "no" again, `restored('h')` once; B syncs → `refused`, and from then on 0 admissions `read`. **(d) the same loss by another key, `'whole-state'` only:** B, stale, commits the state row through `commitKey` → the backing's list is B's old one; A's guard writes the "no" again. **(e) two refusals, each window stale to the other:** A refused `h`, B refused `g`; each writes over the other; after one sync and one guard each, the backing holds both | (c): *the store lost “Not this host” for h and nothing wrote it again*; (a), with a stub that writes "yes" over any row: *an automatic “yes” replaced a “Not this host”* |
 | A1-T4 | who may change which row (RH) | Every cell of the merge table of § S1.4: the row after, and whether an update happened. A person's "yes" over an automatic row has no `how`. `auto` over any row → `kept`, 0 updates. `auto` and `repair` over a "no" → the same "no" object. `forget` over no row → `kept`, 0 updates | *an automatic “yes” replaced a row* |
 | A1-T5 | no list is ever handed to a write (RH, RR, HW) | Over every operation of the keeper (each change kind, `admit`, `guard`, `mend`, `commitKey`): every `update` was called in the step of a `get` of the same key. Type level: an object literal with `write` is not a `RoadSeams['store']` (`@ts-expect-error`). HW: no source file exports `withAnswer` or `withoutHost`; `state.update(` is given the hosts key in the keeper's seams and in `testDoorOf` only | The step half is GREEN today — both writers read at the write (F7). RED today is the seam: *RoadSeams.store takes a list to write* |
-| A1-T6 | a refusal this window gave is written again, and a person's later press is not undone (RH) | A commits "no" for `h` at T. **(a) lost:** the backing's row is removed behind A's back; each of the three moments alone writes it again — `admit('other')`, a commit for another host, and a bare `guard()` (the timer's call); `restored('h')` once each. **(b) *Read* in B:** B commits a person's "yes" → A's guard writes nothing and lets go; a later loss of that row is NOT repaired by A. **(c) *Forget* in B:** B commits `forget` → A's guard writes the "no" again and calls `restored('h')` (K5). **(d) *Forget* in A:** A commits `forget` → the row is gone, 0 repairs follow, and A's `admit('h')` with the setting on writes an automatic row. **(e) an old "yes" put back:** a person's "yes" stamped before T replaces the "no" → written again. **(f) two clocks:** B's clock is one hour behind; B, synced, commits a person's "yes" → its stamp is later than T and A lets go; B, stale, does the same → A writes the "no" again. **(g) a damaged list:** the backing becomes `'junk'` → A's guard writes nothing and still guards; after `mend`, the next guard writes the "no" | *a “Not this host” that went missing was not written again* |
+| A1-T6 | a refusal this window gave is written again, and a person's later press is not undone (RH) | A commits "no" for `h` at T. **(a) lost:** the backing's row is removed behind A's back; each of the three moments alone writes it again — `admit('other')`, a commit for another host, and a bare `guard()` (the timer's call); `restored('h')` once each. **(b) *Read* in B:** B commits a person's "yes" → A's guard writes nothing and lets go; a later loss of that row is NOT repaired by A. **(c) *Forget* in B:** B commits `forget` → A's guard writes the "no" again and calls `restored('h')` (K5; the parent's entry 1.1). **(d) *Forget* in A:** A commits `forget` → the row is gone, 0 repairs follow, and A's `admit('h')` with the setting on writes an automatic row. **(e) an old "yes" put back:** a person's "yes" stamped before T replaces the "no" → written again. **(f) two clocks:** B's clock is one hour behind; B, synced, commits a person's "yes" → its stamp is later than T and A lets go; B, stale, does the same → A writes the "no" again. **(g) a damaged list:** the backing becomes `'junk'` → A's guard writes nothing and still guards; after a `mend` (a person's answer for ANOTHER host), the next guard writes the "no" | *a “Not this host” that went missing was not written again* |
 | A1-T7 | the cap drops no refusal, and no person's row for an automatic one (RH) | **The fixture of S3-T2** (99 person's "yes", one "no" that is the oldest row) + a person's "yes" for a new host → 100 rows; `oldest` is still `no`; `h0` is gone. 99 automatic + 1 "no" + an `auto` commit for a new host → `written`, the oldest automatic row went and `evicted` names it; `admit` of one more new host → `read`. 100 person's rows + `admit(new)` → `full`, 0 updates, and the store is the same value. One "no" + 300 admissions of invented hosts → the "no" holds, 100 rows. 100 refusals + a person's "no" or "yes" → `full`; through the road → W6's second sentence, 0 runs. A changed answer of a known host at the cap drops nothing | *the list dropped a “Not this host” to make room* — what `:177` and `:179` of today's test assert |
-| A1-T8 | a list that cannot be read allows nobody (RH, RR) | For each of `'junk'`, `null`, `7`, `{}`, `[null]`, `['h']`, `[{ host: 'h' }]`, `[yes for z, 'junk']`, `[no for x, { host: 'y', answer: 'maybe', askedUtc }]`, `[yes with how 'later']`: `admit` of a new host, setting on → `damaged`; `admit('x')` → `refused`; `admit('z')` → `damaged`; every change kind but `mend` → `damaged`; 0 updates in all, and the stored value is the same value; `damaged()` was called once for the keeper, not once for each host. Through the road: W6's first sentence, 0 asks, 0 runs. `mend` → the readable rows only, one for each host; then `admit` works. **One positive with the same fixture shape:** `[yes for z]`, not damaged → `admit('z')` is `read` | *a damaged list let a new host be allowed by itself*; and through the road: *a damaged list was asked about and then written over: 1 row left of 2* |
+| A1-T8 | a list that cannot be read allows nobody (RH, RR) | For each of `'junk'`, `null`, `7`, `{}`, `[null]`, `['h']`, `[{ host: 'h' }]`, `[yes for z, 'junk']`, `[no for x, { host: 'y', answer: 'maybe', askedUtc }]`, `[yes with how 'later']`: `admit` of a new host, setting on → `damaged`; `admit('x')` → `refused`; `admit('z')` → `damaged`; every change kind but `mend` → `damaged`; 0 updates in all, and the stored value is the same value; **no notice is raised: `KeeperSeams` has no member for one** (an object literal with `damaged` is not a `KeeperSeams`, `@ts-expect-error`). 100 admissions, 100 guards and a `commitKey` of another key leave the damaged value the same value. Through the road: W6's first sentence, 0 asks, 0 runs. **The mend is a person's answer (gate G2):** `{ kind: 'mend', host: 'q', answer: 'no' }` over `[yes for z, 'junk', no for x]` → ONE update; the stored value is `x`'s "no" (the same object), a "no" for `q` and `z`'s "yes", the refusals first; then `admit` works again. The same with `answer: 'yes'`, and with `'forget'` for `z` (its row is gone). Over 100 readable refusals and one bad entry: a `mend` for a NEW host → `full`, 0 updates, the same value; a `mend` with `forget` for one of the hundred → written. Over a list that can be read, a `mend` is its plain change. **Reaching the question:** `listedHosts` over `[yes for z, 'junk']` with the live hosts `z` and `q` → `z` with its answer and `q` with W4c, each once; over a list that can be read the live hosts are not added; over `'junk'` with no live host → no row, and the command says the third wording of W5. **One positive with the same fixture shape:** `[yes for z]`, not damaged → `admit('z')` is `read` | *a damaged list let a new host be allowed by itself*; and through the road: *a damaged list was asked about and then written over: 1 row left of 2* |
 | A1-T9 | the store and the setting are read again before every call (RH) | Two admissions of `h` with a person's "yes": between them another view commits "no" and this one syncs → the second is `refused`. Two admissions of two new hosts: the `allowNew` seam turns false between → the first writes a row, the second is `not-asked` with 0 updates. `allowNew` was called at least once for each admission, after its guard | *a “no” given between two calls did not stop the second* |
 | A1-T10 | the setting, on and off (RH, RR) | **On:** `admit` of a host with no row → `read`, `auto`, `allowedNow` true; again → `allowedNow` false. With an `update` that resolves only when the test lets it, the admission does not resolve before it: the row is stored BEFORE a call can be spawned. **Off:** no row → `not-asked`, 0 updates; an automatic row → `not-asked`, and the row is still there; a person's "yes" → `read`. **On again:** the automatic row → `read`, `auto`, `allowedNow` false | *an automatic row counted as an answer with the setting off*; *the host was answered “read” before its row was stored* |
 | A1-T11 | only the user layer decides, and nothing carries the setting in (AS; `modelKeys.test.ts`; `modelKeysAreReadOnce.test.ts`; `helpCoverage.test.ts`) | `allowNewHostsFrom(userLayerReader(merged, inspector(layers))(KEY))` for the mixes: nothing set → `true`; user `false`, workspace `true` → `false`; user `true`, workspace `false` → `true`; user unset, workspace `false` → `true`; user unset, folder `false` → `true`. User `'true'`, `0`, `{}` → `false`; `null` → `true`. `ignoredLayerOf` → `workspace`, `folder` (folder first when both), `undefined`. The manifest: boolean, default `true`, `"scope": "application"`; the description names the default, "asked first" and the user setting. `SAFETY_KEYS` deep-equals the two keys (`modelKeys.test.ts:67-73`, its name reworded). The direct-read scan matches `config.get('terminalAccountsAllowNewHosts')` (one more planted line, `modelKeysAreReadOnce.test.ts:45-50`). `NEVER_TRANSFERRED` holds the key with a reason of more than 20 characters; `importedConfig` of a file that carries it → refused with `never transferred:`; `exportedSettings` with a base value `false` → not exported. The key is not in `OVERLAID_SETTINGS` and not a key of `DEFAULTS`. HW: the body of `allowsNewHosts` in `sideConfig.ts` calls `userLayer(` and not `readerFor(`; the keeper's `allowNew` seam holds `getConfiguration('coai')` inside its arrow. `SETTING_ALIAS` has the key, its phrase is in the English help, and each of the five chat articles holds `` `coai.terminalAccountsAllowNewHosts` `` | *coai.terminalAccountsAllowNewHosts is not in package.json* |
 | A1-T12 | the session doors (RR) | `remoteRoad` over a keeper and a fake store. Setting on, an automatic row → 0 asks, 1 run. No row → 1 ask. Setting off, an automatic row → 1 ask; *Read* → the row is a person's (no `how`) and 1 run; *Not this host* → "no", 0 runs; Escape → the row is still the automatic one, 0 updates, 0 runs. A person's "yes", setting off → 0 asks, 1 run | *an automatically allowed host was read without a question with the setting off* (F2) |
 | A1-T13 | *Forget*, and *Not this host* on an automatic row (RH) | An automatic row; `forget` → no row; `admit` (on) → an automatic row again, `allowedNow` true. With the setting off → `not-asked`. A person's "no" over an automatic row → one row, no `how`; `admit` → `refused` | *Forget left the host allowed* |
-| A1-T14 | the words (RH, HW) | Each of W1–W9 and W11 equals its text of § S1.8, for a host `h` and both setting values where it has two. The question keeps its code `read-remote-session` and its two buttons (HW: both are literals of the host file, and `notification-sites.json` holds the code). W5 does not hold `asks once`. `dayOf` of an instant built from this machine's LOCAL noon gives that local day; of `'x'` → *an unknown day*. HW: `remoteSessionHost.ts` holds no `Read the Claude session on` literal; each of the six codes (`read-remote-session`, `change-remote-host-answer`, `no-remote-host-asked`, `mend-remote-hosts`, `remote-hosts-damaged`, `remote-host-refusal-restored`) is a string literal there, once | *the question still says “Read the Claude session on …”*; *the empty list still says the first read asks once* |
+| A1-T14 | the words (RH, HW) | Each of W1–W7, W9 and W11 (W4c and the three wordings of W5 among them; there is no W8) equals its text of § S1.8, for a host `h` and both setting values where it has two. The question keeps its code `read-remote-session` and its two buttons (HW: both are literals of the host file, and `notification-sites.json` holds the code). W5 does not hold `asks once`. `dayOf` of an instant built from this machine's LOCAL noon gives that local day; of `'x'` → *an unknown day*. HW: `remoteSessionHost.ts` holds no `Read the Claude session on` literal; each of the four codes (`read-remote-session`, `change-remote-host-answer`, `no-remote-host-asked`, `remote-host-refusal-restored`) is a string literal there, once; and NO source file holds `mend-remote-hosts` or `remote-hosts-damaged` — a damaged list has no code of its own (gate G2) | *the question still says “Read the Claude session on …”*; *the empty list still says the first read asks once* |
 | A1-T15 | the door of the round never asks (RH) | `KeeperSeams` has no member whose name holds `ask` (an object literal with `ask` is not one, `@ts-expect-error`). 100 admissions of new hosts, setting on and off, over a keeper whose road-side ask throws → nothing is raised | with a stub that asks on `ask`: *the door of the round asked a person* |
 | A1-T16 | the commit is generic (RH) | `commit(view, 'coai.terminalAccountsState', { stop: T }, merge)`: the value was changed after the caller last read it → `merge` is given the value of NOW; the step rule holds; a `merge` that gives no `next` → 0 updates. `keeper.commitKey` runs the guard after its write: a refusal lost before it is back after it | *the state row was written from a value read earlier* |
 | A1-T17 | a person's answer is stamped after the row it replaces (RH) | A "yes" stamped one hour in the future; a person's "no" at `now` → its `askedUtc` is that stamp plus 1 ms. A row whose `askedUtc` is `'x'` → the new stamp is `now`. An automatic row → `now` | *an older “yes” looked newer than the “no” that replaced it* |
-| A1-T18 | the host half is wired as written (HW; `remoteExportGuard.test.ts`) | `remoteSessionHost.ts` holds ONE `setInterval(`, its callback calls `guard(`, its delay is `GUARD_MS`, and its handle is cleared and disposed; `GUARD_MS` is 60 000. The handler of `registerCommand('coai.terminalHosts'` takes no parameter. `testDoorOf(` is built once, behind the test-mode check, with the `Memento` as its second argument; `restore` is a member of the test door only, and `letGo(` is called in `testDoorOf` only. `notification-sites.json` holds the three new codes and `PLACES_THIS_SPEAKS` is the counted number | *no timer looks again in a window that makes no call* |
+| A1-T18 | the host half is wired as written (HW; `remoteExportGuard.test.ts`) | `remoteSessionHost.ts` holds ONE `setInterval(`, its callback calls `guard(`, its delay is `GUARD_MS`, and its handle is cleared and disposed; `GUARD_MS` is 60 000. The handler of `registerCommand('coai.terminalHosts'` takes no parameter. `testDoorOf(` is built once, behind the test-mode check, with the `Memento` as its second argument; `restore` is a member of the test door only, and `letGo(` is called in `testDoorOf` only. `kind: 'mend'` is written in `remoteSessionHost.ts` in ONE place, inside the change question's handler. `notification-sites.json` holds the ONE new code, `remote-host-refusal-restored`, and `PLACES_THIS_SPEAKS` is the counted number (186) | *no timer looks again in a window that makes no call* |
 | A1-H1 | the store in a real editor (`terminalHostsScenario.ts`, extended; CI only) | `before = door.stored()`. `door.admit('h1')` with the default setting → `read`, `auto`; `door.stored()` — a fresh `get` — holds a row for `h1` with `how: 'auto'`. `door.commit` a person's "no" for `h1` → `door.admit('h1')` is `refused`, and the stored row has no `how`. In a `finally`: `door.restore(before)`, and `door.stored()` deep-equals `before` | cannot be written today: the door has no `admit` |
 | A1-H2 | the setting through the real configuration (the same file; CI only) | `getConfiguration('coai').update('terminalAccountsAllowNewHosts', false, Global)` → `door.admit('h2')` is `not-asked`, and no row for `h2` is stored. Back to `undefined` in a `finally` → `door.admit('h2')` is `read`; then `restore`. It records what `inspect()` answers for the key. If the editor refuses the update, the scenario FAILS and says so (V5) | — |
 
@@ -767,6 +820,8 @@ refined as X9 says. A1-T17, A1-T18 and A1-H2 are added.
 | B25 | The `setInterval` is removed | A1-T18 — *no timer looks again in a window that makes no call* |
 | B26 | `testDoorOf` is built outside the test-mode check | `remoteExportGuard.test.ts` — its message of today |
 | B27 | `restore` does not empty the window's memory | A1-H1 — *the profile was not left as it was found* (CI) |
+| B28 | `admit` commits a `mend` when it meets a damaged list | A1-T8 — *a damaged list was repaired with no press* |
+| B29 | A `mend` keeps the readable rows and drops the person's answer; then it puts the answer first and cuts at 100 | A1-T8 — *the answer that repaired the list was not kept*; *a mend dropped a “Not this host”* |
 
 ## S1.13 — The brief: order, files, commands
 
@@ -785,10 +840,13 @@ One commit for each step; `npm run compile` exit 0 and the whole suite green at 
    `remoteRead.test.ts` (`:107-121`) is built over a keeper and a view. A1-T12.
 6. **The setting.** `modelKeys.ts`, `sideConfig.ts`, `package.json`, `configTransfer.ts`, the help sentence in five
    languages, `SETTING_ALIAS`. A1-T11.
-7. **The host.** `remoteSessionHost.ts`: the keeper bound; the words; the list's rows; the mend question; the two
-   notices; the timer; `changeHost`, `askHost`; the test door. `extension.ts:935`: `testDoorOf(remote,
-   context.globalState)`. `node scripts/count-notifications.mjs --write`, and `PLACES_THIS_SPEAKS` raised with a
-   dated comment that names the three codes. A1-T14, T18. Keep `liveNameOf` as it is (F26).
+7. **The host.** `remoteSessionHost.ts`: the keeper bound; the words; the list's rows — over a damaged list the
+   readable answers and the hosts of the live `Creds:` terminals, through `liveTerminals` and `credsSession`, which
+   exist; the change question, which over a damaged list starts with W7 and commits a `mend`; the ONE notice (W9);
+   the timer; `changeHost`, `askHost`; the test door. `extension.ts:935`: `testDoorOf(remote,
+   context.globalState)`. `node scripts/count-notifications.mjs --write`, and `PLACES_THIS_SPEAKS` raised by one, to
+   186, with a dated comment that names the code `remote-host-refusal-restored`. A1-T14, T18. Keep `liveNameOf` as it
+   is (F26).
 8. **The host scenarios.** § S1.9; A1-H1 and A1-H2. They run only in CI's real-editor job; its result is read from
    that job on the head commit.
 
@@ -809,8 +867,8 @@ Commands, from `src_vs_code/`: `npm ci`; `npm run compile` (read the exit code);
   allow again; it goes with the window.
 - **The timer of the guard**: one for each window, only while that window guards a refusal; one read of the store
   each minute; cleared at 0 and disposed with the extension.
-- **Notices**: one for each refusal written again — each needs a person's press elsewhere or a real loss; one for a
-  damaged list for each window. All go through the one door, which keys repeats by code and subject (F19).
+- **Notices**: one for each refusal written again — each needs a person's press elsewhere or a real loss. None for a
+  damaged list. All go through the one door, which keys repeats by code and subject (F19).
 - **Interrupted**: a window that closes in the middle of a commit leaves the old value or the new one, never half of
   a list; nothing here has a state between.
 
@@ -818,24 +876,25 @@ Commands, from `src_vs_code/`: `npm ci`; `npm run compile` (read the exit code);
 
 1. No function of `src/` outside `testDoorOf` writes a value under `coai.terminalHosts` that was not built from a
    read in the same step — by reading `commit`, not by the test alone.
-2. The merge table of § S1.4, cell by cell, against the code; and that `repair` and `mend` are sent only by the
-   keeper and by the mend question.
+2. The merge table of § S1.4, cell by cell, against the code; and that `repair` is sent only by the keeper, and
+   `mend` only by the three answers of the change question over a damaged list.
 3. The order in the keeper's commit: the window lets go of a host it forgot or allowed itself BEFORE the guard runs.
 4. The cap never drops a "no": every path that shortens the list.
-5. A damaged value: every door, and that no commit writes over it.
+5. A damaged value: every door, and that no commit but a person's `mend` writes over it. No notice, no question and
+   no code of its own exists for a damaged list (gate G2).
 6. The setting is read through `userLayer`, afresh, and through no overlay; a NEW configuration object at each call.
 7. The three replaced tests are gone, not kept beside A1-T7 and A1-T8.
 8. Every break-it was seen red with the message of § S1.12.
-9. The rows X1–X13 are in the stories document and in the S3 and S4 briefs.
+9. The rows X1–X16 are in the stories document and in the S3 and S4 briefs.
 10. No sentence of a doc comment says what VS Code does with the scope, or that a refusal "cannot" be lost.
 
 ## Definition of Done — E1.S1
 
 - [ ] The caller read "Changes to the parent" and J1–J6 BEFORE any S1 code, and recorded in the parent's ledger any
-      item judged a change.
-- [ ] This spec was reviewed by Opus (gate G2), and X1–X13 are in the stories document and in the S3 and S4 briefs,
+      item judged a change. (Gate G2, 2026-11-19: K5 with J2 is entry 1.1; J3 is fitted; the rest is inside.)
+- [ ] This spec was reviewed by Opus (gate G2), and X1–X16 are in the stories document and in the S3 and S4 briefs,
       in one commit.
-- [ ] A1-T1…T18 green; each RED and each break-it B1…B27 observed with its message; all in the summary, with the
+- [ ] A1-T1…T18 green; each RED and each break-it B1…B29 observed with its message; all in the summary, with the
       three replaced tests named (`S3-T1`'s damaged half, `S3-T2`, `S3-T2b`'s two lines).
 - [ ] `npm run compile` exit 0; the whole suite and lint green; no suppression count grew;
       `notification-sites.json` generated again.

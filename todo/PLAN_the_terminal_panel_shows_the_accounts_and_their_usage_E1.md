@@ -4,11 +4,14 @@
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage.md)
 > (its `## Epics` § *E1*, its §§ 1–4, its § *Security*, its § *Test plan* and its DoD items for E1). Written by Opus when
 > the epic started, on `feat/terminal-accounts-e1` at `8494bb0d` (latest `main` merged; extension 0.89.1). A stories
-> document keeps no change ledger: a change to this epic is an entry in the parent (epoch 1 is open with 0 changes, so
-> the next accepted change is 1.1 and the one after it is a full stop). **Two specs are owed by Fable before any code of
-> their stories:** E1.S1 (the security row of `subagent-models.md`, outside the quota) and E1.S2 (the cornerstone; the
-> parent's ledger line `Cornerstones: 1 of 1 — E1.S2` does not change). **§ 10 lists the conflicts between the parent and
-> the code that this document found; three of them may be plan changes, and the caller decides before S1 is coded.**
+> document keeps no change ledger: a change to this epic is an entry in the parent (epoch 1 is open with ONE change,
+> 1.1, so the next accepted change is a full stop). **The two Fable specs are written** — E1.S1 (the security row of
+> `subagent-models.md`, outside the quota) and E1.S2 (the cornerstone; the parent's ledger line `Cornerstones: 1 of 1 —
+> E1.S2` does not change) — **and gate G2 judged them on 2026-11-19**
+> ([PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_G2.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_G2.md)).
+> **Its verdict is applied in this document:** K5 is the parent's entry 1.1; the damaged store (K6) and U10 (K3) are
+> fitted to the parent's text; the specs' X tables, the gate's eleven contradictions and its security findings are in
+> § 4, § 5, § 6, § 7 and § 10. No code is written yet.
 >
 > Scope: `src_vs_code` only, plus `SECURITY.md`, `research/` and the help. Five stories, as the parent cuts them.
 
@@ -108,7 +111,8 @@ parent did not name.
 
 - **Worktree.** The worktree `coai-accounts-e1` of branch `feat/terminal-accounts-e1`. Never the main checkout.
 - **Models.** Spec: **Fable** for S1 (security row) and S2 (cornerstone), each in its own document; **Opus** for S3, S4 and
-  S5 (this document). An **Opus review of both Fable specs** before S3 is coded (gate G2, § 6). Code and tests: Sonnet.
+  S5 (this document). An **Opus review of both Fable specs** before S3 is coded (gate G2, § 6; done 2026-11-19). Code
+  and tests: Sonnet.
   Review: Opus. Fixes: Sonnet. Fable refused on a limit → Opus, and the summary says so.
 - **RED-GREEN-RED.** Each scenario names its assertion and its break-it: the production line to break, and the failure
   message the test must then show. Every new test is seen RED first (before its code, or a compile error for a new
@@ -126,9 +130,12 @@ parent did not name.
   so the log scan (`remoteLogScan.test.ts:71`) covers it from its first commit. No `console.*`, `notify(`, `logged(` or
   `seams.log(` argument of such a file may name a word of `BANNED` (`:16`: `stdout`, `output`, `lines`, `rows`, `names`,
   `reason`, `.message`, `asText(` …) — so a notice that lists hosts passes a variable called `hosts`, never `rows`.
-- **Reuse first.** Called, never re-typed: `credsSession`, `liveTerminals`, `consentOf` (through S1's admit), `SSH_OPTIONS`
-  and the one argv builder, `capture`, `shQuoted`, `oneAtATime`, `textCopier`, `notify`/`notifyThen`/`notifyAndAsk`,
-  `userLayerReader`, `agoWords` (exported, S4), the framing function (extracted, S2). The mod's three word rules are
+- **Reuse first.** Called, never re-typed: `credsSession`, `liveTerminals`, `consentOf` (only through S1's `admitHost`
+  and the session road: S3 and S4 never call it), `SSH_OPTIONS` and the one argv builder, `capture`, `shQuoted`,
+  `oneAtATime`, `textCopier`, `notify`/`notifyThen`/`notifyAndAsk`, `userLayerReader`, `agoWords` (exported, S4), the
+  framing function (extracted, S2), `plainValue` (S2's one road for VM text; S4's `forList` calls it) and
+  `withoutControls` (S2 exports the one rule that takes control and format characters out; S3 makes the two older
+  copies call it). The mod's three word rules are
   COPIED once into TypeScript (the mod is a `.tsx` of another runtime that this extension cannot import) and held to the
   mod's own cases by a table (A4-T1).
 - **Lint.** A new function keeps `complexity` ≤ 4 and ≤ 50 lines; a file stays under 800 lines; no suppression count
@@ -145,7 +152,8 @@ parent did not name.
 - **No literal bidi or invisible character in any source file** (`src_bugs/tests/NoSourceFileCarriesAnInvisibleCharacterTests.cs`).
   A test that needs one builds it with `String.fromCodePoint(…)`.
 - **A host scenario that changes the editor's state puts it back** in a `finally`, also when an assertion fails.
-- **Nothing in E1 runs on a real VM.** The real hosts are E2's (R1–R12, W6–W8).
+- **Nothing in E1 runs on a real VM.** The real hosts are E2's (R1–R12, W6–W8). In `ExtensionMode.Test` the round
+  never arms itself and its default call is a stub (S3), so no host scenario can start a real `ssh`.
 
 Commands (from `src_vs_code/`):
 
@@ -161,67 +169,108 @@ npm run test:host                                                               
 
 From the worktree root: `node .agents/conventions/tools/plan-lifecycle.mjs` before every commit that touches `todo/`.
 
-## 4. Shared contracts — fixed here so S3 and S4 can be briefed while Fable writes S1 and S2
+## 4. Shared contracts — as the two Fable specs and gate G2 fixed them (2026-11-19)
 
-The Fable specs may refine C1 and C2. **Gate G2:** Opus reviews both specs, and any change they make to C1 or C2 is
-written into this section AND into the briefs of S3 and S4 in the same commit, before S3 or S4 is coded. The names
-below are the contract; a spec that renames one says so in a table of changes.
+This section was written before the specs, so that S3 and S4 could be briefed. **It now holds what the specs decided**:
+the X tables of the S1 spec (X1–X16) and of the S2 spec (X1–X15), and the verdict of gate G2. The specs are the source
+for C1 and C2; where a spec and this section differ, that is a defect of this section. The names below are the
+contract.
 
-- **C1 — who may be contacted (S1 owns; Fable).** In `src/remoteRead.ts` (pure) and `src/remoteSessionHost.ts` (host):
-  - The row gains a marker: `HostAnswer = { host; answer: 'yes' | 'no'; askedUtc; how?: 'auto' }` (no `how` = a person's).
-  - A write is a CHANGE for one host, never a list: `HostChange = { kind: 'person'; host; answer: 'yes' | 'no' } | { kind:
-    'forget'; host } | { kind: 'auto'; host }`. ONE commit function writes the store: it reads the stored value at the
-    moment of the write, applies the change by the merge rule, and writes the result (`commitHost(change):
-    Promise<Committed>`, on the bound sessions). The change signal of today (`remoteSessionsOf(…, changed)`,
-    `remoteSessionHost.ts:158`, `:165`) fires after every commit.
-  - **The round's door**, called just before EVERY accounts call: `admitHost(host): Promise<Admission>`, which reads the
-    store and `coai.terminalAccountsAllowNewHosts` (user layer) afresh, writes the automatic "yes" when the rule says so,
-    and answers
-    `Admission = { kind: 'read'; how: 'person' | 'auto'; allowedNow: boolean } | { kind: 'refused' } | { kind: 'not-asked' }
-    | { kind: 'full' } | { kind: 'damaged' }` — `allowedNow` true only for the call that wrote the automatic row. It never
-    asks a person; it has no ask seam.
-  - For the list (S4): `hostStandings(): readonly HostStanding[]` (each host's row as the list shows it: `answer`, `how`,
-    `askedUtc`), `changeHost(host): Promise<void>` (the three choices of *CoAI: hosts read over ssh*, as one host),
-    `askHost(host): Promise<void>` (the shared question for a host with no row, setting off), and
-    `ignoredLayerOf(key): 'workspace' | 'folder' | undefined` (pure, in `modelKeys.ts`).
-  - The commit primitive is reusable for another `globalState` key: S3 writes the state row (C5) through it.
-- **C2 — the script, the mode and the typed result (S2 owns; Fable).** NEW pure modules, named by the spec, under the
-  `remote` prefix (this document uses `src/remoteAccountsScript.ts` and `src/remoteAccountsReply.ts`):
+- **C1 — who may be contacted (S1 owns; Fable; the S1 spec).** NEW pure `src/remoteHosts.ts` (the store; S1 X1) and
+  host `src/remoteSessionHost.ts`. `src/remoteRead.ts` keeps the session road and its store seam.
+  - The row gains a marker: `HostAnswer = { host; answer: 'yes' | 'no'; askedUtc; how?: 'auto' }` (no `how` = a
+    person's). A marker this build does not know makes the list `damaged`.
+  - A write is a CHANGE for one host, never a list: `HostChange` = `person` | `forget` | `auto`, and two kinds that
+    only S1 sends, `repair` and `mend` (S1 X2). **S3 and S4 send `person`, `forget` and `auto` only.** ONE commit
+    function writes the store: `sessions.commitHost(change): Promise<Committed>`, where `Committed` = `written` |
+    `kept` | `full` | `damaged` (S1 X3). No function of the product takes a list to write: `withAnswer`, `withoutHost`,
+    `answersOf`, `AnswerStore.write` and `RemoteSessions.answers` are gone, and `RoadSeams.store` is `{ consent(host),
+    answer(host, answer) }` (S1 X5). The change signal of today fires after every commit that wrote.
+  - **One function decides contact: `consentOf(value, host, allowNew)`**, which answers `yes`, `no`, `ask` or
+    `damaged` (S1 X4). It is called in `remoteHosts.ts` and in `readsKey`, and nowhere else (A1-T2). **S3 and S4 never
+    call it** (G2, C-2; S1 X14).
+  - **The round's door**, called just before EVERY accounts call: `sessions.admitHost(host): Promise<Admission>`. It
+    runs the refusal guard, reads the store and `coai.terminalAccountsAllowNewHosts` (user layer) afresh, writes the
+    automatic "yes" when the rule says so, and answers
+    `Admission = { kind: 'read'; how: 'person' | 'auto'; allowedNow: boolean } | { kind: 'refused' } | { kind:
+    'not-asked' } | { kind: 'full' } | { kind: 'damaged' }` — `allowedNow` true only for the call that wrote the
+    automatic row. It never asks a person; it has no ask seam.
+  - **A refusal is guarded by the window that gave it**: before every call, after every commit, and once in 60 s. A
+    *Forget* given in ANOTHER window is undone by that window, with the notice `remote-host-refusal-restored`. A *Read*
+    in any window holds, and so does a *Forget* in the window that gave the "no" (K5 — **the parent's ledger entry
+    1.1**; S1 X9).
+  - **A damaged list** contacts nobody and is never written over, but for a person's own answer for a host in the
+    change question that exists. It has no notice and no question of its own (K6; fitted to the parent's text at G2).
+  - For the list (S4): `sessions.hostStandings(): readonly HostStanding[]` (each host's row as the list shows it:
+    `answer`, `how`, `askedUtc`; over a damaged list the rows that can be read), `sessions.changeHost(host)` (the three
+    choices of *CoAI: hosts read over ssh*, as one host), `sessions.askHost(host)` (the shared question for a host with
+    no row, setting off), `sessions.allowsNewHosts()` and `sessions.ignoredLayer(): 'workspace' | 'folder' |
+    undefined` (the bound forms; the pure one is `ignoredLayerOf(inspect, key)` in `modelKeys.ts`, S1 X7), and
+    `dayOf(askedUtc)` from `remoteHosts.ts` (S1 X12). The words for a host's row over a damaged list are S1's
+    (`HOSTS_SAID`, W11).
+  - **The commit primitive.** Pure `commit(state, key, change, merge)`, with `Merge<C, R> = (stored: unknown, change:
+    C) => { next: { value: unknown } | undefined; result: R }`. S3 writes the state row (C5) through the BOUND
+    `sessions.commitKey(key, change, merge)`, never through the pure one: the bound one runs the refusal guard after
+    its write (S1 X6).
+  - The census: S1 adds ONE notice site (`remote-host-refusal-restored`), so 186 after S1 (S1 X13).
+- **C2 — the script, the mode and the typed result (S2 owns; Fable; the S2 spec).** FOUR new pure modules (S2 X1):
+  `src/remoteFraming.ts` (the shared frame finder), `src/remoteAccountsScript.ts`, `src/remoteAccountsUsage.ts` (the
+  value rules) and `src/remoteAccountsReply.ts`. S2 also touches `.github/workflows/ci.yml` (one step: `jq` for its
+  tests) and `src/notifications.ts` (one exported name) (S2 X10).
   - `ACCOUNTS_SCRIPT: string` (the text sent, whole), `AccountsMode = 'claude-usage' | 'no-claude-usage'`,
     `ACCOUNTS_MODES`, `isAccountsMode(word): word is AccountsMode`, `ManagerWord = 'apt-get' | 'dnf' | 'yum' | 'apk' |
-    'none'`.
-  - `readAccounts(run: { code: number; stdout: string }, mode: AccountsMode): AccountsRead` — never throws, never holds an
-    error's message. The shape, as the parent fixes it (§ 4) and the spec may refine:
+    'none'`, `MANAGER_WORDS`.
+  - `readAccounts(run: { code: number; stdout: string }, mode: AccountsMode, nowMs: number): AccountsRead` — never
+    throws, never holds an error's message, and reads no clock: the reset text has no year, so the caller hands in
+    the time (S2 X2). The typed result is the S2 spec's § A2.7. What S3 and S4 lean on:
     `AccountsRead = { kind: 'unreadable'; why } | { kind: 'read'; claude: ClaudeSide; codex: CodexSide; agy: AgySide;
-    jqMissing: ManagerWord | undefined }`;
-    `ClaudeSide` = `absent` | `signed-out` | `unreadable` (`why`, `no-jq` among them) | `found` with `version: string |
-    null`, `email`, `org: string | null`, `plan: string | null` and `usage` = `read` (`windows`) | `skipped` | `failed`
-    (`why`: `timeout` | `format` | `model-call` | …);
+    jqMissing: ManagerWord | undefined }` — `jqMissing` whenever the VM said that `jq` is missing (S2 X6);
+    `ClaudeSide` = `absent` | `signed-out` | `unreadable` (`why`: `no-jq` | `auth` | `timeout` | `credential-shape`) |
+    `found` with `version: string | null`, `email` (`''` = the account is not known), `org: string | null`, `plan:
+    string | null` and `usage` = `read` (`windows`, `unmatched`) | `skipped` | `failed` (`why`: `timeout` | `error` |
+    `format` | `model-call`) (S2 X3);
     a Claude window is `{ name: '5h' | 'week' | { model: string }; usedPercent: number | null; resetsAtMs: number | null }`;
-    `CodexSide` = `absent` | `unreadable` | `found` with `signInFile`, `plan: string | null` and `usage` = `read`
-    (`windows: { minutes; usedPercent | null; resetsAtMs | null }[]`, `asOfMs`, `asOfFrom: 'record' | 'file'`) | `failed`
-    (`none` | a record too far from the end);
-    `AgySide` = `absent` | `found` with `version: string | null` and `signInFile`.
-    A number that is not there is `null`, never 0. Text values arrive with control and format characters taken out and
-    cut (the parser's road in); the `$(` break is the list's (C6).
-  - The framing function shared with `remoteFrame.ts`, extracted from `framedLines` (`remoteFrame.ts:121`), with a result
-    that does not name the session parser's faults.
+    `CodexSide` = `absent` | `unreadable` (`no-jq` | `credential-shape`) | `found` with `signInFile`, `plan: string |
+    null` and `usage` = `read` (`windows: { minutes; usedPercent | null; resetsAtMs | null }[]`, `asOf: { ms; from:
+    'record' | 'file' } | null`, `statMissing: boolean`) | `failed` (`why`: `no-sessions` | `none` | `error`) (S2 X4,
+    X15);
+    `AgySide` = `absent` | `unreadable` (`credential-shape`) | `found` with `version: string | null`, `signInFile` and
+    `usage: { state: 'no-source' }` (S2 X5).
+    A number that is not there is `null`, never 0.
+  - **VM text is made plain in ONE function, `plainValue`** (S2 X7): control and format characters out, every `$(`
+    written `$ (`, 200 characters at most. Every text value of the typed result has passed it. Its first step is
+    exported by itself, `withoutControls`: the one home of that rule in `src/` (S2 X12).
+  - Exported for S3 and S4 (S2 X11, X14): `ACCOUNTS_PROTOCOL`, `ACCOUNTS_SECONDS`, `ACCOUNTS_READ_SECONDS`,
+    `ACCOUNTS_CEILING_SECONDS`, `ACCOUNTS_LINES_MAX`, `ACCOUNTS_LINE_BYTES_MAX`, `ACCOUNTS_REPLY_BYTES_MAX`,
+    `ACCOUNTS_UNREADABLE_SAID`.
+  - The framing function `framed(stdout, sentinels)` in `remoteFraming.ts`, shared with `remoteFrame.ts`, with a
+    result that names no parser's fault.
 - **C3 — the runner (S3 owns).** In `src/remoteSsh.ts`: `accountsArgv(host, mode)`, `ACCOUNTS_LIMITS` (30 s, 64 KiB),
   `runAccounts(host, mode, limits?, seams?): Promise<RemoteRun>` (it always sends `ACCOUNTS_SCRIPT`), and
   `defaultRemoteSeams()` exported. `runRemote`, `sshArgv` and their sentences keep their contract and their tests.
+  The runner's two numbers are held to S2's: `ACCOUNTS_LIMITS.maxStdoutBytes >= ACCOUNTS_REPLY_BYTES_MAX` (S2 X9) and
+  `ACCOUNTS_LIMITS.ms === ACCOUNTS_CEILING_SECONDS * 1000` (S2 X14). S3 also makes the two older copies of the
+  character rule call `withoutControls` (S2 X12).
 - **C4 — the round and its memory (S3 owns).** NEW pure `src/remoteAccountsRound.ts`: `accountsHosts(live)`,
-  `roundOrder(hosts, round)`, `HostMemory`, `Memory` (immutable, by host), `modeFor`, `needsSecondCall`, `UsagePolicy` and
-  `USAGE_POLICY`, `runRound(seams, memory, trigger)`, `claudeAccountKey(found)`, the timer decisions, `refreshAnswer`, and
-  `logGate`. S4 reads `Memory` only through `HostMemory` fields named in S3's brief.
-- **C5 — the state row (S3 owns).** `coai.terminalAccountsState` = `{ toldUtc?, lastAutoNoticeUtc?, stoppedUtc? }`, parsed by
-  `accountsStateOf(unknown)` (a damaged value reads as `{}`), written only through C1's commit primitive with a FIELD change:
-  `{ stop: utc } | { start: true } | { told: utc } | { autoNoticed: utc }`.
+  `roundOrder(hosts, round)`, `HostMemory`, `Memory` (immutable, by host), `modeFor`, `needsSecondCall`, `UsagePolicy`
+  (`every-round` | `hourly` | `on-press` | `off`; S2 X8) and `USAGE_POLICY`, `runRound(seams, memory, round, trigger)`,
+  `claudeAccountKey(found, host)`, the timer decisions, `refreshAnswer`, and `logGate`. S4 reads `Memory` only through
+  the `HostMemory` fields named in S3's brief. One of them is `admission`: where the round keeps an admission that was
+  not `read` (G2, C-4).
+- **C5 — the state row (S3 owns).** `coai.terminalAccountsState` = `{ toldUtc?, lastAutoNoticeUtc?, stoppedUtc? }`. **A
+  value that cannot be read is STOPPED, not empty** (G2, S-2): `stoppedOf(value)` is true for a damaged row. It is
+  written only through `sessions.commitKey`, with the merge `stateMerge` — a `Merge` over the stored value as
+  `unknown` (S1 X15; G2, C-3) — and a FIELD change: `{ stop: utc } | { start: true } | { told: utc } | { autoNoticed:
+  utc }`.
 - **C6 — the words and the rows (S4 owns).** NEW pure `src/usageWords.ts` (the mod's rules and the window names) and
-  `src/remoteAccountsRows.ts` (`accountsRows(view, now)`, `forList(text)` — the ONE road by which VM text reaches a row —
-  `INSTALL_JQ` the five fixed strings, `noticesDue`).
+  `src/remoteAccountsRows.ts` (`accountsRows(view, now)`, `forList(text, max)` — the ONE road by which VM text reaches
+  a row, and it CALLS `plainValue` (S2 X7) — `INSTALL_JQ` the five fixed strings, `noticesDue`). The runner's failure
+  sentence is VM text as well and passes `forList` (S2 X13).
 - **C7 — the test door (S3 owns, S4 widens).** `TerminalAccountsTestDoor`, present only in `ExtensionMode.Test`, in a
   spread of its own in `extension.ts`: `replaceCall(call | undefined)`, `runRoundNow(trigger)`, `armed()`,
-  `memoryHosts()`; S4 adds `lastItems()`.
+  `memoryHosts()`; S4 adds `lastItems()`. **In test mode the round never arms itself, and the default call is a stub
+  that never spawns `ssh` until `replaceCall` gives one** (G2, § 4; S1 X16). The road's own test door (S1) has
+  `commit`, `admit`, `standings`, `stored` and `restore`; `answers` is gone (S1 X10).
 
 ## 5. Stories
 
@@ -236,40 +285,52 @@ opus (of the spec first, gate G2; then of the code). Depends on nothing in this 
 **Why Fable.** It is authorisation: who is contacted with the person's keys, and what keeps a refusal. The parent's
 finding F1 says the consent no longer comes first; what is left of a gate is the refusal, and this story makes it hold.
 
-- **Scope.** `src/remoteRead.ts` (the row's marker, the merge rule, the cap rule, the change type, the pure core of the
-  round's door, `consentOf` with the setting); `src/remoteSessionHost.ts` (the ONE commit function, the refusal repair, the
+- **Scope (as the spec fixed it).** NEW pure `src/remoteHosts.ts` (the row's marker, the merge rule, the cap rule, the
+  change type, the keeper with the round's door and the refusal guard, `consentOf` with the setting, the words);
+  `src/remoteRead.ts` (the road's store seam); `src/remoteSessionHost.ts` (the keeper bound, the guard's timer, the
   bound `admitHost`, the question's title and detail, the hosts list's rows and *Forget*'s sentence, `saidNoHost`'s
-  words, `hostStandings`, `changeHost`, `askHost`, the test door's store); `src/modelKeys.ts` (the key joins the user-layer
-  door; `ignoredLayerOf`); `package.json` (the setting: boolean, default `true`, `"scope": "application"`, a description
-  that says what it does, that it is on by default and what off restores); `src/configTransfer.ts` (`NEVER_TRANSFERRED`);
-  `src/settingsShape.ts` **only if** the spec keeps it there (§ 10, K9); the help sentence the setting's census needs, in
-  five languages (`SETTING_ALIAS`); the tests; the host scenarios that write the store
+  words, `hostStandings`, `changeHost`, `askHost`, the test door); `src/modelKeys.ts` (the key joins the user-layer
+  door; `ignoredLayerOf`); `src/sideConfig.ts` (`allowsNewHosts`, `ignoredLayerFor`); `src/extension.ts` (one argument
+  of `testDoorOf`); `package.json` (the setting: boolean, default `true`, `"scope": "application"`, a description
+  that says what it does, that it is on by default and what off restores); `src/configTransfer.ts`
+  (`NEVER_TRANSFERRED`); NOT `src/settingsShape.ts` (§ 10, K9: decided by the spec); the help sentence the setting's
+  census needs, in five languages (`SETTING_ALIAS`); the tests; the host scenarios that write the store
   (`terminalHostsScenario.ts`, `terminalDoorsScenario.ts`).
 - **Not in scope.** The round, the timer, the stop, the state row's fields (S3); the list and the notices (S4); the help
   paragraph rewritten whole, `SECURITY.md` (S5).
-- **What the spec must decide, beyond the parent's text** (each found in the code, § 10):
+- **What the spec had to decide, beyond the parent's text — and what it decided** (each found in the code, § 10):
   1. **The refusal repair against a person's later press in another window** (K5). § 3 point 3 of the parent writes a
      missing "no" again; point 2 says a person's *Read* or *Forget* changes a "no". A *Forget* in window B leaves no row,
      which window A cannot tell from a lost "no". The spec decides how a person's change survives the other window's
-     repair — and whether that needs a tombstone, which changes the row's shape.
+     repair — and whether that needs a tombstone, which changes the row's shape. **Decided (spec § S1.5): no
+     tombstone.** The window that gave the "no" writes it again and says so; a *Read* in any window holds, and so does
+     a *Forget* in that window. It is the parent's ledger entry 1.1.
   2. **A damaged store** (K6). `rowsOf` reads a list with one bad row as empty (`remoteRead.ts:127`), which is `ask` today.
      Under the automatic "yes" an empty reading is "allow everyone", and a commit over it would write one row and lose
      every "no" the damaged value held. The spec decides what `admitHost` answers (the contract has `damaged`), what the
-     commit does over a damaged value, and what the person is told.
+     commit does over a damaged value, and what the person is told. **Decided (spec § S1.3):** `damaged`; nobody is
+     contacted; nothing writes over the value but a person's own answer for a host in the change question that
+     exists. Fitted at G2: no notice and no question of its own.
   3. **A person's answer at a full store** (K7). The parent says what an AUTOMATIC row does at the cap. Today a person's
      answer at the cap drops the oldest row, a "no" included — and the test `remoteRead.test.ts:170-184` asserts exactly
-     that. The spec decides the person's case; that test is REPLACED, not kept beside a new one.
+     that. The spec decides the person's case; that test is REPLACED, not kept beside a new one. **Decided (spec
+     § S1.4):** a "no" is never dropped; a person's answer may push out the oldest person's "yes"; a hundred refusals
+     answer `full`.
   4. **The list the setting joins** (K9). `SAFETY_KEYS` is documented as "the overrides that switch a server refusal off"
      (`modelKeys.ts:28-36`, its test name at `modelKeys.test.ts:67`); the parent puts the key there. Whether it joins that
      list or a sibling list of `USER_LAYER_KEYS`, and whether it belongs in `CoaiSettings` at all
      (`settingsReach.test.ts:104` then requires it to reach the server, unless it is in `NOT_FOR_THE_SERVER`).
+     **Decided (spec § S1.7):** `SAFETY_KEYS`, and not `CoaiSettings`.
   5. **The test door** (K15): a host scenario must set and restore the real store. Either the door keeps a raw write,
-     named test-only and refused outside test mode, or the scenarios restore by commits.
+     named test-only and refused outside test mode, or the scenarios restore by commits. **Decided (spec § S1.9):**
+     set by commits; restore by one raw write that exists only in test mode.
   6. **A row written by an older build.** An older extension reads an automatic row as a person's "yes" (`isRow` ignores
-     extra keys) and drops `how` on its next whole-list write. Named as a residual, or answered.
+     extra keys) and drops `how` on its next whole-list write. Named as a residual, or answered. **Named** (spec
+     § S1.10, residual 4).
 - **Interfaces with the other stories.** C1 exactly, and: S3 calls `admitHost` just before EVERY call and never another
-  consent function; S3 writes the state row through the commit primitive; S3 listens to the change signal to drop a
-  refused host's reading; S4 draws `hostStandings()` and `ignoredLayerOf`, opens `changeHost` and `askHost`; the session
+  consent function; S3 writes the state row through `sessions.commitKey`; S3 listens to the change signal and reads
+  `hostStandings()` to drop a refused host's reading and to decide whether the timer is armed (never `consentOf`); S4
+  draws `hostStandings()`, `ignoredLayer()` and `allowsNewHosts()`, opens `changeHost` and `askHost`; the session
   road (`remoteRoad`) asks through the same store, and with the setting off an automatic row counts as no answer there too.
 - **Scenarios the spec must contain at least** (it may split, refine or add; it keeps these ids or maps them in a table).
   The parent's test-plan rows they cover: *The consent store's commit and merge*, *The automatic "yes", the cap …* (the
@@ -282,23 +343,26 @@ finding F1 says the consent no longer comes first; what is left of a gate is the
 | A1-T3 | The merge, with two views of one backing store, one of them stale: a "no" in window A against an automatic "yes" in window B, in both orders, and with B holding a list from before A's write → after both commits the store holds the "no", and B's next `admitHost` answers `refused` |
 | A1-T4 | A person's "yes" replaces an automatic "yes"; an automatic "yes" never replaces any row; only a person's press changes a "no" |
 | A1-T5 | No whole-list write: the commit seam is given a change, and a fake store proves every write follows a read in the same step with no `await` between (a test fails if the write seam is ever handed a list that was not read in that step) |
-| A1-T6 | The refusal repair: a "no" this window wrote and then lost is written again before the next call and after the next commit — and a person's *Read* or *Forget* of that host in another window is not undone by it (K5, the spec's rule) |
+| A1-T6 | The refusal repair: a "no" this window wrote and then lost is written again before the next call, after the next commit and by the guard's timer. A person's *Read* of that host in another window is not undone by it. A *Forget* in ANOTHER window IS undone, with a notice; a *Forget* in the window that gave the "no" holds (K5 — the parent's entry 1.1) |
 | A1-T7 | The cap: with 100 rows a new host drops the oldest AUTOMATIC row, never a person's; with 100 rows of a person the new host is `full`, not allowed and not contacted; 100 invented hosts and one "no" → the "no" holds; a person's answer at a full store follows the spec's rule (K7) |
-| A1-T8 | A damaged store (`'junk'`, an array with one bad row) is never read as "allow everyone": `admitHost` answers what the spec decided, 0 automatic writes over it, and the person is told (K6) |
+| A1-T8 | A damaged store (`'junk'`, an array with one bad row) is never read as "allow everyone": `admitHost` answers `damaged` (`refused` for a "no" that can be read), nothing writes over it but a person's own answer for a host, and the damage is said in the host's row, at the session door and in the hosts list — with no notice and no question of its own (K6; fitted at G2) |
 | A1-T9 | Read afresh before every call: a "no" committed between two calls stops the second; the setting turned off between two calls stops the automatic "yes" of the second |
 | A1-T10 | The setting on: a host with no row gets the marked row BEFORE its call is spawned, `allowedNow` true once and false after; off: no row → `not-asked`, 0 writes; an automatic row counts as no answer for the round AND for the session road (it asks); a person's "yes" still counts; on again → the automatic row counts again (it was kept) |
 | A1-T11 | The user layer only: the four mixes of a user value and a workspace value, and a folder value → only the user value (else the default `true`) decides; `ignoredLayerOf` names the layer that tried; the manifest: boolean, default `true`, `"scope": "application"`; the key is in the user-layer door, and `modelKeysAreReadOnce.test.ts` refuses a direct read of it; an imported config file is refused the key by name (`NEVER_TRANSFERRED`); its `SETTING_ALIAS` phrase is in the English help and the sentence is in all five languages |
 | A1-T12 | The session doors: on an automatically allowed host (setting on) *take* and *add* read without asking; on a host with no row they ask; with the setting off an automatic row makes them ask |
 | A1-T13 | *Forget* removes the row and the next `admitHost` (setting on) writes the automatic row again; *Not this host* turns an automatic row into a refusal |
-| A1-T14 | The words: the question's title *"Read the Claude session and the AI accounts on “x” over ssh?"* and its detail listing what a "yes" covers; the same code `read-remote-session` and the same two buttons; the hosts list's three descriptions (*the Claude session and the AI accounts are read*; *allowed automatically on <day>: …*; *not read*); *Forget*'s sentence that a forgotten host is allowed again by itself; `saidNoHost` no longer says the first read asks once |
+| A1-T14 | The words: the question's title *"Read the Claude session and the AI accounts on “x” over ssh?"* and its detail listing what a "yes" covers; the same code `read-remote-session` and the same two buttons; the hosts list's four descriptions (*the Claude session and the AI accounts are read*; *allowed automatically on <day>: …*; an automatic row with the setting off; *not read*); *Forget*'s sentence that a forgotten host is allowed again by itself; `saidNoHost` no longer says the first read asks once |
 | A1-T15 | The door never asks: `admitHost`'s pure core takes no ask seam; with a fake ask that throws, 100 admissions of new hosts raise nothing |
 | A1-T16 | The commit primitive is generic: given another key and a field change it re-reads at the moment of the write (S3's state row uses it) |
 | A1-H1 | Host scenario (CI only), through the real `globalState` and the test door: an automatic row written by `admitHost` is read back from a fresh `get`; a person's "no" then committed; the next `admitHost` answers `refused`; the store is restored in a `finally` |
+| A1-T17 | (added by the spec) A person's answer is stamped later than the row it replaces, so "later" does not need two clocks to agree |
+| A1-T18 | (added by the spec) The host half is wired as written: ONE timer for the guard; the hosts command takes no argument; the test door and its `restore` only in test mode; ONE new notice code |
+| A1-H2 | (added by the spec) Host scenario (CI only): the setting through the real configuration — off: `not-asked` and no row; back to unset: `read` |
 
 - **Docs (S1's part).** None beyond the help sentence its census needs; S5 writes the rest from the spec.
-- **Done when.** The spec is written and reviewed by Opus (G2) BEFORE any S1 code; A1-T1…T16 and every scenario the spec
-  adds green, each break-it seen red; the replaced E2 tests named in the summary; `npm run compile` exit 0; the whole suite
-  and lint green; A1-H1 green in CI's real-editor job, read from that job.
+- **Done when.** The spec is written and reviewed by Opus (G2) BEFORE any S1 code; A1-T1…T18 green, each break-it of
+  the spec seen red; the replaced E2 tests named in the summary; `npm run compile` exit 0; the whole suite and lint
+  green; A1-H1 and A1-H2 green in CI's real-editor job, read from that job.
 
 ### E1.S2 — The accounts script, its reply and its parser (CORNERSTONE)
 
@@ -311,28 +375,35 @@ gate G2; then of the code) · areas (a), (b) and (d). Depends on nothing in this
 a VM, and the only place hostile or cut data can arrive and look right. A leak, a banner read as data or a missing number
 read as zero gives no error.
 
-- **Scope.** NEW pure modules for the script text and its constants, the reply's grammar and its parser, the Claude usage
-  lines with the reset parse, and the Codex record (names by the spec, `remote` prefix); `src/remoteFrame.ts` (the framing
-  function extracted to a shared one, its own behaviour and tests unchanged); the tests, including the script run by a real
-  `sh -s` (`dash`) and `bash --posix` against a temporary `HOME` with false `claude`, `codex` and `agy` and the REAL `jq`.
+- **Scope (as the spec fixed it).** FOUR new pure modules: `src/remoteFraming.ts` (the shared frame finder),
+  `src/remoteAccountsScript.ts` (the script text and its constants), `src/remoteAccountsUsage.ts` (the Claude usage
+  lines with the reset parse, and the Codex record) and `src/remoteAccountsReply.ts` (the reply's grammar and its
+  parser); `src/remoteFrame.ts` (its private frame finder calls the shared one; its own behaviour and tests
+  unchanged); `.github/workflows/ci.yml` (one step: `jq` for these tests, K12); `src/notifications.ts` (one pattern
+  gets a name and an `export`); the tests, including the script run by a real `sh -s` (`dash`) and `bash --posix`
+  against a temporary `HOME` with false `claude`, `codex` and `agy` and the REAL `jq`.
 - **Not in scope.** The ssh call and its argv (S3, from C2's mode list); the words, the groups and the rows (S4); the fixed
   install strings (S4 — S2 owns only the closed manager word).
-- **What the spec must decide, beyond the parent's text.**
+- **What the spec had to decide, beyond the parent's text — and what it decided.**
   1. **The frame extraction** (K11): `framedLines` is private and throws the session parser's own faults
      (`remoteFrame.ts:98`, `:121-130`). The shared function needs a result that names no fault of either parser, and every
-     test of `remoteFrame.test.ts` and `remoteScriptRuns.test.ts` stays green with no edit.
+     test of `remoteFrame.test.ts` and `remoteScriptRuns.test.ts` stays green with no edit. **Decided (spec § A2.6):**
+     `framed(stdout, sentinels)` in `remoteFraming.ts`, a result that is a value and not a throw.
   2. **The real `jq` in the tests** (K12): this machine has none and `ci.yml` installs none. The spec says how the real-`jq`
      cases skip here with that reason, and that on CI's Linux runner a missing `jq` FAILS (as `remoteScriptRuns.test.ts:76-80`
      does for `sh`). Whether `ubuntu-latest` ships `jq` is UNVERIFIED; the spec either verifies it from a CI run or adds an
-     install step to the test job (a CI change, not a VM install).
+     install step to the test job (a CI change, not a VM install). **Decided (spec § A2.10):** a step of the test job
+     installs `jq` where the runner has none, and prints its version.
   3. **The time the script's own limits cost a test** (2 s, 3 s, 8 s, 4 s): the cases that hang a false vendor wait for the
-     real limit, because the limits are part of the text under test. The spec bounds the file's run time.
+     real limit, because the limits are part of the text under test. The spec bounds the file's run time. **Decided
+     (spec § A2.10):** six hang runs, started together in ONE test; the file stays under 30 s here and 60 s on CI.
   4. **Every word of the reply** (markers, states, keys), the line and byte limits, the reasons of `unreadable`, and where
-     the manager word stands.
+     the manager word stands. **Decided (spec § A2.5, § A2.7).**
 - **Interfaces with the other stories.** C2 exactly, and: S3 sends `ACCOUNTS_SCRIPT` (no other text) with one operand from
-  `ACCOUNTS_MODES`, and hands an `answered` run to `readAccounts(run, mode)` with the SAME mode; S3 decides the next mode
-  from `claude.state`, `claude.usage.state` and `why`, and `claude.version`; S3 groups usage by `claudeAccountKey` over
-  `email` and `org`; S4 draws every arm and every `why` with its own sentence, and turns `jqMissing` into one of five fixed
+  `ACCOUNTS_MODES`, and hands an `answered` run to `readAccounts(run, mode, nowMs)` with the SAME mode and the round's
+  clock; S3 decides the next mode from `claude.state`, `claude.usage.state` and `why`, and `claude.version`; S3 groups
+  usage by `claudeAccountKey(found, host)` over `email` and `org`, with a key of its own for a host whose account is
+  not known; S4 draws every arm and every `why` with its own sentence, and turns `jqMissing` into one of five fixed
   strings.
 - **Scenarios the spec must contain at least** (it keeps these ids or maps them). The parent's test-plan rows they cover:
   *The accounts script, run for real*, *No secret leaves*, *The person's activity does not leave*, *The version is the only
@@ -340,7 +411,7 @@ read as zero gives no error.
 
 | # | What must be shown |
 |---|---|
-| A2-T1 | The shape: one function read to its end and only then called with `</dev/null 2>/dev/null`, the begin line first and the end line last; a script cut on the way does nothing (real `sh -s` and `bash --posix`) |
+| A2-T1 | The shape: one function read to its end and only then called — the call with `</dev/null 2>/dev/null` first and the end line, in ONE brace group on the last line; the begin line first and the end line last. A script cut on the way does nothing: it starts no program, opens no path for writing and prints no line (real `sh -s` and `bash --posix`; the cut half maps the last line's absolute paths to a temporary folder — G2, S-1) |
 | A2-T2 | The hash: a test holds the sha256 of the exported text; the spec holds the same value; an edit of one without the other is red |
 | A2-T3 | The modes: the two words by a closed list in TypeScript and again in `sh`; a wrong or missing operand runs no vendor command and says so |
 | A2-T4 | The `PATH`: a `claude` and an `agy` only in `$HOME/.local/bin` are found; nothing else of a profile is read |
@@ -363,18 +434,21 @@ read as zero gives no error.
 | A2-T21 | Nothing of a reply in a log or an error's text: the new modules are found by the log scan (`remoteLogScan.test.ts:71`) and are clean; a companion asserts they are found |
 | A2-T22 | The script bounds its own reply: a false `claude` whose `result` is 10 MB → at most 64 lines of at most 512 bytes leave the VM |
 | A2-T23 | On CI's Linux runner the real-`sh` and real-`jq` cases RUN: a missing `sh` or `jq` there is a failure, not a skip |
+| A2-T24…T30 | (added by the spec) T24: the frame finder was moved, not copied. T25: the script keeps its own rules — the one brace group of its last line, and no package manager ever run. T26: the numbers in the script are the constants, and the readers' limits with ssh's connect sum under the 30 s ceiling. T27: the reply is held to the mode. T28: the credential net knows the redactor's key shapes. T29: `plainValue` is one rule. T30: no command waits for the script's stdin |
 
 - **Docs (S2's part).** None in its own commits; S5 writes `research/module_extension.md` and `SECURITY.md` from the spec.
-- **Done when.** The spec (with the script text, its sha256 and the security judgement) written and reviewed by Opus (G2)
-  BEFORE any S2 code; A2-T1…T23 and the spec's own scenarios green, A2-T9 and A2-T10 seen RED once; the hash in the spec and
-  in a test; `npm run compile` exit 0; the whole suite green on CI with the `sh` and `jq` cases RUN; lint green.
+- **Done when.** The spec (with the script text and the security judgement) written and reviewed by Opus (G2) BEFORE
+  any S2 code; A2-T1…T30 green, A2-T9 and A2-T10 seen RED once; the hash pinned in the spec and in a test, in one
+  commit (the spec's pin says PENDING until then: its block changed at G2); `npm run compile` exit 0; the whole suite
+  green on CI with the `sh` and `jq` cases RUN; lint green.
 
 ### E1.S3 — The runner and the round
 
 `model: opus` (spec, this section) · coder: sonnet · review: opus · areas (c) (who is contacted and WHEN — the timing and
 the count; the WHO is S1's door) and (d) (the reply arms decide the next mode). **Depends on S1 and S2 merged into the
 branch** (it calls `admitHost` and sends `ACCOUNTS_SCRIPT`); its runner part (files 1) needs only C2's mode list and may
-start once the S2 spec is reviewed.
+start once the S2 spec is reviewed. **This brief holds the rows of both specs' X tables that S3 must follow** (S1 X6,
+X10, X14–X16; S2 X2, X3, X8, X9, X12, X14) **and gate G2's § 4.**
 
 - **Goal.** One argv builder and one run for both callers, with the pinned options untouched; and a pure round that calls
   every distinct host that is not refused, one at a time, at most once — twice in the one case — usage once for each
@@ -402,44 +476,72 @@ start once the S2 spec is reviewed.
        the accounts call's `session` value is the fixed word `accounts`. No `console.` is added (`:86-88` counts one).
      - `defaultSeams` (`:92`) becomes `export function defaultRemoteSeams()`, so the round's log gate writes through the
        same default seam and no second `console.` exists.
+     - **The runner's two numbers are held to S2's** (C3): `ACCOUNTS_LIMITS.maxStdoutBytes >=
+       ACCOUNTS_REPLY_BYTES_MAX`, and `ACCOUNTS_LIMITS.ms === ACCOUNTS_CEILING_SECONDS * 1000` — S2's A2-T26 sums the
+       script's own limits against that ceiling, so the two numbers cannot part (A3-T4).
+     - **One rule takes control and format characters out (S2 X12; G2: C-11 and N1).** The private `withoutControls`
+       (`:216`) is deleted and the one that `remoteAccountsReply.ts` exports is imported in its place. In
+       `src/remoteRead.ts`, `plainOf` (`:67`) becomes a call of it. One commit and no change of behaviour: it is the
+       same expression, and the session reader's tests stay green with no edit. `remoteAccountsReply.ts` imports
+       neither of the two files, so there is no import circle (A3-T28).
   2. **NEW `src/remoteAccountsRound.ts` (pure; every effect a seam).**
      - Constants: `ROUND_GAP_MS = 600_000` (from the END of a round, O4), `FIRST_DELAY_MS = 30_000`, `REFRESH_FLOOR_MS =
-       60_000`, `HOURLY_MS = 3_600_000`; `type UsagePolicy = { kind: 'every-round' } | { kind: 'hourly' } | { kind: 'on-press' }`
-       and `export const USAGE_POLICY: UsagePolicy = { kind: 'every-round' }` — the one constant the release build sets from
-       W6 (parent § 2's table); E1 ships `every-round` (the pre-release build of E2 reads in every round).
+       60_000`, `HOURLY_MS = 3_600_000`; `type UsagePolicy = { kind: 'every-round' } | { kind: 'hourly' } | { kind:
+       'on-press' } | { kind: 'off' }` and `export const USAGE_POLICY: UsagePolicy = { kind: 'every-round' }` — the one
+       constant the release build sets from W6 (parent § 2's table) and from W7: `off` is W7's stated consequence,
+       "the Claude usage read is then off and the list shows the account only" (S2 X8). E1 ships `every-round` (the
+       pre-release build of E2 reads in every round); § 6, item 8 has the order that keeps a timer from running the
+       usage command before W7.
      - `accountsHosts(live: readonly LiveTerminal[]): readonly string[]` — the distinct hosts of the live (not exited)
        terminals whose name gives `credsSession(...).kind === 'session'`, sorted by name (code-unit order, as `byHost`
        compares, `remoteRead.ts:160`).
      - `roundOrder(hosts, round: number)` — the sorted hosts rotated to start at `round % hosts.length`.
      - `HostMemory = { reading?: { read: Extract<AccountsRead, { kind: 'read' }>; atMs }; unreadable?: { why; atMs };
-       failure?: { sentence: string; atMs }; claudeAccount?: string; usageAtMs?: number; usageBlockedAt?: string /* the
-       Claude Code version */ }` and `Memory = ReadonlyMap<string, HostMemory>`; every update returns a NEW map.
-       A `refused` run sets `failure` and keeps `reading` (the list shows the older numbers and that the later read failed).
-     - `claudeAccountKey(found)` — `email` and `org` joined by a character neither can hold after the parser (`\u0000`),
-       vendor-prefixed: two hosts share a key only when the whole account text is equal (parent § 1).
+       failure?: { sentence: string; atMs }; admission?: Exclude<Admission['kind'], 'read'>; claudeAccount?: string;
+       usageAtMs?: number; usageBlockedAt?: string /* the Claude Code version */ }` and `Memory = ReadonlyMap<string,
+       HostMemory>`; every update returns a NEW map. A `refused` run sets `failure` and keeps `reading` (the list shows
+       the older numbers and that the later read failed). **`admission`** is what the door answered when it was not
+       `read` — `refused`, `not-asked`, `full` or `damaged`. The round sets it, and a `read` admission clears it. It is
+       where S4 learns *not asked yet*, *full* and *damaged* from: nothing else holds the admission (G2, C-4; S1 X8).
+     - `claudeAccountKey(found, host): string` — for a KNOWN account (`email` is not empty): the words `claude` and
+       `account`, then `email` and `org`, joined by a character none of them can hold after the parser (`\u0000`).
+       `org: null` is joined as the empty text, which no real `org` can be (the parser gives `null` for an empty one),
+       so an account with no organization and one with an organization never share a key. Two hosts share a key only
+       when the whole account text is equal (parent § 1). **For an account that is NOT known (`email` is `''`): the
+       words `claude` and `host`, then the host's name** — a key of that host alone. So two unknown accounts never
+       merge, whatever their `org`: each host reads its own usage, and S4, which groups by this same key, draws one
+       group for each (G2, C-1; parent § 1: "An account that is not known is never grouped").
      - `modeFor(memory, host, roundUsage: ReadonlySet<string>, policy, now, trigger): AccountsMode` — `no-claude-usage`
        when: the host's last `claudeAccount` is in `roundUsage` (its usage was READ in this round); or the host is blocked
        (`usageBlockedAt` equals the version of its last reading); or the policy says the account is not due. Else
        `claude-usage`. A host never read, or whose last read failed, has no account → `claude-usage` (unless the policy
        says no). `due(policy, lastUsageAtMs, now, trigger)`: `every-round` always; `hourly` when no usage of that account is
-       known or it is `HOURLY_MS` old; `on-press` only for `trigger === 'refresh'`.
+       known or it is `HOURLY_MS` old; `on-press` only for `trigger === 'refresh'`; `off` never, for any trigger.
      - `needsSecondCall(sentMode, read, roundUsage, memory, host, policy, now, trigger): boolean` — true only when
        `sentMode` was `no-claude-usage`, the reply is `found` with an account whose key is NOT in `roundUsage`, the account
-       is due, and the host is not blocked (parent § 2, finding 3). At most ONE extra call for a host in a round.
+       is due, and the host is not blocked (parent § 2, finding 3). At most ONE extra call for a host in a round. With
+       the policy `off` no account is ever due, so there is no extra call: a switch that is off is not gone round by
+       finding 3 (S2 X14; G2, S-3).
      - `blockedAfter(read)` — a reply whose usage is `failed` with `why` `model-call` or `format` blocks the host at its
        Claude Code version; a reading with another version unblocks it. A reload starts a new `Memory` (unblocked).
      - `runRound(seams: RoundSeams, memory: Memory, round: number, trigger: 'timer' | 'refresh' | 'open'):
        Promise<RoundResult>` — for each host of `roundOrder(accountsHosts(seams.live()), round)`, in turn, AWAITED:
        (1) `seams.stopped()` → end the round; (2) the host still has a live terminal in `seams.live()` (read again: a host
        whose last terminal closed is not called — a judgement, § 10 J3); (3) `await seams.admit(host)`: anything but `read`
-       → no call (`full`, `not-asked`, `damaged` are noted for the list; `refused` drops the host's reading); (4) `run =
-       await seams.call(host, mode)`; (5) an `answered` run → `seams.parse(run, mode)` with the SAME mode; (6) the memory
+       → no call, and that kind is kept in the host's `HostMemory.admission` (`refused` also drops the host's reading); a
+       `read` clears it; (4) `run = await seams.call(host, mode)`; (5) an `answered` run → `seams.parse(run, mode)` with
+       the SAME mode — the seam's type is `(run, mode: AccountsMode) => AccountsRead`, and the host binds it as `(run,
+       mode) => readAccounts(run, mode, seams.now())`, so the parser gets the round's clock and reads none itself (S2
+       X2; G2, C-7); (6) the memory
        updated; (7) `needsSecondCall` → steps (1)–(6) once more with `claude-usage`; (8) `seams.landed()` after each host, so
        the list redraws. A host whose terminal closed while its call ran: its result is DROPPED (`seams.live()` read after the
        call). `RoundResult = { memory; allowedNow: readonly string[]; endedMs }`. `RoundSeams = { live; stopped; admit; call;
        parse; now; landed }` — **no ask seam**.
      - The timer, as pure decisions: `armFor({ eligible, armed, stopped, running }): 'arm-first' | 'clear' | 'keep'` (an
-       eligible host = a live `Creds:` terminal of a host whose `consentOf` is not `no`); after a round,
+       eligible host = a live `Creds:` terminal of a host for which `sessions.hostStandings()` holds no "no". **S3
+       never calls `consentOf`**: it is S1's one function, the setting is its third argument, and A1-T2 scans for a
+       second caller. Whether a host is CONTACTED is `admitHost`'s answer alone — S1 X14; G2, C-2); `timerFor(decision,
+       test)`, which answers `none` whenever `test` is true (the first test-mode lock, below); after a round,
        `nextAfterRound(...)` → `ROUND_GAP_MS` from `endedMs` or `clear`; `refreshAnswer({ running, lastEndMs, now }): 'start' |
        'busy' | 'floor'`; `openStarts({ running, lastEndMs, now, unreadHost })` (opening the list starts a round only when a
        host that is not refused has neither a reading nor a failure yet, and not inside the floor).
@@ -447,19 +549,44 @@ start once the S2 spec is reviewed.
        writes a host's line only when it differs from the last line written for that host; `answered` writes ONE fixed
        line, `ConnectOtherAIs: accounts read host=<host> answered again`, when that host's last written line was a failure,
        and forgets it. A host down for a day is two lines, not 144 (parent § 2).
-     - The state row (C5): `accountsStateOf(value: unknown): AccountsState` (a damaged value reads as `{}`) and
-       `withStateChange(state, change)`: `stop` sets `stoppedUtc`; `start` removes it (both are a person's press: the later
-       commit wins); `told` sets `toldUtc` only when absent; `autoNoticed` keeps the later of the two times. Written only
-       through S1's commit primitive, so a stale window cannot erase another's stop.
+     - The state row (C5): `accountsStateOf(value: unknown): { kind: 'state'; state: AccountsState } | { kind:
+       'damaged' }`. `undefined` (never written) is the empty state; an object whose three fields are each absent or a
+       string is that state, and its other keys are kept; anything else is `damaged`. **`stoppedOf(value: unknown):
+       boolean` is true for a `stoppedUtc` AND for a damaged row** (G2, S-2): the stop is the way out when a read does
+       harm on a VM (parent § 3), so a row that cannot be read must not open it. The write is `stateMerge:
+       Merge<StateChange, StateCommitted>` in the form S1's § S1.4 types — `(stored: unknown, change) => { next,
+       result }` — given to `sessions.commitKey` (S1 X6, X15; G2, C-3). So the value is read in the step of the write,
+       and a stale window cannot erase another's stop. Over a state that can be read: `stop` sets `stoppedUtc`; `start`
+       removes it (both are a person's press: the later commit wins); `told` sets `toldUtc` only when absent;
+       `autoNoticed` keeps the later of the two times. **Over a damaged row only a person's press writes:** `stop`
+       writes a new row with `stoppedUtc`, `start` writes a new empty row, and `told` and `autoNoticed` give no `next`
+       — nothing is written. After such a `start` the two notice times are gone, so the first-round notice and the
+       daily notice can each be shown once more: the price of not guessing them. The list over a damaged row is the
+       stopped list, with its one row (S4): no new words.
+     - The second test-mode lock, pure: `callFor(test, real, replaced)` answers `replaced ?? (test ? STUB_CALL : real)`,
+       and `STUB_CALL` answers `refused` with one fixed sentence — *The accounts call is not replaced in this test
+       run.* — and calls nothing.
   3. **NEW `src/remoteAccountsHost.ts` (host; its row in `sonarcloud.yml:268` in the same commit).** The seams only:
-     - `bindTerminalAccounts(context, sessions: RemoteSessions): TerminalAccounts`, called once in `extension.ts` right after
-       `bindRemoteSessions` (`:161`). It holds the window's `Memory`, the round counter, the last `endedMs`, one
+     - `bindTerminalAccounts(context, sessions: RemoteSessions, test: boolean): TerminalAccounts`, called once in
+       `extension.ts` right after `bindRemoteSessions` (`:161`), with `test = context.extensionMode ===
+       vscode.ExtensionMode.Test`. It holds the window's `Memory`, the round counter, the last `endedMs`, one
        `setTimeout` handle (never `setInterval`: K2), and a `oneAtATime` latch around `runRound`, so two rounds never run at
        once.
-     - The seams: `live` = `liveTerminals(vscode.window.terminals)`; `stopped` = `accountsStateOf(globalState.get(
-       'coai.terminalAccountsState')).stoppedUtc !== undefined`, read before every call; `admit` = `sessions.admitHost`;
-       `call` = `runAccounts(host, mode, ACCOUNTS_LIMITS, { ...defaultRemoteSeams(), log: gate.seamFor(host) })`, replaced
-       by the test door; `parse` = `readAccounts`; after an `answered` run, `gate.answered(host)`.
+     - **Test mode: two locks (G2, § 4; S1 X16).** Three existing host scenarios open a terminal called `Creds: h / s`
+       (`src/test/host/terminalHostsScenario.ts:56`, `src/test/host/terminalDoorsScenario.ts:60`, `:94`). A round armed
+       by such a terminal would admit `h` — an automatic row, written under those scenarios' own store assertions — and
+       start a REAL `ssh` to `h` 30 s later, in CI's real-editor job. It would also call A3-H1's fake more often than
+       A3-H1 counts. So with `test` true: (1) **the round never arms itself** — the host still computes `armFor` and
+       reports it through `armed()`, but `timerFor` answers `none` and no `setTimeout` is started; scenarios drive
+       rounds with `runRoundNow` (C7); (2) **the default call is a stub** (`callFor`): it answers `refused` and spawns
+       nothing, until `replaceCall` gives a call, and again after `replaceCall(undefined)`. A scenario that forgets one
+       lock still starts no `ssh`. Outside test mode nothing changes: the parent's own host-scenario row has "the call
+       replaced through the test door", and the self-arming is held by the pure A3-T20.
+     - The seams: `live` = `liveTerminals(vscode.window.terminals)`; `stopped` = `stoppedOf(globalState.get(
+       'coai.terminalAccountsState'))`, read before every call; `admit` = `sessions.admitHost`; `standings` =
+       `sessions.hostStandings` (for `armFor`); `call` = `callFor(test, real, replaced)` with `real` =
+       `runAccounts(host, mode, ACCOUNTS_LIMITS, { ...defaultRemoteSeams(), log: gate.seamFor(host) })`; `parse` =
+       `(run, mode) => readAccounts(run, mode, Date.now())`; after an `answered` run, `gate.answered(host)`.
      - Arming: at activation, `armFor` with a `FIRST_DELAY_MS` timer when an eligible host exists;
        `onDidOpenTerminal` → `armFor` (30 s when not armed); `onDidCloseTerminal` → `armFor` (clear when none is eligible)
        and drop from `Memory` every host with no live terminal; the change signal of S1 → drop the readings of refused hosts
@@ -476,7 +603,7 @@ start once the S2 spec is reviewed.
 | A3-T1 | the accounts argv is the pinned one (`remoteSsh.test.ts`, extended) | `accountsArgv('ai1-dev2', 'claude-usage')` deep-equals `[...SSH_OPTIONS, '--', 'ai1-dev2', 'sh', '-s', '--', "'claude-usage'"]`; the same for `no-claude-usage`; no `-n`; `SSH_OPTIONS` deep-equals its E2 value | add `-n` → `the remote sh -s would read an empty stdin` |
 | A3-T2 | a bad host or mode never reaches ssh | hosts `-oProxyCommand=x`, `h;id`, `h\n`; modes `''`, `usage`, `claude-usage;id` → `accountsArgv` throws the fixed word; `runAccounts` answers `refused` with the bad-operand sentence and the fake `capture` saw NO call | drop the mode check → `a mode outside the list reached ssh` |
 | A3-T3 | the session reader is unchanged | every existing test of `remoteSsh.test.ts` green with no edit; `sshArgv('ai1-dev2', ['small-tasks'])` as before; the session's refusal sentences byte for byte today's, `8 MiB` included | build the session sentence from `subject` with a typo → the existing S2-T7 companions are red |
-| A3-T4 | the accounts call's limits and stdin | a fake `capture` records: `input === ACCOUNTS_SCRIPT`, `options` = `{ cwd: <ssh's folder>, maxStdoutBytes: 65536, killTree: true }`, `shell` false, `capMs` 30 000; a child that never closes with `limits.ms` 50 → `“h” did not answer over ssh within 0.05 s.`; a multi-byte stdout over the byte cap → `“h” sent more than 64 KiB, so the read was stopped.` | send `REMOTE_SCRIPT` → red naming the script; say MiB → `0.0625 MiB is not a size a person reads` |
+| A3-T4 | the accounts call's limits and stdin | a fake `capture` records: `input === ACCOUNTS_SCRIPT`, `options` = `{ cwd: <ssh's folder>, maxStdoutBytes: 65536, killTree: true }`, `shell` false, `capMs` 30 000; a child that never closes with `limits.ms` 50 → `“h” did not answer over ssh within 0.05 s.`; a multi-byte stdout over the byte cap → `“h” sent more than 64 KiB, so the read was stopped.`; `ACCOUNTS_LIMITS.maxStdoutBytes >= ACCOUNTS_REPLY_BYTES_MAX` and `ACCOUNTS_LIMITS.ms === ACCOUNTS_CEILING_SECONDS * 1000` (S2 X9, X14) | send `REMOTE_SCRIPT` → red naming the script; set the limit to 45 s → `the runner's limit and the ceiling the script's limits are summed against differ`; say MiB → `0.0625 MiB is not a size a person reads` |
 | A3-T5 | ssh's own failure is not an answer | exit 255 with `Permission denied (publickey).` → `refused`, the sentence ends with that line; exit 1 → `answered` with code 1 (the parser decides) | map 255 to `answered` → red |
 | A3-T6 | the accounts sentences name the accounts | the not-started and no-ssh sentences of `runAccounts` say *the AI accounts on “h”*; `runRemote`'s say *the Claude session on “h”* as today | share one literal → red naming the subject |
 | A3-T7 | the log is one line of four fields | `logLine` declared once, called once (the existing companion); a failed accounts call logs `session=accounts`; no stdout in it (the existing scanner over the new file) | log the mode as an operand list → the scanner is red |
@@ -485,30 +612,34 @@ start once the S2 spec is reviewed.
 | A3-T10 | the order moves one host each round | hosts `a`, `b`, `c`: round 0 → `a b c`, round 1 → `b c a`, round 3 → `a b c` | always start at `a` → `the last host is always read last` |
 | A3-T11 | one call at a time | a fake `call` that resolves after a tick logs start and end: no start before the previous end; three hosts → three calls in order | `Promise.all` → `two reads ran at once` |
 | A3-T12 | a failed host does not stop the round | host `a` `refused` with *“a” did not answer over ssh within 30 s.* → its `failure` holds that sentence and the time; `b` and `c` are still called; `a`'s older `reading` is kept | `return` on a refusal → `the round stopped at the first failed host` |
-| A3-T13 | the door is asked before EVERY call, and its "no" holds | `admit` answers `refused`, `not-asked`, `full`, `damaged` → 0 calls to that host; `admit` answers `read` for `a` and, after `a`'s call, `refused` for `b` → 1 call; a `refused` drops `b`'s reading | ask `admit` once per round → `a "no" given during a round did not stop the next call` |
-| A3-T14 | the mode for each host (usage once for each account) | `a` and `b` of account X: `a` → `claude-usage`, its usage read → `b` → `no-claude-usage`; `a`'s usage `failed timeout` → `b` → `claude-usage`; a host never read → `claude-usage`; three hosts of one account → ONE `claude-usage` | send `claude-usage` to every host → `one account's usage was read twice in a round` |
+| A3-T13 | the door is asked before EVERY call, and its "no" holds | `admit` answers `refused`, `not-asked`, `full`, `damaged` → 0 calls to that host; `admit` answers `read` for `a` and, after `a`'s call, `refused` for `b` → 1 call; a `refused` drops `b`'s reading; each of the four kinds is kept in that host's `HostMemory.admission`, and a later `read` clears it (G2, C-4) | ask `admit` once per round → `a "no" given during a round did not stop the next call` |
+| A3-T14 | the mode for each host (usage once for each account) | `a` and `b` of account X: `a` → `claude-usage`, its usage read → `b` → `no-claude-usage`; `a`'s usage `failed timeout` → `b` → `claude-usage`; a host never read → `claude-usage`; three hosts of one account → ONE `claude-usage`. **Two hosts whose account is not known (`email` `''`) and whose `org` is equal → two keys, BOTH `claude-usage`, and the second host's usage is read (G2, C-1).** A known account with `org` `null` and the same email with an `org` → two keys | send `claude-usage` to every host → `one account's usage was read twice in a round`; key an unknown account by its `org` → `two unknown accounts were merged, and the second host's usage was never read` |
 | A3-T15 | the account that changed gets ONE more call (finding 3) | `b` last seen with X; X read on `a`; `b` called `no-claude-usage` answers Y → `b` called once more with `claude-usage` in the SAME round, before `c`; the extra call answers Z → no third; Y's usage already read on another host this round → no extra call; `b` blocked → no extra call | omit the extra call → `a new account's usage was a round late`; loop → `a host was called three times in a round` |
 | A3-T16 | a usage read that went wrong is not repeated blindly | a reply `failed model-call` at version V → `b`'s next rounds are `no-claude-usage`; a reading at version W → `claude-usage` again once; `failed format` the same; `failed timeout` does not block; a new `Memory` (a reload) is unblocked | ignore `model-call` → `a model call was made six times an hour` |
-| A3-T17 | the usage policy is one constant | `every-round` → `claude-usage` in each of 6 rounds 10 min apart; `hourly` → at most once in those 6 rounds for one account (fake clock); `on-press` → never on `timer` or `open`, once on `refresh`; `USAGE_POLICY` is `every-round` | read the policy from a setting → red (no such setting) |
+| A3-T17 | the usage policy is one constant | `every-round` → `claude-usage` in each of 6 rounds 10 min apart; `hourly` → at most once in those 6 rounds for one account (fake clock); `on-press` → never on `timer` or `open`, once on `refresh`; **`off` → `no-claude-usage` for every host and every trigger, `refresh` among them, and `needsSecondCall` is false for a host whose account changed (S2 X8, X14)**; `USAGE_POLICY` is `every-round` | read the policy from a setting → red (no such setting); let finding 3's extra call run with `off` → `a usage read was made while the usage read is off` |
 | A3-T18 | the calls of a round are bounded | five hosts, one of which changed account → at most 6 calls, at most 2 to one host; a companion counts the calls of A3-T15's round exactly | — |
 | A3-T19 | a closed host is dropped, and a result in flight too | `b`'s last terminal closes before the round → no call, its memory dropped; it closes while its call runs → the result is not stored | store a late result → `a closed terminal's host kept its reading` |
 | A3-T20 | the first round and the gap (fake clock) | an eligible host at activation → `arm-first`, a round at +30 s; none → no timer, and a reload with none starts nothing; the first `Creds:` terminal opens at T → a round at T+30 s; a round that ends at E → the next at E+600 s, also when it took 150 s; an open while armed → `keep` | count the gap from the start → `the next round began before 10 minutes after the last ended` |
 | A3-T21 | the timer goes with the last terminal | the last eligible terminal closes → `clear`; only refused hosts left → `clear`; a terminal opens → `arm-first` again | leave the timer idle → `a timer ran with no Creds terminal` |
 | A3-T22 | *Refresh now* and opening the list | `refreshAnswer`: no round running, the last ended 61 s ago → `start`; 59 s → `floor`; running → `busy`; after a refresh round the next timer round is 600 s after ITS end; `openStarts` true only for a host with neither reading nor failure, and not inside the floor | drop the floor → `Refresh started a round 30 s after the last` |
-| A3-T23 | the stop holds | `withStateChange` `stop` then a stale window's `autoNoticed` → `stoppedUtc` kept; `stopped()` true before a call → the round ends, 0 calls, 0 admissions (so no automatic row); `accountsStateOf` of a stored stop after a reload → no timer is armed; `start` → `stoppedUtc` gone; `told` twice keeps the first | read the stop once per round → `a stopped round made one more call` |
+| A3-T23 | the stop holds, and a state row that cannot be read is a stop | `stateMerge` `stop`, then a stale window's `autoNoticed` through `commitKey` → `stoppedUtc` kept (the merge is given the stored value of NOW); `stopped()` true before a call → the round ends, 0 calls, 0 admissions (so no automatic row); `stoppedOf` of a stored stop after a reload → no timer is armed; `start` → `stoppedUtc` gone; `told` twice keeps the first. **A damaged row (G2, S-2):** for each of `'junk'`, `null`, `7`, `[]` and `{ stoppedUtc: 5 }` → `stoppedOf` is true, a round makes 0 calls and 0 admissions, no timer is armed, `told` and `autoNoticed` write nothing and the stored value is the same value; `start` writes `{}` and the next round runs; `stop` writes a row with `stoppedUtc`. Companion: `undefined` and `{}` are NOT stopped | read the stop once per round → `a stopped round made one more call`; read a damaged row as `{}` → `a state row that could not be read let the round run` |
 | A3-T24 | nothing of a reading is stored | after three rounds with readings, the fake `globalState` holds only `coai.terminalHosts` rows written by `admit` and `coai.terminalAccountsState` with at most the three fields, under 150 bytes | store the memory → `an email reached globalState` |
 | A3-T25 | the round never asks a person | `RoundSeams` has no member whose name contains `ask` (a type-level assertion: a seam object literal with `ask` does not compile, `@ts-expect-error`); with a fake `admit` that throws when asked to ask, 100 new hosts raise nothing | — |
-| A3-T26 | the parser reads the mode that was sent | a fake `parse` records `(run, mode)`: every call's mode equals the one passed to `call` for it, the extra call's included | parse with `claude-usage` always → `the reply was read against another mode` |
-| A3-T27 | the test door is built only in test mode (`remoteExportGuard.test.ts`, extended) | ONE place builds `terminalAccounts: …TestDoorOf(`, right after `extensionMode === vscode.ExtensionMode.Test ? {`, in a spread of its own; the `CoaiExports` field is optional; `bindTerminalAccounts(` appears once | build it unconditionally → red |
+| A3-T26 | the parser reads the mode that was sent, and the round's clock | a fake `parse` of the seam's type `(run, mode)` records both: every call's mode equals the one passed to `call` for it, the extra call's included. A scan of `remoteAccountsHost.ts` with its companion: `readAccounts(` is called once, with three arguments, inside the `parse` seam (S2 X2; G2, C-7) | parse with `claude-usage` always → `the reply was read against another mode` |
+| A3-T27 | the test door is built only in test mode, and in test mode no round arms itself and no call reaches ssh (`remoteExportGuard.test.ts`, extended; `remoteAccountsRound.test.ts`) | ONE place builds `terminalAccounts: …TestDoorOf(`, right after `extensionMode === vscode.ExtensionMode.Test ? {`, in a spread of its own; the `CoaiExports` field is optional; `bindTerminalAccounts(` appears once, and its third argument is `context.extensionMode === vscode.ExtensionMode.Test` and nothing else. **Both locks (G2, § 4):** `timerFor(decision, true)` is `none` for every decision of `armFor`, and `timerFor('arm-first', false)` is not; `callFor(true, real, undefined)` answers `refused` with the fixed sentence and `real` was NOT called; `callFor(true, real, fake)` calls `fake`; `callFor(false, real, undefined)` is `real`. A scan of `remoteAccountsHost.ts` with its companion: the one `setTimeout(` of the round is reached only through `timerFor(`, and `runAccounts(` only through `callFor(` | build it unconditionally → red; `timerFor` ignores `test` → `a round armed itself in a test run`; `callFor` ignores `test` → `an accounts call reached ssh in a test run` |
+| A3-T28 | one rule takes control and format characters out (`remoteLogScan.test.ts`, extended; S2 X12) | a scan of `src/*.ts`, tests left out: the character class `[\p{Cc}\p{Cf}]` stands in ONE file, `remoteAccountsReply.ts`; `remoteSsh.ts` and `remoteRead.ts` each import `withoutControls` from `./remoteAccountsReply`, and that file imports neither of them. Companion: the scan finds the class in a sample string. The tests of `remoteSsh.test.ts` and `remoteRead.test.ts` that hold a bidi mark, a zero-width space and a bell are green with no edit | keep the private copy in `remoteSsh.ts` → `the plain rule stands in two files` |
 
 - **Host scenario A3-H1** (NEW `src/test/host/terminalAccountsScenario.ts`, registered in `scenarios.ts:234`): with the call
   replaced through the test door by a fake that answers a fixed reply and logs start and end, terminals `Creds: hA / s1`,
   `Creds: hA / s2` and `Creds: hB / s1` opened → `runRoundNow('timer')` → the fake was called ONCE for `hA` and ONCE for
   `hB`, one after the other, `hA` first; the store holds an automatic row for each (the setting's default); all three
-  terminals closed → `armed()` false, and `runRoundNow('timer')` calls nothing. In a `finally`: the terminals disposed, the
-  rows removed by S1's commit (*Forget*), the call put back. CI only (§ 8).
+  terminals closed → `armed()` false, and `runRoundNow('timer')` calls nothing. The scenario never waits for a timer:
+  in test mode there is none, and `armed()` says what `armFor` answered. In a `finally`: the terminals disposed, the
+  store put back with the road's test door — `restore(before)`, where `before = stored()` was taken before the
+  scenario started (S1 X10) — and the call put back with `replaceCall(undefined)`, which in test mode is the stub
+  again. CI only (§ 8).
 - **Docs.** S5 writes them (the runner, the round, the timer, the log gate).
-- **Done when.** A3-T1…T27 green, each break-it seen red; the existing `remoteSsh.test.ts`, `remoteLogScan.test.ts` and
+- **Done when.** A3-T1…T28 green, each break-it seen red; the existing `remoteSsh.test.ts`, `remoteLogScan.test.ts` and
   `remoteRead.test.ts` green with no edit beyond S1's; `sonarExclusions.test.ts` green with `remoteAccountsHost.ts` listed;
   `npm run compile` exit 0; the whole suite and lint green; A3-H1 green in CI's real-editor job on the head commit, read from
   that job.
@@ -517,7 +648,9 @@ start once the S2 spec is reviewed.
 ### E1.S4 — The list and the icon
 
 `model: opus` (spec, this section) · coder: sonnet · review: opus · area (d) on the screen, and the trigger. **Depends on
-S3** (the memory, the round's buttons) **and S1** (`hostStandings`, `changeHost`, `askHost`, `ignoredLayerOf`).
+S3** (the memory, the round's buttons) **and S1** (`hostStandings`, `changeHost`, `askHost`, `ignoredLayer`,
+`allowsNewHosts`, `dayOf`, and the words of a host's row over a damaged list). **This brief holds the rows of both
+specs' X tables that S4 must follow** (S1 X7, X8, X12, X13; S2 X3–X7, X11, X13, X15).
 
 - **Goal.** The icon opens a QuickPick that stays open, redraws when a host's read lands, groups by account, says every
   number as "left" in the mod's words with a dash for a missing one, gives every host its own sentence — the fixed command
@@ -536,17 +669,21 @@ S3** (the memory, the round's buttons) **and S1** (`hostStandings`, `changeHost`
   2. **`src/gaugeWords.ts`** — `agoWords` (`:92`) gains `export`, nothing else changes (its tests green). The list says
      `read 4 min ago`, `from a Codex session 2 d ago` with it.
   3. **NEW pure `src/remoteAccountsRows.ts`.**
-     - `forList(text: string, max: number): string` — the ONE road by which text from a VM reaches a row: control and
-       format characters out (as `plainOf`, `remoteRead.ts:67`, which it calls — exported for it), cut at `max` characters
-       with `…`, and every `$(` written `$ (` so the list never draws an icon a VM chose (U10; § 10, K3). Hosts come from
-       the terminal name's rule and are not VM text.
+     - `forList(text: string, max: number): string` — the ONE road by which text from a VM reaches a row. It CALLS
+       S2's `plainValue` (control and format characters out, every `$(` written `$ (`, 200 characters at most; doing
+       it twice changes nothing) and then cuts at `max` characters with `…`. It holds no character class of its own,
+       and `plainOf` of `remoteRead.ts` is NOT exported for it (S2 X7; G2, C-5). So the list never draws an icon a VM
+       chose (U10; § 10, K3). **The runner's failure sentence passes `forList` too** (S2 X13; G2, S-5): it can end
+       with the last line of ssh's stderr, which a remote login shell's rc file can print, and which has kept its
+       `$(`. Hosts come from the terminal name's rule and are not VM text.
      - `INSTALL_JQ: Readonly<Record<ManagerWord, string | undefined>>` — exactly the parent's § 4 table: `apt-get` → `sudo
        apt-get install -y jq`; `dnf` → `sudo dnf install -y jq`; `yum` → `sudo yum install -y jq`; `apk` → `apk add jq`
        (the row adds *to be run as root*); `none` → no command and the sentence *Install `jq` on this host. CoAI found none
        of apt-get, dnf, yum and apk there.* The row's command is ONLY ever a value of this table.
      - `AccountsView = { live: boolean /* any Creds: terminal */; stopped: boolean; busy: boolean; memory: Memory;
        standings: readonly HostStanding[]; hosts: readonly string[]; ignored: 'workspace' | 'folder' | undefined;
-       allowNew: boolean }`.
+       allowNew: boolean }` — `standings` from `sessions.hostStandings()`, `ignored` from `sessions.ignoredLayer()`,
+       `allowNew` from `sessions.allowsNewHosts()` (S1 X7).
      - `accountsRows(view, nowMs): readonly Row[]` where `Row` = `{ kind: 'separator'; label }` | `{ kind: 'usage'; label;
        description; detail }` | `{ kind: 'host'; host; label; description; copy?: string }` | `{ kind: 'info'; label; action?:
        'start' }`. In this order: the ignored-layer row (*This workspace sets `coai.terminalAccountsAllowNewHosts`. It is
@@ -554,26 +691,43 @@ S3** (the memory, the round's buttons) **and S1** (`hostStandings`, `changeHost`
        round is stopped. Choose this row to start it.*; when no `Creds:` terminal is open, ONLY *No `Creds: <host> /
        <session>` terminal is open, so there is no host to read.*; else the groups, then `── Hosts ──` and one row for each
        host.
-     - **The groups** (parent § 1). Claude: one group for each `claudeAccountKey` (S3) among the hosts' readings; its
+     - **The groups** (parent § 1). Claude: one group for each `claudeAccountKey(found, host)` (S3) among the hosts'
+       readings; its
        separator `Claude Code · <email> · <org>`; its row's label the mod's line — `5h <n>% left · resets in <t> · week <n>%
        left · <Model> <n>% left`, one model part for each model window `/usage` named — its description `week resets in
        <t>`, its detail `<host>, <host> · read <age>` from the NEWEST reading of the group (and `· the later read of <host>
-       failed` when one has). A found account whose `email` is empty is not known: one group for its host. Codex: one group
+       failed` when one has). A found account whose `email` is empty is not known: its key is its host's own, so it is one
+       group for its host, whatever its `org`, and its separator names the host in the account's place. Codex: one group
        for each host (`Codex · account name not shown by Codex · plan <plan> · <host>`), its label the windows by
-       `windowLabel` with `resets in`, its detail `from a Codex session <age> · read <age>`; a window whose reset has passed
-       → *no reading since this window was reset*. Antigravity: `Antigravity <version> · <host>` (or `Antigravity (version
+       `windowLabel` with `resets in`, its detail `from a Codex session <age> · read <age>` — with `asOf === null` the
+       age is `—`, and with `statMissing` the row adds *this host has no stat, so the time of the Codex session file
+       was not read* (S2 X4, X15); a window whose reset has passed → *no reading since this window was reset*. Antigravity: `Antigravity <version> · <host>` (or `Antigravity (version
        not known)`), row *agy states no usage, and its account is not read*. A host alias never groups; equal numbers never
        group.
      - **Usage not read says why**, never a row of dashes alone: `failed format` → *usage not read: Claude Code <version>
        on this host printed no usage line this version understands*; `failed model-call` → *usage not read: the usage
        command of Claude Code <version> asked the model, so CoAI stopped asking this host*; `failed timeout` → *usage not
        read: Claude Code did not answer within 8 s*; `no-jq` → the host row's command; `signed-out` → *signed out*. A
-       `skipped` usage draws nothing of its own (another host of the account read it).
+       `skipped` usage draws nothing of its own (another host of the account read it). **The words the S2 spec added
+       (S2 X3–X5; its § A2.7 has each sentence):** usage `failed error` → *usage not read: the usage command of Claude
+       Code <version> ended with an error*; Claude `unreadable auth` → *the account command of Claude Code printed
+       nothing this version understands*; `unreadable timeout` → *the account command of Claude Code did not answer
+       within 3 s*; Codex `failed no-sessions` → *no Codex session file is on this host*; `failed none` → *no usage
+       record is near the end of the newest Codex sessions*; `failed error` → *the Codex session files could not be
+       read*; any vendor `unreadable credential-shape` → *not shown: a value in the answer looked like a credential*; a
+       whole answer that is `unreadable` → *The AI accounts on “<host>” could not be read: <clause>.*, the clause from
+       `ACCOUNTS_UNREADABLE_SAID`. The seconds in these sentences come from `ACCOUNTS_SECONDS`, never from a literal
+       (S2 X11).
      - **The host sentences**, one for each standing (C1 and C3): *turned off: your answer for this host is “Not this
        host”*; *not asked yet — choose this row to be asked* (setting off); *never read yet*; *the last read failed <age>:
-       <the runner's sentence>*; *the list of hosts is full, so this host is not read* (`full`); the damaged-store sentence
-       the S1 spec writes; *allowed automatically on <day>. Choose this row to change that.* (also when the host has a
-       reading); *jq is missing on this host. Run there: <INSTALL_JQ[word]>* with `copy` set to that same string.
+       <the runner's sentence>*, the sentence through `forList`; *the list of hosts is full, so this host is not read*
+       (`full`); over a list of hosts that cannot be read, S1's W11 word for word (`HOSTS_SAID`: choosing the row opens
+       the change question, and the answer there repairs the list); *allowed automatically on <day>. Choose this row
+       to change that.* (`<day>` is S1's `dayOf(askedUtc)`; also when the host has a reading); *jq is missing on this
+       host. Run there: <INSTALL_JQ[word]>* with `copy` set to that same string. **Where each comes from:** *turned
+       off* from a "no" among `standings`; *not asked yet*, *full* and the damaged sentence from
+       `HostMemory.admission`, which S3's round sets (before a host's first admission, *not asked yet* also follows
+       from no standing with `allowNew` false); *the last read failed* from `failure`.
      - `noticesDue(state: AccountsState, standings, firstRoundEnded: boolean, nowMs)` → `{ autoHosts: readonly string[];
        first: readonly string[] }`: `autoHosts` = the automatic rows whose `askedUtc` is after `lastAutoNoticeUtc` (all of
        them when it is absent), and only when it is absent or 24 h old; `first` = the person's "yes" rows older than the first
@@ -598,7 +752,8 @@ S3** (the memory, the round's buttons) **and S1** (`hostStandings`, `changeHost`
        uses that command today; R2/R11 observe it) and decides nothing; then commit `{ autoNoticed: now }`. The first-round
        notice — `notify`, `class: 'outcome'`, `code: 'accounts-read-every-ten-minutes'`: the hosts with a "yes" from before,
        that their AI accounts are now read every 10 minutes, and where to stop it; then commit `{ told: now }`. Two new
-       sites: regenerate `notification-sites.json`, raise `PLACES_THIS_SPEAKS` to the counted number with a dated comment.
+       sites: regenerate `notification-sites.json`, raise `PLACES_THIS_SPEAKS` to the counted number with a dated comment
+       (188: S1 left 186 — S1 X13).
      - The test door gains `lastItems()`: the labels, descriptions, details and kinds of the items last given to the list.
   5. **`package.json`** — the command `coai.terminalAccounts`, title **AI accounts and usage**, category
      `ConnectOtherAIs`, icon `$(account)`; a `view/title` row `when: view == terminal`, `group: navigation@91`; NO
@@ -620,13 +775,13 @@ S3** (the memory, the round's buttons) **and S1** (`hostStandings`, `changeHost`
 | A4-T3 | windows by their names | Claude `5h`, `week`, `Fable`; Codex 300→`5h`, 10 080→`week`, 120→`2h`, 90→`1.5h` | name Codex `primary` by its slot → `a weekly window was called 5h` |
 | A4-T4 | the Claude row is the mod's line | a reading of 56/77/49 used with resets → label `5h 44% left · resets in <t> · week 23% left · Fable 51% left`, description `week resets in <t>`; no session window → `5h — · resets in —`; the reset text from `resetsAtMs` at DRAW time (two `now` values, two texts) | draw "used" → `the list says 56% left where 44% is left` |
 | A4-T5 | absent is never zero | every `null` of a reading → `—` with no `% left`; a scan of every label of 200 generated readings with `null`s finds no `0%` that was not a `0` in the input | `?? 0` → red naming the label |
-| A4-T6 | the groups | one Claude account on `hA` and `hB` → ONE group naming both; two accounts with equal numbers → two; two hosts whose email is empty → two; Codex on two hosts → two groups; no group by host alias | group by numbers → `two accounts were merged` |
+| A4-T6 | the groups | one Claude account on `hA` and `hB` → ONE group naming both; two accounts with equal numbers → two; two hosts whose email is empty → two, also when their `org` is equal (the key is the host's own: G2, C-1); Codex on two hosts → two groups; no group by host alias | group by numbers → `two accounts were merged` |
 | A4-T7 | the newest reading, and a later failure | `hA` read 4 min ago and `hB` 1 min ago → the group shows `hB`'s numbers and `read 1 min ago`; `hB`'s later read failed → `hB`'s older numbers stay and the detail says the later read of `hB` failed | draw the oldest → red |
-| A4-T8 | every host says how it stands | one row for each standing of the brief, each its own sentence, all different; an automatic host with a reading still says *allowed automatically on <day>* | one sentence for two standings → red naming both |
+| A4-T8 | every host says how it stands | one row for each standing of the brief, each its own sentence, all different; an automatic host with a reading still says *allowed automatically on <day>*; the *not asked yet*, *full* and damaged rows are drawn from `HostMemory.admission`, and the damaged one is S1's W11 word for word | one sentence for two standings → red naming both; ignore `admission` → `a host that is not read over a damaged list says never read yet` |
 | A4-T9 | the fixed command for a host without `jq` | for each `ManagerWord` the host row shows exactly `INSTALL_JQ[word]` and its `copy` is that string; `none` → the sentence and no `copy`; the copy button hands `textCopier` exactly `copy` | build the command with the host's name → red |
 | A4-T10 | no text from a reply is ever part of a shown command | 50 generated readings whose every text field holds a marker (`; rm -rf ~`, `$(id)`, a newline, a manager-like word) → no row's `copy` and no command text holds any marker; every `copy` is a value of `INSTALL_JQ` | interpolate a reply field → `text from the VM reached the command` |
-| A4-T11 | usage not read says why | `failed format`, `failed model-call`, `failed timeout`, `no-jq`, `signed-out`, agy → each its own sentence with the version where it has one; `skipped` → nothing; never a row of dashes with no reason | one sentence for format and model-call → red |
-| A4-T12 | VM text is made plain at one road | `forList` of a text with a bidi override, a zero-width space (built with `String.fromCodePoint`), a bell, `$(zap)` and 10 KB → none of the four, `$ (zap)`, the cut with `…`; a companion scan: every reply text field reaches a row only through `forList(` | draw `email` as it is → `an icon a VM chose was drawn` |
+| A4-T11 | usage not read says why | `failed format`, `failed model-call`, `failed timeout`, `failed error`, `no-jq`, `signed-out`, Claude `unreadable auth` and `unreadable timeout`, the three Codex failures, `credential-shape` for each vendor, agy → each its own sentence with the version where it has one; a whole answer `unreadable` → the one sentence with the clause of `ACCOUNTS_UNREADABLE_SAID`, for every `why` of that table; Codex `asOf` `null` → the age is `—`, and with `statMissing` the row says the host has no `stat`; `skipped` → nothing; never a row of dashes with no reason; the `8 s` and the `3 s` are `ACCOUNTS_SECONDS.usage` and `.account` | one sentence for format and model-call → red |
+| A4-T12 | VM text is made plain at one road | `forList` of a text with a bidi override, a zero-width space (built with `String.fromCodePoint`), a bell, `$(zap)` and 10 KB → none of the four, `$ (zap)`, the cut with `…`; a companion scan: every reply text field reaches a row only through `forList(`, and `forList` calls `plainValue(` and holds no character class of its own. **The runner's failure sentence is on the same road (G2, S-5):** a `failure.sentence` that ends with `$(zap)` and a bidi override is drawn with `$ (zap)` and no override, and the scan finds `failure.sentence` only inside `forList(` | draw `email` as it is → `an icon a VM chose was drawn`; draw the failure sentence as it is → `an icon from ssh's stderr was drawn` |
 | A4-T13 | the notices | `noticesDue`: the first automatic host → `autoHosts` at once; again 2 h later → none; 25 h later → only the hosts allowed since; none allowed → none; `first` once while `toldUtc` is absent, never after a `told` | show the daily notice every round → `the person was told 6 times an hour` |
 | A4-T14 | the stopped list and the empty list | `stopped` → exactly one row, the start row; no `Creds:` terminal → exactly the one sentence; the ignored-layer row first when a workspace or folder sets the key | draw the groups while stopped → red |
 | A4-T15 | the manifest (`terminalDoorWiring.test.ts`, extended) | one command row: title `AI accounts and usage`, category `ConnectOtherAIs`, icon `$(account)`; one `view/title` row, `when` exactly `view == terminal`, group `navigation@91`; no `commandPalette` row; no keybinding; `coai.askFromTerminal` still `navigation@90`; the skip-list default unchanged | `navigation@89` → `the accounts icon sits before Ask other AI` |
@@ -638,7 +793,11 @@ S3** (the memory, the round's buttons) **and S1** (`hostStandings`, `changeHost`
 - **Host scenario A4-H1** (in `terminalAccountsScenario.ts`): `coai.terminalAccounts` is among `vscode.commands.getCommands`;
   with the fake call answering a reply whose `email` holds `$(zap)`, one round, then the command executed → `lastItems()`
   holds a separator `Claude Code · …$ (zap)…`, a `── Hosts ──` separator and one row for each host; the QuickPick is hidden
-  in the `finally`. **What it cannot see:** what VS Code DRAWS for `$(`; no API reads a drawn row (§ 10, K3).
+  in the `finally`. **What it cannot see:** what VS Code DRAWS for `$(`; no API reads a drawn row. **U10 is measured
+  here as far as a host scenario can, and the scenario records what was CHECKED** (§ 10, K3; G2): the label text it
+  handed to the list, raw and after `forList`; that no extension API reads a drawn row — checked: `QuickPick` and
+  `QuickPickItem` of the locked type definitions, and nothing else. The record goes into the summary and into
+  `research/module_tests.md` (S5). U10 stays "open" as the parent has it; nothing moves to E2.
 - **Docs.** S5.
 - **Done when.** A4-T1…T19 green, each break-it seen red; the door census and the help census green; `notification-sites.json`
   regenerated; `npm run compile` exit 0; the whole suite and lint green; A4-H1 green in CI's real-editor job, read from it.
@@ -661,7 +820,10 @@ from the two specs and this document). No product code.
        nothing of a reading is stored; what Claude Code writes on a usage read (four cache files, measured);
      - the chat article's remote paragraph rewritten: the per-host answer now covers the AI accounts; with
        `coai.terminalAccountsAllowNewHosts` on (the default) a host with no answer is allowed by itself and named in a
-       notice at most once a day; only *Not this host* stops a host, and *Forget* lets it be allowed again; only the user
+       notice at most once a day; only *Not this host* stops a host, and *Forget* lets it be allowed again — **with the
+       K5 clause: a *Forget* given in another window does not lift a “Not this host” while the window that gave it is
+       open; that window writes it again and says so; *Read* holds from every window** (the parent's entry 1.1; G2,
+       C-6; S1's W3 has the English words, and the four translations say the same); only the user
        settings count; the sentence *"They only read: they change nothing on that machine"* rewritten (our script writes
        nothing; Claude Code writes its own caches on a usage read). The old sentence *"The first time for each host you are
        asked once"* goes.
@@ -673,8 +835,9 @@ from the two specs and this document). No product code.
      sequence diagram of a round (the timer → `admitHost` → `runAccounts` → `readAccounts` → the memory → the list). No
      renderer runs in this repository's CI: the diagram is checked by reading.
   3. **`research/module_tests.md`** — a NEW row after `:317`, *Terminal accounts — THE READ-ONLY LIST (E1)*, naming every
-     A1–A5 test and A1-H1, A3-H1, A4-H1; **not covered**: a real VM, a real Claude Code, Codex or agy, a real `jq` on this
-     machine, what VS Code draws for `$(` (U10), two real windows (U12, R12), a remote window (R11) — E2's.
+     A1–A5 test and A1-H1, A1-H2, A3-H1, A4-H1; **not covered**: a real VM, a real Claude Code, Codex or agy, a real `jq`
+     on this machine, what VS Code draws for `$(` (U10: with what A4-H1 CHECKED and what it did not, § 10, K3), two real
+     windows (U12, R12), a remote window (R11) — E2's.
   4. **`research/architecture.md`** — in the outward edge's section (`:624`): a second kind of ssh call, started by a TIMER
      with no press, read-only, to a host that is not refused; and the NEW edge from a VM to a vendor — Claude Code, started by
      our script on a usage read, calls Anthropic with the VM's own login (no secret through our code). The module map names
@@ -682,7 +845,10 @@ from the two specs and this document). No product code.
   5. **`SECURITY.md`** (`:126-147`) — the section becomes *The extension's outward ssh calls*: two kinds of call in E1;
      the sentences *"No ssh child is started before a "yes""* and *"The first read for a host asks once"* (`:130`) rewritten:
      a host is contacted unless it was refused; the timer; how a new host is allowed, stored and shown, and that only *Not
-     this host* stops one; the merge of the store and the cap; the setting and that only a user-level value counts; the
+     this host* stops one; the merge of the store and the cap; that the window which gave a refusal writes it again when
+     it is missing, so a *Forget* from another window does not hold while that window is open (K5, the parent's entry
+     1.1; G2, C-6); that a list of hosts which cannot be read contacts nobody, and a state row which cannot be read is a
+     stopped round; the setting and that only a user-level value counts; the
      daily notice; the stop button; road (a) and what the VM then calls; what Claude Code writes on a read (measured, W4);
      the start of `agy`; the person's activity dropped on the VM; the residuals of the parent's § *Security*. Not W6 or W7:
      their sentences are written after E2, from what was seen (parent § *Security*, last paragraph). Every sentence about an
@@ -705,7 +871,7 @@ from the two specs and this document). No product code.
 | # | Name | Assertion | Break-it → the RED it must show |
 |---|---|---|---|
 | A5-T1 | every language's accounts article names its controls | each of the five articles, not a fallback, holds `**AI accounts and usage**`, `**Refresh now**`, `**Stop the accounts round**`, `**Not this host**`, `` `coai.terminalAccountsAllowNewHosts` `` and `jq` | leave `helpUk.ts` without *Stop the accounts round* → red naming uk |
-| A5-T2 | every language's chat article says the answer covers the accounts | each of the five chat articles holds `**CoAI: hosts read over ssh**` and the accounts clause, and NOT the sentence *"The first time for each host you are asked once"* (nor its translation, by a phrase per language the test names) | keep the old sentence → red naming the language |
+| A5-T2 | every language's chat article says the answer covers the accounts, and what *Forget* does from another window | each of the five chat articles holds `**CoAI: hosts read over ssh**` and the accounts clause, and NOT the sentence *"The first time for each host you are asked once"* (nor its translation, by a phrase per language the test names). **Each of the five holds the K5 clause** — a *Forget* from another window does not lift a refusal while the window that gave it is open — by a phrase per language the test names (G2, C-6) | keep the old sentence → red naming the language; leave `helpEs.ts` with *Forget* and no K5 clause → red naming es |
 | A5-T3 | the old "change nothing" sentence is gone | no language's chat article holds *"They only read: they change nothing on that machine"* or its translation as written today | — |
 | A5-T4 | the E2 help test still holds | `helpCoverage.test.ts:84-101` green with no edit | — |
 
@@ -721,7 +887,10 @@ from the two specs and this document). No product code.
    a third kind of call — parent § 5, last paragraph), the caller records it in the parent's ledger and gets it approved
    BEFORE that story is coded. The coder never adds one.
 2. **G2 — the Opus review of both specs.** Any change to C1 or C2 goes into § 4 and into the briefs of S3 and S4 in the same
-   commit, before S3 or S4 is coded.
+   commit, before S3 or S4 is coded. **It ran on 2026-11-19**
+   ([PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_G2.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1_G2.md)):
+   one change of the parent (1.1, K5), and its verdict applied in the two specs and in this document. S1 and S2 are
+   coded from the specs as they stand after it.
 3. **S1 and S2 coded** — Sonnet, from their specs; Opus reviews; Sonnet fixes. Their files are disjoint (S1: the consent
    files, the setting, the manifest's setting; S2: new modules and `remoteFrame.ts`), so two coders may work at once; they
    land on this branch S1 first, then S2.
@@ -732,34 +901,45 @@ from the two specs and this document). No product code.
    § 11, and the two specs' scope sections) as `planText`. Every CI check green, and the `extension · a real editor` job
    read by its own result (§ 8).
 8. **Merge.** Build the pre-release VSIX from the merged head (`npm run package`). E2 starts there (parent build order 3–4).
+   **The order E2 starts with (G2, S-3): W7 before the install.** E1 ships `USAGE_POLICY` `every-round`, so from its
+   first start the pre-release runs the usage command by a timer on every host of an open `Creds:` terminal. W7 — the
+   trace of every program start — is what could find a hook or an MCP server of the person starting there, so it is
+   run BEFORE the owner installs that VSIX. It needs no window: one usage read with the pinned command, by hand, under
+   the trace, on one of the owner's hosts, with the owner's go for its exact text (parent § 5). R2 (the first start
+   after the install) and R7 come after W7's result is recorded. If W7 fails, its stated consequence comes first: a
+   new PR sets `USAGE_POLICY` to `{ kind: 'off' }`, and the pre-release is built from that head (parent *Build order*,
+   step 4). It is an order inside E2, and NOT a default of `off` in E1: the parent has the pre-release read in every
+   round (§ 2). The E2 stories document takes it as its first step.
 
 ## 7. Test plan — the parent's rows this epic owns
 
 | Parent row (§ *Test plan*) | Story | Tests |
 |---|---|---|
-| The accounts script, run for real | S2 | A2-T1, T3–T8, T12, T13, T22, T23 and the spec |
+| The accounts script, run for real | S2 | A2-T1, T3–T8, T12, T13, T22, T23, T25, T26, T30 |
 | No secret leaves, seen and not assumed | S2 | A2-T9 (seen RED once) |
 | The person's activity does not leave | S2 | A2-T10 (seen RED once) |
 | The version is the only thing kept | S2 | A2-T11 |
 | The hash | S2 | A2-T2 |
-| The parser | S2 | A2-T14–T17, T20, T21 |
+| The parser | S2 | A2-T14–T17, T20, T21, T24, T27–T29 |
 | The Claude usage lines | S2 | A2-T18 |
 | The Codex record | S2 | A2-T19 |
 | The words and the rows | S4 | A4-T1–T12 |
 | The round | S3 | A3-T9–T22, T26; A3-H1 |
-| The consent store's commit and merge | S1 | A1-T3–T8 and the spec |
+| The consent store's commit and merge | S1 | A1-T1–T9, T16, T17 |
 | The automatic "yes", the cap, the stop button and the notices | S1, S3, S4 | A1-T7, T10, T13, T15; A3-T23, T25; A4-T13 |
-| The setting, at both values, user layer only | S1 | A1-T10, T11 |
-| The runner | S3 | A3-T1–T8 |
-| The manifest and the help | S1, S4, S5 | A1-T11; A4-T15–T18; A5-T1–T4 |
-| Host scenario | S1, S3, S4 | A1-H1, A3-H1, A4-H1 (U10: § 10, K3) |
+| The setting, at both values, user layer only | S1 | A1-T10, T11; A1-H2 |
+| The runner | S3 | A3-T1–T8, T28 |
+| The manifest and the help | S1, S4, S5 | A1-T11, T14, T18; A4-T15–T18; A5-T1–T4 |
+| Host scenario | S1, S3, S4 | A1-H1, A1-H2, A3-H1, A4-H1 (U10: measured as far as a host scenario can, § 10, K3). A3-T27 holds that no scenario can arm a round or reach `ssh` |
 | Webview pages are not changed | all | — |
 
 ## 8. Where each proof runs
 
 - **Unit and wiring tests**: `npm test`, here and in CI (`ci.yml:576-578`, `ubuntu-latest`). The real-`sh` cases RUN in CI;
   the real-`jq` cases RUN in CI by A2-T23 (how is the S2 spec's, K12) and skip here with that reason.
-- **Host scenarios** A1-H1, A3-H1, A4-H1: `npm run test:host` CANNOT run on this machine (no `libnss3`). They run only in
+- **Host scenarios** A1-H1, A1-H2, A3-H1, A4-H1: `npm run test:host` CANNOT run on this machine (no `libnss3`). In that
+  run the round never arms itself and an accounts call that a scenario did not replace is a stub (S3: the two
+  test-mode locks), so the three older scenarios that open `Creds: h / s` start no `ssh`. They run only in
   CI's job `extension · a real editor` (`ci.yml:596`, `xvfb-run -a npm run test:host` at `:630`). That job has
   `continue-on-error: true` (`:599`), so a red scenario does NOT turn the pull request red: read the job's own conclusion and
   log on the head commit and write the result (with the sha) in the pull request description. A red host scenario blocks the
@@ -780,8 +960,10 @@ from the two specs and this document). No product code.
   decided inside the parent's text: the accounts call reuses the pinned options and the one argv builder, its one operand is a
   closed word quoted for the remote shell as the session operands are, and the runner sends no text but `ACCOUNTS_SCRIPT`
   (A3-T1, T2, T4); the round's seams have no ask (A3-T25); the stop and the "no" are read before every call (A3-T13, T23);
-  the only command a row shows is one of five fixed strings (A4-T9, T10); VM text reaches a row through one function that
-  breaks `$(` (A4-T12). `SECURITY.md` gets its rewrite in S5.
+  a state row that cannot be read is a stop, as a list of hosts that cannot be read contacts nobody (A3-T23; A1-T8);
+  the only command a row shows is one of five fixed strings (A4-T9, T10); VM text reaches a row through one function,
+  which calls S2's `plainValue` and so breaks `$(` — the runner's failure sentence too (A4-T12). `SECURITY.md` gets
+  its rewrite in S5.
 
 ## 10. What E1 does not do, judgements, conflicts with the parent, and open points
 
@@ -799,34 +981,37 @@ window or a real vendor (E2); road (b); a webview; a change to `SSH_OPTIONS`; a 
 - **J4.** The two new modules that touch a reply or a log carry the `remote` prefix so the existing log scan covers them.
 - **J5.** One host module for S3 and S4 (`remoteAccountsHost.ts`), as the parent's scope says ("a NEW host module").
 
-**Conflicts between the parent and the code, found while verifying** (K-numbers are referred to above). The first three may
-be plan changes; the caller decides, and records any accepted one in the parent's ledger before S1 is coded.
+**Conflicts between the parent and the code, found while verifying** (K-numbers are referred to above). Three of them
+could have been plan changes: K3, K5 and K6. **The caller decided at gate G2, on 2026-11-19: K5 is the parent's ledger
+entry 1.1; K3 and K6 are fitted to the parent's text, and are not changes.** The last column says what each became.
 
 | # | What the parent says | What the code says | What this document does |
 |---|---|---|---|
 | K1 | The icon is one `view/title` row, `view == terminal` | `doorCommands()` counts every such row as a way into a chat and demands a `noteChatDoor` (`chatWiring.test.ts:482-493`) | S4 adds a named allow-list and its honesty test (A4-T16). A test change, not a plan change |
 | K2 | *"A timer pattern exists"*: `everyMs` | `everyMs` is a private `setInterval` (`consultantHealthPanel.ts:214-218`); the parent's round counts 10 minutes from the END of a round | S3 uses one re-armed `setTimeout`; `everyMs` is not reused |
-| K3 | **U10 is measured by E1's host scenario** (§ *Test plan*, *Host scenario*) | No extension API reads what a QuickPick DRAWS. The type definitions say `label`, `description` and `detail` render `$(<name>)` (`@types/vscode` 1.134.0, the locked version, `QuickPickItem`; documented, not observed) | A4-H1 asserts the item text has `$(` broken, which is what a host scenario can see. What VS Code draws is observable only by a person (R3's window). **Moving where U10 is observed may be a plan change of the test plan: the caller decides** |
+| K3 | **U10 is measured by E1's host scenario** (§ *Test plan*, *Host scenario*) | No extension API reads what a QuickPick DRAWS. The type definitions say `label`, `description` and `detail` render `$(<name>)` (`@types/vscode` 1.134.0, the locked version, `QuickPickItem`; documented, not observed) | A4-H1 asserts the item text has `$(` broken, which is what a host scenario can see. **Decided at G2: U10 is NOT moved, so the parent does not change.** A4-H1 measures U10 as far as a host scenario can, and records what was CHECKED (`planning-docs.md`: a result that says "impossible" names what was checked): the label text it handed over; that no extension API reads a drawn row — checked: `QuickPick` and `QuickPickItem` of the locked type definitions, nothing else; and, only if CI's runner already has a tool that captures the xvfb screen (UNVERIFIED; nothing is installed for it), the drawn row of a label with `$(account)` beside one with `$ (account)`. If nothing more can be seen, U10 stays "open" exactly as the parent has it, with that record. R3 gains nothing. U10 decides no E1 code: `$(` is broken in every case |
 | K4 | The rules are the mod's own (`resetText`), and the § 1 sample shows `resets in 2d 14h` | The mod's `resetText` has no day form (`limits.tsx:93-95`: 3 790 minutes is `63h 10m`); its cases stop under 24 h (`reset.test.tsx:48-50`) | Under 24 h the mod's form, held to its cases; from 24 h on the sample's `<d>d <h>h` (A4-T2) |
-| K5 | § 3: a window writes a missing "no" again (point 3); only a person's *Read* or *Forget* changes a "no" (point 2) | A *Forget* leaves no row, which the other window cannot tell from a lost "no"; a *Read* replaces the row with a "yes" | **The S1 spec decides** (A1-T6). If it needs a tombstone the row's shape changes: **possibly a contract change, the caller decides** |
-| K6 | — (a damaged store is not discussed) | `rowsOf` reads a list with one bad row as EMPTY (`remoteRead.ts:127`), which the automatic "yes" would read as "allow everyone", and a commit would overwrite it | **The S1 spec decides** (A1-T8; `damaged` in C1) |
-| K7 | At the cap the oldest AUTOMATIC row goes | Today a person's answer at the cap drops the oldest row, a "no" included, and `remoteRead.test.ts:170-184` asserts it | **The S1 spec decides** the person's case; that test is replaced |
+| K5 | § 3: a window writes a missing "no" again (point 3); only a person's *Read* or *Forget* changes a "no" (point 2) | A *Forget* leaves no row, which the other window cannot tell from a lost "no"; a *Read* replaces the row with a "yes" | **Decided by the S1 spec, with no tombstone** (its § S1.5; A1-T6): the window that gave the "no" writes it again and says so, so a *Forget* from another window does not hold while that window is open. **A plan change: the parent's ledger entry 1.1** (2026-11-19, `approach`) |
+| K6 | — (a damaged store is not discussed) | `rowsOf` reads a list with one bad row as EMPTY (`remoteRead.ts:127`), which the automatic "yes" would read as "allow everyone", and a commit would overwrite it | **Decided by the S1 spec** (its § S1.3; A1-T8): `damaged`, nobody is contacted, and nothing writes over it but a person's own answer for a host in the change question that exists. **Fitted at G2:** no notice and no question of its own, so it is inside the parent's "never overridden" |
+| K7 | At the cap the oldest AUTOMATIC row goes | Today a person's answer at the cap drops the oldest row, a "no" included, and `remoteRead.test.ts:170-184` asserts it | **Decided by the S1 spec** (its § S1.4): a "no" is never dropped; that test is replaced by A1-T7 |
 | K8 | A failed read is logged once, not every round | `runRemote` logs every call that did not answer 0 (`remoteSsh.ts:192-195`) | S3's log gate through the log seam (A3-T8) |
-| K9 | The setting is registered in `src/settingsShape.ts` and joins `SAFETY_KEYS` | A key in `CoaiSettings` must reach the server (`settingsReach.test.ts:104`) unless it is in `NOT_FOR_THE_SERVER` (`:102`); `coai.teamServers`, the other `application` key, is not in `CoaiSettings`; `SAFETY_KEYS` is documented as server-refusal overrides (`modelKeys.ts:28-36`) | **The S1 spec decides** where it is listed; the user-layer read and the scan are kept either way |
+| K9 | The setting is registered in `src/settingsShape.ts` and joins `SAFETY_KEYS` | A key in `CoaiSettings` must reach the server (`settingsReach.test.ts:104`) unless it is in `NOT_FOR_THE_SERVER` (`:102`); `coai.teamServers`, the other `application` key, is not in `CoaiSettings`; `SAFETY_KEYS` is documented as server-refusal overrides (`modelKeys.ts:28-36`) | **Decided by the S1 spec** (its § S1.7): in `SAFETY_KEYS`, not in `CoaiSettings`; the user-layer read and the scan are kept |
 | K10 | The other side of the boundary is owed at the terminal-door plan's promotion at the latest | That plan was promoted on 2026-11-18 and says nothing of this plan (`research/PLAN_the_chat_opens_from_a_terminal.md:310`) | S5 writes the sentence (item 6) |
-| K11 | The frame is ONE framing function shared with `remoteFrame.ts`, extracted | `framedLines` is private and throws the session parser's own faults (`remoteFrame.ts:98`, `:121-130`) | The S2 spec decides the shared result |
-| K12 | The script tests use the real `jq` | This machine has no `jq`; `ci.yml` installs none | The S2 spec decides how CI runs them (A2-T23) |
+| K11 | The frame is ONE framing function shared with `remoteFrame.ts`, extracted | `framedLines` is private and throws the session parser's own faults (`remoteFrame.ts:98`, `:121-130`) | **Decided by the S2 spec** (its § A2.6): NEW `src/remoteFraming.ts`, with a result that is a value |
+| K12 | The script tests use the real `jq` | This machine has no `jq`; `ci.yml` installs none | **Decided by the S2 spec** (its § A2.10): a step of the test job installs `jq` where the runner has none; a missing `jq` on CI's Linux fails (A2-T23) |
 | K13 | The words name an age as `gaugeWords` does | `agoWords` is private (`gaugeWords.ts:92`) | S4 exports it; no copy |
 | K14 | The ignored-layer row uses *"the words `sideConfig.ts` uses for an ignored layer"* | `sideConfig.ts`'s words are another sentence (`:98-99`), and its layer finder is private and walks the model keys only (`modelKeys.ts:119-136`) | S4 uses the parent's own sentence; S1 exports `ignoredLayerOf` |
-| K15 | Every write is a commit of a change; no whole list is written | The road's test door and two host scenarios set and restore the store by whole lists | **The S1 spec decides** the test door (item 5 of its list) |
+| K15 | Every write is a commit of a change; no whole list is written | The road's test door and two host scenarios set and restore the store by whole lists | **Decided by the S1 spec** (its § S1.9): set by commits, restore by one raw write in the test door only |
 | K16 | — | The hosts list's empty notice says *"The first read … asks once"* (`remoteSessionHost.ts:113`) | S1 rewrites it (A1-T14) |
 | K17 | The read is capped at 64 KiB | The capped sentence divides by 1 048 576 (`remoteSsh.ts:168`) and would say `0.0625 MiB` | S3 says the cap in the unit it divides into evenly (A3-T4) |
 | K18 | — | `helpCoverage.test.ts` turns red the moment a command or a setting exists without its English needle, and a new article without its four translations | S1 and S4 add the help their census needs; S5 completes it (§ 3) |
 
 **Open, for the people named.**
 
-1. **K3, K5 (if a tombstone), and any change the two specs need** — the caller, through the parent's ledger, before S1.
-2. **Whether `ubuntu-latest` ships `jq`** — UNVERIFIED; the S2 spec settles it (K12).
+1. **K3, K5 (if a tombstone), and any change the two specs need** — **closed at gate G2, 2026-11-19:** K5 is the
+   parent's entry 1.1; K3 and the damaged store are fitted; the specs need no other change.
+2. **Whether `ubuntu-latest` ships `jq`** — still UNVERIFIED, and it no longer matters: the S2 spec gives the test job a
+   step of its own (K12).
 3. **What `inspect()` hands the extension for an `application`-scoped key set in a workspace** — UNVERIFIED (the parent says
    the same); the ignored-layer row may never appear. R11 observes it in E2.
 4. **`workbench.action.openSettings` with the key as its query** — UNVERIFIED in this repository (no caller today); R2 and
@@ -835,11 +1020,17 @@ be plan changes; the caller decides, and records any accepted one in the parent'
 6. **The minimum VS Code** — the manifest's engine is `^1.85.0` (`package.json`); separators, item buttons and
    `keepScrollPosition` are in the locked type definitions (1.134.0); their presence on 1.85 is UNVERIFIED, and
    `conversationPickerCommand.ts` already depends on the first two.
+7. **The order E2 starts with: W7 before the pre-release VSIX is installed** (§ 6, item 8; G2, S-3) — for the E2
+   stories document, and for the owner, whose go W7 needs.
+8. **The session script's call line** (`src/remoteScript.ts:428`) — a defect of shipped code that gate G2 confirmed
+   (its § 5). Not this plan's, and no entry of its ledger:
+   [PLAN_the_session_script_call_line_cannot_be_cut.md](PLAN_the_session_script_call_line_cannot_be_cut.md).
 
 ## 11. Definition of Done — epic E1
 
 - [ ] The S1 and S2 specs were written by Fable and reviewed by Opus (G2) BEFORE their code; § 4 and the S3 and S4 briefs
       updated with any change they made; any change outside the parent's text recorded in the parent's ledger first.
+      (G2 ran on 2026-11-19: the parent's entry 1.1; § 4 and the briefs hold both X tables.)
 - [ ] S1–S5 coded to their specs; every scenario green; every break-it observed red, then green; both observations in the
       summary; A2-T9 and A2-T10 seen RED once.
 - [ ] A "no" always wins: A1-T3…T8 green, and no round, reload, second terminal, second window, full store or damaged store
@@ -851,7 +1042,7 @@ be plan changes; the caller decides, and records any accepted one in the parent'
       version command only the version is.
 - [ ] One ssh call for each host in a round, two only in finding 3's case; the pinned options untouched; usage once for each
       account; 30 s, then 600 000 ms from the end of a round; the timer asks nobody and stops with the last terminal and
-      with the stop button (A3-T1…T27).
+      with the stop button (A3-T1…T28). A state row that cannot be read is a stopped round.
 - [ ] The list: grouped by account; "left" in the mod's words; a missing value a dash and never 0; usage that was not read
       says why; every host its own sentence; the fixed `jq` command from a closed table only (A4-T1…T19).
 - [ ] Nothing of a reading is persisted (A3-T24). Road (b) is not in the code.
@@ -860,8 +1051,8 @@ be plan changes; the caller decides, and records any accepted one in the parent'
 - [ ] `npm run compile` exit 0; `npm test` green on CI with the `sh` and `jq` cases RUN; `npm run lint` green; no suppression
       count grew; `sonarExclusions.test.ts` green with `remoteAccountsHost.ts` listed; `notification-sites.json` regenerated;
       the door census and the help census green.
-- [ ] A1-H1, A3-H1 and A4-H1 green in CI's `extension · a real editor` job on the head commit, read from that job, named
-      in the pull request.
+- [ ] A1-H1, A1-H2, A3-H1 and A4-H1 green in CI's `extension · a real editor` job on the head commit, read from that
+      job, named in the pull request.
 - [ ] Docs: the help in five languages; `research/module_extension.md`, `research/module_tests.md`,
       `research/architecture.md` (the timer's call and the edge from a VM to a vendor); `SECURITY.md` but for W6 and W7;
       the boundary sentence in the terminal-door plan; § 12 of this document (the release notes draft and the
