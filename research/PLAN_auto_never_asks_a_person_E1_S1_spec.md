@@ -1,6 +1,6 @@
 # PLAN — E1.S1 spec: the stored policy and the hold's authority — `autonomous` on disk, and the one hold `auto` may release (CORNERSTONE)
 
-> Status: **spec only, revised to epoch 2 of the parent on 2026-11-16, by Fable, before its code — nothing coded.** U1
+> Status: **IMPLEMENTED, 2026-11-19** — the E1.S1 cornerstone spec, built in #1011 (mcp 0.66.0); promoted with its plan. Before that: **spec only, revised to epoch 2 of the parent on 2026-11-16, by Fable, before its code — nothing coded.** U1
 > is settled: it became the parent's entry 1.2, and the revised § 4.3 fixes the released state (`AwaitingResolve = true`,
 > `AdvanceOnResolve = true`). U2 and U3, reported from this spec, are settled in the parent the same day, neither
 > counted as a change (§ S1.8): the release note reaches `coai.db` by a one-column update, and an answer found at the
@@ -553,7 +553,7 @@ succeeded (J10), and the person must not have answered the hold (J9).
 broken): a stamp while the hold stands (D8, T44); the reflection serializer over an initializer (M2, not present).
 
 **J8 — the residuals, and nothing wider.** (a) A9, as the parent words it. (b) The data-folder write class of A10, which
-exists today and which [PLAN_a_signed_answer_releases_the_gate.md](PLAN_a_signed_answer_releases_the_gate.md) names —
+exists today and which [PLAN_a_signed_answer_releases_the_gate.md](../todo/PLAN_a_signed_answer_releases_the_gate.md) names —
 the session file, the answer file and `settings.json` alike (parent § 6, the access model). (c) The parent's two
 residuals of the order: a card no session records is not withdrawn (F18 retires it), and a withdrawal followed by a
 failed save leaves the hold with fewer live cards. (d) An answer file being written at the instant of the second read

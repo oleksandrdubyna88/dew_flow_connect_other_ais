@@ -26,14 +26,15 @@ function questionHalf(): (typeof KNOWN_HALVES)[number] {
   return half;
 }
 
-test('the question half is the last row of the table, at v1, and travels in the paste', () => {
+test('the question half is the last row of the table, at v2, and travels in the paste', () => {
   const half = questionHalf();
 
-  assert.equal(half.version, 1);
-  assert.equal(QUESTION_VERSION, 1);
+  // v2: the floor under policy `auto`, `consult_first`, the production-risk phases (conventions #182).
+  assert.equal(half.version, 2);
+  assert.equal(QUESTION_VERSION, 2);
   assert.equal(HALF_IDS.at(-1), QUESTION_ID, 'the two consultants close the paste, the question one last');
   assert.equal(half.file, 'coai-question-consultant.md');
-  assert.ok(claudeSnippet().includes('<!-- coai-question v1 -->'));
+  assert.ok(claudeSnippet().includes('<!-- coai-question v2 -->'));
 });
 
 test('it raises the bar above the server: the consultants first, in every phase', () => {

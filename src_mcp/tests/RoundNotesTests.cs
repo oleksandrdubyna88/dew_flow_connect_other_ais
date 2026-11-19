@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// One round's note in <c>coai.db</c>, written by a statement that names one column of one row
-/// (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.5.1).
+/// (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.5.1).
 /// </summary>
 /// <remarks>
 /// Real SQLite over a test folder, as <c>RoundsDbTests</c>: the point is that the SQL runs. The writer is the narrow one a release uses

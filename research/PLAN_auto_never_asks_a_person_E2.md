@@ -1,6 +1,6 @@
 # PLAN — E2 stories: the extension, everyone is on `auto` and can see what it did (`src_vs_code`)
 
-> Status: **built 2026-11-17 on `feat/auto-mode-e2`, in PR #1018: S1 with its U3 fix forward and its review fixes (one feature cache per window), S2 from the epoch-3 spec with its review fixes (a copy that lost its record, a claim taken over during the witness write), S3 page and words; each story judged by Opus; the coai code gate `proceed` (8 of 8, session ca7ffe63, epic 2/3), its accepted finding fixed (the notification is true on an older coai-mcp). Not yet merged or released.** Before that: **brought to epoch 3 of the parent by its re-review, 2026-11-17 (the parent is stopped until the owner
+> Status: **IMPLEMENTED, 2026-11-19** — epic E2 of the `auto` plan: merged 2026-11-18 as #1018, released as extension 0.89.0 (#1022). Before that: **built 2026-11-17 on `feat/auto-mode-e2`, in PR #1018: S1 with its U3 fix forward and its review fixes (one feature cache per window), S2 from the epoch-3 spec with its review fixes (a copy that lost its record, a claim taken over during the witness write), S3 page and words; each story judged by Opus; the coai code gate `proceed` (8 of 8, session ca7ffe63, epic 2/3), its accepted finding fixed (the notification is true on an older coai-mcp). Not yet merged or released.** Before that: **brought to epoch 3 of the parent by its re-review, 2026-11-17 (the parent is stopped until the owner
 > approves epoch 3): C4–C6 and § 6 take the S2 spec's X1–X5, § 7.3 briefs S1's fix forward for U3, § 9 the kept
 > sentence and the notification's two forms, § 10 lists what Fable revises in the S2 spec. S1 coded on
 > `feat/auto-mode-e2` (8fd79b71, 91a62aa7, 44bb7a4c), the S3 page slice on `feat/auto-mode-e2-s3-page` (ff158372,
@@ -13,7 +13,7 @@
 >
 > Scope: `src_vs_code` and the documents a reader reads. Three stories, the parent's intended cut, kept. **Cornerstone:
 > E2.S2** (`model: fable`), the one-time migration. Its scenarios and brief are Fable's, in
-> `todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md`. That file was written after this document (998a2a39) and revised to epoch 3 (ad7ee2fb).
+> `research/PLAN_auto_never_asks_a_person_E2_S2_spec.md`. That file was written after this document (998a2a39) and revised to epoch 3 (ad7ee2fb).
 > This document fixes S2's boundary, the contracts S1 and S3 rely on, and the inputs the spec must settle. S1 and S3
 > are briefed here in full. The parent's ledger line now reads `Cornerstones: 2 of 2 — E1.S1, E2.S2`.
 >
@@ -505,7 +505,7 @@ build their settings from `DEFAULTS`, not through the door.
 
 ## 8. E2.S2 — the one-time migration · `model: fable` (CORNERSTONE)
 
-Scenarios and brief: **Fable**, in `todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md`. This section is the boundary
+Scenarios and brief: **Fable**, in `research/PLAN_auto_never_asks_a_person_E2_S2_spec.md`. This section is the boundary
 only.
 
 **What it builds.** The parent § 4.6's *one-time migration*, N5–N8, and § 8 PR 2 step 2. That is done-when 3 and the

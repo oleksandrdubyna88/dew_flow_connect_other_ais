@@ -3,7 +3,7 @@ using CoaiMcp.Core.Rounds;
 namespace CoaiMcp.Server;
 
 /// <summary>
-/// The words <c>ask_human</c> answers under policy auto (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c> § 9.2 and N3): the AI's own question sent to
+/// The words <c>ask_human</c> answers under policy auto (<c>research/PLAN_auto_never_asks_a_person_E1.md</c> § 9.2 and N3): the AI's own question sent to
 /// the consultants first, a held gate answered at once, a feature review's request window told the server decides. The service owns the doors and
 /// the log; this owns the sentences, so each is read in one place and none of them can carry a question's text.
 /// </summary>

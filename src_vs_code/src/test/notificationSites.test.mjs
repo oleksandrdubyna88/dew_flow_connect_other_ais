@@ -285,7 +285,7 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // or folder list hides them (`skip-list-hidden-by-workspace`), and says when the write did not take (`skip-list-not-written`).
 // 182 -> 183 on 2026-11-17 (E3.S2 review, m3): the offer to start a conversation from a terminal catches a rejection of the terminal door and says it as the
 // registered command does (`terminal-door-failed`, one more site, the same code).
-// 183 -> 185 on 2026-11-17 (E2.S2 of todo/PLAN_auto_never_asks_a_person_E2.md), two sites: the one notification of the reset of When the rounds run out to
+// 183 -> 185 on 2026-11-17 (E2.S2 of research/PLAN_auto_never_asks_a_person_E2.md), two sites: the one notification of the reset of When the rounds run out to
 // Auto, in its two forms (`on-exhausted-migrated`, an `outcome`), and the warning for a settings file that refused the change (`on-exhausted-not-reset`).
 const PLACES_THIS_SPEAKS = 185;
 

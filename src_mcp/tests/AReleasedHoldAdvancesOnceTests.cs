@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// One <c>resolve</c> after a release advances the stage exactly once, in each of the four stages, with the decisions kept and — for a code stage —
-/// the cadence closed once (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.12; D10, J11).
+/// the cadence closed once (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.12; D10, J11).
 /// </summary>
 /// <remarks>
 /// <c>PanelService</c> level; every hold is raised by the real code under <c>human</c> (<see cref="HoldFromBeforeAutoFixture.RaiseAsync"/>).

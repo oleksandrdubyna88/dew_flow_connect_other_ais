@@ -9,7 +9,7 @@ import { readOverlay } from './sideSettings';
 
 /**
  * The host half of the one-time reset of *When the rounds run out* to Auto (E2.S2,
- * todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.5). It holds no decision: it builds the ports of
+ * research/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.5). It holds no decision: it builds the ports of
  * `migrateOnExhausted` — this profile's `globalState`, the person's own settings layer, the catalog's queue, the two
  * notifications — and awaits it. The run starts from `activate`, never from the panel.
  */

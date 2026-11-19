@@ -912,7 +912,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: theMigrationKeysAreKnownInARealEditor,
   },
   {
-    // todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md T31 (D16): the one-time reset of When the rounds run out completes in the real
+    // research/PLAN_auto_never_asks_a_person_E2_S2_spec.md T31 (D16): the one-time reset of When the rounds run out completes in the real
     // editor — the witness setting known to the registry, the record complete and told, the settings file holding the witness.
     // What it does and does not drive is in `onExhaustedMigrationScenario.ts`.
     name: 'the one-time reset of When the rounds run out completes, and a real settings file takes its witness',

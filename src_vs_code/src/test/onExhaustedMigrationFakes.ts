@@ -18,7 +18,7 @@ import { inForceOf } from '../onExhaustedTold';
 import { readOverlay, writeOverlay } from '../sideSettings';
 
 /**
- * The doubles every E2.S2 migration test stands on (todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.8.0).
+ * The doubles every E2.S2 migration test stands on (research/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.8.0).
  *
  * <p>They are a READING of VS Code's source, not VS Code: `ClientState` follows `extHostMemento.ts` (V1–V3) and
  * `FakeUserSettings` follows `configurationEditing.ts` and `extHostConfiguration.ts` (V5, V6). `T29` pins what they

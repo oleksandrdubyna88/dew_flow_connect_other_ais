@@ -1,5 +1,5 @@
 /** Measure what the panel writes for When the rounds run out against a real RELEASED coai-mcp that predates Auto, and the
- * current one (todo/PLAN_auto_never_asks_a_person.md § 4.6, E2.S1). No reviewer is run. Build the current server (the
+ * current one (research/PLAN_auto_never_asks_a_person.md § 4.6, E2.S1). No reviewer is run. Build the current server (the
  * Release configuration or Debug) and compile the extension first (`npm run test:on-exhausted-compat` compiles). Set
  * COAI_OLD_SERVER or pass --tag=mcp-v0.65.4; --new=<path> names the current binary when it is not in the usual build
  * folder. Exit 2 means a binary could not be obtained, a binary did not settle its --features answer, or the released one already knows Auto; it is not a passing

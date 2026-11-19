@@ -1405,10 +1405,10 @@ draws every card, as before.
 sweep asks; the gate's wiring and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497
 (the default's constant and its remark paid for by the surplus blank lines beside it).
 
-## ask_human never waits under policy auto (2026-11-17, `todo/PLAN_auto_never_asks_a_person_E1.md` § 9, owner decision O3)
+## ask_human never waits under policy auto (2026-11-17, `research/PLAN_auto_never_asks_a_person_E1.md` § 9, owner decision O3)
 
-> Plan: [PLAN_auto_never_asks_a_person.md](../todo/PLAN_auto_never_asks_a_person.md) § 4.4 (the design) and
-> [PLAN_auto_never_asks_a_person_E1.md](../todo/PLAN_auto_never_asks_a_person_E1.md) § 9 and N3 (the words).
+> Plan: [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) § 4.4 (the design) and
+> [PLAN_auto_never_asks_a_person_E1.md](PLAN_auto_never_asks_a_person_E1.md) § 9 and N3 (the words).
 
 Under policy `auto` the person is never asked first and nothing waits. Whether the policy is `auto` is read from the SETTINGS
 (`_settings.Rounds.IsAutonomous`), not from the session: a session raised under `human` is still `HumanGate` while the settings say
@@ -7020,8 +7020,9 @@ refused its operator's checkpoint gate to keep the last one, and on 2026-09-22/2
   `status` carried counts only.
 
 The shared gate rule tells agents the same thing, since conventions release a847ab7 (2026-09-24). The
-rule is `coai-review-gate.md`, step 5, and its marker is still `coai-snippet v5` because the marker is
-frozen. Step 5 now says:
+rule is `coai-review-gate.md`, step 5. Its marker stayed `coai-snippet v5` for that change, but not because it
+was frozen: the migration freeze ended on 2026-09-15 (conventions `747887d`), and the marker moved to v6 on
+2026-11-18 with the words for policy `auto` (conventions `25d551b8`, extension artefact v19). Step 5 then said:
 
 - only committed changes are reviewed;
 - an empty diff is refused, never passed;

@@ -34,14 +34,16 @@ function mountedBody(file: string): string {
   return source.slice(marker);
 }
 
-test('the feature half is a row of the table, at v3, and travels in the paste', () => {
+test('the feature half is a row of the table, at v4, and travels in the paste', () => {
   const half = featureHalf();
 
   // v2: the half stopped telling callers to pass a `head` the tool did not declare (§9.30).
   // v3: the shared rule — the one-round budget and its three grounds (conventions #58).
-  assert.equal(half.version, 3);
+  // v4: what the gate does under policy `auto` — `not_reviewed`, and only the first two grounds remain
+  // (conventions #182).
+  assert.equal(half.version, 4);
   assert.ok(HALF_IDS.includes(FEATURE_ID));
-  assert.ok(claudeSnippet().includes('<!-- coai-feature v3 -->'));
+  assert.ok(claudeSnippet().includes('<!-- coai-feature v4 -->'));
   // The feature half's v2 moved the artefact from 13 to 14; any later change to the paste only raises it
   // (15: the consultant half's v4; 16: this half's v3). An exact pin here broke on every unrelated half.
   assert.ok(ARTEFACT_VERSION >= 16, `the feature half moved to the shared v3, so the artefact moved past 15 — it is ${ARTEFACT_VERSION}`);

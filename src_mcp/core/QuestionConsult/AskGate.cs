@@ -67,7 +67,7 @@ public sealed record AskGateInput
     public AskDoor Door { get; init; } = AskDoor.Conversation;
 
     /// <summary>
-    /// Policy auto, read from the settings (<c>todo/PLAN_auto_never_asks_a_person.md</c> § 4.4, O3). Default false: every table row
+    /// Policy auto, read from the settings (<c>research/PLAN_auto_never_asks_a_person.md</c> § 4.4, O3). Default false: every table row
     /// above is the shipped gate. Under it the person is never asked first — see <see cref="AskGate.Decide"/>.
     /// </summary>
     public bool Autonomous { get; init; }
@@ -123,7 +123,7 @@ public abstract record AskDecision
 /// and the batches count the AI's own questions. Only a production risk keeps D8 there.</para>
 /// <para><b>Under policy auto</b> (<see cref="AskGateInput.Autonomous"/>, O3) the table above is not asked: see <c>Autonomously</c> — the AI's
 /// own question goes to the consultants first, whatever the phase and the batches say. The one exception is a production risk
-/// on the AI's own question: it keeps today's decision, phase exclusion included (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c> § 9.1) — in
+/// on the AI's own question: it keeps today's decision, phase exclusion included (<c>research/PLAN_auto_never_asks_a_person_E1.md</c> § 9.1) — in
 /// Planning or Released the person is asked at once, with an empty note; the reply still carries the instruction to ask them in the conversation.</para>
 /// </remarks>
 public static class AskGate

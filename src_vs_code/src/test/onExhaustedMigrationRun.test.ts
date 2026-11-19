@@ -35,7 +35,7 @@ import {
 } from './onExhaustedMigrationFakes';
 
 /**
- * One window runs the migration (todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.8.2). The usual fixture, **U**: the
+ * One window runs the migration (research/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.8.2). The usual fixture, **U**: the
  * user layer `human` with no witness; overlay X (`human`, `vendors` and `rounds` beside it); overlay Y (`continue`), whose
  * side has no registry record; overlay Z (`auto`); a slot that holds a string; `workspaceValue: 'human'` and
  * `workspaceFolderValue: 'continue'`; both keys declared; the per-side switch off. **U0** is U without the two workspace
