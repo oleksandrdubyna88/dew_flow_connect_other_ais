@@ -11,7 +11,9 @@
 > is allowed by itself**, with no question. No change to `src_mcp`, `src_server` or CredsForDevs. The accounts script
 > writes nothing on a VM. **One thing is installed there: `jq`, from the host's own package manager, at once, when it
 > is missing, an AI CLI is there to read, and the ssh user may install it** (N5, Q2); where the user may not, the
-> list shows the command to run. Three epics (E0 is the measurement), one extension release. **Not approved yet:** no
+> list shows the command to run. **Both automatic steps are user settings, on by default (owner decision 20)**:
+> turned off, a new host is asked first and nothing is installed. Three epics (E0 is the measurement), one extension
+> release. **Not approved yet:** no
 > plan round has run. The owner answered the questions N1–N5 and Q1–Q2 on 2026-11-19 and the answers are folded in,
 > as are the measurements W1–W5 (§ 5). **No question for the owner is open. The text is ready for the question
 > consultants and the plan round.** Still owed, and named so: the consultants' answer on what is important before
@@ -103,6 +105,16 @@ kept in *Open points for the owner*, with the answer beside each.
 19. **Q2 — "Install at once."** The install of `jq` runs by itself, as N5 says, also on a host whose "yes" is older
     than this release and on a host that was allowed by itself. No press is needed. The planner's recommendation was
     to wait for one press on an old "yes"; the owner decided otherwise.
+
+**Owner decision 20 (2026-11-19; given in Russian, translated here).** The main session put the risk of findings F1
+and F2 to the owner in plain words — any program can name a terminal `Creds: prod-db / x`, and that leads to an
+automatic ssh login and an install as root — and offered two settings that are off by default.
+
+20. **"Yes, but on by default."** There are two settings, and both are ON by default:
+    `coai.terminalAccountsAllowNewHosts` (a host with no answer is allowed by itself) and
+    `coai.terminalAccountsInstallMissingTools` (`jq` is installed where it is needed). Turning the first off restores
+    ask-first; turning the second off restores no-install. Only a value in the person's own user settings counts.
+    The planner's recommendation stays recorded: off by default (finding F1, finding F2).
 
 ## What the code does today — verified on `a057c971` (extension 0.89.1)
 
@@ -274,14 +286,16 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
     The mod rounds a fraction, so the two views can differ by one point. R3 checks equality with `/usage` and
     "within one point" with the mod line.
   - **When two hosts of one account were read at different times**, the group shows the newest reading and its age.
-  - **Every host has its own sentence in the *Hosts* part**: turned off; never read yet; the last read failed (with
+  - **Every host has its own sentence in the *Hosts* part**: turned off; *not asked yet*, with a press to ask, where
+    new hosts are not allowed by themselves (the setting of § 3 is off); never read yet; the last read failed (with
     the runner's own sentence and its age); and, for a host the round allowed by itself, *allowed automatically on
     <day>* — that one is shown also when the host has a reading. A host whose last read failed keeps its older numbers
     in its account group, and the group's second line says the later read failed.
   - **Usage that was not read says why**, in its own words: *usage not read: Claude Code 2.1.326 on this host printed
     no usage line this version understands*, *agy states no usage*. It is never a row of dashes with no reason.
   - **A host without `jq` has its own sentences** (§ 4): that `jq` was installed; or that it is missing and the ssh
-    user may not install it, with the exact command to run there; or that the install failed, with the reason and the
+    user may not install it, with the exact command to run there; or that it is missing and installing is turned off
+    (the setting of § 3), with the same command; or that the install failed, with the reason and the
     same command. The command is a fixed string from a closed table. The row has a copy button (a QuickPick item
     button) that puts that string on the clipboard. The extension never runs it for the person.
   - **The part *Changes CoAI made on a host*** lists every installation the extension made: the host, the day, the
@@ -290,6 +304,9 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
   - **Choosing a host's row** in the *Hosts* part opens that host's three choices — *Read*, *Not this host*, *Forget*
     — as *CoAI: hosts read over ssh* does, so a host can be forbidden from where it is seen (§ 3). Choosing the row
     of a failed install tries it once more. Choosing any other row does nothing.
+  - **A setting that a workspace or a folder tried to set** is said in one row at the top of the list: *This
+    workspace sets `coai.terminalAccountsAllowNewHosts`. It is ignored: only your own user settings count.* (§ 3).
+
   - **Two title buttons**: *Refresh now*, and *Stop the accounts round* (§ 3). While the round is stopped the list
     holds one row: *The accounts round is stopped. Choose this row to start it.*
 - **Text from a VM is made plain at one road in**: control and format characters are taken out, the length is cut, and
@@ -303,7 +320,8 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
   exited) terminals whose name gives `kind: 'session'`, read through `liveTerminals`. Several terminals of one host
   are one read. A host whose answer is "no" is refused and is never contacted. A host with a "yes" is read. **A host
   with no answer is allowed by the round itself**: the round writes its "yes", marked as automatic, and reads it in
-  the same round (§ 3). In this plan "an allowed host" is a host with a "yes", however it was written.
+  the same round (§ 3) — while the setting `coai.terminalAccountsAllowNewHosts` is on, as it is by default. With it
+  off, such a host is not contacted and waits for a press. In this plan "an allowed host" is a host with a "yes", however it was written.
 - **One host at a time.** A round takes the hosts in name order, starting one host later each round, and awaits each read
   before the next. Two reads never run at once. A failed host is recorded with its sentence and the round goes on.
 - **The answer is read again just before every call**, from the store, as the session reader checks the terminal's
@@ -369,7 +387,7 @@ read it no longer comes first. Only a "no" stops a host.
 | The host's row | What the round does |
 |---|---|
 | "yes", written by a press (*Read*) | Reads it, from the first round after the extension starts. No press and no question. Installs `jq` there at once when it is needed (§ 4) |
-| none — a new host, or a host after *Forget* | **Allows it by itself**: writes a "yes" row marked as automatic, with the time, and reads the host in the same round. No modal and no press. Installs `jq` as on any allowed host |
+| none — a new host, or a host after *Forget* | **Allows it by itself**, while `coai.terminalAccountsAllowNewHosts` is on (the default): writes a "yes" row marked as automatic, with the time, and reads the host in the same round. No modal and no press. Installs `jq` as on any allowed host. **With that setting off:** nothing; the host says *not asked yet*, and a press on its row asks |
 | "no" (*Not this host*) | Nothing. No ssh call of any kind. **Never overridden**: not by the round, not by another terminal of that host, not by the cap, not by a reload |
 
 **How a host that was allowed by itself is stored: in the same store, with a marker.** The row is
@@ -419,7 +437,11 @@ and for a new host they are not asked at all. The Security section holds this as
 - **A daily notice of the hosts that were allowed by themselves (Q1).** At most one in 24 hours, and only when there
   is such a host. It is information: no question, and no button that decides anything. It lists the hosts that were
   allowed automatically since the last such notice, and says where to forbid one: *CoAI: hosts read over ssh*, the
-  choice *Not this host*. The first one is shown as soon as the first host was allowed.
+  choice *Not this host*. It names the two settings — `coai.terminalAccountsAllowNewHosts` and
+  `coai.terminalAccountsInstallMissingTools` — says that both are on, and that they are turned off in the user
+  settings; its one button, *Open settings*, opens the user settings at these two keys and decides nothing. The
+  notice of an install names the second setting in the same way. The first daily notice is shown as soon as the first
+  host was allowed.
 - **One notice, once for each installation of the extension**, at its first accounts round, for the hosts that have a
   "yes" from before: their AI accounts are now read every 10 minutes, `jq` is installed where it is missing, and
   where to stop it.
@@ -436,6 +458,45 @@ and for a new host they are not asked at all. The Security section holds this as
   first read of a host asks once — that is no longer so; and the sentence *"They only read: they change nothing on
   that machine"*, which is rewritten with the one exception.
 - **`SECURITY.md`** and the release notes say the same (the Security section).
+
+**Two settings, both on by default (owner decision 20).** With both on, everything above is as written. Each one
+takes one automatic step back:
+
+| Setting | Default | On | Off |
+|---|---|---|---|
+| `coai.terminalAccountsAllowNewHosts` | `true` | A host with no answer is allowed by the round itself (Q1) | **Ask-first, as before Q1.** No host is contacted without a person's "yes". A host with no answer says *not asked yet*; a press on its row raises the shared question; the timer never asks. A row the round wrote by itself (`how: 'auto'`) then counts as no answer — for the accounts read and for the session read — until a person presses *Read*. The row is kept, not deleted |
+| `coai.terminalAccountsInstallMissingTools` | `true` | `jq` is installed at once where it is needed (N5, Q2) | **No install.** No install call is made and no install record is written. The host's row says that `jq` is missing and shows the fixed command of § 4's table for that host's package manager, with its copy button, as the no-rights path does. Nothing is run |
+
+- **The names.** Every one of the 68 `coai.*` settings is one flat camelCase word (`coai.kimiAllowNetworkSignIn`,
+  `coai.consultEnabled`); none is a dotted group. So the names offered to the owner,
+  `coai.terminalAccounts.allowNewHosts` and `coai.terminalAccounts.installMissingTools`, keep their words and lose the
+  dot. "MissingTools" stays although the one tool is `jq`: the description says that today it is `jq` and nothing
+  else, and another tool is a change of this plan.
+- **Only the person's own user-level value counts.** A repository's `.vscode/settings.json` must not be able to turn
+  either setting on for the person — or off. This repository already has the rule for a setting that switches a
+  protection: `SAFETY_KEYS` in `src/modelKeys.ts` (today `kimiAllowNetworkSignIn`). Two layers hold it, and both are
+  taken here:
+  1. **The read goes through the user-layer door**: `inspect().globalValue`, else the manifest default — never the
+     merged value. Both keys join `SAFETY_KEYS`, and the test that refuses any other read of such a key covers them.
+  2. **A manifest scope.** Here it is `"scope": "application"`, as `coai.teamServers` has, and not `"machine"` as the
+     Kimi key has. The Kimi key is a decision about one machine's home folder. These two are a person's decision
+     about their own servers: one value for every window, which a workspace cannot set. With `machine`, a WSL or
+     remote window would read its own machine's value, and a person who turned a setting off on Windows would have
+     it on again there without knowing. What a remote window really reads for an application-scoped key is not
+     measured here; the host scenario and R11 observe it.
+- **A workspace or folder value is ignored, and said.** Where `inspect()` shows such a value, the list says so in one
+  row, in the words `sideConfig.ts` uses for an ignored layer: *This workspace sets `<key>`. It is ignored: only your
+  own user settings count.* If VS Code does not hand the extension that value at all for an application-scoped key,
+  the row never appears and VS Code's own Settings editor says it; in both cases the value is not read.
+- **Read before every call.** A setting turned off takes effect at the next call of the round. An install that is
+  already running is not killed (§ 4).
+- **Where each is registered:** `package.json`, with a description that says what it does, that it is on by default
+  and what turning it off restores; `src/settingsShape.ts`; `SAFETY_KEYS`; `NEVER_TRANSFERRED` in
+  `src/configTransfer.ts`, so an imported config file cannot decide either for the person; and the help in five
+  languages, which `helpCoverage.test.ts` requires for every setting.
+- **The planner's recommendation was off by default, and it stays recorded.** On by default, a person who never
+  opens the settings gets both automatic steps. What the settings change is that each step can be taken back, by the
+  person and by nobody else.
 
 **The stop button is kept, and this is why.** The round is on by default and nobody has to press anything for it.
 *Stop the accounts round* is one title button of the list. It clears the timer and drops the readings from memory;
@@ -492,7 +553,9 @@ marker `how`; its cap of 100 rows, which gains the rule above; and its pure func
   it was named, so nothing beside it in a JSON document can leave the VM. Cutting JSON with `sed` would be a pattern
   next to private text (the person's activity in `/usage`, a transcript line of Codex), and one wrong pattern there is
   a leak with no error. A host without `jq` gets the state `unreadable no-jq` for Claude and Codex. The accounts script
-  does not install it; the extension then makes the install call, once (N5, below).
+  does not install it; the extension then makes the install call, once (N5, below). With `jq` missing the accounts
+  script also says which package manager the host has — one closed word, from the existence of the four fixed paths
+  of the install table — so that the row can show the fixed command when no install is made.
 - **The operand** is one of two fixed words, `claude-usage` or `no-claude-usage`, checked by a closed list on this side
   and again in `sh`. No value from a terminal's name or from a VM is ever an operand.
 - **The reply is line-based, fixed and small.** A marker line names a vendor and a state from a closed list; a data
@@ -643,6 +706,10 @@ marker `how`; its cap of 100 rows, which gains the rule above; and its pure func
   reads the host once more when the reply says `installed`. **A host on which neither Claude Code nor Codex was found
   gets no install**: `jq` would read nothing there. This is the planner's reading of "install what is needed", and it
   keeps a server that has no AI CLI — one that a terminal merely names — at a read-only login.
+- **With `coai.terminalAccountsInstallMissingTools` off, none of this runs.** No install call, no record. The row
+  says `jq` is missing and shows the fixed command for the manager word the accounts script sent. The table below is
+  then only a table of sentences.
+
 - **Once for each host, and the record is written first.** `globalState` key `coai.terminalAccountsInstalls`, rows
   `{ host, state, manager, as, utc }`, at most 100. The row is written as `started` BEFORE the ssh call is spawned, and
   rewritten with the outcome. So a reload or a crash in the middle does not start a second install: a row that is
@@ -786,6 +853,9 @@ with a secret that this plan does not name; a write by the accounts script; road
   by itself (Q1).
 - No install on a host where neither Claude Code nor Codex was found.
 - No switch that a first press must turn on: the round runs by itself (N2).
+- No setting that a workspace or a folder can set for the person: the two settings of § 3 count at the user level
+  only. No setting that turns the whole round off: that is the stop button.
+
 - No live Codex read (`codex app-server`), no `codex login status`, and no opening of `~/.codex/auth.json`, ever.
 - No start of `agy` but with its version flag, no reading of agy's log, and no opening of its sign-in file.
 - No opening of `~/.claude.json` or of the Claude credential file by our script.
@@ -875,6 +945,12 @@ R7 notes the time and size of the agy program over an hour; W8 records what one 
 **Finding F1, for the owner: the consent no longer comes first. An old "yes" is used with no press (N2), and a host
 nobody was asked about is allowed by a terminal's name (Q1).**
 
+**On by default, as the owner chose (decision 20). Turning `coai.terminalAccountsAllowNewHosts` off restores
+ask-first:** no host is contacted without a person's "yes", and an automatic row counts as no answer. What follows
+describes the extension as it ships, with the setting on. The planner's recommendation was off by default, and it
+stays recorded here: with the default on, a person who never opens the settings is in the position this finding
+describes.
+
 - **No rule of `.agents/` forbids it.** `common/security.md` has no rule on consent. The conflict is with texts of
   this repository that say the opposite, and this plan changes them openly:
   1. `SECURITY.md`, *The extension's one outward ssh call*: *"Read-only, to a host the person agreed to. The first read
@@ -910,6 +986,11 @@ nobody was asked about is allowed by a terminal's name (Q1).**
 
 **Finding F2, for the owner: the install changes the machine, as root, at once (Q2) — and with Q1, on a host nobody
 was asked about.**
+
+**On by default, as the owner chose (decision 20). Turning `coai.terminalAccountsInstallMissingTools` off restores
+no-install:** no install call is made, and the row shows the command for the person to run. What follows describes
+the extension as it ships, with the setting on. The planner's recommendation was off by default, and it stays
+recorded here.
 
 - **No rule of `.agents/` forbids installing software on a remote host.** `common/security.md` has no rule on it. Two
   of its rules bear on HOW it is done:
@@ -1013,6 +1094,10 @@ itself (Q1) — with finding F1 above. What is left of a gate is the refusal, an
 is checked on the one road in, before every call, and no cap, reload or terminal name removes it.** **Judgement on the
 install: the owner's decisions (N5, Q2), built as the smallest install there is and only where an AI CLI is there to
 read, with finding F2 above. The planner would not have started it without a press; the owner decided.**
+**Judgement on the two settings (decision 20): they make each automatic step something the person can take back, and
+nobody else — they are read from the person's own layer only, and no workspace, folder or imported file sets them.
+They are on by default, so they change nothing for a person who never opens the settings; the planner recommended
+off by default.**
 **Judgement on persistence: nothing
 of a reading is stored; the shared answers exist today; added are one row of state and the record of installs, which
 holds host names and no secret.** **Judgement on Codex: the passive file read**, because the live read can refresh a
@@ -1037,7 +1122,8 @@ not stop that.
 asks once"* are rewritten: a host is contacted unless it was refused. It gains: the timer, which starts by itself;
 that a new host is allowed by itself, how that is stored and shown, and that only *Not this host* stops a host; that
 the per-host answer now covers the session read, the accounts read and the install, and what that widens (F1, F2);
-the daily notice; the stop button; road (a) and what
+the daily notice; the two settings, that both are on by default, what each restores when it is off, and that only a
+user-level value counts; the stop button; road (a) and what
 the VM then calls; the four files Claude Code writes on a read, and what is known about `~/.claude.json`; the start
 of `agy`; the person's activity dropped on the VM; **the install — when, by which fixed commands, with which rights,
 once, what it never does, and the command a person without the rights is shown**; and the residuals above. Its
@@ -1113,7 +1199,7 @@ latest, its text names this plan beside *The person agrees to each host once*.
 4. The plan round (`review_plan`) and our own Opus review, at the same time. The first passing verdict opens epoch 1.
 5. **E1 — the remote accounts reader.** The stories by Opus; the cornerstone spec by Fable before its code; one PR.
 6. **E2 — the round and the list.** The stories by Opus; one PR. E1's code has no door until E2 merges.
-7. A pre-release VSIX from the merged head; the owner's real-window checks R1–R10 on it, before the tag, as change 1.1
+7. A pre-release VSIX from the merged head; the owner's real-window checks R1–R11 on it, before the tag, as change 1.1
    of the terminal-door plan did (no real VS Code can start on the build machine); a failed check is fixed first.
 8. `review_feature` over the three epics, every finding resolved; an accepted fix that changes the product is a new PR
    and a new pre-release VSIX.
@@ -1178,6 +1264,18 @@ latest, its text names this plan beside *The person agrees to each host once*.
   hours, names exactly the hosts allowed since the last one, has no button that decides anything, and is not shown
   when there is no such host; the one notice of the first round is shown once for an installation; the question's
   title and detail name the accounts read and the install.
+- **The two settings, each at both values** (pure, with a seam for the layered configuration): with
+  `terminalAccountsAllowNewHosts` on, a host with no row is allowed and read; with it off, it is not contacted, its
+  row says *not asked yet*, a press asks, and an automatic row counts as no answer for the accounts read and for the
+  session door, while a person's "yes" still counts; turned on again, the automatic row counts again. With
+  `terminalAccountsInstallMissingTools` on, the install call follows a `no-jq` reply; with it off, no install call
+  and no record, and the row shows the fixed command for the manager word. **Only the user layer:** with the user
+  value off and a workspace or folder value on, the setting is off; with the user value unset and a workspace value
+  off, it is on (the default) — a test for each of the four mixes, for each key; the ignored layer gives its one
+  row; an imported config file that carries either key is refused that key by name. Both keys are in the manifest
+  with `"scope": "application"` and a default of `true`, in `SAFETY_KEYS`, and in the help of all five languages. A
+  setting turned off between two calls of one round stops the next call's automatic step.
+
 - **The install, decided on this side** (pure, with a seam for the call and for the store): no install call without a
   `no-jq` reply, to a refused host, to a host where neither Claude Code nor Codex was found, or while the round is
   stopped; an install call with no press on a "yes" of any kind — a person's, one older than the release, an
@@ -1223,6 +1321,7 @@ latest, its text names this plan beside *The person agrees to each host once*.
 | R8 | *Take the question* in a `Creds:` terminal still works (the widened runner); on a host the round allowed by itself it reads without asking. *CoAI: hosts read over ssh* shows the new words; *Not this host* there stops the accounts read of that host; *Forget* there does not — the host is allowed again in the next round, and the list says so |
 | R9 | The plan's M7: the time of one whole read from Windows with the pinned ssh options, twice, the time of `agy --version` in it, and the size of the reply; a host of an account with no 5-hour window shows `5h —` |
 | R10 | **The install, on real hosts.** (a) A VM or container without `jq`, reached as root or with `sudo` without a password: within the first round `jq` is installed once; the notice and the row *installed jq on this host* appear; the next read shows the accounts; the VM's package log shows one install of `jq` and nothing else installed, upgraded or removed; no service was restarted; no second install call in the next rounds (the ssh log). (b) A Linux user with no rights: nothing is installed; the row shows the exact command for that VM's manager; the copy button gives that string; after the owner runs it there, the next round reads the accounts. (c) After a reload in each state: no new install call. (d) A host with no `jq`, no Claude Code and no Codex: it is logged in to and nothing is installed. (e) The install on a host that was allowed by itself, with no press at any point |
+| R11 | **The two settings.** With `coai.terminalAccountsAllowNewHosts` off in the user settings: a new `Creds:` terminal's host is not contacted (the VM's ssh log) and says *not asked yet*; a press asks; a host that was allowed automatically before is not contacted either, until *Read* is pressed. With `coai.terminalAccountsInstallMissingTools` off: on a host without `jq` nothing is installed and the row shows the command. A workspace `settings.json` that sets either key the other way changes nothing, and the list or VS Code's Settings editor says it is ignored. The same in a WSL or remote window, if the owner uses one. The daily notice names both settings and its button opens them |
 
 ## Definition of Done
 
@@ -1250,6 +1349,10 @@ latest, its text names this plan beside *The person agrees to each host once*.
       command, never a password prompt, once for each host with the record written first; every install is in the
       list and in a notice; a user without the rights is shown a fixed command and nothing is run. Seen in the
       container run and in R10.
+- [ ] `coai.terminalAccountsAllowNewHosts` and `coai.terminalAccountsInstallMissingTools` exist, are on by default,
+      are read from the user layer only, and are in the help of five languages; off, the first restores ask-first
+      and the second restores no-install — shown by the tests for both values and by R11.
+
 - [ ] The Claude usage road is road (a), with the pinned command of § 4. Road (b) is not in the code.
 - [ ] Nothing of a reading is persisted. The consent is the session reader's own store; its question, the hosts list,
       the help and `SECURITY.md` say that a "yes" covers the accounts read and the install, that a new host is allowed
@@ -1259,7 +1362,7 @@ latest, its text names this plan beside *The person agrees to each host once*.
       `research/module_extension.md`, `research/module_tests.md`, `research/architecture.md` (the new edges: a VM to a
       vendor, and a change of a VM); `SECURITY.md`, which no longer says "read-only" of every call; the
       `POST_DEPLOY.md` question asked.
-- [ ] R1–R10 recorded here; `review_feature` run before the tag and every finding resolved; one extension release cut and
+- [ ] R1–R11 recorded here; `review_feature` run before the tag and every finding resolved; one extension release cut and
       verified; the plan promoted with its deviations.
 
 ## Open points for the owner
@@ -1294,6 +1397,10 @@ In both the owner decided against the planner's recommendation, and the plan fol
 |---|---|---|---|
 | Q1 | **A host with no answer yet.** Should the round ask once, by a modal, when it first meets a host of an open `Creds:` terminal that has no answer? The default then was: no question, and the host is not read until a press on its row asks | **Keep that default.** A modal that a terminal's NAME can set off, with no press, is what the terminal-door plan avoided: any program can open a terminal called `Creds: x / y`. And with five hosts it is five modals at the start | **Neither: "new hosts are allowed by themselves."** No modal and no press: the round allows a new host and reads it. Once a day a notice with no question names the hosts allowed that way and says where to forbid them. A "no" is never overridden (§ 3, finding F1) |
 | Q2 | **An install on an old "yes"** (finding F2). On a host whose "yes" was given before this release — to *"Read the Claude session…"* — should the install of `jq` wait for one press on that host's row? | **Yes, wait for the press on an old "yes".** For the owner that is at most one press for each host without `jq`, once. For another person it is the difference between software installed as root on their server after an update, and a row that offers it | **No: "install at once."** The install runs by itself on every allowed host where it is needed and the ssh user may — an old "yes" and an automatic one included (§ 4, finding F2) |
+
+**After Q1 and Q2 the main session put findings F1 and F2 to the owner again, with two settings that are off by
+default.** The owner answered: *"Yes, but on by default"* (decision 20). The settings are in § 3. The planner's
+recommendation, off by default, is recorded in both findings.
 
 ## Epics
 
@@ -1363,7 +1470,8 @@ Cornerstones: 2 of 2 — E1.S2, E1.S4
     quota, by the security row. Sonnet codes; Opus reviews.
   - **E1.S3 — the shared store: what a "yes" covers, the automatic "yes", and the refusal that holds.** The
     question's new title and detail; the row's marker `how` and the three texts of the hosts list; the pure rule that
-    allows a host with no row; the cap that never drops a person's answer; and the tests that hold a "no" against a
+    allows a host with no row only while its setting is on, and reads an automatic row as no answer while it is off;
+    the cap that never drops a person's answer; and the tests that hold a "no" against a
     round, a reload, a second terminal and a full store.
   - **E1.S4 — the install of `jq` (CORNERSTONE, `model: fable`).** Fable writes the spec before any code: the exact
     script text and its sha256, the four fixed paths, the rights check, the one command for each manager with its
@@ -1379,13 +1487,14 @@ Cornerstones: 2 of 2 — E1.S2, E1.S4
   sentences, the install sentences with their fixed commands, the plain-text road for VM text); a NEW host module with
   the `vscode` seams (the timer, the terminal events, the QuickPick with its two title buttons and the copy button of
   a row, the state and the install record in `globalState`, the notices, the test door) bound in `src/extension.ts`;
-  `package.json` (the command, its icon, the `view/title` entry); the help in five languages; `notification-sites.json`;
+  `package.json` (the command, its icon, the `view/title` entry, the two settings with their scope);
+  `src/settingsShape.ts`, `src/modelKeys.ts` (`SAFETY_KEYS`) and `src/configTransfer.ts` for the two settings; the help in five languages; `notification-sites.json`;
   the host scenario; `research/module_extension.md`, `research/module_tests.md`, `research/architecture.md`,
   `SECURITY.md`; the `POST_DEPLOY.md` question (the file is at its cap of twelve, so a new item needs a named one to
   leave).
 - **Depends on.** E1 merged.
 - **Done when.** The words, round, stop-button, notice, install-decision, manifest, help and host-scenario rows of the
-  test plan are green; the Definition of Done's items hold; the PR is merged; R1–R10 are recorded on the pre-release
+  test plan are green; the Definition of Done's items hold; the PR is merged; R1–R11 are recorded on the pre-release
   VSIX of the merged head; `review_feature` ran from the merged head and every finding is resolved; the release is cut
   and verified; the plan is promoted.
 - **Cornerstone areas.** (c) the timer never asks, never contacts a refused host, allows a new host only by the one
@@ -1398,4 +1507,4 @@ Cornerstones: 2 of 2 — E1.S2, E1.S4
   - **E2.S3 — the host and the door.** The timer and the terminal events, the list, *Refresh now*, *Stop the accounts
     round*, the copy button, the notices, the question raised from a host's row, the command and its icon.
   - **E2.S4 — the documents and the release.** The help, the module documents, `SECURITY.md`, the pre-release VSIX,
-    R1–R10, `review_feature`, the tag, the promotion.
+    R1–R11, `review_feature`, the tag, the promotion.
