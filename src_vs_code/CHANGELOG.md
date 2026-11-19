@@ -8,7 +8,7 @@ What the feature half now says, for an AI that reads it: under policy Auto, at t
 
 A paste reads `older` until it is pasted again, and a mounted rule until its repository's pin bump (move the pin, don't paste); nothing is rewritten for you. The menu says "Copy the CLAUDE.md snippet (v20)".
 
-Nothing else in the extension changed: the help, in five languages, and the README never said a blocking finding is always landed, so they stay as they are. The MCP server to pair it with is `coai-mcp` 0.66.0, unchanged.
+Nothing else in the extension changed: the help, in five languages, and the README never said a blocking finding is always landed, so they stay as they are. The MCP server to pair it with is `coai-mcp` 0.66.0, unchanged. The change landed in #1027.
 
 ## Extension 0.89.1 — 2026-11-19
 
