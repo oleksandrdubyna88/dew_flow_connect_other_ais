@@ -29,8 +29,11 @@ only the memory was missing.
 
 Reported by the session that shipped extension 0.89.0 (2026-11-18): the scenario also failed on #1018 (a66e7420,
 passed on re-run) and twice in a row on release PR #1022 (13c93522). Attempt 1 failed with the same "never remembered
-as added … waited 15s". Attempt 2 failed with a second shape of the same miss: "the offer came back for ids the person
-had already answered … 2 !== 1". Over the last 25 CI runs, 7 first attempts failed, including on 5b9ab66c, 838fdf8d,
+as added … waited 15s". Attempt 2 failed at a LATER assertion: "the offer came back for ids the person had
+already answered … 2 !== 1". S3-H1 reaches it only after the answer WAS remembered as added (so that run's read-back
+passed) and the ids were removed again; the memory then did not stop a second offer. That may be a different cause
+(for example the change listener's check and the explicit check racing over the memory), so step 1 measures it
+separately and this plan does not assume it shares the read-back's cause. Over the last 25 CI runs, 7 first attempts failed, including on 5b9ab66c, 838fdf8d,
 ec52e27f and 550ec09d. Main with that release's E2 (a5855ec1, 97372ed6) passed.
 
 ## What is not known yet
@@ -44,7 +47,8 @@ a fresh `getConfiguration()` (instead of the one held by the seam) sees the valu
 
 1. **Measure first**, in the host scenario on a branch: after `update()` resolves, log what (a) the held configuration's
    `inspect()`, (b) a fresh `getConfiguration('terminal.integrated').inspect()` return, and when the change event
-   arrives, over 20 CI runs. Record it here.
+   arrives, over 20 CI runs. In the same runs, log every check the change listener and the explicit `door.check()` start
+   after the ids are removed, and what the memory held when each decided (the second failure shape above). Record both here.
 2. **Choose from the data**, one of:
    - a fresh `getConfiguration()` always sees the write → read back through a fresh one;
    - only the change event is reliable → read back on the event, with a stated limit (for example 2 s), and say
