@@ -2,7 +2,7 @@ import type { Inspected } from './modelKeys';
 
 /**
  * The skip list of the terminal: does the person's own `terminal.integrated.commandsToSkipShell` hide the terminal keys of CoAI,
- * and may they be added (todo/PLAN_the_chat_opens_from_a_terminal_E3.md, E3.S3).
+ * and may they be added (research/PLAN_the_chat_opens_from_a_terminal_E3.md, E3.S3).
  *
  * <p><b>Why it exists.</b> The manifest puts the commands bound under `terminalFocus` into the DEFAULT of the setting, so
  * Ctrl+Alt+A and Ctrl+Alt+G in a terminal reach VS Code and not the shell. A list of the person's own hides that default, and

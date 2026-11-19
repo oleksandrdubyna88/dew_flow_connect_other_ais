@@ -13539,7 +13539,7 @@ flowchart LR
 
 ## The chat opens from a terminal (E1)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This section grows with each story of E1; S1 is the capture, S2 the source, S3 the door.
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This section grows with each story of E1; S1 is the capture, S2 the source, S3 the door.
 
 - **The terminal door reads the clipboard (epoch 2, change 1.2).** The first real-window check (VSIX 0.85.901, 2026-11-11) showed why a
   copy command cannot serve this door: in a `Creds:` tmux terminal running the Claude CLI, a mouse drag is Claude's own selection, already
@@ -13573,7 +13573,7 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E1.md` (2026-11-10). This sectio
 
 ### The terminal source and its identity (E1.S2)
 
-Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation opened from a terminal is filed under a
+Spec: `research/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation opened from a terminal is filed under a
 `terminal` source, and the rest of E1 builds on it.
 
 - **The kind.** `ConversationSource` has a fourth kind, `{ kind: 'terminal'; name }`: the terminal's FULL name as the host reported it at the
@@ -13699,7 +13699,7 @@ Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E1_S2_spec.md`. A conversation o
 
 ## The chat reads the remote Claude session (E2)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This section grows with each story of E2; S1 is which terminal reads a session.
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This section grows with each story of E2; S1 is which terminal reads a session.
 
 - **Which terminal reads a session, and no local walk for a terminal (E2.S1).** `credsSession(name)` in `src/credsSession.ts` (pure, no imports) reads the
   terminal's FULL name with the plan's one pattern, `^Creds: ([A-Za-z0-9][A-Za-z0-9._-]*) / ([A-Za-z0-9][A-Za-z0-9_-]*)$`, and answers `session` (host and
@@ -13723,7 +13723,7 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md` (2026-11-11). This sectio
 
 ### The remote reader's contract: the script, the frame and the ssh edge (E2.S2)
 
-Spec: `todo/PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md` (Fable, reviewed by Opus). Four new modules and two widened ones; none imports `vscode`. Everything an
+Spec: `research/PLAN_the_chat_opens_from_a_terminal_E2_S2_spec.md` (Fable, reviewed by Opus). Four new modules and two widened ones; none imports `vscode`. Everything an
 ssh option does below is said as "we pass": the effect on the configuration ssh would use was seen (S2-T21, M-G2, M-G3), the effect against a real server was not
 (M-O1…M-O7, below).
 
@@ -13800,7 +13800,7 @@ ssh option does below is said as "we pass": the effect on the configuration ssh 
 
 ### One road to the VM: the consent, the registry path, the fallback and the pick list (E2.S3)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4) and § 5 *E2.S3*. Two new modules: `src/remoteRead.ts` (pure — it imports no `vscode`, and `sonarExclusions.test.ts` holds it out of the host
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4) and § 5 *E2.S3*. Two new modules: `src/remoteRead.ts` (pure — it imports no `vscode`, and `sonarExclusions.test.ts` holds it out of the host
 list) and `src/remoteSessionHost.ts` (host: only the `vscode` seams; it is listed in `sonar.coverage.exclusions`). `remoteScript.ts` exports `FOLDERS_MAX` so the road does not type the bound again. Nothing here is
 reached by a door yet: the two doors and *Asked* are E2.S4's, and they call `readRemoteSession(terminal, purpose)`.
 
@@ -13841,7 +13841,7 @@ reached by a door yet: the two doors and *Asked* are E2.S4's, and they call `rea
 
 ### The doors: take and add from a terminal, *Asked* through the reach, the words, the help (E2.S4)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4, C5 as revised by gate G6) and § 5 *E2.S4*. This is what a person presses; the road under it is E2.S3's.
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4, C5 as revised by gate G6) and § 5 *E2.S4*. This is what a person presses; the road under it is E2.S3's.
 
 - **The words moved first (C5).** The `Waiting` → sentence mapping of `questionWaitingHere` is the pure `waitingSaid(found)` in `src/waitingSaid.ts`, moved word for word in its own commit (`waitingSaid.test.ts`, S4-T1: every sentence is
   typed in the test, so a changed word fails by name). The local road (a tab, over the window's folders) and the remote road (a terminal) both call it, so one situation has one sentence. The same file holds `questionSaid(answer)`:
@@ -13874,7 +13874,7 @@ Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E2.md`, § 4 (C4, C5 as revised 
 
 ## The chat finds its terminal again (E3)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E3.md` (its parent `todo/PLAN_the_chat_opens_from_a_terminal.md`, § *Stage 3*). Epic E3 has three stories: re-attach after a reload (S1, below), go-to from a terminal (S2) and the skip list (S3).
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E3.md` (its parent `research/PLAN_the_chat_opens_from_a_terminal.md`, § *Stage 3*). Epic E3 has three stories: re-attach after a reload (S1, below), go-to from a terminal (S2) and the skip list (S3).
 
 ### Re-attach after a reload (E3.S1)
 
@@ -13908,7 +13908,7 @@ A reload gives a restored chat tab a key of its own (a plain `{}`), and creds br
 
 ## The skip list of the terminal keys (E3.S3)
 
-Plan: `todo/PLAN_the_chat_opens_from_a_terminal_E3.md`, § 4 (C4) and § 5 *E3.S3*. The manifest puts every command bound under `terminalFocus` into the DEFAULT of `terminal.integrated.commandsToSkipShell`, so Ctrl+Alt+A in a terminal reaches VS Code and not the shell.
+Plan: `research/PLAN_the_chat_opens_from_a_terminal_E3.md`, § 4 (C4) and § 5 *E3.S3*. The manifest puts every command bound under `terminalFocus` into the DEFAULT of `terminal.integrated.commandsToSkipShell`, so Ctrl+Alt+A in a terminal reaches VS Code and not the shell.
 A list of the person's OWN hides that default (the layers do not merge), and the chord goes to the shell. This is the check that tells them, and — only after a press — repairs their user list. It is the one place the extension appends to a VS Code setting it does not own.
 
 - **The pure module** (`src/skipShell.ts`, no `vscode`; every effect is a seam). `SKIP_SHELL_IDS` is `coai.askFromTerminal`, `coai.goToFromTerminal` (the manifest default, in its order; `terminalDoorWiring.test.ts` S3-T9 holds the constant, the default and the set of commands bound under
