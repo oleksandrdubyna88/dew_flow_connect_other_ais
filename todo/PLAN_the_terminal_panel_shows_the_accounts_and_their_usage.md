@@ -929,7 +929,8 @@ Cornerstones: 1 of 1 — E1.S2
 - **Done when.** Every row of the test plan is green; the marker tests were seen RED once; the hash is in the spec and
   in a test; the session reader's tests are green, changed only where they hold the question's words; the code gate
   passed; the PR is merged; a pre-release VSIX of the merged head is built.
-- **Stories.**
+- **Stories** — written by Opus on 2026-11-19 in
+  [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md).
   - **E1.S1 — the shared store: a "no" that always wins, the automatic "yes", the setting (SECURITY SPEC by Fable,
     outside the quota).** The one commit function that re-reads and merges; the merge rule; the refusal that is
     repaired; the marker `how`; the cap that never drops a person's answer; the user-layer read of
