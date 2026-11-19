@@ -12,7 +12,9 @@
 > exact script text, the reply's grammar, the parser's rules, the scenarios and the security judgement on that text
 > (§ A2.9), which must stand before any S2 code. Its own file, because the stories document goes whole to a review
 > gate and must stay short. It keeps no change ledger: a change is an entry in the parent (epoch 1, one change: 1.1,
-> which is K5 of the S1 spec; the next accepted change is a full stop). It is promoted with the E1 document.
+> which is K5 of the S1 spec; the next accepted change is a full stop). **That stop came on 2026-11-19, with the
+> parent's entry 1.2 (the refusals file of the S1 spec): the parent is stopped, and no S2 code is written before the
+> re-review and the owner's approval. Entry 1.2 changes nothing in this spec.** It is promoted with the E1 document.
 >
 > Scope: `src_vs_code` only, and one step of `.github/workflows/ci.yml`. NEW pure `src/remoteFraming.ts`,
 > `src/remoteAccountsScript.ts`, `src/remoteAccountsUsage.ts`, `src/remoteAccountsReply.ts`; `src/remoteFrame.ts` (its
@@ -23,7 +25,7 @@
 ## Changes to the parent plan — none
 
 Epoch 1 of the parent has its one change (1.1: K5 of the E1.S1 spec, recorded at gate G2 on 2026-11-19); a second is
-a full stop. This spec needs **zero**, and gate G2 judged the same (its § 1.2: R1–R5 and X1–X11 are inside the
+a full stop. (The second came the same day and is not this spec's: entry 1.2, the refusals file of the S1 spec.) This spec needs **zero**, and gate G2 judged the same (its § 1.2: R1–R5 and X1–X11 are inside the
 parent's text). What gate G2 changed in this spec (the brace group of the last line, the readers' limits, the word
 `no-stat`, two tests) is a fix that satisfies the parent's text as written — "a cut script does nothing", "each
 command has its own limit … under 30 s", "a missing tool is said":

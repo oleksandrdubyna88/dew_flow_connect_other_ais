@@ -10,10 +10,16 @@
 > install of `jq` (owner decisions 17, 19 and 20) stands and ships in the same release; it is built after E2, as
 > candidate C1. No change to `src_mcp`, `src_server` or CredsForDevs. Step 0 and the measurements W1–W5 are done
 > ([../research/RESULTS_accounts_and_usage_on_a_vm.md](../research/RESULTS_accounts_and_usage_on_a_vm.md)). The owner
-> answered O1–O7, N1–N5, Q1–Q2 and decision 20; no question for the owner is open. This text was cut from 154 KB:
+> answered O1–O7, N1–N5, Q1–Q2 and decision 20; no question for the owner was open before the stop below. This text was cut from 154 KB:
 > the decision history, the findings F1 and F2 in full, the step 0 tables and the installer's design are in
 > [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_appendix.md),
-> word for word where they were moved. **Epoch 1 open (one change, 1.1):** K5 of E1, recorded at gate G2 on 2026-11-19.
+> word for word where they were moved. **STOPPED at change 1.2 (2026-11-19): re-review and the owner's approval owed
+> before any E1 code.** Epoch 1 is stopped for re-review: its first change was 1.1 (K5 of E1, gate G2), and its
+> second, 1.2, moves the person's refusals and the Stop out of `globalState` into a file that is merged under a lock.
+> The text of § 3, § *Security*, § *Growth surfaces*, the residuals, R12 and C4 below is REVISED to entry 1.2, and
+> with them the lines of § 2, the test plan, the Definition of Done, R8 and the scope of E1 that follow from it. It is
+> the text the re-review judges, and it is not approved: no code of any epic of this plan is written, and no pull
+> request that carries its work is merged, until the re-review is done and the owner has approved the next epoch.
 
 Related: [../research/RESULTS_accounts_and_usage_on_a_vm.md](../research/RESULTS_accounts_and_usage_on_a_vm.md) (step 0
 and W1–W5, measured 2026-11-19), [PLAN_the_chat_opens_from_a_terminal.md](../research/PLAN_the_chat_opens_from_a_terminal.md)
@@ -24,7 +30,7 @@ quota gauge, measured 2026-10-10),
 
 ## Plan changes
 
-> Epoch 1 · approved 2026-11-19 · by reviewers · state: open
+> Epoch 1 · approved 2026-11-19 · by reviewers · state: stopped
 
   The gate's round 1 on `653140c3`: `proceed`, codex only; antigravity did not receive the plan whole. Its 7
   findings, the reply's commands and the consultants' answer on the split are folded into this approved text. They
@@ -32,6 +38,21 @@ quota gauge, measured 2026-10-10),
 
 - 1.1 · 2026-11-19 · reviewer · approach — a Forget given in another window does not lift a refusal while the window that gave it is open: that window cannot tell a Forget from a lost "no", so it writes the refusal again and says so (K5 of E1, gate G2)
   (J2, W3, W9, X9 and the run condition of R8 share this one cause. The first change of epoch 1: one more stops the plan.)
+- 1.2 · 2026-11-19 · reviewer · contract, approach — a write of ANY `globalState` key by a window with a stale copy puts back that window's whole copy, so it can erase a "no" or the Stop for good: both move to a small file under `globalStorageUri`, merged under an exclusive-create lock, and only a person's press removes one
+  (This second change stopped the plan. The finding is the E1 plan gate's, coai session `a4a016fb`: "S1's
+  read-merge-write does not make refusals atomic across windows". The planner first rejected it, citing the repair
+  loop, C4 and R12. The cadence consultation `e319fe2e` showed that the rejection does not hold: if the window that
+  gave a "no" is disposed before it repairs, a stale window's automatic write erases the refusal for good, and the
+  Stop has the same race with no repair at all. The cause was then read in this repository's own record:
+  `research/PLAN_auto_never_asks_a_person.md:683-686` and V1–V3 of
+  `research/PLAN_auto_never_asks_a_person_E2_S2_spec.md:119-121`. Splitting the keys does not help, because the
+  whole object is what a window sends.)
+  (Entry 1.1 is SUPERSEDED by this entry, and it stays in the ledger as it was written. With the refusals in a merged
+  file no window writes a lost "no" again, so the repair of 1.1, its notice and its run condition of R8 are gone, and
+  a *Forget* given in any window of the side that holds the refusal lifts it. What is new instead: the file is kept
+  for each SIDE of the machine, § 3.)
+  (What C4 was: this entry takes its first half before E2, not after a failed R12. § *Candidates after E2* says what
+  is left of it.)
 
 ## The goal
 
@@ -243,7 +264,8 @@ W1–W5) are in the appendix, § D. What the design uses:
   off, such a host is not contacted and waits for a press. In this plan "an allowed host" is a host with a "yes", however it was written.
 - **One host at a time.** A round takes the hosts in name order, starting one host later each round, and awaits each read
   before the next. Two reads never run at once. A failed host is recorded with its sentence and the round goes on.
-- **The answer is read again just before every call**, from the store, as the session reader checks the terminal's
+- **The answer is read again just before every call**, from the refusals file on the disk and from the store (§ 3,
+  entry 1.2), as the session reader checks the terminal's
   name again before every spawn. A "no" given while a round runs stops the next call to that host. A *Forget* does not
   stop anything any more: the host then has no answer, and the round allows it again (§ 3).
 - **One ssh call for each host in a round — two in the one case below**: the pinned options of `SSH_OPTIONS`, unchanged, then
@@ -294,7 +316,8 @@ W1–W5) are in the appendix, § D. What the design uses:
 - **Results are in memory only.** Nothing of a reading is written to disk, to `globalState`, to a ledger or to a log:
   the readings hold email addresses and the usage of a person's accounts, they are 10 minutes old at most, and after a
   reload the next round brings them back within a minute. What is persisted is the shared consent, which exists
-  today, and one small row of state (§ 3).
+  today, one small row of state, and — since entry 1.2 — the refusals file of each side (§ 3). None of them holds
+  anything of a reading.
 - **Limits of one read call**: killed at 30 s (the tree, as today), stdout capped at 64 KiB. Both are ceilings. The
   ceiling was 20 s before `agy` was started (N4). Measured on the VM: the account command 0.3 s, the usage command
   3.6 s with the flags (6.3 s without), whole calls between 3 and 10 s. Inside the script each command has its own
@@ -310,40 +333,122 @@ W1–W5) are in the appendix, § D. What the design uses:
 
 ### 3. The consent — one shared store, a "no" that always wins, and a new host allowed by itself (O3, N2, Q1)
 
-**What the store is from this release.** `coai.terminalHosts` held the answers to a question, and no ssh child
-started before a "yes". From this release it is: **the list of hosts the person refused, which nothing overrides**;
-and a record of the hosts that are read, with how each came to be allowed. For the accounts read only a "no" stops a
-host.
+**This section is revised at the stop (ledger entry 1.2, 2026-11-19).** The paragraphs that changed say so. They
+are the baseline for the re-review, not approved text.
+
+**What the store is from this release (revised, entry 1.2).** `coai.terminalHosts` held the answers to a question,
+and no ssh child started before a "yes". From this release there are two places, and each holds what it can keep:
+
+| What | Where it is kept | What losing it would do |
+|---|---|---|
+| **The hosts the person refused** ("no"), **and the Stop** of the accounts round | **A file of this extension, on the disk of the side that runs it**, written under a lock (*The refusals file*, below). `globalState` holds a copy of each | It would contact a host the person forbade, or start a round the person stopped. So it is not left to `globalState` |
+| The hosts that are read: a person's "yes", and the automatic "yes" with its marker | `globalState`, the key `coai.terminalHosts`, as today | A new automatic allow, or a new question. Neither contacts a host the person forbade |
+| The times of the two notices | `globalState`, the row `coai.terminalAccountsState` | A notice is shown once more |
+
+For the accounts read only a "no" stops a host.
 
 | The host's row | What the round does |
 |---|---|
 | "yes", written by a press (*Read*) | Reads it, from the first round after the extension starts. No press, no question |
 | none — a new host, or a host after *Forget* | **Allows it by itself**, while `coai.terminalAccountsAllowNewHosts` is on (the default): writes a "yes" row marked as automatic, with the time, and reads the host in the same round. **With the setting off:** nothing; the host says *not asked yet*, and a press on its row asks |
-| "no" (*Not this host*) | Nothing. No ssh call of any kind. **Never overridden**: not by the round, not by another terminal or another window, not by the cap, not by a reload |
+| "no" (*Not this host*) — in the refusals file, or as a copy in `globalState` | Nothing. No ssh call of any kind. **Never overridden**: not by the round, not by another terminal or another window, not by the cap, not by a reload, and not by any write of `globalState` |
 
-**The row.** `{ host, answer, askedUtc }` as today; a row the round wrote has `how: 'auto'`. One store, not two:
-`consentOf` stays the one function that says whether a host may be contacted, so a "no" is looked up in one place; a
-host has one row, so a "no" and an automatic "yes" cannot both exist; and the person's three choices act on an
-automatic row as on any other. The appendix, § G, has the longer argument.
+**The row.** `{ host, answer, askedUtc }` as today; a row the round wrote has `how: 'auto'`. `consentOf` stays the
+one function that says whether a host may be contacted, so a "no" is looked up in one place. It is given the file
+and the list, and **a "no" in either is a "no"**. In `globalState` a host has one row, so a "no" and an automatic
+"yes" cannot both exist there; and the person's three choices act on an automatic row as on any other. From this
+release a "no" row in `globalState` is the COPY of a refusal; the refusal itself is the file's. The appendix, § G,
+has the longer argument for one list of rows; it was written before entry 1.2.
 
-**Every write is one commit that re-reads and merges (the gate's finding 0).** Two windows can each hold a copy of the
-list. If a window wrote a whole list it had read earlier, it would erase a "no" that the person gave in the other
-window in between. So:
+**Why `globalState` cannot keep a refusal (entry 1.2).** VS Code keeps ONE value for each extension, not one for each
+key. `Memento.update` changes the window's own copy and then sends the extension's WHOLE `globalState` object as that
+window holds it; another window replaces its whole copy when the change reaches it. (Read in VS Code's source on
+2026-11-17 for another plan of this repository, and verified there:
+`research/PLAN_auto_never_asks_a_person_E2_S2_spec.md`, V1–V3. It is not pinned to the editor a person runs.) How
+long a change takes to reach another window was measured only as an upper bound, 20 s and 23 s
+(`research/RESULTS_side_registry_reaches_the_other_window.md`). So, inside that lag, a write of ANY key by ANY
+feature of coai in a window that has not yet received a "no" puts the old list back, and the "no" is gone with no
+sign. Three things do not cure it. A re-read at the write (rule 1 below) reads the window's own copy. A repair by
+the window that gave the "no" — the first text of this section, and entry 1.1 — works only while that window lives.
+A key of its own does not help: the whole object is sent. The Stop had the same race and no repair at all.
+
+**The refusals file (entry 1.2).**
+
+- **Where.** `<globalStorageUri>/terminal-hosts/refused.json`, with its lock `refused.lock` beside it.
+  `globalStorageUri` is a folder on the disk of the extension host that is running (`src/coaiInstall.ts:303-309`): a
+  Windows window and a WSL window of one profile have two such folders. So **the file is kept for each SIDE of the
+  machine** (*What a side means*, below).
+- **The format.** Versioned JSON, UTF-8, one object:
+  `{ "v": 1, "migratedUtc": "<UTC>", "refused": [ { "host": "<host>", "utc": "<UTC>" } ], "stop": { "utc": "<UTC>" } }`.
+  `stop` is absent while the round is not stopped. Every time is UTC. A key this build does not know is kept through
+  a write and not read.
+- **The size.** At most 100 refusals — the cap of the list — and at most 64 KiB. A full file is about 8 KB with host
+  names of 30 characters. A write that would pass either cap is not made, and the person is told that the answer was
+  not kept. A file of more than 64 KiB is not read: it is damaged.
+- **One function writes it, and it takes a CHANGE, never a content**: refuse a host, lift a host, stop, start, and
+  the migration. It (1) claims the file by an exclusive create of `refused.lock` — the pattern of
+  `src/chatStoreLock.ts`, reused and not copied; (2) reads the file; (3) applies the change to what it just read;
+  (4) writes beside the file and renames over it (`src/atomicFile.ts`); (5) lets go of the claim only when the lock
+  still reads as its own; (6) reads the file once more and checks that its own change is there — else it starts
+  again, three times at most. Step 6 is the answer to the lock's own residual (*Security*, the residuals).
+- **A read takes no claim.** A rename is atomic, so a reader sees the old file or the new one, never half. The round
+  reads the file from the disk just before EVERY call, and the session door before every read. No window answers
+  from a copy it kept, so a window cannot be stale about a refusal of its own side.
+- **Who removes one.** A refusal is removed only by a person's press — *Read*, or *Forget*, in the hosts list, in a
+  host's row of the accounts list or in the question — written to the file. The Stop is removed only by a person's
+  start. Nothing automatic removes or replaces either: not the round, not the cap, not the migration, not a reload.
+- **A file that is damaged fails closed.** Text that is not JSON, a `v` this build does not know, a key of the wrong
+  shape, more than 64 KiB, or a file that cannot be opened: from this side no host is contacted and no host is
+  allowed by itself. A host whose copy in `globalState` is a "no" says *turned off*; every other host says that the
+  file cannot be read. Nothing automatic writes over it. **The person mends it by an answer for one host in the
+  change question that exists** — no notice and no question of its own, as gate G2 fitted for a list that cannot be
+  read. That answer writes a new file: the refusals that `globalState` still holds, the answer itself, and **the
+  round stopped**, because the damaged file may have held the Stop. The question says how many refusals can still be
+  read, and that a refusal kept only in the file is lost. The person then starts the round.
+- **A file that cannot be written** — the claim is still held after its wait, the disk refuses, or the change is not
+  there after three tries. The answer is never reported as kept. For a "no" or a Stop: one notice names the host and
+  the reason; the copy in `globalState` is written all the same; and **that window treats it as in force, contacts
+  NO host for accounts, and tries the write again before every call**, until it is in the file. For a *Read*, a
+  *Forget* or a start: nothing changes, the refusal or the Stop stands, and the person is told.
+- **The migration, once for each side.** At the first read by this build, under the claim: every "no" row of
+  `coai.terminalHosts` that can be read is copied into the file, and the file then carries `migratedUtc`. Nothing is
+  removed from `globalState`. A "no" in either place counts, before the migration and after it.
+- **The copy in `globalState`.** Every refusal is also written as the "no" row of today, and the Stop as `stoppedUtc`
+  of the state row. The copy is how another side of the machine learns of it, and how a window that still runs an
+  older build does. A person's *Read*, *Forget* or start changes the copy in the same press.
+
+**What a side means, and what it costs (entry 1.2).** `globalState` belongs to the client: every window of a profile
+shares it, a WSL or remote window too. The file belongs to one extension host's disk. So:
+
+- On the side where the person pressed, the refusal is in the file, and nothing but a person's press on that side
+  removes it.
+- Another side honours the copy in `globalState` while it stands. Inside the lag after the press a stale write can
+  still erase that copy, and then the other side never learns of the refusal. It is the old defect, left on the far
+  side only; it is a residual (*Security*) and what is left of candidate C4.
+- A *Read* or a *Forget* pressed on another side changes the copy, and lifts nothing on the side that keeps the
+  refusal. After the migration an old refusal is in the file of every side that ran this build, so it is lifted on
+  each. The change question says on which side a refusal is kept.
+
+**Every write of `globalState` is one commit that re-reads and merges (the gate's finding 0).** Two windows can each
+hold a copy of the list. If a window wrote a whole list it had read earlier, it would erase a row that the other
+window wrote in between. So, for the rows that stay in `globalState`:
 
 1. **One function writes the store**, and nothing else does. It takes a CHANGE for one host — never a list. At the
    moment of the write it reads the stored list again, applies the change to that fresh list, and writes the result.
    No list that was read before an `await` is ever written.
 2. **The merge rule, for one host:** a person's "no" beats everything. A person's "yes" beats an automatic "yes". An
-   automatic "yes" is written ONLY when the fresh list has no row for that host; it never replaces a row. Only a
-   person's own press (*Read*, *Forget*) changes a "no".
-3. **A refusal is repaired, never lost.** A window remembers, while it lives, the hosts it wrote a "no" for. Before
-   every call and after every commit it re-reads the store; if one of its refusals is missing, it writes it again.
-4. **The round reads the store again just before every call** (§ 2), so a "no" from another window stops the next
-   call as soon as this window can see it.
-5. **What is not measured (U12):** how soon one window sees another window's `globalState` write. VS Code is expected
-   to hand it over within moments. Until that moment a round in the other window can still make one call to the host.
-   E2 measures it with two windows (R12). If the delay is long enough to matter, the store moves to one file with an
-   exclusive lock; that is a change of this plan.
+   automatic "yes" is written ONLY when the fresh list has no row for that host — and only after the file, read just
+   before, showed no refusal for it; it never replaces a row. Only a person's own press (*Read*, *Forget*) changes a
+   "no".
+3. **(Superseded by entry 1.2.)** The first text of this point had a window write a missing "no" again, and entry
+   1.1 followed from it. No window does that any more: a refusal is the file's, and a missing copy in `globalState`
+   is not put back by anybody.
+4. **The round reads the file and the store again just before every call** (§ 2). A "no" given in another window of
+   the same side stops the next call with no lag, because it is read from the disk.
+5. **What is not measured (U12):** how soon one window sees another window's `globalState` write. Since entry 1.2 it
+   no longer decides whether a refusal holds on the side that keeps it. It still bounds two things: how soon
+   ANOTHER side stops calling a refused host, and how long a lifted refusal's copy still counts in another window.
+   E2 measures it with two windows (R12).
 
 **The cap protects the person's answers.** 100 rows. An automatic row never pushes out a row a person wrote: at the
 cap the oldest AUTOMATIC row goes; with none to drop, the new host is not allowed and not contacted, and the list
@@ -371,7 +476,8 @@ starts. (With candidate C1, an install of `jq` is added to this list.)
 - **The question's words**, where it is still asked: same code (`read-remote-session`), same buttons, same store; the
   title is *"Read the Claude session and the AI accounts on “x” over ssh?"* and the detail lists what a "yes" covers.
 - ***CoAI: hosts read over ssh***: *the Claude session and the AI accounts are read*; *allowed automatically on
-  <day>: …*; or *not read*. Beside *Forget* it says that a forgotten host is allowed again by itself.
+  <day>: …*; or *not read*. Beside *Forget* it says that a forgotten host is allowed again by itself, and — since
+  entry 1.2 — on which side of the machine a refusal is kept.
 - **The help in five languages**, **`SECURITY.md`** and the release notes (the Security section).
 
 **The setting `coai.terminalAccountsAllowNewHosts`** (boolean, default `true`, owner decision 20). Off, it restores
@@ -393,16 +499,23 @@ read and for the session read — until a person presses *Read*; the row is kept
 **The stop button is kept.** *Stop the accounts round* is one title button of the list. It clears the timer and drops
 the readings; while it is stopped no host is contacted for accounts and no host is allowed by itself. It is the only
 way to keep the session read of a host and stop the accounts read, and the way out when a read does harm on a VM. It
-does not come before the first round. The state is one `globalState` row, `coai.terminalAccountsState`:
-`{ toldUtc, lastAutoNoticeUtc, stoppedUtc }`, written by the same kind of commit.
+does not come before the first round. **Where the Stop is kept (revised, entry 1.2):** in the refusals file, as
+`stop`, written and removed by the same function as a refusal. The state row of `globalState`,
+`coai.terminalAccountsState`: `{ toldUtc, lastAutoNoticeUtc, stoppedUtc }`, keeps `stoppedUtc` as the COPY of the
+Stop and is written by the commit of this section. The round is stopped when the file says so OR the copy says so,
+and a state row that cannot be read is a stop (gate G2). Only a person's start removes the Stop: it is written to the
+file first, and then the copy is cleared. A stale window's write of the state row can put an old `stoppedUtc` back or
+drop a new one; the first stops a round that the person started, and it is said in the list; the second changes
+nothing on the side whose file holds the Stop.
 
 **How a person forbids a host.** ***Not this host*** — in the hosts list, in a host's row of the accounts list, or
 in the question — stops every ssh call to it, and its reading is dropped at once. ***Forget* no longer stops the
-accounts read**: it removes the row, and the next round allows the host again. **One case is different (ledger entry
-1.1):** a *Forget* given in ANOTHER window does not lift a "no" while the window that gave that "no" is open. That
-window cannot tell the missing row from a refusal that was lost (point 3 above), so it writes the "no" again and says
-so in a notice. *Forget* in the window that gave the "no", *Read* in any window, and a *Forget* after that window was
-closed or reloaded all hold. A read that is already running ends within its 30 s and its result is dropped.
+accounts read**: it removes the refusal and the row, and the next round allows the host again. **The case of ledger
+entry 1.1 is gone (superseded by entry 1.2):** no window writes a refusal again, so a *Forget* or a *Read* given in
+any window of the side that keeps the refusal lifts it, at once and for every window of that side. What is different
+now is the SIDE: a *Forget* or a *Read* pressed on another side of the machine does not lift a refusal that this
+side's file keeps (*What a side means*, above). A read that is already running ends within its 30 s and its result
+is dropped.
 
 **What a person can no longer choose.** They cannot allow the session read on a host and refuse the accounts read on
 the same host. With the setting on, they are not asked before a host is contacted for the first time.
@@ -609,7 +722,9 @@ file with a secret that this plan does not name; a write by the accounts script;
   from equal numbers.
 - No change to `SSH_OPTIONS`. Connection sharing is still not pinned, as `SECURITY.md` says today.
 - No lock between VS Code windows for the round: each window with `Creds:` terminals runs its own round. (The consent
-  store is different: its writes merge, § 3.)
+  is different: the writes of the store merge, and the refusals file is written under a lock, § 3.)
+- No file shared between two sides of the machine, and no copy of a refusal carried into another side's file: a
+  refusal reaches another side through `globalState` only (§ 3, *What a side means*).
 - No change to the session reader's pick list (the `$(` note in § 1) without the owner's word.
 
 ## Security
@@ -689,9 +804,15 @@ owner chose; the planner recommended a press on an old "yes" and the setting off
   else. If `evil` is its own server and has one of the person's public keys, it sees a login and the text of the
   fixed script; it gets no agent and no password. If the name is one of the person's own servers, it has made the
   extension log in there and read. It cannot push a person's "no" out of the store (the cap), and it cannot undo one
-  through a second window (the merge, § 3).
-- **A second window, or a reload, racing a refusal** (the gate's finding 0). The commit of § 3 re-reads and merges, a
-  "no" beats an automatic "yes", and the window that wrote a "no" writes it again if it is ever missing.
+  through a second window: a refusal is in a file that only a person's press changes (§ 3). It cannot write that
+  file through the extension either: no command takes a host or an answer. A program that can write files as the
+  person can edit it, as it can edit `known_hosts`; that is code already running as the person, and not a boundary
+  of this plan.
+- **A second window, or a reload, racing a refusal or the Stop** (the gate's finding 0; the E1 gate's finding and
+  the cadence consultation `e319fe2e`; ledger entry 1.2). A stale window sends its whole copy of `globalState` on any
+  write, so `globalState` cannot hold either. Both are in the refusals file of § 3: written under an exclusive-create
+  lock, read from the disk before every call, removed only by a person's press. The earlier answer — the window that
+  wrote a "no" writes it again — is gone: it protected nothing once that window was closed.
 - **A hostile reply.** It can only become text in a list, or `unreadable`. The credential-shape rule of the parser is
   a net, not the measure; the measure is that the script has no line that opens a credential file.
 - **Logs.** A failed read logs the host, how it ended and ssh's own last line. The script's stderr goes to
@@ -700,33 +821,82 @@ owner chose; the planner recommended a press on an old "yes" and the setting off
 **Judgements.** *Road (a):* yes, on what is measured — no model call, no transcript, no secret through our script —
 and with W7 as the gate that can still fail it. *Road (b):* allowed by the owner, not built, and the planner still
 recommends against it; its conditions are in the appendix, § C. *The consent:* the owner's decisions, with F1; what
-is left of a gate is the refusal, and this plan makes that one hold — one road in, a merge on every write, a cap that
-cannot drop it. *The setting:* it makes the automatic allow something the person can take back, and nobody else.
-*Persistence:* nothing of a reading is stored. *Codex:* the passive file read. *agy:* no file is opened; the program
-is started with its version flag only, by the owner's choice.
+is left of a gate is the refusal, and this plan makes that one hold — one road in, a file that only a person's press
+changes, read from the disk before every call, and a cap that cannot drop a refusal. *The refusals file (entry 1.2):*
+the first judgement of this section trusted a repair by the window that gave the refusal; that was wrong, and the
+E1 gate said so before the planner did. What may stay in `globalState` is what is safe to lose: a "yes" of either
+kind and the notice times. *The setting:* it makes the automatic allow something the person can take back, and
+nobody else. *Persistence:* nothing of a reading is stored. *Codex:* the passive file read. *agy:* no file is opened;
+the program is started with its version flag only, by the owner's choice.
 
 **Residuals, named.** A person's `ControlMaster` can make the call a persisting master on Linux or macOS, as today.
 Every host of an open `Creds:` terminal gets a login every 10 minutes, whether an AI CLI is there or not, until the
 person refuses it; a VM's ssh log shows it. The list shows an email on screen (O2). Each usage read is a start of
 Claude Code, with what Claude Code does on a start: its caches, its own network calls, possibly its own update check.
-A VM that prints the reset in another zone than UTC shows the percent and a dash for the reset. Until another
-window's refusal is visible in this one, one more call can go to that host (U12).
+A VM that prints the reset in another zone than UTC shows the percent and a dash for the reset.
+
+**The residuals of the refusals file (entry 1.2), which replace "one more call until another window's refusal is
+visible" (U12).**
+
+1. **A call that is already running** when a refusal or the Stop is written runs to its end, 30 s at most, and its
+   result is dropped. A call that starts afterwards is not made, in any window of that side.
+2. **Another side of the machine** learns of a refusal or of the Stop through its copy in `globalState` only. Inside
+   the lag after the press a stale write can erase that copy; that side then goes on reading the host, and nobody is
+   told. The side where the person pressed is not affected. To forbid a host for good on two sides, the person
+   presses *Not this host* on each; the list of each side shows how the host stands there.
+3. **A person's "yes" that was withdrawn can come back.** With `coai.terminalAccountsAllowNewHosts` off, a *Forget*
+   of a person's "yes" puts the host back to *not asked yet*; a stale write inside the lag can put the old "yes" row
+   back, and the host is then read again with no question. It needs a host the person once allowed, a *Forget*, the
+   setting off and a stale write in the lag. *Not this host* is the press that holds. With the setting on a
+   forgotten host is allowed again in any case.
+4. **A lifted refusal can come back.** A stale write can put the "no" copy back after a *Read* or a *Forget*. The
+   host is then refused again on every side until the person presses once more. It errs to not contacting, and the
+   list says so. The same holds for an old `stoppedUtc`: the round is stopped again, and the list says so.
+5. **The lock's own residuals** (`src/chatStoreLock.ts`, its header). (a) Two writers that both break a lock
+   abandoned for more than 30 s can both hold the file, and the last rename wins: one change is not in the file. The
+   writer whose change is missing sees that at its read-back and writes again. What is left is a writer that ends
+   between its rename and its read-back, in that same instant. (b) A writer that is frozen for more than 30 s
+   between its read and its rename — a machine that sleeps — writes over what others wrote meanwhile. It checks that
+   the lock is still its own just before the rename; what is left is a freeze between that check and the rename. In
+   both cases the copy in `globalState` still counts. (c) A lock left by a crash blocks every write for 30 s: a "no"
+   pressed then is not in the file yet, and the window that took the press treats it as in force and contacts
+   nobody until it is.
+6. **A damaged file** stops every accounts read of that side until a person mends it. The mend keeps only the
+   refusals that `globalState` still holds; one that was kept only in the file is lost, and the question says so. No
+   notice says that the file is damaged: a person learns it from a host's row, the session door or the hosts list.
+7. **A file that is deleted from outside** reads as a file that was never written. The refusals then stand only as
+   their copies in `globalState`, and the migration copies those back.
+8. **A window that still runs an older build** writes a "no" to `globalState` only, and reads only that. A "no"
+   given there counts on every side as a copy, and is in no file — also after that window is reloaded — until the
+   person gives it again in a window of this build.
 
 `SECURITY.md`: the section *The extension's one outward ssh call* becomes two kinds of call in this release's first
 epics, and three with C1. Its sentences *"No ssh child is started before a "yes""* and *"The first read for a host
 asks once"* are rewritten: a host is contacted unless it was refused. It gains: the timer; how a new host is allowed,
-stored and shown, and that only *Not this host* stops a host; the merge of the store; the setting and that only a
-user-level value counts; the daily notice; the stop button; road (a) and what the VM then calls; what Claude Code
-writes on a read; the start of `agy`; the person's activity dropped on the VM; and the residuals above. What it says
-about W6 and W7 is written after E2, from what was seen.
+stored and shown, and that only *Not this host* stops a host; the merge of the store; **the refusals file (entry
+1.2): where it is, that it is kept for each side, that only a person's press removes a refusal or the Stop, what a
+damaged file and a file that cannot be written do, and why `globalState` alone cannot keep a refusal**; the setting
+and that only a user-level value counts; the daily notice; the stop button; road (a) and what the VM then calls; what
+Claude Code writes on a read; the start of `agy`; the person's activity dropped on the VM; and the residuals above,
+the eight of the file among them. What it says about W6 and W7 is written after E2, from what was seen.
 
 ## Growth surfaces
 
 - **The readings**: in memory, one for each host with an open `Creds:` terminal, a few hundred bytes each, dropped when
   the host's last terminal closes, when its answer becomes "no", when the round is stopped, and with the window.
-- **The consent**: no new store. `coai.terminalHosts` stays capped at 100 rows. The round writes rows too; at the cap
-  the oldest automatic row goes, never a person's answer. So the store cannot grow past its cap, and a flood of
+- **The consent in `globalState`**: `coai.terminalHosts` stays capped at 100 rows. The round writes rows too; at the
+  cap the oldest automatic row goes, never a person's answer. So the store cannot grow past its cap, and a flood of
   terminal names cannot empty it of refusals.
+- **The refusals file (entry 1.2) — a new surface, one for each side.** `terminal-hosts/refused.json` under
+  `globalStorageUri`. **Projected size:** at most 100 refusals and one Stop; about 8 KB with host names of 30
+  characters, and never more than 64 KiB, because a write that would pass either cap is not made. A terminal's name
+  cannot grow it: only a person's "no" adds a refusal. **Who retires it:** a refusal goes by a person's *Read* or
+  *Forget*, the Stop by a person's start; at 100 refusals the next "no" is not kept and the person is told. The file
+  itself is kept for ever: 64 KiB at most on each side, in the extension's own storage folder. Whether VS Code
+  removes that folder with the extension was not checked. **When a write is interrupted:** the rename is atomic, so the file is the old one or the new one. A
+  crash can leave `refused.lock`, which the next writer breaks after 30 s, and one beside-file of at most 64 KiB;
+  every write, while it holds the claim, removes the beside-files of that folder that are older than 60 s. The host
+  that does both is the window that writes next; no timer exists for it.
 - **The state of the accounts round**: one `globalState` row, under 150 bytes.
 - **The ssh child**: one for each host in a round, two in the one case of § 2, killed at 30 s with its tree, stdout
   capped at 64 KiB. At most one alive at a time for each window.
@@ -754,7 +924,7 @@ what is whose, so it is read as complete:
 | Item | Built by | The other plan's part |
 |---|---|---|
 | The pinned ssh call, the session script, *take*, *add*, *Asked* | [PLAN_the_chat_opens_from_a_terminal.md](../research/PLAN_the_chat_opens_from_a_terminal.md) (shipped in 0.87.0) | This plan widens the runner so a call needs no session operand. The session read itself does not change |
-| The per-host consent: the store `coai.terminalHosts`, the question `read-remote-session`, *CoAI: hosts read over ssh* | the same plan | **This plan changes its meaning (O3, N2, Q1; with candidate C1 also N5 and Q2)**: the same answer also allows the accounts read, by a timer with no press — and, once C1 is built, one install of `jq`; and a host with no answer is allowed by the round itself, for the session read too, so the question is in practice no longer asked first. This plan rewrites the question's title and detail, the rows of the hosts list, the help paragraph — with its sentence that the doors only read and change nothing on that machine — and `SECURITY.md`. The store's key, the question's code and the buttons do not change; a row gains the marker `how`, and the cap gains the rule that an automatic row never pushes out a person's answer, and every write becomes a commit that re-reads and merges |
+| The per-host consent: the store `coai.terminalHosts`, the question `read-remote-session`, *CoAI: hosts read over ssh* | the same plan | **This plan changes its meaning (O3, N2, Q1; with candidate C1 also N5 and Q2)**: the same answer also allows the accounts read, by a timer with no press — and, once C1 is built, one install of `jq`; and a host with no answer is allowed by the round itself, for the session read too, so the question is in practice no longer asked first. This plan rewrites the question's title and detail, the rows of the hosts list, the help paragraph — with its sentence that the doors only read and change nothing on that machine — and `SECURITY.md`. The store's key, the question's code and the buttons do not change; a row gains the marker `how`, and the cap gains the rule that an automatic row never pushes out a person's answer, and every write becomes a commit that re-reads and merges. **Since entry 1.2:** a refusal is kept in a file of this plan, `terminal-hosts/refused.json`, one for each side, and the "no" row of that store becomes its copy; the session read asks the file too, so a host refused in the file is not read by a press either |
 | The gauge of coai's own rounds on this machine and on a Team server (`gaugeWords.ts`, the Team server's capture) | [../research/PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) and [PLAN_the_round_counter_tail.md](PLAN_the_round_counter_tail.md) | Nothing. That gauge counts coai's rounds; this list shows a person's accounts on other machines. No shared store, no shared reader |
 | The account and limits line inside Claude Code | `dew_flow_conventions · mods/agent-models` | Nothing is changed there. This plan carries its word rules over and tests them against its cases |
 
@@ -832,19 +1002,33 @@ latest, its text names this plan beside *The person agrees to each host once*.
   which one can be stale: a "no" in window A against an automatic "yes" in window B, in both orders, and with B
   holding a list from before A's write — after both commits the store holds the "no", and B makes no call once the
   "no" is visible to it; B's whole-list write is impossible by construction (a test fails if the write seam is ever
-  given a list that was not read in the same step); a "no" that goes missing is written again by the window that
-  wrote it; a person's "yes" replaces an automatic one; an automatic "yes" never replaces any row; only a person's
-  press changes a "no".
+  given a list that was not read in the same step); a person's "yes" replaces an automatic one; an automatic "yes"
+  never replaces any row; only a person's press changes a "no". *(Revised, entry 1.2: "a "no" that goes missing is
+  written again by the window that wrote it" is gone; the next row replaces it.)*
+- **The refusals file (entry 1.2)** — pure, over a fake disk with an exclusive create and a rename, and views of
+  one `globalState` of which each can be STALE and writes its WHOLE copy. **The two checks of the cadence
+  consultation:** (a) window A commits a "no"; A is disposed; window B, stale, commits an automatic admission — a
+  whole-object write; both views synchronize and are built again as after a reload; the host is admitted again →
+  **refused, with no call**; (b) the same with the Stop: A stops, A is disposed, stale B writes the state row for a
+  notice → after the reload the round is stopped and makes no call. Then: two writers at once — one is admitted,
+  the other waits, and the file holds both changes; a writer whose change was written over sees it at its read-back
+  and writes again; a lock older than 30 s is broken, a younger one is not; a "no" that cannot be written is not
+  reported as kept, the window contacts no host, and it is in the file after the next try that succeeds; a file
+  that is damaged (not JSON, an unknown `v`, a wrong shape, more than 64 KiB, unreadable) contacts nobody and is
+  written over only by a person's answer for a host, which leaves the round stopped; the migration copies every
+  readable "no" row once, and a "no" in either place refuses; the cap: 100 refusals, the next is not kept; a
+  *Forget* and a *Read* in a second window of the same side lift a refusal at once; nothing but those two and a
+  start ever shortens the file (a test fails if any other change does).
 - **The automatic "yes", the cap, the stop button and the notices**: a host with no row gets the marked row before
   its call is spawned and is read in the same round; a "no" is never replaced — not by a round, a reload, or a second
-  terminal; *Forget* removes the row and the next round allows the host again, but a *Forget* of a "no" from
-  another window, while the window that gave it is open, is undone by that window with a notice (ledger entry
-  1.1); **the cap**: with 100 rows a new host
+  terminal; *Forget* removes the row and the next round allows the host again — from any window of the side that
+  keeps the refusal (entry 1.2; the case of entry 1.1, a *Forget* undone by the window that gave the "no", is
+  gone); **the cap**: with 100 rows a new host
   drops the oldest automatic row and never a person's, and with 100 rows of a person it is not allowed and not
   contacted (100 invented hosts and one "no": the "no" holds); the session door on an automatically allowed host
   reads without asking, and on a host with no row it asks; the timer raises no question (a test fails if the ask seam
-  is called from a tick); the stop button clears the timer, drops the readings, holds through a reload, and stops
-  the automatic "yes" too; the daily notice is shown at once for the first such host, then at most once in 24 hours,
+  is called from a tick); the stop button clears the timer, drops the readings, holds through a reload AND through a
+  stale window's write of the state row (the Stop is in the file, entry 1.2), and stops the automatic "yes" too; the daily notice is shown at once for the first such host, then at most once in 24 hours,
   names exactly the hosts allowed since the last one, and is not shown with none; the first-round notice is shown
   once.
 - **The setting, at both values, user layer only**: on, a host with no row is allowed and read; off, it is not
@@ -876,8 +1060,11 @@ latest, its text names this plan beside *The person agrees to each host once*.
       distinct host that is not refused — two in the one case of § 2; a host with no answer is allowed by itself,
       stored with its marker and named in a notice at most once a day; it stops with the last `Creds:` terminal and
       with the stop button; the timer asks nobody.
-- [ ] **A "no" always wins**: every write of the store re-reads and merges; no round, reload, second terminal, second
-      window or full store removes a refusal — shown by the merge tests and by R12.
+- [ ] **A "no" always wins, and so does the Stop** (revised, entry 1.2): both are kept in the refusals file of the
+      side, written under its lock and read from the disk before every call; only a person's press removes one; no
+      round, reload, second terminal, second window, full store, damaged file or write of `globalState` removes a
+      refusal or the Stop on the side that keeps it — shown by the file's tests, the two checks of the cadence
+      consultation among them, and by R12. Every write of the store that stays in `globalState` re-reads and merges.
 - [ ] `coai.terminalAccountsAllowNewHosts` exists, is on by default, is read from the user layer only, and is in the
       help of five languages; off, it restores ask-first.
 - [ ] The accounts script is fixed, its hash is in the spec and in a test, and it writes and installs nothing on the
@@ -926,7 +1113,8 @@ Cornerstones: 1 of 1 — E1.S2
   and nothing written on a VM by our code.
 - **Scope.** `src/remoteSsh.ts` (the runner widened for a second caller, `SSH_OPTIONS` untouched);
   `src/remoteFrame.ts` (the framing extracted); `src/remoteRead.ts` and `src/remoteSessionHost.ts` (the store's commit
-  and merge, the marker, the cap, the question's words, the hosts list); NEW pure modules for the accounts script,
+  and merge, the marker, the cap, the question's words, the hosts list); a NEW module for the refusals file, and
+  `src/chatStoreLock.ts` widened so that its claim serves a second file (entry 1.2); NEW pure modules for the accounts script,
   its reply and typed result, the usage lines, the round, the words and rows; a NEW host module with the `vscode`
   seams (the timer, the terminal events, the QuickPick with its buttons, the state row, the notices, the test door);
   `package.json` (the command, its icon, the `view/title` entry, the setting with its scope); `src/settingsShape.ts`,
@@ -940,10 +1128,12 @@ Cornerstones: 1 of 1 — E1.S2
 - **Stories** — written by Opus on 2026-11-19 in
   [PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md](PLAN_the_terminal_panel_shows_the_accounts_and_their_usage_E1.md).
   - **E1.S1 — the shared store: a "no" that always wins, the automatic "yes", the setting (SECURITY SPEC by Fable,
-    outside the quota).** The one commit function that re-reads and merges; the merge rule; the refusal that is
-    repaired; the marker `how`; the cap that never drops a person's answer; the user-layer read of
-    `coai.terminalAccountsAllowNewHosts`; the question's new words and the hosts list. Fable writes the spec and the
-    scenarios before any code; Sonnet codes; Opus reviews.
+    outside the quota).** The one commit function that re-reads and merges; the merge rule; **the refusals file —
+    its format, its lock, its one writer, a damaged file, a file that cannot be written, the migration, the sides
+    (revised, entry 1.2; "the refusal that is repaired" is gone)**; the marker `how`; the cap that never drops a
+    person's answer; the user-layer read of `coai.terminalAccountsAllowNewHosts`; the question's new words and the
+    hosts list. Fable writes the spec and the scenarios before any code; Sonnet codes; Opus reviews. The story keeps
+    its name and its number; whether the file is a story of its own is the re-review's to say.
   - **E1.S2 — the accounts script, its reply and its parser (CORNERSTONE, `model: fable`).** The exact script text
     and its sha256; the pinned Claude commands with their flags, folder and limits; the `agy` version command and the
     rule that keeps only a version; the three line patterns; the Codex record rule; the manager word for a host
@@ -978,11 +1168,11 @@ Cornerstones: 1 of 1 — E1.S2
 | R5 | A host that cannot be reached | Its own sentence within 30 s, and every other host is still read in that round |
 | R6 | Stopping | Every `Creds:` terminal closed: 0 logins in the next 20 minutes. *Stop the accounts round*: 0 logins in 20 minutes, also after a reload; started again, a round follows within 60 s |
 | R7 | Two hours, at least 12 rounds, on a host WITH live sessions | **0** live Claude, Codex or agy sessions that ask to sign in again, lose their settings or MCP servers, or stop or restart. The time and size of the agy program before and after: recorded |
-| R8 | The session door and the hosts list | *Take the question* still works, and on an automatically allowed host it reads without asking. *Not this host*: 0 logins in 20 minutes, also after a reload and after the terminal is opened again. *Forget*, pressed in the window that gave the host's answer (ledger entry 1.1; else the record names the window and shows the notice of a refusal written again): exactly 1 login in the next round, and the list says the host was allowed again |
+| R8 | The session door and the hosts list | *Take the question* still works, and on an automatically allowed host it reads without asking. *Not this host*: 0 logins in 20 minutes, also after a reload and after the terminal is opened again. *Forget*, pressed in ANY window of the side that keeps the refusal — and at least once in a window other than the one that gave it (revised, entry 1.2; the run condition of entry 1.1 is gone): exactly 1 login in the next round, and the list says the host was allowed again |
 | R9 | The time of a read (the plan's M7): 10 reads of each host from Windows with the pinned options | None is killed at 30 s; the slowest is under 20 s; `agy --version` is under 4 s; a reply is at most 64 lines and 8 KiB. The median is recorded. A host of an account with no 5-hour window shows `5h —` |
 | R10 | **Which hosts lack `jq`** — every host of the owner's `Creds:` terminals | A table: `jq` there or not, the manager word, root or `sudo` without a password. A host without `jq` shows the fixed command for its manager; after the owner runs it, the next round reads the accounts. The count of hosts without `jq` is recorded for C1 |
 | R11 | The setting off, in the user settings | 0 logins to a new terminal's host in 20 minutes, and it says *not asked yet*; 0 logins to a host that was allowed automatically, until *Read* is pressed; a workspace `settings.json` that says the opposite changes nothing; the same in a WSL or remote window, if the owner uses one |
-| R12 | **Two windows (the gate's finding 0, U12).** *Not this host* is pressed in window A while window B's round is running | **Gate.** At most 1 login to that host after the press, and 0 from B's next round on. The "no" is in the store after B's next write, in both windows, and after a reload of both. The delay until B saw it: recorded. A lost "no", or a delay longer than one round: the store moves to a file with an exclusive lock before the release — a change of this plan |
+| R12 | **Two windows (the gate's finding 0, U12; revised, entry 1.2).** Four runs, each with the VM's ssh log read. **(a)** *Not this host* is pressed in window A while window B's round is running. **(b) The first check of the cadence consultation:** *Not this host* in A; A is closed at once; B, which was open throughout, goes on for three rounds and is made to write `globalState` in them (a new host's terminal is opened, so B writes an automatic row); both are reloaded. **(c) The second check:** *Stop the accounts round* in A; A is closed at once; B goes on for three rounds; both are reloaded. **(d) Two sides, where the owner uses two** (a Windows window and a WSL or remote window, each with a terminal of that host): *Not this host* on one side | **Gate.** (a) At most 1 login to that host after the press — a call that was already running — and 0 from then on, in both windows. (b) 0 logins to that host from the press on, the refusal is in the file and shown in both windows after the reload. (c) 0 logins to any host from the press on, and both windows show the round stopped after the reload. In (a)–(c) the file is read back and holds the refusal or the Stop. (d) is a RECORD, not a gate: how many logins the other side made after the press, how long it took to stop, and whether the copy in `globalState` was still there after the three rounds. The lag until B's `globalState` showed A's write: recorded (U12). **A lost "no" or a lost Stop in (a)–(c) fails the gate:** the build is not released, and the cure is a change of this plan. A copy lost in (d) is the evidence for what is left of candidate C4 |
 | W6 | Backups (§ 5) | **Gate for growth.** The row of § 2's policy table that the result selects is the release build's policy |
 | W7 | The trace of every program start (§ 5) | **Gate.** No program is started that is not Claude Code's own. Else the Claude usage read is off until the owner decides |
 | W8 | A start of `agy` (§ 5) | A record |
@@ -1000,7 +1190,14 @@ plan (kind `epics`), recorded in the ledger — **but for C1, which this approve
 - **C2 — a webview instead of the QuickPick.** Justified by R3 failing on "no row is cut".
 - **C3 — hosts with no AI CLI are read once an hour, not every 10 minutes.** Justified by R10 or R2 showing such
   hosts among the owner's terminals, and by their logins being a nuisance in the ssh log.
-- **C4 — the consent store in one file with an exclusive lock.** Justified by R12 failing.
+- **C4 — the consent store in one file with an exclusive lock.** Justified by R12 failing. **Partly taken by ledger
+  entry 1.2, before E2:** the person's refusals and the Stop are in such a file from E1 on. **What remains a
+  candidate, in two parts.** *C4a — the rest of the store in the file:* the person's "yes", the automatic rows and
+  the notice times. Justified by R12 or R8 showing a withdrawn "yes" that came back with the setting off (residual 3
+  of the file), or lost rows that make the daily notice a nuisance. *C4b — a refusal and the Stop carried into the
+  file of every side:* each side copies the copy it sees into its own file, and a lift is then recorded so that a
+  stale copy is not taken again. Justified by run (d) of R12 showing a copy that was lost, or by the owner working
+  on two sides with terminals of the same hosts.
 - **C5 — the Claude usage only on a press, or road (b), or the account only.** Justified by W7 failing; the planner
   recommends the account only.
 - **C6 — one lock between VS Code windows for the round.** Justified by R2 or R9 showing that two windows doubling

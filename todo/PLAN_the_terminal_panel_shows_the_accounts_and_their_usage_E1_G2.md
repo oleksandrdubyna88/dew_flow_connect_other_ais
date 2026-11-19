@@ -9,6 +9,7 @@
 > `feat/terminal-accounts-e1` at `040a7fa0`. It keeps no ledger: what it counts goes into the parent's ledger, by the
 > caller. No code was compiled and no test was run. One probe was run with `dash` in a scratch folder (§ 3, S-1).
 > **§ 7 says where each item of this verdict was fixed.** §§ 1–6 are the verdict as it was given and are not edited.
+> **The count of § 1 — one change — was overtaken on 2026-11-19 by the parent's entry 1.2** (the refusals and the Stop move to a file): it came from the cadence consultation `e319fe2e` on the E1 plan gate's finding, not from this gate, it supersedes K5 (entry 1.1), and it stopped the plan; this gate has not judged the file design.
 
 Line numbers `:n` are the parent's unless another file is named — **the parent's at `040a7fa0`**. Since entry 1.1
 the parent's lines stand 3 later from its ledger on, 6 later after the old `:398`, and 8 later after the old `:834`
