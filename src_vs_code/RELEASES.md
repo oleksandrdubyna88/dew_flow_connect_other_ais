@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.89.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.89.0...extension-v0.89.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **extension:** the CLAUDE.md snippet speaks policy auto — not_reviewed, consult_first, call_human as the operator's choice (v19; E3 of the auto plan) ([#1024](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1024)) ([4ec6cf3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4ec6cf3d9e84959c1b959d8217c017e85bf34226))
+
 ## [0.89.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.88.0...extension-v0.89.0) (2026-11-18)
 
 
