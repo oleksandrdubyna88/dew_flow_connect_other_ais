@@ -15,7 +15,7 @@ import {
 } from './onExhaustedMigrationFakes';
 
 /**
- * Two machines (todo/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.8.4): each its own `ClientState` — its own overlays,
+ * Two machines (research/PLAN_auto_never_asks_a_person_E2_S2_spec.md § S2.8.4): each its own `ClientState` — its own overlays,
  * record and windows — sharing ONE `FakeUserSettings`, the synced user layer after Settings Sync has delivered. What a
  * real Sync does between two deliveries is not modelled (R1, R10): the only observation there can be is the owner's.
  */

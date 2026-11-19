@@ -195,7 +195,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     /// <summary>
     /// A code round under policy auto whose ordinary reviewer failed while the security lane answered with a blocking finding is
     /// <c>not_reviewed</c> — nobody ORDINARY answered — but the finding is pending, and the instruction must not say there is nothing to
-    /// decide: <c>resolve</c> refuses an empty list while a finding awaits (todo/PLAN_auto_never_asks_a_person_E1.md, § 8, the S2 fix).
+    /// decide: <c>resolve</c> refuses an empty list while a finding awaits (research/PLAN_auto_never_asks_a_person_E1.md, § 8, the S2 fix).
     /// </summary>
     [Fact]
     public async Task Under_auto_a_round_only_the_lane_answered_says_what_awaits_a_decision_and_resolve_advances_it()

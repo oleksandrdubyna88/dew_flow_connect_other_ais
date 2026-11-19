@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A client <c>env</c> block that still pins a policy other than <c>auto</c> wins over the panel (<c>SettingsFile.Over</c>), so the migration
-/// cannot reach it: the server says so at startup, naming where to remove it (<c>todo/PLAN_auto_never_asks_a_person_E1.md</c> § 9.3, the
+/// cannot reach it: the server says so at startup, naming where to remove it (<c>research/PLAN_auto_never_asks_a_person_E1.md</c> § 9.3, the
 /// parent's § 4.6). Only the PROCESS environment counts — the same value in the settings file is the panel's own choice.
 /// </summary>
 public sealed class APinnedPolicyIsNotedAtStartupTests

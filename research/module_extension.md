@@ -4787,8 +4787,8 @@ flowchart LR
 
 ## Policy Auto in the panel (E2 of the auto plan)
 
-*Written 2026-11-17 from `todo/PLAN_auto_never_asks_a_person.md` § 4.6 (epoch 3) and the stories document
-`todo/PLAN_auto_never_asks_a_person_E2.md`. The value, the wire, the gate section and the rounds-log note are code on
+*Written 2026-11-17 from `research/PLAN_auto_never_asks_a_person.md` § 4.6 (epoch 3) and the stories document
+`research/PLAN_auto_never_asks_a_person_E2.md`. The value, the wire, the gate section and the rounds-log note are code on
 `feat/auto-mode-e2`. The migration's module names and mechanics are the stories document's C4–C6 and the S2 spec's; read this section
 against `src/onExhaustedMigration.ts` and `src/onExhaustedMigrationHost.ts` before trusting a detail of the migration.*
 

@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A hold the REAL code raised under <c>human</c>, then made a hold from before policy auto by editing its file — never a session assembled by
-/// hand (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.6). The four stages' holds are raised here so that every class of the
+/// hand (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.6). The four stages' holds are raised here so that every class of the
 /// hold-authority scenarios reaches them the same way; a subclass carries <c>[Collection("fakecli-env")]</c> itself.
 /// </summary>
 /// <remarks>

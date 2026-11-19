@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { KNOWN_HALVES } from '../claudeSnippet';
 
 /**
- * The snippet's four gate halves speak policy `auto` (E3 of `todo/PLAN_auto_never_asks_a_person.md`, story S2).
+ * The snippet's four gate halves speak policy `auto` (E3 of `research/PLAN_auto_never_asks_a_person.md`, story S2).
  *
  * <p>Every assertion reads a generated rule constant — the shared rule's text as the paste carries it — so
  * this is a test of rule text, not of a webview page. A phrase is read with its whitespace collapsed: the

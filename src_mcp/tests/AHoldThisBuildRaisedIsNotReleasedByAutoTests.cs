@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A hold THIS build raised is the person's whatever the policy becomes: policy auto releases only a hold from before it
-/// (<c>todo/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.7).
+/// (<c>research/PLAN_auto_never_asks_a_person_E1_S1_spec.md</c>, § S1.10.7).
 /// </summary>
 /// <remarks>
 /// The fixture is <c>HeldAsync</c> with no strip. Its file says <c>"autonomous": false</c>; the positive beside these negatives is the same hold,
