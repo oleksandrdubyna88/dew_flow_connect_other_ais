@@ -7,15 +7,16 @@
 > round over those hosts every 10 minutes (one read-only ssh call per host, one host at a time). The consent is the
 > session reader's own per-host answer, with no second question (the owner's O3). The Claude usage is printed by Claude
 > Code itself on the VM (road (a), measured). The round runs by itself from the start of the extension, over each
-> distinct host of those terminals whose answer is "yes" (the owner's N2). No change to `src_mcp`, `src_server` or
-> CredsForDevs. The accounts script writes nothing on a VM. **One thing is installed there: `jq`, from the host's own
-> package manager, when it is missing and the ssh user may install it** (the owner's N5); where the user may not, the
+> distinct host of those terminals that the person has not refused (the owner's N2 and Q1): **a host with no answer
+> is allowed by itself**, with no question. No change to `src_mcp`, `src_server` or CredsForDevs. The accounts script
+> writes nothing on a VM. **One thing is installed there: `jq`, from the host's own package manager, at once, when it
+> is missing, an AI CLI is there to read, and the ssh user may install it** (N5, Q2); where the user may not, the
 > list shows the command to run. Three epics (E0 is the measurement), one extension release. **Not approved yet:** no
-> plan round has run. The owner answered the questions N1–N5 on 2026-11-19 and the answers are folded in, as are the
-> measurements W1–W5 (§ 5). **The text is ready for the question consultants and the plan round.** Still owed, and
-> named so: the consultants' answer on what is important before the epic split is final; the plan round; two
-> questions for the owner that do not block it (Q1, Q2); the process check W7 before the E1.S2 spec is final; and
-> the measurements W6 and W8, which are recorded and stop nothing.
+> plan round has run. The owner answered the questions N1–N5 and Q1–Q2 on 2026-11-19 and the answers are folded in,
+> as are the measurements W1–W5 (§ 5). **No question for the owner is open. The text is ready for the question
+> consultants and the plan round.** Still owed, and named so: the consultants' answer on what is important before
+> the epic split is final; the plan round; the process check W7 before the E1.S2 spec is final; and the measurements
+> W6 and W8, which are recorded and stop nothing.
 > The change ledger (the `Plan changes` section of `.agents/conventions/common/plan-change-control.md`) opens
 > here, directly under this block, with its epoch 1 line in the commit of the first approval; until then the section
 > is not written, because a ledger with no epoch line is a finding of `plan-lifecycle.mjs`.
@@ -83,8 +84,8 @@ kept in *Open points for the owner*, with the answer beside each.
     over every distinct host of the open `Creds:` terminals, from the start of the extension. The first-press switch
     of the earlier revision is removed. "Unique" is one read for each host, however many terminals name it. The
     consent stays shared (O3): the owner did not say to read a host that nobody allowed. So a host is read when its
-    answer is "yes", and not when it is "no" or forgotten. A host with no answer is not asked by the timer; whether it
-    should be is question Q1.
+    answer is "yes", and not when it is "no" or forgotten. A host with no answer was not read in that revision; the owner then
+    decided that it is (item 18).
 15. **N3 — answered by the run** of W1–W5.
 16. **N4 — "With the version."** The list shows the Antigravity version: the script starts `agy` with its version flag
     in every round. The risk the planner named, a self-update on a start, is recorded in Security and Growth.
@@ -92,6 +93,16 @@ kept in *Open points for the owner*, with the answer beside each.
     person: run this command".** Where `jq` is missing, the extension installs it, when the ssh user may. Where the
     user may not, the list tells the person the exact command to run, and runs nothing. **This reverses the earlier
     line "nothing is installed on a VM".** The design is in § 4 and the judgement is finding F2.
+
+**The owner's answers to Q1 and Q2 (2026-11-19; given in Russian, translated here).**
+
+18. **Q1 — "New hosts are allowed by themselves."** A host of an open `Creds:` terminal that has no answer is read by
+    the round, with no modal and no press. Once a day one notice, with no question, lists the hosts that were allowed
+    by themselves and says where to forbid them. An explicit "no" (*Not this host*) is never overridden. The planner's
+    recommendation was to keep the question; the owner decided otherwise, and § 3 is designed on the owner's answer.
+19. **Q2 — "Install at once."** The install of `jq` runs by itself, as N5 says, also on a host whose "yes" is older
+    than this release and on a host that was allowed by itself. No press is needed. The planner's recommendation was
+    to wait for one press on an old "yes"; the owner decided otherwise.
 
 ## What the code does today — verified on `a057c971` (extension 0.89.1)
 
@@ -240,7 +251,7 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
   agy states no usage, and its account is not read
   ── Hosts ──
   ai1-root — the last read failed 3 min ago: “ai1-root” did not answer over ssh within 30 s.
-  ai2-dev2 — not asked yet. Choose this row to answer for this host.
+  ai2-dev2 — allowed automatically on 2026-11-20. Choose this row to change that.
   ai2-root — turned off: your answer for this host is “Not this host”.
   ai2-dev3 — jq is missing, and this ssh user may not install it. Run there: sudo apt-get install -y jq     [copy]
   ── Changes CoAI made on a host ──
@@ -263,9 +274,10 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
     The mod rounds a fraction, so the two views can differ by one point. R3 checks equality with `/usage` and
     "within one point" with the mod line.
   - **When two hosts of one account were read at different times**, the group shows the newest reading and its age.
-  - **Every host has its own sentence in the *Hosts* part** when it has no reading to show: not asked yet, turned off,
-    never read, or the last read failed (with the runner's own sentence and its age). A host whose last read failed
-    keeps its older numbers in its account group, and the group's second line says the later read failed.
+  - **Every host has its own sentence in the *Hosts* part**: turned off; never read yet; the last read failed (with
+    the runner's own sentence and its age); and, for a host the round allowed by itself, *allowed automatically on
+    <day>* — that one is shown also when the host has a reading. A host whose last read failed keeps its older numbers
+    in its account group, and the group's second line says the later read failed.
   - **Usage that was not read says why**, in its own words: *usage not read: Claude Code 2.1.326 on this host printed
     no usage line this version understands*, *agy states no usage*. It is never a row of dashes with no reason.
   - **A host without `jq` has its own sentences** (§ 4): that `jq` was installed; or that it is missing and the ssh
@@ -275,9 +287,9 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
   - **The part *Changes CoAI made on a host*** lists every installation the extension made: the host, the day, the
     package manager, and whether it ran as root or through `sudo`. It comes from a stored record, so it is still
     there after a reload.
-  - **Choosing the row of a host that was not asked** raises the shared question for that host (§ 3). Choosing the
-    row of a failed install tries it once more. Choosing any other row does nothing. There is no question for
-    several hosts at once.
+  - **Choosing a host's row** in the *Hosts* part opens that host's three choices — *Read*, *Not this host*, *Forget*
+    — as *CoAI: hosts read over ssh* does, so a host can be forbidden from where it is seen (§ 3). Choosing the row
+    of a failed install tries it once more. Choosing any other row does nothing.
   - **Two title buttons**: *Refresh now*, and *Stop the accounts round* (§ 3). While the round is stopped the list
     holds one row: *The accounts round is stopped. Choose this row to start it.*
 - **Text from a VM is made plain at one road in**: control and format characters are taken out, the length is cut, and
@@ -287,14 +299,16 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
 
 ### 2. The round
 
-- **Which hosts — every distinct one, by itself (N2).** The distinct hosts of the live (not exited) terminals whose
-  name gives `kind: 'session'`, read through `liveTerminals`. Several terminals of one host are one read. Of these
-  only the hosts whose answer in the shared consent is "yes" (§ 3). A host with no answer or a "no" is never
-  contacted.
+- **Which hosts — every distinct one that is not refused, by itself (N2, Q1).** The distinct hosts of the live (not
+  exited) terminals whose name gives `kind: 'session'`, read through `liveTerminals`. Several terminals of one host
+  are one read. A host whose answer is "no" is refused and is never contacted. A host with a "yes" is read. **A host
+  with no answer is allowed by the round itself**: the round writes its "yes", marked as automatic, and reads it in
+  the same round (§ 3). In this plan "an allowed host" is a host with a "yes", however it was written.
 - **One host at a time.** A round takes the hosts in name order, starting one host later each round, and awaits each read
   before the next. Two reads never run at once. A failed host is recorded with its sentence and the round goes on.
 - **The answer is read again just before every call**, from the store, as the session reader checks the terminal's
-  name again before every spawn. A "no" or a *Forget* given while a round runs stops the next call to that host.
+  name again before every spawn. A "no" given while a round runs stops the next call to that host. A *Forget* does not
+  stop anything any more: the host then has no answer, and the round allows it again (§ 3).
 - **One ssh call for each host in a round**: the pinned options of `SSH_OPTIONS`, unchanged, then
   `-- <host> sh -s -- <mode>`, the script on stdin. `<mode>` is one of two fixed words (below).
 - **Every 10 minutes, counted from the END of a round** to the start of the next, so two rounds never overlap. The
@@ -310,20 +324,20 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
   from then on, until the window is reloaded or the host reports another Claude Code version. So a Claude Code version
   that sends `/usage` to the model costs one small call for each window, not six an hour.
 - **The first round starts with the extension, with no press** (N2): 30 s after activation, when the window has a
-  `Creds:` terminal of an allowed host; else 30 s after the first such terminal opens. The 30 s let the window restore
-  its terminals first. It is not started by a reload alone with no allowed host.
+  `Creds:` terminal of a host that is not refused; else 30 s after the first such terminal opens. The 30 s let the
+  window restore its terminals first. It is not started by a reload alone with no such host.
 - **An install step, once for each host** (N5, § 4). When a host's reply says `jq` is missing and the extension has
   not tried that host yet, the round makes one install call to it right after the read, and reads the host once more
   when `jq` was installed. That is three ssh calls to one host in one round, once in that host's life.
-- **It stops when no `Creds:` terminal is open.** With no live terminal of an allowed host the timer is cleared, not
+- **It stops when no `Creds:` terminal is open.** With no live terminal of a host that is not refused the timer is cleared, not
   left idle. `onDidOpenTerminal` arms it again; `onDidCloseTerminal` checks again. A host whose last terminal closed is
   dropped from the next round, and its reading is dropped from memory. A read in flight is not killed by a close; its
   result is dropped.
-- **The timer never asks a person.** The shared question is raised only by a press: on a host's row in the list, or by
-  the session reader's own doors. A round over hosts that were not asked reads nothing and shows nothing.
+- **The timer never asks a person.** It does not need to: it allows a new host by itself (Q1). The shared question is
+  raised only by a press on one of the session reader's doors, for a host that has no row yet.
 - ***Refresh now*** is a title button of the list. It starts a round at once, unless one is running (the list shows it is
   busy) or the last round ended less than 60 s ago (the mod's own floor). Opening the list draws what memory holds; it
-  starts a round only when an allowed host has no reading yet.
+  starts a round only when a host that is not refused has no reading yet.
 - **Results are in memory only.** Nothing of a reading is written to disk, to `globalState`, to a ledger or to a log:
   the readings hold email addresses and the usage of a person's accounts, they are 10 minutes old at most, and after a
   reload the next round brings them back within a minute. What is persisted is the shared consent, which exists
@@ -341,100 +355,123 @@ host, one Linux user (`root`, Ubuntu), one account for each vendor, Claude Code 
   host: two ssh children to one host, both read-only. Each VS Code window runs its own round, so two windows with
   terminals of one host read it twice in 10 minutes. Both are named, not prevented.
 
-### 3. The consent — shared with the session reader (O3), and used by the round with no press (N2)
+### 3. The consent — one shared answer for each host, and a new host is allowed by itself (O3, N2, Q1)
 
 **Decisions (the owner, 2026-11-19).** O3: there is no separate consent; the per-host answer of the session reader is
 the answer for the accounts read too. N2: the round runs by itself over every distinct host of the open `Creds:`
-terminals. N5: where `jq` is missing, it is installed.
+terminals. Q1: a host with no answer is allowed by itself. N5 and Q2: where `jq` is missing, it is installed, at once.
 
-**Which host is contacted, by its answer in `coai.terminalHosts`:**
+**What the store is from this release.** Until now `coai.terminalHosts` held the answers to a question, and no ssh
+child started before a "yes". From this release it is two things: **the list of hosts the person refused, which
+nothing overrides**; and a record of the hosts that are read, with how each one came to be allowed. For the accounts
+read it no longer comes first. Only a "no" stops a host.
 
-| The host's answer | What the round does |
+| The host's row | What the round does |
 |---|---|
-| "yes" (*Read*) | Reads it, from the first round after the extension starts. No press and no question. Installs `jq` there once when it is missing and the ssh user may |
-| "no" (*Not this host*) | Nothing. No ssh call of any kind |
-| none (never asked, or *Forget*) | Nothing. **The timer never raises a question.** The list shows the host as *not asked yet*, and a press on that row raises the shared question |
+| "yes", written by a press (*Read*) | Reads it, from the first round after the extension starts. No press and no question. Installs `jq` there at once when it is needed (§ 4) |
+| none — a new host, or a host after *Forget* | **Allows it by itself**: writes a "yes" row marked as automatic, with the time, and reads the host in the same round. No modal and no press. Installs `jq` as on any allowed host |
+| "no" (*Not this host*) | Nothing. No ssh call of any kind. **Never overridden**: not by the round, not by another terminal of that host, not by the cap, not by a reload |
 
-The owner said "all unique ssh sessions". This plan reads that inside O3: a host nobody allowed is not read. Whether
-the round should ask once, by a modal, when it first meets a host with no answer is question Q1. The default here is
-no: a question appears only after a press.
+**How a host that was allowed by itself is stored: in the same store, with a marker.** The row is
+`{ host, answer: 'yes', askedUtc, how: 'auto' }`. A row written by a press has no `how`, so every row of today reads as
+a person's answer. The reasons for one store and not a second one:
 
-**What a "yes" covers from this release — said plainly.** Until this release the question was *"Read the Claude
-session on “x” over ssh?"*. A "yes" covered one read that a press starts and that prints a transcript. From this
-release the same "yes" also covers, **with no further press**:
+1. **One road in.** `consentOf` is the one function that says whether a host may be contacted. A second store would
+   be a second place where a "no" has to be looked up, by every caller, every time — the shape `security.md` calls a
+   measure applied at some of its sites.
+2. **A "no" and an automatic "yes" cannot both exist for one host**: a host has one row.
+3. **The person's three choices act on it as on any row**, with no new code path: *CoAI: hosts read over ssh* shows
+   *allowed automatically on <day>*, and *Not this host* turns it into a refusal.
+4. **The marker is what the rest needs**: the list can say how a host came in, the daily notice knows which hosts to
+   name, and the cap can tell a person's answer from an automatic one.
+
+**The cap protects the person's answers.** The store holds 100 rows, and today the oldest row goes when it is full.
+From this release **an automatic row never pushes out a row a person wrote**: at the cap the oldest AUTOMATIC row
+goes; when there is none, the new host is not allowed and not contacted, and the list says that the list of hosts is
+full. Without this rule a program that opens a hundred terminals with invented names could push a person's "no" out
+of the store, and the refused host would be allowed by itself in the next round.
+
+**The automatic "yes" covers the session read too. That is the recommended reading, and it is a widening.** The store
+is shared since O3: one row, one answer. So on a host the round allowed, *take the question* and *add the question*
+read the session without asking. The other reading — an automatic row that means "yes" for accounts and "ask" for a
+session — makes one row mean two things, and `consentOf` would have to be told who is asking. A session read still
+starts only on a press in that terminal. What it costs: the round meets a new host within 30 s to 10 minutes, so the
+question *"Read the Claude session…"* is in practice no longer asked while the round runs. It is still asked when a
+door is pressed on a host that has no row yet — before the round met it, or while the round is stopped. Finding F1
+names this.
+
+**What a host gets from this release, with a "yes" of any kind, with no press:**
 
 - a read that a timer starts, from the start of the extension, every 10 minutes while a `Creds:` terminal of that
   host is open;
 - the names of the accounts signed in there;
 - a start of Claude Code on that host, which asks Anthropic with that host's own login;
 - a start of `agy` on that host, for its version;
-- **one installation of `jq` on that host**, when it is missing and the ssh user is root or has `sudo` without a
-  password.
+- **one installation of `jq` on that host, at once**, when an AI CLI was found there, `jq` is missing, and the ssh
+  user is root or has `sudo` without a password.
 
-For the owner these are the decisions O3, N2, N4 and N5. For another person who installed the extension and answered
-*Read* before this release, each of them is wider than what they were asked. The Security section holds this as
-findings F1 and F2.
+Until this release a "yes" covered one read that a press starts. For the owner the list above is the decisions O3, N2,
+N4, N5, Q1 and Q2. For another person who installed the extension, each line is wider than what they were ever asked,
+and for a new host they are not asked at all. The Security section holds this as findings F1 and F2.
 
-**What the person is told, and where.**
+**What the person is told, and where. Every one of these comes after the first read, not before it.**
 
-- **The question's words change, for every host asked from this release on.** Same code (`read-remote-session`), same
-  buttons (*Read*, *Not this host*), same store. The title becomes *"Read the Claude session and the AI accounts on
-  “x” over ssh?"*. The modal's detail says what a "yes" covers: the session of a terminal, when you press *take* or
-  *add*; and, by itself, every 10 minutes while a `Creds:` terminal of that host is open, which Claude Code, Codex
-  and Antigravity accounts are signed in there and how much of their limits is left — for which Claude Code is
-  started on that host and asks Anthropic with that host's own login; and that `jq` is installed there once from the
-  host's own package manager when it is missing and your ssh user may install software. By fixed scripts, as your
-  ssh user. The words "read-only" are no longer true without that last clause, and the detail does not use them
-  without it.
-- **One notice, once for each installation of the extension**, when its first accounts round is about to contact a
-  host. It names the hosts, says that their AI accounts are now read every 10 minutes and that `jq` is installed
-  where it is missing, and says where to stop it. It is information: it asks nothing and the round does not wait for
-  it. It does not turn an old "yes" into a new one.
-- **A notice for every installation**, when it was made and when it failed, through the one door, so it is kept in
-  the notifications ledger like every notice. The list keeps it too (*Changes CoAI made on a host*).
-- ***CoAI: hosts read over ssh*** names it in each row: *the Claude session and the AI accounts are read*, or *not
-  read*. Its three choices stay: *Read*, *Not this host*, *Forget*.
-- **The accounts list** shows, for each open host, its answer and where to change it (the *Hosts* part of § 1).
+- **A daily notice of the hosts that were allowed by themselves (Q1).** At most one in 24 hours, and only when there
+  is such a host. It is information: no question, and no button that decides anything. It lists the hosts that were
+  allowed automatically since the last such notice, and says where to forbid one: *CoAI: hosts read over ssh*, the
+  choice *Not this host*. The first one is shown as soon as the first host was allowed.
+- **One notice, once for each installation of the extension**, at its first accounts round, for the hosts that have a
+  "yes" from before: their AI accounts are now read every 10 minutes, `jq` is installed where it is missing, and
+  where to stop it.
+- **A notice for every installation of `jq`**, when it was made and when it failed, through the one door, so it is
+  kept in the notifications ledger like every notice. The list keeps it too (*Changes CoAI made on a host*).
+- **The question's words change**, where it is still asked. Same code (`read-remote-session`), same buttons, same
+  store. The title becomes *"Read the Claude session and the AI accounts on “x” over ssh?"*, and the detail says what
+  a "yes" covers: the lines of the list above. It does not say "read-only" without the install clause.
+- ***CoAI: hosts read over ssh*** names it in each row: *the Claude session and the AI accounts are read*; *allowed
+  automatically on <day>: the Claude session and the AI accounts are read*; or *not read*. Its three choices stay.
+  Beside *Forget* it says that a forgotten host is allowed again by itself.
+- **The accounts list** shows, for each open host, how it is allowed, and opens its three choices (§ 1).
 - **The help, in five languages**: the new command; the paragraph on the per-host question, which today says the
-  first read of a host asks once; and the sentence *"They only read: they change nothing on that machine"*, which
-  stops being true and is rewritten with the one exception.
+  first read of a host asks once — that is no longer so; and the sentence *"They only read: they change nothing on
+  that machine"*, which is rewritten with the one exception.
 - **`SECURITY.md`** and the release notes say the same (the Security section).
 
-**The first-press switch is gone (N2). The stop button is kept, and this is why.** The round is on by default and
-nobody has to press anything for it: that is the owner's answer. *Stop the accounts round* is one title button of the
-list. It clears the timer, drops the readings from memory, and no host is contacted for accounts or for an install
-until the person starts the round again from the list. The reasons to keep it:
+**The stop button is kept, and this is why.** The round is on by default and nobody has to press anything for it.
+*Stop the accounts round* is one title button of the list. It clears the timer and drops the readings from memory;
+while it is stopped no host is contacted for accounts or for an install, and **no host is allowed by itself**. The
+reasons to keep it:
 
-1. It is the only way to keep the session read of a host and stop the accounts read. The per-host answer cannot be
-   split, and *Not this host* stops both.
+1. It is the only way to keep the session read of a host and stop the accounts read. *Not this host* stops both.
 2. It is the way out when a read does harm on a VM — a Claude Code or agy update that disturbs the live sessions
    (R7 (b)) — without uninstalling the extension or closing the terminals.
 3. It costs little: one button, one stored row, three tests. It is a title button and not a command or a setting,
    because each of those needs its own help entry in five languages, and a setting a control.
 
-What it does **not** do: it does not protect an old "yes" at the first start after the update. The first round, and
-an install with it, start 30 s after the extension starts, before anyone can press a button (F2).
+What it does **not** do: it does not come before the first round. The first read of every host, and an install with
+it, start 30 s after the extension starts or within 10 minutes of a new terminal, before anyone can press a button.
 
-**The state** is one `globalState` row, key `coai.terminalAccountsState`: `{ toldUtc, stoppedUtc }`. `toldUtc` is
-when the one notice was shown; `stoppedUtc` is there only while the round is stopped.
+**The state** is one `globalState` row, key `coai.terminalAccountsState`: `{ toldUtc, lastAutoNoticeUtc, stoppedUtc }`.
 
-**How a "no" or a *Forget* stops the accounts read.**
+**How a person forbids a host — and what no longer does.**
 
-- ***Not this host*** — in the question, or later in *CoAI: hosts read over ssh*: no ssh call of any kind goes to that
-  host: no session read, no accounts read, no install. Its reading is dropped from memory at once.
-- ***Forget***: the host has no answer. It is not contacted. Its row in the accounts list says *not asked yet*, and a
-  press on that row raises the shared question again.
-- A change made while a round runs takes effect before the next call (§ 2). A read that is already running ends
+- ***Not this host*** — in the hosts list, in a host's row of the accounts list, or in the question: no ssh call of
+  any kind goes to that host: no session read, no accounts read, no install. Its reading is dropped from memory at
+  once. The row stays a refusal until the person changes it.
+- ***Forget* no longer stops the accounts read.** It removes the row, as before. The host then has no answer, and the
+  next round allows it again by itself. A person who wants a host left alone has to say *Not this host*.
+- A "no" given while a round runs takes effect before the next call (§ 2). A read that is already running ends
   within its 30 s, and its result is dropped. An install that is already running is not killed: stopping a package
   manager half-way is worse than letting it end (§ 4).
 
 **What a person can no longer choose.** They cannot allow the session read on a host and refuse the accounts read or
-the install on the same host. The per-host answer is one answer. The only finer control is the stop button, for all
-hosts at once.
+the install on the same host: the per-host answer is one answer. And they are no longer asked before a host is
+contacted for the first time: they can only refuse it afterwards.
 
 **No second store, no reach number.** The first draft had a second `globalState` key and a "reach" for each row. Both
-are gone with O3. The store stays `coai.terminalHosts`, with its row `{ host, answer, askedUtc }`, its cap of 100 rows
-and its pure functions (`consentOf`, `withAnswer`, `withoutHost`, `answersOf`).
+are gone with O3. The store stays `coai.terminalHosts`, with its row `{ host, answer, askedUtc }`, which gains the
+marker `how`; its cap of 100 rows, which gains the rule above; and its pure functions (`consentOf`, `withAnswer`,
+`withoutHost`, `answersOf`).
 
 ### 4. The remote script and its reply — the cornerstone
 
@@ -599,9 +636,13 @@ and its pure functions (`consentOf`, `withAnswer`, `withoutHost`, `answersOf`).
 
 **Installing `jq` — a second script, the only one that changes a VM (the owner's N5).**
 
-- **When.** A host's read says `unreadable no-jq`; the host's answer is "yes"; the round is not stopped; and the
-  install record has no row for that host. Then the round makes ONE install call to that host, right after its read,
-  and reads the host once more when the reply says `installed`.
+- **When — at once, and only where it is needed (N5, Q2).** A host's read says that Claude Code or Codex was found
+  there and that `jq` is missing (`unreadable no-jq`); the host's answer is "yes", whether a person gave it, it is
+  older than this release, or the round wrote it by itself; the round is not stopped; and the install record has no
+  row for that host. Then the round makes ONE install call to that host, right after its read, with no press, and
+  reads the host once more when the reply says `installed`. **A host on which neither Claude Code nor Codex was found
+  gets no install**: `jq` would read nothing there. This is the planner's reading of "install what is needed", and it
+  keeps a server that has no AI CLI — one that a terminal merely names — at a read-only login.
 - **Once for each host, and the record is written first.** `globalState` key `coai.terminalAccountsInstalls`, rows
   `{ host, state, manager, as, utc }`, at most 100. The row is written as `started` BEFORE the ssh call is spawned, and
   rewritten with the outcome. So a reload or a crash in the middle does not start a second install: a row that is
@@ -741,7 +782,9 @@ with a secret that this plan does not name; a write by the accounts script; road
 - No colour for the numbers (the mod colours them), and no webview.
 - No history, no chart, no ledger of the readings, no alert when a limit runs low.
 - No reading of a host that has no open `Creds:` terminal, and none of this machine's own accounts.
-- No reading of a host whose answer is not "yes", and no question raised by the timer (Q1 asks whether it should).
+- No reading of a host whose answer is "no", ever. No question raised by the timer: a host with no answer is allowed
+  by itself (Q1).
+- No install on a host where neither Claude Code nor Codex was found.
 - No switch that a first press must turn on: the round runs by itself (N2).
 - No live Codex read (`codex app-server`), no `codex login status`, and no opening of `~/.codex/auth.json`, ever.
 - No start of `agy` but with its version flag, no reading of agy's log, and no opening of its sign-in file.
@@ -763,7 +806,8 @@ This section is the security judgement of the plan (Fable, `subagent-models.md`:
 spec repeats it for the exact script text, and it must stand before any E1 code.
 
 **The new edges.** (1) A read-only ssh call that a TIMER starts, with no press, from the start of the extension, to
-hosts whose shared answer is "yes". (2) On each usage read, a start of Claude Code on the VM, which calls Anthropic
+every host of an open `Creds:` terminal that the person has not refused — for a new host, the terminal's NAME is
+enough. (2) On each usage read, a start of Claude Code on the VM, which calls Anthropic
 with the VM's own Claude login. (3) In every round, a start of `agy` on the VM, for its version. (4) **Once for each
 host that has no `jq`: an ssh call that CHANGES the VM** — a package manager run as root or through `sudo`, which
 fetches a package from the host's repositories and installs it. (5) Text from a VM drawn in a list.
@@ -828,31 +872,44 @@ sessions too. The owner chose the version knowing this. What this plan does abou
 download leaves behind is not known);
 R7 notes the time and size of the agy program over an hour; W8 records what one start touches.
 
-**Finding F1, for the owner: the shared consent widens answers that were given to another question — and with N2 an
-old "yes" is now used by itself, with no new press.**
+**Finding F1, for the owner: the consent no longer comes first. An old "yes" is used with no press (N2), and a host
+nobody was asked about is allowed by a terminal's name (Q1).**
 
-- **No rule of `.agents/` forbids it.** `common/security.md` has no rule on consent. The conflict is with two texts of
-  this repository, and this plan changes both openly:
+- **No rule of `.agents/` forbids it.** `common/security.md` has no rule on consent. The conflict is with texts of
+  this repository that say the opposite, and this plan changes them openly:
   1. `SECURITY.md`, *The extension's one outward ssh call*: *"Read-only, to a host the person agreed to. The first read
-     for a host asks once (a modal naming the host)"*. The modal named the Claude session, and nothing else.
-  2. The terminal-door plan, *The person agrees to each host once*, with the question *"Read the Claude session on
-     “x” over ssh?"*.
-- **Every "yes" stored before this release answered that question.** After the update the same row allows, from the
-  first start of the extension and with no press: a read by a timer every 10 minutes, the names of the signed-in
-  accounts, a start of Claude Code on the VM that asks Anthropic with that host's login, and a start of `agy`. The
-  earlier revision kept the round off until the first press of the icon, so that an old "yes" was used only after the
-  person had used the list. The owner removed that (N2), and it is removed.
-- **For the owner's own installation, O3 and N2 are that consent**, given on 2026-11-19 knowing what they cover. The
-  extension is public. For any other person who answered *Read* before, nobody has said yes to the wider act, and
-  after the update it happens without their doing anything.
-- **What is left to tell them, since nothing asks them:** one notice at the first round, which names the hosts and
-  where to stop; the list, which names each host and its answer; the stop button; and the question's words, the hosts
-  list, the help in five languages, `SECURITY.md` and the release notes (§ 3). A notice can be missed, and none of
-  these comes before the first read.
-- **The planner's first judgement was a separate consent with a reach; the second was a round that waits for one
-  press. The owner decided otherwise both times, and this plan follows the owner.**
+     for a host asks once (a modal naming the host)"*; *"No ssh child is started before a "yes""*; *"a name is a
+     request, never proof"*.
+  2. The terminal-door plan: *The person agrees to each host once*, and in its Security section: *"The terminal name
+     chooses the host, and a name is not proof, which is why the consent exists."*
+- **Three widenings, in the order the owner decided them.**
+  1. **O3:** a "yes" that was given to one read — *"Read the Claude session…"*, started by a press — also covers
+     another kind of read.
+  2. **N2:** and with no press. After the update the same row is used by a timer from the first start of the
+     extension.
+  3. **Q1:** and a host with NO answer is allowed by itself. From then on the store does not stand before the
+     accounts read at all; it only remembers refusals. Because the row is shared, the session reader's own question
+     is in practice not asked any more while the round runs (§ 3).
+- **What a terminal's name can now set off.** Any program that can open a terminal in the window — another
+  extension, a task of an opened workspace — can call it `Creds: <host> / x`. Within 30 s to 10 minutes the extension
+  then logs in to that host over ssh, as the person, with the person's keys; runs the fixed script there; and
+  installs `jq` when F2's conditions hold. **What limits it:** the name chooses only the host, from an alphabet with
+  no option and no shell character; ssh refuses a host whose key is not already in the person's `known_hosts`, never
+  asks for a password and forwards no agent; the script is fixed; and nothing of the reply goes back to whoever
+  opened the terminal. **What does not limit it:** every host the person has ever logged in to with a key can be
+  reached this way, a production server among them.
+- **For the owner's own installation, O3, N2 and Q1 are the consent**, given on 2026-11-19 knowing what they cover.
+  The extension is public. For any other person, after an update: nothing asks them, about an old "yes" or about a
+  new host.
+- **What is left to tell them, since nothing asks them:** the daily notice of the hosts that were allowed by
+  themselves; the one notice at the first round; the list and the hosts list, which say how each host is allowed; the
+  stop button; the help in five languages, `SECURITY.md` and the release notes (§ 3). All of it comes after the first
+  read, and a notice can be missed.
+- **The planner recommended a separate consent, then a round that waits for one press, then to keep the question for
+  a new host. The owner decided otherwise each time, and this plan follows the owner.**
 
-**Finding F2, for the owner: the install makes a feature that reads change the machine, as root.**
+**Finding F2, for the owner: the install changes the machine, as root, at once (Q2) — and with Q1, on a host nobody
+was asked about.**
 
 - **No rule of `.agents/` forbids installing software on a remote host.** `common/security.md` has no rule on it. Two
   of its rules bear on HOW it is done:
@@ -868,24 +925,26 @@ old "yes" is now used by itself, with no new press.**
      writes and starts nothing in the background, and leaves nothing on the VM."*
   2. The help, in five languages: *"They only read: they change nothing on that machine."*
   3. This plan's own earlier line, *"nothing is installed on a VM"*, and step 0's list of what is outside the plan.
-- **Together with F1 it is the widest step of this plan.** A "yes" that was given to *"Read the Claude session…"*
-  becomes, with no press, the permission to install a package as root. For the owner's VMs, N5 is the decision. For
-  another person: at the first start after the update, if a host of theirs has no `jq` and their ssh user is root or
-  has `sudo` without a password, the extension installs software there. Nobody agreed to that. The stop button is too
-  late for it: the first round starts 30 s after the extension.
+- **F1 and F2 together: what happens to another person who updates the extension.** They open a `Creds:` terminal to
+  a server, as they did the day before. Nothing asks them anything, then or later. Within minutes the extension logs
+  in to that server. If Claude Code or Codex is found there, `jq` is missing, and their ssh user is root or has `sudo`
+  without a password, a package is installed as root, and its scripts run as root. The first they hear of it is a
+  notice afterwards. If the terminal's name came from a program and not from them, the same happens on a host they
+  did not choose. Nobody agreed to that, and the stop button is too late for it.
 - **What the install can do beyond adding a small program.** It runs the package's own scripts as root. It can run
   the distribution's hooks; on some systems a hook restarts services that were waiting for a restart. Refreshing the
   package lists changes what a later upgrade by the person sees. On a machine with several Linux users — and two
   aliases can be one machine — an install through one alias changes the machine for every user of it. The package
   comes from whatever repositories the host is set up with, checked as the host's package manager checks them; we add
   no repository and switch no check off.
-- **What this plan does inside the owner's decision:** the smallest install there is — one package, the host's own
+- **What this plan does inside the owner's decisions:** the smallest install there is — one package, the host's own
   manager by a fixed path, a fixed command from a closed table, no password ever, once for each host, a record
-  written before the call; a notice and a list row for every install; the new words of the question, the help and
-  `SECURITY.md`; and, where the user has no rights, a command for the person and nothing run.
-- **What the planner would add, and puts to the owner as question Q2:** on a host whose "yes" is older than this
-  release, the install waits for one press on the host's row. It is not the default here, because the owner's answer
-  is "install it yourself".
+  written before the call; **only where it is needed** — a host with no Claude Code and no Codex gets no install, so
+  a server that a terminal merely names is logged in to and not changed; a notice and a list row for every install;
+  the new words of the question, the help and `SECURITY.md`; and, where the user has no rights, a command for the
+  person and nothing run.
+- **The planner recommended that an install on an old "yes" waits for one press (Q2). The owner decided "install at
+  once", and this plan follows the owner.**
 
 **What an attacker gains.**
 
@@ -900,9 +959,14 @@ old "yes" is now used by itself, with no new press.**
   left in a shared folder.
 - **Someone on the network.** Between this machine and the VM: ssh, with `StrictHostKeyChecking=yes`, so an unknown or
   changed host key is a refusal. Between the VM and the vendor: TLS, by Claude Code itself.
-- **A program that opens a terminal named `Creds: evil / x`.** A name is not proof. The timer contacts only hosts with a
-  stored "yes", and a "yes" is written only by a press on the question that names the host. `BatchMode=yes` makes a
-  password prompt a refusal.
+- **A program that opens a terminal named `Creds: evil / x`.** A name is not proof — and from this release a name is
+  enough (Q1, finding F1). The round logs in to `evil` unless the person refused that host. What the program gains:
+  it chooses a host and nothing else. If `evil` is a server of its own that has one of the person's public keys, it
+  sees a login from the person's machine and the text of the fixed script; `ForwardAgent=no`, so it gets no agent,
+  and it gets no password: `BatchMode=yes` makes a password prompt a refusal. Its reply can only become text in a
+  list. If the name is one of the person's own servers, the program has made the extension log in there and, where
+  F2's conditions hold, install `jq` — on a host the person did not open. It cannot push a person's "no" out of the
+  store (the cap, § 3).
 - **A hostile reply.** It can only become text in a list, or `unreadable`. The credential-shape rule of the parser is
   a net under the script: if a defect ever printed a token, it would not reach the screen. It is a net, not the
   measure; the measure is that the script has no line that opens a credential file.
@@ -944,9 +1008,12 @@ clock, on every account. The asset at risk is the account itself, and the vendor
 without notice (`hooks/limits.tsx:4-5`). It also puts a credential into our script, so one defect in one line becomes
 a leak. The headers that endpoint needs were not measured.
 
-**Judgement on the consent: the owner's decisions — shared (O3), and used with no press (N2) — with finding F1
-above.** **Judgement on the install: the owner's decision (N5), built as the smallest install there is, with finding
-F2 above; the planner would not start it on an old "yes" without a press (Q2).** **Judgement on persistence: nothing
+**Judgement on the consent: the owner's decisions — shared (O3), used with no press (N2), and a new host allowed by
+itself (Q1) — with finding F1 above. What is left of a gate is the refusal, and this plan makes that one hold: a "no"
+is checked on the one road in, before every call, and no cap, reload or terminal name removes it.** **Judgement on the
+install: the owner's decisions (N5, Q2), built as the smallest install there is and only where an AI CLI is there to
+read, with finding F2 above. The planner would not have started it without a press; the owner decided.**
+**Judgement on persistence: nothing
 of a reading is stored; the shared answers exist today; added are one row of state and the record of installs, which
 holds host names and no secret.** **Judgement on Codex: the passive file read**, because the live read can refresh a
 login that live sessions share, and that case was never measured. **Judgement on agy: no file is opened; the program
@@ -961,11 +1028,16 @@ the percent and a dash for the reset. A Claude Code version that changes the thr
 the version. Each round starts `agy` once on each allowed host; a self-update set off by that start is possible and
 not measured. An install can leave more than `jq`: its dependencies, refreshed package lists, and whatever the
 distribution's hooks do; a package manager that is cut off can leave its database in need of a repair. A host where
-the install was made through one alias has `jq` for every Linux user of that machine.
+the install was made through one alias has `jq` for every Linux user of that machine. Every host of an open `Creds:`
+terminal gets a login every 10 minutes, whether an AI CLI is there or not, until the person refuses it; *Forget* does
+not stop that.
 
 `SECURITY.md`: the section *The extension's one outward ssh call* becomes three kinds of call, and it no longer says
-"read-only" for the third. It gains: the timer, which starts by itself; that the per-host answer now covers the
-session read, the accounts read and the install, and what that widens (F1, F2); the stop button; road (a) and what
+"read-only" for the third. Its sentences *"No ssh child is started before a "yes""* and *"The first read for a host
+asks once"* are rewritten: a host is contacted unless it was refused. It gains: the timer, which starts by itself;
+that a new host is allowed by itself, how that is stored and shown, and that only *Not this host* stops a host; that
+the per-host answer now covers the session read, the accounts read and the install, and what that widens (F1, F2);
+the daily notice; the stop button; road (a) and what
 the VM then calls; the four files Claude Code writes on a read, and what is known about `~/.claude.json`; the start
 of `agy`; the person's activity dropped on the VM; **the install — when, by which fixed commands, with which rights,
 once, what it never does, and the command a person without the rights is shown**; and the residuals above. Its
@@ -976,8 +1048,11 @@ sentence that the remote script leaves nothing on the VM is rewritten to be true
 - **The readings**: in memory, one for each host with an open `Creds:` terminal, a few hundred bytes each, dropped when
   the host's last terminal closes, when its answer is no longer "yes", when the round is stopped, and with the window.
   Bounded by the number of open hosts; today five.
-- **The consent**: no new store. `coai.terminalHosts` stays as it is, capped at 100 rows.
-- **The state of the accounts round**: one `globalState` row, `{ toldUtc, stoppedUtc }`, under 100 bytes. It does not
+- **The consent**: no new store. `coai.terminalHosts` stays capped at 100 rows, and now the round writes rows too: one
+  for each new host of an open `Creds:` terminal. At the cap the oldest automatic row goes, never a person's answer;
+  with no automatic row to drop, a new host is not allowed. So the store cannot grow past its cap, and a flood of
+  terminal names cannot empty it of refusals.
+- **The state of the accounts round**: one `globalState` row, `{ toldUtc, lastAutoNoticeUtc, stoppedUtc }`, under 150 bytes. It does not
   grow.
 - **The record of installs**: one `globalState` list, a row for each host where an install was tried, about 100 bytes
   a row, capped at 100 rows; at the cap the oldest row goes, and that host can then be tried once more. Under 12 KiB.
@@ -1015,7 +1090,7 @@ what is whose, so it is read as complete:
 | Item | Built by | The other plan's part |
 |---|---|---|
 | The pinned ssh call, the session script, *take*, *add*, *Asked* | [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md) (shipped in 0.87.0) | This plan widens the runner so a call needs no session operand. The session read itself does not change |
-| The per-host consent: the store `coai.terminalHosts`, the question `read-remote-session`, *CoAI: hosts read over ssh* | the same plan | **This plan changes its meaning (O3, N2, N5)**: the same answer also allows the accounts read, by a timer with no press, and one install of `jq`. This plan rewrites the question's title and detail, the rows of the hosts list, the help paragraph — with its sentence that the doors only read and change nothing on that machine — and `SECURITY.md`. The store, the code, the buttons and the cap do not change |
+| The per-host consent: the store `coai.terminalHosts`, the question `read-remote-session`, *CoAI: hosts read over ssh* | the same plan | **This plan changes its meaning (O3, N2, N5, Q1, Q2)**: the same answer also allows the accounts read, by a timer with no press, and one install of `jq`; and a host with no answer is allowed by the round itself, for the session read too, so the question is in practice no longer asked first. This plan rewrites the question's title and detail, the rows of the hosts list, the help paragraph — with its sentence that the doors only read and change nothing on that machine — and `SECURITY.md`. The store's key, the question's code and the buttons do not change; a row gains the marker `how`, and the cap gains the rule that an automatic row never pushes out a person's answer |
 | The gauge of coai's own rounds on this machine and on a Team server (`gaugeWords.ts`, the Team server's capture) | [../research/PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) and [PLAN_the_round_counter_tail.md](PLAN_the_round_counter_tail.md) | Nothing. That gauge counts coai's rounds; this list shows a person's accounts on other machines. No shared store, no shared reader |
 | The account and limits line inside Claude Code | `dew_flow_conventions · mods/agent-models` | Nothing is changed there. This plan carries its word rules over and tests them against its cases |
 
@@ -1030,8 +1105,8 @@ latest, its text names this plan beside *The person agrees to each host once*.
 ## Build order
 
 1. **Done 2026-11-19:** the owner answered the open points O1–O7 and the new questions N1–N5. Still owed from this
-   step: the question consultants are asked what is important before the epic split is final. The two open questions
-   Q1 and Q2 go to them first and then to the owner; they do not block the plan round.
+   step: the question consultants are asked what is important before the epic split is final. The owner also
+   answered Q1 and Q2; no question for the owner is open.
 2. **E0 — step 0. Done 2026-11-19** on `ai2-root`: the RESULTS file is written and folded in here.
 3. **Done 2026-11-19:** W1–W5, in one call the owner approved; the results are in the RESULTS file (§ 11) and in § 5.
    Owed: the gate W7 before the E1.S2 spec is final, and the records W6 and W8.
@@ -1085,17 +1160,28 @@ latest, its text names this plan beside *The person agrees to each host once*.
   each host sentence.
 - **The round** (pure, with seams for the clock, the call and the terminals): one call at a time, never two; the start
   moves one host each round; a failed host does not stop the round; usage is asked once for each account in a round and
-  moves to the next host when the first fails; no call to a host with no "yes"; no timer with no terminal; a closed
+  moves to the next host when the first fails; no call to a host with a "no"; no timer with no terminal; a closed
   host is dropped with its reading; the 60 s floor of *Refresh now*; a result that lands after its host closed is dropped;
   three terminals of one host are one read; the first round starts with no press, 30 s after activation.
-- **The consent, the stop button and the notice**: a session "yes" allows the accounts read with no question and no
-  press; a "no" starts no ssh of any kind; *Forget* stops the accounts read and the row then asks again; an answer
-  changed during a round stops the next call; a host with no answer is never contacted and the timer raises no
-  question (a test fails if the ask seam is called from a tick); the stop button clears the timer, drops the readings
-  and holds through a reload, and no read or install follows until it is started again; the one notice is shown once
-  for an installation and names the hosts; the question's title and detail name the accounts read and the install.
+- **The consent, the automatic "yes", the stop button and the notices**: a "yes" allows the accounts read with no
+  question and no press; **a host with no row is given an automatic "yes" by the round** — the row has the marker and
+  the time, it is written before the call is spawned, and the host is read in the same round; a "no" starts no ssh of
+  any kind and is never replaced by an automatic row — not by a round, not by a reload, not by a second terminal of
+  that host; *Forget* removes the row and the next round allows the host again; a "no" given during a round stops
+  the next call; a press of *Read* or *Not this host* on an automatic row writes a person's row with no marker; **the
+  cap**: with 100 rows, a new host drops the oldest automatic row and never a person's row, and with 100 rows of a
+  person the new host is not allowed and not contacted (a test with 100 invented hosts and one "no" holds the "no");
+  the session door on an automatically allowed host reads without asking, and on a host with no row it asks; the
+  timer raises no question (a test fails if the ask seam is called from a tick); the stop button clears the timer,
+  drops the readings and holds through a reload, and while it is stopped no read, no install and no automatic "yes"
+  follows; **the daily notice** is shown at once for the first automatically allowed host, then at most once in 24
+  hours, names exactly the hosts allowed since the last one, has no button that decides anything, and is not shown
+  when there is no such host; the one notice of the first round is shown once for an installation; the question's
+  title and detail name the accounts read and the install.
 - **The install, decided on this side** (pure, with a seam for the call and for the store): no install call without a
-  `no-jq` reply, without a "yes", or while the round is stopped; the row is `started` in the store BEFORE the call
+  `no-jq` reply, to a refused host, to a host where neither Claude Code nor Codex was found, or while the round is
+  stopped; an install call with no press on a "yes" of any kind — a person's, one older than the release, an
+  automatic one; the row is `started` in the store BEFORE the call
   seam is entered (a test fails on the other order); with any row for the host, a timer never calls the install
   again — after `installed`, after `no-rights`, after `failed`, after a row left at `started`; a press on the row
   calls it once; after `installed` the host is read once more in the same round; the cap of 100 rows.
@@ -1128,15 +1214,15 @@ latest, its text names this plan beside *The person agrees to each host once*.
 | # | Check |
 |---|---|
 | R1 | The icon sits beside *Ask other AI* in the terminal panel's title bar and opens the list. With no `Creds:` terminal the list says so |
-| R2 | After the update, with no press: the one notice appears and names the allowed hosts; about 30 s after the start the first round reads each allowed host once (the VM's ssh log), also when two terminals name one host. A host that was never asked is not contacted and says *not asked yet*; choosing it raises the question with its new words. *Not this host*: no ssh to it of any kind |
+| R2 | After the update, with no press: the one notice appears and names the hosts with an earlier "yes"; about 30 s after the start the first round reads each host that is not refused once (the VM's ssh log), also when two terminals name one host. **A host that was never asked is read too, with no question**; the list and *CoAI: hosts read over ssh* show it as *allowed automatically* with the day; the daily notice names it and says where to forbid it; a day later no second notice comes for the same host. *Not this host*: no ssh to it of any kind, also after a reload and after its terminal is opened again |
 | R3 | A round runs, one host after the other. The Claude numbers equal the built-in `/usage` on that VM, and the mod line within one point — the same dashes. The Antigravity group shows the version `agy --version` prints on that VM. Every row can be read at the owner's window width |
 | R4 | Two hosts that share an account are one group that names both hosts, and its usage was read once in the round |
 | R5 | A host that cannot be reached says so in its own sentence, and the other hosts are still read |
 | R6 | All `Creds:` terminals closed: no further ssh login on the VM (its ssh log). One opened again: a round follows. *Stop the accounts round*: no further login either, also after a reload; started again from the list, a round follows |
 | R7 | Left open for an hour: rounds about 10 minutes apart. Two parts. **(a) A record, on a Linux user with NO live Claude Code session** (it is W6 on the real build): the time of `~/.claude.json` and the number of files in `~/.claude/backups/` before and after each usage read; no new session file; the plugin store still holds the same number of files; the time and size of the agy program and of its folder; the processes of that user left after a read. The owner accepted the writes (N1), so this part is written down and stops nothing — but for a leftover process or a started hook or MCP server, which is W7's condition. **(b) A condition, on a host WITH live sessions** (as `ai2-root` has): the live Claude, Codex and agy sessions go on undisturbed — no session asks to sign in again, none loses its settings or MCP servers, none stops or restarts. A disturbed session stops the usage read (or the start of agy, if that is the cause) until the owner decides |
-| R8 | *Take the question* in a `Creds:` terminal still works (the widened runner). *CoAI: hosts read over ssh* shows the new words; *Forget* there stops the accounts read of that host |
+| R8 | *Take the question* in a `Creds:` terminal still works (the widened runner); on a host the round allowed by itself it reads without asking. *CoAI: hosts read over ssh* shows the new words; *Not this host* there stops the accounts read of that host; *Forget* there does not — the host is allowed again in the next round, and the list says so |
 | R9 | The plan's M7: the time of one whole read from Windows with the pinned ssh options, twice, the time of `agy --version` in it, and the size of the reply; a host of an account with no 5-hour window shows `5h —` |
-| R10 | **The install, on real hosts.** (a) A VM or container without `jq`, reached as root or with `sudo` without a password: within the first round `jq` is installed once; the notice and the row *installed jq on this host* appear; the next read shows the accounts; the VM's package log shows one install of `jq` and nothing else installed, upgraded or removed; no service was restarted; no second install call in the next rounds (the ssh log). (b) A Linux user with no rights: nothing is installed; the row shows the exact command for that VM's manager; the copy button gives that string; after the owner runs it there, the next round reads the accounts. (c) After a reload in each state: no new install call |
+| R10 | **The install, on real hosts.** (a) A VM or container without `jq`, reached as root or with `sudo` without a password: within the first round `jq` is installed once; the notice and the row *installed jq on this host* appear; the next read shows the accounts; the VM's package log shows one install of `jq` and nothing else installed, upgraded or removed; no service was restarted; no second install call in the next rounds (the ssh log). (b) A Linux user with no rights: nothing is installed; the row shows the exact command for that VM's manager; the copy button gives that string; after the owner runs it there, the next round reads the accounts. (c) After a reload in each state: no new install call. (d) A host with no `jq`, no Claude Code and no Codex: it is logged in to and nothing is installed. (e) The install on a host that was allowed by itself, with no press at any point |
 
 ## Definition of Done
 
@@ -1150,11 +1236,13 @@ latest, its text names this plan beside *The person agrees to each host once*.
       version.
 - [ ] Usage is shown as "left" with the mod's words and its dash; a missing value is never a zero; usage that was not
       read says why.
-- [ ] Every host with nothing to show says why in its own sentence: not asked, turned off, never read, failed, or `jq`
-      missing — with the exact command where the ssh user may not install it.
+- [ ] Every host says how it stands in its own sentence: turned off, allowed automatically and when, never read,
+      failed, or `jq` missing — with the exact command where the ssh user may not install it.
 - [ ] A round runs by itself from the start of the extension, every 10 minutes, one host at a time, one read for each
-      distinct host with the pinned options, only for hosts whose shared answer is "yes"; it stops with the last
-      `Creds:` terminal and with the stop button; a failed host does not stop it; the timer asks nobody.
+      distinct host with the pinned options, for every host that is not refused; a host with no answer is allowed by
+      itself, stored with its marker, and named in a notice at most once a day; a "no" is never overridden, by
+      anything; it stops with the last `Creds:` terminal and with the stop button; a failed host does not stop it;
+      the timer asks nobody.
 - [ ] The accounts script is fixed, its hash is in the spec and in a test, and it writes nothing on the VM. No secret
       is in an argument, the environment, the reply or a log; the person's activity is not in the reply; of a version
       command only the version is — shown by the marker tests.
@@ -1163,8 +1251,9 @@ latest, its text names this plan beside *The person agrees to each host once*.
       list and in a notice; a user without the rights is shown a fixed command and nothing is run. Seen in the
       container run and in R10.
 - [ ] The Claude usage road is road (a), with the pinned command of § 4. Road (b) is not in the code.
-- [ ] Nothing of a reading is persisted. The consent is the session reader's own answer; its question, the hosts list,
-      the help and `SECURITY.md` say that it covers the accounts read and the install; a "no" or a *Forget* stops both.
+- [ ] Nothing of a reading is persisted. The consent is the session reader's own store; its question, the hosts list,
+      the help and `SECURITY.md` say that a "yes" covers the accounts read and the install, that a new host is allowed
+      by itself, and that only *Not this host* stops a host.
 - [ ] The session reader behaves as before, but for the words of its question and of its hosts list (its tests green, R8).
 - [ ] Docs with the change: the help in five languages, with the sentence "they only read" made true again;
       `research/module_extension.md`, `research/module_tests.md`, `research/architecture.md` (the new edges: a VM to a
@@ -1198,13 +1287,13 @@ planner's recommendation and the owner's answer. Where the two differ, the plan 
 | N4 | **Antigravity shows no version**, because the script does not start `agy`: a start was not measured, and agy updated itself on a start on another machine. Is "installed, no usage, account not read" enough? | **Yes.** A version is not worth a start of that program on every host every 10 minutes | **No: "with the version."** `agy --version` runs in every round, with a limit, an empty stdin and the folder `/`. The risk is recorded in Security and Growth, and W8 measures a start. (The question's words "on a start" said more than the source: it records that agy updated itself, not what set it off) |
 | N5 | **A host without `jq`** shows *`jq` is not installed on this host* for Claude and Codex, and we install nothing. Is that accepted, or should the script cut JSON with `sed` where `jq` is missing? | **Accepted, `jq` only.** Naming a field is safe by construction; a `sed` pattern next to private text is where a leak with no error starts | **Neither: "install what is needed yourself, and that is all"; "and only if there are no rights, write to the person: run this command".** `jq` stays the only reader, and it is installed where it is missing (§ 4, finding F2). Without the rights, the list shows the command and runs nothing |
 
-**Open questions for the owner — two, and neither blocks the plan round.** Each goes to the question consultants
-first. This text takes the default written beside each; another answer after the round is a change.
+**Q1 and Q2 are answered (2026-11-19). No question for the owner is open.** They came from N2 and from finding F2.
+In both the owner decided against the planner's recommendation, and the plan follows the owner.
 
-| # | The question | The default in this text | The planner's recommendation |
+| # | The question | The planner recommended | The owner answered |
 |---|---|---|---|
-| Q1 | **A host with no answer yet.** Should the round ask once, by a modal, when it first meets a host of an open `Creds:` terminal that has no answer? | **No.** The timer never raises a question. The list shows the host as *not asked yet*, and a press on its row asks | **Keep the default.** A modal that a terminal's NAME can set off, with no press, is what the terminal-door plan avoided: any program can open a terminal called `Creds: x / y`. And with five hosts it is five modals at the start |
-| Q2 | **An install on an old "yes"** (finding F2). On a host whose "yes" was given before this release — to *"Read the Claude session…"* — should the install of `jq` wait for one press on that host's row? The extension can tell: such a row's `askedUtc` is older than the day the one notice was shown | **No: it installs by itself**, as N5 says, on every allowed host where the ssh user may | **Yes, wait for the press on an old "yes".** For the owner that is at most one press for each host without `jq`, once. For another person it is the difference between software installed as root on their server after an update, and a row that offers it. A "yes" given to the new words installs by itself either way |
+| Q1 | **A host with no answer yet.** Should the round ask once, by a modal, when it first meets a host of an open `Creds:` terminal that has no answer? The default then was: no question, and the host is not read until a press on its row asks | **Keep that default.** A modal that a terminal's NAME can set off, with no press, is what the terminal-door plan avoided: any program can open a terminal called `Creds: x / y`. And with five hosts it is five modals at the start | **Neither: "new hosts are allowed by themselves."** No modal and no press: the round allows a new host and reads it. Once a day a notice with no question names the hosts allowed that way and says where to forbid them. A "no" is never overridden (§ 3, finding F1) |
+| Q2 | **An install on an old "yes"** (finding F2). On a host whose "yes" was given before this release — to *"Read the Claude session…"* — should the install of `jq` wait for one press on that host's row? | **Yes, wait for the press on an old "yes".** For the owner that is at most one press for each host without `jq`, once. For another person it is the difference between software installed as root on their server after an update, and a row that offers it | **No: "install at once."** The install runs by itself on every allowed host where it is needed and the ssh user may — an old "yes" and an automatic one included (§ 4, finding F2) |
 
 ## Epics
 
@@ -1217,8 +1306,9 @@ quota: Q = ⌈2·E/5⌉ = ⌈2·3/5⌉ = 2.
 *The split is a draft until the question consultants were asked what is important* (`subagent-models.md`, pipeline
 step 2). The areas Fable names as cornerstones: **(a)** what the script touches on the VM and what it prints — the only
 place a secret or the person's activity can leak, and a leak gives no error; **(b)** the reply's frame and the parser —
-the only place wrong or hostile data can arrive and look right; **(c)** who is contacted and when — the shared answer
-read again before every call, the stop button, and a timer that never asks; **(d)** absent, signed out, no usage
+the only place wrong or hostile data can arrive and look right; **(c)** who is contacted and when — a refused host
+is never contacted and never allowed again by anything, the answer is read again before every call, the cap never
+trades a person's answer for an automatic one, the stop button, and a timer that never asks; **(d)** absent, signed out, no usage
 source, skipped, failed and unreadable are different results, and a missing number is never a zero; **(e)** the one
 place the extension changes a VM — what the install runs as root, that it runs once, and that the command a person is
 shown is never made from VM text. A mistake there is made on somebody's server, with root, and cannot be taken back
@@ -1271,8 +1361,10 @@ Cornerstones: 2 of 2 — E1.S2, E1.S4
     the parser's rules with the reset parse, the scenarios (the test plan's script, version, marker, hash, parser,
     usage-line and Codex rows), the results of W1–W8, and the security judgement on the exact text — outside the
     quota, by the security row. Sonnet codes; Opus reviews.
-  - **E1.S3 — the shared consent says what it covers.** The question's new title and detail, the rows of the hosts
-    list, and the tests that hold a "no" and a *Forget* to the session read, the accounts read and the install.
+  - **E1.S3 — the shared store: what a "yes" covers, the automatic "yes", and the refusal that holds.** The
+    question's new title and detail; the row's marker `how` and the three texts of the hosts list; the pure rule that
+    allows a host with no row; the cap that never drops a person's answer; and the tests that hold a "no" against a
+    round, a reload, a second terminal and a full store.
   - **E1.S4 — the install of `jq` (CORNERSTONE, `model: fable`).** Fable writes the spec before any code: the exact
     script text and its sha256, the four fixed paths, the rights check, the one command for each manager with its
     exact options, the one refresh of the lists, the limits, the reply's grammar, the closed table of shown commands,
@@ -1296,8 +1388,8 @@ Cornerstones: 2 of 2 — E1.S2, E1.S4
   test plan are green; the Definition of Done's items hold; the PR is merged; R1–R10 are recorded on the pre-release
   VSIX of the merged head; `review_feature` ran from the merged head and every finding is resolved; the release is cut
   and verified; the plan is promoted.
-- **Cornerstone areas.** (c) the timer never asks, contacts only allowed hosts, and does nothing while the round is
-  stopped; (e) the install is called once and its record is written first; (d) the sentences. No cornerstone story is
+- **Cornerstone areas.** (c) the timer never asks, never contacts a refused host, allows a new host only by the one
+  rule of E1.S3, and does nothing while the round is stopped; (e) the install is called once and its record is written first; (d) the sentences. No cornerstone story is
   recommended here: the rules are pure, small and fixed by this plan, and both quota places are used in E1.
 - **Stories.**
   - **E2.S1 — the round.** The pure planner, its table in memory, the stop state and the install step.
