@@ -1,24 +1,37 @@
 # PLAN — the chat opens from a terminal
 
-> Status: **E3 coded and merged (#1015, b3abb791, 2026-11-17; coai code gate `proceed`); R8, R10 and R11 passed on VSIX 0.87.901 (2026-11-17); `review_feature` over E1–E3 `proceed` (2026-11-17, one Minor finding accepted as change 3.1: the title fallback no longer reads one session of a cut scan by itself); next: its fix in its own PR and a new pre-release VSIX, then the extension release 0.88.0. Epoch 3 open (one change, 3.1), approved by the owner 2026-11-16 (narrowed: the skip-list *Add* only for the user list; a workspace or folder list gets one notice with no button; any other value nothing), after the re-review of change 2.2 (review_feature moves before E3's release tag); epoch 2 was approved by the owner 2026-11-11 (narrowed: the terminal door takes the clipboard, not a VS Code
-> selection; `autoSend` kept as on the other doors). E1 coded on `feat/chat-from-a-terminal` (S1–S3; code gate `proceed`
-> twice, 8 of 8 reviewers); the E1.S1 epoch-2 revision is the fix forward in PR #971, then a new pre-release VSIX for R3. E1 merged
-> (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9 passed on VSIX 0.85.902, and released as extension
-> 0.86.0 (2026-11-11). E2 started 2026-11-11: stories written by Opus on `feat/chat-from-a-terminal-e2`, plan gate `proceed`,
-> E2.S1–S4 coded and tested, merged (#982, e060d77e; coai code gate `proceed`); R6 and R7 passed on VSIX 0.86.901 (2026-11-12), released from release PR #986 as extension 0.87.0; change 2.1 recorded (the ssh call pins `StrictHostKeyChecking=yes`); change 2.2 stopped the plan before any E3 code. E3
-> stories written by Opus 2026-11-12 on `feat/chat-from-a-terminal-e3`; E3 code starts with epoch 3. The
-> re-review's revision of the whole plan is written (2026-11-13, the baseline of epoch 3) and sorted by an Opus judge (each finished item fits and is kept). The E3
-> stories passed the coai plan gate on 2a2f21fe on 2026-11-13 (round 1 `proceed`, 0 findings, both reviewers, session
-> 167eb40d). Epoch 1's plan gate: round 1 `proceed` (codex, antigravity;
-> 6 findings: 4 accepted and folded into this approved text, 2 rejected with reasons).** Scope: `src_vs_code`
+> Status: **IMPLEMENTED, 2026-11-18** — three epics, three extension releases. E1 merged (#971, 0851f074) after R1, R2, R3 (second run), R4, R5 and R9
+> passed on VSIX 0.85.902, and released as extension 0.86.0 on 2026-11-11. E2 merged (#982, e060d77e) after R6 and R7 passed on VSIX 0.86.901, and
+> released (release PR #986) as extension 0.87.0 on 2026-11-12. E3 merged (#1015, b3abb791, 2026-11-17) after R8, R10 and R11 passed on VSIX 0.87.901;
+> `review_feature` over E1–E3 gave `proceed` on 2026-11-17 with one Minor finding, accepted as change 3.1 and fixed in #1019 (b7173359); the owner's smoke
+> on VSIX 0.87.902 (b7173359) passed 2026-11-18; released as extension 0.88.0 on 2026-11-18 (release PR #1013, squash 5b9ab66c; tag
+> `extension-v0.88.0` cut by a release-please dispatch; release run 44360357872 green; "Publish to the Marketplace" 17:38:57 UTC; vsix sha256
+> `e47dc77fbaf10580d1b7705b093e5fa09384e858e2500f015be3aed25282bc48`, opened: version 0.88.0, the commands `askFromTerminal`, `takeFromTerminal`,
+> `addFromTerminal` and `goToFromTerminal`, Ctrl+Alt+G under `terminalFocus` and the road back's Ctrl+Alt+G with `!terminalFocus`).
+>
+> **Deviations from the plan as approved** (each is an entry in `## Plan changes`). (1) Change 1.1: each epic's real-window checks run on a pre-release
+> VSIX before its tag. (2) Change 1.2: the terminal door takes the text from the clipboard and runs no copy command; the second change stopped the plan,
+> and the owner approved a narrowed epoch 2 on 2026-11-11. (3) Change 2.1: the ssh call pins `StrictHostKeyChecking=yes`; `ControlPath=none` was not taken.
+> (4) Change 2.2: `review_feature` runs after E3's merge and before E3's release tag; it stopped the plan before any E3 code, and the owner approved a
+> narrowed epoch 3 on 2026-11-16 (the skip-list *Add* only for the user list; a workspace or folder list gets one notice with no button; any other value
+> nothing). (5) Change 3.1: the title fallback asks — a list of one, whose placeholder says not every session was read — when its scan did not read every
+> session. (6) **Known issue, shipped and disclosed in the 0.88.0 changelog:** the host scenario S3-H1 (skip-list *Add*) flakes in CI's
+> `extension · a real editor` job — the ids are written but the answer is not remembered ("the write was not read back (waited 15s)"); likely VS Code's
+> `inspect()` still shows the old value right after `update()`. It failed on 550ec09d twice (run 44157675340) and on the release PR head ec52e27f once
+> (run 44350882163, passed on rerun); it passed on 2b7847fe, c72f49c7 and b7173359. The consultants (consult 593e4bab) ruled that a bounded wait would be a
+> plan change, so 0.88.0 shipped as it was, and the follow-up is outside this plan:
+> [PLAN_the_skip_list_add_reads_back_after_the_write.md](../todo/PLAN_the_skip_list_add_reads_back_after_the_write.md). Not reported by the owner
+> (none is a release condition): M-O2…M-O7 of the E2.S2 spec and the look of a long prompt in *Asked* (R7), and three details of R8 (who brought the
+> terminals back, whether a name appeared twice, the full-restart run). Epoch 1's plan gate: round 1 `proceed` (codex, antigravity; 6 findings: 4 accepted
+> and folded into this approved text, 2 rejected with reasons). Scope: `src_vs_code`
 > only — a terminal door for *Chat with other AIs*, a `terminal` conversation source, and (stage 2) a
 > read-only ssh reader for a Claude Code session that runs inside tmux on another machine. No change to
 > `src_mcp`, `src_server` or CredsForDevs. Three epics; one extension release per epic.
 
-Related: [../research/PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md) (the feature),
-[../research/PLAN_the_chat_opens_anywhere.md](../research/PLAN_the_chat_opens_anywhere.md) (the file door and
-reading Claude's session files), [../research/PLAN_a_conversation_survives_a_reload.md](../research/PLAN_a_conversation_survives_a_reload.md),
-[../research/PLAN_the_chat_goes_back_where_it_came_from.md](../research/PLAN_the_chat_goes_back_where_it_came_from.md).
+Related: [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md) (the feature),
+[PLAN_the_chat_opens_anywhere.md](PLAN_the_chat_opens_anywhere.md) (the file door and
+reading Claude's session files), [PLAN_a_conversation_survives_a_reload.md](PLAN_a_conversation_survives_a_reload.md),
+[PLAN_the_chat_goes_back_where_it_came_from.md](PLAN_the_chat_goes_back_where_it_came_from.md).
 
 ## Plan changes
 
@@ -534,24 +547,25 @@ what stage 3 touches and the text above did not name:
 
 ## Definition of Done
 
-- [ ] From any terminal, the title-bar button and Ctrl+Alt+A open a coai chat with the text the person copied,
+- [x] From any terminal, the title-bar button and Ctrl+Alt+A open a coai chat with the text the person copied,
       named after the terminal; with an empty or whitespace-only clipboard the owner's sentence and nothing sent; the terminal door
       synthesises no keystroke and runs no copy command, and leaves the clipboard as it was.
-- [ ] A Claude tab can never take a terminal's conversation, and the old chords never fire in a terminal.
-- [ ] A terminal conversation is saved with a `terminal` source, has no agent mode, and *back to source*
+- [x] A Claude tab can never take a terminal's conversation, and the old chords never fire in a terminal.
+- [x] A terminal conversation is saved with a `terminal` source, has no agent mode, and *back to source*
       brings its terminal forward or says why it cannot.
-- [ ] For a `Creds: <host> / <session>` terminal, *take the question*, *add the question* and *Asked* read the
+- [x] For a `Creds: <host> / <session>` terminal, *take the question*, *add the question* and *Asked* read the
       remote session read-only over ssh, after the person agreed to that host once — ONE call on the registry
       path, by the exact session id; the title fallback (at most three calls) gives a list on ambiguity, never a
       guess.
-- [ ] After a reload a `Creds:` conversation re-attaches only when unambiguous, and a bind that later turns
+- [x] After a reload a `Creds:` conversation re-attaches only when unambiguous, and a bind that later turns
       ambiguous before its first use is undone; go-to works from a terminal; a user-level skip list that hides the
       default is offered back with the person's consent, and a workspace or folder list that hides it is named once
       and never written.
-- [ ] Every real-window check R1–R11 is recorded here with its result.
-- [ ] Three extension releases cut and verified (tag pushed alone, its run observed); `review_feature` run over the
+- [x] Every real-window check R1–R11 is recorded here with its result.
+- [x] Three extension releases cut and verified (tag pushed alone, its run observed); `review_feature` run over the
       three epics after E3's merge and its R8, R10 and R11, and before E3's release tag, every finding resolved;
       the plan promoted with its deviations.
+      Recorded 2026-11-18: 0.86.0 and 0.87.0 as in the status; for 0.88.0 the tag `extension-v0.88.0` was cut by a release-please dispatch (run 44360357872 green, Marketplace publish 17:38:57 UTC), not pushed by hand.
 
 ## Epics
 

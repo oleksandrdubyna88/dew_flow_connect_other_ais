@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { bodyOf, sourceFiles, sourceOf } from './sourceReading';
 
 /**
- * The re-attach of a terminal's conversation, as it is wired (todo/PLAN_the_chat_opens_from_a_terminal_E3.md, S1).
+ * The re-attach of a terminal's conversation, as it is wired (research/PLAN_the_chat_opens_from_a_terminal_E3.md, S1).
  *
  * <p>Host code, where no seam reaches: `terminalHost.ts`, `extension.ts`, `chatRestorePanel.ts` and `chatCommand.ts` import
  * `vscode`, so their function bodies cannot be called here. These tests read them. The decisions themselves are

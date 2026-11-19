@@ -7,7 +7,7 @@ import { SKIP_SHELL_IDS } from '../skipShell';
 import { bodyOf, sourceOf } from './sourceReading';
 
 /**
- * The terminal door, as the manifest declares it and as the command is written (todo/PLAN_the_chat_opens_from_a_terminal_E1.md, S3).
+ * The terminal door, as the manifest declares it and as the command is written (research/PLAN_the_chat_opens_from_a_terminal_E1.md, S3).
  *
  * <p>Two halves, and neither runs the door. The manifest half parses `package.json` and asks structural questions of it: it
  * is a data file, so nothing here reads page source. The source half reads `chatCommand.ts`, a host module whose function

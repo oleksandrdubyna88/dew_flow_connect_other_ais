@@ -1,8 +1,9 @@
 # PLAN — E2.S2 spec: the remote reader's contract — the ssh argv, the stdin script and the typed result (CORNERSTONE)
 
-> Status: **coded and tested on `feat/chat-from-a-terminal-e2` (PR #982), 2026-11-11 — written by Fable before its code;
+> Status: **IMPLEMENTED, 2026-11-12 — promoted with its parent.** Coded and tested on `feat/chat-from-a-terminal-e2` (PR #982), 2026-11-11 — written by Fable before its code;
 > reviewed by Opus 2026-11-11 (gate G6), its findings fixed in this text; change 2.1 decided (§ S2.7): `StrictHostKeyChecking=yes`
-> taken, `ControlPath=none` not taken. Owed before the tag: the owner's R6, R7 and M-O1…M-O7.**
+> taken, `ControlPath=none` not taken. Merged (#982, e060d77e); the owner's R6 and R7 passed on VSIX 0.86.901 (2026-11-12); released as extension 0.87.0
+> (release PR #986) on 2026-11-12. M-O1 was seen in the R6 pass; M-O2…M-O7 were not reported.
 > Cornerstone spec of story E2.S2 of [PLAN_the_chat_opens_from_a_terminal_E2.md](PLAN_the_chat_opens_from_a_terminal_E2.md)
 > (parent [PLAN_the_chat_opens_from_a_terminal.md](PLAN_the_chat_opens_from_a_terminal.md), § *Stage 2*, § *Security*, ledger
 > entry 1.1). It holds the security judgement on the ssh edge (gate G2 + G4, § S2.6), which must stand before any S2 code.
@@ -1273,12 +1274,12 @@ node scripts/count-notifications.mjs --write                   # expect NO chang
 - [x] The security judgement (§ S2.6) and the proposal of § S2.7 were read by the caller BEFORE any S2 code; 2.1 is
       recorded in the parent (`StrictHostKeyChecking=yes` taken; `ControlPath=none` not taken, residual 9), and this spec
       and its brief say so.
-- [ ] This spec was reviewed by Opus (gate G6) and "Changes to § 4" is in the stories document and in the S3 and S4
+- [x] This spec was reviewed by Opus (gate G6) and "Changes to § 4" is in the stories document and in the S3 and S4
       briefs, in one commit.
 - [ ] S2-T1…T44 green; each first RED and each break-it B1…B34 observed with its message; all in the summary.
 - [ ] `npm run compile` exit 0; the whole suite green on CI with the `sh -s`, `sh -c` and `ssh -G` tests RUN (S2-T44);
       `npm run lint` green; no suppression count grew.
 - [ ] The sha256 of `REMOTE_SCRIPT` is the one in § S2.3 (or the spec holds the new one, with the reason).
-- [ ] `research/module_extension.md`, `research/module_tests.md` and `research/architecture.md` updated; M-O1…M-O7 named
+- [x] `research/module_extension.md`, `research/module_tests.md` and `research/architecture.md` updated; M-O1…M-O7 named
       as not observed; R6 and R7 carry them when the owner runs them.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
