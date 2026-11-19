@@ -105,8 +105,8 @@ test('the CLAUDE.md snippet names all eight tools under the coai namespace', () 
 
 test('the snippet teaches the document gate, and its own shape', () => {
   // A tool an AI has not been told about is a tool nobody calls, which is the whole reason the
-  // pasted block exists. The gate half could not carry it — it is one of the 24 frozen rule bodies
-  // — so the document half is a second rule file, and this is what proves it actually travels.
+  // pasted block exists. The gate half could not carry it when it was written — it was one of the 24
+  // frozen rule bodies (the freeze ended 2026-09-15; the files stayed separate) — so the document half is a second rule file, and this is what proves it actually travels.
   const snippet = claudeSnippet();
 
   assert.ok(snippet.includes('Reviewing a DOCUMENT rather than a change'), 'the heading');

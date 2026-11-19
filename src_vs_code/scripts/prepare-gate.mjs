@@ -9,20 +9,22 @@ export const SOURCE = '.agents/conventions/common/coai-review-gate.md';
 /**
  * The DOCUMENT gate, which is a second file rather than a section of the first.
  *
- * <p>`coai-review-gate.md` is one of the 24 rule bodies `tools/rules.test.mjs` hashes against
+ * <p>`coai-review-gate.md` was one of the 24 rule bodies `tools/rules.test.mjs` hashed against
  * baseline `5d6984eb` as evidence that the migration lost nothing, so a section added to it
- * turns that suite red. The conventions repository has already settled what to do — a new file
- * that names the frozen rule it extends — and this is the third time it has been done.</p>
+ * turned that suite red. The conventions repository settled what to do — a new file that names the
+ * rule it extends — and this is the third time it was done. The freeze ended on 2026-09-15 (conventions
+ * `747887d`) and the halves stay separate files, each with its own marker; merging some back is the
+ * conventions' manuals plan's step 4.</p>
  */
 export const DOCUMENT_SOURCE = '.agents/conventions/common/coai-document-gate.md';
 
 /**
  * The CALLER rule — say which model you are when you open the gate.
  *
- * <p>A third file for the same reason as the second: `coai-review-gate.md` is frozen against the
+ * <p>A third file for the same reason as the second: `coai-review-gate.md` was frozen against the
  * conventions migration baseline, so the sentence asking an AI to declare its own model could not
- * be added to step 1 where it belongs. The rule file says so, and says where it goes when the
- * inventory retires.</p>
+ * be added to step 1 where it belonged. The rule file said so, and said where it would go when the
+ * inventory retired.</p>
  */
 export const CALLER_SOURCE = '.agents/conventions/common/coai-caller-model.md';
 export const OUTPUT = 'src_vs_code/src/generated/gateRule.ts';

@@ -15,8 +15,8 @@ import { ARTEFACT_VERSION, copiedMessage } from '../claudeSnippet';
  * what you took with what you already had.</p>
  *
  * <p><b>Against `ARTEFACT_VERSION`, not `SNIPPET_VERSION` — the same defect came back through this
- * door.</b> The label was pinned to the gate rule's own marker, which is frozen at 5 by the
- * conventions migration baseline and therefore cannot move. So the menu went on saying `(v5)` across
+ * door.</b> The label was pinned to the gate rule's own marker, which the conventions migration
+ * baseline held at 5 (until 2026-09-15) and which therefore did not move. So the menu went on saying `(v5)` across
  * three changes to what the clipboard carries, and the test was green the whole time: it was
  * comparing the label with a number that had no way of changing. The label names the version of the
  * ARTEFACT the click will give you, and this is what makes that checkable.</p>

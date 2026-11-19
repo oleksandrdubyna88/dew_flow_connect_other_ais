@@ -37,20 +37,22 @@ import { QUESTION_RULE } from './generated/questionRule';
  * carry no marker and report `unversioned`; if anybody ever hand-marks one, v1 is the honest number
  * for it.</p>
  */
-export const SNIPPET_VERSION = 5;
+export const SNIPPET_VERSION = 6;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '9833b04294fc083a';
+export const SNIPPET_BODY_SHA = 'a94ba2fef37a8826';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
  *
  * <p><b>A different thing from `SNIPPET_VERSION`, which is why the two disagree — and drift further
  * apart with every change to the paste — and must not be “tidied” into agreement.</b> That one is the
- * marker inside `coai-review-gate.md` and is frozen at 5 by the conventions migration baseline; this
- * one numbers the paste as a whole — gate, document, feature, caller, consultant and question together — and is
- * free to move when any of them does. (A docblock here once said they "differ by one", which was true for a
- * day and false from the next change on; the gap is not a fact about either number.)</p>
+ * marker inside `coai-review-gate.md` and moves only when the gate rule's text does (it was held at 5
+ * while the conventions migration baseline froze that file, from the migration to 2026-09-15, and went
+ * to 6 with the words for policy `auto`); this one numbers the paste as a whole — gate, document, feature,
+ * caller, consultant and question together — and moves when any of them does. (A docblock here once said
+ * they "differ by one", which was true for a day and false from the next change on; the gap is not a fact
+ * about either number.)</p>
  *
  * <p><b>Why it exists.</b> The ⋯ menu said `(v5)` from the day the label was introduced, through three
  * changes to what the clipboard carries: the document half, the caller half, and the consultant half.
@@ -65,7 +67,7 @@ export const SNIPPET_BODY_SHA = '9833b04294fc083a';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 18;
+export const ARTEFACT_VERSION = 19;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -102,7 +104,7 @@ export const SNIPPET_MARKER = 'Multi-model review gate (ConnectOtherAIs)';
  * <p><b>`current` is the ARTEFACT's version in every state, and a diverged paste is described by
  * its HALVES rather than by a number of its own.</b> A pasted copy carries one marker per half and
  * nothing that numbers the whole, so any single number attributed to it is invented. The panel used
- * to print the gate half's frozen 5 as though it were the paste's version, which is how a
+ * to print the gate half's own number as though it were the paste's version, which is how a
  * repository that mounts the gate rule came to be told "is v5; v5 is current".</p>
  */
 export type SnippetStatus =
@@ -115,26 +117,28 @@ export type SnippetStatus =
 /**
  * The DOCUMENT half's own marker.
  *
- * <p><b>A second version rather than a bump of the first, and not by choice.</b>
- * `SNIPPET_VERSION` is the number written inside `coai-review-gate.md`, and that file is one of
- * the 24 rule bodies the conventions repository hashes against its migration baseline — editing
- * it turns that suite red, which is why the document flow is a second rule file at all. So the
- * gate half is still v5 and always will be until the inventory retires; what moves is this.</p>
+ * <p><b>A second version rather than a bump of the first, and it began as no choice.</b>
+ * `SNIPPET_VERSION` is the number written inside `coai-review-gate.md`, and that file was one of
+ * the 24 rule bodies the conventions repository hashed against its migration baseline — editing
+ * it turned that suite red, which is why the document flow is a second rule file at all. The freeze
+ * ended on 2026-09-15 (conventions `747887d`) and the halves stay separate files, each with its own
+ * marker; merging some back is the conventions' manuals plan's step 4. Each marker moves with its own
+ * rule: this one with the document rule (v4 with the words for policy `auto`, conventions `25d551b8`).</p>
  *
  * <p>It is not cosmetic. A copy pasted before the document gate existed carries
- * `coai-snippet v5` and no document marker, and the AI obeying it will never call
+ * a gate marker and no document marker, and the AI obeying it will never call
  * `review_document` — the same defect the first version marker was introduced for, one rule
  * file over.</p>
  */
-export const DOCUMENT_VERSION = 3;
+export const DOCUMENT_VERSION = 4;
 
 /**
  * The CALLER half's version — say which model you are when you open the gate.
  *
  * <p><b>A third number rather than a bump of either other one, and for the same reason there is a
  * second.</b> The sentence asking an AI to declare its own model belongs in step 1 of
- * `coai-review-gate.md`, and that file is frozen against the conventions migration baseline. So it
- * is a third rule file with a marker of its own, and a marker of its own is what lets a paste made
+ * `coai-review-gate.md`, and that file was then frozen against the conventions migration baseline (the
+ * freeze ended 2026-09-15; the file stayed separate). So it is a third rule file with a marker of its own, and a marker of its own is what lets a paste made
  * before it be recognised — the AI obeying such a paste never sends `callerModel`, and every round
  * it drives is recorded as stating no model while the gate is perfectly capable of recording one.
  * That is the same defect the first version marker was introduced for, two rule files over.</p>
@@ -167,12 +171,13 @@ export const CONSULTANT_VERSION = 4;
  * tool of one server is not shared. Conventions #58 reversed it as 2026-09-25 did for the consultant:
  * v3 is <c>.agents/conventions/common/coai-feature-gate.md</c>, and it says what the server does — one
  * round is the budget, a second only on a reviewer failure, a `blocking` finding or the person's
- * request — where v2 still promised a reopen the server refuses.</p>
+ * request — where v2 still promised a reopen the server refuses. v4 (conventions #182) says what the feature
+ * gate does under policy `auto`: an unreviewed round is `not_reviewed`, and only the first two grounds remain.</p>
  *
  * <p>Not cosmetic: a copy pasted before it carries no feature marker, and the AI obeying it never calls
  * `review_feature` — the whole feature is then released having only ever been reviewed in slices.</p>
  */
-export const FEATURE_VERSION = 3;
+export const FEATURE_VERSION = 4;
 
 /**
  * The QUESTION half's version — ask the consultants before the person.
@@ -181,12 +186,13 @@ export const FEATURE_VERSION = 3;
  * questions and the first two batches after a plan's `proceed` reach the person directly; the rule sets
  * a higher bar — every question goes to `ask_consultants` first, and the person gets only what the
  * answers did not settle and what is theirs to decide. Asked by the operator on 2026-10-09
- * (research/PLAN_the_feature_and_question_halves_are_shared_rules.md).</p>
+ * (research/PLAN_the_feature_and_question_halves_are_shared_rules.md). v2 (conventions #182) raises the floor
+ * under policy `auto`, where the gate itself never asks a person and the AI's own question is the road left.</p>
  *
  * <p>Not cosmetic either: a paste without it never learns the bar, and the person is asked what the
  * consultants could have settled.</p>
  */
-export const QUESTION_VERSION = 1;
+export const QUESTION_VERSION = 2;
 
 /**
  * The halves the artefact is made of: the one place that knows which they are, in what order, and
@@ -200,31 +206,33 @@ export const QUESTION_VERSION = 1;
  * screen below.</p>
  *
  * <p>`name` is what a person reads in the panel when their copy is missing that half; it is prose
- * and never crosses a boundary — {@link SnippetStatus} carries ids. `frozen` is the gate half's
- * standing fact rather than a sentence in four docblocks: its marker lives in a rule body the
- * conventions repository hashes against a baseline, so it is the one version nobody may raise, and
- * the guard that tells you which numbers to move reads this rather than a hand-typed list.</p>
+ * and never crosses a boundary — {@link SnippetStatus} carries ids. A row used to carry a `frozen`
+ * flag for the gate half, whose marker sat in a rule body the conventions repository hashed against a
+ * migration baseline and so could not be raised; that freeze ended on 2026-09-15 and the flag was removed
+ * when the gate half moved to v6 (E3 of the auto plan), so every half is raisable and the guard that
+ * tells you which numbers to move reads this table rather than a hand-typed list.</p>
  *
  * <p>`file` is the half's shared rule in a conventions mount — every half is one since S3.5 — and it is
  * what {@link readSnippetStatus} reads beside a mounted gate rule.</p>
  */
 export const KNOWN_HALVES = [
-  { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION, text: GATE_RULE, frozen: true, file: 'coai-review-gate.md' },
-  { id: 'coai-document', name: 'the document gate', version: DOCUMENT_VERSION, text: DOCUMENT_RULE, frozen: false, file: 'coai-document-gate.md' },
-  { id: 'coai-feature', name: 'the feature gate', version: FEATURE_VERSION, text: FEATURE_RULE, frozen: false, file: 'coai-feature-gate.md' },
-  { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION, text: CALLER_RULE, frozen: false, file: 'coai-caller-model.md' },
-  { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION, text: CONSULTANT_RULE, frozen: false, file: 'coai-consultant.md' },
-  { id: 'coai-question', name: 'the question consultant', version: QUESTION_VERSION, text: QUESTION_RULE, frozen: false, file: 'coai-question-consultant.md' },
+  { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION, text: GATE_RULE, file: 'coai-review-gate.md' },
+  { id: 'coai-document', name: 'the document gate', version: DOCUMENT_VERSION, text: DOCUMENT_RULE, file: 'coai-document-gate.md' },
+  { id: 'coai-feature', name: 'the feature gate', version: FEATURE_VERSION, text: FEATURE_RULE, file: 'coai-feature-gate.md' },
+  { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION, text: CALLER_RULE, file: 'coai-caller-model.md' },
+  { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION, text: CONSULTANT_RULE, file: 'coai-consultant.md' },
+  { id: 'coai-question', name: 'the question consultant', version: QUESTION_VERSION, text: QUESTION_RULE, file: 'coai-question-consultant.md' },
 ] as const;
 
 /**
  * Sentences an OLD paste of a half carried that the current rule no longer says, per half.
  *
- * <p><b>Why a table of text when every half has a marker.</b> The gate half's marker is `frozen` at 5
- * by the conventions baseline and may never be raised, so a change to the gate rule cannot be told
- * apart from the old one by number: a paste made from an earlier build still reads `current` while
- * telling the agent to do what the server now refuses. A retired sentence is the only way to tell
- * an old paste of the frozen half. {@link isBehind} treats a half whose own segment — from its marker
+ * <p><b>Why a table of text when every half has a marker.</b> The gate half's marker was held at 5
+ * by the conventions baseline (until 2026-09-15; it moved to 6 with the words for policy `auto`), and
+ * a change to the gate rule made while it was held could not be told apart from the old one by number: a
+ * paste made from an earlier build still read `current` while telling the agent to do what the server
+ * now refuses. A retired sentence is the way to tell a paste whose text changed and whose marker did not
+ * — the gate half's first row stays for such pastes. {@link isBehind} treats a half whose own segment — from its marker
  * to the next half marker — contains a retired sentence of its own exactly as it treats a lower marker;
  * the phrase elsewhere in a file (a person's notes, another half) counts for nothing.</p>
  *
@@ -313,8 +321,8 @@ function isBehind(text: string, half: { readonly id: string; readonly version: n
   }
 
   // A retired sentence of this half's own, INSIDE one of this half's segments, is as good as a lower
-  // marker: the frozen gate half's marker cannot move, so this is the only way an old paste of it is
-  // told from a current one. Outside its segment the phrase proves nothing — a person's own notes or
+  // marker: a paste whose text changed while its marker did not (the gate half's, until it moved to
+  // v6) is told from a current one only by this. Outside its segment the phrase proves nothing — a person's own notes or
   // another half quoting it must not mark a fresh paste stale for good.
   const retired = RETIRED_TEXT.filter((row) => row.half === half.id);
 
@@ -536,7 +544,8 @@ export function callerVersionIn(text: string): number | undefined {
  * All six rules, in the order an AI should read them: the gate, the document gate, the feature gate,
  * the caller, the consultant, the question consultant.
  *
- * <p>Several files because the first one is frozen — see `DOCUMENT_VERSION` and `CALLER_VERSION`. A
+ * <p>Several files because the first one was frozen — see `DOCUMENT_VERSION` and `CALLER_VERSION`; the
+ * freeze ended and the files stayed separate, each with its own marker. A
  * person pasting this gets one block either way, and the AI reading it gets every rule, which is
  * the only thing that matters about the arrangement.</p>
  *
