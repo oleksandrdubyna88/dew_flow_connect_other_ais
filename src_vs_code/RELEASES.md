@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.89.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.89.1...extension-v0.89.2) (2026-11-19)
+
+
+### Miscellaneous Chores
+
+* **extension:** release the v20 snippet (coai-feature v5) as extension 0.89.2 ([#1029](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1029)) ([55ab555](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/55ab5557991d90deb1de599ea18acc290d7e5bcc))
+
 ## [0.89.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.89.0...extension-v0.89.1) (2026-11-19)
 
 
