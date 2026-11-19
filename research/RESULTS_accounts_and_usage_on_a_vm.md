@@ -14,6 +14,9 @@
 > are quoted word for word below. The small probe lines around them (`command -v`, `stat`, the lists of changed files,
 > the key-name listings) are described, not quoted. The numbers and file lists are the main session's report of what
 > the calls printed; this file adds no measurement of its own.
+>
+> **Added later the same day:** a fifth call measured five follow-up points (W1–W5). It is § 11. The sections before
+> it are kept as they were written; where § 11 measured something they call open, a note says so.
 
 **One host, one Linux user, one account for each vendor, one run of each command form.** Every result below is true of
 that, and of no more. What was not measured is listed in § 9.
@@ -25,11 +28,11 @@ The left column is what the plan had not verified (its rows U1–U11). "Expected
 | # | Expected by the plan | Measured | State |
 |---|---|---|---|
 | U1 | A Codex rollout file holds `token_count` events with `rate_limits` (`primary` and `secondary`: `used_percent`, `window_minutes`, `resets_at`) | Yes, with these names. `primary` was the **weekly** window and `secondary` was `null` (§ 6) | answered |
-| U2 | The layout under `~/.codex/sessions` is not known | `~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl`, 60 files (§ 6) | answered; how far from the end of a file the last record sits was not measured |
+| U2 | The layout under `~/.codex/sessions` is not known | `~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl`, 60 files (§ 6) | answered; how far from the end of a file the last record sits was not measured (measured later: § 11, W5) |
 | U3 | `codex login status` may exist and name an account with no secret | It exists and prints only `Logged in using ChatGPT`. It names no account (§ 6) | answered |
 | U4 | `~/.claude.json` holds `oauthAccount` with `emailAddress` and an organization name | Yes, by key name (§ 5). Not needed: U5 gives the account | answered |
-| U5 | Whether `claude auth status --json` prints an organization, and anything secret | It prints the email, the organization id and name and the subscription type. No token and no secret (§ 3) | answered; whether the command writes a file was not recorded |
-| U6 | Whether a non-interactive Claude Code command prints the usage, with no model call, nothing started and nothing written | `claude -p "/usage" --output-format json` prints it with **no model call**. With three more flags it writes no transcript and no `~/.claude.json`; it still writes four cache files of Claude Code's own (§ 4) | answered; three points open (§ 9) |
+| U5 | Whether `claude auth status --json` prints an organization, and anything secret | It prints the email, the organization id and name and the subscription type. No token and no secret (§ 3) | answered; whether the command writes a file was not recorded (measured later: § 11, W3 — it writes none) |
+| U6 | Whether a non-interactive Claude Code command prints the usage, with no model call, nothing started and nothing written | `claude -p "/usage" --output-format json` prints it with **no model call**. With three more flags it writes no transcript and no `~/.claude.json`; it still writes four cache files of Claude Code's own (§ 4) | answered; three points open (§ 9). Later, § 11: `/` and the plugin store pass; a write of `~/.claude.json` during one read and one process of unknown origin are not settled |
 | U7 | The path and key names of the Claude credential file; the headers the usage endpoint needs | `~/.claude/.credentials.json`, mode 600, key names recorded (§ 5). The headers were not measured | half answered; needed for road (b) only, which is not built |
 | U8 | Where agy keeps the account, and whether anything states usage | No usage, quota or account command, and no file with a quota. The account appears only in a log file (§ 7) | answered |
 | U9 | Whether the tools are found by `ssh <host> sh -s`, which `sh`, whether `printf` is a builtin | `sh` is `dash`; `printf` is a builtin; `claude` and `agy` are **not** on the `PATH` of a shell that is not a login shell (§ 2) | answered |
@@ -242,17 +245,19 @@ Each line is a condition outside this run. A conclusion in the plan may not be w
   `/usage` prints there (a line with no number, or no line) is not known.
 - A VM whose time zone is not UTC. The reset text ended in `(UTC)` here; whether another zone's name is printed
   there, and whether `TZ=UTC` in the environment changes it, is not known.
-- The working folder `/`. Both runs used a temporary folder.
+- The working folder `/`. Both runs used a temporary folder. *(Measured later: § 11, W1.)*
 - The raw bytes of the JSON: whether it is one line, and whether `·` is in it as the character or as an escape.
-- A list of processes during run 2 (no MCP server, no hook process), and a process left behind after it.
+- A list of processes during run 2 (no MCP server, no hook process), and a process left behind after it. *(Sampled
+  later: § 11, W2 — not settled.)*
 - Whether `~/.claude/plugins/store/cc-plugin-agents-md_builtin-*.json` is one file written again on every read, or a
-  new file each time. The second would grow by one file for each read.
-- Whether `claude auth status --json` and `claude --version` write a file.
+  new file each time. The second would grow by one file for each read. *(Measured later: § 11, W4 — one file.)*
+- Whether `claude auth status --json` and `claude --version` write a file. *(Measured later: § 11, W3 — neither.)*
 - A login whose access token has expired. Claude Code may then refresh it and write the credential file, as on any
   start. How that meets a live session that uses the same login was not measured.
 - Whether a live Claude Code session on the host notices the four cache files changing.
 - For Codex: how far from the end of a session file its last `rate_limits` line is; the form of the record's
-  `timestamp` value; whether `codex login status` writes a file or refreshes the login.
+  `timestamp` value; whether `codex login status` writes a file or refreshes the login. *(The first two measured
+  later: § 11, W5.)*
 - For agy: whether starting `agy` (for its version) writes a file, contacts the network or updates itself. On another
   machine agy updated itself on a start ([RESULTS_agy_read_file.md](RESULTS_agy_read_file.md)).
 - The headers the Claude usage endpoint needs from a client that is not Claude Code (road (b), not built).
@@ -266,3 +271,132 @@ alias can be on the machine of the `ai1-` aliases. The addresses are not written
 
 What follows for the plan: the list groups by **account**, as it already does, and never by alias or by a guess about
 machines. Each alias is still its own read, because each Linux user has its own `~/.claude`, `~/.codex` and `~/.gemini`.
+
+## 11. W1–W5 — five follow-up points, measured later the same day
+
+The plan listed five points that §§ 2–8 left open, and wrote down before the run what a bad result of each would
+mean. They were measured on 2026-11-19 at about 12:40 UTC, on the same host and Linux user, in **one** `creds_exec`
+call. The owner approved its exact text in the Creds dialog. The whole call took **12 094 ms**. It installed nothing.
+It made one temporary folder of its own (`mktemp -d`) for a marker file, and listed the files newer than that marker
+(`find … -newer`). As in the sections above, the numbers and lists are the main session's report of what the call
+printed.
+
+The order below is the order of the run.
+
+### W3 — do the two small commands write a file?
+
+**Expected.** Not known; the plan's M2 had asked and step 0 did not record it (§ 3).
+
+**The commands.** `claude --version`, then `claude auth status --json </dev/null`, with the marker made before them.
+
+**Measured.** `find ~/.claude ~/.claude.json -newer <marker>` listed **nothing**. Neither command writes a file.
+
+**Decided by it.** Both can run on every allowed host in every round.
+
+### W4 — does the plugin store grow?
+
+**Expected.** Not known whether `~/.claude/plugins/store/cc-plugin-agents-md_builtin-*.json` is one file written
+again or a new file for each read. A new file each time would be 144 files a day.
+
+**Measured.** Before: `ls ~/.claude/plugins/store/ | grep -c cc-plugin` gave **2**, and the file is
+`cc-plugin-agents-md_builtin-b049b47b3618.json`. Two usage reads in a row, from the working folder `/`: each rewrote
+the **same** file, with the same name. After: the count is still **2**. These two reads wrote only the four cache
+files; `~/.claude.json` was not written.
+
+**Decided by it.** No growth. W4 passes.
+
+### W1 — the usage command from the working folder `/`
+
+**Expected.** The same numbers, the same four changed files, and nothing written in `/`. Step 0 had used a temporary
+folder.
+
+**The command**, run with the working folder `/`, stdin from `/dev/null`, under `timeout 60`:
+
+```
+claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config --setting-sources ""
+```
+
+**Measured.**
+
+- Exit code 0, `is_error` `false`, `num_turns` **0**, `total_cost_usd` **0**.
+- The lines:
+
+  ```
+  Current session: 80% used · resets Nov 19, 3pm (UTC)
+  Current week (all models): 81% used · resets Nov 22, 3am (UTC)
+  Current week (Fable): 52% used · resets Nov 22, 3am (UTC)
+  ```
+
+  In step 0 they were 56 %, 77 % and 49 %. The numbers moved, so the read is live and not a cached answer. The reset
+  of the model window was printed as `2:59am` in step 0 and as `3am` here: the same moment can be printed a minute
+  apart.
+- Files newer than the marker:
+  - the four cache files: `plugins/store/cc-plugin-agents-md_builtin-b049b47b3618.json`,
+    `policy-limits.json.stamp.json`, `remote-settings.json.signature.json`, `policy-limits.json.signature.json`;
+  - **and `~/.claude.json`, with a new `~/.claude/backups/.claude.json.backup.<n>`**;
+  - the folders `/root` and `/tmp`, whose own time changed. `/tmp` is the measurement's own `mktemp -d`. `/root` is
+    the home folder, and its time changes when `~/.claude.json` is written again.
+- Nothing else in `/` (`find` with `-maxdepth 1`).
+
+**The `~/.claude.json` write is not explained.** Four reads with the three flags now have a list of changed files:
+
+| Read | Working folder | `~/.claude.json` |
+|---|---|---|
+| step 0, run 2 (§ 4) | a temporary folder | not written |
+| W1 | `/` | **written, with a new backup** |
+| W4, first read (right after W1) | `/` | not written |
+| W4, second read | `/` | not written |
+
+So the working folder does not cause the write on every read. The list of changed files says that the file changed
+during the read. It does not say who changed it. Readings, **none of them proven**:
+
+1. The owner has live Claude Code sessions in tmux on this host (a terminal `Creds: ai2-root / orc-user-profile` is
+   one). Those sessions rewrite `~/.claude.json` on their own, and one of them did so during W1's read.
+2. Claude Code rewrites the file on some starts, for a reason of its own.
+3. Claude Code recorded the folder `/` the first time it was started there. This fits the order of the four reads.
+   It is not shown: whether step 0's run 2 used a new temporary folder or the one of run 1 is not recorded.
+
+**Decided by it.** The working folder `/` behaves like the temporary folder for the numbers, the model call and the
+four cache files, and nothing is left in `/`. The plan keeps `/`. The `~/.claude.json` point stays open: the plan
+does not claim the file is untouched by a read, puts the point to the owner, and names the check that can settle it
+(a Linux user with no live Claude Code session).
+
+### W2 — processes during and after a read
+
+**Expected.** No MCP server process, no hook process, and nothing left after the read. Step 0 had concluded this from
+the flags and the file list (§ 4), without a list of processes.
+
+**Measured.**
+
+- 1.5 s after the start, the `claude` process had **no child process** (`pgrep -P`, followed down: none).
+- After it ended, `ps -eo pid,etimes,comm`, filtered to processes younger than 15 s whose name holds `claude`, `node`,
+  `mcp`, `creds` or `coai`, showed **one `node` process, 1 s old**. Its parent was not checked.
+
+**What this does and does not show.** The read started no MCP server and no hook process that the one sample saw. The
+`node` process was 1 s old, so it started after that sample: the sample does not rule the read out as its origin.
+Nothing ties it to the read either. The host has live Claude Code sessions, and other things run on it. So: **no child
+seen; one young `node` process of unknown origin; not attributed.**
+
+**Decided by it.** The condition "starts nothing, leaves nothing" is neither broken nor shown. One sample at one
+moment misses a short-lived child, and a list filtered by name cannot say whose a process is. The plan asks for a
+stronger check before the script's spec is final: the processes of the read's own process group, listed several times
+during the read and once after it.
+
+### W5 — the Codex record: its place in the file and its time
+
+**Expected.** Not known how far from the end of a session file its last `rate_limits` line is, nor the form of the
+record's `timestamp` (§ 9).
+
+**Measured.** The newest Codex file has **65 lines**. The last `rate_limits` line is **line 64**, with **991 bytes**
+after it. Its `timestamp` is `"2026-11-17T19:32:36.474Z"`: ISO 8601 with milliseconds and `Z`. Its `ordinal` is 63.
+
+**Decided by it.** The script reads the last 1 MiB of a file: about a thousand times the measured distance, and twice
+the whole measured file (527 525 bytes). The margin is for a turn that is still running, whose lines come after the
+last record. The list says "from a Codex session <age> ago" from the record's `timestamp`.
+
+### What § 11 leaves open
+
+- Who rewrote `~/.claude.json` during W1's read.
+- Whether a read starts a short-lived process, and whose the `node` process was.
+- Whether Claude Code retires old files in `~/.claude/backups/`.
+- Everything else of § 9 that carries no "measured later" note.
