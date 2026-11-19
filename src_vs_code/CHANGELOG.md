@@ -1,5 +1,23 @@
 # Changelog
 
+## Extension 0.89.1 — 2026-11-19
+
+**The CLAUDE.md snippet now speaks policy Auto: the clipboard is v19.** The text your AI reads — the gate, the document gate, the feature gate and the question rule, from the conventions release `5d2d5ec` — says what a server running Auto does, so a repository that pastes it, or mounts it, no longer tells its AI to wait for a person the gate will never ask.
+
+What changed for an AI that reads it:
+
+- **`not_reviewed`.** Under Auto, a round nobody answered proceeds as `not_reviewed`, which is not a review and approves nothing; the rule says so for the plan round, the code round, a document and a feature review (under Auto only the first two grounds for a further feature round remain).
+- **`consult_first`.** When the server answers a question with `consult_first`, the AI asks its consultants before anyone else; under Auto the question rule's floor rises to the rule's own bar in every phase.
+- **`call_human` only under a policy that asks a person.** Under Auto the gate never says `call_human`; it is the operator's choice (Ask a human, or another value they set, including one a repository's workspace settings keep in force) or a server too old to know Auto, which still asks by default — there the rule says to stop and surface the findings to the person.
+
+A correction to 0.89.0's entry. It said "The one road left to a person is your AI's own question after its consultants, or when no consultant can be had …" That is true of the gate and of an ordinary question, and wider than the server for one case. Under Auto **the gate** never asks a person, and **your AI's own question** reaches the person after its consultants, or at once when none can be had. A question the AI marks as a production risk keeps its own path: in the planning or released phase, or with the question mode off, it may reach the person without the consultants first. The rule text in this version says exactly that.
+
+A paste reads `older` until it is pasted again, and a mounted rule until its repository's pin bump (move the pin, don't paste); nothing is rewritten for you. The menu says "Copy the CLAUDE.md snippet (v19)".
+
+The README and the help, in five languages, are corrected in this release too: they said the AI's own question was the only road to a person under Auto, and now name the production-risk exception.
+
+The MCP server to pair it with is `coai-mcp` 0.66.0, unchanged.
+
 ## Extension 0.89.0 — 2026-11-18
 
 **Auto is now what *When the rounds run out* starts on, and a value you chose before is reset to Auto once.** Under Auto the
