@@ -1,6 +1,6 @@
 # PLAN — E3 stories: the conventions, the words every consumer's AI reads (`dew_flow_conventions` and the pins)
 
-> Status: **E3.S1 merged in conventions 2026-11-18 as #182 (`25d551b8`) and NOT yet promoted to the `release` branch (it waits for the owner's word on in-flight consumer releases and on the PR cap, § 5.1). This repository's bump is built on `docs/auto-mode-e3` (the pin at `25d551b8`, the snippet v19, the constants and the tests green; not yet a PR). Remaining: the promotion, the nine pin bumps, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **plan only, nothing built — written 2026-11-18 by Opus when the epic started, on branch `docs/auto-mode-e3`
+> Status: **E3.S1 merged in conventions 2026-11-18 as #182 (`25d551b8`); pre-checks in conventions #183; `release` promoted to `5d2d5ec` on 2026-11-19 with the owner's approval. This repository's bump with the regenerated snippet (v19) is PR #1024 (pin `5d2d5ec`); the other eight bumps are open or merging. Remaining: the bumps merged, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **E3.S1 merged in conventions 2026-11-18 as #182 (`25d551b8`) and NOT yet promoted to the `release` branch (it waits for the owner's word on in-flight consumer releases and on the PR cap, § 5.1). This repository's bump is built on `docs/auto-mode-e3` (the pin at `25d551b8`, the snippet v19, the constants and the tests green; not yet a PR). Remaining: the promotion, the nine pin bumps, the post-deploy check with the native-agent smoke, `review_feature`, the patch release, and the promotion of the plan.** Before that: **plan only, nothing built — written 2026-11-18 by Opus when the epic started, on branch `docs/auto-mode-e3`
 > at `origin/main` `82a4eeac` (E1 merged as #1011 and released as mcp 0.66.0 by #1012; E2 merged as #1018 and released
 > as extension 0.89.0 by #1022).** Epic E3 of [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md)
 > (its `## Epics`, § *E3*; the design is its § 4.7 snippet item, § 8 PR 3 and note N1). A stories document keeps no
@@ -1015,6 +1015,14 @@ entry 3.1, so one change stops the parent.
   says the hold went (§ 4.1, what (e) rests on). Requirement 4 asks for the release, its log line, the withdrawn notice
   and the note — all built; it does not ask `ask_human` to announce it. E3's rule text says where the release is told
   (the next review call, `status`'s round note). Recorded at the promotion as an E1 deviation; no code here.
+- **P7 — the feature rule's blocking `good_enough` sentence leaves no room to reject (a residual of the released text,
+  found by CodeRabbit on coai #1024, 2026-11-19).** `common/coai-feature-gate.md` (released `5d2d5ec`) says a capped
+  feature review under `auto` whose `good_enough` carries a `blocking` finding is landed "as a NEW pull request like the
+  rest". The rule's own sentence before it applies the true findings and rejects the rest with reasons; a `blocking`
+  finding that is false deserves the same choice. Not fixed in this release: the text is out, and a second release
+  means nine more bumps. It goes to the conventions plan as a follow-up for the next conventions release
+  ("verify it as any other finding: land a true one as a new pull request, reject a false one with its reason"), named
+  at that plan's promotion. Not a change to this plan: E3's wording is shipped as briefed.
 
 ## 10. Open questions, each with the assumption this document takes
 
