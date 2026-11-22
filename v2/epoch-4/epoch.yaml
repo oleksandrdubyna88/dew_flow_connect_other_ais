@@ -1,7 +1,7 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: epoch-4
 title: "Reach: studio and every listed language"
-proves: "video review and C#/Node/PHP/Rust/Python/Java all work"
+proves: "video review through extracted frames, and C#/Node/PHP/Rust/Python/Java all work"
 dependsOn:
   - epoch-3
 epics:

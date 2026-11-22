@@ -9,3 +9,4 @@ doneWhen:
   - "kit 0.3.0 released with K1-K6, each with a story, fakeDom and axe test"
   - "each page tested by running its shipped bundle"
   - "migration: user settings AND side overlays backed up, effective values per side, If-None-Match first write, idempotent, v1 keys untouched"
+  - "migration is local only: device-settings.json with local revision + migrated hash (first hub sync is epoch 2 E2)"

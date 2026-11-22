@@ -328,3 +328,31 @@ Sound as written (consultant): the codex resume shape (CodexConsultant.cs:108, :
 7. **Folder-name rule scoped.** The rule "folder name = id" applies to epoch, epic, story and task nodes. The feature
    node's id is free (the folder is wherever the plan lives — here `v2/`, id `coai-v2`). The v2 folder is a validator
    acceptance fixture.
+
+## 18. Plan gate round 2 (good_enough, 2026-11-22) — accepted fixes
+
+1. **Enrolment line, final shape.** The pasted line holds no key: it downloads the script to a file, checks the
+   hub-shown sha256, and runs it from the file; the script asks for the key with a hidden prompt read from `/dev/tty`
+   (pwsh: `Read-Host -AsSecureString`). stdin stays free. Tested by running the exact pasted lines in bash and PowerShell.
+2. **Detached work resolves itself.** A `--work-run` has its own resolver: the orchestrator-role model, started as a CLI
+   turn by coai with the findings, the task scope and the rule "accept or reject each with a reason". Retry 2 times;
+   a resolver that fails or times out (10 min) records the task `good_enough` with the open findings named and a
+   notification. The main AI may still resolve first if connected. Test: the initiating AI disconnects before findings
+   arrive; the run completes.
+3. **Re-review on any unreviewed change.** The candidate SHA is compared with the reviewed SHA over the WHOLE tree, not
+   the task's files; any content the code round did not see re-runs the gate (§ 17.4 widened).
+4. **Conventions become optional, not removed.** coai v2 stops generating, shipping and enforcing the shared conventions
+   (no snippet, no ledger/epoch/cadence enforcement). A repository that still mounts `.agents/conventions` keeps them
+   read as its own instructions (the mount tier and `SubmodulePopulator` stay); epoch 1 E1 S5 changes from "remove the
+   mount" to "stop shipping and enforcing". This repository keeps working with its current AGENTS.md until the
+   conventions are reworked.
+5. **Epoch 1 migration is local only.** It writes `<dataDir>/device-settings.json` with a local revision and the hash of
+   what it migrated. Epoch 2 E2 defines and tests the first sync: create with `If-None-Match: *`; if a hub document
+   exists (412), and the local document is unchanged since migration, take the hub copy; if both changed, keep both,
+   apply the hub copy, save the local one as `device-settings.conflict-<utc>.json` and notify.
+6. **Video review = frames.** coai accepts images only. The Studio extracts frames (it already cuts seam frames with
+   ffmpeg) and sends them as attachments; epoch 4 proves "video review through extracted frames", with limits (≤ 8
+   frames, png/jpg/webp) and the failure behaviour of an unreadable frame (skipped with a note).
+7. **Old/new compatibility before 2.0.** Epoch 1 changes no Team-server wire field. Before the 2.0 release (epoch 1 E5):
+   the `http/` contract suite runs live against the deployed Team server (0.16.x), new client ↔ old server and old
+   client (extension 0.89.x) ↔ new mcp are checked; the hub (epoch 2) is a new route group that old clients never call.

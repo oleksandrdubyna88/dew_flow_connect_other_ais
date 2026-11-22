@@ -30,7 +30,7 @@ judgement half — faster, with quality kept.
 - Toolchain adapters: C#, Node/JS/TS, PHP, Rust, Python, Java.
 - tmux Claude sessions through the existing creds MCP; Claude mod with phrases, active consults, notifications.
 - Studio (video) review mode with picture attachments; frames may go to Claude, Gemini (agy), Codex.
-- Security lane deferred. Conventions dependency removed (the conventions themselves are reworked later).
+- Security lane deferred. Conventions optional: coai no longer ships or enforces them; a repo that mounts them still has them read (reworked later).
 - Order: foundation → hub/devices/update → new features.
 
 ## Architecture
@@ -42,7 +42,7 @@ judgement half — faster, with quality kept.
 
 | Epoch | Epics | Proves |
 |---|---|---|
-| [1 Foundation](epoch-1/epoch.yaml) | E1 gate simplification (MVP), E2 thin shell ≤ 2 s (MVP), E3 work contract + roles + install, E4 kit 0.3.0 + local pages + migration, E5 2.0 release | the simplified gate and the new shell work end to end on this machine |
+| [1 Foundation](epoch-1/epoch.yaml) | E1 gate simplification + conventions optional (MVP), E2 thin shell ≤ 2 s (MVP), E3 work contract + roles + install, E4 kit 0.3.0 + local pages + migration, E5 2.0 release | the simplified gate and the new shell work end to end on this machine |
 | [2 Hub](epoch-2/epoch.yaml) | E1 hub server mode (MVP), E2 device agent + VM shared instance, E3 update everywhere, E4 Devices + Features pages, E5 rollout to all devices | one Windows window sees and controls every device |
 | [3 Deterministic work](epoch-3/epoch.yaml) | E1 toolchain adapters dotnet+node (MVP), E2 coder + fix loop (MVP), E3 work scheduler, E4 AskUserQuestion hook, E5 sessions + Claude mod | coai builds a YAML feature with coders in parallel and keeps them green |
 | [4 Reach](epoch-4/epoch.yaml) | E1 studio attachments (MVP), E2 studio roles in jinx_studio, E3 php/rust/python/java adapters, E4 git/PR/CI takeovers | video review and every listed language |

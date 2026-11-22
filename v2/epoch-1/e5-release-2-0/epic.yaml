@@ -8,3 +8,4 @@ doneWhen:
   - "VSIX inspected: new shell, budgets, no dropped modules"
   - "mcp + extension released; the owner's machines run 2.0"
   - "a real plan → code round passes on 2.0"
+  - "http/ contract suite live against the deployed Team server; new client vs old server and old extension vs new mcp checked"

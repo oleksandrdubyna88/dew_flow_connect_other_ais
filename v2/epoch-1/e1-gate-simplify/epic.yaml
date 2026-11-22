@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: e1-gate-simplify
-title: "Gate simplification, renames, migration, conventions out"
+title: "Gate simplification, renames, migration, conventions optional"
 mvp: true
 half: server
 dependsOn: []
@@ -11,5 +11,5 @@ doneWhen:
   - "the deleted classes are gone and the MCP test executable is green"
   - "cons, cons_close, consask served; consult, close_consult, ask_consultants answer as aliases; ask_human answers 'removed in v2'"
   - "--migrate-v2 converts every released session/card/settings fixture exactly once (run twice = one change)"
-  - "no .agents/conventions path is read by a review round; ordinary submodules still populate"
+  - "coai ships and enforces no conventions (no snippet, no ledger/cadence); a repo that mounts them still has them read"
   - "an interrupted migration (killed at each step boundary) ends equal to one clean run (step journal)"

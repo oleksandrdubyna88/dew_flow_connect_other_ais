@@ -32,7 +32,7 @@ judgement half — faster, with quality kept.
 - Toolchain adapters: C#, Node/JS/TS, PHP, Rust, Python, Java.
 - tmux Claude sessions through the existing creds MCP; Claude mod with phrases, active consults, notifications.
 - Studio (video) review mode with picture attachments; frames may go to Claude, Gemini (agy), Codex.
-- Security lane deferred. Conventions dependency removed (the conventions themselves are reworked later).
+- Security lane deferred. Conventions optional: coai no longer ships or enforces them; a repo that mounts them still has them read (reworked later).
 - Order: foundation → hub/devices/update → new features.
 
 ## Architecture
@@ -44,7 +44,7 @@ judgement half — faster, with quality kept.
 
 | Epoch | Epics | Proves |
 |---|---|---|
-| [1 Foundation](epoch-1/epoch.yaml) | E1 gate simplification (MVP), E2 thin shell ≤ 2 s (MVP), E3 work contract + roles + install, E4 kit 0.3.0 + local pages + migration, E5 2.0 release | the simplified gate and the new shell work end to end on this machine |
+| [1 Foundation](epoch-1/epoch.yaml) | E1 gate simplification + conventions optional (MVP), E2 thin shell ≤ 2 s (MVP), E3 work contract + roles + install, E4 kit 0.3.0 + local pages + migration, E5 2.0 release | the simplified gate and the new shell work end to end on this machine |
 | [2 Hub](epoch-2/epoch.yaml) | E1 hub server mode (MVP), E2 device agent + VM shared instance, E3 update everywhere, E4 Devices + Features pages, E5 rollout to all devices | one Windows window sees and controls every device |
 | [3 Deterministic work](epoch-3/epoch.yaml) | E1 toolchain adapters dotnet+node (MVP), E2 coder + fix loop (MVP), E3 work scheduler, E4 AskUserQuestion hook, E5 sessions + Claude mod | coai builds a YAML feature with coders in parallel and keeps them green |
 | [4 Reach](epoch-4/epoch.yaml) | E1 studio attachments (MVP), E2 studio roles in jinx_studio, E3 php/rust/python/java adapters, E4 git/PR/CI takeovers | video review and every listed language |
@@ -391,6 +391,34 @@ Sound as written (consultant): the codex resume shape (CodexConsultant.cs:108, :
    node's id is free (the folder is wherever the plan lives — here `v2/`, id `coai-v2`). The v2 folder is a validator
    acceptance fixture.
 
+## 18. Plan gate round 2 (good_enough, 2026-11-22) — accepted fixes
+
+1. **Enrolment line, final shape.** The pasted line holds no key: it downloads the script to a file, checks the
+   hub-shown sha256, and runs it from the file; the script asks for the key with a hidden prompt read from `/dev/tty`
+   (pwsh: `Read-Host -AsSecureString`). stdin stays free. Tested by running the exact pasted lines in bash and PowerShell.
+2. **Detached work resolves itself.** A `--work-run` has its own resolver: the orchestrator-role model, started as a CLI
+   turn by coai with the findings, the task scope and the rule "accept or reject each with a reason". Retry 2 times;
+   a resolver that fails or times out (10 min) records the task `good_enough` with the open findings named and a
+   notification. The main AI may still resolve first if connected. Test: the initiating AI disconnects before findings
+   arrive; the run completes.
+3. **Re-review on any unreviewed change.** The candidate SHA is compared with the reviewed SHA over the WHOLE tree, not
+   the task's files; any content the code round did not see re-runs the gate (§ 17.4 widened).
+4. **Conventions become optional, not removed.** coai v2 stops generating, shipping and enforcing the shared conventions
+   (no snippet, no ledger/epoch/cadence enforcement). A repository that still mounts `.agents/conventions` keeps them
+   read as its own instructions (the mount tier and `SubmodulePopulator` stay); epoch 1 E1 S5 changes from "remove the
+   mount" to "stop shipping and enforcing". This repository keeps working with its current AGENTS.md until the
+   conventions are reworked.
+5. **Epoch 1 migration is local only.** It writes `<dataDir>/device-settings.json` with a local revision and the hash of
+   what it migrated. Epoch 2 E2 defines and tests the first sync: create with `If-None-Match: *`; if a hub document
+   exists (412), and the local document is unchanged since migration, take the hub copy; if both changed, keep both,
+   apply the hub copy, save the local one as `device-settings.conflict-<utc>.json` and notify.
+6. **Video review = frames.** coai accepts images only. The Studio extracts frames (it already cuts seam frames with
+   ffmpeg) and sends them as attachments; epoch 4 proves "video review through extracted frames", with limits (≤ 8
+   frames, png/jpg/webp) and the failure behaviour of an unreadable frame (skipped with a note).
+7. **Old/new compatibility before 2.0.** Epoch 1 changes no Team-server wire field. Before the 2.0 release (epoch 1 E5):
+   the `http/` contract suite runs live against the deployed Team server (0.16.x), new client ↔ old server and old
+   client (extension 0.89.x) ↔ new mcp are checked; the hub (epoch 2) is a new route group that old clients never call.
+
 # coai v2 — extension half (architecture blueprint)
 
 > Status: **blueprint, nothing built, 2026-11-22.** Written by an Opus architect from the code (read-only); key references
@@ -601,7 +629,7 @@ budgets, running the minified page in tests; E1 first, real host-measurement and
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: e1-gate-simplify
-title: "Gate simplification, renames, migration, conventions out"
+title: "Gate simplification, renames, migration, conventions optional"
 mvp: true
 half: server
 dependsOn: []
@@ -612,7 +640,7 @@ doneWhen:
   - "the deleted classes are gone and the MCP test executable is green"
   - "cons, cons_close, consask served; consult, close_consult, ask_consultants answer as aliases; ask_human answers 'removed in v2'"
   - "--migrate-v2 converts every released session/card/settings fixture exactly once (run twice = one change)"
-  - "no .agents/conventions path is read by a review round; ordinary submodules still populate"
+  - "coai ships and enforces no conventions (no snippet, no ledger/cadence); a repo that mounts them still has them read"
   - "an interrupted migration (killed at each step boundary) ends equal to one clean run (step journal)"
 ```
 
@@ -906,61 +934,45 @@ dod:
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s5-conventions-out
-title: "Remove the conventions dependency from review rounds"
+title: "Conventions optional: stop shipping and enforcing them"
 dependsOn:
   - s1-verdicts-and-holds
 ```
 
-## v2/epoch-1/e1-gate-simplify/stories/s5-conventions-out/tasks/t1-rulefiles/task.yaml
+## v2/epoch-1/e1-gate-simplify/stories/s5-conventions-out/tasks/t1-stop-enforcing/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t1-rulefiles
-title: "Remove the .agents/conventions mount from RuleFiles and the conventions tiers from StageRules; keep InstructionFiles and repo-local rules"
+id: t1-stop-enforcing
+title: "Remove conventions enforcement from the server (ledger/epoch/cadence checks, rule-version notices); keep reading a mounted .agents/conventions as the repo own instructions"
 kind: code
 complexity: 4
 dependsOn: []
 parallel: true
 files:
-  - src_mcp/runners/Context/RuleFiles.cs
   - src_mcp/runners/Context/StageRules.cs
+  - src_mcp/src/Server
 dod:
   - id: d1
-    item: "a round prompt carries no conventions rule text"
+    item: "a repo without the mount gets no missing-rules notice"
+  - id: d2
+    item: "a repo with the mount still has its rules read"
 ```
 
-## v2/epoch-1/e1-gate-simplify/stories/s5-conventions-out/tasks/t2-submodules/task.yaml
+## v2/epoch-1/e1-gate-simplify/stories/s5-conventions-out/tasks/t2-fixture/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t2-submodules
-title: "SubmodulePopulator skips the conventions mount; the missing-mount notice is removed"
-kind: code
+id: t2-fixture
+title: "Fixture: repo with and without the conventions mount plus an ordinary submodule"
+kind: test
 complexity: 3
 dependsOn:
-  - t1-rulefiles
-parallel: false
-files:
-  - src_mcp/runners/Worktrees/SubmodulePopulator.cs
-  - src_mcp/runners/Context/RuleFiles.cs
-dod:
-  - id: d1
-    item: "an ordinary dependency submodule still populates"
-```
-
-## v2/epoch-1/e1-gate-simplify/stories/s5-conventions-out/tasks/t3-fixture/task.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t3-fixture
-title: "Test fixture with the conventions mount and an ordinary submodule, recording git invocations"
-kind: test
-complexity: 4
-dependsOn:
-  - t2-submodules
+  - t1-stop-enforcing
 parallel: false
 files:
   - src_mcp/tests
 dod:
   - id: d1
-    item: "the test fails if the conventions mount is populated again"
+    item: "both cases tested; ordinary submodule populates"
 ```
 
 ## v2/epoch-1/e2-thin-shell/epic.yaml
@@ -1312,6 +1324,7 @@ doneWhen:
   - "kit 0.3.0 released with K1-K6, each with a story, fakeDom and axe test"
   - "each page tested by running its shipped bundle"
   - "migration: user settings AND side overlays backed up, effective values per side, If-None-Match first write, idempotent, v1 keys untouched"
+  - "migration is local only: device-settings.json with local revision + migrated hash (first hub sync is epoch 2 E2)"
 ```
 
 ## v2/epoch-1/e5-release-2-0/epic.yaml
@@ -1326,6 +1339,7 @@ doneWhen:
   - "VSIX inspected: new shell, budgets, no dropped modules"
   - "mcp + extension released; the owner's machines run 2.0"
   - "a real plan → code round passes on 2.0"
+  - "http/ contract suite live against the deployed Team server; new client vs old server and old extension vs new mcp checked"
 ```
 
 ## v2/epoch-1/epoch.yaml
@@ -1372,6 +1386,8 @@ doneWhen:
   - "shared /var/lib/coai with group coai; existing db/WAL permissions repaired; second-UID test"
   - "the pasted line downloads, checks the hub-shown sha256, then runs; the single-use key is not left in history or environment"
   - "local outbox ≤ 20 MB per stream with a dropped-N line; delivered lines removed after ack"
+  - "first sync: If-None-Match create; 412 with unchanged local → take hub; both changed → apply hub, keep local as conflict file, notify"
+  - "the exact pasted bash and PowerShell lines tested: no key in the line, hidden prompt from /dev/tty, script run from the verified file"
 ```
 
 ## v2/epoch-2/e3-update-everywhere/epic.yaml
@@ -1473,7 +1489,8 @@ doneWhen:
   - "DAG from YAML; host-level slots with atomic RAM reservation; WSL ceiling 2"
   - "checks on the candidate merge SHA before the integration branch advances"
   - "pending resolutions persisted; a run ends partial cleanly"
-  - "a rebase or conflict resolution that changes reviewed content re-runs the code gate on the candidate SHA"
+  - "any content the code round did not see (whole-tree compare) re-runs the code gate on the candidate SHA"
+  - "detached run resolves itself (orchestrator-model resolver, 2 retries, 10 min → good_enough + notification); completes when the initiating AI disconnects"
 ```
 
 ## v2/epoch-3/e4-ask-hook/epic.yaml
@@ -1530,6 +1547,7 @@ dependsOn: []
 doneWhen:
   - "codex attachment measurement recorded"
   - "an image round runs on claude, agy and codex (if measured); others skipped with a note"
+  - "frames extracted by the Studio (≤ 8, png/jpg/webp); an unreadable frame is skipped with a note"
 ```
 
 ## v2/epoch-4/e2-studio-roles/epic.yaml
@@ -1572,7 +1590,7 @@ doneWhen:
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: epoch-4
 title: "Reach: studio and every listed language"
-proves: "video review and C#/Node/PHP/Rust/Python/Java all work"
+proves: "video review through extracted frames, and C#/Node/PHP/Rust/Python/Java all work"
 dependsOn:
   - epoch-3
 epics:

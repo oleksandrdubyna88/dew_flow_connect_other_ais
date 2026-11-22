@@ -46,7 +46,7 @@
           "dir": "e1-gate-simplify",
           "yaml": {
             "id": "e1-gate-simplify",
-            "title": "Gate simplification, renames, migration, conventions out",
+            "title": "Gate simplification, renames, migration, conventions optional",
             "mvp": true,
             "half": "server",
             "dependsOn": [],
@@ -58,7 +58,7 @@
               "the deleted classes are gone and the MCP test executable is green",
               "cons, cons_close, consask served; consult, close_consult, ask_consultants answer as aliases; ask_human answers 'removed in v2'",
               "--migrate-v2 converts every released session/card/settings fixture exactly once (run twice = one change)",
-              "no .agents/conventions path is read by a review round; ordinary submodules still populate",
+              "coai ships and enforces no conventions (no snippet, no ledger/cadence); a repo that mounts them still has them read",
               "an interrupted migration (killed at each step boundary) ends equal to one clean run (step journal)"
             ]
           },
@@ -400,57 +400,41 @@
               "dir": "s5-conventions-out",
               "yaml": {
                 "id": "s5-conventions-out",
-                "title": "Remove the conventions dependency from review rounds",
+                "title": "Conventions optional: stop shipping and enforcing them",
                 "dependsOn": [
                   "s1-verdicts-and-holds"
                 ]
               },
               "tasks": [
                 {
-                  "id": "t1-rulefiles",
-                  "title": "Remove the .agents/conventions mount from RuleFiles and the conventions tiers from StageRules; keep InstructionFiles and repo-local rules",
+                  "id": "t1-stop-enforcing",
+                  "title": "Remove conventions enforcement from the server (ledger/epoch/cadence checks, rule-version notices); keep reading a mounted .agents/conventions as the repo own instructions",
                   "kind": "code",
                   "complexity": 4,
                   "dependsOn": [],
                   "parallel": true,
                   "files": [
-                    "src_mcp/runners/Context/RuleFiles.cs",
-                    "src_mcp/runners/Context/StageRules.cs"
+                    "src_mcp/runners/Context/StageRules.cs",
+                    "src_mcp/src/Server"
                   ],
                   "dod": [
                     {
                       "id": "d1",
-                      "item": "a round prompt carries no conventions rule text"
+                      "item": "a repo without the mount gets no missing-rules notice"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "a repo with the mount still has its rules read"
                     }
                   ]
                 },
                 {
-                  "id": "t2-submodules",
-                  "title": "SubmodulePopulator skips the conventions mount; the missing-mount notice is removed",
-                  "kind": "code",
+                  "id": "t2-fixture",
+                  "title": "Fixture: repo with and without the conventions mount plus an ordinary submodule",
+                  "kind": "test",
                   "complexity": 3,
                   "dependsOn": [
-                    "t1-rulefiles"
-                  ],
-                  "parallel": false,
-                  "files": [
-                    "src_mcp/runners/Worktrees/SubmodulePopulator.cs",
-                    "src_mcp/runners/Context/RuleFiles.cs"
-                  ],
-                  "dod": [
-                    {
-                      "id": "d1",
-                      "item": "an ordinary dependency submodule still populates"
-                    }
-                  ]
-                },
-                {
-                  "id": "t3-fixture",
-                  "title": "Test fixture with the conventions mount and an ordinary submodule, recording git invocations",
-                  "kind": "test",
-                  "complexity": 4,
-                  "dependsOn": [
-                    "t2-submodules"
+                    "t1-stop-enforcing"
                   ],
                   "parallel": false,
                   "files": [
@@ -459,7 +443,7 @@
                   "dod": [
                     {
                       "id": "d1",
-                      "item": "the test fails if the conventions mount is populated again"
+                      "item": "both cases tested; ordinary submodule populates"
                     }
                   ]
                 }
@@ -860,7 +844,8 @@
             "doneWhen": [
               "kit 0.3.0 released with K1-K6, each with a story, fakeDom and axe test",
               "each page tested by running its shipped bundle",
-              "migration: user settings AND side overlays backed up, effective values per side, If-None-Match first write, idempotent, v1 keys untouched"
+              "migration: user settings AND side overlays backed up, effective values per side, If-None-Match first write, idempotent, v1 keys untouched",
+              "migration is local only: device-settings.json with local revision + migrated hash (first hub sync is epoch 2 E2)"
             ]
           }
         },
@@ -876,7 +861,8 @@
             "doneWhen": [
               "VSIX inspected: new shell, budgets, no dropped modules",
               "mcp + extension released; the owner's machines run 2.0",
-              "a real plan → code round passes on 2.0"
+              "a real plan → code round passes on 2.0",
+              "http/ contract suite live against the deployed Team server; new client vs old server and old extension vs new mcp checked"
             ]
           }
         }
@@ -930,7 +916,9 @@
               "settings round-trip with offline cache; single writer; foreign edit put back",
               "shared /var/lib/coai with group coai; existing db/WAL permissions repaired; second-UID test",
               "the pasted line downloads, checks the hub-shown sha256, then runs; the single-use key is not left in history or environment",
-              "local outbox ≤ 20 MB per stream with a dropped-N line; delivered lines removed after ack"
+              "local outbox ≤ 20 MB per stream with a dropped-N line; delivered lines removed after ack",
+              "first sync: If-None-Match create; 412 with unchanged local → take hub; both changed → apply hub, keep local as conflict file, notify",
+              "the exact pasted bash and PowerShell lines tested: no key in the line, hidden prompt from /dev/tty, script run from the verified file"
             ]
           }
         },
@@ -1047,7 +1035,8 @@
               "DAG from YAML; host-level slots with atomic RAM reservation; WSL ceiling 2",
               "checks on the candidate merge SHA before the integration branch advances",
               "pending resolutions persisted; a run ends partial cleanly",
-              "a rebase or conflict resolution that changes reviewed content re-runs the code gate on the candidate SHA"
+              "any content the code round did not see (whole-tree compare) re-runs the code gate on the candidate SHA",
+              "detached run resolves itself (orchestrator-model resolver, 2 retries, 10 min → good_enough + notification); completes when the initiating AI disconnects"
             ]
           }
         },
@@ -1087,7 +1076,7 @@
       "yaml": {
         "id": "epoch-4",
         "title": "Reach: studio and every listed language",
-        "proves": "video review and C#/Node/PHP/Rust/Python/Java all work",
+        "proves": "video review through extracted frames, and C#/Node/PHP/Rust/Python/Java all work",
         "dependsOn": [
           "epoch-3"
         ],
@@ -1109,7 +1098,8 @@
             "dependsOn": [],
             "doneWhen": [
               "codex attachment measurement recorded",
-              "an image round runs on claude, agy and codex (if measured); others skipped with a note"
+              "an image round runs on claude, agy and codex (if measured); others skipped with a note",
+              "frames extracted by the Studio (≤ 8, png/jpg/webp); an unreadable frame is skipped with a note"
             ]
           }
         },

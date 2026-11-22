@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-fixture
+title: "Fixture: repo with and without the conventions mount plus an ordinary submodule"
+kind: test
+complexity: 3
+dependsOn:
+  - t1-stop-enforcing
+parallel: false
+files:
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "both cases tested; ordinary submodule populates"
