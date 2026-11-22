@@ -128,6 +128,12 @@ if (args is ["acp"] && (Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT")
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScriptFromEnv);
 }
 
+// The MCP verbs of claude and codex (the installer's stand-in): started by a wrapper file named for the CLI, BEFORE the vendor mode, for the reason the ACP stand-in is.
+if (args.Length >= 2 && args[0] == "vendor-mcp")
+{
+    return CoaiMcp.FakeCli.McpVendor.Run(args[1], args[2..]);
+}
+
 var minimal = MinimalSteering.Load(args);
 Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)
