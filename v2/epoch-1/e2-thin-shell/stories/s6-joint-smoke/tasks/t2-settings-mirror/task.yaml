@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-settings-mirror
+title: "Settings mirror under lazy activation: a window that never opens coai still gives the server current settings, or the gap is closed"
+kind: test
+complexity: 5
+dependsOn: []
+parallel: true
+files:
+  - src_vs_code/src/test/host
+dod:
+  - id: d1
+    item: "result recorded; a gap is fixed or the server reads settings without the mirror"

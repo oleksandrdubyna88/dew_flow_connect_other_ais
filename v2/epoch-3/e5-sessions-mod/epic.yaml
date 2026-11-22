@@ -1,9 +1,0 @@
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e5-sessions-mod
-title: "tmux sessions via the creds MCP + Claude mod"
-half: extension
-dependsOn: []
-doneWhen:
-  - "real Windows/WSL spike: disconnect event recorded; PNG round-trip hash matches"
-  - "tree VM → user → session; create/attach/resume; reconnect backoff; no retry on 0"
-  - "mod: phrases, active consults, failures; appends to CLAUDE_CODE_PLUGIN_DIRS in both install orders"

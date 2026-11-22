@@ -3,7 +3,8 @@ id: e5-release-2-0
 title: "Cut-over: dropped code out of the bundle, 2.0 release, post-deploy check"
 half: both
 dependsOn:
-  - e4-kit-local-pages
+  - e3-server-cleanup-install
+  - e4-shell-modules
 doneWhen:
   - "VSIX inspected: new shell, budgets, no dropped modules"
   - "mcp + extension released; the owner's machines run 2.0"

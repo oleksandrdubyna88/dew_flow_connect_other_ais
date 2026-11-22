@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e5-work-scheduler
+title: "Parallel work scheduler"
+half: server
+dependsOn:
+  - e2-coder-one-task
+  - e4-adapters-coder-hardening
+doneWhen:
+  - "story 1 = two tasks in parallel; go on only if speedup ≥ 1.3× and peak RAM stays in the WSL limit"
+  - "DAG from YAML; host-level slots with atomic RAM reservation; WSL ceiling 2"
+  - "checks on the candidate merge SHA before the integration branch advances"
+  - "pending resolutions persisted; a run ends partial cleanly"
+  - "any content the code round did not see (whole-tree compare) re-runs the code gate on the candidate SHA"
+  - "detached run resolves itself (orchestrator-model resolver, 2 retries, 10 min → good_enough + notification); completes when the initiating AI disconnects"

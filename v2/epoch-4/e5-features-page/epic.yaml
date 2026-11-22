@@ -1,0 +1,7 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e5-features-page
+title: "Features page (needs epoch-3 e1)"
+half: extension
+dependsOn: []
+doneWhen:
+  - "epoch → epic → story → task tree with status, complexity, model, parallel lanes; a remote-only feature through the hub"

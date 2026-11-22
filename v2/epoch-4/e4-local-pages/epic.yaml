@@ -1,0 +1,8 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-local-pages
+title: "Local pages: Prompts & Commands, Phrases, Rounds (kit 0.3.0)"
+half: extension
+dependsOn: []
+doneWhen:
+  - "each page tested by running its shipped bundle"
+  - "prompt overrides and facets (gates, review, documents, cons, consask, chat, roles, coder)"

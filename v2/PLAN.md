@@ -2,7 +2,7 @@
 
 > Status: **plan, nothing built, 2026-11-22.** Branch `feat/v2-plan`. Built with the v2 work method itself: a feature
 > folder → epochs (≤ 5 epics each, MVP first) → epics → stories → tasks, each node with a YAML file. Stories and tasks
-> are written for an epic when it starts (now: epoch 1, E1 and E2).
+> are written for an epic when it starts (now: epoch 1). The split was re-decided by Fable on 2026-11-22: 5 epochs, MVP epics with measurable pass criteria, 10 cornerstone stories (feature.yaml `cornerstones`).
 
 ## Goal
 
@@ -42,10 +42,11 @@ judgement half — faster, with quality kept.
 
 | Epoch | Epics | Proves |
 |---|---|---|
-| [1 Foundation](epoch-1/epoch.yaml) | E1 gate simplification + conventions optional (MVP), E2 thin shell ≤ 2 s (MVP), E3 work contract + roles + install, E4 kit 0.3.0 + local pages + migration, E5 2.0 release | the simplified gate and the new shell work end to end on this machine |
-| [2 Hub](epoch-2/epoch.yaml) | E1 hub server mode (MVP), E2 device agent + VM shared instance, E3 update everywhere, E4 Devices + Features pages, E5 rollout to all devices | one Windows window sees and controls every device |
-| [3 Deterministic work](epoch-3/epoch.yaml) | E1 toolchain adapters dotnet+node (MVP), E2 coder + fix loop (MVP), E3 work scheduler, E4 AskUserQuestion hook, E5 sessions + Claude mod | coai builds a YAML feature with coders in parallel and keeps them green |
-| [4 Reach](epoch-4/epoch.yaml) | E1 studio attachments (MVP), E2 studio roles in jinx_studio, E3 php/rust/python/java adapters, E4 git/PR/CI takeovers | video review and every listed language |
+| [1 Foundation](epoch-1/epoch.yaml) | E1 gate core + live proof (MVP), E2 thin shell + joint smoke (MVP), E3 server cleanup + install + roles, E4 shell modules, E5 2.0 release | the simplified gate and the fast shell work end to end with real data |
+| [2 Hub](epoch-2/epoch.yaml) | E1 hub slice (MVP), E2 VM shared instance (MVP), E3 device agent + sync, E4 update + rollout, E5 kit 0.3.0 + Devices page | one Windows window sees and controls every device |
+| [3 Deterministic work](epoch-3/epoch.yaml) | E1 external-role jobs + router + failover + BA (MVP), E2 coder one task to green (MVP), E3 roles complete, E4 adapters + coder hardening, E5 work scheduler | an external role does a task that coai routes, checks and keeps green |
+| [4 Operator](epoch-4/epoch.yaml) | E1 AskUserQuestion hook (MVP), E2 tmux sessions via creds (MVP), E3 Claude mod, E4 local pages, E5 Features page | the person works through coai |
+| [5 Reach](epoch-5/epoch.yaml) | E1 studio attachments (MVP), E2 studio roles, E3 php/rust/python/java adapters, E4 git/PR/CI takeovers | video review through frames and every listed language |
 
 ## Growth surfaces (named in the architecture)
 

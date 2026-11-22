@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-sessionstart
+title: "Installer merges the SessionStart → --roles --format claude-hook hook"
+kind: code
+complexity: 4
+dependsOn:
+  - t1-roles-tool
+parallel: false
+files:
+  - src_mcp/src/Install
+dod:
+  - id: d1
+    item: "a new Claude session shows the role table"

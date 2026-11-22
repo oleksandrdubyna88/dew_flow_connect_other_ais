@@ -1,0 +1,11 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e2-coder-one-task
+title: "Coder: one task to green on this repository"
+mvp: true
+half: server
+dependsOn:
+  - e1-role-jobs-ba
+doneWhen:
+  - "coder is one role case; this repository through .coai/toolchain.yaml; claude only"
+  - "green in ≤ 3 fix turns; main-AI tokens and wall time below the baseline; accepted gate findings not higher"
+  - "task session inherits the feature plan proceed; write boundary at launch"

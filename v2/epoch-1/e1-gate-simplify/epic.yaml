@@ -1,6 +1,6 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: e1-gate-simplify
-title: "Gate simplification, renames, migration, conventions optional"
+title: "Gate core: four outcomes, v1 data migrated, live proof"
 mvp: true
 half: server
 dependsOn: []
@@ -9,7 +9,5 @@ parallelWith:
 doneWhen:
   - "only proceed, revise, good_enough and not_reviewed come out of a round"
   - "the deleted classes are gone and the MCP test executable is green"
-  - "cons, cons_close, consask served; consult, close_consult, ask_consultants answer as aliases; ask_human answers 'removed in v2'"
-  - "--migrate-v2 converts every released session/card/settings fixture exactly once (run twice = one change)"
-  - "coai ships and enforces no conventions (no snippet, no ledger/cadence); a repo that mounts them still has them read"
-  - "an interrupted migration (killed at each step boundary) ends equal to one clean run (step journal)"
+  - "--migrate-v2 converts every released fixture exactly once; an interrupted run ends equal to one clean run"
+  - "3 real plan→code gates end with 0 person waits; migration on copies of real data: dry-run = apply, second run 0; outcome shares recorded"

@@ -1,0 +1,10 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e3-roles-complete
+title: "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)"
+half: server
+dependsOn:
+  - e1-role-jobs-ba
+doneWhen:
+  - "scout and judge strict JSON outputs"
+  - "codex and agy coder sessions resumed"
+  - "review_plan(featureFolder) validates first, packs in topological order"

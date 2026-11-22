@@ -4,7 +4,7 @@
 
 > Status: **plan, nothing built, 2026-11-22.** Branch `feat/v2-plan`. Built with the v2 work method itself: a feature
 > folder → epochs (≤ 5 epics each, MVP first) → epics → stories → tasks, each node with a YAML file. Stories and tasks
-> are written for an epic when it starts (now: epoch 1, E1 and E2).
+> are written for an epic when it starts (now: epoch 1). The split was re-decided by Fable on 2026-11-22: 5 epochs, MVP epics with measurable pass criteria, 10 cornerstone stories (feature.yaml `cornerstones`).
 
 ## Goal
 
@@ -44,10 +44,11 @@ judgement half — faster, with quality kept.
 
 | Epoch | Epics | Proves |
 |---|---|---|
-| [1 Foundation](epoch-1/epoch.yaml) | E1 gate simplification + conventions optional (MVP), E2 thin shell ≤ 2 s (MVP), E3 work contract + roles + install, E4 kit 0.3.0 + local pages + migration, E5 2.0 release | the simplified gate and the new shell work end to end on this machine |
-| [2 Hub](epoch-2/epoch.yaml) | E1 hub server mode (MVP), E2 device agent + VM shared instance, E3 update everywhere, E4 Devices + Features pages, E5 rollout to all devices | one Windows window sees and controls every device |
-| [3 Deterministic work](epoch-3/epoch.yaml) | E1 toolchain adapters dotnet+node (MVP), E2 coder + fix loop (MVP), E3 work scheduler, E4 AskUserQuestion hook, E5 sessions + Claude mod | coai builds a YAML feature with coders in parallel and keeps them green |
-| [4 Reach](epoch-4/epoch.yaml) | E1 studio attachments (MVP), E2 studio roles in jinx_studio, E3 php/rust/python/java adapters, E4 git/PR/CI takeovers | video review and every listed language |
+| [1 Foundation](epoch-1/epoch.yaml) | E1 gate core + live proof (MVP), E2 thin shell + joint smoke (MVP), E3 server cleanup + install + roles, E4 shell modules, E5 2.0 release | the simplified gate and the fast shell work end to end with real data |
+| [2 Hub](epoch-2/epoch.yaml) | E1 hub slice (MVP), E2 VM shared instance (MVP), E3 device agent + sync, E4 update + rollout, E5 kit 0.3.0 + Devices page | one Windows window sees and controls every device |
+| [3 Deterministic work](epoch-3/epoch.yaml) | E1 external-role jobs + router + failover + BA (MVP), E2 coder one task to green (MVP), E3 roles complete, E4 adapters + coder hardening, E5 work scheduler | an external role does a task that coai routes, checks and keeps green |
+| [4 Operator](epoch-4/epoch.yaml) | E1 AskUserQuestion hook (MVP), E2 tmux sessions via creds (MVP), E3 Claude mod, E4 local pages, E5 Features page | the person works through coai |
+| [5 Reach](epoch-5/epoch.yaml) | E1 studio attachments (MVP), E2 studio roles, E3 php/rust/python/java adapters, E4 git/PR/CI takeovers | video review through frames and every listed language |
 
 ## Growth surfaces (named in the architecture)
 
@@ -419,6 +420,27 @@ Sound as written (consultant): the codex resume shape (CodexConsultant.cs:108, :
    the `http/` contract suite runs live against the deployed Team server (0.16.x), new client ↔ old server and old
    client (extension 0.89.x) ↔ new mcp are checked; the hub (epoch 2) is a new route group that old clients never call.
 
+## 19. External roles (owner, 2026-11-22)
+
+"External roles" = roles relative to the main AI. Every role except the orchestrator is an MCP tool: **coder** (writes
+code in its worktree — § 2 coder delegation + § 10 fix loop), **scout** (read-only research → strict JSON
+`{facts:[{claim, evidence:[file:line]}], files:[]}`), **BA** (splits a plan into epochs/epics/stories/tasks; writes only
+the feature folder; the result must pass `validate_work`), **important/judge** (Fable by default; review, design
+decision, cornerstone spec; read-only; strict JSON verdict/findings). One tool family: `start_role(role, taskFile |
+brief, repoPath, model?, timeoutMinutes?)` / `role_status(jobId, maxSeconds)` / `role_cancel(jobId)`; the role decides
+the model (roles table / complexity band), the permissions and the output schema; `start_coder` is the coder case (no
+separate tool). Placement in the epochs: decided with the Fable split review.
+
+## 20. Important / responsible role and vendor failover (owner, 2026-11-22)
+
+- The **important** role always runs the strongest model, selectable per device (e.g. `fable`, codex `astra`). The router
+  sends it every task with `complexity: 10` and every security task (`security: true` in task.yaml, or kind `security`:
+  crypto, authN/authZ, secrets).
+- **Per-role failover:** each role has an ordered model list (e.g. important: fable → codex astra). A run that stops with
+  a refusal, a spend/rate limit or an error is re-run on the next model in the list; the switch is recorded in the job
+  envelope (`attempts: [{model, vendor, stop, reason}]`), logged, and raised as a notification. The other vendor's own
+  policy applies to it; nothing is hidden. A list that is exhausted ends the task `failed` with every attempt named.
+
 # coai v2 — extension half (architecture blueprint)
 
 > Status: **blueprint, nothing built, 2026-11-22.** Written by an Opus architect from the code (read-only); key references
@@ -629,7 +651,7 @@ budgets, running the minified page in tests; E1 first, real host-measurement and
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: e1-gate-simplify
-title: "Gate simplification, renames, migration, conventions optional"
+title: "Gate core: four outcomes, v1 data migrated, live proof"
 mvp: true
 half: server
 dependsOn: []
@@ -638,10 +660,8 @@ parallelWith:
 doneWhen:
   - "only proceed, revise, good_enough and not_reviewed come out of a round"
   - "the deleted classes are gone and the MCP test executable is green"
-  - "cons, cons_close, consask served; consult, close_consult, ask_consultants answer as aliases; ask_human answers 'removed in v2'"
-  - "--migrate-v2 converts every released session/card/settings fixture exactly once (run twice = one change)"
-  - "coai ships and enforces no conventions (no snippet, no ledger/cadence); a repo that mounts them still has them read"
-  - "an interrupted migration (killed at each step boundary) ends equal to one clean run (step journal)"
+  - "--migrate-v2 converts every released fixture exactly once; an interrupted run ends equal to one clean run"
+  - "3 real plan→code gates end with 0 person waits; migration on copies of real data: dry-run = apply, second run 0; outcome shares recorded"
 ```
 
 ## v2/epoch-1/e1-gate-simplify/stories/s1-verdicts-and-holds/story.yaml
@@ -716,160 +736,13 @@ dod:
     item: "each kept outcome has a test that fails if its branch is deleted"
 ```
 
-## v2/epoch-1/e1-gate-simplify/stories/s2-remove-modes/story.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: s2-remove-modes
-title: "Remove consask modes, cadence, operator commands, prompts-per-round, security lane"
-dependsOn:
-  - s1-verdicts-and-holds
-```
-
-## v2/epoch-1/e1-gate-simplify/stories/s2-remove-modes/tasks/t1-consask-modes/task.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t1-consask-modes
-title: "Remove AskGateDesk, QuestionPhaseStore, StageRelease, QuestionConsultSettings Mode/FreeBatches"
-kind: code
-complexity: 5
-dependsOn: []
-parallel: false
-files:
-  - src_mcp/core/QuestionConsult
-  - src_mcp/src/Server/QuestionConsult
-dod:
-  - id: d1
-    item: "consask answers with no phase or consultId logic"
-```
-
-## v2/epoch-1/e1-gate-simplify/stories/s2-remove-modes/tasks/t2-cadence/task.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t2-cadence
-title: "Remove Server/Cadence, core/Cadence, CadenceArgs and the --cadence one-shot"
-kind: code
-complexity: 4
-dependsOn:
-  - t1-consask-modes
-parallel: false
-files:
-  - src_mcp/src/Server/Cadence
-  - src_mcp/core/Cadence
-  - src_mcp/src/Tools.cs
-  - src_mcp/src/Program.cs
-dod:
-  - id: d1
-    item: "--cadence exits 64 (unknown mode)"
-```
-
-## v2/epoch-1/e1-gate-simplify/stories/s2-remove-modes/tasks/t3-commands-picker/task.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t3-commands-picker
-title: "Remove CommandsSetting, CommandModelsSetting, core/Commands, shared/command-models.json, the operator flags and PromptsPerRound/DealPlan/CodeLenses"
-kind: code
-complexity: 5
-dependsOn:
-  - t2-cadence
-parallel: false
-files:
-  - src_mcp/src/Server/CommandsSetting.cs
-  - src_mcp/core/Commands
-  - shared/command-models.json
-  - src_mcp/src/Server/PanelSettings.cs
-dod:
-  - id: d1
-    item: "one prompt per role by default; variants only as overrides"
-```
-
-## v2/epoch-1/e1-gate-simplify/stories/s2-remove-modes/tasks/t4-security-lane/task.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t4-security-lane
-title: "Remove the security lane (SecurityLane*, CheckSecurityMode, SecurityPromptTextReadMode, core/Security, shared/security-lane*.json)"
-kind: code
-complexity: 4
-dependsOn:
-  - t3-commands-picker
-parallel: false
-files:
-  - src_mcp/src/Server
-  - src_mcp/core/Security
-  - shared/security-lane.json
-dod:
-  - id: d1
-    item: "--check-security and --security-prompt-text exit 64"
-```
-
-## v2/epoch-1/e1-gate-simplify/stories/s3-renames/story.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: s3-renames
-title: "cons / cons_close / consask with aliases and settings fallbacks"
-dependsOn:
-  - s2-remove-modes
-```
-
-## v2/epoch-1/e1-gate-simplify/stories/s3-renames/tasks/t1-tool-renames/task.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t1-tool-renames
-title: "Serve cons, cons_close, consask; keep consult, close_consult, ask_consultants as hidden aliases with a 'renamed' note"
-kind: code
-complexity: 4
-dependsOn: []
-parallel: false
-files:
-  - src_mcp/src/Tools.cs
-  - src_mcp/src/Prompts.cs
-dod:
-  - id: d1
-    item: "tools/list shows the new names only; old names still answer"
-```
-
-## v2/epoch-1/e1-gate-simplify/stories/s3-renames/tasks/t2-settings-fallbacks/task.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t2-settings-fallbacks
-title: "Read COAI_CONS_* / COAI_CONSASK_*, falling back to COAI_CONSULT_* / COAI_QCONSULT_*"
-kind: code
-complexity: 3
-dependsOn:
-  - t1-tool-renames
-parallel: false
-files:
-  - src_mcp/src/Server/PanelSettings.cs
-  - src_mcp/src/Server/QuestionConsult/QuestionConsultSettings.cs
-dod:
-  - id: d1
-    item: "the new key wins when both are set"
-```
-
-## v2/epoch-1/e1-gate-simplify/stories/s3-renames/tasks/t3-text-renames/task.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t3-text-renames
-title: "Rename consultant / question consultant to cons / consask in tool descriptions, notices and prompt texts"
-kind: rename
-complexity: 2
-dependsOn:
-  - t2-settings-fallbacks
-parallel: false
-files:
-  - src_mcp/src
-  - shared
-dod:
-  - id: d1
-    item: "no user-visible text says 'question consultant'"
-```
-
 ## v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/story.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s4-migrate-v2
 title: "--migrate-v2: held sessions, cards, stores, settings keys"
 dependsOn:
-  - s3-renames
+  - s1-verdicts-and-holds
 ```
 
 ## v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/tasks/t1-migrate-mode/task.yaml
@@ -930,49 +803,63 @@ dod:
     item: "every one-shot mode in Program.cs is listed and no removed one is"
 ```
 
-## v2/epoch-1/e1-gate-simplify/stories/s5-conventions-out/story.yaml
+## v2/epoch-1/e1-gate-simplify/stories/s6-live-proof/story.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: s5-conventions-out
-title: "Conventions optional: stop shipping and enforcing them"
+id: s6-live-proof
+title: "Live proof: real plan→code gates and migration on copies of real data"
 dependsOn:
   - s1-verdicts-and-holds
+  - s4-migrate-v2
 ```
 
-## v2/epoch-1/e1-gate-simplify/stories/s5-conventions-out/tasks/t1-stop-enforcing/task.yaml
+## v2/epoch-1/e1-gate-simplify/stories/s6-live-proof/tasks/t1-live-gates/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t1-stop-enforcing
-title: "Remove conventions enforcement from the server (ledger/epoch/cadence checks, rule-version notices); keep reading a mounted .agents/conventions as the repo own instructions"
-kind: code
+id: t1-live-gates
+title: "Run 3 real plan→code gates on the E1 binary; record 0 person waits and only the four outcomes"
+kind: measure
 complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - research/RESULTS_v2_gate_core.md
+dod:
+  - id: d1
+    item: "3 real gates recorded with verdicts and reviewer counts"
+```
+
+## v2/epoch-1/e1-gate-simplify/stories/s6-live-proof/tasks/t2-migrate-copies/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-migrate-copies
+title: "--migrate-v2 on a COPY of each real data folder: dry-run counts = apply counts; second run 0 changes"
+kind: measure
+complexity: 5
 dependsOn: []
 parallel: true
 files:
-  - src_mcp/runners/Context/StageRules.cs
-  - src_mcp/src/Server
+  - research/RESULTS_v2_gate_core.md
 dod:
   - id: d1
-    item: "a repo without the mount gets no missing-rules notice"
-  - id: d2
-    item: "a repo with the mount still has its rules read"
+    item: "counts recorded per data folder"
 ```
 
-## v2/epoch-1/e1-gate-simplify/stories/s5-conventions-out/tasks/t2-fixture/task.yaml
+## v2/epoch-1/e1-gate-simplify/stories/s6-live-proof/tasks/t3-outcome-share/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: t2-fixture
-title: "Fixture: repo with and without the conventions mount plus an ordinary submodule"
-kind: test
+id: t3-outcome-share
+title: "Share of good_enough/not_reviewed vs the v1 call_human share from RoundsDb"
+kind: measure
 complexity: 3
 dependsOn:
-  - t1-stop-enforcing
+  - t1-live-gates
 parallel: false
 files:
-  - src_mcp/tests
+  - research/RESULTS_v2_gate_core.md
 dod:
   - id: d1
-    item: "both cases tested; ordinary submodule populates"
+    item: "both shares recorded with the query used"
 ```
 
 ## v2/epoch-1/e2-thin-shell/epic.yaml
@@ -987,9 +874,10 @@ parallelWith:
   - e1-gate-simplify
 doneWhen:
   - "no onStartupFinished; activate() only registers (entryPurity test)"
-  - "entry firewall checks metafile inputs and output imports; byte budgets green"
-  - "M2 (command to painted usable sidebar) ≤ 2000 ms on Linux and Windows CI, 3 fresh-profile samples, maximum counts; Remote-WSL recorded"
-  - "every existing chat host scenario passes; cold chat command and restored tab work without opening the sidebar"
+  - "entry firewall checks inputs and output imports; byte budgets green"
+  - "M1 ≤ 50 ms; M2 maximum of 3 fresh samples ≤ 2000 ms on Linux CI, Windows CI and Remote-WSL"
+  - "v1 baseline and per-step marks of the old activate() recorded"
+  - "joint smoke with the E1 binary passes; settings-mirror check done"
 ```
 
 ## v2/epoch-1/e2-thin-shell/stories/s1-shell-core/story.yaml
@@ -1147,16 +1035,220 @@ dod:
     item: "the result names the extension-host location"
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s3-sidebar/story.yaml
+## v2/epoch-1/e2-thin-shell/stories/s6-joint-smoke/story.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: s3-sidebar
-title: "Sidebar on the kit: failures, active cons/consask, last rounds"
+id: s6-joint-smoke
+title: "Joint smoke: shell VSIX + E1 binary"
 dependsOn:
-  - s1-shell-core
+  - s2-measure
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s3-sidebar/tasks/t1-band-json/task.yaml
+## v2/epoch-1/e2-thin-shell/stories/s6-joint-smoke/tasks/t1-joint-round/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-joint-round
+title: "Install the shell VSIX with the E1 binary; one real round shown; no hold/card path runs"
+kind: measure
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - research/RESULTS_v2_start.md
+dod:
+  - id: d1
+    item: "round shown in the sidebar; no card or hold code reached"
+```
+
+## v2/epoch-1/e2-thin-shell/stories/s6-joint-smoke/tasks/t2-settings-mirror/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-settings-mirror
+title: "Settings mirror under lazy activation: a window that never opens coai still gives the server current settings, or the gap is closed"
+kind: test
+complexity: 5
+dependsOn: []
+parallel: true
+files:
+  - src_vs_code/src/test/host
+dod:
+  - id: d1
+    item: "result recorded; a gap is fixed or the server reads settings without the mirror"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/epic.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e3-server-cleanup-install
+title: "Server cleanup, renames, conventions optional, --band-json, install, roles"
+half: server
+dependsOn:
+  - e1-gate-simplify
+parallelWith:
+  - e4-shell-modules
+doneWhen:
+  - "cons, cons_close, consask served; old names answer as aliases"
+  - "coai ships and enforces no conventions; a repo that mounts them still has them read"
+  - "roles returns main AI, ORDERED model lists per role, complexity bands, Haiku kinds, work method"
+  - "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent; NO AskUserQuestion hook"
+  - "--band-json answers phrases, consultations, failures"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s2-remove-modes/story.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s2-remove-modes
+title: "Remove consask modes, cadence, operator commands, prompts-per-round, security lane"
+dependsOn: []
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s2-remove-modes/tasks/t1-consask-modes/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-consask-modes
+title: "Remove AskGateDesk, QuestionPhaseStore, StageRelease, QuestionConsultSettings Mode/FreeBatches"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/core/QuestionConsult
+  - src_mcp/src/Server/QuestionConsult
+dod:
+  - id: d1
+    item: "consask answers with no phase or consultId logic"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s2-remove-modes/tasks/t2-cadence/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-cadence
+title: "Remove Server/Cadence, core/Cadence, CadenceArgs and the --cadence one-shot"
+kind: code
+complexity: 4
+dependsOn:
+  - t1-consask-modes
+parallel: false
+files:
+  - src_mcp/src/Server/Cadence
+  - src_mcp/core/Cadence
+  - src_mcp/src/Tools.cs
+  - src_mcp/src/Program.cs
+dod:
+  - id: d1
+    item: "--cadence exits 64 (unknown mode)"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s2-remove-modes/tasks/t3-commands-picker/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-commands-picker
+title: "Remove CommandsSetting, CommandModelsSetting, core/Commands, shared/command-models.json, the operator flags and PromptsPerRound/DealPlan/CodeLenses"
+kind: code
+complexity: 5
+dependsOn:
+  - t2-cadence
+parallel: false
+files:
+  - src_mcp/src/Server/CommandsSetting.cs
+  - src_mcp/core/Commands
+  - shared/command-models.json
+  - src_mcp/src/Server/PanelSettings.cs
+dod:
+  - id: d1
+    item: "one prompt per role by default; variants only as overrides"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s2-remove-modes/tasks/t4-security-lane/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-security-lane
+title: "Remove the security lane (SecurityLane*, CheckSecurityMode, SecurityPromptTextReadMode, core/Security, shared/security-lane*.json)"
+kind: code
+complexity: 4
+dependsOn:
+  - t3-commands-picker
+parallel: false
+files:
+  - src_mcp/src/Server
+  - src_mcp/core/Security
+  - shared/security-lane.json
+dod:
+  - id: d1
+    item: "--check-security and --security-prompt-text exit 64"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s3-renames/story.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s3-renames
+title: "cons / cons_close / consask with aliases and settings fallbacks"
+dependsOn:
+  - s2-remove-modes
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s3-renames/tasks/t1-tool-renames/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-tool-renames
+title: "Serve cons, cons_close, consask; keep consult, close_consult, ask_consultants as hidden aliases with a 'renamed' note"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Tools.cs
+  - src_mcp/src/Prompts.cs
+dod:
+  - id: d1
+    item: "tools/list shows the new names only; old names still answer"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s3-renames/tasks/t2-settings-fallbacks/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-settings-fallbacks
+title: "Read COAI_CONS_* / COAI_CONSASK_*, falling back to COAI_CONSULT_* / COAI_QCONSULT_*"
+kind: code
+complexity: 3
+dependsOn:
+  - t1-tool-renames
+parallel: false
+files:
+  - src_mcp/src/Server/PanelSettings.cs
+  - src_mcp/src/Server/QuestionConsult/QuestionConsultSettings.cs
+dod:
+  - id: d1
+    item: "the new key wins when both are set"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s3-renames/tasks/t3-text-renames/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-text-renames
+title: "Rename consultant / question consultant to cons / consask in tool descriptions, notices and prompt texts"
+kind: rename
+complexity: 2
+dependsOn:
+  - t2-settings-fallbacks
+parallel: false
+files:
+  - src_mcp/src
+  - shared
+dod:
+  - id: d1
+    item: "no user-visible text says 'question consultant'"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s4-band-json/story.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s4-band-json
+title: "--band-json one-shot"
+dependsOn: []
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s4-band-json/tasks/t1-band-json/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t1-band-json
@@ -1173,15 +1265,185 @@ dod:
     item: "exit 0 with one JSON object; an unknown flag never exits 64"
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s3-sidebar/tasks/t2-sidebar-module/task.yaml
+## v2/epoch-1/e3-server-cleanup-install/stories/s5-conventions-out/story.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s5-conventions-out
+title: "Conventions optional: stop shipping and enforcing them"
+dependsOn: []
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s5-conventions-out/tasks/t1-stop-enforcing/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-stop-enforcing
+title: "Remove conventions enforcement from the server (ledger/epoch/cadence checks, rule-version notices); keep reading a mounted .agents/conventions as the repo own instructions"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: true
+files:
+  - src_mcp/runners/Context/StageRules.cs
+  - src_mcp/src/Server
+dod:
+  - id: d1
+    item: "a repo without the mount gets no missing-rules notice"
+  - id: d2
+    item: "a repo with the mount still has its rules read"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s5-conventions-out/tasks/t2-fixture/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-fixture
+title: "Fixture: repo with and without the conventions mount plus an ordinary submodule"
+kind: test
+complexity: 3
+dependsOn:
+  - t1-stop-enforcing
+parallel: false
+files:
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "both cases tested; ordinary submodule populates"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s6-install/story.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s6-install
+title: "--install and --setup-clients: find CLIs, write MCP config (cornerstone)"
+dependsOn:
+  - s3-renames
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s6-install/tasks/t1-find-clis/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-find-clis
+title: "Find claude, codex, agy (ExecutablePaths); report versions"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Install
+dod:
+  - id: d1
+    item: "absent CLIs reported, not guessed"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s6-install/tasks/t2-write-config/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-write-config
+title: "Write MCP config through vendor commands (claude mcp add-json --scope user, codex mcp add); agy path measured first; backup + idempotent by command path"
+kind: code
+complexity: 7
+dependsOn:
+  - t1-find-clis
+parallel: false
+files:
+  - src_mcp/src/Install
+dod:
+  - id: d1
+    item: "second run changes nothing"
+  - id: d2
+    item: "a backup exists before the first write"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s6-install/tasks/t3-clean-box/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-clean-box
+title: "Clean WSL box test (fresh HOME): one command → working MCP setup"
+kind: test
+complexity: 5
+dependsOn:
+  - t2-write-config
+parallel: false
+files:
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "claude and codex list the coai server"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s7-roles-hook/story.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s7-roles-hook
+title: "roles tool + SessionStart hook"
+dependsOn:
+  - s6-install
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s7-roles-hook/tasks/t1-roles-tool/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-roles-tool
+title: "MCP tool roles + one-shot --roles [--format json|claude-hook]; shared/role-defaults.json with ordered model lists per role and main-AI vendor"
+kind: code
+complexity: 6
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src
+  - shared/role-defaults.json
+dod:
+  - id: d1
+    item: "codex/agy rows only from measured model lists"
+```
+
+## v2/epoch-1/e3-server-cleanup-install/stories/s7-roles-hook/tasks/t2-sessionstart/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-sessionstart
+title: "Installer merges the SessionStart → --roles --format claude-hook hook"
+kind: code
+complexity: 4
+dependsOn:
+  - t1-roles-tool
+parallel: false
+files:
+  - src_mcp/src/Install
+dod:
+  - id: d1
+    item: "a new Claude session shows the role table"
+```
+
+## v2/epoch-1/e4-shell-modules/epic.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-shell-modules
+title: "Shell modules: sidebar, chat carried, install after ready, dead v1 out"
+half: extension
+dependsOn:
+  - e2-thin-shell
+doneWhen:
+  - "sidebar polls only while visible"
+  - "all chat host scenarios pass"
+  - "M2 still ≤ 2000 ms"
+  - "no escalation or cadence control or watcher in the bundle"
+```
+
+## v2/epoch-1/e4-shell-modules/stories/s3-sidebar/story.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s3-sidebar
+title: "Sidebar on the kit: failures, active cons/consask, last rounds"
+dependsOn: []
+```
+
+## v2/epoch-1/e4-shell-modules/stories/s3-sidebar/tasks/t2-sidebar-module/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t2-sidebar-module
 title: "shell/modules/sidebar + pages/sidebar.ts on kit 0.2: skeleton first, ready after paint, data after ready"
 kind: code
 complexity: 6
-dependsOn:
-  - t1-band-json
+dependsOn: []
 parallel: false
 files:
   - src_vs_code/shell/modules/sidebar
@@ -1192,7 +1454,7 @@ dod:
     item: "the sidebar polls only while visible"
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s3-sidebar/tasks/t3-sidebar-page-test/task.yaml
+## v2/epoch-1/e4-shell-modules/stories/s3-sidebar/tasks/t3-sidebar-page-test/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-sidebar-page-test
@@ -1209,7 +1471,7 @@ dod:
     item: "deleting the ready post makes the test fail"
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s4-chat-carried/story.yaml
+## v2/epoch-1/e4-shell-modules/stories/s4-chat-carried/story.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s4-chat-carried
@@ -1218,7 +1480,7 @@ dependsOn:
   - s1-shell-core
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s4-chat-carried/tasks/t1-shared-runtime/task.yaml
+## v2/epoch-1/e4-shell-modules/stories/s4-chat-carried/tasks/t1-shared-runtime/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t1-shared-runtime
@@ -1234,7 +1496,7 @@ dod:
     item: "notify state exists once per host"
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s4-chat-carried/tasks/t2-chat-register/task.yaml
+## v2/epoch-1/e4-shell-modules/stories/s4-chat-carried/tasks/t2-chat-register/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t2-chat-register
@@ -1252,7 +1514,7 @@ dod:
     item: "no chat logic changed (diff touches registration only)"
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s4-chat-carried/tasks/t3-chat-scenarios/task.yaml
+## v2/epoch-1/e4-shell-modules/stories/s4-chat-carried/tasks/t3-chat-scenarios/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t3-chat-scenarios
@@ -1269,7 +1531,7 @@ dod:
     item: "all existing chat host scenarios pass"
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s5-install-module/story.yaml
+## v2/epoch-1/e4-shell-modules/stories/s5-install-module/story.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: s5-install-module
@@ -1278,7 +1540,7 @@ dependsOn:
   - s3-sidebar
 ```
 
-## v2/epoch-1/e2-thin-shell/stories/s5-install-module/tasks/t1-install-after-ready/task.yaml
+## v2/epoch-1/e4-shell-modules/stories/s5-install-module/tasks/t1-install-after-ready/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t1-install-after-ready
@@ -1294,37 +1556,46 @@ dod:
     item: "M2 does not include install work"
 ```
 
-## v2/epoch-1/e3-work-contract-install/epic.yaml
+## v2/epoch-1/e4-shell-modules/stories/s6-dead-v1-out/story.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e3-work-contract-install
-title: "YAML work contract, roles, zero-config install, SessionStart hook"
-half: server
+id: s6-dead-v1-out
+title: "Dead v1 watchers and controls out of the bundle"
 dependsOn:
-  - e1-gate-simplify
-doneWhen:
-  - "shared/work-plan.schema.json + vectors; validate_work accepts this v2 folder and rejects each vector case"
-  - "workMethod limits come from the device config (cap 3 rejects a 4-epic fixture)"
-  - "review_plan(featureFolder) validates first, packs in topological order"
-  - "roles returns main AI, role table, complexity bands, Haiku kinds, work method"
-  - "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent"
-  - "the folder-name rule applies to epoch/epic/story/task nodes; the feature id is free; --install writes NO AskUserQuestion hook"
+  - s4-chat-carried
 ```
 
-## v2/epoch-1/e4-kit-local-pages/epic.yaml
+## v2/epoch-1/e4-shell-modules/stories/s6-dead-v1-out/tasks/t1-remove-watchers/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e4-kit-local-pages
-title: "Kit 0.3.0 + Prompts & Commands, Phrases, Main AI (incl. work method), Rounds; v1 → 2.0 migration"
-half: extension
+id: t1-remove-watchers
+title: "Remove escalation/consultation/question watchers, cadence and hold controls from the extension"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - src_vs_code/src
+dod:
+  - id: d1
+    item: "no escalation or cadence control or watcher in the bundle"
+```
+
+## v2/epoch-1/e4-shell-modules/stories/s6-dead-v1-out/tasks/t2-recheck-m2/task.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-recheck-m2
+title: "Re-run the measure launch; M2 still ≤ 2000 ms"
+kind: measure
+complexity: 2
 dependsOn:
-  - e2-thin-shell
-  - e3-work-contract-install
-doneWhen:
-  - "kit 0.3.0 released with K1-K6, each with a story, fakeDom and axe test"
-  - "each page tested by running its shipped bundle"
-  - "migration: user settings AND side overlays backed up, effective values per side, If-None-Match first write, idempotent, v1 keys untouched"
-  - "migration is local only: device-settings.json with local revision + migrated hash (first hub sync is epoch 2 E2)"
+  - t1-remove-watchers
+parallel: false
+files:
+  - research/RESULTS_v2_start.md
+dod:
+  - id: d1
+    item: "new M2 recorded"
 ```
 
 ## v2/epoch-1/e5-release-2-0/epic.yaml
@@ -1334,7 +1605,8 @@ id: e5-release-2-0
 title: "Cut-over: dropped code out of the bundle, 2.0 release, post-deploy check"
 half: both
 dependsOn:
-  - e4-kit-local-pages
+  - e3-server-cleanup-install
+  - e4-shell-modules
 doneWhen:
   - "VSIX inspected: new shell, budgets, no dropped modules"
   - "mcp + extension released; the owner's machines run 2.0"
@@ -1352,82 +1624,88 @@ dependsOn: []
 epics:
   - e1-gate-simplify
   - e2-thin-shell
-  - e3-work-contract-install
-  - e4-kit-local-pages
+  - e3-server-cleanup-install
+  - e4-shell-modules
   - e5-release-2-0
 ```
 
-## v2/epoch-2/e1-hub-server/epic.yaml
+## v2/epoch-2/e1-hub-slice/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e1-hub-server
-title: "Hub mode of the Team server"
+id: e1-hub-slice
+title: "Hub slice: boots alone, enrol, device document, applied, one log stream, --hub-sync"
 mvp: true
-half: server
+half: both
 dependsOn: []
 doneWhen:
+  - "a setting changed from the Windows window is reported applied by a VM user in ≤ 90 s"
+  - "stale write = 412; a device token is refused on another device and on Team routes"
   - "hub mode boots alone (own auth, own startup condition)"
   - "endpoints + http/ contracts; 412/428; device token limited to its device; Team session refused on hub routes"
   - "sweeper measures retained bytes and db+WAL size"
   - "deployed on the ionos host"
 ```
 
-## v2/epoch-2/e2-device-agent-vm-shared/epic.yaml
+## v2/epoch-2/e2-vm-shared/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e2-device-agent-vm-shared
-title: "Device agent, enrolment line, VM shared instance"
+id: e2-vm-shared
+title: "VM shared instance"
+mvp: true
 half: server
+dependsOn: []
+doneWhen:
+  - "UID B runs claude, codex and agy after UID A logged in, also after a token refresh by the other UID"
+  - "two UIDs write SQLite at the same time"
+  - "shared /var/lib/coai with group coai; existing db/WAL permissions repaired"
+```
+
+## v2/epoch-2/e3-device-agent-sync/epic.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e3-device-agent-sync
+title: "Device agent and sync: lease, cache, single writer, outbox, sweeper, v1 → device-document migration, first sync"
+half: both
 dependsOn:
-  - e1-hub-server
+  - e1-hub-slice
+  - e2-vm-shared
 doneWhen:
   - "two VM users and WSL appear on the hub from pasted lines"
   - "settings round-trip with offline cache; single writer; foreign edit put back"
-  - "shared /var/lib/coai with group coai; existing db/WAL permissions repaired; second-UID test"
   - "the pasted line downloads, checks the hub-shown sha256, then runs; the single-use key is not left in history or environment"
   - "local outbox ≤ 20 MB per stream with a dropped-N line; delivered lines removed after ack"
   - "first sync: If-None-Match create; 412 with unchanged local → take hub; both changed → apply hub, keep local as conflict file, notify"
   - "the exact pasted bash and PowerShell lines tested: no key in the line, hidden prompt from /dev/tty, script run from the verified file"
+  - "migration: user settings AND side overlays backed up, effective values per side, idempotent, v1 keys untouched"
+  - "the legacy settings mirror is off on a hub-managed device"
 ```
 
-## v2/epoch-2/e3-update-everywhere/epic.yaml
+## v2/epoch-2/e4-update-rollout/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e3-update-everywhere
-title: "One-click update of every device"
-half: server
+id: e4-update-rollout
+title: "Update everywhere and rollout to all devices"
+half: both
 dependsOn:
-  - e2-device-agent-vm-shared
+  - e3-device-agent-sync
 doneWhen:
   - "a desired version moves every device; swap survives a kill; last 2 versions kept; rollback works"
   - "shared VM swap needs no root after the first install"
+  - "2 VMs (shared), WSL and Windows enrolled; one rollout followed to the end"
 ```
 
-## v2/epoch-2/e4-devices-features-pages/epic.yaml
+## v2/epoch-2/e5-kit-devices-page/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e4-devices-features-pages
-title: "Devices and Features pages"
+id: e5-kit-devices-page
+title: "Kit 0.3.0 + Devices page (roles → model lists, work method)"
 half: extension
 dependsOn:
-  - e1-hub-server
+  - e1-hub-slice
 doneWhen:
+  - "kit 0.3.0 released with K1-K6, each with a story, fakeDom and axe test"
   - "Devices: tree VM → user / WSL / Windows, per-device settings and logs, enrolment lines, update everywhere with progress"
-  - "Features: a remote-only feature opened from one Windows window through the hub"
-  - "412 handled: reload, 'changed elsewhere', no overwrite"
-```
-
-## v2/epoch-2/e5-rollout/epic.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e5-rollout
-title: "All owner devices enrolled and on the hub"
-half: both
-dependsOn:
-  - e3-update-everywhere
-  - e4-devices-features-pages
-doneWhen:
-  - "2 VMs (shared), WSL and Windows enrolled; one rollout followed to the end"
+  - "412 handled: reload, changed elsewhere, no overwrite"
 ```
 
 ## v2/epoch-2/epoch.yaml
@@ -1439,53 +1717,87 @@ proves: "one Windows window sees and controls every device"
 dependsOn:
   - epoch-1
 epics:
-  - e1-hub-server
-  - e2-device-agent-vm-shared
-  - e3-update-everywhere
-  - e4-devices-features-pages
-  - e5-rollout
+  - e1-hub-slice
+  - e2-vm-shared
+  - e3-device-agent-sync
+  - e4-update-rollout
+  - e5-kit-devices-page
 ```
 
-## v2/epoch-3/e1-toolchain-adapters/epic.yaml
+## v2/epoch-3/e1-role-jobs-ba/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e1-toolchain-adapters
-title: "Toolchain adapters dotnet + node, deterministic checks"
+id: e1-role-jobs-ba
+title: "External-role jobs + router + failover + work-plan schema + BA role"
 mvp: true
 half: server
 dependsOn: []
+doneWhen:
+  - "start_role/role_status/role_cancel; detached job with lease + generation"
+  - "BA writes the stories and tasks of the next real v2 epic; validate_work passes in ≤ 2 repair turns; the orchestrator changes < 20 % of the task files"
+  - "FakeCli refusal / limit / crash → next model; one log line and one notification per switch"
+  - "work-plan schema with the security flag; validate_work; workMethod limits from the device config"
+  - "complexity 10 or security → the important model list"
+```
+
+## v2/epoch-3/e2-coder-one-task/epic.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e2-coder-one-task
+title: "Coder: one task to green on this repository"
+mvp: true
+half: server
+dependsOn:
+  - e1-role-jobs-ba
+doneWhen:
+  - "coder is one role case; this repository through .coai/toolchain.yaml; claude only"
+  - "green in ≤ 3 fix turns; main-AI tokens and wall time below the baseline; accepted gate findings not higher"
+  - "task session inherits the feature plan proceed; write boundary at launch"
+```
+
+## v2/epoch-3/e3-roles-complete/epic.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e3-roles-complete
+title: "Roles complete: scout, important/judge, codex + agy rows, review_plan(featureFolder)"
+half: server
+dependsOn:
+  - e1-role-jobs-ba
+doneWhen:
+  - "scout and judge strict JSON outputs"
+  - "codex and agy coder sessions resumed"
+  - "review_plan(featureFolder) validates first, packs in topological order"
+```
+
+## v2/epoch-3/e4-adapters-coder-hardening/epic.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-adapters-coder-hardening
+title: "Adapters dotnet + node + coder hardening"
+half: server
+dependsOn:
+  - e2-coder-one-task
 doneWhen:
   - "golden detection and argv on fixture repos (both trees, base..head diff)"
   - "parsers tested on recorded real output"
   - ".coai/toolchain.yaml override; not_configured is never green"
   - "this repository is a fixture that runs a real test"
-```
-
-## v2/epoch-3/e2-coder-fix-loop/epic.yaml
-```yaml
-# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e2-coder-fix-loop
-title: "Coder delegation with the build/test fix loop"
-mvp: true
-half: server
-dependsOn:
-  - e1-toolchain-adapters
-doneWhen:
-  - "start_coder/coder_status/coder_cancel; envelope + report schema"
   - "same session resumed (claude, codex, agy); caps and no-progress stop; flaky re-run"
   - "write boundary at launch; task session inherits the feature's plan proceed"
   - "job lease with generation; survives an MCP client restart"
 ```
 
-## v2/epoch-3/e3-work-scheduler/epic.yaml
+## v2/epoch-3/e5-work-scheduler/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e3-work-scheduler
+id: e5-work-scheduler
 title: "Parallel work scheduler"
 half: server
 dependsOn:
-  - e2-coder-fix-loop
+  - e2-coder-one-task
+  - e4-adapters-coder-hardening
 doneWhen:
+  - "story 1 = two tasks in parallel; go on only if speedup ≥ 1.3× and peak RAM stays in the WSL limit"
   - "DAG from YAML; host-level slots with atomic RAM reservation; WSL ceiling 2"
   - "checks on the candidate merge SHA before the integration branch advances"
   - "pending resolutions persisted; a run ends partial cleanly"
@@ -1493,11 +1805,28 @@ doneWhen:
   - "detached run resolves itself (orchestrator-model resolver, 2 retries, 10 min → good_enough + notification); completes when the initiating AI disconnects"
 ```
 
-## v2/epoch-3/e4-ask-hook/epic.yaml
+## v2/epoch-3/epoch.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e4-ask-hook
-title: "AskUserQuestion hook (spike first)"
+id: epoch-3
+title: "Deterministic work"
+proves: "an external role does a task that coai routes, checks and keeps green"
+dependsOn:
+  - epoch-1
+epics:
+  - e1-role-jobs-ba
+  - e2-coder-one-task
+  - e3-roles-complete
+  - e4-adapters-coder-hardening
+  - e5-work-scheduler
+```
+
+## v2/epoch-4/e1-ask-hook/epic.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e1-ask-hook
+title: "AskUserQuestion hook (spike = story 1)"
+mvp: true
 half: server
 dependsOn: []
 doneWhen:
@@ -1507,36 +1836,70 @@ doneWhen:
   - "the installer writes the hook only when the spike passed for the installed Claude Code version"
 ```
 
-## v2/epoch-3/e5-sessions-mod/epic.yaml
+## v2/epoch-4/e2-sessions-creds/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: e5-sessions-mod
-title: "tmux sessions via the creds MCP + Claude mod"
+id: e2-sessions-creds
+title: "tmux sessions through the creds MCP (spike = story 1)"
+mvp: true
 half: extension
 dependsOn: []
 doneWhen:
   - "real Windows/WSL spike: disconnect event recorded; PNG round-trip hash matches"
   - "tree VM → user → session; create/attach/resume; reconnect backoff; no retry on 0"
+```
+
+## v2/epoch-4/e3-claude-mod/epic.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e3-claude-mod
+title: "Claude mod: phrases, active consults, failures"
+half: extension
+dependsOn: []
+doneWhen:
   - "mod: phrases, active consults, failures; appends to CLAUDE_CODE_PLUGIN_DIRS in both install orders"
 ```
 
-## v2/epoch-3/epoch.yaml
+## v2/epoch-4/e4-local-pages/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: epoch-3
-title: "Deterministic work"
-proves: "coai builds a YAML feature with coders in parallel and keeps them green"
+id: e4-local-pages
+title: "Local pages: Prompts & Commands, Phrases, Rounds (kit 0.3.0)"
+half: extension
+dependsOn: []
+doneWhen:
+  - "each page tested by running its shipped bundle"
+  - "prompt overrides and facets (gates, review, documents, cons, consask, chat, roles, coder)"
+```
+
+## v2/epoch-4/e5-features-page/epic.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e5-features-page
+title: "Features page (needs epoch-3 e1)"
+half: extension
+dependsOn: []
+doneWhen:
+  - "epoch → epic → story → task tree with status, complexity, model, parallel lanes; a remote-only feature through the hub"
+```
+
+## v2/epoch-4/epoch.yaml
+```yaml
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: epoch-4
+title: Operator
+proves: "the person works through coai: questions answered, sessions one click away, everything visible"
 dependsOn:
   - epoch-1
 epics:
-  - e1-toolchain-adapters
-  - e2-coder-fix-loop
-  - e3-work-scheduler
-  - e4-ask-hook
-  - e5-sessions-mod
+  - e1-ask-hook
+  - e2-sessions-creds
+  - e3-claude-mod
+  - e4-local-pages
+  - e5-features-page
 ```
 
-## v2/epoch-4/e1-attachments/epic.yaml
+## v2/epoch-5/e1-attachments/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: e1-attachments
@@ -1550,7 +1913,7 @@ doneWhen:
   - "frames extracted by the Studio (≤ 8, png/jpg/webp); an unreadable frame is skipped with a note"
 ```
 
-## v2/epoch-4/e2-studio-roles/epic.yaml
+## v2/epoch-5/e2-studio-roles/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: e2-studio-roles
@@ -1563,7 +1926,7 @@ doneWhen:
   - "findings written to scene_issue as consultant, idempotent"
 ```
 
-## v2/epoch-4/e3-more-adapters/epic.yaml
+## v2/epoch-5/e3-more-adapters/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: e3-more-adapters
@@ -1574,7 +1937,7 @@ doneWhen:
   - "each stack's fixture repo goes green end to end"
 ```
 
-## v2/epoch-4/e4-git-pr-ci/epic.yaml
+## v2/epoch-5/e4-git-pr-ci/epic.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: e4-git-pr-ci
@@ -1585,10 +1948,10 @@ doneWhen:
   - "PR body from task.yaml + envelope; CI wait: checks must exist then pass; no-runner re-run once; conflicting PR reported"
 ```
 
-## v2/epoch-4/epoch.yaml
+## v2/epoch-5/epoch.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
-id: epoch-4
+id: epoch-5
 title: "Reach: studio and every listed language"
 proves: "video review through extracted frames, and C#/Node/PHP/Rust/Python/Java all work"
 dependsOn:
@@ -1623,4 +1986,19 @@ epochs:
   - epoch-2
   - epoch-3
   - epoch-4
+  - epoch-5
+taskSchema:
+  security: "boolean flag; true routes the task to the important role"
+  roles: "ordered model lists per role"
+cornerstones:
+  - epoch-1/e1/s4-migrate-v2
+  - epoch-1/e3/s6-install
+  - "epoch-2/e1 hub auth + device-document contract"
+  - "epoch-2/e2 shared vendor logins + file permissions"
+  - "epoch-2/e3 first sync + settings migration, single writer"
+  - "epoch-2/e4 binary swap"
+  - "epoch-3/e1 router + failover + job lease"
+  - "epoch-3/e1 work-plan schema"
+  - "epoch-3/e2 plan binding + envelope/report schema"
+  - "epoch-3/e5 host slots + merge on candidate SHA"
 ```

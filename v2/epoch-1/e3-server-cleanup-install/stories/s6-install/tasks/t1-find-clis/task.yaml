@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-find-clis
+title: "Find claude, codex, agy (ExecutablePaths); report versions"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Install
+dod:
+  - id: d1
+    item: "absent CLIs reported, not guessed"
