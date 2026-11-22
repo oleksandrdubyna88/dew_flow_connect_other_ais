@@ -12,10 +12,16 @@ namespace CoaiMcp.Install;
 /// <remarks>
 /// <para>It reads; it never writes. A value it cannot classify is a refusal (the safe direction): the worst a too-strict reader does is leave a file alone and say why.
 /// Tables are kept as <see cref="Dictionary{TKey, TValue}"/>, arrays as <see cref="List{T}"/>, strings as <see cref="string"/>; numbers, booleans and date-times
-/// as their source text (nothing here needs their value).</para>
+/// as a <see cref="TomlBare"/> holding their source text (nothing here needs their value, but a reader must be able to tell a number from a string: an argument that is not text is not handed to a vendor as if it were).</para>
 /// </remarks>
 internal sealed partial class TomlSubset
 {
+    /// <summary>A boolean, number or date-time as it was written — not a string.</summary>
+    internal sealed record TomlBare(string Text)
+    {
+        public override string ToString() => Text;
+    }
+
     private readonly string _text;
     private int _at;
 
@@ -256,7 +262,7 @@ internal sealed partial class TomlSubset
         }
     }
 
-    private string Bare()
+    private TomlBare Bare()
     {
         var start = _at;
         while (_at < _text.Length && !char.IsWhiteSpace(_text[_at]) && _text[_at] is not (',' or ']' or '}' or '#'))
@@ -267,7 +273,7 @@ internal sealed partial class TomlSubset
         var token = _text[start.._at];
         if (token is "true" or "false" || NumberLike().IsMatch(token) || DateLike().IsMatch(token))
         {
-            return token;
+            return new TomlBare(token);
         }
 
         throw Fault($"'{token}' at line {LineOf(start)} is not a TOML value");

@@ -42,7 +42,14 @@ internal static class RolesSettings
                 }
                 else if (ModelList(role.Value) is { } list)
                 {
-                    chosen[role.Name] = list;
+                    if (list.Select(model => VendorRouting.Refusal(model.Model, model.Vendor)).FirstOrDefault(refusal => refusal.Length > 0) is { } refusal)
+                    {
+                        problems.Add(Problem(RolesKeys.Models, $"the list of '{role.Name}' breaks the vendor-routing rule — {refusal}; its default stands"));
+                    }
+                    else
+                    {
+                        chosen[role.Name] = list;
+                    }
                 }
                 else
                 {
@@ -109,6 +116,13 @@ internal static class RolesSettings
                 if (BandOf(row) is not { } band)
                 {
                     problems.Add(Problem(RolesKeys.Bands, $"a row is not {{\"min\":0-{TopBand},\"max\":0-{TopBand},\"model\":\"…\",\"vendor\":\"…\"}} with min not above max; the default bands stand"));
+
+                    return defaults;
+                }
+
+                if (VendorRouting.Refusal(band.Model, band.Vendor) is { Length: > 0 } refusal)
+                {
+                    problems.Add(Problem(RolesKeys.Bands, $"a band breaks the vendor-routing rule — {refusal}; the default bands stand"));
 
                     return defaults;
                 }

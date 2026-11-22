@@ -28,10 +28,10 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
         var found = await _finder.FindAsync(args.Only, ct);
         if (found.All(client => !client.Found))
         {
-            return Report(output, binary.View, null, Plan(found, binary.Path, restore), SetupClientsMode.NoClientFound);
+            return Report(output, binary.View, null, Plan(found, binary, restore), SetupClientsMode.NoClientFound);
         }
 
-        var runs = Plan(found, binary.Path, restore);
+        var runs = Plan(found, binary, restore);
         if (args.DryRun || !runs.Any(Changes))
         {
             return Report(output, binary.View, null, runs, ExitOf(runs, failed: false));
@@ -64,7 +64,7 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
         using (held)
         {
             // Planned AGAIN under the lock: the run that held it may just have done what this one meant to.
-            var runs = Plan(found, binary.Path, restore);
+            var runs = Plan(found, binary, restore);
             if (!runs.Any(Changes))
             {
                 return Report(output, binary.View, null, runs, ExitOf(runs, failed: false));
@@ -151,12 +151,16 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
 
     // ---------- planning ----------
 
-    private IReadOnlyList<ClientRun> Plan(IReadOnlyList<FoundClient> found, string binary, ManifestRecord? restore)
+    private IReadOnlyList<ClientRun> Plan(IReadOnlyList<FoundClient> found, BinaryChoice binary, ManifestRecord? restore)
     {
-        var inputs = new PlanInputs(args.Remove ? Wanted.Remove : Wanted.Install, binary, args.Binary.Length > 0, host.IsWindows, File.Exists, host.InClaudeSession);
+        var inputs = new PlanInputs(args.Remove ? Wanted.Remove : Wanted.Install, binary.Path, args.Binary.Length > 0, host.IsWindows, File.Exists, host.InClaudeSession);
 
-        return [.. found.Select(client => new ClientRun(client, client.Found ? PlanTargets(client.Cli, inputs, restore) : []))];
+        return [.. found.Select(client => new ClientRun(client, !client.Found ? [] : binary.Missing.Length > 0 && client.Cli != Client.Agy ? RefusedTargets(client.Cli, binary.Missing) : PlanTargets(client.Cli, inputs, restore)))];
     }
+
+    /// <summary>Every target of a client REFUSED with one sentence — the default binary is not there, so nothing may be registered, and nothing is locked, backed up or run.</summary>
+    private IReadOnlyList<TargetRun> RefusedTargets(Client cli, string reason) =>
+        [.. InstallTargets.For(cli).Select(target => new TargetRun(target, PlannedTarget.Refused(cli, target.Kind, target.FileOf(host), reason), "planned", string.Empty))];
 
     private IReadOnlyList<TargetRun> PlanTargets(Client cli, PlanInputs inputs, ManifestRecord? restore) =>
         [.. InstallTargets.For(cli).Select(target => new TargetRun(target, PlanTarget(target, inputs, restore), "planned", string.Empty))];
@@ -204,7 +208,11 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
 
     // ---------- the binary to register ----------
 
-    private sealed record BinaryChoice(string Path, BinaryView View, string Error);
+    /// <param name="Path">The binary to register.</param>
+    /// <param name="View">What the output says about it.</param>
+    /// <param name="Error">An argument error (65): the person NAMED a binary that cannot be used.</param>
+    /// <param name="Missing">Why the DEFAULT binary (this process's own path) is not there — then every target is refused (78), because the arguments were fine and the machine is not.</param>
+    private sealed record BinaryChoice(string Path, BinaryView View, string Error, string Missing = "");
 
     private async Task<BinaryChoice> PrepareBinaryAsync(CancellationToken ct)
     {
@@ -214,6 +222,11 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
         }
 
         var path = args.Binary.Length > 0 ? args.Binary : deps.SelfPath;
+        if (args.Binary.Length == 0 && !ExecutableResolver.IsInstalledFile(path))
+        {
+            return new BinaryChoice(string.Empty, new BinaryView(path, string.Empty), string.Empty, $"no coai-mcp at {(path.Length > 0 ? path : "(this process has no path)")}; pass --binary or install the extension first");
+        }
+
         if (!Path.IsPathFullyQualified(path) && !(host.IsWindows && path.Contains('\\')))
         {
             return Bad($"the binary '{path}' is not a full path — name one with --binary <full path to coai-mcp>");

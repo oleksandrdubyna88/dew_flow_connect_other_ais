@@ -228,6 +228,14 @@ internal static class McpVendor
             rest.RemoveRange(0, 2);
         }
 
+        if (rest.Count < 3 || rest[1] != "--")
+        {
+            // Measured: the command and its arguments come after `--` (`<NAME> -- <COMMAND>...`); a fake no more forgiving than the real one.
+            Console.Error.WriteLine("error: the server command must follow `--`");
+
+            return 2;
+        }
+
         var name = rest[0];
         var command = rest[2];
         var args = rest.Skip(3).ToList();

@@ -91,8 +91,17 @@ internal static class ClientPlan
             return PlannedTarget.Refused(target.Cli, target.Kind, file, ClaudeMcp.SessionRefusal, found.ShadowedBy);
         }
 
-        return found.Entry is null ? Added(target, file, found, inputs, interrupted) : Moved(target, file, found, found.Entry, inputs);
+        return NoSecretOnACommandLine(found.Entry is null ? Added(target, file, found, inputs, interrupted) : Moved(target, file, found, found.Entry, inputs), target);
     }
+
+    /// <summary>
+    /// Codex takes an environment value only as an argument of <c>codex mcp add</c>, so a plan that would pass an entry's env on is REFUSED when that env holds a key that is not known to be non-secret
+    /// (<see cref="CodexMcp.NonSecretEnv"/>) — at plan time, before any lock or backup, and with the key's name only.
+    /// </summary>
+    private static PlannedTarget NoSecretOnACommandLine(PlannedTarget plan, IInstallTarget target) =>
+        target is CodexMcp && plan.Action.Changes() && CodexMcp.EnvRefusal(plan.After) is { Length: > 0 } refusal
+            ? PlannedTarget.Refused(plan.Client, plan.Kind, plan.File, refusal, plan.ShadowedBy)
+            : plan;
 
     private static PlannedTarget Added(IInstallTarget target, string file, ConfigRead.Found found, PlanInputs inputs, McpEntry? interrupted)
     {
@@ -138,7 +147,7 @@ internal static class ClientPlan
         }
 
         return (after is null ? found.Entry is null : after.Same(found.Entry))
-            ? new PlannedTarget(target.Cli, target.Kind, file, PlanAction.Restore, target.Via(PlanAction.Restore), found.Entry, before, found.ShadowedBy, "the entry goes back to what it was before the install")
+            ? NoSecretOnACommandLine(new PlannedTarget(target.Cli, target.Kind, file, PlanAction.Restore, target.Via(PlanAction.Restore), found.Entry, before, found.ShadowedBy, "the entry goes back to what it was before the install"), target)
             : PlannedTarget.Refused(target.Cli, target.Kind, file, $"{file} no longer holds what the install wrote, so it is not put back over a later change", found.ShadowedBy);
     }
 

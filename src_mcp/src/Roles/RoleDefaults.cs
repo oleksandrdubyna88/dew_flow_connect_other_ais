@@ -76,15 +76,26 @@ internal sealed class RoleDefaults
     private static VendorDefaults VendorOf(JsonElement vendor)
     {
         var roles = RoleNames.Select(name => (name, (IReadOnlyList<DefaultModel>)[.. vendor.GetProperty("roles").GetProperty(name).EnumerateArray().Select(ModelOf)])).ToList();
+        var bands = vendor.GetProperty("complexityBands").EnumerateArray().Select(band => new Band(
+            band.GetProperty("min").GetInt32(),
+            band.GetProperty("max").GetInt32(),
+            band.GetProperty("model").GetString() ?? string.Empty,
+            band.GetProperty("vendor").GetString() ?? string.Empty)).ToList();
+
+        // A shipped default has no default of its own to fall back on, so one that breaks the vendor-routing rule is a build fault, like a file that does not parse.
+        var wrong = roles.SelectMany(role => role.Item2.Select(model => (Where: $"role '{role.name}'", model.Model, model.Vendor)))
+            .Concat(bands.Select(band => (Where: "a band", band.Model, band.Vendor)))
+            .Select(entry => (entry.Where, Refusal: VendorRouting.Refusal(entry.Model, entry.Vendor)))
+            .FirstOrDefault(entry => entry.Refusal.Length > 0);
+        if (wrong.Refusal is { Length: > 0 })
+        {
+            throw new InvalidOperationException($"shared/role-defaults.json: {wrong.Where} breaks the vendor-routing rule — {wrong.Refusal}");
+        }
 
         return new VendorDefaults(
             vendor.GetProperty("cli").GetString() ?? string.Empty,
             roles,
-            [.. vendor.GetProperty("complexityBands").EnumerateArray().Select(band => new Band(
-                band.GetProperty("min").GetInt32(),
-                band.GetProperty("max").GetInt32(),
-                band.GetProperty("model").GetString() ?? string.Empty,
-                band.GetProperty("vendor").GetString() ?? string.Empty))],
+            bands,
             vendor.TryGetProperty("note", out var note) ? note.GetString() ?? string.Empty : string.Empty);
     }
 
