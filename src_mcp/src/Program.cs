@@ -332,6 +332,14 @@ internal static class Program
         /// </summary>
         /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs.</remarks>
         BackfillAuthors,
+
+        /// <summary>
+        /// The v2 data migration of this side's data folder: held sessions leave their hold, open cards are withdrawn and archived, the cadence and question
+        /// phase stores and the removed settings keys move to an archive (E1.S4). Without <c>--apply</c> it is a dry run that creates nothing. See
+        /// <see cref="Server.Migrations.MigrateV2Mode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs. Never exits 64.</remarks>
+        MigrateV2,
     }
 
     /// <summary>
@@ -347,7 +355,7 @@ internal static class Program
     internal static readonly IReadOnlySet<Startup> WriterModes = new HashSet<Startup>
     {
         Startup.CheckConsultant, Startup.CheckModel, Startup.Collect, Startup.PairsKeep, Startup.PairsDecide,
-        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors,
+        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors, Startup.MigrateV2,
     };
 
     /// <summary>Why <paramref name="startup"/> may not run here — empty when it may (not a writer, or its root is there).</summary>
@@ -404,6 +412,7 @@ internal static class Program
                 "--features" => Startup.Features,
                 "--check-security" => Startup.CheckSecurity,
                 "--check-model" => Startup.CheckModel,
+                "--migrate-v2" => Startup.MigrateV2,
                 _ => Startup.Usage,
             };
 
@@ -588,6 +597,10 @@ internal static class Program
 
             case Startup.CheckModel:
                 return await Server.ConsultantCheckMode.RunAsync(args, Server.Noticing.None);
+
+            case Startup.MigrateV2:
+                // A one-shot WRITER (with --apply): ONE JSON object on stdout whenever it runs, its sentences on stderr, never 64.
+                return Server.Migrations.MigrateV2Mode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note);
 
             default:
                 return await ServeAsync();
@@ -2148,6 +2161,12 @@ internal static class Program
             // settings file happens before there is a host to own anything.
             var noticing = Noticing.Through(notices, Environment.GetEnvironmentVariable, log, run);
             var dataDir = dir.Path; // the one resolution above, not a second one
+            // The v2 data migration, once, before anything reads the folder (E1.S4): only a v2 build, only with no marker of these tables. Never throws and never
+            // writes stdout; a lease held elsewhere, a read-only folder or deferred objects are a warning here and the next start tries again.
+            Server.Migrations.MigrateV2Mode.RunAutomatic(
+                dataDir,
+                typeof(Program).Assembly.GetName().Version ?? new Version(0, 0, 0),
+                sentence => log.Warning("{Detail}", sentence));
             var configuration = SettingsFile.Layer(
                 dataDir,
                 Environment.GetEnvironmentVariable,
@@ -2608,6 +2627,14 @@ internal static class Program
         A request it cannot read exits 65.
         `--check-model` reads {"row": {…}} on stdin and runs ONE paid check of that catalog row — the consultant's
         check (a scratch repository, a marker, a canary), its record kept as model-<id>. A request without a row exits 65.
+        `--migrate-v2 [--apply]` migrates THIS side's data folder to v2: a session a v1 build held leaves its hold
+        (good_enough; the next resolve advances the stage), an open escalation card is marked withdrawn_v2 and moved to
+        escalations/archive/, qphase/ and cadence/ move to migrations/v1-archive/, and the settings keys v2 no longer reads
+        move from settings.json to settings.v1-removed.json. Without --apply it is a dry run: it prints what it would do and
+        creates nothing. It always scans (the marker migrations/v2.done gates only the automatic run at server start) and is safe to
+        run again. Prints ONE JSON object on stdout (status plan, done, busy, partial or failed; counts; the holds a person had
+        answered; the steps). Exits 0 plan printed or apply complete, 65 a bad argument, 74 the data folder is missing or not
+        writable, 75 another migration holds the lease, or some objects were deferred and no marker was written — never 64.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

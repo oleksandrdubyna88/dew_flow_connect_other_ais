@@ -531,6 +531,16 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     }
 
     /// <summary>
+    /// One session file by its PATH, made whole like <see cref="Load"/> — but read WITHOUT the turn, and a file that cannot be read THROWS
+    /// (<see cref="JsonException"/>, <see cref="IOException"/>, <see cref="UnauthorizedAccessException"/>): the v2 migration must tell a corrupt file
+    /// from a busy one and a fresh session from neither (E1.S4), and a DRY RUN must not create the <c>.turn</c> file a turn would make. A reader needs
+    /// no turn to see a whole file — every write is a temp file moved over it, and the shared read tolerates the move (<see cref="SharedRead"/>).
+    /// <see cref="Load"/> answers all three failures as null.
+    /// </summary>
+    internal PersistedSession? LoadFile(string file) =>
+        Normalised(JsonSerializer.Deserialize(SharedRead.Text(file), ServerJsonContext.Default.PersistedSession));
+
+    /// <summary>
     /// Reads a session file WITHOUT forbidding anyone else to write it.
     /// </summary>
     /// <remarks>
@@ -573,7 +583,18 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         // a parameter: a session knows what it is about, and a save that had to be told would be a
         // save that could be told wrong. It is also what lets the orphan sweep re-save a feature
         // session under its own key without knowing what a feature session is.
-        var file = FileFor(session.State.RepoPath, session.State.Branch, session.State.Document, session.State.Feature);
+        WriteTo(FileFor(session.State.RepoPath, session.State.Branch, session.State.Document, session.State.Feature), session);
+    }
+
+    /// <summary>
+    /// Writes a session to a file the CALLER names — scrub, turn and atomic move exactly as <see cref="Save"/>, with its failures as raw
+    /// <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/> for the caller to classify. The v2 migration rewrites a session
+    /// where it LIES, which is not always the file its key would name (E1.S4, scenario 15): a second file would be a second session.
+    /// </summary>
+    internal void SaveTo(string file, PersistedSession session) => WriteTo(file, session);
+
+    private void WriteTo(string file, PersistedSession session)
+    {
         // The bags are cleaned on a copy, once, here — the only place a session is serialised (SessionScrub says what it drops).
         var json = JsonSerializer.Serialize(SessionScrub.Scrubbed(session, Retired), ServerJsonContext.Default.PersistedSession);
         // ONE road, whether or not the turn could be taken: a temp file beside the session, then the move over it — `AtomicFile`, whose

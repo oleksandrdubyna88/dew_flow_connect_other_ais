@@ -179,6 +179,9 @@ public sealed class StageRulesTests : IDisposable
     /// at the old 90 000 left 6 676 and put <c>common/test-leftovers.md</c> on no branch; the owner's decision (after two consultants, consult 53578f8a) raised
     /// <c>RuleFiles.DefaultBudgetBytes</c> to 93 301, which leaves 9 977 (93 301 - 83 324), exactly what it was before this pin. Measured with
     /// <c>RuleBudgetMeasurementTests</c> (explicit): base 17 988, tier 65 336, free 9 977. The pins below were changed first and read back.</para>
+    /// <para><b>Re-baselined 2026-11-22 (E1.S4 of coai v2, the data migration).</b> `.agents/PROJECT.md` names the one-shot mode `--migrate-v2` (+16, which it must —
+    /// every one-shot mode is listed there). The base is 18 004, the tier is unchanged at 65 336, the pair is 83 340, which leaves 9 961 of 93 301 (9 977 until then). The tail
+    /// canaries below were re-run unchanged and green; the fourth smallest tail rule still does not fit. Read back from this test's own failure message.</para>
     /// <para>The unit is the one the collector spends: characters of the line-ending-normalised text
     /// (<c>RuleFile.Text.Length</c>), which is what <c>RuleFiles.DefaultBudgetBytes</c> calls bytes. They
     /// differ for the non-ASCII characters in these files, and are equal on every platform.</para>
@@ -196,13 +199,13 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
             .Sum(file => file.Text.Length);
 
-        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 988 + 65 336 = 83 324 of 93 301, since the conventions pin moved to 37b9aa5 and the owner raised the budget on 2026-11-06; 17 988 + 62 035 = 80 023 of 90 000, since E6.S1's --round-counts-merged met the conventions pin 105d53c on 2026-11-05; 17 988 + 62 061 = 80 049 on the E6.S1 branch before the merge; 17 963 + 62 035 = 79 998 since the conventions pin moved to 105d53c on 2026-11-01; 17 963 + 62 061 = 80 024 until then; 17 947 + 62 061 = 80 008 before E1.S2's --host-facts; 17 925 + 62 061 = 79 986 before E7). "
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 18 004 + 65 336 = 83 340 of 93 301, since E1.S4's --migrate-v2 on 2026-11-22; 17 988 + 65 336 = 83 324 before it, since the conventions pin moved to 37b9aa5 and the owner raised the budget on 2026-11-06; 17 988 + 62 035 = 80 023 of 90 000, since E6.S1's --round-counts-merged met the conventions pin 105d53c on 2026-11-05; 17 988 + 62 061 = 80 049 on the E6.S1 branch before the merge; 17 963 + 62 035 = 79 998 since the conventions pin moved to 105d53c on 2026-11-01; 17 963 + 62 061 = 80 024 until then; 17 947 + 62 061 = 80 008 before E1.S2's --host-facts; 17 925 + 62 061 = 79 986 before E7). "
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
         tierBytes.Should().Be(65_336, message);
-        baseBytes.Should().Be(17_988, message);
-        (baseBytes + tierBytes).Should().Be(83_324, message);
+        baseBytes.Should().Be(18_004, message);
+        (baseBytes + tierBytes).Should().Be(83_340, message);
     }
 
     /// <summary>

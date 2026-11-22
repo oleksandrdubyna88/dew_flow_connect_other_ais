@@ -55,6 +55,7 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
         new[] { "--upload-pairs", "--server", "http://127.0.0.1:9" },
         new[] { "--requeue-refused" },
         new[] { "--consultants" },
+        new[] { "--migrate-v2", "--apply" },
     };
     // END WRITER MODES
 
