@@ -558,7 +558,8 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// (<see cref="HoldBoundary"/>), so both doors write the same bytes <b>and the same notice</b>: an answered hold is announced, and the notice read back from disk, BEFORE the
     /// session leaves its hold. When the notice cannot be confirmed — no sink, a writer that refuses, a line the disk never took — the session is returned as it was loaded, STILL
     /// HELD (a v2 code path reads a held session as a normal one), nothing is written, and the next load or migration tries again; converting it anyway would end the only
-    /// chance of the notice, because no later run lists a session that is no longer held. The same rule covers the two ways out that do not write
+    /// chance of the notice, because no later run lists a session that is no longer held. An answer file that exists and cannot be read (permissions, an I/O error) is the same
+    /// case: whether a person answered is unknown, so the session stays held with a warning until the file can be read. The same rule covers the two ways out that do not write
     /// (<see cref="HoldBoundary.InMemory"/>): a conversion handed to a caller is a conversion that caller may save.</para>
     /// <para>Every step that falls back is SAID through <see cref="Log"/>: a save or a re-read that failed, and a session left held.</para>
     /// </remarks>
@@ -581,12 +582,15 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
                 return fresh ?? InMemory(boundary, file, held);
             }
 
-            if (boundary.Released(fresh, file) is not { } converted)
+            var release = boundary.Released(fresh, file);
+            if (!release.IsConverted)
             {
-                Log.Warning("v2 convert on load: the notice of an answered hold of {File} could not be written and read back, so the session stays held and is converted by a later load or migration", Path.GetFileName(file));
+                Log.Warning("v2 convert on load: {File} stays held and is converted by a later load or migration — {Why}", Path.GetFileName(file), release.Why);
 
                 return fresh;
             }
+
+            var converted = release.Session;
 
             WriteTo(file, converted);
             HoldConversion.Journaled(dataDir, file, "on-load", SaidInTheLog, Clock);

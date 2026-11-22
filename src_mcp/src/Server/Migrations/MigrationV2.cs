@@ -174,13 +174,21 @@ internal sealed partial class MigrationV2
 
             if (LegacyHold.Stands(session.State))
             {
-                scan.Work.Add(new SessionWork(file, session, Holds.AnsweredOf(id, session.State)));
+                scan.Work.Add(HeldWork(file, id, session));
             }
             else if (database && !done.Contains(id) && session.Rounds.Count > 0 && session.Rounds[^1].Note == ConversionNote)
             {
                 scan.Work.Add(new ReprojectWork(file, session));
             }
         }
+    }
+
+    /// <summary>A held session to convert, or — when an answer file of it exists and could not be read — a deferred one: whether a person answered is unknown, so the marker waits.</summary>
+    private Work HeldWork(string file, string id, PersistedSession session)
+    {
+        var answers = Holds.AnsweredOf(id, session.State);
+
+        return answers.Known ? new SessionWork(file, session, answers.Answered) : new DeferredWork("session", id, answers.Unknown);
     }
 
     /// <summary>Reads one session file; a file that is not a session is <c>unreadable</c>, one that could not be opened just now is <c>deferred</c>.</summary>
@@ -241,17 +249,35 @@ internal sealed partial class MigrationV2
                 continue;
             }
 
-            // Open = no status, or the empty one, and no answer a person gave. Expired and answered cards are history; a marked one only moves.
-            if (StatusOf(card) == WithdrawnStatus)
+            if (CardWorkOf(file, id, card) is { } work)
             {
-                scan.Work.Add(new CardWork(file, Withdraw: false));
-            }
-            else if (StatusOf(card).Length == 0 && HoldBoundary.AnswerOf(_dataDir, id) is null)
-            {
-                scan.Work.Add(new CardWork(file, Withdraw: true));
+                scan.Work.Add(work);
             }
         }
     }
+
+    /// <summary>What one readable card needs, or null for a card that is history. A marked one only moves; an open one is withdrawn.</summary>
+    private Work? CardWorkOf(string file, string id, JsonObject card)
+    {
+        var status = StatusOf(card);
+        if (status == WithdrawnStatus)
+        {
+            return new CardWork(file, Withdraw: false);
+        }
+
+        return status.Length == 0 ? OpenCardWork(file, id) : null;
+    }
+
+    /// <summary>
+    /// Open = no status, or the empty one, and no answer a person gave. Expired and answered cards are history. A card whose answer file exists and cannot be read is NOT open:
+    /// withdrawing it would move the card out from under the held session that names it, and the answer's notice could never be issued — it is deferred.
+    /// </summary>
+    private Work? OpenCardWork(string file, string id) => HoldBoundary.ReadAnswer(_dataDir, id) switch
+    {
+        AnswerRead.None => new CardWork(file, Withdraw: true),
+        AnswerRead.Unreadable unreadable => new DeferredWork("card", id, $"its answer file exists and could not be read: {unreadable.Why}"),
+        _ => null,
+    };
 
     /// <summary>What a card says once the migration withdrew it.</summary>
     public const string WithdrawnStatus = "withdrawn_v2";

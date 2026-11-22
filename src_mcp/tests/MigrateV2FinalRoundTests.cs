@@ -369,4 +369,112 @@ public sealed class MigrateV2FinalRoundTests : IDisposable
         tails.Should().HaveCount(3).And.OnlyContain(t => t.Bytes < 1000);
         MigrateV2Data.NoticesOf(dir, Code).Select(n => n.GetProperty("subject").GetString()).Should().Contain([AnsweredCard, "bbbbbbbbbbbb", "cccccccccccc"]);
     }
+
+    // ---------- 5. an answer file that exists but cannot be read is UNKNOWN, not "no answer" ----------
+
+    private static string AnswerFile(string dir) => Path.Combine(dir, "escalations", AnsweredCard + ".answer.json");
+
+    /// <summary>Runs <paramref name="body"/> while the answer file of the answered hold exists and cannot be read (mode 000), then makes it readable again.</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private static void WhileTheAnswerCannotBeRead(string dir, Action body)
+    {
+        var mode = File.GetUnixFileMode(AnswerFile(dir));
+        File.SetUnixFileMode(AnswerFile(dir), UnixFileMode.None);
+        try
+        {
+            body();
+        }
+        finally
+        {
+            File.SetUnixFileMode(AnswerFile(dir), mode);
+        }
+    }
+
+    private static void SkipWhereAModeIsNotKept() =>
+        Assert.SkipWhen(OperatingSystem.IsWindows() || Environment.IsPrivilegedProcess, "an unreadable file is a Unix mode a privileged user ignores");
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void ALoad_OfAnAnsweredHoldWhoseAnswerCannotBeRead_LeavesItHeld_WritesNothing_SaysWhy_AndAnnouncesOnceTheAnswerIsReadable()
+    {
+        SkipWhereAModeIsNotKept();
+        var dir = FolderWithAnAnsweredHold();
+        var file = MigrateV2Data.SessionFile(dir, "plan");
+        var bytes = File.ReadAllBytes(file);
+        var (log, said) = Logging();
+        var store = new SessionStore(dir) { Notice = MigrateV2Data.Sink(dir), Log = log };
+
+        WhileTheAnswerCannotBeRead(dir, () =>
+        {
+            var loaded = Load(store, dir, file);
+
+            LegacyHold.Stands(loaded.State).Should().BeTrue("an answer that may exist must not be overridden unannounced: the answer is unknown, so the session waits");
+            File.ReadAllBytes(file).Should().Equal(bytes, "no conversion is written");
+            MigrateV2Data.NoticesOf(dir, Code).Should().BeEmpty();
+            JournalText(dir).Should().NotContain("on-load");
+            said.Events.Should().ContainSingle(e => e.Level == LogEventLevel.Warning).Which.RenderMessage().Should().Contain(Path.GetFileName(file));
+        });
+
+        var later = Load(store, dir, file);
+
+        LegacyHold.Stands(later.State).Should().BeFalse("once the answer can be read the load converts");
+        MigrateV2Data.NoticesOf(dir, Code).Should().ContainSingle("the notice a missed conversion would have lost is written first").Which.GetProperty("answer").GetString().Should().Be("fix");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void AMigration_OfAnAnsweredHoldWhoseAnswerCannotBeRead_DefersTheSession_WritesNoMarker_AndTheNextRunAnnouncesThenConverts()
+    {
+        SkipWhereAModeIsNotKept();
+        var dir = FolderWithAnAnsweredHold();
+        var file = MigrateV2Data.SessionFile(dir, "plan");
+        var bytes = File.ReadAllBytes(file);
+
+        WhileTheAnswerCannotBeRead(dir, () =>
+        {
+            var plan = MigrateV2Data.Plan(dir);
+            plan.Steps.Should().Contain(s => s.Kind == "session" && s.Action == "defer", "a dry run says the session cannot be converted yet");
+
+            var report = MigrateV2Data.Apply(dir);
+
+            report.Status.Should().Be("partial");
+            report.Counts.Deferred.Should().Be(2, "the session and the card whose answer cannot be read");
+            File.ReadAllBytes(file).Should().Equal(bytes, "the session is left exactly as it is");
+            File.Exists(MigrationV2.MarkerFile(dir)).Should().BeFalse("a deferred session keeps the marker away");
+            File.Exists(Path.Combine(dir, "escalations", AnsweredCard + ".json")).Should().BeTrue("the card stays where the held session finds it: an unreadable answer is not an open card");
+            MigrateV2Data.NoticesOf(dir, Code).Should().BeEmpty();
+        });
+
+        MigrateV2Data.Apply(dir).Status.Should().Be("done");
+
+        LegacyHold.Stands(MigrateV2Data.Load(dir, file).State).Should().BeFalse();
+        MigrateV2Data.NoticesOf(dir, Code).Should().ContainSingle("the notice is issued once the answer is readable");
+        File.Exists(MigrationV2.MarkerFile(dir)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AnEmptyAnswer_IsNoAnswer_AndTheHeldSessionConvertsWithoutANotice()
+    {
+        var dir = FolderWithAnAnsweredHold();
+        var file = MigrateV2Data.SessionFile(dir, "plan");
+        File.WriteAllText(AnswerFile(dir), """{"id":"x","answer":""}""");
+
+        var loaded = Load(new SessionStore(dir) { Log = Logging().Log }, dir, file);
+
+        LegacyHold.Stands(loaded.State).Should().BeFalse("an empty answer is not an answer: nothing to announce, nothing to wait for");
+        MigrateV2Data.NoticesOf(dir, Code).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AMissingAnswer_IsNoAnswer_AndTheHeldSessionConvertsWithoutANotice()
+    {
+        var dir = FolderWithAnAnsweredHold();
+        var file = MigrateV2Data.SessionFile(dir, "plan");
+        File.Delete(AnswerFile(dir));
+
+        var loaded = Load(new SessionStore(dir) { Log = Logging().Log }, dir, file);
+
+        LegacyHold.Stands(loaded.State).Should().BeFalse();
+        MigrateV2Data.NoticesOf(dir, Code).Should().BeEmpty();
+    }
 }

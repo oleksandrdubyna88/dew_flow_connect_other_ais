@@ -44,64 +44,86 @@ internal sealed class HoldBoundary(string dataDir, Func<ServerNotice, bool>? not
         new(ServerNoticeCodes.V2ConvertedAnsweredHold, hold.Card, state.SessionId, hold.Decision);
 
     /// <summary>
-    /// The session as it leaves its hold, or null when an answered hold's notice could not be written and confirmed — the session is then left exactly as it is.
+    /// The session as it leaves its hold — or, when it must not leave it yet, the session exactly as it is with the reason: an answered hold's notice could not be written and
+    /// confirmed, or an answer file exists and could not be read (whether a person answered is UNKNOWN, and a conversion over an answer nobody announced cannot be taken back).
     /// <paramref name="afterNotice"/> runs between the last notice and the conversion, and only when there was a hold to announce (the migration's fault seam).
     /// </summary>
     /// <param name="fresh">The session as read under its claim.</param>
     /// <param name="sessionFile">The session's file, which names it in a hold's record.</param>
     /// <param name="afterNotice">Called once the notices are on disk, before the conversion is returned.</param>
-    public PersistedSession? Released(PersistedSession fresh, string sessionFile, Action? afterNotice = null)
+    public HoldRelease Released(PersistedSession fresh, string sessionFile, Action? afterNotice = null)
     {
-        var holds = AnsweredOf(sessionFile, fresh.State);
-        if (!Announced(holds, fresh.State))
+        var answers = AnsweredOf(sessionFile, fresh.State);
+        if (Withheld(answers, fresh.State) is { } why)
         {
-            return null;
+            return HoldRelease.Held(fresh, why);
         }
 
-        if (holds.Count > 0)
+        if (answers.Answered.Count > 0)
         {
             afterNotice?.Invoke();
         }
 
-        return HoldConversion.Converted(fresh);
+        return HoldRelease.Converted(HoldConversion.Converted(fresh));
     }
 
+    /// <summary>The reason a session must stay held, or null when it may be converted: an unknown answer first, then a notice that is not on disk.</summary>
+    private string? Withheld(HoldAnswers answers, SessionState state) =>
+        !answers.Known ? answers.Unknown
+        : Announced(answers.Answered, state) ? null
+        : "the notice of an answered hold could not be written and read back, so the session was not converted";
+
     /// <summary>
-    /// The session as v2 reads it WITHOUT being written: converted when nothing it overrides is unannounced (no answered hold, or each one's notice already on disk), otherwise
-    /// as loaded. For a caller that cannot take the claim or cannot save — whoever saves the result must not persist a conversion whose notice nobody wrote.
+    /// The session as v2 reads it WITHOUT being written: converted when nothing it overrides is unannounced or unknown (no answered hold, or each one's notice already on disk,
+    /// and every answer file read), otherwise as loaded. For a caller that cannot take the claim or cannot save — whoever saves the result must not persist a conversion whose
+    /// notice nobody wrote.
     /// </summary>
     public PersistedSession InMemory(PersistedSession held, string sessionFile)
     {
-        var holds = AnsweredOf(sessionFile, held.State);
+        var answers = AnsweredOf(sessionFile, held.State);
 
-        return holds.All(hold => NoticeWritten(hold.Card)) ? HoldConversion.Converted(held) : held;
+        return answers.Known && answers.Answered.All(hold => NoticeWritten(hold.Card)) ? HoldConversion.Converted(held) : held;
     }
 
-    /// <summary>The cards of one held session that a person ANSWERED: named in its <c>holdQuestions</c>, or carrying its session id.</summary>
-    public List<MigrateV2AnsweredHold> AnsweredOf(string sessionFile, SessionState state)
+    /// <summary>
+    /// The cards of one held session that a person ANSWERED — named in its <c>holdQuestions</c>, or carrying its session id — and the cards whose answer file exists and could not
+    /// be read. A missing, empty or malformed answer is none; an unreadable one is UNKNOWN, never "none".
+    /// </summary>
+    public HoldAnswers AnsweredOf(string sessionFile, SessionState state)
     {
-        var holds = new List<MigrateV2AnsweredHold>();
+        var name = Path.GetFileName(sessionFile);
+        var reads = HeldCardIds(state).Select(id => ReadAnswer(dataDir, id)).ToList();
+
+        return new HoldAnswers(
+            [.. reads.OfType<AnswerRead.Given>().Select(given => new MigrateV2AnsweredHold(name, given.Card, given.Decision))],
+            [.. reads.OfType<AnswerRead.Unreadable>().Select(unreadable => unreadable.Card)]);
+    }
+
+    /// <summary>The ids of the top-level cards that belong to this held session, in a fixed order.</summary>
+    private IEnumerable<string> HeldCardIds(SessionState state)
+    {
         var dir = MigrationV2.CardsDir(dataDir);
         if (!Directory.Exists(dir))
         {
-            return holds;
+            return [];
         }
 
-        var named = state.Unknown is { } bag && bag.TryGetValue("holdQuestions", out var questions) && questions.ValueKind == JsonValueKind.Array
-            ? questions.EnumerateArray().Where(q => q.ValueKind == JsonValueKind.String).Select(q => q.GetString()!).ToHashSet()
-            : [];
-        var name = Path.GetFileName(sessionFile);
-        foreach (var card in TopLevelCards(dir))
-        {
-            var id = Path.GetFileNameWithoutExtension(card);
-            if ((named.Contains(id) || CardOfSession(card, state.SessionId)) && AnswerOf(dataDir, id) is { } decision)
-            {
-                holds.Add(new MigrateV2AnsweredHold(name, id, decision));
-            }
-        }
+        var named = QuestionsOf(state);
 
-        return holds;
+        return TopLevelCards(dir).Where(card => BelongsTo(card, named, state.SessionId)).Select(Path.GetFileNameWithoutExtension)!;
     }
+
+    private static bool BelongsTo(string card, HashSet<string> named, string sessionId) =>
+        named.Contains(Path.GetFileNameWithoutExtension(card)) || CardOfSession(card, sessionId);
+
+    /// <summary>The card ids the session's <c>holdQuestions</c> name; none when the member is absent or is not a list.</summary>
+    private static HashSet<string> QuestionsOf(SessionState state) =>
+        state.Unknown is { } bag && bag.TryGetValue("holdQuestions", out var questions) ? NamesIn(questions) : [];
+
+    private static HashSet<string> NamesIn(JsonElement questions) =>
+        questions.ValueKind == JsonValueKind.Array
+            ? [.. questions.EnumerateArray().Where(q => q.ValueKind == JsonValueKind.String).Select(q => q.GetString()!)]
+            : [];
 
     public static IEnumerable<string> TopLevelCards(string dir) =>
         Directory.EnumerateFiles(dir, "*.json").Where(f => !f.EndsWith(".answer.json", StringComparison.Ordinal)).Order(StringComparer.Ordinal);
@@ -118,25 +140,43 @@ internal sealed class HoldBoundary(string dataDir, Func<ServerNotice, bool>? not
         }
     }
 
-    /// <summary>The decision a person's non-empty answer carries (empty for a typed answer), or null when there is no answer — a missing, empty or malformed file is none.</summary>
-    public static string? AnswerOf(string dataDir, string cardId)
+    /// <summary>One card's answer file read into one of three states (<see cref="AnswerRead"/>): none, given, or unreadable.</summary>
+    public static AnswerRead ReadAnswer(string dataDir, string cardId)
+    {
+        var file = Path.Combine(MigrationV2.CardsDir(dataDir), cardId + ".answer.json");
+        if (!File.Exists(file))
+        {
+            return new AnswerRead.None(cardId);
+        }
+
+        try
+        {
+            return Parsed(cardId, File.ReadAllText(file));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new AnswerRead.Unreadable(cardId, e.Message);
+        }
+    }
+
+    private static AnswerRead Parsed(string cardId, string text)
     {
         try
         {
-            using var answer = JsonDocument.Parse(File.ReadAllText(Path.Combine(MigrationV2.CardsDir(dataDir), cardId + ".answer.json")));
-            var root = answer.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("answer", out var words) || words.ValueKind != JsonValueKind.String || words.GetString()!.Length == 0)
-            {
-                return null;
-            }
+            using var answer = JsonDocument.Parse(text);
 
-            return root.TryGetProperty("decision", out var decision) && decision.ValueKind == JsonValueKind.String ? decision.GetString()! : string.Empty;
+            return DecisionIn(answer.RootElement) is { } decision ? new AnswerRead.Given(cardId, decision) : new AnswerRead.None(cardId);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        catch (JsonException)
         {
-            return null;
+            return new AnswerRead.None(cardId);
         }
     }
+
+    private static string? DecisionIn(JsonElement root) => TextOf(root, "answer").Length == 0 ? null : TextOf(root, "decision");
+
+    private static string TextOf(JsonElement root, string name) =>
+        root.ValueKind == JsonValueKind.Object && root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : string.Empty;
 
     /// <summary>
     /// Makes sure every answered hold of this session has its notice on disk: true when each is there (already, or written now and confirmed), false when one could not be.

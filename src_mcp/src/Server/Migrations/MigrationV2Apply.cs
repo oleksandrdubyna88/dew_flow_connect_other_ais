@@ -266,12 +266,13 @@ internal sealed partial class MigrationV2
 
         // The person is told BEFORE the answer is overridden (HoldBoundary, the boundary a load crosses too): a session that cannot be announced stays held, and the next run tries again.
         // A kill between the notice and the conversion leaves a held session and its notice: the next run finds the notice and converts.
-        var converted = Holds.Released(fresh, work.File, afterNotice: Boundary);
-        if (converted is null)
+        var release = Holds.Released(fresh, work.File, afterNotice: Boundary);
+        if (!release.IsConverted)
         {
-            return new Outcome("deferred", "the notice of an answered hold could not be written, so the session was not converted");
+            return new Outcome("deferred", release.Why);
         }
 
+        var converted = release.Session;
         _store.SaveTo(work.File, converted);
 
         return new Outcome("done", "released")
@@ -300,7 +301,7 @@ internal sealed partial class MigrationV2
         var id = Path.GetFileNameWithoutExtension(work.File);
         var card = JsonNode.Parse(File.ReadAllText(work.File)) as JsonObject ?? throw new JsonException("the card is not a JSON object");
         var status = StatusOf(card);
-        if (status.Length == 0 && HoldBoundary.AnswerOf(_dataDir, id) is null)
+        if (status.Length == 0 && HoldBoundary.ReadAnswer(_dataDir, id) is AnswerRead.None)
         {
             // In place first, atomically and with every other member kept: a kill between this and the move leaves a card the next run only moves.
             card["status"] = WithdrawnStatus;
