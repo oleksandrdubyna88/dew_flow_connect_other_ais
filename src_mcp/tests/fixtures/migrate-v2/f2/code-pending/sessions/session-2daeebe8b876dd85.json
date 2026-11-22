@@ -1,0 +1,354 @@
+{
+  "state": {
+    "sessionId": "d1aafe01",
+    "repoPath": "/fixture/repo",
+    "branch": "epic-1",
+    "config": {
+      "onExhausted": "Human",
+      "securityLane": {
+        "maxRounds": 2,
+        "threshold": 0,
+        "enabled": false
+      },
+      "roles": {
+        "PlanCritique": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Conventions": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Architecture": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "SecurityReliability": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "UxDxPerformance": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentSummary": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "FeatureReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        }
+      }
+    },
+    "stage": "CodeReview",
+    "roundsRunThisStage": 1,
+    "escalationsUsed": 0,
+    "awaitingResolve": true,
+    "planProceeded": true,
+    "advanceOnResolve": false,
+    "humanGate": true,
+    "holdQuestions": [
+      "dcf7bd32ff1a"
+    ],
+    "requestQuestions": [],
+    "rejections": [],
+    "secondRound": "None",
+    "document": "",
+    "isDocumentSession": false,
+    "feature": "",
+    "isFeatureSession": false
+  },
+  "rounds": [
+    {
+      "stage": "PlanReview",
+      "number": 1,
+      "verdict": "proceed",
+      "gatingCount": 0,
+      "reviewers": "all 1 reviewers answered",
+      "completedUtc": "2026-11-22T18:34:40.705384Z",
+      "status": "done",
+      "startedUtc": "2026-11-22T18:34:40.6580837Z",
+      "runnerPid": 334294,
+      "sha": "",
+      "planKey": "",
+      "epicNumber": 0,
+      "cadenceNote": "",
+      "note": "",
+      "key": "b36ce8be7ce9db6ea7f66d1cafaada6b",
+      "admittedBy": "",
+      "repeats": 1,
+      "loggedNote": "",
+      "reviewerStates": [
+        {
+          "provider": "codex",
+          "role": "PlanCritique",
+          "status": "done",
+          "findings": 0,
+          "note": "",
+          "seconds": 0,
+          "model": "",
+          "effort": ""
+        }
+      ],
+      "caller": {
+        "vendor": "unknown",
+        "client": "",
+        "clientVersion": "",
+        "model": "",
+        "phrase": "unknown · model not stated"
+      },
+      "planSource": {
+        "origin": "text",
+        "commit": "c2d2f0f46c844d2efea1c4ee42f61d2276929102",
+        "path": "",
+        "blob": "",
+        "bytes": 47,
+        "textId": "47318c01c8971dbe"
+      },
+      "authors": {
+        "stage": "PlanReview",
+        "number": 1,
+        "session": "00000000-0000-0000-0000-000000000000",
+        "state": "unobserved",
+        "ambiguous": {
+          "agents": -1,
+          "launches": -1,
+          "turns": -1,
+          "tokens": {
+            "input": -1,
+            "output": -1,
+            "cacheCreation": -1,
+            "cacheRead": -1
+          }
+        },
+        "elsewhere": {
+          "agents": -1,
+          "launches": -1,
+          "turns": -1,
+          "tokens": {
+            "input": -1,
+            "output": -1,
+            "cacheCreation": -1,
+            "cacheRead": -1
+          }
+        },
+        "claimedByPeer": {
+          "agents": -1,
+          "launches": -1,
+          "turns": -1,
+          "tokens": {
+            "input": -1,
+            "output": -1,
+            "cacheCreation": -1,
+            "cacheRead": -1
+          }
+        },
+        "unobservedLaunches": -1,
+        "idSource": "environment",
+        "reader": 0,
+        "attribution": 0,
+        "submoduleWrites": -1,
+        "uncoveredWrites": -1,
+        "reasons": [
+          "transcript not found"
+        ],
+        "rows": [],
+        "windows": [],
+        "peerGates": []
+      },
+      "subject": "PLAN — held",
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "costNote": "",
+      "usageNote": ""
+    },
+    {
+      "stage": "CodeReview",
+      "number": 1,
+      "verdict": "call_human",
+      "gatingCount": 1,
+      "reviewers": "all 3 reviewers answered; Conventions was not asked: this repository has no written rules to judge against",
+      "completedUtc": "2026-11-22T18:34:40.8974296Z",
+      "status": "done",
+      "startedUtc": "2026-11-22T18:34:40.8018235Z",
+      "runnerPid": 334294,
+      "sha": "fe9d83b0bd84ddf7d79b35de2389e547c5d2cb7a",
+      "planKey": "",
+      "epicNumber": 0,
+      "cadenceNote": "",
+      "note": "",
+      "key": "ca0c2a997b48bc0770b39e194b8cb5f9",
+      "admittedBy": "",
+      "repeats": 1,
+      "loggedNote": "",
+      "reviewerStates": [
+        {
+          "provider": "codex",
+          "role": "Architecture",
+          "status": "done",
+          "findings": 1,
+          "note": "",
+          "seconds": 0,
+          "model": "",
+          "effort": ""
+        },
+        {
+          "provider": "codex",
+          "role": "SecurityReliability",
+          "status": "done",
+          "findings": 1,
+          "note": "",
+          "seconds": 0,
+          "model": "",
+          "effort": ""
+        },
+        {
+          "provider": "codex",
+          "role": "UxDxPerformance",
+          "status": "done",
+          "findings": 1,
+          "note": "",
+          "seconds": 0,
+          "model": "",
+          "effort": ""
+        }
+      ],
+      "caller": {
+        "vendor": "unknown",
+        "client": "",
+        "clientVersion": "",
+        "model": "",
+        "phrase": "unknown · model not stated"
+      },
+      "size": {
+        "whole": {
+          "state": "recorded",
+          "from": "c2d2f0f46c844d2efea1c4ee42f61d2276929102",
+          "cells": [
+            {
+              "coverage": "shown",
+              "kind": "code",
+              "files": 1,
+              "added": 1,
+              "removed": 1
+            }
+          ]
+        },
+        "delta": {
+          "state": "unavailable: first round",
+          "from": "",
+          "cells": []
+        },
+        "origin": "live"
+      },
+      "gitlinks": 0,
+      "authors": {
+        "stage": "CodeReview",
+        "number": 1,
+        "session": "00000000-0000-0000-0000-000000000000",
+        "state": "unobserved",
+        "ambiguous": {
+          "agents": -1,
+          "launches": -1,
+          "turns": -1,
+          "tokens": {
+            "input": -1,
+            "output": -1,
+            "cacheCreation": -1,
+            "cacheRead": -1
+          }
+        },
+        "elsewhere": {
+          "agents": -1,
+          "launches": -1,
+          "turns": -1,
+          "tokens": {
+            "input": -1,
+            "output": -1,
+            "cacheCreation": -1,
+            "cacheRead": -1
+          }
+        },
+        "claimedByPeer": {
+          "agents": -1,
+          "launches": -1,
+          "turns": -1,
+          "tokens": {
+            "input": -1,
+            "output": -1,
+            "cacheCreation": -1,
+            "cacheRead": -1
+          }
+        },
+        "unobservedLaunches": -1,
+        "idSource": "environment",
+        "reader": 0,
+        "attribution": 0,
+        "submoduleWrites": -1,
+        "uncoveredWrites": -1,
+        "reasons": [
+          "transcript not found"
+        ],
+        "rows": [],
+        "windows": [],
+        "peerGates": []
+      },
+      "subject": "SCOPE",
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "costNote": "",
+      "usageNote": ""
+    }
+  ],
+  "openedUtc": "2026-11-22T18:34:40.6208513Z",
+  "pending": [
+    {
+      "severity": "Blocking",
+      "category": "Reliability",
+      "file": "",
+      "line": 0,
+      "title": "the poll has no timeout",
+      "why": "a hung peer hangs the loop",
+      "fix": "add one",
+      "providers": [
+        "codex"
+      ],
+      "role": "Architecture",
+      "capReason": "",
+      "alsoSeenBy": [],
+      "isGating": true
+    }
+  ],
+  "planText": "# SCOPE\n\nThe reviewer's own words must survive a failure. A reviewer that falls over is recorded with\nan outcome and nothing else, so the round summary says \"unparseable\" without the text that\nwould not parse, and the same answer replayed by hand goes through cleanly.\n\nWhen it is done: the raw answer is kept beside the session, the refusal names the file, and\na failed reviewer still reports what it consumed. Constraint: no new dependency, and the\nlauncher stays the one in v2.Shared.",
+  "plan": "",
+  "epic": "",
+  "cadenceRepoId": "",
+  "featureBase": "",
+  "carried": [],
+  "caller": {
+    "vendor": "unknown",
+    "client": "",
+    "clientVersion": "",
+    "model": "",
+    "phrase": "unknown · model not stated"
+  },
+  "usedPrompts": [
+    "plan-critique",
+    "architecture",
+    "security-reliability",
+    "uxdx-performance"
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "id": "13c1b1387697",
+  "sessionId": "7ca7beb2",
+  "repoPath": "/fixture/repo",
+  "branch": ":feature",
+  "question": "The feature review gate needs your decision: a blocking finding still stands after the second round — 1 finding(s) gate, and a feature review has two rounds at most (D23). Proceed anyway, or fix the findings and review again?",
+  "questionOriginal": "",
+  "language": "en",
+  "translationNote": "",
+  "openFindings": [
+    {
+      "severity": 0,
+      "category": 1,
+      "file": "src/Shop.cs",
+      "line": 3,
+      "title": "The till charges before the cart is checked",
+      "why": "a customer pays for an empty cart",
+      "fix": "check the cart first",
+      "providers": [
+        "codex"
+      ],
+      "role": "FeatureReview",
+      "reproduction": null,
+      "capReason": "",
+      "alsoSeenBy": [],
+      "isGating": true
+    }
+  ],
+  "askedUtc": "2026-11-22T18:34:39.8128238Z",
+  "consultId": "",
+  "productionRisk": false,
+  "riskReason": "",
+  "consultantAnswers": []
+}
