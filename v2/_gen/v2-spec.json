@@ -573,7 +573,8 @@
               "roles returns main AI, ORDERED model lists per role, complexity bands, Haiku kinds, work method",
               "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent; NO AskUserQuestion hook",
               "--band-json answers phrases, consultations, failures",
-              "each removal story adds its rows to MigrationV2Tables with a fixture; answered/expired cards older than 30 days are archived"
+              "each removal story adds its rows to MigrationV2Tables with a fixture; answered/expired cards older than 30 days are archived",
+              "review_*/cons/consask accept workItem; --plan-report gives per-item gates, cons, consask, time"
             ]
           },
           "stories": [
@@ -934,6 +935,63 @@
                     {
                       "id": "d1",
                       "item": "a new Claude session shows the role table"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s8-work-item-attribution",
+              "yaml": {
+                "id": "s8-work-item-attribution",
+                "title": "Work-item attribution: every gate, cons and consask call names its plan item",
+                "dependsOn": [
+                  "s3-renames"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-workitem-param",
+                  "title": "Optional workItem (feature-folder path of an epoch/epic/story/task) on review_plan/code/document/feature, cons, consask; recorded in RoundsDb (new schema step) and in consultation records",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Tools.cs",
+                    "src_mcp/storage"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "old callers without workItem still work"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "the value is validated as a path inside the repo"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-plan-report",
+                  "title": "One-shot --plan-report <feature-dir> --json: per item gates run, rounds, cons and consask counts, first/last event, wall time, status",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t1-workitem-param"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "listed in PROJECT.md"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "an item with no events reports zeros, not missing"
                     }
                   ]
                 }
@@ -1468,11 +1526,13 @@
           "dir": "e5-features-page",
           "yaml": {
             "id": "e5-features-page",
-            "title": "Features page (needs epoch-3 e1)",
+            "title": "Plans page: tree of all plans, status, progress, per-item report",
             "half": "extension",
             "dependsOn": [],
             "doneWhen": [
-              "epoch → epic → story → task tree with status, complexity, model, parallel lanes; a remote-only feature through the hub"
+              "tree of every plan (feature) → epoch → epic → story → task with status open / in progress / done and progress counts",
+              "per item: gates run, cons and consask counts, execution time (from --plan-report)",
+              "coai sets item status deterministically (task done when green + gate outcome); a remote-only plan through the hub"
             ]
           }
         }

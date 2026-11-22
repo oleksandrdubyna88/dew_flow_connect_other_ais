@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-workitem-param
+title: "Optional workItem (feature-folder path of an epoch/epic/story/task) on review_plan/code/document/feature, cons, consask; recorded in RoundsDb (new schema step) and in consultation records"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Tools.cs
+  - src_mcp/storage
+dod:
+  - id: d1
+    item: "old callers without workItem still work"
+  - id: d2
+    item: "the value is validated as a path inside the repo"

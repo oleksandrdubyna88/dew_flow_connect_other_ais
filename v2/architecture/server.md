@@ -377,3 +377,11 @@ separate tool). Placement in the epochs: decided with the Fable split review.
   a refusal, a spend/rate limit or an error is re-run on the next model in the list; the switch is recorded in the job
   envelope (`attempts: [{model, vendor, stop, reason}]`), logged, and raised as a notification. The other vendor's own
   policy applies to it; nothing is hidden. A list that is exhausted ends the task `failed` with every attempt named.
+
+## 21. Plans page and per-item reports (owner, 2026-11-22)
+
+A separate Plans page lists every plan (feature folder) as a tree epoch → epic → story → task, with status open /
+in progress / done and progress counts. Every item has a report: gates run (and rounds), `cons` and `consask` counts,
+execution time. Data: an optional `workItem` argument (feature-folder path) on `review_*`, `cons`, `consask` and
+`start_role`, recorded in RoundsDb from 2.0 (epoch 1 E3 s8); `--plan-report <feature-dir> --json` aggregates it; coai sets
+the item status in the YAML deterministically. The page is epoch 4 E5 (was "Features page").
