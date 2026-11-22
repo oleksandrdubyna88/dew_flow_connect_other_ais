@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e1-hub-slice
+title: "Hub slice: boots alone, enrol, device document, applied, one log stream, --hub-sync"
+mvp: true
+half: both
+dependsOn: []
+doneWhen:
+  - "a setting changed from the Windows window is reported applied by a VM user in ≤ 90 s"
+  - "stale write = 412; a device token is refused on another device and on Team routes"
+  - "hub mode boots alone (own auth, own startup condition)"
+  - "endpoints + http/ contracts; 412/428; device token limited to its device; Team session refused on hub routes"
+  - "sweeper measures retained bytes and db+WAL size"
+  - "deployed on the ionos host"

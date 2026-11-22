@@ -512,7 +512,8 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
             state["escalationsUsed"] = 2;
         });
 
-        var loaded = store.Load(Repo, Branch)!;
+        // LoadFile, not Load: a LOAD converts a held session since the epic gate (SPEC §5.1, MigrateV2GateTests); the file reader is the one that shows the evidence.
+        var loaded = store.LoadFile(file)!;
 
         loaded.State.SessionId.Should().Be("bag-1");
         LegacyHold.Stands(loaded.State).Should().BeTrue("an older build's hold is found by reading the bag");
@@ -533,7 +534,8 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
             state["humanGate"] = true;
             state["holdQuestions"] = new JsonArray("q1");
         });
-        var held = store.Load(Repo, Branch)!.State;
+        var held = store.LoadFile(file)!.State;
+        LegacyHold.Stands(held).Should().BeTrue("LoadFile shows the evidence a load would convert");
 
         var released = LegacyHold.Released(held);
 

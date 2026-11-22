@@ -5,8 +5,8 @@ proves: "one Windows window sees and controls every device"
 dependsOn:
   - epoch-1
 epics:
-  - e1-hub-server
-  - e2-device-agent-vm-shared
-  - e3-update-everywhere
-  - e4-devices-features-pages
-  - e5-rollout
+  - e1-hub-slice
+  - e2-vm-shared
+  - e3-device-agent-sync
+  - e4-update-rollout
+  - e5-kit-devices-page

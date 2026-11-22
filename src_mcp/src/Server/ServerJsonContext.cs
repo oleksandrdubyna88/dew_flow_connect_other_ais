@@ -329,4 +329,8 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(Core.Collecting.UploadRequest))]
 [JsonSerializable(typeof(Core.Collecting.UploadAnswer))]
 [JsonSerializable(typeof(Collecting.UploadSummary))]
+// The v2 data migration (E1.S4): the report `--migrate-v2` prints and the marker it leaves; the journal line has its own compact context.
+[JsonSerializable(typeof(Migrations.MigrateV2Report))]
+[JsonSerializable(typeof(Migrations.MigrateV2Notice))]
+[JsonSerializable(typeof(Migrations.MigrateV2Marker))]
 internal sealed partial class ServerJsonContext : JsonSerializerContext;

@@ -66,7 +66,8 @@ public sealed class PanelService
         _launcher = launcher;
         _log = log;
         _noticing = noticing;
-        _store = new SessionStore(settings.DataDir, settings.Rounds.Catalog);
+        // The store converts a held session it loads across the same boundary the migration uses: an answered hold is announced through the host's writer first.
+        _store = new SessionStore(settings.DataDir, settings.Rounds.Catalog) { Notice = noticing.Settled, Log = log };
         _artifacts = new ArtifactStore(settings.DataDir);
         _worktrees = new WorktreeManager(
             launcher,

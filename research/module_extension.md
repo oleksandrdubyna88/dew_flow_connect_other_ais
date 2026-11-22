@@ -4123,6 +4123,8 @@ destination refuse.** They differ by `logs/` alone — a log file is named for i
 second installation's logs land beside the first's and overwrite nothing, where one `coai.db` lands on
 top of another. Refusing on logs would have refused every folder a server had ever been pointed at.
 
+**v2 (E1.S4, 2026-11-22): a NESTED entry.** `migrations/v1-archive/` is in `DATA_TO_MOVE` and clashes (`shared/data-inventory.json`: `move: true`, `clash: true`), because it holds the ONLY copy of the `qphase/` and `cadence/` history the v2 migration archived out of the data folder. Its parent `migrations/` stays behind (`move: false`): the marker `v2.done`, the journal and `claims/` describe the folder they sit in, and a marker carried to a folder that was never migrated would say it was. `copyInventory` copies the nested path as it copies every entry (`workspace.fs.copy` makes the missing parent folder), `historyIn` checks it in a destination, `countEach` counts it for the read-back, and `theInventoryIsComplete.test.ts` holds both fates (the archive moves and clashes; `migrations/` and `claims/` do not). The panel's moving hint lists it beside the others.
+
 **The live check also settled the tail the plan was carrying.** On a UNC-backed drive
 (`\\192.168.0.10\Team_Share`): both halves resolve the same string for the same pair,
 partitioned and not; a 46 MB history copied in 19.5 s and read back as the same 548 rounds and 9 090

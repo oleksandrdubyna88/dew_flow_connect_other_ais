@@ -1,0 +1,218 @@
+{
+  "state": {
+    "sessionId": "5ca60eea",
+    "repoPath": "/fixture/repo",
+    "branch": "epic-1",
+    "config": {
+      "onExhausted": "Human",
+      "autonomous": false,
+      "securityLane": {
+        "maxRounds": 2,
+        "threshold": 0,
+        "enabled": false
+      },
+      "roles": {
+        "PlanCritique": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Conventions": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "Architecture": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "SecurityReliability": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "UxDxPerformance": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "DocumentSummary": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        },
+        "FeatureReview": {
+          "maxRounds": 1,
+          "threshold": 0,
+          "enabled": true
+        }
+      }
+    },
+    "stage": "PlanReview",
+    "roundsRunThisStage": 1,
+    "escalationsUsed": 0,
+    "awaitingResolve": false,
+    "planProceeded": false,
+    "advanceOnResolve": false,
+    "humanGate": true,
+    "holdQuestions": [
+      "e4f7d4bfee3e"
+    ],
+    "requestQuestions": [],
+    "rejections": [
+      {
+        "finding": {
+          "severity": "Blocking",
+          "category": "Reliability",
+          "file": "",
+          "line": 0,
+          "title": "the poll has no timeout",
+          "why": "a hung peer hangs the loop",
+          "fix": "add one",
+          "providers": [
+            "codex"
+          ],
+          "role": "PlanCritique",
+          "capReason": "",
+          "alsoSeenBy": [],
+          "isGating": true
+        },
+        "reason": "the timeout lives in the caller"
+      }
+    ],
+    "secondRound": "None",
+    "document": "",
+    "isDocumentSession": false,
+    "feature": "",
+    "isFeatureSession": false
+  },
+  "rounds": [
+    {
+      "stage": "PlanReview",
+      "number": 1,
+      "verdict": "call_human",
+      "gatingCount": 1,
+      "reviewers": "all 1 reviewers answered",
+      "completedUtc": "2026-11-22T18:34:40.0830269Z",
+      "status": "done",
+      "startedUtc": "2026-11-22T18:34:40.0340466Z",
+      "runnerPid": 334294,
+      "sha": "",
+      "planKey": "",
+      "epicNumber": 0,
+      "cadenceNote": "",
+      "note": "",
+      "key": "8231a1d09df7d589568f4120097a0b23",
+      "admittedBy": "",
+      "repeats": 1,
+      "loggedNote": "",
+      "reviewerStates": [
+        {
+          "provider": "codex",
+          "role": "PlanCritique",
+          "status": "done",
+          "findings": 1,
+          "note": "",
+          "seconds": 0,
+          "model": "",
+          "effort": ""
+        }
+      ],
+      "caller": {
+        "vendor": "unknown",
+        "client": "",
+        "clientVersion": "",
+        "model": "",
+        "phrase": "unknown \u00B7 model not stated"
+      },
+      "planSource": {
+        "origin": "text",
+        "commit": "36d118bf6ceac72db833c16536fd7ba8ad1e46ad",
+        "path": "",
+        "blob": "",
+        "bytes": 47,
+        "textId": "47318c01c8971dbe"
+      },
+      "authors": {
+        "stage": "PlanReview",
+        "number": 1,
+        "session": "00000000-0000-0000-0000-000000000000",
+        "state": "unobserved",
+        "ambiguous": {
+          "agents": -1,
+          "launches": -1,
+          "turns": -1,
+          "tokens": {
+            "input": -1,
+            "output": -1,
+            "cacheCreation": -1,
+            "cacheRead": -1
+          }
+        },
+        "elsewhere": {
+          "agents": -1,
+          "launches": -1,
+          "turns": -1,
+          "tokens": {
+            "input": -1,
+            "output": -1,
+            "cacheCreation": -1,
+            "cacheRead": -1
+          }
+        },
+        "claimedByPeer": {
+          "agents": -1,
+          "launches": -1,
+          "turns": -1,
+          "tokens": {
+            "input": -1,
+            "output": -1,
+            "cacheCreation": -1,
+            "cacheRead": -1
+          }
+        },
+        "unobservedLaunches": -1,
+        "idSource": "environment",
+        "reader": 0,
+        "attribution": 0,
+        "submoduleWrites": -1,
+        "uncoveredWrites": -1,
+        "reasons": [
+          "transcript not found"
+        ],
+        "rows": [],
+        "windows": [],
+        "peerGates": []
+      },
+      "subject": "PLAN \u2014 held",
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "costNote": "",
+      "usageNote": ""
+    }
+  ],
+  "openedUtc": "2026-11-22T18:34:39.9910447Z",
+  "pending": [],
+  "planText": "# PLAN \u2014 held\n\n## Build order\n\n1. one\n2. two\n",
+  "plan": "",
+  "epic": "",
+  "cadenceRepoId": "",
+  "featureBase": "",
+  "carried": [],
+  "caller": {
+    "vendor": "unknown",
+    "client": "",
+    "clientVersion": "",
+    "model": "",
+    "phrase": "unknown \u00B7 model not stated"
+  },
+  "usedPrompts": [
+    "plan-critique"
+  ]
+}

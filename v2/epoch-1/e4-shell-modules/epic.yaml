@@ -1,0 +1,11 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-shell-modules
+title: "Shell modules: sidebar, chat carried, install after ready, dead v1 out"
+half: extension
+dependsOn:
+  - e2-thin-shell
+doneWhen:
+  - "sidebar polls only while visible"
+  - "all chat host scenarios pass"
+  - "M2 still ≤ 2000 ms"
+  - "no escalation or cadence control or watcher in the bundle"

@@ -442,6 +442,8 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
             [
                 // Story 3.2's crash record: the exception nothing else caught, written as it leaves.
                 "src_mcp/src/Server/HostCrash.cs",
+                // E1.S4: the notice an answered hold gets when the v2 migration releases it.
+                "src_mcp/src/Server/Migrations/HoldBoundary.cs",
                 "src_mcp/src/Server/RefusalNotices.cs",
                 "src_mcp/src/Server/ReviewerNotices.cs",
                 // Epic 3's death record: the unclean-exit a start writes about a run that never finished.

@@ -184,6 +184,9 @@ internal sealed class NoticeWriter
     /// <summary>Whether the queue has drained, for a test that needs to look at the file.</summary>
     internal bool Idle(TimeSpan within) => Volatile.Read(ref _inFlight) == 0 || _idle.Wait(within);
 
+    /// <summary>Whether the queue has drained within <see cref="DrainBudget"/>: the wait a caller makes when it must read its own notice back from the file before it goes on (<see cref="Noticing.Settled"/>).</summary>
+    internal bool IdleWithinBudget() => Idle(DrainBudget);
+
     private async Task Draining()
     {
         await foreach (var pending in _queue.Reader.ReadAllAsync().ConfigureAwait(false))

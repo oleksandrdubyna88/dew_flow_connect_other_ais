@@ -15,10 +15,117 @@
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
-| `ask_human` | `AskHumanService` (its own file since 2026-10-01, a proved move out of `PanelService` — S2 of the question consultant) over `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session that can still be asked for its second round (one round run, no ground, not held — narrowed 2026-10-03) it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request; **since 2026-10-02 (S3) the GATE stands in front of it**: the phase rule inferred by the server, a `consultId` verified, a `productionRisk` asked at once with the consultants beside — see *The door to the person* below | an empty question; `document` and `feature` together; `productionRisk` without a `riskReason`; and, under `require`, a question the phase rule sends to the consultants first (named `ask_consultants`, with the count); otherwise it WAITS the budget (15 minutes by default), then answers `no_answer_yet` telling the model to ask in the chat and marks the card `expired`. **Since 2026-10-03 only the GATE's question becomes a card** — a held gate, or a feature review that can still be asked for its second round (`RoundMachine.AsksForTheGate`); every other question is the AI's own and is answered at once with `ask_in_conversation` (`ConversationAnswer`), no card, no wait; a production risk outside the gate asks the consultants FIRST and returns their fenced answers (*Two doors*). **Under policy auto (the default, 2026-11-17) it never waits and writes no card** — the AI's own question without a proof is answered `consult_first`, a held gate at once with `no_answer_yet` (*ask_human never waits under policy auto*, below). |
+| `ask_human` | a stub kept so an old caller does not break (v2, E1.S1): it answers `{"status":"ask_in_conversation","note":"removed in v2: …"}` and writes nothing — no card, no wait. The v1 behaviour (a question FILE the extension watched, the gate in front of it, the fifteen-minute budget) is described in the sections marked *Superseded in v2* below | never; it only points the AI back to its own conversation |
 | `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
 | `close_consult` | `CloseAsync` — how a consultation ENDED, recorded by whoever knows | not your consultation; a word outside the closed set; `lapsed`, which is the server's own; a consultation that FAILED and produced no advice; a different verdict over one already recorded |
 | `ask_consultants` | `QuestionConsultService` → `QuestionFanOut` — every active model × prompt row answers in PARALLEL before the person is asked (2026-10-01, `todo/PLAN_question_consultant.md` S2) | the switch off, nobody to ask and the quota are ANSWERS (`status`: `off` · `none_available` · `quota_spent`), not refusals; refused: an empty `context` by name, a question over 4 KB, a context over 8 KB, rows that cannot be read, `document` and `feature` together, a path that is no repository — see *The question consultant* below |
+
+## v2: the gate has four outcomes and never waits (2026-11-22, epoch 1 E1.S1)
+
+> **Read this section before any older one.** Sections of this file dated before 2026-11-22 that describe a held gate, an escalation card
+> (`escalations/<id>.json`), `ask_human` waiting for an answer file, `call_human`, `continue_anyway`, the fifteen-minute budget, the
+> escalation ladder, `COAI_ON_EXHAUSTED` or `COAI_ESCALATION_MINUTES` describe the v1 gate. They are kept as history, each is marked
+> *Superseded in v2*, and none of it runs.
+
+A round ends in one of four verdicts — `proceed`, `revise`, `good_enough`, `not_reviewed` — computed by `RoundMachine` ([module_core.md](module_core.md),
+*v2: four outcomes*) and carried by the round engine without any branch that waits:
+
+| Verdict | When | What the server does after it |
+|---|---|---|
+| `proceed` | the findings that gate are at or under the role's threshold | the stage advances on the next `resolve` |
+| `revise` | findings still gate and a round is left | the next round is admitted; `resolve` first |
+| `good_enough` | rounds spent with findings gating, or a feature review at its two-round cap | the stage advances on `resolve`; the findings travel with the verdict because they are the work |
+| `not_reviewed` | no ordinary reviewer answered | the stage advances on `resolve` WITHOUT a review; the reason says so |
+
+What is gone from this binary: `AskHumanService`, `AskUnderAuto`, `AskGateDesk`, `Escalations`, `EscalationRetention`, `SessionHolds`, `SessionPolicy`,
+`CurrentAnswer`, `ProceededOver`, `PersonsRequest`, the `humanDecision` argument's effect, the settings `COAI_ON_EXHAUSTED`, `COAI_ESCALATION_MINUTES`,
+`COAI_ESCALATION_SECONDS` and the `escalations/` writer. The `ask_human` tool stays registered so an old caller does not
+break, and answers `{"status":"ask_in_conversation","note":"removed in v2: …"}` — the AI asks in its own chat. `ask_consultants` is unchanged. Nothing
+in v2 creates a file under `escalations/`; the directory is read only by the migration below and by an extension that has not yet dropped its modal.
+
+### The v2 data migration — `--migrate-v2` and the first start of a v2 server (E1.S4)
+
+A data folder an older build wrote holds objects a v2 build reads differently. One class, `MigrationV2` (`src_mcp/src/Server/Migrations/`, partial across
+`MigrationV2.cs`, `MigrationV2Apply.cs` and `MigrationV2Notices.cs`), brings ONE resolved data folder (`COAI_DATA_DIR` + `COAI_DATA_SIDE`; each side migrates
+itself) to the shape v2 reads. The full contract is `v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/SPEC.md`; this is the part a reader of the code needs.
+
+```mermaid
+flowchart TD
+  start["coai-mcp start, assembly major >= 2"] --> gate{"marker v2.done absent,<br/>or its tablesHash differs?"}
+  gate -- yes --> full["Apply: the whole migration"]
+  gate -- no --> sweep["SweepCards: only the open cards a v1 process raised since"]
+  oneshot["coai-mcp --migrate-v2 [--apply]"] --> scan["always scans; the marker gates only the automatic run"]
+  scan -- no --apply --> plan["Plan: counts, steps, proposed notices — creates NOTHING"]
+  scan -- --apply --> full
+  full --> lease["claims/migrate-v2.lease (LeaseTake: Taken / Busy / Unusable)"]
+  sweep --> lease
+  lease --> s1["1. every held session leaves its hold<br/>(notice first for an answered hold)"]
+  s1 --> s2["2. every OPEN card: withdrawn_v2, then escalations/archive/"]
+  s2 --> s3["3. qphase/ and cadence/ → migrations/v1-archive/"]
+  s3 --> s4["4. removed settings keys → settings.v1-removed.json"]
+  s4 --> done{"nothing deferred,<br/>nothing unreadable?"}
+  done -- yes --> marker["migrations/v2.done"]
+  done -- no --> nomarker["no marker; the next start retries"]
+```
+
+**The doors.** (1) The one-shot `--migrate-v2 [--apply]` prints ONE JSON object on stdout (`mode`, `apply`, `dataDir`, `status` = `plan` · `done` · `busy` · `partial` · `failed`,
+`counts`, `answeredHolds`, `notices`, `steps`); every sentence for a person goes to stderr. Exit **0** a plan printed or the apply complete; **65** an argument it does not know
+(never 64 — this binary knows the mode); **74** the folder is missing, not writable or unresolvable; **75** the lease is busy, or objects were deferred or unreadable and no marker was
+written. (2) The automatic run, `MigrateV2Mode.RunAutomatic`, in `ServeAsync` after the logger and before the host: the whole migration when the build is v2 (`ShouldRunAutomatically`: major
+version ≥ 2 — a dev build is 0.0.0 and a v1 release is 0.x — and the marker absent or made by other tables), and at every v2 start, marker or not, `SweepCards`. It never throws into serve
+(the one catch-all sits there, because it passes no fault seam) and never writes stdout. (3) **Convert on load** — `SessionStore.Load` converts a session still held when it is read, with the
+same function (`HoldConversion.Converted`) under the session's claim, so the migration is not the only door: a session the run deferred, a file that was unreadable and is readable now, and a held
+session a still-running v1 process writes after `v2.done` would otherwise stay held for ever. Both doors write the same bytes (a test compares them) and cross the same boundary, `HoldBoundary`:
+an answered hold is announced, and its notice read back from the file, BEFORE the session is converted (see *A person's answer v1 never applied*). A load whose notice cannot be confirmed — no
+`SessionStore.Notice` sink, a writer that refuses, a line the disk never took — returns the session as loaded, STILL HELD, writes nothing and logs a warning (v2 code reads a held session as a
+normal one); the next load or migration tries again, so the notice is never lost to a conversion the migration did not see. A load that cannot take the claim returns the converted session in
+memory and writes nothing — the holder's own save persists it — unless an answered hold's notice is not on disk, when it returns the session held: whoever saves the result must not persist a
+conversion nobody announced.
+
+**What each step does.** *Sessions:* a session whose unknown-member bag says `humanGate: true` (`LegacyHold.Stands`) becomes `LegacyHold.Released` — `AwaitingResolve` and `AdvanceOnResolve` set
+together, the hold members dropped — and the held round's note reads `good_enough — converted from a held gate by v2`; the verdict, stage, rejections, pending findings and round count stay. It is
+written to the SAME path under `SessionClaim` and `SessionTurn`, re-read under the claim first, then the note goes into `coai.db` best effort (a projection rebuilt from the session files). *Cards:*
+an open card (no `status`, no non-empty answer file) gets `status: "withdrawn_v2"` in place, atomically with every other member kept, and moves to `escalations/archive/`; answered and expired cards are
+history and stay. *Stores:* `qphase/` and `cadence/` move to `migrations/v1-archive/<name>`; a store re-created after the first run merges file by file by PATH IDENTITY — the same relative path with the
+same bytes is removed from the source, a different file at that path lands beside it as `name.v1-<first 8 hex of its SHA-256>.ext`, two names with identical bytes are both kept, nothing is ever
+overwritten. *Settings:* under the extension's own `settings.lock` (never waited for: a held lock defers the keys), the removed keys (`COAI_ON_EXHAUSTED`, `COAI_ESCALATION_MINUTES`,
+`COAI_ESCALATION_SECONDS`; the rows are DATA in `MigrationV2Tables`, whose hash goes into the marker) are written to `settings.v1-removed.json` FIRST (an existing key is never overwritten), then dropped
+from `settings.json`.
+
+**Idempotence comes from the object, never from the journal.** A session is converted while its file says `humanGate: true`; a card is withdrawn while it is open at the top level and moved only when
+already marked; a store is archived while its source is there; a key is moved while it is in `settings.json`. A kill at any boundary (`MigrationV2.AtBoundary`, the fault seam a test throws from) is
+resumed by reading the objects. `migrations/v2.journal` is JSON Lines, append-only, flushed per line (`{seq, utc, kind, id, state, detail}`), and is EVIDENCE for one purpose: a session that carries the
+conversion note and has no `done` line gets its `coai.db` projection written again. A line torn by a kill is ignored on read, and the next append cuts the file back to its last newline first.
+A journal line the convert-on-load door cannot write is reported through the server log (a warning), never thrown: the session is converted and the journal is evidence only (`HoldConversion.Journaled`).
+The door's journal line and its notices are stamped from the store's injected clock (`SessionStore.Clock`, the `TimeProvider` passed on to `MigrationV2Journal` and `HoldBoundary`), as the migration's are.
+A claimed session that cannot be read again or saved is also reported (a warning with the exception) before the caller gets the conversion in memory; the store's `Log` is the host's logger (`PanelService`
+passes its own — Serilog's global logger is never set in production, so a default-logger warning would reach no one).
+
+**The marker.** `migrations/v2.done` (`schema`, `tablesHash`, `finishedUtc`, `version`) is written only when nothing was deferred AND nothing was unreadable: an object the run could not read is an
+object it did not migrate, so an unreadable file keeps the marker away (exit 75, status `partial`) and the next start retries — the run never loops inside one start.
+
+**The lease.** `claims/migrate-v2.lease` is a file held open exclusively, which the kernel releases when the holder is killed (the shape `SessionClaim` uses), taken only by an apply or a sweep that
+has a card to take. `MigrationV2Lease.Take` answers a closed hierarchy `LeaseTake`: `Taken(lease)`, `Busy`, `Unusable(why)`. A busy lease is status `busy`, exit 75; the server starts anyway.
+
+**A person's answer v1 never applied.** A held session whose card a person had answered (`fix`, `discuss`, `continue`) is converted to `good_enough` — v1 never applied the answer and v2 never waits — and the
+person is told FIRST: one entry per card in `server-notices.jsonl`, code `v2-converted-answered-hold`, subject = the card id, written through the notice writer and READ BACK from the file before
+the session is converted (the sink answers "accepted"; the disk can still refuse). A session whose notice cannot be written stays held and the run is `partial`; a load in the same case leaves it held
+(both are `HoldBoundary.Released`). An answer file has THREE states, never two (`HoldBoundary.ReadAnswer`, the closed `AnswerRead`): *none* (the file is missing, has no words or is malformed — the hold
+converts as unanswered), *given* (a person's words — the notice first), and *unreadable* (the file exists and a permission or I/O error stopped the read — whether a person answered is UNKNOWN). An unknown
+answer defers: the migration marks the session deferred (`partial`, exit 75, no marker; a dry run lists it as `defer`), a load leaves it held and logs a warning, and neither writes anything. The card whose
+answer is unreadable is deferred too, never withdrawn — a withdrawn card leaves the top level, and the held session could no longer find the answer that its notice is keyed on. Once the file can be read the
+next run or load announces it and converts. `HoldBoundary.AnsweredOf` answers `HoldAnswers` (the answered holds and the unreadable cards); `Released` answers `HoldRelease` (the session, converted or as it
+was, and the reason it was held). The card id is the key, so a kill between the notice and the conversion leaves a held session and a notice, and the next run — or load — finds the notice and converts.
+The history is read ONCE per run into a set of card ids (`HoldBoundary.Noticed`; a run that finds every notice already written reads the file once in all). A write is confirmed by reading ONLY the bytes
+appended after the length of `server-notices.jsonl` recorded just before it (`ServerNotices.Length`, `ServerNotices.LinesFrom` — a file shorter than the offset was rolled and is read from its start), so the
+cost of a notice does not grow with the history; the tail must contain the card's own line, and what it holds joins the set — the set is fed by what a read of the file found, never by the sink's answer. A dry run lists the notices it would write (`notices`) and writes none.
+
+**What it must not change:** `RetiredMembers.Shipped` stays empty (retiring `humanGate` before the migration ran would lose the evidence), non-held sessions, a session's file name, cadence and
+question-phase code (E3 removes them and adds rows to the tables), and any Team-server wire field.
+
+**The data folder and the extension's move.** `migrations/v1-archive/` is the ONLY copy of the archived cadence and question-phase history, so it has its own entry in `shared/data-inventory.json`
+(`move: true`, `clash: true`) and in the extension's `DATA_TO_MOVE`; its parent `migrations/` stays behind — the marker, the journal and `claims/` describe THIS folder, and a marker carried to
+a folder that was never migrated would say it was.
 
 ## A start answers `initialize` at once, and an idle server does nothing (2026-10-06)
 
@@ -1169,6 +1276,8 @@ unchanged, its callers untouched; S3's gate lands there.
 
 ## Two doors — the gate's question on a card, the AI's own in its chat (2026-10-03, `research/PLAN_ask_human_is_for_the_gate.md`)
 
+> **Superseded in v2 (E1.S1, 2026-11-22) — history only.** The held gate, the escalation card and the wait this section describes were removed; see *v2: the gate has four outcomes and never waits*, above.
+
 **The symptom.** The operator's sidebar showed *A review is waiting on you* over an AI's own A-or-B question about
 its work, and **Answer…** offered the gate's three decisions — *Keep going*, *Stop and act on the findings*, *Stop
 and talk to me* — none of which answers A or B. The operator pressed one; `status` then reported
@@ -1233,6 +1342,8 @@ sequenceDiagram
 ```
 
 ## The door to the person — the phase-aware gate, the fifteen-minute wait, the retention, the autonomy order (2026-10-02, `todo/PLAN_question_consultant.md` S3)
+
+> **Superseded in v2 (E1.S1, 2026-11-22) — history only.** The held gate, the escalation card and the wait this section describes were removed; see *v2: the gate has four outcomes and never waits*, above.
 
 > **Since 2026-10-03** the card half of what follows applies only to the GATE's question; the phase table still decides
 > every question, and the AI's own is then asked in its conversation (*Two doors*, above).
@@ -1406,6 +1517,8 @@ sweep asks; the gate's wiring and the two forwarders paid for inside the file); 
 (the default's constant and its remark paid for by the surplus blank lines beside it).
 
 ## ask_human never waits under policy auto (2026-11-17, `research/PLAN_auto_never_asks_a_person_E1.md` § 9, owner decision O3)
+
+> **Superseded in v2 (E1.S1, 2026-11-22) — history only.** The held gate, the escalation card and the wait this section describes were removed; see *v2: the gate has four outcomes and never waits*, above.
 
 > Plan: [PLAN_auto_never_asks_a_person.md](PLAN_auto_never_asks_a_person.md) § 4.4 (the design) and
 > [PLAN_auto_never_asks_a_person_E1.md](PLAN_auto_never_asks_a_person_E1.md) § 9 and N3 (the words).
@@ -1865,6 +1978,8 @@ runner, which is the machine slow enough to lose the race.
 
 ## Escalation — reaching a person without a port
 
+> **Superseded in v2 (E1.S1, 2026-11-22) — history only.** The held gate, the escalation card and the wait this section describes were removed; see *v2: the gate has four outcomes and never waits*, above.
+
 > Since 2026-10-03 only the GATE's question reaches this file — a `call_human` notice, or an `ask_human` asked on a held
 > gate or in a feature review's request window; every other `ask_human` is answered `ask_in_conversation` and writes
 > nothing here (*Two doors*, above).
@@ -1886,7 +2001,7 @@ front of `ask_human` has let it through — *The door to the person*, above.
 ## Configuration and keys
 
 Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI_EXE_*`,
-`COAI_MAX_ROUNDS`, `COAI_GATE_THRESHOLD`, `COAI_ON_EXHAUSTED` (`auto|human|continue|good_enough|escalate`; **absent, empty or `auto` is policy auto** — an unknown word is `human` plus a complaint), `COAI_MAX_CONCURRENCY`,
+`COAI_MAX_ROUNDS`, `COAI_GATE_THRESHOLD`, `COAI_ON_EXHAUSTED` (**removed in v2, E1.S1** — v2 has the one outcome policy, and the migration moves the key to `settings.v1-removed.json`; the v1 reading was `auto|human|continue|good_enough|escalate`), `COAI_MAX_CONCURRENCY`,
 `COAI_MAX_PER_PROVIDER`, `COAI_REVIEWER_TIMEOUT_MINUTES`, `COAI_DATA_DIR`, `COAI_LOG_LEVEL`, and
 `COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config -` once per
 start, the key written to its stdin and never in its arguments (2026-10-10,
@@ -2050,6 +2165,12 @@ Four properties of it are load-bearing, and each was earned:
 the real one, retried briefly (see *A session is saved under its own scratch name*); a torn file
 reads as a fresh session rather than a locked repo. Round trail (`RoundRecord`) and pending findings ride in the same file — `status`
 survives a server restart, per the durable-status rule.
+
+**v2 (E1.S4):** a load of a session that is still held converts it (`SessionStore.ConvertedOnLoad`, under the claim, across the shared `HoldBoundary` — an answered hold is announced first, else the session stays held — journaled `on-load`; a step it cannot finish — the journal line, the `coai.db` note, a re-read or a save — is
+said through the server log, never thrown), `LoadFile(path)` reads one file by path for the migration and throws on a torn or unreadable file instead of answering "fresh", and `SaveTo(path, session)` writes
+it back to the SAME path. The folder gains `migrations/` (`v2.done`, `v2.journal`, `v1-archive/`), `claims/migrate-v2.lease` and `settings.v1-removed.json` — see *The v2 data migration*, above.
+
+> **Superseded in v2 (E1.S1)** for the next section: `autonomous` is no longer a member of `PanelConfig`; a file that carries it keeps it in the `Unknown` bag.
 
 ### `autonomous` absent is a meaning, not a default (2026-11-17)
 
@@ -2309,6 +2430,8 @@ Its stdout report is unchanged.
 
 ## `call_human` stops the review (2026-09-02)
 
+> **Superseded in v2 (E1.S1, 2026-11-22) — history only.** The held gate, the escalation card and the wait this section describes were removed; see *v2: the gate has four outcomes and never waits*, above.
+
 The round budget used to decide only what a finished round was CALLED. `BeginPlanRound` and
 `BeginCodeRound` refused an unresolved previous round and a wrong stage, and asked nothing about how
 many rounds had been spent; the budget was read in `CompleteRound`, to choose between `revise` and
@@ -2337,6 +2460,8 @@ it is part of the machine rather than a label the server puts on an answer file.
 are unchanged and were always described this way to the person — `continue` and `fix` grant a FRESH
 set of rounds, `discuss` advances nothing. The fourth, `proceed`, arrived 2026-10-22 and is the only one that
 ships with the findings open.
+
+> **Superseded in v2 (E1.S1)** — the five policies are one: rounds that run out are always `good_enough`. History only.
 
 **The five policies, and what each does where the rounds run out.** `COAI_ON_EXHAUSTED` is read into
 `PanelConfig.OnExhausted`; `PanelConfig.Autonomous` (`IsAutonomous`) says which of them is policy `auto`, and the two are
@@ -2375,6 +2500,8 @@ projection, the line) — the operation order is unchanged. `CurrentUnclaimed` i
 validates and loads; `FactsOf` builds the desk's facts with the policy on them and `DecidedAsync` answers what the gate decided.
 
 ## Only an answer on the notice card releases the gate (2026-10-22)
+
+> **Superseded in v2 (E1.S1, 2026-11-22) — history only.** The held gate, the escalation card and the wait this section describes were removed; see *v2: the gate has four outcomes and never waits*, above.
 
 > Plan: [PLAN_only_a_person_releases_the_gate.md](../todo/PLAN_only_a_person_releases_the_gate.md) (the server half; the
 > extension half is in [module_extension.md](module_extension.md), *Active questions*).

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Server.Migrations;
 
 namespace CoaiMcp.Server;
 
@@ -463,6 +464,18 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// <summary>The write road of one session file: (file, whole text). <see cref="AtomicFile.Write"/> with its shared window by default; a seam so a test can hold, fail or pause the write.</summary>
     internal Action<string, string> FileWriter { get; init; } = static (file, json) => Runners.Files.AtomicFile.Write(file, json, Runners.Files.AtomicFile.SharingRetry);
 
+    /// <summary>
+    /// Where a notice about an answered hold is written AND settled (<see cref="Noticing.Settled"/>): the convert-on-load door announces an answered hold through it before it converts the
+    /// session. Absent means the store cannot announce — a held session with an answered card then stays held when it is loaded, and a held session with none converts as always.
+    /// </summary>
+    internal Func<CoaiMcp.Core.Notices.ServerNotice, bool>? Notice { get; init; }
+
+    /// <summary>The clock of the convert-on-load door: its journal line and its notices are stamped from it.</summary>
+    internal TimeProvider Clock { get; init; } = TimeProvider.System;
+
+    /// <summary>Where the convert-on-load door says what it could not do. The host passes its own log; the default is Serilog's global one, which a bare store in a tool or a test may leave silent.</summary>
+    internal Serilog.ILogger Log { get; init; } = Serilog.Log.Logger;
+
     private string SessionsDir => Path.Combine(dataDir, "sessions");
 
     /// <summary>
@@ -495,14 +508,108 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 
         try
         {
-            return Normalised(
+            var session = Normalised(
                 JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
+
+            return session is not null && LegacyHold.Stands(session.State) ? ConvertedOnLoad(file, session) : session;
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
             return null; // a torn or momentarily busy file is a fresh session, not a locked repo
         }
     }
+
+    /// <summary>
+    /// A session a v1 build HELD, found by a load: left out of its hold with the same conversion the v2 migration makes, saved under the claim and journaled (SPEC §5.1).
+    /// </summary>
+    /// <remarks>
+    /// <para>The migration cannot be the only door. A session it deferred, a file that was unreadable and is readable now, and a held session a v1 process that is still alive
+    /// writes after <c>v2.done</c> would all stay held for ever — and a v2 round machine does not read a hold. So the first load converts it.</para>
+    /// <para><b>Under the claim, or not at all.</b> The claim is taken here and the file read again under it. When another call holds the claim — a round, a resolve, the
+    /// migration — that call owns the file: this load hands back the session as v2 reads it, in memory, and writes nothing; the holder's own save persists it. A read-only
+    /// folder, or a write that fails, ends the same way: the caller gets the converted session and the file is converted by the next load that can.</para>
+    /// <para>The journal line says <c>on-load</c>; the conversion is the migration's own function (<see cref="HoldConversion.Converted"/>) behind the migration's own boundary
+    /// (<see cref="HoldBoundary"/>), so both doors write the same bytes <b>and the same notice</b>: an answered hold is announced, and the notice read back from disk, BEFORE the
+    /// session leaves its hold. When the notice cannot be confirmed — no sink, a writer that refuses, a line the disk never took — the session is returned as it was loaded, STILL
+    /// HELD (a v2 code path reads a held session as a normal one), nothing is written, and the next load or migration tries again; converting it anyway would end the only
+    /// chance of the notice, because no later run lists a session that is no longer held. An answer file that exists and cannot be read (permissions, an I/O error) is the same
+    /// case: whether a person answered is unknown, so the session stays held with a warning until the file can be read. The same rule covers the two ways out that do not write
+    /// (<see cref="HoldBoundary.InMemory"/>): a conversion handed to a caller is a conversion that caller may save.</para>
+    /// <para>Every step that falls back is SAID through <see cref="Log"/>: a save or a re-read that failed, and a session left held.</para>
+    /// </remarks>
+    private PersistedSession ConvertedOnLoad(string file, PersistedSession held)
+    {
+        var state = held.State;
+        var boundary = new HoldBoundary(dataDir, Notice, Clock);
+        try
+        {
+            using var claim = SessionClaim.TryTake(dataDir, state.RepoPath, state.Branch, state.Document, state.Feature);
+            if (claim is null)
+            {
+                return InMemory(boundary, file, held);
+            }
+
+            // Read again UNDER the claim: the first read was before it, and the holder that had it may have converted the file.
+            var fresh = Normalised(JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
+            if (fresh is null || !LegacyHold.Stands(fresh.State))
+            {
+                return fresh ?? InMemory(boundary, file, held);
+            }
+
+            var release = boundary.Released(fresh, file);
+            if (!release.IsConverted)
+            {
+                Log.Warning("v2 convert on load: {File} stays held and is converted by a later load or migration — {Why}", Path.GetFileName(file), release.Why);
+
+                return fresh;
+            }
+
+            var converted = release.Session;
+
+            WriteTo(file, converted);
+            HoldConversion.Journaled(dataDir, file, "on-load", SaidInTheLog, Clock);
+            if (converted.Rounds.Count > 0)
+            {
+                HoldConversion.WriteNote(dataDir, converted.State.SessionId, converted.Rounds[^1], SaidInTheLog);
+            }
+
+            return converted;
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(e, "v2 convert on load: the claimed session {File} could not be read again or saved, so the caller gets it in memory and the file is converted by a later load", Path.GetFileName(file));
+
+            return InMemory(boundary, file, held);
+        }
+    }
+
+    /// <summary>The session as v2 reads it, unwritten (<see cref="HoldBoundary.InMemory"/>); a notice history that cannot be read leaves it held, and says so.</summary>
+    private PersistedSession InMemory(HoldBoundary boundary, string file, PersistedSession held)
+    {
+        try
+        {
+            return boundary.InMemory(held, file);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(e, "v2 convert on load: the notice history could not be read for {File}, so the session is returned held", Path.GetFileName(file));
+
+            return held;
+        }
+    }
+
+    /// <summary>The diagnostic of a best-effort step of the convert-on-load door: the store's <see cref="Log"/>, which is the server's own — stderr and the run's file, never stdout.</summary>
+    private void SaidInTheLog(string sentence) => Log.Warning("{Sentence}", sentence);
+
+    /// <summary>
+    /// One session file by its PATH, made whole like <see cref="Load"/> — but read WITHOUT the turn, and a file that cannot be read THROWS
+    /// (<see cref="JsonException"/>, <see cref="IOException"/>, <see cref="UnauthorizedAccessException"/>): the v2 migration must tell a corrupt file
+    /// from a busy one and a fresh session from neither (E1.S4), and a DRY RUN must not create the <c>.turn</c> file a turn would make. A reader needs
+    /// no turn to see a whole file — every write is a temp file moved over it, and the shared read tolerates the move (<see cref="SharedRead"/>).
+    /// <see cref="Load"/> answers all three failures as null.
+    /// </summary>
+    internal PersistedSession? LoadFile(string file) =>
+        Normalised(JsonSerializer.Deserialize(SharedRead.Text(file), ServerJsonContext.Default.PersistedSession));
 
     /// <summary>
     /// Reads a session file WITHOUT forbidding anyone else to write it.
@@ -547,7 +654,18 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         // a parameter: a session knows what it is about, and a save that had to be told would be a
         // save that could be told wrong. It is also what lets the orphan sweep re-save a feature
         // session under its own key without knowing what a feature session is.
-        var file = FileFor(session.State.RepoPath, session.State.Branch, session.State.Document, session.State.Feature);
+        WriteTo(FileFor(session.State.RepoPath, session.State.Branch, session.State.Document, session.State.Feature), session);
+    }
+
+    /// <summary>
+    /// Writes a session to a file the CALLER names — scrub, turn and atomic move exactly as <see cref="Save"/>, with its failures as raw
+    /// <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/> for the caller to classify. The v2 migration rewrites a session
+    /// where it LIES, which is not always the file its key would name (E1.S4, scenario 15): a second file would be a second session.
+    /// </summary>
+    internal void SaveTo(string file, PersistedSession session) => WriteTo(file, session);
+
+    private void WriteTo(string file, PersistedSession session)
+    {
         // The bags are cleaned on a copy, once, here — the only place a session is serialised (SessionScrub says what it drops).
         var json = JsonSerializer.Serialize(SessionScrub.Scrubbed(session, Retired), ServerJsonContext.Default.PersistedSession);
         // ONE road, whether or not the turn could be taken: a temp file beside the session, then the move over it — `AtomicFile`, whose

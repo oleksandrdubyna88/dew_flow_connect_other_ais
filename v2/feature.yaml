@@ -19,3 +19,18 @@ epochs:
   - epoch-2
   - epoch-3
   - epoch-4
+  - epoch-5
+taskSchema:
+  security: "boolean flag; true routes the task to the important role"
+  roles: "ordered model lists per role"
+cornerstones:
+  - epoch-1/e1/s4-migrate-v2
+  - epoch-1/e3/s6-install
+  - "epoch-2/e1 hub auth + device-document contract"
+  - "epoch-2/e2 shared vendor logins + file permissions"
+  - "epoch-2/e3 first sync + settings migration, single writer"
+  - "epoch-2/e4 binary swap"
+  - "epoch-3/e1 router + failover + job lease"
+  - "epoch-3/e1 work-plan schema"
+  - "epoch-3/e2 plan binding + envelope/report schema"
+  - "epoch-3/e5 host slots + merge on candidate SHA"

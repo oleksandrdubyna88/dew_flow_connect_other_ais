@@ -1,12 +1,12 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: epoch-3
 title: "Deterministic work"
-proves: "coai builds a YAML feature with coders in parallel and keeps them green"
+proves: "an external role does a task that coai routes, checks and keeps green"
 dependsOn:
   - epoch-1
 epics:
-  - e1-toolchain-adapters
-  - e2-coder-fix-loop
-  - e3-work-scheduler
-  - e4-ask-hook
-  - e5-sessions-mod
+  - e1-role-jobs-ba
+  - e2-coder-one-task
+  - e3-roles-complete
+  - e4-adapters-coder-hardening
+  - e5-work-scheduler

@@ -1,0 +1,43 @@
+{
+  "id": "ee95dd5aa97f",
+  "sessionId": "54beca54",
+  "repoPath": "/fixture/repo",
+  "branch": "epic-1",
+  "question": "The document review gate needs your decision: 1 finding(s) still gate after 1 round(s). Proceed anyway, or fix the findings and review again?",
+  "questionOriginal": "",
+  "language": "en",
+  "translationNote": "",
+  "openFindings": [
+    {
+      "severity": 1,
+      "category": 7,
+      "file": "",
+      "line": 0,
+      "title": "\u0027fast\u0027 is not a number",
+      "why": "nobody can tell whether the result meets it",
+      "fix": "state a latency and a percentile",
+      "providers": [
+        "codex"
+      ],
+      "role": "Spec",
+      "reproduction": null,
+      "capReason": "",
+      "alsoSeenBy": [],
+      "isGating": true
+    }
+  ],
+  "askedUtc": "2026-11-22T18:34:38.8011009Z",
+  "status": "",
+  "expiredUtc": "",
+  "consultId": "",
+  "productionRisk": false,
+  "riskReason": "",
+  "consultantAnswers": [],
+  "kind": "notice",
+  "decisions": [
+    "continue",
+    "fix",
+    "discuss",
+    "proceed"
+  ]
+}

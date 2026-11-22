@@ -1,0 +1,4 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s4-band-json
+title: "--band-json one-shot"
+dependsOn: []

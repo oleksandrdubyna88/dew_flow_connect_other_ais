@@ -539,6 +539,10 @@ export const DATA_TO_MOVE: readonly string[] = [
   // server writes them to the ROOT rather than the side directory, because `SettingsFile.DataDirFrom`
   // applies no side — so a partitioned move finds nothing here until that defect ships its own fix.
   'logs/', 'rounds.md',
+  // The cadence and question-phase stores the v2 migration archived (E1.S4): the ONLY copy of that history, so it
+  // travels. Its parent `migrations/` does not — the marker `v2.done` and the journal are about THIS folder, and a
+  // marker carried to a folder that was never migrated would say it was.
+  'migrations/v1-archive/',
 ];
 
 /**
