@@ -1,0 +1,9 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e2-sessions-creds
+title: "tmux sessions through the creds MCP (spike = story 1)"
+mvp: true
+half: extension
+dependsOn: []
+doneWhen:
+  - "real Windows/WSL spike: disconnect event recorded; PNG round-trip hash matches"
+  - "tree VM → user → session; create/attach/resume; reconnect backoff; no retry on 0"

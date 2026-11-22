@@ -1,11 +1,12 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: epoch-4
-title: "Reach: studio and every listed language"
-proves: "video review through extracted frames, and C#/Node/PHP/Rust/Python/Java all work"
+title: Operator
+proves: "the person works through coai: questions answered, sessions one click away, everything visible"
 dependsOn:
-  - epoch-3
+  - epoch-1
 epics:
-  - e1-attachments
-  - e2-studio-roles
-  - e3-more-adapters
-  - e4-git-pr-ci
+  - e1-ask-hook
+  - e2-sessions-creds
+  - e3-claude-mod
+  - e4-local-pages
+  - e5-features-page

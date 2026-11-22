@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e3-server-cleanup-install
+title: "Server cleanup, renames, conventions optional, --band-json, install, roles"
+half: server
+dependsOn:
+  - e1-gate-simplify
+parallelWith:
+  - e4-shell-modules
+doneWhen:
+  - "cons, cons_close, consask served; old names answer as aliases"
+  - "coai ships and enforces no conventions; a repo that mounts them still has them read"
+  - "roles returns main AI, ORDERED model lists per role, complexity bands, Haiku kinds, work method"
+  - "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent; NO AskUserQuestion hook"
+  - "--band-json answers phrases, consultations, failures"
+  - "each removal story adds its rows to MigrationV2Tables with a fixture; answered/expired cards older than 30 days are archived"
+  - "review_*/cons/consask accept workItem; --plan-report gives per-item gates, cons, consask, time"

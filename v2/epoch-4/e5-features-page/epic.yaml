@@ -1,0 +1,9 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e5-features-page
+title: "Plans page: tree of all plans, status, progress, per-item report"
+half: extension
+dependsOn: []
+doneWhen:
+  - "tree of every plan (feature) → epoch → epic → story → task with status open / in progress / done and progress counts"
+  - "per item: gates run, cons and consask counts, execution time (from --plan-report)"
+  - "coai sets item status deterministically (task done when green + gate outcome); a remote-only plan through the hub"

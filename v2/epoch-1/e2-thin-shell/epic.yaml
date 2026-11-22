@@ -8,6 +8,7 @@ parallelWith:
   - e1-gate-simplify
 doneWhen:
   - "no onStartupFinished; activate() only registers (entryPurity test)"
-  - "entry firewall checks metafile inputs and output imports; byte budgets green"
-  - "M2 (command to painted usable sidebar) ≤ 2000 ms on Linux and Windows CI, 3 fresh-profile samples, maximum counts; Remote-WSL recorded"
-  - "every existing chat host scenario passes; cold chat command and restored tab work without opening the sidebar"
+  - "entry firewall checks inputs and output imports; byte budgets green"
+  - "M1 ≤ 50 ms; M2 maximum of 3 fresh samples ≤ 2000 ms on Linux CI, Windows CI and Remote-WSL"
+  - "v1 baseline and per-step marks of the old activate() recorded"
+  - "joint smoke with the E1 binary passes; settings-mirror check done"

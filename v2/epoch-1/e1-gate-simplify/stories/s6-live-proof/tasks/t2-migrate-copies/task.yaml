@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-migrate-copies
+title: "--migrate-v2 on a COPY of each real data folder: dry-run counts = apply counts; second run 0 changes"
+kind: measure
+complexity: 5
+dependsOn: []
+parallel: true
+files:
+  - research/RESULTS_v2_gate_core.md
+dod:
+  - id: d1
+    item: "counts recorded per data folder"

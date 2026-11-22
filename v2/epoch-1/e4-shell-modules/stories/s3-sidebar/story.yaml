@@ -1,0 +1,4 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s3-sidebar
+title: "Sidebar on the kit: failures, active cons/consask, last rounds"
+dependsOn: []
