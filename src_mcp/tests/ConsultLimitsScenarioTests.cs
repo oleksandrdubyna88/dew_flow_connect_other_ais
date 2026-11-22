@@ -150,7 +150,7 @@ public sealed class ConsultationSweeperTests : IDisposable
         var loop = ConsultationSweeper.RunAsync(() => host.Current, TimeSpan.FromMilliseconds(50), Logger.None, stop.Token);
 
         await Lapses(() => host.Current.Consultations, first);
-        File.WriteAllText(Path.Combine(_dir, "settings.json"), """{ "COAI_CONSULT_TURNS": "4" }""");
+        File.WriteAllText(Path.Combine(_dir, "settings.json"), """{ "COAI_CONS_TURNS": "4" }""");
         host.Current.Settings.ConsultTurns.Should().Be(4, "the reload happened");
         var second = Idle(host.Current.Consultations, minutesAgo: 20);
         await Lapses(() => host.Current.Consultations, second);

@@ -2420,7 +2420,7 @@ internal static class Program
         implement, then `review_code`, `resolve`, fix — the same loop. `review_code` REFUSES until the plan
         stage advanced.
         `providers` says what is configured; `status` re-orients a resumed conversation;
-        `ask_consultants` puts a question to other models before you ask the person in your own conversation
+        `consask` puts a question to other models before you ask the person in your own conversation
         (`ask_human` is removed in v2 and only says so).
         Two rules:
         1. Reject in round ONE, not when the rounds run out. Accepting to please stops the loop
@@ -2428,9 +2428,9 @@ internal static class Program
            and the count never falls.
         2. Nothing holds the gate: `not_reviewed` and `good_enough` advance on `resolve` like `proceed`.
            Say in your summary what was not reviewed, or which findings you declined, and why.
-        `consult` is for when YOU are stuck: an independent model reads this checkout read-only with its
+        `cons` is for when YOU are stuck: an independent model reads this checkout read-only with its
         uncommitted diff and answers advice, not orders — verify it, then report back on the same
-        consultationId. The person can ask for one themselves with the `consult` PROMPT.
+        consultationId, and record how it ended with `cons_close`. The person can ask for one themselves with the `cons` PROMPT.
         """;
 
     /// <summary>

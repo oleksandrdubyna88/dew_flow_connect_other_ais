@@ -126,7 +126,7 @@ test('a feature tab names the rows ticked for it, and a row ticked for something
 test('a feature tab with nothing ticked says so, and the consultant says who answers until then (D2)', () => {
   const state = { ...panelState('reviewers'), catalogRows: DEFAULT_VENDORS };
 
-  assert.match(strip(state, 'consultants/qconsult'), /No model is ticked for the question consultant yet/);
+  assert.match(strip(state, 'consultants/qconsult'), /No model is ticked for the consask yet/);
   assert.match(strip(state, 'consultants/consultant'), /each caller asks the pair it ships with/);
 });
 

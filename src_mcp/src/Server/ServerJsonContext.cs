@@ -128,7 +128,7 @@ public sealed record ProvidersAnswer(
 }
 
 /// <summary>One refused setting the extension can act on by kind: which key, what kind, which stored value, and the sentence.</summary>
-/// <param name="Key">The settings-file key — <c>COAI_QCONSULT_ROOTS</c>.</param>
+/// <param name="Key">The settings-file key — <c>COAI_CONSASK_ROOTS</c>.</param>
 /// <param name="Kind">One of <see cref="SettingProblemKinds"/>.</param>
 /// <param name="Value">The stored value as the file spells it — what the page holds and matches on.</param>
 /// <param name="Sentence">The same sentence <see cref="ProvidersAnswer.Unrecognised"/> carries, so the extension can drop it there.</param>

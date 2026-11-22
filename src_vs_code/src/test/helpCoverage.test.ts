@@ -462,9 +462,9 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.consultTurns': 'turns per consultation',
   'coai.consultCallsPerSession': 'calls per session',
   'coai.consultIdleMinutes': 'close an idle consultation after, minutes',
-  'coai.consultEnabled': 'let an ai consult another vendor',
+  'coai.consultEnabled': 'let an ai use cons',
   // The question consultant's eight (todo/PLAN_question_consultant.md, S4), by the tab's own labels.
-  'coai.qconsultEnabled': 'let an ai ask the question consultant first',
+  'coai.qconsultEnabled': 'let an ai ask consask first',
   'coai.qconsultRows': 'who answers',
   'coai.qconsultPrompts': 'base prompts',
   'coai.qconsultRoots': 'folders a disk row may read',

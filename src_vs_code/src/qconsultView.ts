@@ -138,8 +138,8 @@ function banner(serverVersion: string): string {
 
 function switchBlock(settings: QconsultSettings): string {
   return `<div class="field">
-  <div class="check-row"><label for="qconsultEnabled"><input type="checkbox" id="qconsultEnabled" data-setting="qconsultEnabled"${settings.enabled ? ' checked' : ''}> Let an AI ask the question consultant first</label>${help('qconsultEnabled')}</div>
-  <div class="hint">Before an AI asks you a question it calls <code>ask_consultants</code>: every row below that is on answers it at once, each with its one prompt, and the answers come back to the AI separately — advice, never orders.</div>
+  <div class="check-row"><label for="qconsultEnabled"><input type="checkbox" id="qconsultEnabled" data-setting="qconsultEnabled"${settings.enabled ? ' checked' : ''}> Let an AI ask consask first</label>${help('qconsultEnabled')}</div>
+  <div class="hint">Before an AI asks you a question it calls <code>consask</code>: every row below that is on answers it at once, each with its one prompt, and the answers come back to the AI separately — advice, never orders.</div>
 </div>`;
 }
 

@@ -16,7 +16,7 @@ namespace CoaiMcp.Server;
 /// resumable. This deadline is the bound behind it, for a launch that did not end when told to and for a
 /// git that hangs afterwards.</para>
 /// <para>It is the runtime bound; the SWEEP's abandonment threshold is the operator's idle window
-/// (<c>COAI_CONSULT_IDLE_MINUTES</c>), which this deadline sits well inside — so an <c>asking</c> record
+/// (<c>COAI_CONS_IDLE_MINUTES</c>), which this deadline sits well inside — so an <c>asking</c> record
 /// idle past that window, with nobody holding its repository's lock, was left behind by a turn that did
 /// not settle, whether or not the pid it names is alive (2026-09-26). Before that the sweep asked only
 /// about the pid, and a record naming the server's own live pid was kept for ever.</para>

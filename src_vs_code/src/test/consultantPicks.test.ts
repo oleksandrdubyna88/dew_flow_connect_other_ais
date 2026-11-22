@@ -40,7 +40,7 @@ test('a pick of a row no longer ticked is shown, selected and named — never cl
 
   assert.equal(view.selected, 'chat-fast');
   assert.ok(view.options.some((one) => one.value === 'chat-fast'), 'the stranded pick is not on the list, so the next change would lose it');
-  assert.match(view.note, /chat-fast is not ticked for the consultant/);
+  assert.match(view.note, /chat-fast is not ticked for the cons/);
 });
 
 test('a pick of a row that is gone says so', () => {
@@ -81,7 +81,7 @@ test('a pick never touches the rows — re-pointing a caller through the old pag
 });
 
 test('a pick the page could not have offered is refused, and nothing is written', () => {
-  assert.match(consultantPickWrites({}, 'claude', 'chat-fast', ROWS).refusal, /not ticked for the consultant/);
+  assert.match(consultantPickWrites({}, 'claude', 'chat-fast', ROWS).refusal, /not ticked for the cons/);
   assert.deepEqual(consultantPickWrites({}, 'claude', 'chat-fast', ROWS).writes, []);
   assert.deepEqual(consultantPickWrites({}, '__proto__', 'deep-high', ROWS).writes, []);
 });
@@ -169,10 +169,10 @@ test('a caller on the shipped pair, with other rows ticked consultant, is told t
   const two = [...one, deep];
 
   assert.ok(hintsUnder(pickOn(DEFAULT_CONSULT, one, 'claude')).includes(
-    'GPT-6-Astra is ticked consultant on Models, but Claude Code still asks the shipped pair — pick it here to use it.'),
+    'GPT-6-Astra is ticked cons on Models, but Claude Code still asks the shipped pair — pick it here to use it.'),
   `under Claude Code's pick: ${JSON.stringify(hintsUnder(pickOn(DEFAULT_CONSULT, one, 'claude')))}`);
   assert.ok(hintsUnder(pickOn(DEFAULT_CONSULT, two, 'other')).includes(
-    'GPT-6-Astra and deep-high are ticked consultant on Models, but Another client still asks the shipped pair — pick one here to use it.'));
+    'GPT-6-Astra and deep-high are ticked cons on Models, but Another client still asks the shipped pair — pick one here to use it.'));
 });
 
 /** Whether a pick carries the not-asking line. */

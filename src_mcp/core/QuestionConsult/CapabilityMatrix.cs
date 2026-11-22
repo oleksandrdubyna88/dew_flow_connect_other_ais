@@ -79,7 +79,7 @@ public static class CapabilityMatrix
         if (row is null)
         {
             return new Admission.Refused(
-                $"'{runtime}' is not a runtime the question consultant can launch for '{capability.Spelled()}' — it launches on: {string.Join(", ", RuntimeCapabilities.Runtimes)}");
+                $"'{runtime}' is not a runtime consask can launch for '{capability.Spelled()}' — it launches on: {string.Join(", ", RuntimeCapabilities.Runtimes)}");
         }
 
         return row.Standing switch

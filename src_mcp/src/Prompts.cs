@@ -54,7 +54,7 @@ internal static class Prompts
     }
 
     private const string Described = """
-        Hand the problem to the cons — the model the person configured for this kind of caller. Give it the
+        Hand the problem to `cons`, the model the person configured for this kind of caller. Give it the
         problem in your own words, or nothing at all and the assistant states what it is
         stuck on. It reads this checkout READ-ONLY with its uncommitted change
         and answers advice to verify — it is never told to change anything.
@@ -142,7 +142,7 @@ internal static class Prompts
                plainly when it is wrong.
             2. **Report the verification back.** A follow-up on the same `consultationId` must say
                what you tried and what it produced; the server refuses a turn that merely repeats the
-               question, because a consultant told nothing new can only repeat itself.
+               question, because a model told nothing new can only repeat itself.
             """;
     }
 }

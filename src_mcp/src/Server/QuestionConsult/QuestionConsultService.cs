@@ -124,24 +124,24 @@ public sealed class QuestionConsultService(
         var options = settings.QuestionConsult;
         if (!options.Enabled)
         {
-            return $"the question consultant is switched off in this installation ({QuestionConsultKeys.Enabled})";
+            return $"consask is switched off in this installation ({QuestionConsultKeys.Enabled})";
         }
 
         if (options.RowsUnreadable)
         {
-            return $"the question consultant's rows ({QuestionConsultKeys.Rows}) could not be read";
+            return $"consask's rows ({QuestionConsultKeys.Rows}) could not be read";
         }
 
         if (options.Rows.Count(r => r.Enabled) == 0)
         {
-            return $"no question-consultant row is switched on ({QuestionAdmission.Section})";
+            return $"no consask row is switched on ({QuestionAdmission.Section})";
         }
 
         var peeked = _counter.Peek(QuotaKey(caller), options.QuestionsPerSession, nowUtc);
 
         // A counter file that exists but cannot be read holds the caller at its cap with a sentence naming the file;
         // that sentence is the reason, not a count of questions nobody can read.
-        return peeked.Allowed ? string.Empty : peeked.Note.Length > 0 ? peeked.Note : $"this caller session has asked the consultants {peeked.Used} questions, the cap ({QuestionConsultKeys.QuestionsPerSession} = {options.QuestionsPerSession})";
+        return peeked.Allowed ? string.Empty : peeked.Note.Length > 0 ? peeked.Note : $"this caller session has put {peeked.Used} questions to consask, the cap ({QuestionConsultKeys.QuestionsPerSession} = {options.QuestionsPerSession})";
     }
 
     public int Sweep(Func<int, bool> isAlive) => _store.Sweep(isAlive, DateTime.UtcNow, settings.QuestionConsult.RowBudget);
@@ -177,12 +177,12 @@ public sealed class QuestionConsultService(
         if (!options.Enabled)
         {
             return Reply(string.Empty, Statuses.Off, [], 0,
-                $"the question consultant is switched off in this installation ({QuestionConsultKeys.Enabled}) — ask the person with ask_human");
+                $"consask is switched off in this installation ({QuestionConsultKeys.Enabled}) — ask the person in your own conversation");
         }
 
         if (options.RowsUnreadable)
         {
-            return Error($"the question consultant's rows ({QuestionConsultKeys.Rows}) could not be read, so this installation does not know which models to ask — fix them in {QuestionAdmission.Section}. Nothing was sent anywhere");
+            return Error($"consask's rows ({QuestionConsultKeys.Rows}) could not be read, so this installation does not know which models to ask — fix them in {QuestionAdmission.Section}. Nothing was sent anywhere");
         }
 
         if (Arguments(question, contextText) is { Length: > 0 } refused)
@@ -282,7 +282,7 @@ public sealed class QuestionConsultService(
     {
         if (string.IsNullOrWhiteSpace(question))
         {
-            return "a question is required — the consultants are asked what you would ask the person";
+            return "a question is required — consask is asked what you would ask the person";
         }
 
         if (string.IsNullOrWhiteSpace(contextText))
@@ -304,7 +304,7 @@ public sealed class QuestionConsultService(
         if (options.Rows.Count(r => r.Enabled) == 0)
         {
             return Written(record, QuestionOutcomes.NoneAvailable, Statuses.NoneAvailable, Left(caller, options),
-                $"no question-consultant row is switched on — add one in {QuestionAdmission.Section}, or ask the person with ask_human");
+                $"no consask row is switched on — add one in {QuestionAdmission.Section}, or ask the person in your own conversation");
         }
 
         // The quota is taken LAST before the launches, so a refusal above spends nothing — and once,
@@ -313,8 +313,8 @@ public sealed class QuestionConsultService(
         if (!counted.Allowed)
         {
             return Written(record, QuestionOutcomes.QuotaSpent, Statuses.QuotaSpent, 0,
-                $"this caller session has asked the consultants {counted.Used} questions, the cap ({QuestionConsultKeys.QuestionsPerSession} = {options.QuestionsPerSession}; "
-                + $"the window is {ConsultCallCounter.Window.TotalHours:0} hours from the first) — ask the person with ask_human");
+                $"this caller session has put {counted.Used} questions to consask, the cap ({QuestionConsultKeys.QuestionsPerSession} = {options.QuestionsPerSession}; "
+                + $"the window is {ConsultCallCounter.Window.TotalHours:0} hours from the first) — ask the person in your own conversation");
         }
 
         return await FannedOutAsync(record, Math.Max(0, options.QuestionsPerSession - counted.Used), counted.Note, ct);
@@ -345,10 +345,10 @@ public sealed class QuestionConsultService(
     {
         var answered = settled.Rows.Count(r => r.Answered);
         var sentence = launched == 0
-            ? "no row could be asked (each says why) — fix the rows or the question, or ask the person with ask_human"
+            ? "no row could be asked (each says why) — fix the rows or the question, or ask the person in your own conversation"
             : answered == 0
-                ? "no consultant answered (each row says why) — ask the person with ask_human"
-                : $"{answered} of {launched} consultant(s) answered: verify each answer before acting on it, and ask the person with ask_human only if the answers do not settle the question";
+                ? "no row answered (each says why) — ask the person in your own conversation"
+                : $"{answered} of {launched} row(s) answered: verify each answer before acting on it, and ask the person in your own conversation only if the answers do not settle the question";
 
         return counterNote.Length > 0 ? sentence + " (" + counterNote + ")" : sentence;
     }

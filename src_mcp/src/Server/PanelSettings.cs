@@ -854,8 +854,8 @@ public sealed record PanelSettings
 
     /// <summary>The v1 key a v2 key replaced, or nothing when the key is not one of the renamed families.</summary>
     internal static string? OldNameOf(string name) =>
-        name.StartsWith("COAI_CONSASK_", StringComparison.Ordinal) ? "COAI_QCONSULT_" + name["COAI_CONSASK_".Length..]
-        : name.StartsWith("COAI_CONS_", StringComparison.Ordinal) ? "COAI_CONSULT_" + name["COAI_CONS_".Length..]
+        name.IndexOf("COAI_CONSASK_", StringComparison.Ordinal) == 0 ? "COAI_QCONSULT_" + name["COAI_CONSASK_".Length..]
+        : name.IndexOf("COAI_CONS_", StringComparison.Ordinal) == 0 ? "COAI_CONSULT_" + name["COAI_CONS_".Length..]
         : null;
 
     private static PanelSettings WithCatalog(Func<string, string?> env, RolesSetting roles) =>

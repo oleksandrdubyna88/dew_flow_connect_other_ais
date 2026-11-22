@@ -37,7 +37,7 @@ test('picking the row it already refers to changes nothing — it stays on', () 
   assert.deepEqual(rowEdited([held], 'q-1', 'qconsultRowPick', 'ask-deep', context), [held]);
 });
 
-test('a pick of a row not ticked for the question consultant is refused', () => {
+test('a pick of a row not ticked for the consask is refused', () => {
   assert.equal(rowEdited([question('q-1')], 'q-1', 'qconsultRowPick', 'chat-fast', context), undefined);
   assert.equal(rowEdited([question('q-1')], 'q-1', 'qconsultRowPick', 'nobody', context), undefined);
 });
@@ -58,7 +58,7 @@ test('the new page draws a pick per question row, not the definition fields; the
   assert.equal(stranded.value, 'chat-fast', 'a pick of a row not ticked is gone from its list, so the next change would lose it');
   assert.ok(stranded.options.some((one) => one.value === 'chat-fast' && one.text.includes('(stranded)')));
   assert.match(pageTree(html).one((node) => node.dataset.pane === 'consultants/qconsult', 'the pane').text(),
-    /chat-fast is not ticked for the question consultant on Models/);
+    /chat-fast is not ticked for the consask on Models/);
 });
 
 test('changing a row\'s pick on the new page writes it', () => {
@@ -74,7 +74,7 @@ test('changing a row\'s pick on the new page writes it', () => {
 });
 
 // Operator, 2026-10-10: the tab listed only the rows ticked "question consultant" and did not say so, and a row whose
-// pick had been removed from Models said "'' is not a runtime the question consultant can launch for 'disk'" — a
+// pick had been removed from Models said "'' is not a runtime consask can launch for 'disk'" — a
 // runtime of nothing, because a pick that is gone has no runtime to borrow.
 
 /** The Question consultant pane of the page as it is run. */
@@ -94,7 +94,7 @@ test('the tab says which models it offers, and where to change that', () => {
   const pane = qconsultPane([question('q-1', { vendor: 'ask-deep', runtime: '' })]);
   const offered = pane.one((node) => node.text().startsWith('Offered:') && node.className.split(' ').includes('hint'), 'the Offered line');
 
-  assert.equal(offered.text(), 'Offered: the models ticked question consultant on Models. Change on Models');
+  assert.equal(offered.text(), 'Offered: the models ticked consask on Models. Change on Models');
   assert.equal(offered.one((node) => node.tagName === 'BUTTON', 'its link').dataset.modelsUses, 'qconsult');
 });
 
@@ -104,8 +104,8 @@ test('a row whose pick was removed from Models says so by name, never a runtime 
     question('q-2', { vendor: 'odd', runtime: 'bogus', prompt: 'question-disk', enabled: false }),
   ]);
 
-  assert.equal(blockedHint(pane, 'q-1'), 'consult-claude is no longer ticked question consultant (or was removed) — pick another model');
+  assert.equal(blockedHint(pane, 'q-1'), 'consult-claude is no longer ticked consask (or was removed) — pick another model');
   assert.ok(!pane.text().includes('\'\' is not a runtime'), 'a removed pick is still said as a runtime of nothing');
-  assert.match(blockedHint(pane, 'q-2'), /^'bogus' is not a runtime the question consultant can launch for 'disk'/,
+  assert.match(blockedHint(pane, 'q-2'), /^'bogus' is not a runtime consask can launch for 'disk'/,
     'a row with a real runtime this build cannot launch keeps the table\'s own sentence');
 });

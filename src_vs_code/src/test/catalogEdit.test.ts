@@ -192,7 +192,7 @@ test('the question tab writing every row back resolved changes no row it did not
   assert.deepEqual(rows.map((one) => one['vendor']), ['ask-q1', 'ask-q2'], 'both stay references');
   assert.equal(vendorsFrom(after.vendors).find((one) => one.id === 'ask-q1')?.model, 'qwen-3');
   assert.equal(vendorsFrom(after.vendors).find((one) => one.id === 'ask-q2')?.model, 'k2');
-  assert.match(env(after)['COAI_QCONSULT_ROWS'] ?? '', /"model":"qwen-3"/u);
+  assert.match(env(after)['COAI_CONSASK_ROWS'] ?? '', /"model":"qwen-3"/u);
 });
 
 test('removing a question row takes its catalog row with it', () => {

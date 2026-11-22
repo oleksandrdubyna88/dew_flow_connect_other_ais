@@ -139,8 +139,8 @@ function outcomeOf(question: DbQuestion): string {
 /** The tab's body: the table, or the sentence saying why there is none. */
 export function qconsultLogHtml(questions: readonly DbQuestion[]): string {
   if (questions.length === 0) {
-    return '<div class="empty">No question has been put to the consultants yet. One is, when an AI calls <code>ask_consultants</code> before it asks you — '
-      + 'the <b>Question consultant</b> tab of ConnectOtherAIs Settings says who answers.</div>';
+    return '<div class="empty">No question has been put to consask yet. One is, when an AI calls <code>consask</code> before it asks you — '
+      + 'the <b>Consask</b> tab of ConnectOtherAIs Settings says who answers.</div>';
   }
 
   return `<table class="qconsults"><thead><tr>

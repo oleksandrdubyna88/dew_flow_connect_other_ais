@@ -284,7 +284,7 @@ public sealed class McpContractTests : IDisposable
             var instructions = init.RootElement.GetProperty("result").GetProperty("instructions").GetString()!;
 
             instructions.Should()
-                .Contain("`consult` is for when YOU are stuck", "the tool has to be named for a client that lists no prompts")
+                .Contain("`cons` is for when YOU are stuck", "the tool has to be named for a client that lists no prompts")
                 .And.Contain("PROMPT", "and so does the other way in")
                 .And.Contain("advice, not orders");
         }

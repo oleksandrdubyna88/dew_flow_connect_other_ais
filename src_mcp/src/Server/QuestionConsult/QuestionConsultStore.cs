@@ -81,7 +81,7 @@ public sealed class QuestionConsultStore(
     /// its cap, and the answer files go on the same clock. Returns how many records changed or went.
     /// </summary>
     /// <param name="deadline">
-    /// A row's budget (<c>COAI_QCONSULT_ROW_MINUTES</c>): rows run in parallel, so it is the question's deadline too, and
+    /// A row's budget (<c>COAI_CONSASK_ROW_MINUTES</c>): rows run in parallel, so it is the question's deadline too, and
     /// a <c>consulting</c> record past TWICE it is ended whatever its pid says (§5, S4b item 9).
     /// </param>
     public int Sweep(Func<int, bool> isAlive, DateTime nowUtc, TimeSpan deadline)

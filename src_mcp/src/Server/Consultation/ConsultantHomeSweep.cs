@@ -22,7 +22,7 @@ public sealed record HomeSweepInputs(string HomesRoot, string Store, Func<string
 /// The bounded life of a persistent consultant home (D20 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>): every folder under
 /// <c>&lt;homes root&gt;/coai-vibe/</c> and <c>&lt;homes root&gt;/coai-kimi/</c> — a conversation's home and its snapshot, named by
 /// the consultation's id — is removed once its conversation is over, unknown to the store, or idle past
-/// <c>COAI_CONSULT_IDLE_MINUTES</c>, and never while a turn in it could still be running.
+/// <c>COAI_CONS_IDLE_MINUTES</c>, and never while a turn in it could still be running.
 /// </summary>
 /// <remarks>
 /// <para><b>Where it runs.</b> On the consultation sweep's beat (<see cref="ConsultationSweeper"/>) and once at server start

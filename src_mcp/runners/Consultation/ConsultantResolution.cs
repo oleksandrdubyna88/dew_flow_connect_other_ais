@@ -98,6 +98,6 @@ public static class ConsultantResolution
         $"the vendor '{vendor.Provider}' runs on '{RuntimeResolution.NameOf(vendor)}'"
         // Only a codex row's base URL is a custom endpoint — a Team server row's is the server, an api row's its vendor.
         + (vendor.BaseUrl.Length > 0 && RuntimeResolution.NameOf(vendor) == "codex" ? " with a custom endpoint" : string.Empty)
-        + $", which cannot hold a consultation in this build — consultants run on: {string.Join(", ", Consulting)}. "
-        + "Pick one of those in ConnectOtherAIs > Consultant.";
+        + $", which cannot hold a consultation in this build — cons runs on: {string.Join(", ", Consulting)}. "
+        + "Pick one of those in ConnectOtherAIs > Cons.";
 }

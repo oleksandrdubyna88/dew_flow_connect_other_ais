@@ -43,7 +43,7 @@ public sealed class TheInstructionsFitWhatAClientKeepsTests
     public void TheLastParagraphSurvives() =>
         // The half that was actually lost, asserted at its own end rather than by its presence: a
         // sentence 400 characters past the cut is "present" in the constant and absent everywhere else.
-        Program.Instructions.TrimEnd().Should().EndWith("the `consult` PROMPT.",
+        Program.Instructions.TrimEnd().Should().EndWith("the `cons` PROMPT.",
             "the end of the text is what a budget overrun eats first, so the end is what is pinned");
 
     [Fact]

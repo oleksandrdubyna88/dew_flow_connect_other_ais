@@ -90,7 +90,7 @@ public sealed class ConsultFailureScenarioTests : ConsultScenarioBase
         }
 
         Field(RecordFile(), "failureKind").Should().Be("tree-changed");
-        Refusal(await Consult(service, "why is the count wrong, asked again")).Should().Contain("consult calls, the cap");
+        Refusal(await Consult(service, "why is the count wrong, asked again")).Should().Contain("cons calls, the cap");
     }
 
     [Fact]

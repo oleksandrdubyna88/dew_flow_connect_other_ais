@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The <c>COAI_QCONSULT_*</c> keys (PLAN_question_consultant.md, §4) read into their own record, and D14 (c): a disk
+/// The <c>COAI_CONSASK_*</c> keys (PLAN_question_consultant.md, §4) read into their own record, and D14 (c): a disk
 /// root that is a drive, the profile, a system directory, inside the data directory, relative or missing is refused.
 /// </summary>
 public sealed class QuestionConsultSettingsTests : IDisposable
@@ -80,7 +80,7 @@ public sealed class QuestionConsultSettingsTests : IDisposable
     {
         // v2: consask has no mode, no phase rule and no free batches. A settings file an older build (or the
         // extension) wrote still carries the keys; they change nothing and cost no toast.
-        var env = Env(("COAI_QCONSULT_MODE", "off"), ("COAI_QCONSULT_FREE_BATCHES", "9"), ("COAI_QCONSULT_MODE_X", "sometimes"));
+        var env = Env(("COAI_CONSASK_MODE", "off"), ("COAI_CONSASK_FREE_BATCHES", "9"), ("COAI_CONSASK_MODE_X", "sometimes"));
 
         var read = QuestionConsultReader.Read(env, _data, Places);
 
@@ -96,7 +96,7 @@ public sealed class QuestionConsultSettingsTests : IDisposable
 
         read.Settings.RowsUnreadable.Should().BeTrue();
         read.Complaints.Should().ContainSingle().Which.Key.Should().Be(QuestionConsultKeys.Rows);
-        PanelSettings.FromEnvironment(Env((QuestionConsultKeys.Rows, "[{"))).Unrecognised.Should().ContainSingle().Which.Should().Contain("COAI_QCONSULT_ROWS");
+        PanelSettings.FromEnvironment(Env((QuestionConsultKeys.Rows, "[{"))).Unrecognised.Should().ContainSingle().Which.Should().Contain("COAI_CONSASK_ROWS");
     }
 
     [Fact]

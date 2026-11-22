@@ -221,7 +221,7 @@ export function missingCure(finding: PathFinding): string {
 
 /** Who a value belongs to, as the title opens. */
 const OWNERS: Readonly<Record<string, string>> = {
-  'coai.qconsultRoots': "The question consultant's folder",
+  'coai.qconsultRoots': "The folder consask reads",
   'coai.vendors[].executablePath': 'The CLI path',
   'coai.alsoWatchDataDirectories': "Another installation's data folder",
   'coai.dataDirectory': "This window's data folder",
@@ -238,7 +238,7 @@ const CONSEQUENCES: Readonly<Record<string, string>> = {
 };
 
 const CURES: Readonly<Record<string, string>> = {
-  'coai.qconsultRoots': 'Create the folder, or remove it from the list in Settings › Consultants › Question consultant.',
+  'coai.qconsultRoots': 'Create the folder, or remove it from the list in Settings › Cons & consask › Consask.',
   'coai.vendors[].executablePath': 'Install the CLI there, correct the path on its Models card, or clear it to look the CLI up on PATH.',
   'coai.alsoWatchDataDirectories': 'Connect the machine or share holding it, or remove it from the list in Settings › Setup › MCP server.',
   'coai.dataDirectory': 'Connect the drive, create the folder, or choose another in Settings › Setup › MCP server.',

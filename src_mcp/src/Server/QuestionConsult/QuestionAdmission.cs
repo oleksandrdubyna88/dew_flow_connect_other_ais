@@ -35,7 +35,7 @@ public abstract record RowAdmission
 /// </remarks>
 public static class QuestionAdmission
 {
-    public const string Section = "ConnectOtherAIs > Question consultant (COAI_QCONSULT_ROWS)";
+    public const string Section = "ConnectOtherAIs > Consask (COAI_CONSASK_ROWS)";
 
     public static RowAdmission Admit(QuestionRow row, QuestionConsultSettings settings, IReadOnlyList<ProviderSettings> reviewers, Core.Api.ApiOverrides overrides)
     {
@@ -199,6 +199,6 @@ public static class QuestionRowResolver
             ? $"the row '{row.Id}' names the vendor '{row.Vendor}', which is neither a reviewer row nor a runtime this build can "
               + $"launch a question on ({string.Join(", ", QuestionResolution.Answering)}) — give the row a runtime of its own, "
               + $"or name a reviewer, in {QuestionAdmission.Section}"
-            : $"{row.Vendor} is no longer ticked question consultant (or was removed) — pick another model, in {QuestionAdmission.Section}";
+            : $"{row.Vendor} is no longer ticked consask (or was removed) — pick another model, in {QuestionAdmission.Section}";
     }
 }

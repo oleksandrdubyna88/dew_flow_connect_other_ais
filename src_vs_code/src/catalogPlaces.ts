@@ -32,7 +32,7 @@ export const CATALOG_TABS: readonly CatalogTab[] = [
       { id: 'limits', label: 'Limits' },
     ],
   },
-  { id: 'consultants', label: 'Consultants', subs: [{ id: 'consultant', label: 'Consultant' }, { id: 'qconsult', label: 'Question consultant' }] },
+  { id: 'consultants', label: 'Cons & consask', subs: [{ id: 'consultant', label: 'Cons' }, { id: 'qconsult', label: 'Consask' }] },
   { id: 'chat', label: 'Chat', subs: [] },
   {
     id: 'setup',

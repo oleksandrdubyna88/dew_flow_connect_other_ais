@@ -66,7 +66,7 @@ function questionRowsOnTheWire(features: readonly string[]): readonly Record<str
   const read = (key: string): unknown => stored[key];
   const env = envBlock(settingsFrom(read), vendorsFrom(read('vendors')), '0.50.0', undefined, features);
 
-  return JSON.parse(env['COAI_QCONSULT_ROWS'] ?? '[]') as Record<string, unknown>[];
+  return JSON.parse(env['COAI_CONSASK_ROWS'] ?? '[]') as Record<string, unknown>[];
 }
 
 test('each question row carries ITS catalog row, even when two rows share a key and a model', () => {

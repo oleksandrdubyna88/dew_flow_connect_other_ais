@@ -18,7 +18,7 @@ public sealed record QuestionConsultSettings
     /// <summary>The rows, at most <see cref="QuestionRows.MaxActive"/> of them on — see <see cref="QuestionRows.Parse"/>.</summary>
     public IReadOnlyList<QuestionRow> Rows { get; init; } = [];
 
-    /// <summary>Whether <c>COAI_QCONSULT_ROWS</c> could not be read at all — the tool then refuses by name.</summary>
+    /// <summary>Whether <c>COAI_CONSASK_ROWS</c> could not be read at all — the tool then refuses by name.</summary>
     public bool RowsUnreadable { get; init; }
 
     /// <summary>The shipped prompts with the person's own after them.</summary>
@@ -357,7 +357,7 @@ public static class QuestionRoots
     public static string InactiveSentence(IReadOnlyList<string> otherSide) =>
         $"inactive on this side — every folder a disk row may read ({string.Join(", ", otherSide.Select(root => $"'{root}'"))}) is spelled for "
         + "the other operating system, so the server there reads it and this one has none; add a folder of this machine in "
-        + "ConnectOtherAIs > Question consultant to ask this row here too";
+        + "ConnectOtherAIs > Consask to ask this row here too";
 
     private static bool IsPosixAbsolute(string text) => text.StartsWith('/') && !text.StartsWith("//", StringComparison.Ordinal);
 

@@ -37,7 +37,7 @@ const REFERENCES: readonly ((state: PanelState, id: string) => string)[] = [
 
     return callers.length === 0 ? '' : `the consultant for ${callers.join(', ')}`;
   },
-  (state, id) => counted(state.settings.qconsult.rows.filter((row) => row.vendor === id).length, 'question-consultant row'),
+  (state, id) => counted(state.settings.qconsult.rows.filter((row) => row.vendor === id).length, 'consask row'),
   (state, id) => (state.chat?.model === id ? 'the model a chat opens on' : ''),
   (state, id) => (state.settings.bugzModel.split('/')[0] === id ? 'the Bugz ranking model' : ''),
 ];

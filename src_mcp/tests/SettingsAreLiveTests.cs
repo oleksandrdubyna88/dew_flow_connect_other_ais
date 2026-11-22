@@ -55,7 +55,7 @@ public sealed class SettingsAreLiveTests : IDisposable
     [Fact]
     public void ASettingChangedASecondAgo_GovernsTheNextCall()
     {
-        Write("""{ "COAI_CONSULT_TURNS": "3" }""");
+        Write("""{ "COAI_CONS_TURNS": "3" }""");
         var host = Host();
 
         host.Current.Settings.ConsultTurns.Should().Be(3);
@@ -64,7 +64,7 @@ public sealed class SettingsAreLiveTests : IDisposable
         // file's write time and length, which a same-second rewrite of the same length would not
         // change. One second is longer than any editor takes to save.
         Thread.Sleep(1100);
-        Write("""{ "COAI_CONSULT_TURNS": "4" }""");
+        Write("""{ "COAI_CONS_TURNS": "4" }""");
 
         host.Current.Settings.ConsultTurns.Should().Be(4, "the next call reads the file, not the memory of it");
     }
@@ -73,7 +73,7 @@ public sealed class SettingsAreLiveTests : IDisposable
     public void ASwitchTickedASecondAgo_GovernsTheNextCall_AndSwitchingItBackOffIsLiveToo()
     {
         // The direction nobody tests: a reload that only ever adds is a reload that cannot take anything away.
-        Write("""{ "COAI_CONSULT_ENABLED": "false" }""");
+        Write("""{ "COAI_CONS_ENABLED": "false" }""");
         var host = Host();
         host.Current.Settings.ConsultEnabled.Should().BeFalse();
 
@@ -90,7 +90,7 @@ public sealed class SettingsAreLiveTests : IDisposable
         host.Current.Settings.ConsultTurns.Should().Be(5, "nothing is changed until somebody changes it");
 
         Thread.Sleep(1100);
-        Write("""{ "COAI_CONSULT_TURNS": "2" }""");
+        Write("""{ "COAI_CONS_TURNS": "2" }""");
 
         host.Current.Settings.ConsultTurns.Should().Be(2, "a file that did not exist and now does is a change");
     }

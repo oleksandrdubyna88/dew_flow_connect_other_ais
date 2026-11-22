@@ -335,15 +335,15 @@ public sealed class ConsultationService(
 
     /// <summary>The sentence for a feature a person switched off — one copy, for the tool and the preflight.</summary>
     private const string SwitchedOff =
-        "consulting another vendor is switched off in this installation "
-        + "(COAI_CONSULT_ENABLED) — ConnectOtherAIs > Consultant turns it "
+        "cons is switched off in this installation "
+        + "(COAI_CONS_ENABLED) — ConnectOtherAIs > Cons turns it "
         + "back on. Nothing was sent anywhere; carry on with the person instead";
 
     /// <summary>The sentence for a routing setting that does not parse — one copy, for the tool and the gate.</summary>
     private const string RoutingUnreadable =
-        "the consultant routing (COAI_CONSULTANTS) could not be read, so this installation "
+        "the cons routing (COAI_CONSULTANTS) could not be read, so this installation "
         + "does not know which vendor you chose — and it will not pick one for you. Fix the "
-        + "settings in ConnectOtherAIs > Consultant. Nothing was sent anywhere";
+        + "settings in ConnectOtherAIs > Cons. Nothing was sent anywhere";
 
     /// <summary>
     /// Whether a NEW consultation could be had by THIS caller right now, and the sentence the tool would
@@ -446,7 +446,7 @@ public sealed class ConsultationService(
             // (local, code round.)
             log.Warning("consultation: git refused a command in {Repo}: {Reason}", repo, e.Message);
 
-            return Error($"the working tree at {repo} could not be read: {e.Message} — no consultant was launched");
+            return Error($"the working tree at {repo} could not be read: {e.Message} — cons was not launched");
         }
     }
 
@@ -526,7 +526,7 @@ public sealed class ConsultationService(
         var counted = _counter.TryTake(caller.Id, settings.ConsultCallsPerSession, DateTime.UtcNow);
         if (!counted.Allowed)
         {
-            return Error($"this caller session has made {counted.Used} consult calls, the cap (COAI_CONSULT_CALLS_PER_SESSION = {settings.ConsultCallsPerSession}) — "
+            return Error($"this caller session has made {counted.Used} cons calls, the cap (COAI_CONS_CALLS_PER_SESSION = {settings.ConsultCallsPerSession}) — "
                          + $"the window is {ConsultCallCounter.Window.TotalHours:0} hours from the first call; if you are still stuck, this is the moment to ask the person"
                          + (counted.Note.Length > 0 ? $" ({counted.Note})" : string.Empty));
         }
