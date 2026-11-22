@@ -121,8 +121,6 @@ public sealed record PanelConfig
     [System.Text.Json.Serialization.JsonIgnore]
     public RoleCatalog Catalog { get; init; } = RoleCatalog.Builtin;
 
-    public RoleGate SecurityLane { get; init; } = new(2, 0, false);
-
     /// <summary>
     /// Members of this panel config in the file that THIS build does not know, kept so that a save by an older build does not
     /// strip what a newer build wrote. Null when the file had none.
@@ -182,7 +180,6 @@ public sealed record PanelConfig
     /// </remarks>
     public RoleGate For(string role)
     {
-        if (role == Security.SecurityCatalog.Gate) return SecurityLane;
         return Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
     }
 
@@ -192,11 +189,6 @@ public sealed record PanelConfig
     /// either in would keep the stage running rounds nobody reviews, or hold the gate open against a
     /// number no reviewer can bring down. With every role off the answer is <c>(0, 0)</c> — a stage
     /// that may run no round — rather than an exception from <c>Max</c> over an empty sequence.
-    /// <para><b>The ordinary roles only.</b> The security lane keeps its own budget
-    /// (<see cref="SecurityLane"/>, read through <see cref="For(string)"/> under
-    /// <see cref="Security.SecurityCatalog.Gate"/>). Folding it in here let a lane of two rounds buy a
-    /// feature stage whose roles have one a second round for an ORDINARY reviewer's failure — a round
-    /// only the lane would then have answered.</para>
     /// </remarks>
     public StageGate For(Stage stage)
     {

@@ -830,17 +830,12 @@ public sealed class PanelService
                         round, RosterBuilder.NoWrittenRules, string.Join(", ", RuleFiles.SourceNames));
                 }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
-                var securitySources = await SecuritySources.ReadAsync(_settings.SecurityLane,
-                    _roster.Security().Due(Stage.CodeReview, round), collected.Files,
-                    new Runners.Feature.SourceResolver(new Runners.Collecting.GitHistory(_launcher),
-                        new Normalizer.TreeSitterOutliner(), repoPath, sha), roundToken);
-                // The ordinary reviewers' codex and the security lane's alike (research/PLAN_codex_tier_floor.md).
+                // The reviewers' codex rows (research/PLAN_codex_tier_floor.md).
                 var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
                 var built = WithSkippedByRule(
                     _roster.BuildWork(roles, workingDir, context, round,
                         stage: Stage.CodeReview, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
-                        securityFiles: collected.Files, securitySources: securitySources,
                         codexTiers: tiers,
                         // The round's own scratch: D17's homes, and D6's sanitised snapshot of the pinned tree for a runtime
                         // that must not start in the checkout — made here, once, because BuildWork cannot await.

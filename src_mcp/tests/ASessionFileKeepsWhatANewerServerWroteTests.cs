@@ -39,13 +39,12 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         public string Label => $"{(Where.Length == 0 ? "root" : string.Join('.', Where))} unknown member {Name}";
     }
 
-    /// <summary>One at the root, in the state, its config, the security lane, one role gate, a round and a reviewer row.</summary>
+    /// <summary>One at the root, in the state, its config, one role gate, a round and a reviewer row.</summary>
     private static readonly Planting[] Planted =
     [
         new Planting([], "futureRoot", """{"a":1,"b":[1,2,{"c":true}]}"""),
         new Planting(["state"], "futureState", "\"text\""),
         new Planting(["state", "config"], "futureConfig", "42.5"),
-        new Planting(["state", "config", "securityLane"], "futureLane", """["x",null]"""),
         new Planting(["state", "config", "roles", FirstRole], "futureGate", """{"n":null,"m":[]}"""),
         new Planting(["rounds[0]"], "futureRound", """{"claude":{"lines":12,"files":[1,2,3]},"codex":{"lines":0,"files":[]}}"""),
         new Planting(["rounds[0]", "reviewerStates[0]"], "futureReviewer", "\"r\""),
@@ -217,7 +216,6 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         loaded.Unknown.Should().BeNull();
         loaded.State.Unknown.Should().BeNull();
         loaded.State.Config.Unknown.Should().BeNull();
-        loaded.State.Config.SecurityLane.Unknown.Should().BeNull();
         gate.Value.Unknown.Should().BeNull();
         loaded.Rounds[0].Unknown.Should().BeNull();
         loaded.Rounds[0].ReviewerStates[0].Unknown.Should().BeNull();
@@ -291,7 +289,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
 
     /// <summary>
     /// The session as CODE can make it and deserialisation never does: a stale copy of a KNOWN member put into the bag of every
-    /// level — session <c>planText</c>, state <c>stage</c>, config <c>securityLane</c>, a gate's <c>threshold</c>, a round's
+    /// level — session <c>planText</c>, state <c>stage</c>, a gate's <c>threshold</c>, a round's
     /// <c>verdict</c> and a reviewer row's <c>status</c>.
     /// </summary>
     private static PersistedSession WithForgedKnownNames(PersistedSession loaded)
@@ -299,11 +297,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         var (role, gate) = loaded.State.Config.Roles.First();
         var roles = loaded.State.Config.Roles.ToDictionary(p => p.Key, p => p.Value);
         roles[role] = gate with { Unknown = WithEntry(gate.Unknown, "threshold", "99") };
-        var config = loaded.State.Config with
-        {
-            Roles = roles,
-            Unknown = WithEntry(loaded.State.Config.Unknown, "securityLane", """{"maxRounds":99}"""),
-        };
+        var config = loaded.State.Config with { Roles = roles };
         var round = loaded.Rounds[0] with
         {
             Unknown = WithEntry(loaded.Rounds[0].Unknown, "verdict", "\"OLD\""),
@@ -348,9 +342,6 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
                 .Should().Be(typed, $"the typed {name} must win over the bag's stale copy");
         }
 
-        Spelled(file, ["state", "config"], "securityLane").Should().Be(1, "the config's security lane is written once, by the typed member");
-        JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!["securityLane"]!["maxRounds"]!.GetValue<int>()
-            .Should().NotBe(99, "the typed security lane must win over the bag's stale copy");
         var roles = JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!["roles"]!.AsObject();
         Spelled(file, ["state", "config", "roles", roles.First().Key], "threshold").Should().Be(1, "a gate's threshold is written once");
         roles.First().Value!["threshold"]!.GetValue<int>().Should().NotBe(99, "the typed threshold must win");
@@ -389,7 +380,6 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
 
         forged.Unknown.Should().ContainKey("planText", "the caller's bag is shared by every with-copy: it is not scrubbed in place");
         forged.State.Unknown.Should().ContainKey("stage");
-        forged.State.Config.Unknown.Should().ContainKey("securityLane");
         forged.State.Config.Roles.First().Value.Unknown.Should().ContainKey("threshold");
         forged.Rounds[0].Unknown.Should().ContainKey("verdict");
         forged.Rounds[0].ReviewerStates[0].Unknown.Should().ContainKey("status");
@@ -407,7 +397,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         (ServerJsonContext.Default.SessionState,
             ["sessionId", "repoPath", "branch", "config", "stage", "roundsRunThisStage", "awaitingResolve", "planProceeded", "advanceOnResolve", "rejections", "secondRound", "document", "isDocumentSession", "feature", "isFeatureSession"]),
         (ServerJsonContext.Default.PanelConfig,
-            ["catalog", "securityLane", "roles"]),
+            ["catalog", "roles"]),
         (ServerJsonContext.Default.RoleGate,
             ["maxRounds", "threshold", "enabled"]),
         (ServerJsonContext.Default.RoundRecord,
@@ -597,11 +587,10 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
     }
 
     [Theory]
-    [InlineData("securityLane")]
     [InlineData("roles")]
     public void AConfigWrittenBeforeAMemberExisted_StillSaves_AndKeepsItsUnknowns(string absent)
     {
-        // The scrub walks into the config's gates. A file written before the security lane (2026-10-01) or with no role
+        // The scrub walks into the config's gates. A file written with no role
         // budgets has no such member, and the save that read it must still write it — the walk may not be the thing that
         // turns an old file into a NullReferenceException on every open.
         var store = new SessionStore(_data);

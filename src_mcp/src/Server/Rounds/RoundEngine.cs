@@ -162,10 +162,6 @@ internal sealed class RoundEngine(
             return Error("no session for this repo+branch — call open first", from);
         }
 
-        session = session with
-        {
-            State = session.State with { Config = session.State.Config with { SecurityLane = _settings.SecurityLane.Gate } }
-        };
         // The session as read under the claim, BEFORE a begin moves it — what a refusal compares with.
         var loaded = session;
 
@@ -281,11 +277,7 @@ internal sealed class RoundEngine(
             // configured. It sits AFTER `stage.Begin` on purpose — a standing call_human from a
             // round whose reviewers all failed is a person's decision, and un-ticking every vendor
             // must not dissolve it (§4.4).
-            //
-            // Except a round only the security lane's budget admitted: no ordinary role is due in it, so
-            // refusing or skipping it would meet every later call the same way. It runs empty instead and
-            // completes as a round nobody answered — recorded, with its reason, and a person's call.
-            if (work.Count == 0 && !RoundMachine.AdmittedOnlyForTheLane(session.State))
+            if (work.Count == 0)
             {
                 // And if a role was dropped on the way here, the refusal says which and why. This
                 // path returns before any summary is built, so a round whose whole roster was
@@ -296,8 +288,6 @@ internal sealed class RoundEngine(
                     ? SkippedOrOwed(stage, loaded, number, sha, planText, _skips.NobodyFor(stage.Stage, roundWork), from)
                     : Error(_noReviewerRefusal(session.State.Stage, roundWork), from);
             }
-
-            roundWork = SecurityRound.NamingAnEmptyLaneRound(roundWork);
 
             // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
             // its whole duration instead of nothing at all, and a crash leaves something to sweep.
@@ -357,14 +347,14 @@ internal sealed class RoundEngine(
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             // The ROLE is stamped here because this is the only place that holds both the invocation
             // and its answer. A threshold belongs to a role, so a finding has to remember whose it is.
-            var merged = SecurityRound.Merge(results, work);
+            var merged = Core.Gate.FindingDedup.Merge(results.Where(r => r.Outcome is ReviewerOutcome.Ok).SelectMany(r =>
+                ((ReviewerOutcome.Ok)r.Outcome).Review.Findings.Select(f => f with { Role = r.Invocation.Role })));
             var gate = GateRule.Evaluate(
                 merged,
                 session.State.Rejections,
-                role => role == Core.Security.SecurityCatalog.Gate ? _settings.SecurityLane.Threshold : _settings.Rounds.For(role).Threshold);
+                role => _settings.Rounds.For(role).Threshold);
 
-            var decisionSummary = SecurityRound.DecisionSummary(results, roundWork, summary);
-            SecurityRound.Notice(results, roundWork, _noticing);
+            var decisionSummary = summary;
             if (RoundMachine.CompleteRound(session.State, gate, decisionSummary, merged.Length) is not Transition.Ok completed)
             {
                 return Error("the round could not complete — this is a bug, report it", from);
@@ -384,7 +374,7 @@ internal sealed class RoundEngine(
             // new field. Empty for every other round, so nothing else changes by a byte.
             answer = answer with
             {
-                Instruction = SecurityRound.Clause(results, roundWork) + answer.Instruction,
+                Instruction = answer.Instruction,
                 Reviewers = answer.Reviewers
                     + WhereTheDocumentWent(stage.Stage, work.Select(w => w.Invocation.Provider))
                     // And what the round did not look at: a `proceed` must not cover an uncommitted
@@ -395,7 +385,7 @@ internal sealed class RoundEngine(
                     + RoundWarnings.Clause(results),
             };
             // The commit it reviewed, kept with the round: what a later `again` compares the branch to.
-            var record = live.Finish(answer.Verdict, gate.GatingCount, SecurityRound.Clause(results, roundWork) + summary.Sentence, results) with
+            var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results) with
             {
                 Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
                 Size = roundWork.Size,

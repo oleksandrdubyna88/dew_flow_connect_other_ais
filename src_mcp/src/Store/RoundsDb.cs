@@ -1009,7 +1009,8 @@ public sealed class RoundsDb : IDisposable
             Bind(write, "$gating", finding.IsGating ? 1 : 0);
             Bind(write, "$providers", string.Join(",", finding.Providers));
             Bind(write, "$reRaised", context.WasReRaised(finding) ? 1 : 0);
-            Bind(write, "$security", SecurityFindingStore.Write(finding));
+            // The security lane is gone in v2; the column stays (a schema step is never undone) and is written empty.
+            Bind(write, "$security", string.Empty);
             write.ExecuteNonQuery();
         }
     }

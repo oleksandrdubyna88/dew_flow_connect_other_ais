@@ -29,8 +29,6 @@ public static class ServerNoticeCodes
     /// person to look at a vendor that was never slow. Still written down, because the launch may well have been billed.
     /// </summary>
     public const string ReviewerCancelled = "reviewer-cancelled";
-    public const string SecurityLaneIncomplete = "security-lane-incomplete";
-
     public const string ReviewerRateLimited = "reviewer-rate-limited";
 
     /// <summary>A reviewer process that ended with a non-zero exit.</summary>
@@ -67,7 +65,6 @@ public static class ServerNoticeCodes
         Refused,
         ReviewerTimedOut,
         ReviewerCancelled,
-        SecurityLaneIncomplete,
         ReviewerRateLimited,
         ReviewerExit,
         ReviewerNotStarted,

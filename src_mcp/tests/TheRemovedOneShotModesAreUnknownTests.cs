@@ -15,6 +15,8 @@ public sealed class TheRemovedOneShotModesAreUnknownTests
     public static TheoryData<string> Removed => new()
     {
         "--cadence",
+        "--security-prompt-text",
+        "--check-security",
     };
 
     [Theory]

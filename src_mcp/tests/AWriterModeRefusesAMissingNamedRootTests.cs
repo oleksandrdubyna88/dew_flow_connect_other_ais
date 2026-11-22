@@ -180,7 +180,7 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
     public void AModeThatDoesNotWrite_IsNotRefusedHere()
     {
         Program.MissingRootRefusal(Program.Startup.Log, Named(Missing), File.GetAttributes).Should().BeEmpty("a reader answers on its own terms");
-        Program.MissingRootRefusal(Program.Startup.CheckSecurity, Named(Missing), File.GetAttributes).Should().BeEmpty("--check-security never touches the data directory");
+        Program.MissingRootRefusal(Program.Startup.Features, Named(Missing), File.GetAttributes).Should().BeEmpty("--features never touches the data directory");
     }
 
     private static string RowJson =>

@@ -209,22 +209,10 @@ internal static class Program
         CheckConsultant,
 
         /// <summary>
-        /// Each named security prompt's override file as this server reads it, as JSON. Read only; for the seam that
-        /// checks the Security lane tab draws what the server sends. See <see cref="Server.SecurityPromptTextReadMode"/>.
-        /// </summary>
-        SecurityPromptText,
-
-        /// <summary>
         /// The capabilities this build has, as JSON, so the extension sends a catalog field only when it is listed.
         /// See <see cref="Server.FeaturesMode"/>.
         /// </summary>
         Features,
-
-        /// <summary>
-        /// What the security lane would make of a sample read on stdin — signals, due cards, refused patterns. See
-        /// <see cref="Server.CheckSecurityMode"/>.
-        /// </summary>
-        CheckSecurity,
 
         /// <summary>
         /// ONE paid check of a catalog row read on stdin — the consultant's check, of any row. See
@@ -389,9 +377,7 @@ internal static class Program
                 "--close-consult" => Startup.CloseConsult,
                 "--consultants" => Startup.Consultants,
                 "--check-consultant" => Startup.CheckConsultant,
-                "--security-prompt-text" => Startup.SecurityPromptText,
                 "--features" => Startup.Features,
-                "--check-security" => Startup.CheckSecurity,
                 "--check-model" => Startup.CheckModel,
                 _ => Startup.Usage,
             };
@@ -562,14 +548,8 @@ internal static class Program
             case Startup.CheckConsultant:
                 return await Server.ConsultantCheckMode.RunAsync(args, Server.Noticing.None);
 
-            case Startup.SecurityPromptText:
-                return await Server.SecurityPromptTextReadMode.RunAsync(args);
-
             case Startup.Features:
                 return await Server.FeaturesMode.RunAsync();
-
-            case Startup.CheckSecurity:
-                return await Server.CheckSecurityMode.RunAsync(args);
 
             case Startup.CheckModel:
                 return await Server.ConsultantCheckMode.RunAsync(args, Server.Noticing.None);
@@ -2580,14 +2560,8 @@ internal static class Program
         (only denied-by-cli is observed confinement), or the classified failure. Exits 0 for every
         outcome (already-checking included), 65 without a known --caller, 74 when the data directory or
         the check's lock cannot be opened.
-        `--security-prompt-text --ids <id,id>` prints, per security prompt id, what its override file in the
-        data directory counts as when this server reads it: none, blank, placeholder, oversized, unreadable or
-        written. Read only; no model is called.
         `--features` prints the capabilities this build has as {"features":[...]} — what the extension asks
         before it sends a catalog field. A build too old for it exits 64.
-        `--check-security [--validate]` reads {"text": …, "lane": …} on stdin and prints the signals the security lane
-        would raise, the cards that would be due and the patterns it refuses; --validate checks the patterns alone.
-        A request it cannot read exits 65.
         `--check-model` reads {"row": {…}} on stdin and runs ONE paid check of that catalog row — the consultant's
         check (a scratch repository, a marker, a canary), its record kept as model-<id>. A request without a row exits 65.
         Configure it in your client as:

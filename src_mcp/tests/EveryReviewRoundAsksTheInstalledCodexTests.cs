@@ -1,6 +1,5 @@
 using System.Text.Json;
 using CoaiMcp.Core.Rounds;
-using CoaiMcp.Core.Security;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
 using FluentAssertions;
@@ -12,7 +11,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// Every review round asks the installed codex its release before it builds the roster, and an Off codex row on a release
 /// that refuses the standard tier is sent no tier at all (research/PLAN_codex_tier_floor.md, build step 4) — the plan round,
-/// the code round with its security lane, and the document round, each through the real service.
+/// the code round, and the document round, each through the real service.
 /// </summary>
 /// <remarks>
 /// <para>Against the fake CLI answering <c>codex-cli 0.120.0</c> (in the refusing range: no <c>service_tier</c> on any
@@ -60,12 +59,9 @@ public sealed class EveryReviewRoundAsksTheInstalledCodexTests : IAsyncLifetime
         await File.WriteAllTextAsync(Path.Combine(_repo, "Query.cs"), "class Query { int F(string v) => database.Query(v); }\n");
         await Git("add", ".");
         await Git("commit", "-m", "change");
-        Directory.CreateDirectory(Path.Combine(_data, "prompts"));
-        await File.WriteAllTextAsync(Path.Combine(_data, "prompts", "redteam-general.md"), "Fixture: return an empty findings array.");
 
         Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
-        // One answer both schemas read: the ordinary reviewers' findings, and the security lane's status beside them.
-        Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", """{"status":"SECURE","findings":[]}""");
+        Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", """{"findings":[]}""");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", _record);
     }
 
@@ -98,17 +94,12 @@ public sealed class EveryReviewRoundAsksTheInstalledCodexTests : IAsyncLifetime
 
     private PanelService Service()
     {
-        var lane = SecurityLaneSetting.Parse("""
-            {"enabled":true,"prompts":[{"id":"redteam-general"}],"runs":[{"vendor":"codex","prompt":"redteam-general"}]}
-            """, [new("codex")]);
-
         return new PanelService(
             new PanelSettings
             {
                 // Fast left at its default — Off, the state that fails on 0.110–0.130.
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
-                SecurityLane = lane,
-                Rounds = PanelConfig.Uniform(3, 2) with { SecurityLane = lane.Gate },
+                Rounds = PanelConfig.Uniform(3, 2),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
@@ -158,7 +149,7 @@ public sealed class EveryReviewRoundAsksTheInstalledCodexTests : IAsyncLifetime
     [Theory]
     [InlineData("0.120.0", new string[0])]
     [InlineData("0.160.0", new[] { "service_tier=default" })]
-    public async Task ACodeRound_AndItsSecurityLane_TellTheirCodexOnlyWhatItsReleaseTakes(string release, string[] sent)
+    public async Task ACodeRound_TellsItsCodexOnlyWhatItsReleaseTakes(string release, string[] sent)
     {
         Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", $"codex-cli {release}\n");
         var service = Service();
@@ -169,10 +160,7 @@ public sealed class EveryReviewRoundAsksTheInstalledCodexTests : IAsyncLifetime
 
         Answered(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
 
-        var launches = Launches();
-        launches.Should().Contain(argv => argv.Any(a => a.Contains("finding-schema-security", StringComparison.Ordinal)),
-            "the security lane's codex launched in this round too");
-        EveryLaunch(launches, sent, release);
+        EveryLaunch(Launches(), sent, release);
     }
 
     [Theory]

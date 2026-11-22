@@ -236,19 +236,13 @@ internal sealed class FeatureStage(
         var source = settings.FeatureSourceFollowUps > 0
             ? new SourceTurns.On(new SourceResolver(new GitHistory(launcher), outliner, repoPath, sha), settings.FeatureSourceFollowUps)
             : SourceTurns.None;
-        var securityDiff = settings.SecurityLane.Applies(Stage.FeatureReview)
-            && settings.SecurityLane.Runs.Any(r => r.Serves(Stage.FeatureReview))
-            ? (await new ContextAssembler(launcher).CollectAsync(repoPath, baseSha, sha, ct: ct)).Files : [];
-        var securitySources = await SecuritySources.ReadAsync(settings.SecurityLane,
-            roster.Security().Due(Stage.FeatureReview, round), securityDiff,
-            new SourceResolver(new GitHistory(launcher), outliner, repoPath, sha), ct);
         // As every review stage does before it builds: an Off codex row on 0.110–0.130 is sent no tier
         // (research/PLAN_codex_tier_floor.md).
         var tiers = await roster.CodexTiersAsync(launcher, workingDir, ct);
         var work = roster.BuildWork(
             settings.Rounds.RolesForRound(Stage.FeatureReview, round), workingDir, context, round,
             stage: Stage.FeatureReview, readsCheckout: false, seed: PanelService.StableSeed(session.State.SessionId, round),
-            source: source, securityFiles: securityDiff, securitySources: securitySources, codexTiers: tiers,
+            source: source, codexTiers: tiers,
             // The round's own scratch: no checkout here, so no snapshot — the folder its Vibe homes live in (D17).
             scratch: await roster.ScratchAsync(launcher, Stage.FeatureReview, workingDir, readsCheckout: false, ct));
 

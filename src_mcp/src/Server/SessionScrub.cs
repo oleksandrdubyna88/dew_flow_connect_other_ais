@@ -71,13 +71,12 @@ internal static class SessionScrub
 
     private static PanelConfig ConfigOf(PanelConfig config, RetiredMembers retired)
     {
-        var lane = GateOf(config.SecurityLane, retired);
         var roles = RolesOf(config.Roles, retired);
         var bag = Bag(config.Unknown, ServerJsonContext.Default.PanelConfig, retired);
 
-        return Same((config.SecurityLane, lane), (config.Roles, roles), (config.Unknown, bag))
+        return Same((config.Roles, roles), (config.Unknown, bag))
             ? config
-            : config with { Unknown = bag, SecurityLane = lane, Roles = roles };
+            : config with { Unknown = bag, Roles = roles };
     }
 
     private static IReadOnlyDictionary<string, RoleGate> RolesOf(IReadOnlyDictionary<string, RoleGate> roles, RetiredMembers retired)

@@ -46,15 +46,14 @@ internal static class FeatureSecondRound
         }
 
         var failed = FailedInRoundOne(session);
-        var keptOrdinary = work.Reviewers.Where(w => !w.IsSecurity && failed.Contains(PairOf(w))).ToList();
-        var kept = work.Reviewers.Where(w => w.IsSecurity || keptOrdinary.Contains(w)).ToList();
+        var kept = work.Reviewers.Where(w => failed.Contains(PairOf(w))).ToList();
         var gone = failed
             .Where(f => !work.Reviewers.Any(w => ProviderAndRole.Instance.Equals(PairOf(w), f)))
             .Select(f => new SkippedRole($"{f.Provider}/{f.Role}", "failed in round 1 and is no longer enabled, so it was not retried (D23)"));
 
         // No failed reviewer is still on the roster: everyone runs, so a roster edited between the rounds
         // cannot turn the retry into a proceed over nobody — and the failures that are gone are still named.
-        return keptOrdinary.Count == 0
+        return kept.Count == 0
             ? work with { NotAsked = [.. work.NotAsked, .. gone] }
             : work with { Reviewers = kept, NotAsked = [.. work.NotAsked, .. AnsweredInRoundOne(work.Reviewers.Except(kept)), .. gone] };
     }

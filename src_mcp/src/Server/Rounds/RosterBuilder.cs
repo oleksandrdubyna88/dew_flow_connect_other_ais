@@ -82,20 +82,6 @@ internal sealed class RosterBuilder(
     internal static bool Remote(ProviderSettings provider) => provider.IsRemote;
 
     /// <summary>
-    /// The security lane's roster for these settings — the one place its decisions are made, shared by
-    /// the work it appends and the source reader that must not read for a pairing that will not run.
-    /// </summary>
-    internal SecurityRoster Security() => Security(CodexTiers.None, RoundScratch.None);
-
-    /// <summary>
-    /// The security lane's roster, its codex rows launched with what this round's codex executables said about the
-    /// standard tier (research/PLAN_codex_tier_floor.md) — the lane's reviewers are launched through <see cref="SettingsFor"/>
-    /// like every other row, so they read the same answers.
-    /// </summary>
-    internal SecurityRoster Security(CodexTiers tiers, RoundScratch scratch) => new(_settings, _prompts, _canRun, _runtimeFor,
-        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi, tiers, scratch), log);
-
-    /// <summary>
     /// The round's own scratch (<see cref="RoundScratch"/>), prepared before the roster is built because a snapshot is made
     /// asynchronously and <see cref="BuildWork"/> is not: a path for the round's Vibe homes (D17), and — when this stage
     /// mounts a checkout and a runnable row of it runs on a runtime that asks (<see cref="IReviewerRuntime.NeedsASanitisedSnapshot"/>,
@@ -195,8 +181,6 @@ internal sealed class RosterBuilder(
         // The feature stage's source turns (S3.2): the round's one resolver and the follow-up cap. Absent
         // — every other stage, and the feature stage with the follow-ups switched off — is a single turn.
         Runners.Feature.SourceTurns? source = null,
-        IReadOnlyList<Core.Context.FileDiff>? securityFiles = null,
-        IReadOnlyDictionary<string, string>? securitySources = null,
         // The round's own scratch (ScratchAsync): its snapshot and the folder its Vibe homes live in. Absent, a runtime that
         // must not start in the checkout is LEFT OUT of a stage that mounts one, with its reason — never started in it.
         RoundScratch? scratch = null)
@@ -243,8 +227,7 @@ internal sealed class RosterBuilder(
         Everyone(runnable, Items(ids, round),
             (provider, role, promptId) => AddReviewer(frame, collector, provider, role, promptId));
 
-        var ordinary = collector.Work(ordinaryDue: ids.Count > 0, frame.Scratch);
-        return securityFiles is null ? ordinary : Security(frame.Tiers, frame.Scratch).Append(ordinary, securityFiles, stage, round, securitySources);
+        return collector.Work(frame.Scratch);
     }
 
     /// <summary>
