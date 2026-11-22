@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t0-v1-baseline
+title: "Measure the v1 cold start (same harness) and record it as the baseline"
+kind: measure
+complexity: 3
+dependsOn: []
+parallel: true
+files:
+  - research/RESULTS_v2_start.md
+dod:
+  - id: d1
+    item: "v1 M2 recorded on Linux with three samples"

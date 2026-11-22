@@ -1,0 +1,9 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e5-rollout
+title: "All owner devices enrolled and on the hub"
+half: both
+dependsOn:
+  - e3-update-everywhere
+  - e4-devices-features-pages
+doneWhen:
+  - "2 VMs (shared), WSL and Windows enrolled; one rollout followed to the end"

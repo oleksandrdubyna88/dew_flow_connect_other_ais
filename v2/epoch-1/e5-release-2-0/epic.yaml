@@ -1,0 +1,10 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e5-release-2-0
+title: "Cut-over: dropped code out of the bundle, 2.0 release, post-deploy check"
+half: both
+dependsOn:
+  - e4-kit-local-pages
+doneWhen:
+  - "VSIX inspected: new shell, budgets, no dropped modules"
+  - "mcp + extension released; the owner's machines run 2.0"
+  - "a real plan → code round passes on 2.0"

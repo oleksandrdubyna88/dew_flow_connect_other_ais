@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-text-renames
+title: "Rename consultant / question consultant to cons / consask in tool descriptions, notices and prompt texts"
+kind: rename
+complexity: 2
+dependsOn:
+  - t2-settings-fallbacks
+parallel: false
+files:
+  - src_mcp/src
+  - shared
+dod:
+  - id: d1
+    item: "no user-visible text says 'question consultant'"

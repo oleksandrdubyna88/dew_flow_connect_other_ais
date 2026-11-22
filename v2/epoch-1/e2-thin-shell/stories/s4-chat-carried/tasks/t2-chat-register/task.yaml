@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-chat-register
+title: "shell/modules/chat/register.ts: commands and coaiChat serializer registered once by the shell; data root, side models, remote sessions, presets initialised; deactivate forwards heartbeat stop and usage drain"
+kind: code
+complexity: 7
+dependsOn:
+  - t1-shared-runtime
+parallel: false
+files:
+  - src_vs_code/shell/modules/chat
+  - src_vs_code/src/extension.ts
+dod:
+  - id: d1
+    item: "no chat logic changed (diff touches registration only)"

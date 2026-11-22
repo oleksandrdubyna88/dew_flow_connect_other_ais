@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-bundles
+title: "scripts/bundle-entries.json and one CommonJS esbuild entry per module and page"
+kind: code
+complexity: 5
+dependsOn:
+  - t1-entry-lazy
+parallel: false
+files:
+  - src_vs_code/scripts
+  - src_vs_code/package.json
+dod:
+  - id: d1
+    item: "dist/extension.js and dist/modules/*.js are emitted; the packaged VSIX contains every chunk"

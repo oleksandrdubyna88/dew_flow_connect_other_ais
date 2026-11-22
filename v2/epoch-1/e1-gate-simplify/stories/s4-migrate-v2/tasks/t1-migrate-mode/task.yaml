@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-migrate-mode
+title: "One-shot --migrate-v2 [--apply], automatic at first 2.0 serve under a lease with marker migrations/v2.done; legacy-hold reader kept"
+kind: code
+complexity: 7
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Program.cs
+  - src_mcp/src/Server/Migrations
+dod:
+  - id: d1
+    item: "a held session becomes AwaitingResolve + AdvanceOnResolve with the converted note"
+  - id: d2
+    item: "active cards move to escalations/archive as withdrawn_v2; qphase and cadence stores archived, not deleted"
+  - id: d3
+    item: "removed settings keys land in settings.v1-removed.json"

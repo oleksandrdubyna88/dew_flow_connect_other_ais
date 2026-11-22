@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-submodules
+title: "SubmodulePopulator skips the conventions mount; the missing-mount notice is removed"
+kind: code
+complexity: 3
+dependsOn:
+  - t1-rulefiles
+parallel: false
+files:
+  - src_mcp/runners/Worktrees/SubmodulePopulator.cs
+  - src_mcp/runners/Context/RuleFiles.cs
+dod:
+  - id: d1
+    item: "an ordinary dependency submodule still populates"

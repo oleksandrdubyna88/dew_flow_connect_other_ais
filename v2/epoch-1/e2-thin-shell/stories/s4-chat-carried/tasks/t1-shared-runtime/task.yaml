@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-shared-runtime
+title: "One runtime module for notify, ledger and data root; other bundles reach it through the shell"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - src_vs_code/shell/modules/runtime
+dod:
+  - id: d1
+    item: "notify state exists once per host"

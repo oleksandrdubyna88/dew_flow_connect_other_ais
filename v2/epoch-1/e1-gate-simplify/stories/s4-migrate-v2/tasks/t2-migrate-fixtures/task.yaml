@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-migrate-fixtures
+title: "Fixtures of each released session format migrated twice: one advance, note present, no active card"
+kind: test
+complexity: 5
+dependsOn:
+  - t1-migrate-mode
+parallel: false
+files:
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "second run changes nothing"

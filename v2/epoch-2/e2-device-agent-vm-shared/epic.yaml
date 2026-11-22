@@ -1,0 +1,10 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e2-device-agent-vm-shared
+title: "Device agent, enrolment line, VM shared instance"
+half: server
+dependsOn:
+  - e1-hub-server
+doneWhen:
+  - "two VM users and WSL appear on the hub from pasted lines"
+  - "settings round-trip with offline cache; single writer; foreign edit put back"
+  - "shared /var/lib/coai with group coai; existing db/WAL permissions repaired; second-UID test"

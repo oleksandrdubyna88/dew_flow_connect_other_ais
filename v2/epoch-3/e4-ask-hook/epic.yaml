@@ -1,0 +1,9 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-ask-hook
+title: "AskUserQuestion hook (spike first)"
+half: server
+dependsOn: []
+doneWhen:
+  - "spike on the installed Claude Code: updatedInput.answers skips the widget"
+  - "first question answered by consask; later ones in 30 min reach the person; fails open"
+  - "exit 0 always; one JSON object or nothing; one winner for parallel calls"

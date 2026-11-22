@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s2-remove-modes
+title: "Remove consask modes, cadence, operator commands, prompts-per-round, security lane"
+dependsOn:
+  - s1-verdicts-and-holds

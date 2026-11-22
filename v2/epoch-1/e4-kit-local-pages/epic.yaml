@@ -1,0 +1,11 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-kit-local-pages
+title: "Kit 0.3.0 + Prompts & Commands, Phrases, Main AI (incl. work method), Rounds; v1 → 2.0 migration"
+half: extension
+dependsOn:
+  - e2-thin-shell
+  - e3-work-contract-install
+doneWhen:
+  - "kit 0.3.0 released with K1-K6, each with a story, fakeDom and axe test"
+  - "each page tested by running its shipped bundle"
+  - "migration: user settings AND side overlays backed up, effective values per side, If-None-Match first write, idempotent, v1 keys untouched"

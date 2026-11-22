@@ -1,0 +1,12 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e3-work-contract-install
+title: "YAML work contract, roles, zero-config install, SessionStart hook"
+half: server
+dependsOn:
+  - e1-gate-simplify
+doneWhen:
+  - "shared/work-plan.schema.json + vectors; validate_work accepts this v2 folder and rejects each vector case"
+  - "workMethod limits come from the device config (cap 3 rejects a 4-epic fixture)"
+  - "review_plan(featureFolder) validates first, packs in topological order"
+  - "roles returns main AI, role table, complexity bands, Haiku kinds, work method"
+  - "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent"

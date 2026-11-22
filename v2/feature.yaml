@@ -1,0 +1,21 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: coai-v2
+title: "coai v2 — one product on every machine, auto only, ≤ 2 s start, deterministic half done by coai"
+status: planned
+plan: PLAN.md
+architecture:
+  - architecture/server.md
+  - architecture/extension.md
+workMethod:
+  mvpEpics:
+    min: 1
+    max: 2
+  maxEpicsPerEpoch: 5
+  minConsultsPerEpoch: 1
+  minConsultsPerEpic: 0
+  complexityScale: "0-10"
+epochs:
+  - epoch-1
+  - epoch-2
+  - epoch-3
+  - epoch-4

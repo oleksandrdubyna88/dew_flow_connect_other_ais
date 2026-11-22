@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-band-json
+title: "Server one-shot --band-json: phrases, open consultations, open failures from the local data folder"
+kind: code
+complexity: 4
+dependsOn: []
+parallel: true
+files:
+  - src_mcp/src/Program.cs
+  - src_mcp/src/BandJsonMode.cs
+dod:
+  - id: d1
+    item: "exit 0 with one JSON object; an unknown flag never exits 64"

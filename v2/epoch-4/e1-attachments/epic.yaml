@@ -1,0 +1,9 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e1-attachments
+title: "Picture attachments on review_document"
+mvp: true
+half: server
+dependsOn: []
+doneWhen:
+  - "codex attachment measurement recorded"
+  - "an image round runs on claude, agy and codex (if measured); others skipped with a note"

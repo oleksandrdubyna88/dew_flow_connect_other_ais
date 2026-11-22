@@ -1,0 +1,11 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e1-hub-server
+title: "Hub mode of the Team server"
+mvp: true
+half: server
+dependsOn: []
+doneWhen:
+  - "hub mode boots alone (own auth, own startup condition)"
+  - "endpoints + http/ contracts; 412/428; device token limited to its device; Team session refused on hub routes"
+  - "sweeper measures retained bytes and db+WAL size"
+  - "deployed on the ionos host"

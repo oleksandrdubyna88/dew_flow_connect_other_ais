@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-consask-modes
+title: "Remove AskGateDesk, QuestionPhaseStore, StageRelease, QuestionConsultSettings Mode/FreeBatches"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/core/QuestionConsult
+  - src_mcp/src/Server/QuestionConsult
+dod:
+  - id: d1
+    item: "consask answers with no phase or consultId logic"

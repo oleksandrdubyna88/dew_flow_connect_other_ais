@@ -1,0 +1,10 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e3-work-scheduler
+title: "Parallel work scheduler"
+half: server
+dependsOn:
+  - e2-coder-fix-loop
+doneWhen:
+  - "DAG from YAML; host-level slots with atomic RAM reservation; WSL ceiling 2"
+  - "checks on the candidate merge SHA before the integration branch advances"
+  - "pending resolutions persisted; a run ends partial cleanly"
