@@ -47,7 +47,7 @@ internal sealed record FeatureCall(FeaturePlanText Plan, FeatureEpics Epics, Fea
 /// <para><b>What is built, and in what order</b> (§4.6): the outline with the changed hunks
 /// (<see cref="FeatureOutlineBuilder"/>, credential files withheld and content redacted there), the
 /// gate's history of this work (<see cref="GateHistoryQuery"/>, one sentence when it cannot be read),
-/// the rules at the full budget (<see cref="StageRules.Feature"/>, D18), all rendered by
+/// the repository's own rules at the full budget (D18; read as the code stage reads them — coai names no rule of its own since v2 E3.S5), all rendered by
 /// <see cref="FeatureContext"/>.</para>
 /// <para>Source requests are recorded, not served: the loop that answers them is S3.2, so this round is
 /// "follow-ups = 0" by construction, and the reviewer is told so (<see cref="ReviewerPrompt"/>).</para>
@@ -221,10 +221,10 @@ internal sealed class FeatureStage(
             new GateHistoryAsk(settings.DataDir, repoPath, baseSha, sha, [.. call.Epics.Items.Select(e => e.Branch).Where(b => b.Length > 0)],
                 call.Plan.Text, session.State.SessionId),
             launcher, ct);
-        var rules = RuleFiles.Collect(repoPath, RuleOrder.Staged(StageRules.Feature));
+        var rules = RuleFiles.Collect(repoPath, RuleOrder.ForBranch(session.State.Branch));
         var context = FeatureContext.Render(new FeatureContextInput(
             call.Plan.Identity, call.Plan.Text, call.Epics, call.Lessons, history,
-            RulesText.Section(rules, rules.TierCoverage(StageRules.Feature)), outline, Guid.NewGuid().ToString("N")[..8]));
+            RulesText.Section(rules), outline, Guid.NewGuid().ToString("N")[..8]));
         LogPack(outline, rules, context);
 
         var round = session.State.RoundsRunThisStage + 1;
@@ -256,7 +256,7 @@ internal sealed class FeatureStage(
         log.Information(
             "context for review: feature pack {PackBytes} bytes; {Files} file(s) changed, {Outlined} outlined, "
             + "{NotOutlined} not outlined, {Dropped} elided, {Cut} member hunk(s) cut; rules {RulesBytes} bytes, "
-            + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
+            + "{Omitted} omitted",
             System.Text.Encoding.UTF8.GetByteCount(context),
             outline.Files.Count,
             outline.Outlined,
@@ -264,8 +264,6 @@ internal sealed class FeatureStage(
             outline.Omissions.Dropped.Count,
             outline.Omissions.CutHunks.Count,
             rules.Bytes,
-            rules.MatchedCount(StageRules.Feature),
-            StageRules.Feature.Length,
             rules.Omitted.Count);
 
     /// <summary>A refusal, through the one boundary every refusal leaves by, and a line in the log.</summary>

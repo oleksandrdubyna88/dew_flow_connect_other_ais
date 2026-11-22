@@ -200,18 +200,38 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A document round is judged against the rules that govern DOCUMENTS.
+    /// A document round reads a mounted conventions folder as the repository's own rules — all of it, as the code stage does —
+    /// and a repository without the mount gets no missing-rules notice (v2 E3.S5, <c>server.md</c> § 18.4).
     /// </summary>
     /// <remarks>
-    /// It said so itself until this shipped — "no diff and no rules at this stage" — so a reviewer
-    /// asked whether a document belongs in <c>research/</c> had nothing to answer from but its own
-    /// taste. Asserted on the RECORDED launch, not on a context handed to <c>BuildWork</c>: the
-    /// question is whether the STAGE builds the rules in.
+    /// Asserted on the RECORDED launch, not on a context handed to <c>BuildWork</c>: the question is whether the STAGE
+    /// builds the rules in. Until E3 the stage named three rules of the mount and wrote a coverage sentence about them.
     /// </remarks>
     [Fact]
-    public async Task ADocumentRound_IsGivenTheRulesItIsJudgedAgainst()
+    public async Task ADocumentRound_ReadsAMountedConventionsFolderWhole()
     {
         WriteFamilyRules();
+        var prompt = await PromptOfADocumentRoundAsync();
+
+        prompt.Should().Contain("The rules this project has written down");
+        prompt.Should().Contain("research tracks the system as it is", "a rule of the mount");
+        prompt.Should().Contain("Build with the response file", "coai names no tier any more: the mount is read whole");
+        prompt.Should().NotContain("rules this stage is judged against");
+    }
+
+    /// <summary>A repository without the mount gets no missing-rules notice.</summary>
+    [Fact]
+    public async Task ADocumentRoundWithoutTheMount_GetsNoMissingRulesNotice()
+    {
+        var prompt = await PromptOfADocumentRoundAsync();
+
+        prompt.Should().NotContain("NONE of the");
+        prompt.Should().NotContain("Do not read their absence as compliance");
+        prompt.Should().NotContain("pins a different revision of the shared rules");
+    }
+
+    private async Task<string> PromptOfADocumentRoundAsync()
+    {
         var record = TempDir.For("coai-doc-rules-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
@@ -221,12 +241,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
 
             await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument());
 
-            var prompt = Directory.GetFiles(record, "*.argv")
-                .Select(f => LaunchRecords.Read(f).Split('\0')[^1]).First();
-            prompt.Should().Contain("The rules this project has written down");
-            prompt.Should().Contain("research tracks the system as it is", "a rule of the document tier");
-            prompt.Should().NotContain("Build with the response file",
-                "a build recipe is not what a DOCUMENT is judged against");
+            return Directory.GetFiles(record, "*.argv").Select(f => LaunchRecords.Read(f).Split('\0')[^1]).First();
         }
         finally
         {

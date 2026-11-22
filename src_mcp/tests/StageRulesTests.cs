@@ -5,17 +5,13 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// What a gate with NO diff is judged against.
+/// What the rule budget reaches: the canaries of the code stage's rule order, measured against the mount this repository pins.
 /// </summary>
 /// <remarks>
-/// <para>The plan and document stages review a document, so there is no change to select rules from
-/// and the rules have to be named. Naming them is only half of it: the corpus plus the instruction
-/// files is larger than the byte budget, so the list has to be an ORDER, or whatever sorts first
-/// decides what a reviewer sees.</para>
-/// <para>Two of these tests exist because the plan round said the ones originally proposed could not
-/// fail: an existence check whose fixture WRITES every name it then looks for proves only that the
-/// fixture and the table agree, and a pair of negative assertions cannot notice a tier that silently
-/// emits one of its seven entries.</para>
+/// <para>This file also held the plan, document and feature TIERS — named lists of shared rules those stages were judged
+/// against — until v2 E3.S5 removed them: coai names no rule of the shared conventions any more, and every stage reads the
+/// repository's own instruction files and rule folders (a mounted <c>.agents/conventions</c> among them) in
+/// <see cref="RuleOrder.ForBranch"/>'s order. The name stays because the pins below are cited by it.</para>
 /// </remarks>
 public sealed class StageRulesTests : IDisposable
 {
@@ -41,103 +37,6 @@ public sealed class StageRulesTests : IDisposable
 
     private void WriteMount() =>
         Write(".gitmodules", "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
-
-    /// <summary>Every rule of a tier, all the same size, so only the ORDER can decide who fits.</summary>
-    private void WriteTier(IReadOnlyList<string> tier, int bytes = 10_000)
-    {
-        WriteMount();
-        foreach (var entry in tier)
-        {
-            Write($".agents/conventions/{entry}", Filler(entry, bytes));
-        }
-    }
-
-    private static IReadOnlyList<string> Mounted(IReadOnlyList<string> tier) =>
-        [.. tier.Select(entry => $".agents/conventions/{entry}")];
-
-    [Fact]
-    public void APlanRound_GetsTheHighLevelRules_AndNotTheBuildRecipes()
-    {
-        WriteTier(StageRules.Plan);
-        Write(".agents/conventions/csharp/dotnet-build.md", Filler("dotnet-build", 2_000));
-        Write(".agents/conventions/csharp/nuget-packages.md", Filler("nuget", 2_000));
-        Write(".agents/conventions/common/logging-serilog.md", Filler("logging", 2_000));
-
-        var paths = RuleFiles.Collect(_repo, 200_000, RuleOrder.Staged(StageRules.Plan))
-            .Files.Select(file => file.Path).ToList();
-
-        paths.Should().Contain(".agents/conventions/common/reuse-first.md");
-        paths.Should().NotContain([
-            ".agents/conventions/csharp/dotnet-build.md",
-            ".agents/conventions/csharp/nuget-packages.md",
-            ".agents/conventions/common/logging-serilog.md",
-        ]);
-    }
-
-    /// <summary>
-    /// The whole tier, in its own order — not a subset that happens to satisfy a negative assertion.
-    /// </summary>
-    [Fact]
-    public void TheWholeTier_IsEmittedInItsDeclaredOrder()
-    {
-        WriteTier(StageRules.Plan);
-
-        var paths = RuleFiles.Collect(_repo, 200_000, RuleOrder.Staged(StageRules.Plan))
-            .Files.Select(file => file.Path);
-
-        paths.Should().Equal(Mounted(StageRules.Plan));
-    }
-
-    /// <summary>With no manifest the tier is the WHOLE of what the mount contributes.</summary>
-    [Fact]
-    public void WithNoManifest_NothingOutsideTheTierIsOffered()
-    {
-        WriteTier(StageRules.Document);
-        Write(".agents/conventions/common/git-workflow.md", Filler("git-workflow", 2_000));
-        Write(".agents/conventions/csharp/doctrine.md", Filler("csharp", 2_000));
-
-        var bundle = RuleFiles.Collect(_repo, 200_000, RuleOrder.Staged(StageRules.Document));
-
-        bundle.Files.Select(file => file.Path).Should().Equal(Mounted(StageRules.Document));
-        bundle.Omitted.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void TheDocumentTier_IsNotThePlanTier()
-    {
-        StageRules.Document.Should().NotContain("common/testing.md");
-        StageRules.Document.Should().NotContain("common/development-workflow.md");
-        StageRules.Plan.Should().Contain("common/security.md");
-    }
-
-    /// <summary>
-    /// The tier names rules that are really in the corpus this repository MOUNTS.
-    /// </summary>
-    /// <remarks>
-    /// The test the plan round demanded, and the one the original proposal could not be: a fixture
-    /// that writes every name it then asserts proves the fixture agrees with the table, not that the
-    /// table agrees with reality. A rule renamed upstream, a typo, or a promotion that never reached
-    /// this pin all fail HERE instead of silently dropping a rule out of a gate. Skipped rather than
-    /// failed when the submodule is not populated — that is a checkout that has not run
-    /// <c>git submodule update --init</c>, not a broken table.
-    /// <para><b>The skip is not a hole in CI.</b> A code round asked whether a job that forgets the
-    /// submodule would report green with this quietly skipped. It cannot: <c>.github/workflows/ci.yml</c>
-    /// initialises <c>.agents/conventions</c> before the test step, and the two steps between them —
-    /// <c>npm ci --prefix .agents/conventions</c> and <c>rules.mjs check</c> — both fail outright on an
-    /// empty mount, so the suite never runs at all without it. The skip exists for a local offline
-    /// checkout, and a local run is not the authoritative one.</para>
-    /// </remarks>
-    [Fact]
-    public void EveryTierEntry_ResolvesInThePinnedConventionsMount()
-    {
-        var corpus = RequireTheMount("the stage-tier resolution test");
-
-        foreach (var entry in StageRules.Plan.Concat(StageRules.Document).Concat(StageRules.Feature).Distinct(StringComparer.Ordinal))
-        {
-            File.Exists(Path.Combine(corpus, entry.Replace('/', Path.DirectorySeparatorChar)))
-                .Should().BeTrue($"{entry} is named by a stage tier and must exist in the pinned corpus");
-        }
-    }
 
     /// <summary>
     /// The base and the eight tier rules spend exactly 80 023 characters of the budget — the number every
@@ -183,6 +82,9 @@ public sealed class StageRulesTests : IDisposable
     /// `--security-prompt-text` and `--check-security` (-59 together: 13 + 26 + 20), which it must not
     /// (`ARequestFaultIsNotAnOldBinaryTests` holds the list to the modes the binary knows). The base is 17 929, the tier unchanged at 65 336, the pair
     /// 83 265, leaving 10 036 of 93 301 (9 977 until then); the tail canaries below ran unchanged and green.</para>
+    /// <para><b>Re-baselined 2026-11-22 (coai v2 E3.S4: <c>--band-json</c>).</b> `.agents/PROJECT.md` names the new one-shot mode
+    /// (+15, `, \`--band-json\``), which it must (`ARequestFaultIsNotAnOldBinaryTests`). The base is 17 944, the tier unchanged at 65 336, the pair
+    /// 83 280, leaving 10 021 of 93 301; the tail canaries below ran unchanged and green.</para>
     /// <para>The unit is the one the collector spends: characters of the line-ending-normalised text
     /// (<c>RuleFile.Text.Length</c>), which is what <c>RuleFiles.DefaultBudgetBytes</c> calls bytes. They
     /// differ for the non-ASCII characters in these files, and are equal on every platform.</para>
@@ -200,13 +102,13 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
             .Sum(file => file.Text.Length);
 
-        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 929 + 65 336 = 83 265 of 93 301, since coai v2 E3.S2 removed three one-shot modes from .agents/PROJECT.md; 17 988 + 65 336 = 83 324 of 93 301, since the conventions pin moved to 37b9aa5 and the owner raised the budget on 2026-11-06; 17 988 + 62 035 = 80 023 of 90 000, since E6.S1's --round-counts-merged met the conventions pin 105d53c on 2026-11-05; 17 988 + 62 061 = 80 049 on the E6.S1 branch before the merge; 17 963 + 62 035 = 79 998 since the conventions pin moved to 105d53c on 2026-11-01; 17 963 + 62 061 = 80 024 until then; 17 947 + 62 061 = 80 008 before E1.S2's --host-facts; 17 925 + 62 061 = 79 986 before E7). "
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 944 + 65 336 = 83 280 of 93 301, since coai v2 E3.S4 named --band-json in .agents/PROJECT.md; 17 929 + 65 336 = 83 265, since coai v2 E3.S2 removed three one-shot modes from .agents/PROJECT.md; 17 988 + 65 336 = 83 324 of 93 301, since the conventions pin moved to 37b9aa5 and the owner raised the budget on 2026-11-06; 17 988 + 62 035 = 80 023 of 90 000, since E6.S1's --round-counts-merged met the conventions pin 105d53c on 2026-11-05; 17 988 + 62 061 = 80 049 on the E6.S1 branch before the merge; 17 963 + 62 035 = 79 998 since the conventions pin moved to 105d53c on 2026-11-01; 17 963 + 62 061 = 80 024 until then; 17 947 + 62 061 = 80 008 before E1.S2's --host-facts; 17 925 + 62 061 = 79 986 before E7). "
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
         tierBytes.Should().Be(65_336, message);
-        baseBytes.Should().Be(17_929, message);
-        (baseBytes + tierBytes).Should().Be(83_265, message);
+        baseBytes.Should().Be(17_944, message);
+        (baseBytes + tierBytes).Should().Be(83_280, message);
     }
 
     /// <summary>
@@ -507,17 +409,15 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// The tail is everything the ORDER does not rank as tier — not what another stage's tier names.
+    /// The tail is everything the ORDER does not rank as tier — not what any other list names.
     /// </summary>
     /// <remarks>
-    /// The canary collects with <see cref="RuleOrder.ForBranch"/>, whose tier is
-    /// <c>RuleOrder</c>'s own table. <c>StageRules.Plan</c> is the PLAN stage's tier and names
-    /// rules that table does not — <c>development-workflow.md</c>, <c>planning-docs.md</c>. Counting
-    /// with the wrong list makes the canary lenient in the one direction that matters: a genuinely
-    /// reachable tail rule is read as tier and never counted.
+    /// The canary collects with <see cref="RuleOrder.ForBranch"/>, whose tier is <c>RuleOrder</c>'s own table, and
+    /// counting with another list (the plan stage had its own until v2 E3.S5 removed it) would make the canary lenient in
+    /// the one direction that matters: a genuinely reachable tail rule is read as tier and never counted.
     /// </remarks>
     [Fact]
-    public void TheTailCount_UsesTheOrdersOwnTier_NotThePlanStages()
+    public void TheTailCount_UsesTheOrdersOwnTier()
     {
         WriteMount();
         Write(".agents/conventions/common/security.md", Filler("security", 1_000));
@@ -526,7 +426,7 @@ public sealed class StageRulesTests : IDisposable
         var bundle = RuleFiles.Collect(_repo, 200_000, RuleOrder.ForBranch("feat/tier"));
 
         TailOf(bundle).Should().Contain("common/development-workflow.md",
-            "the branch order does not rank it as tier, so it is tail however the plan stage reads it");
+            "the branch order does not rank it as tier, so it is tail");
         TailOf(bundle).Should().NotContain("common/security.md", "which the order DOES rank as tier");
     }
 
@@ -615,105 +515,4 @@ public sealed class StageRulesTests : IDisposable
         return null;
     }
 
-    /// <summary>
-    /// A tier that matches nothing is a mount that contributes nothing — not an empty round.
-    /// </summary>
-    [Fact]
-    public void ATierThatMatchesNothing_StillShowsTheRepositorysOwnRules()
-    {
-        WriteMount();
-        Write("AGENTS.md", "How to work here");
-        Write(".agents/rules/common/vendor-routing.md", "Which CLI runs which model");
-        Write(".agents/conventions/common/something-else-entirely.md", Filler("other", 1_000));
-
-        var bundle = RuleFiles.Collect(_repo, 200_000, RuleOrder.Staged(StageRules.Plan));
-
-        bundle.Files.Select(file => file.Path).Should().Equal([
-            "AGENTS.md", ".agents/rules/common/vendor-routing.md",
-        ]);
-    }
-
-    /// <summary>
-    /// One tier entry names one rule, not every file that ends with the same words.
-    /// </summary>
-    [Fact]
-    public void ATierEntry_DoesNotMatchTheSameNameInAnotherDirectory()
-    {
-        WriteMount();
-        Write(".agents/conventions/common/security.md", Filler("real", 1_000));
-        Write(".agents/conventions/common/legacy/common/security.md", Filler("impostor", 1_000));
-
-        var paths = RuleFiles.Collect(_repo, 200_000, RuleOrder.Staged(StageRules.Plan))
-            .Files.Select(file => file.Path);
-
-        paths.Should().Equal([".agents/conventions/common/security.md"]);
-    }
-
-    /// <summary>
-    /// A tier rule the budget dropped is NOT counted as one the reviewer was shown.
-    /// </summary>
-    /// <remarks>
-    /// The coverage sentence answers "how much of my tier am I holding", so it is counted from what
-    /// was RENDERED. Counted from what the tree contains, a prompt would say "all seven are below"
-    /// over a section showing two — and a reviewer's silence about the other five would read as
-    /// compliance, which is the exact failure the sentence exists to prevent. (codex, code round.)
-    /// </remarks>
-    [Fact]
-    public void ATierRuleTheBudgetDropped_IsNotCountedAsShown()
-    {
-        WriteTier(StageRules.Plan);
-
-        // Room for two of the seven.
-        var bundle = RuleFiles.Collect(_repo, 21_000, RuleOrder.Staged(StageRules.Plan));
-
-        bundle.MatchedCount(StageRules.Plan).Should().Be(2);
-        bundle.TierCoverage(StageRules.Plan).Should().Contain($"2 of the {StageRules.Plan.Length}");
-        bundle.TierCoverage(StageRules.Plan).Should().NotContain("All ");
-    }
-
-    /// <summary>
-    /// The tier is an order because the budget is real: the first entries fit, the rest are named.
-    /// </summary>
-    [Fact]
-    public void TheTierOrder_DecidesWhoFitsTheBudget_NotTheAlphabet()
-    {
-        WriteTier(StageRules.Plan);
-
-        var bundle = RuleFiles.Collect(_repo, 21_000, RuleOrder.Staged(StageRules.Plan));
-
-        // Tier order takes security and reuse-first; the alphabet would have taken coding-style and
-        // development-workflow, which is how `security.md` came to be shown to nobody before 2026-09-06.
-        bundle.Files.Select(file => file.Path).Should().Equal([
-            ".agents/conventions/common/security.md",
-            ".agents/conventions/common/reuse-first.md",
-        ]);
-        bundle.Omitted.Should().Contain(".agents/conventions/common/coding-style.md");
-    }
-
-    /// <summary>
-    /// The instruction files and this repository's own rules are not free.
-    /// </summary>
-    /// <remarks>
-    /// They lead every order and are never dropped, which reads as "they always fit" — but they are
-    /// collected under the SAME budget, so a large one leaves less for the tier. The plan round called
-    /// that contradiction out; this pins the real behaviour, and it is the honest one: whole files, in
-    /// order, and everything past the budget named rather than silently absent.
-    /// </remarks>
-    [Fact]
-    public void TheBaseContextCountsTowardTheBudget_AndTheTierIsTruncatedWithItsOmissionsNamed()
-    {
-        WriteTier(StageRules.Plan);
-        Write("AGENTS.md", Filler("agents", 15_000));
-        Write(".agents/rules/common/vendor-routing.md", Filler("routing", 5_000));
-
-        var bundle = RuleFiles.Collect(_repo, 31_000, RuleOrder.Staged(StageRules.Plan));
-
-        bundle.Files.Select(file => file.Path).Should().Equal([
-            "AGENTS.md",
-            ".agents/rules/common/vendor-routing.md",
-            ".agents/conventions/common/security.md",
-        ]);
-        bundle.Omitted.Should().Contain(".agents/conventions/common/reuse-first.md");
-        bundle.Bytes.Should().BeLessThanOrEqualTo(31_000);
-    }
 }

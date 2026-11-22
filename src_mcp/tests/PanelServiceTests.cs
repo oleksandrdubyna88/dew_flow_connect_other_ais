@@ -317,15 +317,15 @@ public sealed class PanelServiceTests : IAsyncLifetime
         Directory.GetFiles(record, "*.argv").Select(f => LaunchRecords.Read(f).Split('\0')[^1]).First();
 
     /// <summary>
-    /// The plan gate is judged against the rules this project wrote down.
+    /// A repository that mounts <c>.agents/conventions</c> has its rules read by the plan gate as its own instructions —
+    /// every rule of the mount, not a tier coai names (v2 E3.S5, <c>server.md</c> § 18.4).
     /// </summary>
     /// <remarks>
-    /// Until this shipped the stage said so in its own log line — "no diff and no rules at this
-    /// stage" — so a plan reviewer held this repository's plan to its own taste, and a conventions
-    /// finding has nothing to quote.
+    /// Until E3 the stage picked seven named rules out of the mount and told the reviewer how many of the seven it held;
+    /// a plan reviewer was judged against coai's choice of the shared conventions, which is enforcing them.
     /// </remarks>
     [Fact]
-    public async Task APlanRound_IsGivenTheRulesItIsJudgedAgainst()
+    public async Task APlanRound_ReadsEveryRuleOfAMountedConventionsFolder_AsTheRepositorysOwn()
     {
         WriteFamilyRules();
         var record = TempDir.For("coai-plan-rules-").Path;
@@ -338,9 +338,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
 
             var prompt = RecordedPrompt(record);
             prompt.Should().Contain("The rules this project has written down");
-            prompt.Should().Contain("Look before you build", "a rule of the plan tier");
-            prompt.Should().NotContain("one file per run",
-                "a logging recipe is not what a PLAN is judged against");
+            prompt.Should().Contain("Look before you build", "a rule of the mount");
+            prompt.Should().Contain("one file per run", "coai names no tier any more: the mount is read whole, as the repository's own");
+            prompt.Should().NotContain("rules this stage is judged against", "no tier coverage sentence is written any more");
 
             // The rules come BEFORE the thing they judge. A prompt carrying the right rules after
             // the plan has already been read is a prompt that taught the reviewer nothing in time.
@@ -355,40 +355,10 @@ public sealed class PanelServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A partial mount says how much of the tier it had — in the PROMPT, where the reviewer is.
-    /// </summary>
-    /// <remarks>
-    /// The failure this prevents: a round judged against one rule of seven reads exactly like a round
-    /// judged against all seven, so a reviewer's silence about a rule it never saw looks like
-    /// compliance. Raised on story 1.2's code round and again on this one's plan round.
-    /// </remarks>
-    [Fact]
-    public async Task APlanRoundWhoseTierIsOnlyPartlyHere_SaysSoToTheReviewer()
-    {
-        WriteFamilyRules();
-        var record = TempDir.For("coai-plan-partial-").Path;
-        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
-        try
-        {
-            var service = _h.Service();
-            await service.OpenAsync(_h.Repo, "feature");
-            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
-
-            // WriteFamilyRules carries exactly one rule of the plan tier.
-            RecordedPrompt(record).Should().Contain($"1 of the {StageRules.Plan.Length} rules");
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
-            Directory.Delete(record, recursive: true);
-        }
-    }
-
-    /// <summary>
-    /// A repository carrying NONE of the tier is told so in the strongest words the prompt has.
+    /// A repository WITHOUT the conventions mount gets no missing-rules notice: coai does not expect the shared rules to be there.
     /// </summary>
     [Fact]
-    public async Task APlanRoundWithNoneOfItsTier_TellsTheReviewerNotToReadItAsCompliance()
+    public async Task APlanRoundWithoutTheMount_GetsNoMissingRulesNotice()
     {
         var record = TempDir.For("coai-plan-none-").Path;
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
@@ -399,8 +369,10 @@ public sealed class PanelServiceTests : IAsyncLifetime
             await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
 
             var prompt = RecordedPrompt(record);
-            prompt.Should().Contain("NONE of the");
-            prompt.Should().Contain("Do not read their absence as compliance");
+            prompt.Should().NotContain("NONE of the");
+            prompt.Should().NotContain("Do not read their absence as compliance");
+            prompt.Should().NotContain("pins a different revision of the shared rules");
+            prompt.Should().NotContain("NOT in the tree you were given", "that sentence is for a mount the repository declares and the round could not populate");
         }
         finally
         {

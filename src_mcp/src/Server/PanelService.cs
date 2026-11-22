@@ -640,21 +640,19 @@ public sealed class PanelService
                 // scratch folder on purpose, and collecting from it would gather nothing while
                 // looking like it worked. `Collect` reads the WORKING TREE, which is the honest
                 // input at plan time: the plan under review describes work about to happen in it.
-                var rules = RuleFiles.Collect(repoPath, RuleOrder.Staged(StageRules.Plan));
+                // The repository's OWN written rules, in the order the code stage reads them: coai names no
+                // rule of its own (v2 E3.S5), so a repository that mounts the shared conventions has them
+                // read as its own instructions, and one that does not is told nothing is missing.
+                var rules = RuleFiles.Collect(repoPath, RuleOrder.ForBranch(branch));
 
-                // The same sentence the code stage writes, carrying this stage's own numbers. The
-                // tier COVERAGE is here because this gate reviews other repositories: a target on an
-                // older conventions pin may carry only some of the tier, and a round that matched
-                // none of it must not read like a round that matched all of it.
                 _log.Information(
                     "context for review: plan {PlanBytes} bytes (id {TextId}); rules {RulesBytes} bytes, "
-                    + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
+                    + "{Omitted} omitted, {Missing} mount(s) not in the tree",
                     System.Text.Encoding.UTF8.GetByteCount(plan.Text),
                     plan.TextId,
                     rules.Bytes,
-                    rules.MatchedCount(StageRules.Plan),
-                    StageRules.Plan.Length,
-                    rules.Omitted.Count);
+                    rules.Omitted.Count,
+                    rules.MissingMounts.Count);
 
                 // A plan round skips no role for a RULE's sake: it has one, and there is nothing for
                 // a rule file to decide about it. What BuildWork itself could not ask — a role
@@ -674,7 +672,7 @@ public sealed class PanelService
                 return WithNothingSkippedByRule(
                     _roster.BuildWork(
                         roles, workingDir,
-                        RulesText.Section(rules, rules.TierCoverage(StageRules.Plan))
+                        RulesText.Section(rules)
                             + PlanSection.Compose(plan.Text, plan.SourceLine, plan.TextId),
                         round,
                         stage: Stage.PlanReview, readsCheckout: false,
@@ -1166,21 +1164,20 @@ public sealed class PanelService
                     // From `repoPath`, not `workingDir` — this stage is handed no checkout on
                     // purpose, so its working directory is empty and collecting there would gather
                     // nothing while looking like it worked.
-                    var rules = RuleFiles.Collect(repoPath, RuleOrder.Staged(StageRules.Document));
+                    var rules = RuleFiles.Collect(repoPath, RuleOrder.ForBranch(branch));
 
-                    // The same sentence the other two stages write, carrying this one's own numbers.
+                    // The same sentence the other stages write, carrying this one's own numbers.
                     _log.Information(
                         "context for review: document {Name} ({DocumentBytes} bytes, snapshot {Artifact}), "
                         + "purpose {PurposeBytes} bytes; rules {RulesBytes} bytes, "
-                        + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
+                        + "{Omitted} omitted, {Missing} mount(s) not in the tree",
                         document.Name,
                         System.Text.Encoding.UTF8.GetByteCount(document.Text),
                         document.ArtifactId,
                         System.Text.Encoding.UTF8.GetByteCount(purposeText),
                         rules.Bytes,
-                        rules.MatchedCount(StageRules.Document),
-                        StageRules.Document.Length,
-                        rules.Omitted.Count);
+                        rules.Omitted.Count,
+                        rules.MissingMounts.Count);
 
                     var round = running.State.RoundsRunThisStage + 1;
                     var roles = _settings.Rounds.RolesForRound(Stage.DocumentReview, round);
@@ -1223,7 +1220,7 @@ public sealed class PanelService
     /// </remarks>
     private static string DocumentContext(string purposeText, DocumentOutcome.Ready document, RuleBundle rules) =>
         $"## What this document is for\n\n{purposeText}\n\n"
-        + RulesText.Section(rules, rules.TierCoverage(StageRules.Document))
+        + RulesText.Section(rules)
         + $"## The document under review — {document.Name}\n\n{document.Text}";
 
     /// <summary>
