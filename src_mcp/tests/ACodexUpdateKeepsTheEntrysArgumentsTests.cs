@@ -28,7 +28,7 @@ public sealed class ACodexUpdateKeepsTheEntrysArgumentsTests
         code.Should().Be(0, err);
         InstallOutput.SameToml(
             world.CodexTomlText,
-            $"[mcp_servers.coai]\ncommand = \"{world.Binary}\"\nargs = [\"--x\", \"\", \"a b\", 'q\"uote', \"--env=Y\"]\n[mcp_servers.coai.env]\nCOAI_DATA_DIR = \"/data/coai\"\nCOAI_DATA_SIDE = \"wsl\"\n").Should().BeTrue(world.CodexTomlText);
+            $"[mcp_servers.coai]\ncommand = \"{world.BinaryToml}\"\nargs = [\"--x\", \"\", \"a b\", 'q\"uote', \"--env=Y\"]\n[mcp_servers.coai.env]\nCOAI_DATA_DIR = \"/data/coai\"\nCOAI_DATA_SIDE = \"wsl\"\n").Should().BeTrue(world.CodexTomlText);
         world.Calls.Single(line => line.StartsWith("codex mcp add")).Should().Contain($"coai -- {world.Binary} --x  a b q\"uote --env=Y |", "the arguments follow the path after the `--`, as codex takes them");
     }
 

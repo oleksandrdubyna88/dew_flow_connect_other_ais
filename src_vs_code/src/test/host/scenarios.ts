@@ -423,21 +423,21 @@ const SCENARIOS: readonly Scenario[] = [
       const before = await settingsUntil(
         file, () => true, 'the extension never wrote a settings file at all');
 
-      assert.ok(!before.includes('COAI_DEAL_PLAN'), 'the setting this scenario changes is already on');
+      assert.ok(!before.includes('COAI_MAX_CONCURRENCY'), 'the setting this scenario changes is already on');
       try {
-        await config().update('dealPlanLenses', true, vscode.ConfigurationTarget.Global);
+        await config().update('maxConcurrency', 5, vscode.ConfigurationTarget.Global);
         await settingsUntil(
           file,
-          (text) => text.includes('COAI_DEAL_PLAN'),
+          (text) => text.includes('COAI_MAX_CONCURRENCY'),
           'the setting was changed and the file the server reads never followed, which is '
           + 'the defect of this story, in the one place no unit test can look',
         );
       } finally {
-        await config().update('dealPlanLenses', undefined, vscode.ConfigurationTarget.Global);
+        await config().update('maxConcurrency', undefined, vscode.ConfigurationTarget.Global);
       }
       await settingsUntil(
         file,
-        (text) => !text.includes('COAI_DEAL_PLAN'),
+        (text) => !text.includes('COAI_MAX_CONCURRENCY'),
         'returning the setting to its default left the old value in the file',
       );
     },

@@ -40,7 +40,7 @@ public sealed class AClaudeHookMeetsTheFileAsItIsTests
         handlers[0]["command"]!.GetValue<string>().Should().Be(world.Binary);
         handlers[0]["timeout"]!.GetValue<int>().Should().Be(25, "the person's own timeout stays; only the command is replaced");
         world.ClaudeSettingsText.Should().NotContain(OldPath);
-        ClaudeHookFixtures.AddedLines(WithOldHook().Replace(OldPath, world.Binary), world.ClaudeSettingsText).Should().BeEmpty("the one changed line is the command, in place");
+        ClaudeHookFixtures.AddedLines(WithOldHook().Replace(OldPath, world.BinaryJson), world.ClaudeSettingsText).Should().BeEmpty("the one changed line is the command, in place");
         JsonNode.Parse(world.ClaudeSettingsText)!["hooks"]!["SessionStart"]![0]!["hooks"]![0]!["command"]!.GetValue<string>().Should().Be("node", "the foreign group did not move");
     }
 
@@ -204,7 +204,7 @@ public sealed class AClaudeHookMeetsTheFileAsItIsTests
         using var world = InstallWorld.Create(codex: false);
         world.Put(world.ClaudeSettings, $$"""
             { "hooks": { "SessionStart": [ { "hooks": [
-              { "type": "command", "command": "{{world.Binary}}", "args": ["--roles", "--format", "claude-hook"], "timeout": 10 },
+              { "type": "command", "command": "{{world.BinaryJson}}", "args": ["--roles", "--format", "claude-hook"], "timeout": 10 },
               { "type": "command", "command": "node", "args": ["/x/keep.mjs"] }
             ] } ] } }
             """);
@@ -242,7 +242,7 @@ public sealed class AClaudeHookMeetsTheFileAsItIsTests
         using var world = InstallWorld.Create(codex: false);
         (await world.RunAsync("--binary", world.Binary)).Code.Should().Be(0);
         var other = world.AnotherBinary("opt", "second");
-        File.WriteAllText(world.ClaudeSettings, File.ReadAllText(world.ClaudeSettings).Replace(world.Binary, other));
+        File.WriteAllText(world.ClaudeSettings, File.ReadAllText(world.ClaudeSettings).Replace(world.BinaryJson, InstallWorld.Escaped(other)));
 
         var (code, output, _) = await world.RunAsync("--restore", "latest");
 

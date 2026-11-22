@@ -87,7 +87,7 @@ export async function aMissingNamedDataRootStaysAbsent(): Promise<void> {
   // And a setting change, which is the ordinary trigger of the mirror, must not create it either.
   const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
   try {
-    await config().update('dealPlanLenses', true, vscode.ConfigurationTarget.Global);
+    await config().update('maxConcurrency', 5, vscode.ConfigurationTarget.Global);
     await settle(SETTLE_MS);
     assert.equal(fs.existsSync(home), false, 'a settings change wrote the server\'s settings into a folder that is not there');
 
@@ -98,6 +98,6 @@ export async function aMissingNamedDataRootStaysAbsent(): Promise<void> {
       'the folder was created — with no settings edit — and the mirror never wrote the settings file: a person who makes the folder again is not recovered',
       25_000);
   } finally {
-    await config().update('dealPlanLenses', undefined, vscode.ConfigurationTarget.Global);
+    await config().update('maxConcurrency', undefined, vscode.ConfigurationTarget.Global);
   }
 }

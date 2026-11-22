@@ -53,7 +53,7 @@ public sealed class ARestoreBringsOurKeysBackTests
         using var world = InstallWorld.Create(codex: false);
         InstallOutput.WithOldEntries(world);
         (await world.RunAsync("--binary", world.Binary)).Code.Should().Be(0);
-        var edited = world.ClaudeJsonText.Replace(world.Binary, world.AnotherBinary("opt", "later"));
+        var edited = world.ClaudeJsonText.Replace(world.BinaryJson, InstallWorld.Escaped(world.AnotherBinary("opt", "later")));
         world.Put(world.ClaudeJson, edited);
 
         var (code, output, _) = await world.RunAsync("--restore", "latest");

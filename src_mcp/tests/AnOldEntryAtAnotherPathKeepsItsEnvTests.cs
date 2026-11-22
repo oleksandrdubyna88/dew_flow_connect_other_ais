@@ -37,13 +37,14 @@ public sealed class AnOldEntryAtAnotherPathKeepsItsEnvTests
         code.Should().Be(0, err);
         InstallOutput.SameToml(
             world.CodexTomlText,
-            $"[mcp_servers.coai]\ncommand = \"{world.Binary}\"\nargs = [\"--x\"]\n[mcp_servers.coai.env]\nCOAI_DATA_DIR = \"/data/coai\"\nCOAI_DATA_SIDE = \"wsl\"\n").Should().BeTrue(world.CodexTomlText);
+            $"[mcp_servers.coai]\ncommand = \"{world.BinaryToml}\"\nargs = [\"--x\"]\n[mcp_servers.coai.env]\nCOAI_DATA_DIR = \"/data/coai\"\nCOAI_DATA_SIDE = \"wsl\"\n").Should().BeTrue(world.CodexTomlText);
         output.Action("codex").Should().Be("update");
     }
 
     [Fact]
     public async Task AnotherCoaiMcpThatIsThereIsLeftStanding_UnlessThePersonNamedThisOne()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), InstallWorld.NoRunnableStandIn);
         using var world = InstallWorld.Create();
         var live = world.AnotherBinary("opt", "other");
         InstallOutput.WithOldEntries(world, live);

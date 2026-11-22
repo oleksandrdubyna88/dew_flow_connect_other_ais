@@ -68,7 +68,7 @@ public sealed class AClaudeHookIsAddedAsLinesTests
         ClaudeHookFixtures.WithoutOurs(after).ToJsonString().Should().Be(JsonNode.Parse(fixture)!.ToJsonString(), $"deep-equal but for our group — {why}");
         var added = ClaudeHookFixtures.AddedLines(fixture, after);
         added.Should().NotBeEmpty();
-        string.Join('\n', added).Should().Contain(world.Binary).And.Contain("--roles");
+        string.Join('\n', added).Should().Contain(world.BinaryJson).And.Contain("--roles");
         after.Should().Contain(fixture.Contains("é<1e5>") ? "é<1e5>" : "model", "a non-ASCII letter and a < are not turned into escapes").And.Contain("\"ratio\": 1e5", "a number is not respelled");
         ClaudeHookFixtures.OurHandlers(after).Should().HaveCount(1);
     }

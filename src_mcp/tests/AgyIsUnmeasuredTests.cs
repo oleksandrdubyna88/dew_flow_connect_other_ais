@@ -12,11 +12,11 @@ public sealed class AgyIsUnmeasuredTests
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task AFoundAgy_IsReportedUnmeasured_AndItsFileIsNotMade()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the agy stand-in here is a shell file, and Unix file modes are not a Windows thing");
         using var world = InstallWorld.Create(claude: false, codex: false);
         var agy = Path.Combine(world.Bin, "agy");
         world.Put(agy, "#!/bin/sh\necho 1.5.14\n");
         File.SetUnixFileMode(agy, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "the agy stand-in here is a shell file");
 
         var (code, output, _) = await world.RunAsync("--binary", world.Binary);
 

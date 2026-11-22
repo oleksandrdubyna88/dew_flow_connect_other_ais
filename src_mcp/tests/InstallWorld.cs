@@ -60,6 +60,15 @@ internal sealed class InstallWorld : IDisposable
     /// <summary>The <c>coai-mcp</c> the installer registers (<c>--binary</c>).</summary>
     internal string Binary { get; }
 
+    /// <summary>The registered path as a TOML basic string spells it inside quotes: a backslash is doubled (a Windows path).</summary>
+    internal string BinaryToml => Escaped(Binary);
+
+    /// <summary>The registered path as a JSON string spells it inside quotes: a backslash is doubled (a Windows path).</summary>
+    internal string BinaryJson => Escaped(Binary);
+
+    /// <summary>A path as a TOML or JSON string spells it inside quotes — the two agree on the backslash, and a scratch path holds nothing else to escape.</summary>
+    internal static string Escaped(string path) => path.Replace("\\", "\\\\", StringComparison.Ordinal);
+
     /// <summary>The folder the world lives in — and the only one it may touch.</summary>
     internal string Root => _root.Path;
 
@@ -74,9 +83,10 @@ internal sealed class InstallWorld : IDisposable
 
     internal string CodexToml => Path.Combine(CodexHome.Length > 0 ? CodexHome : Path.Combine(Home, ".codex"), "config.toml");
 
-    internal string StateDir => Path.Combine(Home, ".local", "state", "coai");
+    /// <summary>Where the installer keeps its state on THIS platform: <c>~/.local/state/coai</c>, or <c>%LOCALAPPDATA%\coai</c> on Windows — asked of the installer's own host, never spelled twice.</summary>
+    internal string StateDir => InstallHost.From(name => Env.GetValueOrDefault(name), OperatingSystem.IsWindows()).StateDir;
 
-    internal string BackupsDir => Path.Combine(StateDir, "install-backups");
+    internal string BackupsDir => InstallHost.From(name => Env.GetValueOrDefault(name), OperatingSystem.IsWindows()).BackupsDir;
 
     /// <summary>The environment the installer is given: the four variables, a PATH of the wrappers' folder alone, and nothing of the real machine's.</summary>
     internal IReadOnlyDictionary<string, string?> Env => new Dictionary<string, string?>
@@ -111,6 +121,9 @@ internal sealed class InstallWorld : IDisposable
 
         return path;
     }
+
+    /// <summary>Why a scenario that RUNS a stand-in <c>coai-mcp</c> (to ask it <c>--version</c>) is Linux and macOS only: here the stand-in is a shell file, and a Windows <c>.exe</c> cannot be one.</summary>
+    internal const string NoRunnableStandIn = "the stand-in coai-mcp is a shell file, which Windows cannot run as an .exe";
 
     /// <summary>A second <c>coai-mcp</c> in another folder, named for the file the installer recognises as ours.</summary>
     internal string AnotherBinary(params string[] folder)

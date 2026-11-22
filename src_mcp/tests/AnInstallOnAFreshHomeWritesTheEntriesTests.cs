@@ -17,7 +17,7 @@ public sealed class AnInstallOnAFreshHomeWritesTheEntriesTests
         code.Should().Be(0, err);
         InstallOutput.ClaudeEntry(world.ClaudeJsonText)!["command"]!.GetValue<string>().Should().Be(world.Binary);
         world.CodexTomlText.Should().Contain("[mcp_servers.coai]");
-        InstallOutput.SameToml(world.CodexTomlText, $"[mcp_servers.coai]\ncommand = \"{world.Binary}\"\n").Should().BeTrue("codex holds the one entry, at the registered path");
+        InstallOutput.SameToml(world.CodexTomlText, $"[mcp_servers.coai]\ncommand = \"{world.BinaryToml}\"\n").Should().BeTrue("codex holds the one entry, at the registered path");
         output.Result("claude").Should().Be("changed");
         output.Result("codex").Should().Be("changed");
         output.Result("agy").Should().Be("absent");
@@ -33,6 +33,7 @@ public sealed class AnInstallOnAFreshHomeWritesTheEntriesTests
     [Fact]
     public async Task ABinaryThatIsNotThisOne_IsAskedItsVersion()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), InstallWorld.NoRunnableStandIn);
         using var world = InstallWorld.Create();
         var other = world.AnotherBinary("opt", "named");
 

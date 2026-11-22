@@ -1,5 +1,5 @@
 // One-time edit of v2-spec.json: applies the Fable split decision of 2026-11-22 (5 epochs, MVP-first epics).
-// Usage: node v2/_gen/apply-fable-split.mjs   (from the repository root), then regenerate with gen-v2.mjs.
+// Usage: node v2/_gen/apply-fable-split.mjs   (from the repository root), then regenerate with `node v2/_gen/gen-v2.mjs`.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const p = 'v2/_gen/v2-spec.json';

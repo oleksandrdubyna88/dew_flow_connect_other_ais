@@ -26,7 +26,7 @@ public sealed class AClaudeSessionRefusesTheRegistrationTests
         output.Result("claude").Should().Be("refused");
         output.Client("claude").GetProperty("reason").GetString().Should().Contain(Sentence);
         output.Result("codex").Should().Be("changed", "the other CLIs are done");
-        world.CodexTomlText.Should().Contain(world.Binary);
+        world.CodexTomlText.Should().Contain(world.BinaryToml);
         world.ClaudeJsonText.Should().NotContain("coai-mcp");
         world.Calls.Should().NotContain(line => line.StartsWith("claude "), "the vendor was never asked — its protection is met, not tried");
     }

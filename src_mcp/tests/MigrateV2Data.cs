@@ -51,6 +51,11 @@ internal static class MigrateV2Data
                 {
                     var target = Path.Combine(dataDir, folder, Path.GetFileName(file));
                     File.Copy(file, target, overwrite: true);
+                    if (folder == "sessions" && OperatingSystem.IsWindows() && file.EndsWith(".json", StringComparison.Ordinal))
+                    {
+                        target = RekeyedForThisFileSystem(dataDir, target);
+                    }
+
                     if (folder == "escalations" && file.EndsWith(".json", StringComparison.Ordinal))
                     {
                         Stamp(target, at);
@@ -58,6 +63,27 @@ internal static class MigrateV2Data
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// The fixtures were written on Linux, where a session's file is named by a key that keeps the case of the document or plan path (<c>todo/PLAN_the_cart.md</c>). On
+    /// Windows the same key is folded to lower case (<see cref="CoaiMcp.Core.Rounds.DocumentId.KeyOf"/> — one file there), so the store looks for another file name. The file is
+    /// moved to the name THIS platform's store gives that session, which is where a person's own session would be; its content is not touched.
+    /// </summary>
+    private static string RekeyedForThisFileSystem(string dataDir, string file)
+    {
+        var state = JsonNode.Parse(File.ReadAllText(file))!["state"]!.AsObject();
+        var wanted = new SessionStore(dataDir).FileFor(
+            state["repoPath"]?.GetValue<string>() ?? string.Empty,
+            state["branch"]?.GetValue<string>() ?? string.Empty,
+            state["document"]?.GetValue<string>() ?? string.Empty,
+            state["feature"]?.GetValue<string>() ?? string.Empty);
+        if (!string.Equals(wanted, file, StringComparison.OrdinalIgnoreCase))
+        {
+            File.Move(file, wanted, overwrite: true);
+        }
+
+        return wanted;
     }
 
     /// <summary>
