@@ -24,6 +24,7 @@ import { type BusySnapshot, IDLE } from './busySnapshot';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
+import { menuReadyScript, MENU_BASE_CSS, MENU_SECTION_CSS, menuTitle } from './sidebarMenu';
 import { runtimeOnServer, runtimeSkewNote } from './runtimeSince';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
@@ -58,7 +59,7 @@ import { DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
 import { featureNote, reviewsFeatures } from './featureGate';
 import { help, segmentedRadio } from './panelControls';
 import { cadenceBlock } from './cadenceSettings';
-import { CadenceLine, cadenceLinesHtml } from './cadenceLine';
+import type { CadenceLine } from './cadenceLine';
 import { allowedModelsFor, ModelChoice, modelsFor, RemoteProvenance, Runtime } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { FEATURE_CODE, PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
@@ -134,7 +135,7 @@ export interface PanelState {
    * The Team servers this machine knows, with whatever their catalogs last said.
    *
    * <p>It is IN {@link staticKey} rather than a live region: `liveRegions` returns only the regions in
-   * `LIVE_REGION_IDS` (questions, rounds, consultations, cadence, notifications), so everything else reaches the
+   * `LIVE_REGION_IDS` (questions, rounds, consultations, notifications), so everything else reaches the
    * screen by the repaint. A section that
    * was patched instead would be a section that stops updating the day somebody reorders the DOM.</p>
    */
@@ -556,19 +557,16 @@ function focusLiteral(focus: PanelFocus | undefined): string {
 export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // The SIDEBAR: what is happening now, and the two tools a person reaches for while it happens — in the
   // order the operator named them (`research/PLAN_settings_page.md`, D1).
-  { id: 'notifications', title: 'Notifications', surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
+  { id: 'notifications', title: menuTitle('notifications'), surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
   // The gates and the consultations each in a section of its own, where Active rounds was — the operator's
-  // ask of 2026-09-29 (`research/PLAN_every_page_reads_alike.md`, S4). The gates keep the id `rounds`, and the
-  // cadence lines stay with them: they say where each plan's gate stands. A consultation being had is present
-  // tense exactly as a round is, so it stays in the sidebar (`research/PLAN_settings_page.md`, D2).
-  { id: 'rounds', title: 'Active gates', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
-  { id: 'consultations', title: 'Active consultations', surface: 'sidebar', body: (_state, live) => liveRegion('consultations', live) },
-  // The cadence lines, out of Active gates into a section of their own — the operator, 2026-09-29, who read
-  // them as consultations (`research/PLAN_the_cadence_has_its_own_section.md`). Beside the consultations, because
-  // each line says which consultation a plan owes.
-  { id: 'cadence', title: 'Consultation cadence', surface: 'sidebar', body: (_state, live) => liveRegion('cadence', live) },
-  { id: 'phrases', title: 'Phrases', surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
-  { id: 'bugz', title: 'Bugz', surface: 'sidebar', body: (state) => bugzSection(state) },
+  // ask of 2026-09-29 (`research/PLAN_every_page_reads_alike.md`, S4). The gates keep the id `rounds`. A consultation
+  // being had is present tense exactly as a round is, so it stays in the sidebar (`research/PLAN_settings_page.md`, D2).
+  // The cadence section is gone (owner, 2026-11-23: removed in v2). The titles and the order are `sidebarMenu.ts`'s: the
+  // shell's own menu draws the same headers before this code has loaded.
+  { id: 'rounds', title: menuTitle('rounds'), surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
+  { id: 'consultations', title: menuTitle('consultations'), surface: 'sidebar', body: (_state, live) => liveRegion('consultations', live) },
+  { id: 'phrases', title: menuTitle('phrases'), surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
+  { id: 'bugz', title: menuTitle('bugz'), surface: 'sidebar', body: (state) => bugzSection(state) },
 ];
 
 /**
@@ -874,7 +872,7 @@ ${selectSearchScript(['', '__other__', NEW_PROMPT_SENTINEL])}
   bindCommands(document);
 
   // Live updates arrive as HTML for the regions that change on their own — the questions, the rounds in
-  // flight, the consultations, the cadence lines and the notifications (LIVE_REGION_IDS). Patching them leaves every other control ALONE,
+  // flight, the consultations and the notifications (LIVE_REGION_IDS). Patching them leaves every other control ALONE,
   // which is the whole point: assigning the panel's html reloads the webview, and a reload
   // closes any open dropdown. This is what stopped the pickers snapping shut mid-choice.
   // What each region showed last. Identical markup is not re-applied: replacing it recreates
@@ -945,6 +943,7 @@ ${selectSearchScript(['', '__other__', NEW_PROMPT_SENTINEL])}
   // LAST: this document is ready to hear what is running. Anything announced while it was being built reached the
   // document it replaced (busyMark.ts; research/PLAN_model_search_and_busy_marks.md §3.12).
   vscode.postMessage({ type: 'ready' });
+${menuReadyScript()}
 </script>
 </body>
 </html>`;
@@ -2999,35 +2998,13 @@ ${reviewers}</div>`;
 export function liveRegions(
   state: PanelState,
   nowMs: number = Date.now(),
-): { qconsults: string; rounds: string; consultations: string; cadence: string; notifications: string } {
+): { qconsults: string; rounds: string; consultations: string; notifications: string } {
   return {
     qconsults: activeQuestionsBody(state.questions, state.qconsults ?? [], nowMs),
     rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)),
     consultations: consultationsBody(state.consultations ?? [], nowMs),
-    cadence: cadenceBody(state),
     notifications: notificationsBody(state),
   };
-}
-
-/**
- * What Consultation cadence shows: each recent plan's cadence line — or why there is none.
- *
- * <p>ONE function for the first paint and the live push, so the two cannot disagree about whether a line
- * is there. It was drawn above the running rounds until 2026-09-29, when the operator read the lines as
- * consultations and asked for a section of their own; the page script patches every region by one loop
- * now, so a region of its own costs no new branch there.</p>
- */
-function cadenceBody(state: PanelState): string {
-  const lines = cadenceLinesHtml(state.cadence ?? []);
-  if (lines.length > 0) {
-    return lines;
-  }
-
-  return state.settings.cadence.mode === 'off'
-    ? '<div class="empty">The consultation cadence is off. It is switched on in <b>Settings → Consultant</b>.</div>'
-    // True of every way the list comes back empty with the cadence on: no round named a plan in the last day,
-    // the installed server is too old for the mode or not installed, or its first answer is still out.
-    : '<div class="empty">No plan\'s cadence has been read yet: a line appears here once a gate round in the last day names a plan and the server answers for it.</div>';
 }
 
 /**
@@ -3059,42 +3036,12 @@ function labelled(forId: string, text: string, key: HelpKey): string {
 export { escapeHtml } from './escapeHtml';
 
 const CSS = `
-  /* Everything measures its own border and padding: without this a 100% field plus padding is
-     wider than its parent, and the whole view gains a horizontal scrollbar. */
-  *, *::before, *::after { box-sizing: border-box; }
-  :root { color-scheme: light dark; }
-  /* The ROOT carries the text size, and the small print below is measured from it in rem — 13 of them
-     to the old pixel, so at the theme's default 13px every line is exactly the size it was. The Settings
-     tab roots it in its size control instead, which is how the notes follow that control: rem is measured
-     from the root alone, so no nested size compounds (research/PLAN_every_page_reads_alike.md, D5). */
-  html { font-size: var(--vscode-font-size); }
-  body {
-    font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
-    color: var(--vscode-foreground); background: transparent;
-    /* Air down both sides: nothing should touch the edge of the view, and the right-hand gap is
-       a shade wider so a field never sits under the scrollbar's track. */
-    margin: 0; padding: 4px 14px 20px 12px; overflow-x: hidden;
-  }
+${MENU_BASE_CSS}
   h2 {
     font-size: calc(11rem / 13); text-transform: uppercase; letter-spacing: .06em; opacity: .75;
     margin: 10px 0 6px; font-weight: 600;
   }
-  .section { border-top: 1px solid var(--vscode-panel-border); padding: 0 0 8px; }
-  .section > summary {
-    /* .9 rather than .75: coloured text at .75 on a dark ground is muddy, and the colour is
-       doing the separating now. */
-    font-size: calc(11rem / 13); text-transform: uppercase; letter-spacing: .06em; opacity: .9;
-    font-weight: 600; padding: 10px 0 6px; cursor: pointer; list-style: none;
-    display: flex; align-items: center; gap: 6px; user-select: none;
-  }
-  .section > summary:hover { opacity: 1; }
-  /* Each header that opens carries its own tone, from the same palette the role boxes use, so a
-     column of eight identical grey words becomes something you can aim at. The chevron follows for
-     free: it is drawn from currentColor.
-
-     Colour is never the only signal — every heading is also its own word — and each tone is a
-     --vscode-charts-* token with a hex fallback, so a theme that redefines the charts palette
-     moves these with it. */
+${MENU_SECTION_CSS}
   .sec-reviewers > summary { color: var(--tone-arch); }
   .sec-prompts   > summary { color: var(--tone-plan); }
   .sec-gate      > summary { color: var(--tone-sec); }
@@ -3123,35 +3070,11 @@ const CSS = `
      not about the gate at all, and a new hue would say "another kind of setting" when what it is
      is another kind of WORK. */
   .sec-chat      > summary { color: var(--tone-uxdx); }
-  .sec-phrases   > summary { color: var(--tone-plan); }
   /* The consultant takes the chat's tone for the same reason the chat took the server's: the two
      are one idea from opposite ends — a person asking another vendor about a passage, an AI asking
      one about the tree it is stuck in — and sharing a hue says so without a word. */
   .sec-consultant > summary { color: var(--tone-uxdx); }
-  /* Bugz takes the security tone because that is what the corpus IS: the accepted findings it
-     reads back are Reliability, Performance and Security ones, filtered to exactly those. Sharing
-     the hue with the gate says the two are the same subject seen from opposite ends — one deciding
-     what is a defect, the other keeping what was. */
-  .sec-bugz      > summary { color: var(--tone-sec); }
   .sec-usage     > summary { color: var(--tone-arch); }
-  .sec-rounds    > summary { color: var(--tone-plan); }
-  /* The Consultant section's own hue: the settings and the consultations they start read as one thing. */
-  .sec-consultations > summary { color: var(--tone-uxdx); }
-  .sec-cadence   > summary { color: var(--tone-limits); }
-  /* Notifications take the reliability tone, because that is what every record in them is
-     about: something refused, failed, stood down or repeated. Sharing the hue with the gate's
-     own reliability role says the two are asking the same question of different subjects. */
-  .sec-notifications > summary { color: var(--tone-sec); }
-  .section > summary::-webkit-details-marker { display: none; }
-  /* A real chevron, drawn from two borders rather than borrowed from punctuation: it matches the
-     Explorer's weight, scales with the text, and points the right way in both states with no
-     script. (A '›' glyph rendered a third of this size — a disclosure arrow nobody can hit.) */
-  .section > summary::before {
-    content: ''; flex: 0 0 auto; width: 6px; height: 6px; margin: 0 4px 0 2px;
-    border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
-    transform: rotate(-45deg); transition: transform .12s ease;
-  }
-  .section[open] > summary::before { transform: rotate(45deg); margin-top: -3px; }
   /* One row of buttons that wraps: a phrase list is a handful of short labels, and a column of them
      would push everything below it off the fold for no gain. */
   .phrases { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -3208,7 +3131,6 @@ const CSS = `
   .seg input { margin: 0; }
   .inline > label { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
   .inline > input[type="number"] { flex: 0 0 calc(64rem / 13); width: calc(64rem / 13); }
-  .hint { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; line-height: 1.45; }
   /* Sixteen names, in a sidebar whose width is somebody else's choice: two columns where there is
      room, one where there is not, and never a reason to scroll sideways. */
   .inventory { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; padding-left: 16px;

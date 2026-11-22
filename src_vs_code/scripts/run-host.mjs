@@ -195,7 +195,7 @@ export async function main({
  * `coai.__measure`, and COAI_MEASURE_OUT, the file this sample's raw record goes to. A launch that fails, or leaves no record, is a failed sample:
  * the others still run, and the verdict says which one failed.</p>
  *
- * <p>The verdict (`coldstart-lib.mjs`): the MAXIMUM M2 over the samples at most 2000 ms, M1 at most 100 ms, a fresh ready ack in every sample.
+ * <p>The verdict (`coldstart-lib.mjs`): the MAXIMUM M2 over the samples at most 2000 ms, M1 at most 100 ms, a fresh `menuReady` (the real sidebar menu shown and usable) in every sample.
  * `--record-only` is the v1 baseline: no limits, and the extension may have been active. `--json PATH` writes the result; `--row` appends a row to
  * `research/RESULTS_v2_start.md`. `measure` answers the same codes as `main`: 0 pass, 1 fail, 78 no run folder.</p>
  */

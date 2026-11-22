@@ -5,8 +5,9 @@ import { join } from 'node:path';
  * The sidebar's LAST SNAPSHOT (v2 epoch 1, E4 story s3-sidebar): the page the old code last painted, kept on disk so the next window can
  * show it before the old code has loaded.
  *
- * <p>This file is the format and the reader, and it is bundled into `dist/modules/sidebar.js`, which runs BEFORE the old code does — so it
- * imports only `node:fs` and `node:path`. The writer (`sidebarSnapshotStore.ts`) is on the old code's side and may import what it likes.</p>
+ * <p><b>State since 2026-11-23:</b> the sidebar module no longer replays this page. The owner's cold-start rule is that the start ends when the REAL menu is
+ * shown and clickable (`sidebarMenu.ts`), and a replayed copy of an old page is `inert` by construction. The format, the reader and the writer
+ * (`sidebarSnapshotStore.ts`) stay, tested on their own, until the owner decides whether the file goes. This file imports only `node:fs` and `node:path`.</p>
  *
  * <p><b>What is stored.</b> The sidebar's html, built with a PLACEHOLDER where its nonce goes, as one small JSON file in the extension's global
  * storage: `{ v, version, html }`. The nonce is the whole of a webview's content security policy, so a stored page never holds a real one: every
@@ -191,24 +192,6 @@ export function skeletonPage(nonce: string): string {
   const vscode = acquireVsCodeApi();
   vscode.postMessage({ type: 'ready' });
 </script>
-</body>
-</html>`;
-}
-
-/** The page shown when the old code could not be loaded: what happened, in words, and nothing the person can press. */
-export function failedPage(message: string): string {
-  const escaped = message.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;').replace(/"/gu, '&quot;');
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
-<style>body { color: var(--vscode-foreground); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); padding: 8px 12px; }</style>
-</head>
-<body>
-<p>ConnectOtherAIs could not start: ${escaped}</p>
-<p>Reload the window to try again. If it happens again, the extension's log says why.</p>
 </body>
 </html>`;
 }

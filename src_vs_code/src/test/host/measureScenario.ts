@@ -14,7 +14,8 @@ import * as vscode from 'vscode';
  *       extension activates itself at start-up — then the fact is recorded and the driver says so in the result);</li>
  *   <li>start the clock — here, in the driver, just before the command is dispatched — and run
  *       `workbench.view.extension.coai`, which opens the sidebar;</li>
- *   <li>wait for a FRESH `ready` acknowledgement: one the extension marked at or after the clock started; fail if none comes;</li>
+ *   <li>wait for a FRESH `menuReady`: the moment the sidebar shows its REAL menu (every section header, none inert) and says so, marked at or after the
+ *       clock started; fail if none comes. (The v1 baseline, `COAI_MEASURE_RECORD_ONLY=1`, has no such mark and waits for its `ready`, as before 2026-11-23.)</li>
  *   <li>read the marks through `coai.__measure` (registered because the launch sets COAI_MEASURE=1) and write the raw record
  *       to the file the launcher named. What M1/M2/M3 are, and whether the sample passes, is decided by the launcher
  *       (`scripts/coldstart-lib.mjs`), from that record.</li>
@@ -45,13 +46,13 @@ async function marksNow(): Promise<Report | undefined> {
   }
 }
 
-/** Waits for a `ready` mark at or after `t0`; polling does not affect the numbers, which come from the marks' own times. */
-async function freshReady(t0: number, ms: number): Promise<Report | undefined> {
+/** Waits for the mark `name` at or after `t0`; polling does not affect the numbers, which come from the marks' own times. */
+async function freshMark(name: string, t0: number, ms: number): Promise<Report | undefined> {
   const deadline = Date.now() + ms;
   let last: Report | undefined;
   while (Date.now() < deadline) {
     last = (await marksNow()) ?? last;
-    if (last?.marks.some((one) => one.name === 'ready' && one.at >= t0) === true) {
+    if (last?.marks.some((one) => one.name === name && one.at >= t0) === true) {
       return last;
     }
     // Polling on purpose: each probe must finish before the next one starts.
@@ -76,9 +77,11 @@ export async function run(): Promise<void> {
 
   const t0 = clock();
   await vscode.commands.executeCommand(OPEN_SIDEBAR);
-  const report = await freshReady(t0, 20_000);
+  // The end of M2: the real menu works. The v1 baseline has no such mark, and its end is its `ready`.
+  const endMark = recordOnly ? 'ready' : 'menuReady';
+  const report = await freshMark(endMark, t0, 20_000);
   assert.ok(report !== undefined, `${MEASURE} never answered: the extension did not register it (COAI_MEASURE=1 must reach it) or never activated`);
-  const fresh = report.marks.some((one) => one.name === 'ready' && one.at >= t0);
+  const fresh = report.marks.some((one) => one.name === endMark && one.at >= t0);
 
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, `${JSON.stringify({
@@ -90,5 +93,5 @@ export async function run(): Promise<void> {
     host: report.host,
   }, null, 2)}\n`);
 
-  assert.ok(fresh, 'no fresh ready acknowledgement from the sidebar within 20 s of the command: the webview never said it had painted');
+  assert.ok(fresh, `no fresh ${endMark} from the sidebar within 20 s of the command: the webview never showed its real menu`);
 }

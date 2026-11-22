@@ -159,7 +159,7 @@ test('only a few marks of one name are kept: a panel that repaints all day canno
 function recordOf(report, after) {
   const t0 = report.marks.at(-1).at + 1;
 
-  return { schema: 1, sample: 1, t0, startedActive: false, marks: [...report.marks, { name: 'ready', at: t0 + after }], host: report.host };
+  return { schema: 1, sample: 1, t0, startedActive: false, marks: [...report.marks, { name: 'ready', at: t0 + after - 1 }, { name: 'menuReady', at: t0 + after }], host: report.host };
 }
 
 test('a 3 s sleep planted in activate fails the verdict on M1; the same bundle without it passes', async () => {

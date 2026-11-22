@@ -53,6 +53,7 @@ export const OLD_MARKS = [
   'renderDiscovery',
   'firstData',
   'ready',
+  'menuReady',
 ] as const;
 
 /** A moment the old code names. */

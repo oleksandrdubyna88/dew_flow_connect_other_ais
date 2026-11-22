@@ -6,6 +6,7 @@ import { mark } from '../measure';
 import * as vscode from 'vscode';
 import { activate as activateOldCode, deactivate as deactivateOldCode, type CoaiExports } from '../../src/extension';
 import { adoptRegistrationsFor } from '../../src/shellBridge';
+import { PanelProvider } from '../../src/panelProvider';
 import { recordMarksWith } from '../../src/measureMarks';
 import { COMMANDS, MODULE_LEGACY, moduleOf, VIEW_PANEL } from '../ids';
 import type { ShellModule } from '../lazy';
@@ -79,8 +80,12 @@ export const command: ShellModule['command'] = (context, id, args) => {
   return handler(...args);
 };
 
-export const resolveView: ShellModule['resolveView'] = (context, view, resolveContext, token) => {
+export const resolveView: ShellModule['resolveView'] = (context, view, resolveContext, token, handOver) => {
   started(context);
+  // The sidebar module drew the menu first: the sections a person opened or closed on it stay as they left them when this code paints the live page.
+  if (handOver !== undefined && viewProvider instanceof PanelProvider) {
+    viewProvider.seedOpenSections(handOver.opened, handOver.closed);
+  }
 
   return viewProvider?.resolveWebviewView(view, resolveContext, token);
 };

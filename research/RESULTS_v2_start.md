@@ -8,6 +8,8 @@
 > [`coldstart-lib.mjs`](../src_vs_code/scripts/coldstart-lib.mjs), the marks in
 > [`shell/measure.ts`](../src_vs_code/shell/measure.ts).
 >
+> **M2 ends at `menuReady` since 2026-11-23** (§ 1): the real sidebar menu shown and usable, not a skeleton. Earlier rows ended at `ready`.
+>
 > **State (2026-11-22): the table at the end has the first two rows, both from CI (PR #1032, run 45055101329), both FAIL.**
 > The harness was written on a machine that cannot start VS Code (no `libnspr4`, no sudo); every row comes from a run in
 > CI or on the owner's machine, and nothing here is a prediction written as a result. The v1 baseline row is not there yet.
@@ -18,8 +20,11 @@
 |---|---|---|---|
 | **M1** | the first statement of `activate` (mark `activateStart`) | `activate` returns (mark `activateReturn`) | at most 100 ms in every sample |
 | **hostDelay** | module evaluation of `dist/extension.js` (mark `eval`, the first statement of the bundle) | `activate` is called (mark `activateStart`) | none: recorded only (the editor's own time, not the entry's) |
-| **M2** | the driver's clock, started just before it runs `workbench.view.extension.coai` | the sidebar webview's `ready` acknowledgement reaches the host (mark `ready`) | at most **2000 ms**; the **maximum** of the samples counts |
+| **M2** | the driver's clock, started just before it runs `workbench.view.extension.coai` | the REAL sidebar menu is shown and usable: the webview's `menuReady` message reaches the host (mark `menuReady`) | at most **2000 ms**; the **maximum** of the samples counts |
+| **ready**, **firstPaint** | the same clock | the page's first acknowledgement (`ready`); the sidebar module's first `webview.html` write (`firstPaint`) | none: recorded only, as marks and as `ready` / `firstPaint` in the JSON |
 | **M3** | the same clock | the first state handed to the sidebar webview (mark `firstData`) | none: recorded only |
+
+**M2 changed its definition on 2026-11-23 (owner rule).** The start is over when the REAL sidebar menu is shown and clickable — the section headers NOTIFICATIONS, ACTIVE GATES, ACTIVE CONSULTATIONS, PHRASES and BUGZ, collapsed, with the title-bar icons — not when a skeleton or an inert copy of an old page exists. M2 used to end at `ready`, the first acknowledgement of any page, which a skeleton can send. A page posts `menuReady` only when it shows every header of `src/sidebarMenu.ts` `MENU_SECTIONS` and none of them is `inert` or `hidden` (the shell's own menu, and the old page when it stands alone, both run the same script). A sample without a fresh `menuReady` FAILS. The limit stays 2000 ms and the maximum of the samples counts. The v1 baseline (`--record-only`) has no menu mark and keeps ending at `ready`; its samples say so (`m2End`). Every row in § 5 dated before 2026-11-23 ended at `ready`; do not compare it with a later row without that in mind. (Consultation cadence is no longer a section in v2: the menu has five headers.)
 
 **M1 changed its definition on 2026-11-22.** It first ran from `eval`, and the first CI run read 925.8 ms on Windows for an entry of 3 KB
 that registers 37 commands: the `eval` mark includes the host's wait before it calls `activate()`. M1 now starts at `activateStart`, the first
@@ -47,11 +52,13 @@ Rules that make a sample count (all in `coldstart-lib.mjs`, all unit-tested):
   extension data directory, so restored view state cannot start the extension before the clock.
 - The extension must **not be active** when the clock starts (`isActive === false`, asserted in the scenario and checked again
   from the record).
-- A **fresh** `ready` is one marked at or after the clock. A missing acknowledgement fails the launch; it is never read as zero.
+- A **fresh** `menuReady` is one marked at or after the clock. A missing one fails the launch; it is never read as zero, and a fresh `ready` alone is not enough.
 - Three samples; a launch that fails or leaves no record is a failed sample, not a smaller measurement.
 - The `mark` of a sample is the first one after the clock; M1 comes from the first `activateStart` / `activateReturn` pair, the host delay from `eval` / `activateStart`.
 
-What a "ready" is: the sidebar's script posts `{ type: 'ready' }` as the last statement of its page script, after the page is built and
+What a "menuReady" is: the page's script says it as its last statement, after `ready`, and only when the real menu is on screen and usable (header words present, nothing inert or hidden). A unit test runs the shell's menu page and the old page on a DOM shim and asserts both the post and its absence for a skeleton, an inert page, a missing header and an empty header (`theSidebarDrawsItsRealMenu.test.ts`). The host marks `menuReady` when that message arrives from the sidebar; that is the moment M2 ends.
+
+What a "ready" is (recorded only since 2026-11-23): the sidebar's script posts `{ type: 'ready' }` as the last statement of its page script, after the page is built and
 every handler is bound (a unit test runs the page script and asserts it, `theSidebarSaysItIsReady.test.ts`). The host marks `ready`
 when that message arrives from the sidebar; that is the moment M2 ends. For the legacy sidebar this post already existed (the busy
 mark's handshake), so no page change was needed for S2.
@@ -123,6 +130,13 @@ steps are not, and the first run may need a correction. Say so in the row's labe
 - **v1 baseline:** M2 larger than v2's by about the cost of what v1 does at start-up (watchers, the settings mirror, the `--features`
   spawn); M1 has no limit and is recorded only as a pair of marks around the old `activate()`.
 - If a v2 row shows M2 *above* the v1 row, the shell has made the start slower and that is a finding, not a harness note.
+
+**Prediction for M2 to `menuReady` (v2 E4, written 2026-11-23 before the CI run of the native menu).** The shell's own menu is a static page of five `details`
+elements and one short script, written by the sidebar module (10 KB bundle) with no data; it takes the same path as the earlier skeleton page, plus a few
+`querySelector` calls. So M2 to `menuReady` should sit within about 30 ms of the skeleton rows (Linux 560-690 ms, Windows 520-1400 ms in the last two rows), every
+sample under 2000 ms. What could break the prediction: the old code or chat loading before the `menuReady` message is handled (both are asked for on a timer after
+the mark, and `FALLBACK_MS` is 5000 ms so the fallback cannot fire inside the budget); a cold Windows runner that needs more than 2000 ms to start a webview at all
+(the host's own time, not the menu's). `hostDelay` is not changed by this work and is recorded only.
 
 ## 4. Conditions, and what a row does not settle (`common.measurement` § 3)
 

@@ -243,13 +243,11 @@ test('every live region is patched, and one that changed is bound while the othe
     qconsults: '<button data-command="answer" data-id="q2"></button>',
     rounds: '<i>a round</i>',
     consultations: '<i>a consultation</i>',
-    cadence: '<i>a cadence line</i>',
     notifications: ONE_BUTTON,
   });
 
   assert.equal((page.regions.get('live-rounds') as Region).innerHTML, '<i>a round</i>');
   assert.equal((page.regions.get('live-consultations') as Region).innerHTML, '<i>a consultation</i>');
-  assert.equal((page.regions.get('live-cadence') as Region).innerHTML, '<i>a cadence line</i>');
   (page.regions.get('live-notifications') as Region).only().click();
   (page.regions.get('live-qconsults') as Region).only().click();
 

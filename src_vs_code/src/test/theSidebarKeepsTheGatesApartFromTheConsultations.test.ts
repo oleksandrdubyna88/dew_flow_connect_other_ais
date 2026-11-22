@@ -29,28 +29,26 @@ function sectionOf(html: string, id: string): string {
   return html.slice(at, html.indexOf('</details>', at));
 }
 
-test('the sidebar is Notifications, Active gates, Active consultations, Consultation cadence, Phrases and Bugz, in that order', () => {
-  // The cadence lines left Active gates for a section of their own on 2026-09-29 (the operator:
-  // `research/PLAN_the_cadence_has_its_own_section.md`).
+test('the sidebar is Notifications, Active gates, Active consultations, Phrases and Bugz, in that order', () => {
+  // Consultation cadence had a section of its own from 2026-09-29 (`research/PLAN_the_cadence_has_its_own_section.md`); the owner removed it for v2 on 2026-11-23.
   assert.deepEqual(sections(HTML), [
     ['notifications', 'Notifications'],
     ['rounds', 'Active gates'],
     ['consultations', 'Active consultations'],
-    ['cadence', 'Consultation cadence'],
     ['phrases', 'Phrases'],
     ['bugz', 'Bugz'],
   ]);
 });
 
 test('the running rounds are drawn once, under Active gates, and the consultations once, under their own section', () => {
-  for (const [region, section] of [['rounds', 'rounds'], ['consultations', 'consultations'], ['cadence', 'cadence']] as const) {
+  for (const [region, section] of [['rounds', 'rounds'], ['consultations', 'consultations']] as const) {
     assert.equal(HTML.split(`id="live-${region}"`).length - 1, 1, `the ${region} region is not drawn exactly once`);
     assert.ok(sectionOf(HTML, section).includes(`id="live-${region}"`), `the ${region} region is not inside the ${section} section`);
   }
   assert.ok(!sectionOf(HTML, 'rounds').includes('id="live-consultations"'), 'the consultations are still inside Active gates');
 });
 
-for (const id of ['consultations', 'cadence']) {
+for (const id of ['consultations']) {
   test(`the ${id} section has a heading colour of its own, as every section does`, () => {
     const heading = stylesheet(HTML).filter((rule) => rule.selector.trim() === `.sec-${id} > summary`);
 
@@ -68,23 +66,11 @@ const LINE: readonly CadenceLine[] = [{
   },
 }];
 
-test('a cadence line is drawn under Consultation cadence, and no longer under Active gates', () => {
+test('Consultation cadence is not on the sidebar: no section, no heading colour, and a cadence line is drawn nowhere', () => {
   const html = panelHtml(panelState('', { cadence: LINE }), 'n');
 
-  assert.ok(sectionOf(html, 'cadence').includes('PLAN_x.md · epics closed 4/14'), 'the line is not in its own section');
-  assert.ok(!sectionOf(html, 'rounds').includes('PLAN_x.md'), 'the line is still drawn with the running rounds');
-});
-
-test('an empty Consultation cadence says why: the cadence is off, or no round has named a plan yet', () => {
-  const base = panelState('');
-  const off = panelHtml({ ...base, settings: { ...base.settings, cadence: { ...base.settings.cadence, mode: 'off' } } }, 'n');
-  const on = panelHtml({ ...base, settings: { ...base.settings, cadence: { ...base.settings.cadence, mode: 'remind' } }, cadence: [] }, 'n');
-
-  assert.match(sectionOf(off, 'cadence'), /The consultation cadence is off/, 'an empty section with the cadence off says nothing');
-  assert.match(sectionOf(off, 'cadence'), /Settings → Consultant/, 'and does not say where it is switched on');
-  // True in every case the probe answers nothing, not only 'no plan named yet': a server too old for the mode,
-  // none installed, a first probe still out, a plan quiet for a day — each leaves the list empty too.
-  assert.match(sectionOf(on, 'cadence'), /No plan's cadence has been read yet/, 'an empty section with the cadence on says nothing');
-  assert.match(sectionOf(on, 'cadence'), /in the last day/, 'it promises a line where the probe would never draw one');
-  assert.match(sectionOf(on, 'cadence'), /the server answers for it/, 'it does not say the server has to answer');
+  assert.equal(html.includes('data-section="cadence"'), false, 'the section is still drawn');
+  assert.equal(html.includes('Consultation cadence'), false, 'its heading is still on the page');
+  assert.equal(html.includes('PLAN_x.md'), false, 'a cadence line is still drawn');
+  assert.equal(stylesheet(html).some((rule) => rule.selector.includes('.sec-cadence')), false, 'its colour rule is still shipped');
 });

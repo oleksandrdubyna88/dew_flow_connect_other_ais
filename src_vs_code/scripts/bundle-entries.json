@@ -15,7 +15,7 @@
       "entry": "shell/modules/sidebar.ts",
       "out": "dist/modules/sidebar.js",
       "budgetBytes": 98304,
-      "firewall": { "inputs": ["shell/modules/sidebar.ts", "shell/measure.ts", "src/sidebarSnapshot.ts", "src/webviewNonce.ts"], "imports": ["vscode", "node:fs", "fs", "node:path", "path", "node:crypto", "crypto"] },
+      "firewall": { "inputs": ["shell/modules/sidebar.ts", "shell/measure.ts", "src/sidebarMenu.ts", "src/panelSurface.ts", "src/escapeHtml.ts", "src/asText.ts", "src/roleTone.ts", "src/webviewHtml.ts", "src/webviewNonce.ts"], "imports": ["vscode", "node:crypto", "crypto"] },
       "forbidInputs": ["src/runtimeState.ts", "shell/modules/runtime.ts"]
     },
     {

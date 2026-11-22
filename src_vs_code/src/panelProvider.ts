@@ -624,9 +624,17 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   /**
-   * @param view a view the shell's sidebar module may ALREADY have resolved (v2 E4): it holds the last snapshot's page, with options set and its own
+   * The sections a person opened and closed on the shell's own menu before this code had loaded (v2 E4, `shell/modules/sidebar.ts`): the page this
+   * code paints next draws them as they left them. A section they did not touch keeps what this panel already remembered.
+   */
+  seedOpenSections(opened: readonly string[], closed: readonly string[]): void {
+    this.openSections = [...new Set([...this.openSections, ...opened])].filter((id) => !closed.includes(id));
+  }
+
+  /**
+   * @param view a view the shell's sidebar module may ALREADY have resolved (v2 E4): it holds the shell's own menu, with options set and its own
    *        message listener removed. Nothing here assumes an empty document — the slot forgets what was painted, so the first render writes the page
-   *        again, with live data, over the snapshot.
+   *        again, with live data, over the menu.
    */
   resolveWebviewView(view: vscode.WebviewView): void {
     measureMark('sidebarResolve');
@@ -1269,6 +1277,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     if (appliedTextControl(m, 'settings')) {
       return;
     }
+    if (m.type === 'menuReady') { this.markSidebarMenuReady(from); return; }
     if (m.type === 'section' && m.id !== undefined) {
       this.openSections = m.open === true
         ? [...new Set([...this.openSections, m.id])]
@@ -1313,10 +1322,17 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
   }
 
-  /** The sidebar's `ready` acknowledgement is where the cold-start measurement ends M2 (shell/measure.ts; a no-op outside the shell). */
+  /** The sidebar's `ready` acknowledgement: recorded, not judged (shell/measure.ts; a no-op outside the shell). */
   private markSidebarReady(from: SurfaceSlot): void {
     if (from === this.sidebar) {
       measureMark('ready');
+    }
+  }
+
+  /** The page says the real menu is on screen and works: this is where the cold-start measurement ends M2 (a no-op outside the shell). */
+  private markSidebarMenuReady(from: SurfaceSlot): void {
+    if (from === this.sidebar) {
+      measureMark('menuReady');
     }
   }
 

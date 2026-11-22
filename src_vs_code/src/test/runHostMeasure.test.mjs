@@ -22,7 +22,7 @@ const T0 = 5_000_000;
 
 /** What the scenario writes for one sample; `m2: null` is a launch whose ack never came. */
 function record(sample, { m1 = 15, m2 = 900, startedActive = false } = {}) {
-  const marks = [{ name: 'eval', at: T0 - 3000 }, { name: 'activateStart', at: T0 - 3000 }, { name: 'activateReturn', at: T0 - 3000 + m1 }, ...(m2 === null ? [] : [{ name: 'firstData', at: T0 + 700 }, { name: 'ready', at: T0 + m2 }])];
+  const marks = [{ name: 'eval', at: T0 - 3000 }, { name: 'activateStart', at: T0 - 3000 }, { name: 'activateReturn', at: T0 - 3000 + m1 }, ...(m2 === null ? [] : [{ name: 'firstData', at: T0 + 700 }, { name: 'ready', at: T0 + m2 - 10 }, { name: 'menuReady', at: T0 + m2 }])];
 
   return { schema: 1, sample, t0: T0, startedActive, marks, host: { remoteName: null, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Code' } };
 }
@@ -107,7 +107,7 @@ test('M3 an M2 over 2000 ms in any one sample fails, a missing ack fails, and th
   const missing = await run(t, [], (sample) => ({ write: record(sample, { m2: sample === 1 ? null : 500 }) }));
   assert.equal(missing.code, 1);
   assert.equal(missing.seen.length, 3, 'a sample without an ack does not stop the rest');
-  assert.match(missing.errors.join('\n'), /sample 1: no ready acknowledgement/);
+  assert.match(missing.errors.join('\n'), /sample 1: no menuReady/);
 });
 
 test('M4 an extension that was already active is not a cold start', async (t) => {
@@ -124,9 +124,9 @@ test('M5 a launch that fails and leaves no record is a failed sample; one that f
   assert.match(none.errors.join('\n'), /sample 2: the launch left no record/);
   assert.equal(none.seen.length, 3);
 
-  const after = await run(t, [], (sample) => ({ write: record(sample, { m2: null }), fail: 'no fresh ready acknowledgement' }));
+  const after = await run(t, [], (sample) => ({ write: record(sample, { m2: null }), fail: 'no fresh menuReady' }));
   assert.equal(after.code, 1);
-  assert.match(after.errors.join('\n'), /no ready acknowledgement from the sidebar/);
+  assert.match(after.errors.join('\n'), /no menuReady from the sidebar/);
 });
 
 test('M6 --record-only is the v1 baseline: no limit, the extension may have been active, and the scenario is told', async (t) => {

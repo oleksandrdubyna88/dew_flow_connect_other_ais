@@ -11,25 +11,30 @@ import { deriveSample, LIMITS, parseMeasureArgs, stats, stepsOf, stepsTable, sum
 
 const T0 = 1_000_000;
 
-/** A raw record like `measureScenario.ts` writes: M1 = `m1` ms, host delay = `hostDelay` ms, M2 = `m2` ms, M3 = `m3` ms (null: none). */
-function raw({ sample = 1, m1 = 12, hostDelay = 40, m2 = 800, m3 = 700, startedActive = false, remoteName = null, extra = [] } = {}) {
+/**
+ * A raw record like `measureScenario.ts` writes: M1 = `m1` ms, host delay = `hostDelay` ms, M2 = `m2` ms (the `menuReady` mark; null: none), M3 = `m3` ms (null: none).
+ * The page's `ready` comes 10 ms before its `menuReady`; `skeleton: true` is a page that said `ready` and never `menuReady`.
+ */
+function raw({ sample = 1, m1 = 12, hostDelay = 40, m2 = 800, m3 = 700, startedActive = false, remoteName = null, extra = [], skeleton = false } = {}) {
   const marks = [
     { name: 'eval', at: T0 - 5_000 },
     { name: 'activateStart', at: T0 - 5_000 + hostDelay },
     { name: 'activateReturn', at: T0 - 5_000 + hostDelay + m1 },
     { name: 'viewResolve', at: T0 + 30 },
     ...(m3 === null ? [] : [{ name: 'firstData', at: T0 + m3 }]),
-    ...(m2 === null ? [] : [{ name: 'ready', at: T0 + m2 }]),
+    ...(m2 === null ? [] : [{ name: 'ready', at: T0 + m2 - 10 }]),
+    ...(m2 === null || skeleton ? [] : [{ name: 'menuReady', at: T0 + m2 }]),
     ...extra,
   ];
 
   return { schema: 1, sample, t0: T0, startedActive, marks, host: { remoteName, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Code' } };
 }
 
-test('M1 is activateReturn minus activateStart, the host delay is activateStart minus eval, M2 is the first ready at or after the clock minus the clock, M3 is firstData minus the clock', () => {
+test('M1 is activateReturn minus activateStart, the host delay is activateStart minus eval, M2 is the first menuReady at or after the clock minus the clock, M3 is firstData minus the clock; ready is recorded beside them', () => {
   const derived = deriveSample(raw({ m1: 12.34, hostDelay: 55.55, m2: 800.06, m3: 700 }));
 
-  assert.deepEqual([derived.m1, derived.hostDelay, derived.m2, derived.m3], [12.3, 55.6, 800.1, 700]);
+  assert.deepEqual([derived.m1, derived.hostDelay, derived.m2, derived.m3, derived.ready], [12.3, 55.6, 800.1, 700, 790.1]);
+  assert.equal(derived.m2End, 'menuReady');
   assert.deepEqual(derived.problems, []);
   assert.equal(derived.location, 'local');
 });
@@ -79,7 +84,7 @@ test('the per-step table: rows in the order of the middle sample, min / median /
   const result = summarize([sample(0), sample(50), sample(100)]);
   const names = result.steps.map((row) => row.name);
 
-  assert.deepEqual(names, ['eval', 'activateStart', 'activateReturn', 'viewResolve', 'oldActivateStart', 'renderStart', 'firstData', 'ready']);
+  assert.deepEqual(names, ['eval', 'activateStart', 'activateReturn', 'viewResolve', 'oldActivateStart', 'renderStart', 'firstData', 'ready', 'menuReady']);
   const render = result.steps.find((row) => row.name === 'renderStart');
   assert.deepEqual(render.since, { min: 300, median: 350, max: 400 });
   assert.deepEqual(render.delta, { min: 200, median: 200, max: 200 });
@@ -96,28 +101,40 @@ test('the per-step table: rows in the order of the middle sample, min / median /
 test('the log line names the host delay beside M1', () => {
   const line = summaryLine(summarize([raw(), raw(), raw()]));
 
-  assert.match(line, /^cold start \(local\): M1 12 ms max \(activateStart to activateReturn\), host delay \{"min":40,"median":40,"max":40\}, M2 \{/);
+  assert.match(line, /^cold start \(local\): M1 12 ms max \(activateStart to activateReturn\), host delay \{"min":40,"median":40,"max":40\}, M2 \(to menuReady\) \{/);
+  assert.match(line, /, ready \{"min":790,"median":790,"max":790\}, M3 \{/);
 });
 
-test('a ready ack from BEFORE the clock is not an ack: the first ready after it is used, and with none the sample fails naming a stale ack', () => {
-  const fresh = deriveSample(raw({ m2: 900, extra: [{ name: 'ready', at: T0 - 100 }] }));
+test('a menuReady from BEFORE the clock is not the menu working: the first one after it is used, and with none the sample fails naming a stale mark', () => {
+  const fresh = deriveSample(raw({ m2: 900, extra: [{ name: 'menuReady', at: T0 - 100 }] }));
   assert.equal(fresh.m2, 900);
   assert.deepEqual(fresh.problems, []);
 
-  const stale = deriveSample(raw({ m2: null, extra: [{ name: 'ready', at: T0 - 100 }] }));
+  const stale = deriveSample(raw({ m2: null, extra: [{ name: 'menuReady', at: T0 - 100 }] }));
   assert.equal(stale.m2, null);
   assert.match(stale.problems.join('\n'), /older than the driver clock/);
 });
 
-test('a missing ack fails the sample, and is never read as zero', () => {
+test('a missing menuReady fails the sample, and is never read as zero', () => {
   const derived = deriveSample(raw({ m2: null }));
 
   assert.equal(derived.m2, null);
-  assert.match(derived.problems.join('\n'), /no ready acknowledgement/);
+  assert.match(derived.problems.join('\n'), /no menuReady/);
   const result = summarize([raw({ sample: 1 }), raw({ sample: 2, m2: null }), raw({ sample: 3 })]);
   assert.equal(result.pass, false);
-  assert.match(result.problems.join('\n'), /sample 2: no ready acknowledgement/);
+  assert.match(result.problems.join('\n'), /sample 2: no menuReady/);
   assert.deepEqual(result.m2, { min: 800, median: 800, max: 800 }, 'the statistics are of the samples that have one, and the verdict is still a failure');
+});
+
+test('a page that said ready and never menuReady (a skeleton, an inert copy) fails the sample: ready is recorded and judged by nothing', () => {
+  const derived = deriveSample(raw({ skeleton: true }));
+
+  assert.equal(derived.m2, null, 'a fresh ready is not the end of the start');
+  assert.equal(derived.ready, 790);
+  assert.match(derived.problems.join('\n'), /no menuReady from the sidebar: the real menu was never shown and usable/);
+  const result = summarize([raw(), raw({ skeleton: true }), raw()]);
+  assert.equal(result.pass, false);
+  assert.deepEqual(result.ready, { min: 790, median: 790, max: 790 });
 });
 
 test('a record a driver wrote after a failure says so, with its own sentence', () => {
@@ -177,7 +194,7 @@ test('samples from two places do not make one measurement, and the location is n
   assert.equal(remote.pass, true);
 });
 
-test('record-only (the v1 baseline) applies no limit, accepts an active extension and a missing M1, and still needs the ack', () => {
+test('record-only (the v1 baseline) applies no limit, accepts an active extension and a missing M1, ends M2 at its ready (v1 has no menu mark), and still needs an ack', () => {
   const v1 = { ...raw({ m2: 9000, startedActive: true }), marks: [{ name: 'ready', at: T0 + 9000 }] };
   const result = summarize([v1, v1, v1], { recordOnly: true });
 
@@ -185,6 +202,9 @@ test('record-only (the v1 baseline) applies no limit, accepts an active extensio
   assert.equal(result.limits, null);
   assert.equal(result.m1, null);
   assert.equal(result.m2.max, 9000);
+  assert.equal(result.samples[0].m2End, 'ready', 'the sample says which mark ended M2');
+  const withMenu = summarize([{ ...v1, marks: [{ name: 'ready', at: T0 + 100 }, { name: 'menuReady', at: T0 + 300 }] }, v1, v1], { recordOnly: true });
+  assert.deepEqual([withMenu.samples[0].m2, withMenu.samples[0].m2End], [300, 'menuReady'], 'a record-only record that has the menu mark uses it');
   const none = summarize([{ ...v1, marks: [] }, v1, v1], { recordOnly: true });
   assert.equal(none.pass, false);
 });
@@ -196,15 +216,15 @@ test('statistics: min, median (mean of the middle two when even) and max of the 
   assert.equal(stats([]), null);
 });
 
-test('the JSON shape of a result: schema, kind, limits, place, samples without their problems, the three statistics, the verdict', () => {
+test('the JSON shape of a result: schema, kind, limits, place, samples without their problems, the statistics, the verdict', () => {
   const result = summarize([raw({ sample: 1 }), raw({ sample: 2 }), raw({ sample: 3 })]);
 
-  assert.deepEqual(Object.keys(result), ['schema', 'kind', 'recordOnly', 'limits', 'location', 'platform', 'vscodeVersion', 'samples', 'm1', 'hostDelay', 'm2', 'm3', 'steps', 'pass', 'problems']);
+  assert.deepEqual(Object.keys(result), ['schema', 'kind', 'recordOnly', 'limits', 'location', 'platform', 'vscodeVersion', 'samples', 'm1', 'hostDelay', 'm2', 'm3', 'ready', 'firstPaint', 'steps', 'pass', 'problems']);
   assert.equal(result.kind, 'coai-cold-start');
   assert.equal(result.schema, 1);
   const { steps, ...numbers } = result.samples[0];
-  assert.deepEqual(numbers, { sample: 1, startedActive: false, location: 'local', platform: 'linux', vscodeVersion: '1.99.0', m1: 12, hostDelay: 40, m2: 800, m3: 700 });
-  assert.deepEqual(steps.map((one) => one.name), ['eval', 'activateStart', 'activateReturn', 'viewResolve', 'firstData', 'ready'], 'each sample keeps its steps, oldest first');
+  assert.deepEqual(numbers, { sample: 1, startedActive: false, location: 'local', platform: 'linux', vscodeVersion: '1.99.0', m1: 12, hostDelay: 40, m2: 800, m2End: 'menuReady', m3: 700, ready: 790, firstPaint: null });
+  assert.deepEqual(steps.map((one) => one.name), ['eval', 'activateStart', 'activateReturn', 'viewResolve', 'firstData', 'ready', 'menuReady'], 'each sample keeps its steps, oldest first');
   assert.deepEqual(JSON.parse(JSON.stringify(result)), result, 'the result survives JSON, so what a file holds is what the verdict said');
 });
 

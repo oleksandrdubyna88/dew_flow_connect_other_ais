@@ -11,16 +11,20 @@
  *       entry of 3 KB — which is not the entry's time. That delay is now {@link hostDelay}.)</li>
  *   <li><b>hostDelay</b> — `activateStart.at - eval.at`: the time between the host evaluating the entry's module and calling `activate`.
  *       Recorded, never a limit: it is the editor's, not ours.</li>
- *   <li><b>M2</b> — the driver's clock, started just before it runs `workbench.view.extension.coai`, to the sidebar's webview
- *       `ready` acknowledgement reaching the host: `ready.at - t0`, using the FIRST `ready` made at or after `t0`. Limit 2000 ms,
- *       and the MAXIMUM of the samples counts.</li>
+ *   <li><b>M2</b> — the driver's clock, started just before it runs `workbench.view.extension.coai`, to the moment the REAL sidebar menu is shown
+ *       and usable: the webview's `menuReady` message reaching the host, `menuReady.at - t0`, using the FIRST `menuReady` made at or after `t0`.
+ *       A page says it only when it shows every section header and none of them is inert or hidden (`src/sidebarMenu.ts`); a skeleton, or an
+ *       inert copy of an old page, never says it. Limit 2000 ms, and the MAXIMUM of the samples counts. <b>Definition changed 2026-11-23</b> (owner
+ *       rule): M2 used to end at `ready`, the page's first acknowledgement. `ready` and `firstPaint` are still recorded, as marks and as
+ *       {@link deriveSample}'s `ready` / `firstPaint` (ms after the clock), and judged by nothing.</li>
  *   <li><b>M3</b> — the same clock to the first state handed to the webview (`firstData`). Recorded, never a limit.</li>
  * </ul>
  *
  * <p><b>What makes a sample not count.</b> The measure is a COLD start, so a sample whose extension was already active when
- * the clock started is refused (restored view state activated it before the clock), and so is a sample with no `ready` made
- * after the clock started — a missing acknowledgement is a failure, never a zero. `recordOnly` (the v1 baseline) turns the
- * limits off and lets the extension have been active, because v1 activates itself at start-up (`onStartupFinished`).</p>
+ * the clock started is refused (restored view state activated it before the clock), and so is a sample with no `menuReady` made
+ * after the clock started — a missing menu is a failure, never a zero. `recordOnly` (the v1 baseline) turns the
+ * limits off and lets the extension have been active, because v1 activates itself at start-up (`onStartupFinished`); v1 has no menu mark, so
+ * a record-only sample without `menuReady` ends M2 at its `ready` (the sample says which, `m2End`).</p>
  *
  * <p><b>The steps.</b> Every mark of a sample is a row of the per-step table ({@link stepsTable}): its time since the clock, and the time since the
  * step before it. The old activation and the sidebar's first render name their phases (`src/measureMarks.ts`), so the table shows where M2 goes.</p>
@@ -31,7 +35,7 @@
 
 export const SCHEMA = 1;
 
-/** The limits of the design: M2 (command to ready ack) at most 2000 ms in every sample, M1 (own time of the entry) at most 100 ms. */
+/** The limits of the design: M2 (command to the real menu, `menuReady`) at most 2000 ms in every sample, M1 (own time of the entry) at most 100 ms. */
 export const LIMITS = Object.freeze({ m2MaxMs: 2000, m1MaxMs: 100 });
 
 /** How many cold launches make one measurement. */
@@ -74,13 +78,17 @@ export function deriveSample(raw, { recordOnly = false } = {}) {
   const evaluated = first(marks, 'eval');
   const hostDelay = evaluated !== undefined && started !== undefined ? started.at - evaluated.at : null;
 
+  // M2 ends when the real menu works. The v1 baseline (record-only) has no such mark: it ends at its `ready`, and the sample says so.
+  const menu = first(marks, 'menuReady', t0);
   const ready = first(marks, 'ready', t0);
-  const m2 = ready === undefined ? null : ready.at - t0;
-  if (ready === undefined) {
-    problems.push(marks.some((one) => one.name === 'ready')
-      ? 'the only ready acknowledgement is older than the driver clock: no fresh ack'
-      : 'no ready acknowledgement from the sidebar: the webview never said it had painted');
+  const end = menu ?? (recordOnly ? ready : undefined);
+  const m2 = end === undefined ? null : end.at - t0;
+  if (end === undefined) {
+    problems.push(marks.some((one) => one.name === 'menuReady')
+      ? 'the only menuReady is older than the driver clock: no fresh sign that the menu works'
+      : 'no menuReady from the sidebar: the real menu was never shown and usable (a skeleton or an inert page does not count)');
   }
+  const paint = first(marks, 'firstPaint', t0);
   const data = first(marks, 'firstData', t0);
   const m3 = data === undefined ? null : data.at - t0;
 
@@ -93,7 +101,10 @@ export function deriveSample(raw, { recordOnly = false } = {}) {
     m1: round(m1),
     hostDelay: round(hostDelay),
     m2: round(m2),
+    m2End: end?.name ?? null,
     m3: round(m3),
+    ready: round(ready === undefined ? null : ready.at - t0),
+    firstPaint: round(paint === undefined ? null : paint.at - t0),
     steps: stepsOf(marks, t0),
     problems,
   };
@@ -147,7 +158,7 @@ export function aggregateSteps(samples) {
 
 /** The one line of a log: the three numbers, and the host's delay beside M1. */
 export function summaryLine(result) {
-  return `cold start (${result.location}): M1 ${result.m1?.max ?? 'n/a'} ms max (activateStart to activateReturn), host delay ${JSON.stringify(result.hostDelay)}, M2 ${JSON.stringify(result.m2)}, M3 ${JSON.stringify(result.m3)}`;
+  return `cold start (${result.location}): M1 ${result.m1?.max ?? 'n/a'} ms max (activateStart to activateReturn), host delay ${JSON.stringify(result.hostDelay)}, M2 (to menuReady) ${JSON.stringify(result.m2)}, ready ${JSON.stringify(result.ready)}, M3 ${JSON.stringify(result.m3)}`;
 }
 
 const pad = (text, width) => String(text).padEnd(width);
@@ -202,6 +213,8 @@ export function summarize(raws, { expected = SAMPLES, recordOnly = false, limits
   const hostDelay = stats(samples.map((one) => one.hostDelay));
   const m2 = stats(samples.map((one) => one.m2));
   const m3 = stats(samples.map((one) => one.m3));
+  const ready = stats(samples.map((one) => one.ready));
+  const firstPaint = stats(samples.map((one) => one.firstPaint));
   const locations = [...new Set(samples.map((one) => one.location))];
   if (locations.length > 1) {
     problems.push(`the samples ran in different places: ${locations.join(', ')}`);
@@ -229,6 +242,8 @@ export function summarize(raws, { expected = SAMPLES, recordOnly = false, limits
     hostDelay,
     m2,
     m3,
+    ready,
+    firstPaint,
     steps: aggregateSteps(samples),
     pass: problems.length === 0,
     problems,
@@ -238,7 +253,7 @@ export function summarize(raws, { expected = SAMPLES, recordOnly = false, limits
 const cell = (value) => (value === null || value === undefined ? 'n/a' : String(value));
 const triple = (one) => (one === null ? 'n/a' : `${one.min} / ${one.median} / ${one.max}`);
 
-/** The markdown row `research/RESULTS_v2_start.md` takes: date, commit, label, place, platform, M1 max, M2 and M3 min/median/max, verdict. */
+/** The markdown row `research/RESULTS_v2_start.md` takes: date, commit, label, place, platform, M1 max, M2 and M3 min/median/max, verdict. M2 is to `menuReady` from 2026-11-23; the rows above that date ended at `ready`. */
 export function tableRow(result, { date, commit, label }) {
   const verdict = result.recordOnly ? 'recorded' : result.pass ? 'pass' : 'FAIL';
   const cells = [date, commit, label, cell(result.location), cell(result.platform), cell(result.m1?.max), triple(result.m2), triple(result.m3), verdict];

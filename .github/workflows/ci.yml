@@ -651,7 +651,7 @@ jobs:
   #
   # Each of three samples is its OWN launch of a real VS Code with a fresh user-data directory, extensions directory, workspace and data directory
   # (`scripts/run-host.mjs measure`); the scenario asserts the extension is not active, starts its clock, runs `workbench.view.extension.coai`,
-  # waits for a fresh `ready` acknowledgement and reads the marks through `coai.__measure`. It fails when the MAXIMUM M2 is over 2000 ms, M1 over
+  # waits for a fresh `menuReady` (the real sidebar menu is shown and usable; owner rule 2026-11-23) and reads the marks through `coai.__measure`. It fails when the MAXIMUM M2 is over 2000 ms, M1 over
   # 50 ms, or an acknowledgement is missing; M3 (first data) is recorded. Linux runs under xvfb exactly like the job above; Windows needs no display.
   # The numbers are in the log and in the `cold-start-<os>` artifact; the Remote-WSL leg is run by hand (`scripts/measure-remote-wsl.ps1`).
   measure:

@@ -12,7 +12,7 @@
     2. installs the coai VSIX and the tiny driver VSIX (scripts/measure-driver) with `code --remote wsl+<distro> --install-extension`;
     3. launches `code --remote wsl+<distro> <fresh folder>` with COAI_MEASURE=1 (passed to the distro through WSLENV);
     4. the driver extension, running in the remote extension host, checks that the coai extension is NOT active, starts the clock, runs
-       workbench.view.extension.coai, waits for a fresh `ready` ack, reads the marks through `coai.__measure` and writes coai-measure-result.json
+       workbench.view.extension.coai, waits for a fresh `menuReady` (the real sidebar menu is shown and usable), reads the marks through `coai.__measure` and writes coai-measure-result.json
        in the workspace folder; the script reads it back over \\wsl.localhost\<distro>\...;
     5. closes the window, removes what it installed.
   Then scripts/coldstart-report.mjs (node) applies the same rule as CI: the MAXIMUM M2 at most 2000 ms, M1 at most 50 ms, a fresh ack in every sample.

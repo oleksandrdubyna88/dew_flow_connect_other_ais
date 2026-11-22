@@ -26,10 +26,10 @@ export function activate(context: vscode.ExtensionContext): ShellExports {
     vscode.window.registerWebviewViewProvider(VIEW_PANEL, {
       resolveWebviewView: (view, resolveContext, token) => {
         mark('viewResolve');
-        // The sidebar module (v2 E4) paints the last snapshot of the sidebar NOW and loads the legacy module after the page says it is ready, handing it
-        // this same view. If it cannot be loaded or throws, the legacy module resolves the view alone, as it did before it existed.
+        // The sidebar module (v2 E4) draws the sidebar's real menu NOW and, after the page says the menu is ready, loads the legacy module and hands it
+        // this same view, and starts chat. If it cannot be loaded or throws, the legacy module resolves the view alone, as it did before it existed.
         return lazy<SidebarModule>(MODULE_SIDEBAR)
-          .then((sidebar) => sidebar.resolveSidebar(context, view, resolveContext, token, legacy))
+          .then((sidebar) => sidebar.resolveSidebar(context, view, resolveContext, token, legacy, () => chat().then((module) => module.start(context))))
           .catch(() => legacy().then((module) => module.resolveView(context, view, resolveContext, token)));
       },
     }),

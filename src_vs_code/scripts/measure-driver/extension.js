@@ -1,7 +1,7 @@
 // The driver of the cold-start measurement, for a host where a test runner cannot go: a Remote-WSL window (scripts/measure-remote-wsl.ps1).
 // It runs the SAME steps as src/test/host/measureScenario.ts and writes the SAME raw record (schema 1; scripts/coldstart-lib.mjs reads it):
 //   1. the ConnectOtherAIs extension must not be active yet;  2. the clock starts HERE, just before the command is dispatched;
-//   3. `workbench.view.extension.coai` opens the sidebar;     4. wait for a `ready` mark made at or after the clock;
+//   3. `workbench.view.extension.coai` opens the sidebar;     4. wait for a `menuReady` mark (the real menu is shown and usable) made at or after the clock;
 //   5. read the marks through `coai.__measure` (registered because COAI_MEASURE=1 reached the extension host) and write the record.
 // The record goes to `coai-measure-result.json` in the first workspace folder, which the script opened and reads back over \\wsl.localhost.
 // On any failure the file holds `{ "schema": 1, "error": "..." }` so the script says why instead of timing out. The window is closed after.
@@ -46,7 +46,7 @@ async function measure() {
   let report;
   for (const deadline = Date.now() + WAIT_MS; Date.now() < deadline;) {
     report = (await marksNow()) ?? report;
-    if (report !== undefined && report.marks.some((one) => one.name === 'ready' && one.at >= t0)) {
+    if (report !== undefined && report.marks.some((one) => one.name === 'menuReady' && one.at >= t0)) {
       break;
     }
     await sleep(25);

@@ -1,22 +1,30 @@
-// The `sidebar` module (v2 E4 story s3-sidebar): the sidebar's FIRST paint, which does not wait for the legacy bundle.
+// The `sidebar` module (v2 E4 story s3-sidebar): the sidebar's REAL MENU, which does not wait for the legacy bundle.
 // `../measure` FIRST: this bundle's own copy of the recorder evaluates before anything else here, and that moment is `moduleEval:sidebar`.
 //
 // What it does, in order, for a view VS Code asks the shell to resolve:
-//   1. sets the view's options and writes the page: the sidebar's LAST SNAPSHOT (the page the old code last painted, `src/sidebarSnapshot.ts`) with a
-//      "Refreshing…" line and a fresh nonce, or the skeleton when there is none (or it is damaged, from another build, or credential-like);
-//   2. listens for that page's `ready`, which is the cold-start measurement's M2;
-//   3. after `ready` (or after FALLBACK_MS if the page never says it), loads the legacy module in the background and hands it THIS view; the legacy
-//      panel provider repaints the page with live data, as it always has. The listener is removed first, so the old code is the view's only reader.
-// It imports `node:fs` and `node:path` (the snapshot's reader) and `node:crypto` (the nonce), and nothing of the old tree: the snapshot's format
-// is a small file of its own. The bundle's budget and allowed inputs are in `scripts/bundle-entries.json`.
+//   1. sets the view's options and writes the menu (`src/sidebarMenu.ts`): the section headers with the old panel's words, order and colours, every one a
+//      `details` element that opens at once, each with a "loading…" line inside until live content exists. The page says `menuReady` when its headers are
+//      on screen and usable; that message is the end of the cold-start measurement (owner, 2026-11-23: the start is over when the REAL menu is shown and
+//      clickable, not when a skeleton or an inert snapshot is);
+//   2. after `menuReady` (or after a person opens a section, or after FALLBACK_MS if the page never says it) loads the legacy module in the background and hands
+//      it THIS view with the sections the person opened or closed; the legacy panel provider repaints the page with live data, as it always has.
+//      The listener stays until the old code has the view, so no toggle in between is lost, and is removed just before the hand-over: the old code is then
+//      the view's only reader;
+//   3. after `menuReady` also starts the chat module in the background, so its context keys (`coai.terminalReadsSession`, the skip-list check) exist within
+//      seconds. It runs on a timer after the message handler returned: it never delays `menuReady`.
+// It imports `node:crypto` (the nonce) and the small files of the menu, and nothing of the old tree. The bundle's budget and allowed inputs are in
+// `scripts/bundle-entries.json`.
 import { mark } from '../measure';
 import type * as vscode from 'vscode';
 import type { ShellModule, SidebarModule } from '../lazy';
-import { extensionVersionOf, failedPage, readSnapshot, skeletonPage, snapshotPage } from '../../src/sidebarSnapshot';
+import { failedPage, MENU_IDS, menuPage } from '../../src/sidebarMenu';
 import { webviewNonce } from '../../src/webviewNonce';
 
-/** How long the page has to say `ready` before the old code is loaded anyway (a webview that is not shown yet may be slow to run its script). */
-export const FALLBACK_MS = 1500;
+/**
+ * How long the page has to say `menuReady` before the old code is loaded anyway (a webview that is not shown yet may be slow to run its script). Long on
+ * purpose: the old code loads in one block of the host's thread, and a load that began while the page's message was on its way would be counted as the menu's time.
+ */
+export const FALLBACK_MS = 5000;
 
 /** What the module needs from the world besides the view; a test replaces the timers. */
 export interface SidebarSeams {
@@ -31,44 +39,142 @@ const REAL: SidebarSeams = {
   log: (message, error) => { console.error(`ConnectOtherAIs: ${message}`, error); },
 };
 
-/** The page the view opens on: the last snapshot with a fresh nonce, else the skeleton. A read that fails is no snapshot. */
-export function firstPageFor(context: vscode.ExtensionContext): string {
-  const nonce = webviewNonce();
-  const stored = readSnapshot(context.globalStorageUri.fsPath, extensionVersionOf(context));
-
-  return stored === undefined ? skeletonPage(nonce) : snapshotPage(stored, nonce);
-}
-
-/** The first paint: the view's options, then its page, then the mark. */
-function paintFirst(context: vscode.ExtensionContext, view: vscode.WebviewView): void {
+/** The first paint: the view's options, then the menu, then the mark. */
+function paintFirst(view: vscode.WebviewView): void {
   // The same options the old panel provider sets, so its own assignment later is no change to the webview.
   view.webview.options = { enableScripts: true };
-  view.webview.html = firstPageFor(context);
+  view.webview.html = menuPage(webviewNonce());
   mark('firstPaint');
 }
 
-/** Loads the old code and gives it the view; when that fails the page says so, because "Refreshing…" for ever would be a lie. */
-function loadAndHandOver(
-  seams: SidebarSeams,
-  context: vscode.ExtensionContext,
-  view: vscode.WebviewView,
-  resolveContext: vscode.WebviewViewResolveContext,
-  token: vscode.CancellationToken,
-  legacy: () => Promise<ShellModule>,
-): void {
-  legacy()
-    .then((module) => module.resolveView(context, view, resolveContext, token))
-    .catch((error: unknown) => {
-      seams.log('the sidebar could not be handed to the main module', error);
-      try {
-        view.webview.html = failedPage(error instanceof Error ? error.message : String(error));
-      } catch {
-        // The view was disposed under the write: there is nobody to tell.
-      }
-    });
+interface Said {
+  readonly type?: unknown;
+  readonly id?: unknown;
+  readonly open?: unknown;
 }
 
-const isReady = (message: unknown): boolean => (message as { readonly type?: unknown } | null)?.type === 'ready';
+const saidBy = (message: unknown): Said => (typeof message === 'object' && message !== null ? message as Said : {});
+const typeOf = (said: Said): string => (typeof said.type === 'string' ? said.type : '');
+
+/** The id of a section of the menu a page named, or `undefined` for anything else. */
+const menuIdOf = (said: Said): string | undefined => (typeof said.id === 'string' && MENU_IDS.includes(said.id) ? said.id : undefined);
+
+/** What the module is given for one view: the old code's and chat's loaders, and the things a hand-over passes on. */
+interface World {
+  readonly context: vscode.ExtensionContext;
+  readonly view: vscode.WebviewView;
+  readonly resolveContext: vscode.WebviewViewResolveContext;
+  readonly token: vscode.CancellationToken;
+  readonly legacy: () => Promise<ShellModule>;
+  readonly startChat: () => Promise<unknown>;
+}
+
+/** One resolved view's life: the menu, what the person does on it, and the hand-over of the view to the old code. */
+class MenuSession {
+  /** The hand-over has happened or the view has gone: the listener, the disposal watch and the fallback timer are released. */
+  private over = false;
+  /** The old code has been asked for (it may still be loading). */
+  private asked = false;
+  private chatAsked = false;
+  private fallback: unknown;
+  /** What the person did on the menu: a section is in one of these two sets, the one of its last press. */
+  private readonly opened = new Set<string>();
+  private readonly closed = new Set<string>();
+  private readonly subscriptions: vscode.Disposable[] = [];
+  private readonly heard: Readonly<Record<string, (said: Said) => void>> = {
+    ready: () => { mark('ready'); },
+    // The mark FIRST, in the handler; everything that costs anything is on a timer after it.
+    menuReady: () => { mark('menuReady'); this.seams.setTimeout(this.handOver, 0); this.seams.setTimeout(this.askChat, 0); },
+    section: (said) => { this.toggled(said); },
+  };
+
+  constructor(private readonly seams: SidebarSeams, private readonly world: World) {}
+
+  start(): void {
+    this.subscriptions.push(
+      this.world.view.webview.onDidReceiveMessage((message: unknown) => { this.hear(message); }),
+      // A view that goes away before the hand-over is not handed over: VS Code resolves a new one when the sidebar is shown again.
+      this.world.view.onDidDispose(() => { this.release(); }),
+    );
+    this.fallback = this.seams.setTimeout(() => { this.handOver(); this.askChat(); }, FALLBACK_MS);
+  }
+
+  private hear(message: unknown): void {
+    if (this.over) {
+      return;
+    }
+    const said = saidBy(message);
+    const run = Object.hasOwn(this.heard, typeOf(said)) ? this.heard[typeOf(said)] : undefined;
+    run?.(said);
+  }
+
+  private release(): void {
+    this.over = true;
+    this.seams.clearTimeout(this.fallback);
+    for (const one of this.subscriptions.splice(0)) {
+      one.dispose();
+    }
+  }
+
+  private fail(error: unknown): void {
+    this.seams.log('the sidebar could not be handed to the main module', error);
+    this.release();
+    try {
+      this.world.view.webview.html = failedPage(error instanceof Error ? error.message : String(error));
+    } catch {
+      // The view was disposed under the write: there is nobody to tell.
+    }
+  }
+
+  /** Loads the old code and gives it this view, with what the person did on the menu. The listener stays until that moment, so no press in between is lost. */
+  private readonly handOver = (): void => {
+    if (this.asked || this.over) {
+      return;
+    }
+    this.asked = true;
+    this.seams.clearTimeout(this.fallback);
+    this.world.legacy()
+      .then((module) => this.give(module))
+      .catch((error: unknown) => { this.fail(error); });
+  };
+
+  private give(module: ShellModule): void | Thenable<void> {
+    if (this.over) {
+      // The view went away while the old code loaded: VS Code resolves a new one when the sidebar is shown again.
+      return undefined;
+    }
+    const handed = { opened: [...this.opened], closed: [...this.closed] };
+    this.release();
+
+    return module.resolveView(this.world.context, this.world.view, this.world.resolveContext, this.world.token, handed);
+  }
+
+  private readonly askChat = (): void => {
+    if (!this.chatAsked) {
+      this.chatAsked = true;
+      this.world.startChat().catch((error: unknown) => { this.seams.log('chat could not be started in the background', error); });
+    }
+  };
+
+  private toggled(said: Said): void {
+    const id = menuIdOf(said);
+    if (id === undefined) {
+      return;
+    }
+    const open = said.open === true;
+    this.record(id, open);
+    if (open) {
+      // A section that is open has nothing to show but "loading…": the live page is asked for NOW, not on the timer.
+      this.seams.setTimeout(this.handOver, 0);
+    }
+  }
+
+  private record(id: string, open: boolean): void {
+    const [now, before] = open ? [this.opened, this.closed] : [this.closed, this.opened];
+    before.delete(id);
+    now.add(id);
+  }
+}
 
 export function resolveWith(
   seams: SidebarSeams,
@@ -77,39 +183,12 @@ export function resolveWith(
   resolveContext: vscode.WebviewViewResolveContext,
   token: vscode.CancellationToken,
   legacy: () => Promise<ShellModule>,
+  startChat: () => Promise<unknown>,
 ): void {
-  paintFirst(context, view);
-  // `over`: the hand-over has happened or the view has gone. Either way the listener, the disposal watch and the fallback timer are released.
-  const hold = { over: false, fallback: undefined as unknown };
-  const subscriptions: vscode.Disposable[] = [];
-  const release = (): void => {
-    hold.over = true;
-    seams.clearTimeout(hold.fallback);
-    for (const one of subscriptions.splice(0)) {
-      one.dispose();
-    }
-  };
-  const handOver = (): void => {
-    if (!hold.over) {
-      release();
-      loadAndHandOver(seams, context, view, resolveContext, token, legacy);
-    }
-  };
-  subscriptions.push(
-    // Only the first `ready` of this document counts, and it is the one thing this module reads: every other message is dropped, because the page
-    // is inert until it is replaced (`snapshotPage`), so a person has nothing here to send.
-    view.webview.onDidReceiveMessage((message: unknown) => {
-      if (!hold.over && isReady(message)) {
-        mark('ready');
-        seams.setTimeout(handOver, 0);
-      }
-    }),
-    // A view that goes away before the hand-over is not handed over: VS Code resolves a new one when the sidebar is shown again.
-    view.onDidDispose(release),
-  );
-  hold.fallback = seams.setTimeout(handOver, FALLBACK_MS);
+  paintFirst(view);
+  new MenuSession(seams, { context, view, resolveContext, token, legacy, startChat }).start();
 }
 
-export const resolveSidebar: SidebarModule['resolveSidebar'] = (context, view, resolveContext, token, legacy) => {
-  resolveWith(REAL, context, view, resolveContext, token, legacy);
+export const resolveSidebar: SidebarModule['resolveSidebar'] = (context, view, resolveContext, token, legacy, startChat) => {
+  resolveWith(REAL, context, view, resolveContext, token, legacy, startChat);
 };

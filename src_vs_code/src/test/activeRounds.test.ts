@@ -315,8 +315,8 @@ test('a live patch that carries the same HTML as last time does not touch the DO
   for (const region of LIVE_REGION_IDS) {
     assert.equal(page.regionWrites(`live-${region}`), 0, `an identical push rebuilt the ${region} region`);
   }
-  page.deliver({ type: 'live', ...liveRegions(panelState('rounds', { cadence: [] }), NOW) });
-  assert.equal(page.regionWrites('live-cadence'), 1, 'a push that changed the cadence did not replace its region');
+  page.deliver({ type: 'live', ...liveRegions(state([session([round()])]), NOW) });
+  assert.equal(page.regionWrites('live-rounds'), 1, 'a push that changed the rounds did not replace their region');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -333,19 +333,15 @@ const cadence: readonly CadenceLine[] = [{
   },
 }];
 
-test('the cadence line is in its own section as the page renders it, and a live push to the page replaces it', () => {
-  // RUN, not matched (PR #556, CodeRabbit; `.agents/PROJECT.md`): the panel's own script receives each
-  // live push and replaces the region, so what is on screen is what this watches.
+test('Consultation cadence is no section of the sidebar since v2 (owner, 2026-11-23): its lines are drawn nowhere on the page, first paint or live push, and no region is left for them', () => {
+  // RUN, not matched: the panel's own script receives the push, and what is on screen is what this watches.
   const page = runPanel(panelState('rounds', { cadence }));
-  assert.ok(page.region('live-cadence').includes('PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due'),
-    'the first paint does not draw the line');
+  assert.ok(!page.html.includes('PLAN_x.md'), 'the first paint draws a cadence line');
+  assert.equal(page.region('live-cadence'), '', 'there is a region for the cadence');
+  assert.equal((LIVE_REGION_IDS as readonly string[]).includes('cadence'), false, 'the cadence is still a live region');
 
-  const moved = [{ ...cadence[0]!, answer: { ...cadence[0]!.answer, epicsClosed: [1, 2, 3, 4, 5] } }];
-  page.deliver({ type: 'live', ...liveRegions(panelState('rounds', { cadence: moved }), NOW) });
-  assert.ok(page.region('live-cadence').includes('epics closed 5/14'), 'a live push did not bring the new line');
-
-  page.deliver({ type: 'live', ...liveRegions(panelState('rounds', { cadence: [] }), NOW) });
-  assert.ok(!page.region('live-cadence').includes('PLAN_x.md'), 'the line stayed on screen after the cadence went');
+  page.deliver({ type: 'live', ...liveRegions(panelState('rounds', { cadence }), NOW), cadence: '<div>PLAN_x.md</div>' });
+  assert.equal(page.regionWrites('live-cadence'), 0, 'a push that names the old region wrote somewhere');
 });
 
 test('the rounds region is exactly the running rounds, with a cadence line or without one', () => {

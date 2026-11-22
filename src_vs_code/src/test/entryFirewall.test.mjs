@@ -55,9 +55,10 @@ test('a planted 20 KiB literal fails the byte budget', async () => {
 const sidebar = config.bundles.find((bundle) => bundle.id === 'sidebar');
 const sidebarSource = readFileSync(join(ROOT, sidebar.entry), 'utf8');
 
-test('the sidebar module is under a firewall and a budget of its own: 96 KiB, its two files of src/, and Node\'s fs, path and crypto only', async () => {
+test('the sidebar module is under a firewall and a budget of its own: 96 KiB, the menu\'s small files of src/, and Node\'s crypto only (no fs: it replays no snapshot)', async () => {
   assert.equal(sidebar.budgetBytes, 98304);
-  assert.deepEqual(sidebar.firewall.inputs, ['shell/modules/sidebar.ts', 'shell/measure.ts', 'src/sidebarSnapshot.ts', 'src/webviewNonce.ts']);
+  assert.deepEqual(sidebar.firewall.inputs, ['shell/modules/sidebar.ts', 'shell/measure.ts', 'src/sidebarMenu.ts', 'src/panelSurface.ts', 'src/escapeHtml.ts', 'src/asText.ts', 'src/roleTone.ts', 'src/webviewHtml.ts', 'src/webviewNonce.ts']);
+  assert.deepEqual(sidebar.firewall.imports, ['vscode', 'node:crypto', 'crypto']);
   assert.deepEqual(await checkBundle(sidebar, config), []);
 });
 

@@ -6,12 +6,27 @@ import type * as vscode from 'vscode';
 import { LOADING, mark } from './measure';
 import { MODULE_LEGACY, MODULE_RUNTIME, SHELL_KEY_NAME } from './ids';
 
+/** What the person did on the menu the sidebar module drew first, handed to the old code with the view (v2 E4). */
+export interface SidebarHandOver {
+  /** The sections they opened. */
+  readonly opened: readonly string[];
+  /** The sections they closed again. */
+  readonly closed: readonly string[];
+}
+
 /** What every module under `dist/modules/<id>.js` exports; the shell calls these and nothing else. */
 export interface ShellModule {
   /** Runs a command the shell registered; the answer goes back to `executeCommand`. */
   readonly command: (context: vscode.ExtensionContext, id: string, args: readonly unknown[]) => unknown;
   /** Resolves a view the shell registered a provider for. */
-  readonly resolveView: (context: vscode.ExtensionContext, view: vscode.WebviewView, resolveContext: vscode.WebviewViewResolveContext, token: vscode.CancellationToken) => void | Thenable<void>;
+  readonly resolveView: (
+    context: vscode.ExtensionContext,
+    view: vscode.WebviewView,
+    resolveContext: vscode.WebviewViewResolveContext,
+    token: vscode.CancellationToken,
+    /** Only the sidebar module gives it. */
+    handOver?: SidebarHandOver,
+  ) => void | Thenable<void>;
   /** Answers a `vscode://` link addressed to this extension. */
   readonly handleUri: (context: vscode.ExtensionContext, uri: vscode.Uri) => void | Thenable<void>;
   /** What `activate` hands to a test host: the module's own start-up, run once. */
@@ -21,8 +36,10 @@ export interface ShellModule {
 }
 
 /**
- * What the sidebar module exports (v2 E4): it paints the sidebar's last snapshot at once, and hands the SAME view to the legacy module
- * (`legacy().resolveView`) after the page has said it is ready. `legacy` is the entry's own loader, so there is one copy of the old code and one registration.
+ * What the sidebar module exports (v2 E4): it draws the sidebar's real menu at once, and hands the SAME view to the legacy module
+ * (`legacy().resolveView`) after the page has said the menu is ready. `legacy` is the entry's own loader, so there is one copy of the old code and one
+ * registration. `startChat` loads the chat module and starts it (the entry's own loader again): the sidebar module asks for it once the menu is ready, so the
+ * chat's context keys appear without anybody opening a chat.
  */
 export interface SidebarModule {
   readonly resolveSidebar: (
@@ -31,6 +48,7 @@ export interface SidebarModule {
     resolveContext: vscode.WebviewViewResolveContext,
     token: vscode.CancellationToken,
     legacy: () => Promise<ShellModule>,
+    startChat: () => Promise<unknown>,
   ) => void;
 }
 
