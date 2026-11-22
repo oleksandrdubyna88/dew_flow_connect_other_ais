@@ -1,0 +1,62 @@
+{
+  "$comment": "What `coai-mcp --setup-clients` / `--install` knows about each client's MCP configuration, as MEASURED in a scratch HOME (v2 E3.S6). A client is written only when this says measured; agy stays `unmeasured` until the Windows half is measured too (the spec's measurement is Linux AND Windows). Facts are observed behaviour of the versions named, not documentation.",
+  "measuredOn": "2026-11-22",
+  "claude": {
+    "version": "2.1.330",
+    "status": "measured",
+    "file": "${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json",
+    "key": "mcpServers.coai",
+    "writeWith": "claude mcp add-json --scope user coai -  (JSON on stdin); claude mcp remove --scope user coai",
+    "notes": [
+      "an existing name makes add-json exit 1 and change nothing, so an update is remove + add-json",
+      "a malformed file makes it exit 1, leave the file unchanged and write a .corrupted copy",
+      "`claude mcp get` and `claude mcp list` START the server for a health check: never called in product code"
+    ]
+  },
+  "codex": {
+    "version": "codex-cli 0.171.0",
+    "status": "measured",
+    "file": "${CODEX_HOME:-$HOME/.codex}/config.toml",
+    "key": "[mcp_servers.coai]",
+    "writeWith": "codex mcp add [--env K=V]... coai -- <command> [args]; codex mcp remove coai",
+    "notes": [
+      "add REPLACES an existing entry: its old env and startup_timeout_sec are lost, so an update passes the old env again",
+      "a rewrite dropped an inline comment on another server's line",
+      "malformed TOML makes it exit 1 and leave the file unchanged",
+      "it warns on stderr for a HOME under /tmp: only stdout is read"
+    ]
+  },
+  "agy": {
+    "version": "1.5.14",
+    "status": "unmeasured",
+    "reason": "measured on Linux only; the Windows repeat of the spec's measurement has not been run, so the installer writes nothing for agy",
+    "measured": {
+      "linux": {
+        "file": "~/.gemini/config/mcp_config.json",
+        "key": "mcpServers.<name>",
+        "entryShape": { "command": "<path>", "disabled": false },
+        "writeWith": "agy mcp add [--env K=V]... <name> <command> [args]  (flags BEFORE the name; `--` before a command that starts with `-`); agy mcp remove <name>",
+        "scratchHomeStart": "an empty HOME has no .gemini folder; the first add creates ~/.gemini/config/mcp_config.json (mode 0644) and the folders",
+        "observed": [
+          { "case": "first add, fresh HOME", "exit": 0, "result": "file created: {\"mcpServers\":{\"coai-probe\":{\"command\":\"/bin/true\",\"disabled\":false}}}" },
+          { "case": "second add, another path, same name", "exit": 0, "result": "the entry is REPLACED (command changed); `Add or update`" },
+          { "case": "re-add without --env after an add with --env", "exit": 0, "result": "env is gone: the whole entry is replaced, like codex" },
+          { "case": "foreign entry with env, args and an unknown key present", "exit": 0, "result": "preserved by value; the FILE is re-serialised: keys sorted alphabetically, 2-space indent, `<` and `>` written as \\u003c \\u003e" },
+          { "case": "malformed JSON", "exit": 1, "result": "file unchanged; `Error: failed to parse <file>: failed to parse JSON config`; `agy mcp list` exits 1 too" },
+          { "case": "valid JSON that is not an object ([1,2])", "exit": 1, "result": "file unchanged; parse error" },
+          { "case": "mcpServers is not an object", "exit": 1, "result": "file unchanged; `failed to parse mcpServers`" },
+          { "case": "0-byte file, add", "exit": 0, "result": "treated as empty: the object is written" },
+          { "case": "0-byte file, remove", "exit": 1, "result": "`MCP server not found`; file stays 0 bytes" },
+          { "case": "remove, first time", "exit": 0, "result": "`Removed MCP server`" },
+          { "case": "remove, second time", "exit": 1, "result": "`Error: MCP server not found`; file unchanged" },
+          { "case": "remove with no file, no folder", "exit": 1, "result": "`not found`; nothing is created" },
+          { "case": "list with no file", "exit": 0, "result": "`No MCP servers configured.`" }
+        ]
+      },
+      "windows": {
+        "status": "not measured",
+        "todo": "repeat the cases above on Windows with a scratch USERPROFILE: the file's location, the path spelling in JSON, agy.exe's exit codes"
+      }
+    }
+  }
+}
