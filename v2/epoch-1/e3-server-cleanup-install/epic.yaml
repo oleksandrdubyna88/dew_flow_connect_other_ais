@@ -12,3 +12,4 @@ doneWhen:
   - "roles returns main AI, ORDERED model lists per role, complexity bands, Haiku kinds, work method"
   - "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent; NO AskUserQuestion hook"
   - "--band-json answers phrases, consultations, failures"
+  - "each removal story adds its rows to MigrationV2Tables with a fixture; answered/expired cards older than 30 days are archived"

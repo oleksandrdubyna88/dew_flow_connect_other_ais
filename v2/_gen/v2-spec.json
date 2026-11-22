@@ -572,7 +572,8 @@
               "coai ships and enforces no conventions; a repo that mounts them still has them read",
               "roles returns main AI, ORDERED model lists per role, complexity bands, Haiku kinds, work method",
               "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent; NO AskUserQuestion hook",
-              "--band-json answers phrases, consultations, failures"
+              "--band-json answers phrases, consultations, failures",
+              "each removal story adds its rows to MigrationV2Tables with a fixture; answered/expired cards older than 30 days are archived"
             ]
           },
           "stories": [
@@ -1166,7 +1167,8 @@
               "VSIX inspected: new shell, budgets, no dropped modules",
               "mcp + extension released; the owner's machines run 2.0",
               "a real plan → code round passes on 2.0",
-              "http/ contract suite live against the deployed Team server; new client vs old server and old extension vs new mcp checked"
+              "http/ contract suite live against the deployed Team server; new client vs old server and old extension vs new mcp checked",
+              "mcp released as 2.0.0 (the automatic --migrate-v2 runs only from major 2); release notes say to restart every client"
             ]
           }
         }
