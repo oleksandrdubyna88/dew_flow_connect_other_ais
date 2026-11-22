@@ -9,3 +9,4 @@ doneWhen:
   - "all chat host scenarios pass"
   - "M2 still ≤ 2000 ms"
   - "no escalation or cadence control or watcher in the bundle"
+  - "--setup-clients runs after every activation (after ready) and finishes an interrupted client update"

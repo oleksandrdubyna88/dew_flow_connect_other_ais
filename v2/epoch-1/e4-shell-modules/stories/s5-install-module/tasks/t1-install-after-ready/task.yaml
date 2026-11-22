@@ -10,3 +10,5 @@ files:
 dod:
   - id: d1
     item: "M2 does not include install work"
+  - id: d2
+    item: "after the binary check, runs coai --setup-clients (no --binary unless needed) once per activation, after the first ready; an interrupted Claude update is finished from its manifest (E3 plan-gate decision on finding 5)"

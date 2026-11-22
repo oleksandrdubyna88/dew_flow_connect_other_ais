@@ -1012,7 +1012,8 @@
               "sidebar polls only while visible",
               "all chat host scenarios pass",
               "M2 still ≤ 2000 ms",
-              "no escalation or cadence control or watcher in the bundle"
+              "no escalation or cadence control or watcher in the bundle",
+              "--setup-clients runs after every activation (after ready) and finishes an interrupted client update"
             ]
           },
           "stories": [
@@ -1156,6 +1157,10 @@
                     {
                       "id": "d1",
                       "item": "M2 does not include install work"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "after the binary check, runs coai --setup-clients (no --binary unless needed) once per activation, after the first ready; an interrupted Claude update is finished from its manifest (E3 plan-gate decision on finding 5)"
                     }
                   ]
                 }
