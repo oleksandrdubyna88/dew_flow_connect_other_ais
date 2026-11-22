@@ -171,7 +171,7 @@ public sealed class QuestionConsultService(
     /// <param name="sessionOf">Which review session the question is filed under — the service's own resolution of <c>document</c> / <c>feature</c>, handed in.</param>
     public async Task<string> AskAsync(
         string repoPath, string question, string contextText, string document, string feature,
-        Func<string, string, string, string, string> sessionOf, CancellationToken ct = default)
+        Func<string, string, string, string, string> sessionOf, CancellationToken ct = default, string workItem = "")
     {
         var options = settings.QuestionConsult;
         if (!options.Enabled)
@@ -197,7 +197,7 @@ public sealed class QuestionConsultService(
         }
 
         var (sha, branch) = await context.HeadAsync(repo, ct);
-        var record = NewRecord(repo, branch, sha, question.Trim(), contextText.Trim(), sessionOf(repo, branch, document, feature));
+        var record = NewRecord(repo, branch, sha, question.Trim(), contextText.Trim(), sessionOf(repo, branch, document, feature)) with { WorkItem = workItem };
 
         return Reply(await InTheRepositoryAsync(record, ct));
     }

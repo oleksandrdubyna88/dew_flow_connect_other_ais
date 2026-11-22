@@ -22,6 +22,9 @@ internal sealed record FeatureRequest(
     /// checkout's HEAD — only what the caller BELIEVES it is, held to it (§9.30).
     /// </summary>
     public string Head { get; init; } = string.Empty;
+
+    /// <summary>The plan item the call named in <c>workItem</c> — already checked and tidied by <see cref="WorkItems"/> — or empty when it named none.</summary>
+    public string WorkItem { get; init; } = string.Empty;
 }
 
 /// <summary>The two JSON arguments the caller wrote by hand, parsed and accepted — no I/O yet.</summary>
@@ -139,6 +142,7 @@ internal sealed class FeatureStage(
             (session, workingDir, sha, roundToken) => WorkAsync(request.RepoPath, call, range.Base, session, workingDir, sha, roundToken))
         {
             Feature = call.Plan.Identity,
+            WorkItem = request.WorkItem,
             // A full id, resolved once by the ref checks: the commit they passed is the commit read.
             Head = range.Head,
             WhenNobody = NobodyPolicy.RecordSkip,

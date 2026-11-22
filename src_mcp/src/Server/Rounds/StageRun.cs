@@ -47,6 +47,9 @@ internal sealed record StageRun(
     /// </summary>
     public string Document { get; init; } = string.Empty;
 
+    /// <summary>The plan item the call named (<see cref="WorkItems"/>, already checked and tidied), or empty — written on the round.</summary>
+    public string WorkItem { get; init; } = string.Empty;
+
     /// <summary>
     /// A refusal decided from the resolved commit alone, BEFORE any worktree is made or any reviewer
     /// launched — an empty sentence when the round may go on.

@@ -166,6 +166,12 @@ internal static class Program
         BandJson,
 
         /// <summary>
+        /// What each item of a plan cost the gate and the consultants, in one JSON object: <c>--plan-report &lt;feature-dir&gt; --json</c>, read from the rounds database — read-only, never makes the data directory.
+        /// See <see cref="PlanReportMode"/> (v2 E3.S8).
+        /// </summary>
+        PlanReport,
+
+        /// <summary>
         /// The roles table in one JSON object (<c>--format json</c>) or as Claude Code's SessionStart hook output (<c>--format claude-hook</c>) — read-only, never makes the data directory.
         /// See <see cref="Roles.RolesMode"/> (v2 E3.S7).
         /// </summary>
@@ -381,6 +387,7 @@ internal static class Program
                 "--kimi-clear-marker" => Startup.KimiClearMarker,
                 "--host-facts" => Startup.HostFacts,
                 "--band-json" => Startup.BandJson,
+                "--plan-report" => Startup.PlanReport,
                 "--roles" => Startup.Roles,
                 "--setup-clients" => Startup.SetupClients,
                 "--install" => Startup.Install,
@@ -496,6 +503,10 @@ internal static class Program
             case Startup.BandJson:
                 // One object on stdout, read-only, exit 0; a wrong argument is 65, never 64.
                 return BandJsonMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
+
+            case Startup.PlanReport:
+                // One object on stdout, read-only, exit 0; a wrong argument or a folder outside a checkout is 65, never 64.
+                return PlanReportMode.Run(args, Environment.GetEnvironmentVariable, Directory.GetCurrentDirectory(), Console.Out, Note);
 
             case Startup.Roles:
                 // One object on stdout, read-only, exit 0; a wrong argument is 65, never 64. A hook calls this, so nothing here may take a session down.
@@ -2640,6 +2651,10 @@ internal static class Program
         from the data directory and never creating it: the consultations in flight (cons asking or open, consask consulting)
         and the failure notices of the last 24 hours. The phrases live in the editor's settings, so the list is empty here.
         Any other argument is 65; a build too old for the mode exits 64.
+        `--plan-report <feature-dir> --json` prints ONE JSON object for a plan: one entry per folder of the feature found on disk (the feature folder, then each epoch-N, eN-*, sN-* and tN-*
+        folder, by name — no YAML is read), each with the gates run, rounds, cons and consask counts, the first and last event (UTC) and the wall time of the calls that named it in their
+        `workItem` argument, read from the rounds database and never creating the data directory. An item with no events reports zeros. 65 for other arguments or a folder not inside a
+        git checkout, 74 when the database cannot be read; a build too old for the mode exits 64.
         `--roles [--format json|claude-hook]` prints the roles table: the main AI, an ORDERED model list per role (the order is the failover order), the complexity bands,
         the task kinds a small model may take, the work method and a settings revision — as ONE JSON object, or with `claude-hook` as Claude Code's SessionStart hook output
         (a short role table and the work-method sentence in `hookSpecificOutput.additionalContext`). Read from the settings file and the environment (`COAI_ROLES_MODELS`,

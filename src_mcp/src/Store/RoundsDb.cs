@@ -230,11 +230,11 @@ public sealed class RoundsDb : IDisposable
             INSERT INTO consultations (
                 id, caller, caller_kind, repo_path, branch, head_sha, vendor, model, turns, status,
                 reason, outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd, problem, advice, alert,
-                kind, plan, epics, failure_kind, failure_cure, evidence)
+                kind, plan, epics, failure_kind, failure_cure, evidence, work_item)
             VALUES (
                 $id, $caller, $kind, $repo, $branch, $sha, $vendor, $model, $turns, $status,
                 $reason, $outcome, $outcomeBy, $started, $ended, $seconds, $in, $out, $cost, $problem, $advice, $alert,
-                $consultKind, $consultPlan, $consultEpics, $failureKind, $failureCure, $evidence)
+                $consultKind, $consultPlan, $consultEpics, $failureKind, $failureCure, $evidence, $workItem)
             ON CONFLICT(id) DO UPDATE SET
                 turns = excluded.turns, status = excluded.status, reason = excluded.reason,
                 outcome = excluded.outcome, outcome_by = excluded.outcome_by,
@@ -273,6 +273,8 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$failureKind", row.FailureKind);
         Bind(write, "$failureCure", row.FailureCure);
         Bind(write, "$evidence", row.Evidence);
+        // Frozen with the first turn (schema step 25): the conflict clause above does not rewrite it.
+        Bind(write, "$workItem", row.WorkItem);
         write.ExecuteNonQuery();
     }
 
@@ -856,12 +858,12 @@ public sealed class RoundsDb : IDisposable
                                 started_utc, completed_utc, tokens_in, tokens_out, cost_usd,
                                 plan_text, head_sha, base_ref, caller, agent_log,
                                 caller_vendor, caller_client, caller_client_version, caller_model,
-                                commands, plan_shape, plan_key, epic_number, cadence_note, note, round_key, plan_source)
+                                commands, plan_shape, plan_key, epic_number, cadence_note, note, round_key, plan_source, work_item)
             VALUES ($session, $stage, $number, $subject, $status, $verdict, $gating,
                     $started, $completed, $tokensIn, $tokensOut, $cost,
                     $plan, $sha, $baseRef, $caller, $agentLog,
                     $vendor, $client, $clientVersion, $model,
-                    $commands, $planShape, $planKey, $epicNumber, $cadenceNote, $note, $roundKey, $planSource)
+                    $commands, $planShape, $planKey, $epicNumber, $cadenceNote, $note, $roundKey, $planSource, $workItem)
             ON CONFLICT(session_id, stage, number) DO UPDATE SET
                 subject = excluded.subject, status = excluded.status, verdict = excluded.verdict,
                 gating = excluded.gating, completed_utc = excluded.completed_utc,
@@ -872,7 +874,8 @@ public sealed class RoundsDb : IDisposable
                 caller_client_version = excluded.caller_client_version, caller_model = excluded.caller_model,
                 commands = excluded.commands, plan_shape = excluded.plan_shape,
                 plan_key = excluded.plan_key, epic_number = excluded.epic_number, cadence_note = excluded.cadence_note,
-                note = excluded.note, round_key = excluded.round_key, plan_source = excluded.plan_source
+                note = excluded.note, round_key = excluded.round_key, plan_source = excluded.plan_source,
+                work_item = excluded.work_item
             RETURNING id
             """;
         BindRound(write, state.SessionId, round.Stage, round.Number);
@@ -926,6 +929,9 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$planSource", round.PlanSource is { } source
             ? JsonSerializer.Serialize(source, Server.ServerJsonContext.Default.PlanSource)
             : string.Empty);
+
+        // Which item of a plan the round was for (schema step 25, E3.S8): from the round; '' = not attributed.
+        Bind(write, "$workItem", round.WorkItem);
 
         return (long)(write.ExecuteScalar() ?? 0L);
     }

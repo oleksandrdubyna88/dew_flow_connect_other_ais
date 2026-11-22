@@ -118,6 +118,12 @@ public sealed record QuestionConsultRecord(
     /// <summary>Kept for records and the extension's view: v1 keyed the phase rule on it; v2 writes it empty.</summary>
     public string PlanKey { get => field ?? string.Empty; init; } = string.Empty;
 
+    /// <summary>
+    /// The plan item this question was for — the repository-relative feature-folder path the caller named in <c>workItem</c> (coai v2 E3.S8, <see cref="WorkItems"/>).
+    /// Empty when it named none, and on every record written before the field.
+    /// </summary>
+    public string WorkItem { get => field ?? string.Empty; init; } = string.Empty;
+
     /// <summary>What the caller tried and the options — capped by the tool at 8 KB.</summary>
     public string Context { get => field ?? string.Empty; init; } = string.Empty;
 

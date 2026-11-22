@@ -123,6 +123,30 @@ cost of a notice does not grow with the history; the tail must contain the card'
 **What it must not change:** `RetiredMembers.Shipped` stays empty (retiring `humanGate` before the migration ran would lose the evidence), non-held sessions, a session's file name, cadence and
 question-phase code (E3 removes them and adds rows to the tables), and any Team-server wire field.
 
+**The tables after E3 (2026-11-22).** `MigrationV2Tables.Default` now carries the keys E3 removed (`COAI_AUTONOMOUS`, `COAI_COMMANDS`, `COAI_COMMAND_MODELS`, `COAI_SPLIT_PLAN`,
+`COAI_SPLIT_WITH_FABLE`, `COAI_GATE_PER`, `COAI_STOP_LOCAL_WHEN_QUIET`, `COAI_DEAL_PLAN`, `COAI_DEAL_CODE`, `COAI_ROTATE_PROMPTS`, `COAI_PROMPTS_PER_ROUND`, `COAI_SECURITY_LANE`,
+`COAI_QCONSULT_MODE`, `COAI_QCONSULT_FREE_BATCHES`, the four `COAI_CADENCE_*`) and the keys it renamed (`COAI_CONSULT_{ENABLED,TURNS,CALLS_PER_SESSION,IDLE_MINUTES}` → `COAI_CONS_*`, the six
+`COAI_QCONSULT_*` the server reads → `COAI_CONSASK_*`; when both names exist the new one wins and the old value goes to `settings.v1-removed.json`). The hash in the marker moved with the rows, so a
+folder migrated by the E1 tables runs again at the next start — by design; the run is idempotent by object. `MigrateV2E3Tests` holds a v1 settings file that moves exactly once. The start-up card
+sweep also archives an answered or expired card **30 days old** (`MigrationV2.CardRetention`; the age is the answer's or the expiry's, else the question's) to `escalations/archive/` with its answer
+file — SPEC risk 7's decision. A card a still-held session names stays, and so does one whose date cannot be read.
+
+### Work-item attribution — `workItem` and `--plan-report` (E3.S8)
+
+`review_plan`, `review_code`, `review_document`, `review_feature`, `cons` and `consask` take an optional `workItem`: the repository-relative feature-folder path of the epoch, epic, story or task the
+call is for. `WorkItems.Check` accepts it as TEXT (never against the disk): one spelling (`\` becomes `/`, empty and `.` segments and a trailing separator go), refused when absolute, drive-lettered,
+with a `..` segment, a control character, over 400 characters, or naming the repository itself — before any round, consultation or question is spent. A caller that sends none is the old caller,
+unchanged. It is recorded on the round (`RoundRecord.WorkItem`, `rounds.work_item`), the consultation record and the question record (`work_item` on `consultations` and `question_consults`) by
+schema step 25 (`Schema.TheWorkItem`, appended; empty means "not attributed"). A round's column is rewritten from the record on every re-record; a consultation's and a question's are frozen with the
+first turn.
+
+`coai-mcp --plan-report <feature-dir> --json` is a READER (read-only open of `coai.db`; never makes the data directory; listed in `.agents/PROJECT.md`). Its items are the folders of the feature found
+on disk by NAME — the feature folder, `epoch-N`, `eN-*`, `sN-*`, `tN-*`, through the `stories` and `tasks` containers; no YAML is read (a later epoch adds that contract) — and for each: `gates`
+(distinct session and stage), `rounds` (a skipped round is no round), `cons`, `consask`, `firstUtc`, `lastUtc` and `wallSeconds` (the union of the intervals, so overlap counts once), each for the
+item alone. An item with no events reports zeros and empty instants; an item recorded under the feature folder with no folder now is listed under `unlisted`. Exit 65 for other arguments or a folder
+outside a git checkout, 74 for a database the disk will not read, never 64. `AWorkItemIsRecordedAndReportedTests` drives a review and a `cons` through the service and reads the report from the
+real binary.
+
 **The data folder and the extension's move.** `migrations/v1-archive/` is the ONLY copy of the archived cadence and question-phase history, so it has its own entry in `shared/data-inventory.json`
 (`move: true`, `clash: true`) and in the extension's `DATA_TO_MOVE`; its parent `migrations/` stays behind — the marker, the journal and `claims/` describe THIS folder, and a marker carried to
 a folder that was never migrated would say it was.

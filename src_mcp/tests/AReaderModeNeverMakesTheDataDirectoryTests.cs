@@ -49,6 +49,8 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--features" },
         // The Claude mod's band: lists consultation files and reads the notices tail; answers three empty lists for a folder that is not there.
         new[] { "--band-json" },
+        // What each item of a plan cost (v2 E3.S8): reads the rounds database read-only; the folder argument is this test's own build output, inside the checkout.
+        new[] { "--plan-report", AppContext.BaseDirectory, "--json" },
         new[] { "--version" },
         // Launched on a person's act, but it reads stdin and answers stdout only (research/PLAN_names_and_a_missing_root.md 3.3).
         new[] { "--check-security" },

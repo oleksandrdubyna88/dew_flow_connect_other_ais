@@ -11,6 +11,14 @@ namespace CoaiMcp;
 /// </summary>
 internal static class Tools
 {
+    /// <summary>
+    /// The sentence every tool that takes <c>workItem</c> ends its description with (coai v2 E3.S8): the argument is optional, and a caller that never sends
+    /// it is the old caller, unchanged.
+    /// </summary>
+    private const string WorkItemHelp = "\n\n`workItem` is OPTIONAL: the repository-relative feature-folder path of the epoch, epic, story or task this call is for "
+        + "(for example `v2/epoch-1/e3-x/stories/s8-y`). It is recorded with the round or consultation, and `coai-mcp --plan-report <feature-dir> --json` totals it per item. "
+        + "A path that is absolute or has a `..` segment is refused before anything runs; leave it out when the call is for no plan item.";
+
     /// <param name="host">
     /// Resolved per CALL, never captured once: the panel rewrites its settings file while this
     /// server runs, and a tool bound to one service instance would keep serving the vendors,
@@ -78,9 +86,9 @@ internal static class Tools
         yield return McpServerTool.Create(
             // `planText`, `committedPlan` and `expectedCommit` are optional WITH C# defaults — the `resolve` lesson: without
             // one the SDK publishes an argument as required. Exactly one of the first two is wanted — a refusal says so.
-            async (string repoPath, string branch, string? planText = null, string? committedPlan = null, string? expectedCommit = null) =>
+            async (string repoPath, string branch, string? planText = null, string? committedPlan = null, string? expectedCommit = null, string? workItem = null) =>
                 await (await host.CurrentAsync()).ReviewPlanAsync(
-                    repoPath, branch, new PlanInput(planText ?? string.Empty, committedPlan ?? string.Empty, expectedCommit ?? string.Empty)),
+                    repoPath, branch, new PlanInput(planText ?? string.Empty, committedPlan ?? string.Empty, expectedCommit ?? string.Empty) { WorkItem = workItem ?? string.Empty }),
             new McpServerToolCreateOptions
             {
                 Name = "review_plan",
@@ -104,7 +112,7 @@ internal static class Tools
                     is still open. And this is the gate for a document that code will be written
                     FROM, the only one that unlocks `review_code`; a document that is itself the
                     deliverable goes to `review_document` instead.
-                    """,
+                    """ + WorkItemHelp,
                 ReadOnly = true,
                 Idempotent = false,
                 Destructive = false,
@@ -112,8 +120,8 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string baseRef, string planText, bool again = false) =>
-                await (await host.CurrentAsync()).ReviewCodeAsync(repoPath, branch, baseRef, planText, again),
+            async (string repoPath, string branch, string baseRef, string planText, bool again = false, string? workItem = null) =>
+                await (await host.CurrentAsync()).ReviewCodeAsync(repoPath, branch, baseRef, planText, again, workItem ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "review_code",
@@ -151,7 +159,7 @@ internal static class Tools
                     call with `again: true`: it reopens the code stage for the new commits, and is
                     refused (saying why) when nothing reviewable was committed since the last code
                     round, while that round's findings await `resolve`, or while a person is asked.
-                    """,
+                    """ + WorkItemHelp,
                 ReadOnly = true,
                 Idempotent = false,
                 Destructive = false,
@@ -161,9 +169,9 @@ internal static class Tools
         yield return McpServerTool.Create(
             async (string repoPath, string branch, string purposeText,
                    string? documentPath = null, string? documentText = null, string? documentName = null,
-                   bool newReview = false) =>
+                   bool newReview = false, string? workItem = null) =>
                 await (await host.CurrentAsync()).ReviewDocumentAsync(
-                    repoPath, branch, purposeText, documentPath, documentText, documentName, newReview),
+                    repoPath, branch, purposeText, documentPath, documentText, documentName, newReview, workItem ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "review_document",
@@ -206,7 +214,7 @@ internal static class Tools
                     Same reply shape and the same `resolve` duty as the other gates, plus `notes`:
                     each reviewer's prose about the whole document, unmerged and gating nothing. That
                     is where a summary comes back.
-                    """,
+                    """ + WorkItemHelp,
                 ReadOnly = true,
                 Idempotent = false,
                 Destructive = false,
@@ -220,13 +228,14 @@ internal static class Tools
             // it can be refused: undeclared, the SDK dropped it without an error, and a caller naming another
             // commit got a clean review of whatever this checkout held (§9.30 of the feature-review plan).
             async (McpServer server, string repoPath, string planPath, string baseRef, string epics, string lessons,
-                   bool again = false, string? callerModel = null, string? head = null) =>
+                   bool again = false, string? callerModel = null, string? head = null, string? workItem = null) =>
                 await (await host.CurrentAsync()).ReviewFeatureAsync(
                     repoPath, planPath, baseRef, epics, lessons, again,
                     callerModel ?? string.Empty,
                     server.ClientInfo?.Name ?? string.Empty,
                     server.ClientInfo?.Version ?? string.Empty,
-                    head ?? string.Empty),
+                    head ?? string.Empty,
+                    workItem ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "review_feature",
@@ -290,7 +299,7 @@ internal static class Tools
                     or `not_reviewed` when nobody answered in it — nobody is waited for. A third round is never run.
                     `again: true` is refused when nothing moved and when no
                     ground admits a round; against a NEW `baseRef` it starts a fresh review of the same plan.
-                    """,
+                    """ + WorkItemHelp,
                 ReadOnly = true,
                 Idempotent = false,
                 Destructive = false,
@@ -449,7 +458,7 @@ internal static class Tools
                     an earlier turn is refused. Turns per consultation and calls per session are capped, follow-ups included.
                     Nothing in your tree is ever changed by this tool; if its process
                     changes anything, its advice is withheld and the paths are named.
-                    """,
+                    """ + WorkItemHelp + " It is read on the FIRST call of a consultation; a follow-up does not move it to another item.",
             ReadOnly = true,
             Idempotent = false,
             Destructive = false,
@@ -459,12 +468,12 @@ internal static class Tools
             // Both optional arguments carry a C# default — the `resolve` lesson above: without one
             // the SDK publishes the argument as REQUIRED, and the ordinary first call, which has no
             // consultationId yet, fails as "An error occurred invoking 'cons'".
-            async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null) =>
-                await (await host.CurrentAsync()).ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty),
+            async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null, string? workItem = null) =>
+                await (await host.CurrentAsync()).ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty, workItem ?? string.Empty),
             cons);
         yield return McpServerTool.Create(
-            async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null) =>
-                RenamedTools.WithNote(await (await host.CurrentAsync()).ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty), "cons"),
+            async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null, string? workItem = null) =>
+                RenamedTools.WithNote(await (await host.CurrentAsync()).ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty, workItem ?? string.Empty), "cons"),
             RenamedTools.Alias(cons, RenamedTools.OldConsult));
 
         var consask = new McpServerToolCreateOptions
@@ -502,7 +511,7 @@ internal static class Tools
                     verify it before acting on it, and ask the person when the answers do not settle the
                     question. `document` and `feature` file the question under that review's session.
                     The tool has no mode and no gate: it answers every call the same way.
-                    """,
+                    """ + WorkItemHelp,
             ReadOnly = true,
             Idempotent = false,
             Destructive = false,
@@ -511,12 +520,12 @@ internal static class Tools
         yield return McpServerTool.Create(
             // `document` and `feature` carry C# defaults — the `resolve` lesson: without one the SDK publishes
             // an argument as REQUIRED, and the ordinary question, asked from a branch session, has neither.
-            async (string repoPath, string question, string context, string? document = null, string? feature = null) =>
-                await (await host.CurrentAsync()).AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty),
+            async (string repoPath, string question, string context, string? document = null, string? feature = null, string? workItem = null) =>
+                await (await host.CurrentAsync()).AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty, workItem ?? string.Empty),
             consask);
         yield return McpServerTool.Create(
-            async (string repoPath, string question, string context, string? document = null, string? feature = null) =>
-                RenamedTools.WithNote(await (await host.CurrentAsync()).AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty), "consask"),
+            async (string repoPath, string question, string context, string? document = null, string? feature = null, string? workItem = null) =>
+                RenamedTools.WithNote(await (await host.CurrentAsync()).AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty, workItem ?? string.Empty), "consask"),
             RenamedTools.Alias(consask, RenamedTools.OldAsk));
 
         yield return McpServerTool.Create(

@@ -62,6 +62,9 @@ public sealed class LiveRound
     /// </summary>
     private readonly string _key;
 
+    /// <summary>The plan item the call that started this round named (<see cref="WorkItems"/>); empty when it named none.</summary>
+    private readonly string _workItem;
+
     /// <param name="number">The round's number in this session's journal for its stage — see <see cref="_number"/>.</param>
     /// <param name="key">
     /// The round's identity across the wire — see <see cref="_key"/>. Trailing and defaulted for the harnesses that drive
@@ -75,8 +78,10 @@ public sealed class LiveRound
         IReadOnlyList<ReviewerWork> work,
         string subject,
         Noticing noticing,
-        string key = "")
+        string key = "",
+        string workItem = "")
     {
+        _workItem = workItem;
         _subject = subject;
         _noticing = noticing;
         _number = number;
@@ -280,6 +285,7 @@ public sealed class LiveRound
             RunnerPid = Environment.ProcessId,
             Subject = _subject,
             Key = _key,
+            WorkItem = _workItem,
             ReviewerStates = [.. _states.Values.OrderBy(s => s.Provider).ThenBy(s => s.Role)],
             // Taken from the session THIS round started from, so a later `open` by another client
             // cannot relabel it. See RoundRecord.Caller for what the two fields say apart.

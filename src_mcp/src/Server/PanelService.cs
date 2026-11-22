@@ -613,6 +613,13 @@ public sealed class PanelService
     /// </remarks>
     internal async Task<string> ReviewPlanAsync(string repoPath, string branch, PlanInput input, CancellationToken ct = default)
     {
+        // The item the call is for: refused HERE, before the claim, a number or a reviewer, like every refusal of the input.
+        var (workItem, workItemRefusal) = WorkItems.Check(input.WorkItem);
+        if (workItemRefusal.Length > 0)
+        {
+            return Error(workItemRefusal);
+        }
+
         // The same guard the code stage has had, for the same reason: a round that launches no
         // reviewer is not an empty round, it is an unresolved one, and it sits open for ever. It
         // became reachable here when the plan roster started coming from the catalog.
@@ -687,6 +694,7 @@ public sealed class PanelService
             Head = plan.Head,
             PlanSource = plan.Source,
             RolesPerVendor = 1,
+            WorkItem = workItem,
         },
             ct);
     }
@@ -705,8 +713,19 @@ public sealed class PanelService
     /// sending nothing.</para>
     /// </remarks>
     public Task<string> ReviewCodeAsync(
-        string repoPath, string branch, string baseRef, string planText, bool again = false, CancellationToken ct = default)
+        string repoPath, string branch, string baseRef, string planText, bool again = false, CancellationToken ct = default) =>
+        ReviewCodeAsync(repoPath, branch, baseRef, planText, again, string.Empty, ct);
+
+    /// <summary>The code gate for a call that names the plan item it is for (<see cref="WorkItems"/>); `workItem` empty is the old call.</summary>
+    public Task<string> ReviewCodeAsync(
+        string repoPath, string branch, string baseRef, string planText, bool again, string workItem, CancellationToken ct = default)
     {
+        var (item, itemRefusal) = WorkItems.Check(workItem);
+        if (itemRefusal.Length > 0)
+        {
+            return Task.FromResult(Error(itemRefusal));
+        }
+
         // Before the scope check and before anything is built, because it needs nothing to be true:
         // a code round with every role switched off would launch no reviewer, and that is not an
         // empty round — the session counts a round nobody answered as unresolved, so it would sit
@@ -863,6 +882,7 @@ public sealed class PanelService
             // from the session as it stands UNDER the claim — never from a read taken before it, which
             // a round finishing in between would make stale (code round, gemini). Only a finished stage
             // is compared: asking again of a stage still open changes nothing.
+            WorkItem = item,
             RefuseBeforeBuilding = async (loaded, sha) =>
                 await NothingSince(repoPath, sha, again ? SinceWhenFinished(loaded) : NoCodeRound, ct) is { Length: > 0 } unchanged
                     ? unchanged
@@ -950,8 +970,27 @@ public sealed class PanelService
         string? documentText = null,
         string? documentName = null,
         bool newReview = false,
+        CancellationToken ct = default) =>
+        ReviewDocumentAsync(repoPath, branch, purposeText, documentPath, documentText, documentName, newReview, string.Empty, ct);
+
+    /// <summary>The document gate for a call that names the plan item it is for (<see cref="WorkItems"/>); `workItem` empty is the old call.</summary>
+    public Task<string> ReviewDocumentAsync(
+        string repoPath,
+        string branch,
+        string purposeText,
+        string? documentPath,
+        string? documentText,
+        string? documentName,
+        bool newReview,
+        string workItem,
         CancellationToken ct = default)
     {
+        var (item, itemRefusal) = WorkItems.Check(workItem);
+        if (itemRefusal.Length > 0)
+        {
+            return Task.FromResult(Refused(itemRefusal));
+        }
+
         // Before anything is read, resolved or written: a round with no reviewer in it is not an
         // empty round, it is an unresolved one that sits open for ever. The same guard the other two
         // stages have, for the same reason.
@@ -963,7 +1002,7 @@ public sealed class PanelService
         {
             DocumentOutcome.Refused no => Task.FromResult(Refused(no.Sentence)),
             DocumentOutcome.Ready document =>
-                ReviewTheDocumentAsync(repoPath, branch, purposeText, document, roles, newReview, ct),
+                ReviewTheDocumentAsync(repoPath, branch, purposeText, document, roles, newReview, item, ct),
             _ => throw new InvalidOperationException("the union is closed"),
         };
     }
@@ -981,12 +1020,13 @@ public sealed class PanelService
         DocumentOutcome.Ready document,
         int roles,
         bool newReview,
+        string workItem,
         CancellationToken ct) =>
         OpenDocumentSession(repoPath, branch, document, purposeText, newReview) switch
         {
             DocumentTurn.Refused no => Task.FromResult(Refused(no.Sentence)),
             DocumentTurn.Open open => RunDocumentStageAsync(
-                repoPath, branch, purposeText, document, open.Session, roles, ct),
+                repoPath, branch, purposeText, document, open.Session, roles, workItem, ct),
             _ => throw new InvalidOperationException("the union is closed"),
         };
 
@@ -1144,6 +1184,7 @@ public sealed class PanelService
         DocumentOutcome.Ready document,
         PersistedSession session,
         int roles,
+        string workItem,
         CancellationToken ct)
     {
         // The snapshot is kept BEFORE the round, so a round that is then killed still leaves the
@@ -1201,6 +1242,7 @@ public sealed class PanelService
                 // the count the GUARD read, passed down rather than read again — an empty roster is
                 // refused before this line, and a second read is how that could stop being true.
                 RolesPerVendor = roles,
+                WorkItem = workItem,
             },
             ct);
     }
@@ -1484,13 +1526,38 @@ public sealed class PanelService
         string clientVersion = "",
         string head = "",
         CancellationToken ct = default) =>
-        _feature.ReviewAsync(
+        ReviewFeatureAsync(repoPath, planPath, baseRef, epics, lessons, again, callerModel, client, clientVersion, head, string.Empty, ct);
+
+    /// <summary>The feature gate for a call that names the plan item it is for (<see cref="WorkItems"/>); `workItem` empty is the old call.</summary>
+    public Task<string> ReviewFeatureAsync(
+        string repoPath,
+        string planPath,
+        string baseRef,
+        string epics,
+        string lessons,
+        bool again,
+        string callerModel,
+        string client,
+        string clientVersion,
+        string head,
+        string workItem,
+        CancellationToken ct = default)
+    {
+        var (item, itemRefusal) = WorkItems.Check(workItem);
+        if (itemRefusal.Length > 0)
+        {
+            return Task.FromResult(Error(itemRefusal));
+        }
+
+        return _feature.ReviewAsync(
             new FeatureRequest(repoPath, planPath, baseRef, epics, lessons, again,
                 CallerDeclaration.From(CallerIdentity.Current(), client, clientVersion, callerModel))
             {
                 Head = head,
+                WorkItem = item,
             },
             ct);
+    }
 
     // ---------- resolve ----------
 
@@ -1656,6 +1723,16 @@ public sealed class PanelService
     public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, CancellationToken ct = default) =>
         _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, ct);
 
+    /// <summary><c>cons</c> for a call that names the plan item it is for (<see cref="WorkItems"/>), written on the consultation's record; `workItem` empty is the old call.</summary>
+    public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, string workItem, CancellationToken ct = default)
+    {
+        var (item, itemRefusal) = WorkItems.Check(workItem);
+
+        return itemRefusal.Length > 0
+            ? Task.FromResult(Error(itemRefusal))
+            : _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, ct, item);
+    }
+
     /// <summary>Whether a consultation could be had right now — what the consultants report asks.</summary>
     public ConsultPreflight ConsultPreflight() => _consultations.Preflight();
 
@@ -1691,14 +1768,22 @@ public sealed class PanelService
     /// in parallel before the person is asked. A delegation, like `consult`; what this service adds is which
     /// SESSION the question is filed under, which only it can resolve.
     /// </summary>
-    public Task<string> AskConsultantsAsync(string repoPath, string question, string context, string document = "", string feature = "", CancellationToken ct = default)
+    public Task<string> AskConsultantsAsync(string repoPath, string question, string context, string document = "", string feature = "", CancellationToken ct = default) =>
+        AskConsultantsAsync(repoPath, question, context, document, feature, string.Empty, ct);
+
+    /// <summary><c>consask</c> for a call that names the plan item it is for (<see cref="WorkItems"/>), written on the question's record; `workItem` empty is the old call.</summary>
+    public Task<string> AskConsultantsAsync(string repoPath, string question, string context, string document, string feature, string workItem, CancellationToken ct = default)
     {
         if (Both(document, feature) is { Length: > 0 } both)
         {
             return Task.FromResult(Error(both));
         }
 
-        return _questions.AskAsync(repoPath, question, context, document, feature, SessionIdOf, ct);
+        var (item, itemRefusal) = WorkItems.Check(workItem);
+
+        return itemRefusal.Length > 0
+            ? Task.FromResult(Error(itemRefusal))
+            : _questions.AskAsync(repoPath, question, context, document, feature, SessionIdOf, ct, item);
     }
 
     /// <summary>The session a question's arguments name, or <c>no-session</c> — the record's reference, never a precondition.</summary>

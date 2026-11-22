@@ -67,12 +67,12 @@ internal sealed class RoundSkips(
     /// that row's count and completion time instead of appending, which is what keeps a caller retrying
     /// with nobody ticked from growing the trail without an owner (§4.12).
     /// </remarks>
-    internal string Record(Stage stage, PersistedSession loaded, int number, string sha, string planText, string reason)
+    internal string Record(Stage stage, PersistedSession loaded, int number, string sha, string planText, string reason, string workItem = "")
     {
         var phrase = Stages.Of(stage).Phrase;
         log.Warning("the {Stage} was skipped: {Reason}", phrase, reason);
 
-        var (record, rounds) = SkipRecord(stage, loaded, number, sha, reason, RoundSubject.From(planText, File.Exists));
+        var (record, rounds) = SkipRecord(stage, loaded, number, sha, reason, RoundSubject.From(planText, File.Exists), workItem);
         store.Save(loaded with { Rounds = rounds });
         // Best-effort, as every projection is; `head_sha` comes from the context because that is the
         // column the log reads, and the skip is the one round whose record and context name the same commit.
@@ -89,10 +89,10 @@ internal sealed class RoundSkips(
 
     /// <summary>The skip's record and the trail it lands on: the previous row counted up, or a new row.</summary>
     private static (RoundRecord Record, List<RoundRecord> Rounds) SkipRecord(
-        Stage stage, PersistedSession loaded, int number, string sha, string reason, string subject)
+        Stage stage, PersistedSession loaded, int number, string sha, string reason, string subject, string workItem)
     {
         var now = DateTime.UtcNow;
-        if (loaded.Rounds is [.., { Verdict: RoundRecord.Skipped } last] && last.Stage == stage.ToString() && last.Note == reason)
+        if (loaded.Rounds is [.., { Verdict: RoundRecord.Skipped } last] && last.Stage == stage.ToString() && last.Note == reason && last.WorkItem == workItem)
         {
             var counted = last with { CompletedUtc = now, Repeats = last.Repeats + 1, Sha = sha };
 
@@ -108,6 +108,7 @@ internal sealed class RoundSkips(
             Sha = sha,
             Note = reason,
             Caller = loaded.Caller,
+            WorkItem = workItem,
         };
 
         return (fresh, [.. loaded.Rounds, fresh]);

@@ -397,7 +397,7 @@ public sealed class ConsultationService(
         return runtime.NeedsAnswerSchema && !AnswerSchema.Ready ? AnswerSchema.Problem : string.Empty;
     }
 
-    public async Task<string> AskAsync(string repoPath, string problem, string suspectedFilesJson, string consultationId, CancellationToken ct = default)
+    public async Task<string> AskAsync(string repoPath, string problem, string suspectedFilesJson, string consultationId, CancellationToken ct = default, string workItem = "")
     {
         // FIRST, before the shape of the call is examined at all: somebody who switched the feature
         // off is owed the sentence saying so, not a complaint about an empty argument. And it is a
@@ -436,7 +436,7 @@ public sealed class ConsultationService(
 
         try
         {
-            return await WithConsultantAsync(repo, ConsultantPrompt.BoundedProblem(problem), ConsultantPrompt.BoundedFiles(files), consultationId.Trim(), ct);
+            return await WithConsultantAsync(repo, ConsultantPrompt.BoundedProblem(problem), ConsultantPrompt.BoundedFiles(files), consultationId.Trim(), workItem, ct);
         }
         catch (ContextException e)
         {
@@ -452,7 +452,7 @@ public sealed class ConsultationService(
 
     // ---------- choosing the consultant ----------
 
-    private async Task<string> WithConsultantAsync(string repo, string problem, IReadOnlyList<string> files, string consultationId, CancellationToken ct)
+    private async Task<string> WithConsultantAsync(string repo, string problem, IReadOnlyList<string> files, string consultationId, string workItem, CancellationToken ct)
     {
         var kind = CallerIdentity.KindFrom(env);
         var caller = CallerOf(repo);
@@ -467,10 +467,10 @@ public sealed class ConsultationService(
             return Error($"another consultation is running in {repo} right now (waited {RepositoryLock.DefaultWait.TotalSeconds:0} s) — try again in a moment");
         }
 
-        return await UnderTheLockAsync(new TurnCaller(kind, caller, string.Empty), repo, problem, files, consultationId, ct);
+        return await UnderTheLockAsync(new TurnCaller(kind, caller, string.Empty), repo, problem, files, consultationId, workItem, ct);
     }
 
-    private async Task<string> UnderTheLockAsync(TurnCaller caller, string repo, string problem, IReadOnlyList<string> files, string consultationId, CancellationToken ct)
+    private async Task<string> UnderTheLockAsync(TurnCaller caller, string repo, string problem, IReadOnlyList<string> files, string consultationId, string workItem, CancellationToken ct)
     {
         var (record, refusal) = consultationId.Length == 0
             ? (null, null)
@@ -495,7 +495,7 @@ public sealed class ConsultationService(
         return resolved switch
         {
             ResolvedConsultant.Unavailable no => Error(no.Why),
-            ResolvedConsultant.Definition definition => await OnTheVendorAsync(definition.Vendor, caller, record, repo, problem, files, ct),
+            ResolvedConsultant.Definition definition => await OnTheVendorAsync(definition.Vendor, caller, record, repo, problem, files, workItem, ct),
             _ => throw new InvalidOperationException("the union is closed"),
         };
     }
@@ -507,7 +507,7 @@ public sealed class ConsultationService(
     /// and nothing about how it was built: the same checks for a definition, a legacy reference and a
     /// resumed record.
     /// </remarks>
-    private async Task<string> OnTheVendorAsync(ProviderSettings row, TurnCaller caller, ConsultationRecord? record, string repo, string problem, IReadOnlyList<string> files, CancellationToken ct)
+    private async Task<string> OnTheVendorAsync(ProviderSettings row, TurnCaller caller, ConsultationRecord? record, string repo, string problem, IReadOnlyList<string> files, string workItem, CancellationToken ct)
     {
         // The same two refusals the preflight gives, from the same method.
         if (VendorRefusal(row) is { Length: > 0 } refused)
@@ -537,7 +537,7 @@ public sealed class ConsultationService(
         // consultation is the leak the record's "frozen" claim never allowed.
         var consultant = new TurnConsultant(runtime, row, row.Model, caller with { CounterNote = counted.Note, Take = counted.Take });
 
-        return await RunTurnAsync(consultant, record ?? await NewRecordAsync(consultant, repo, DateTime.UtcNow, ct), repo, problem, files, ct);
+        return await RunTurnAsync(consultant, record ?? await NewRecordAsync(consultant, repo, DateTime.UtcNow, workItem, ct), repo, problem, files, ct);
     }
 
     private (ConsultationRecord? Record, string? Refusal) Existing(string consultationId, string caller, string repo, string problem)
@@ -562,7 +562,7 @@ public sealed class ConsultationService(
             : (record, null);
     }
 
-    private async Task<ConsultationRecord> NewRecordAsync(TurnConsultant consultant, string repo, DateTime now, CancellationToken ct)
+    private async Task<ConsultationRecord> NewRecordAsync(TurnConsultant consultant, string repo, DateTime now, string workItem, CancellationToken ct)
     {
         var (sha, branch) = await context.HeadAsync(repo, ct);
 
@@ -588,6 +588,8 @@ public sealed class ConsultationService(
             CarryBudget = consultant.Runtime.Memory is ConsultantMemory.WeRemember carried ? carried.CarryBudget : 0,
             // Frozen with the model: the row's own instruction as it stands now, for every turn of this conversation (C2).
             RowInstruction = consultant.Row.SystemPrompt,
+            // Frozen with the first turn: a follow-up that names another item does not move the conversation to it (schema step 25, E3.S8).
+            WorkItem = workItem,
         };
     }
 

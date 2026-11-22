@@ -401,7 +401,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         (ServerJsonContext.Default.RoleGate,
             ["maxRounds", "threshold", "enabled"]),
         (ServerJsonContext.Default.RoundRecord,
-            ["stage", "number", "verdict", "gatingCount", "reviewers", "completedUtc", "status", "startedUtc", "runnerPid", "sha", "note", "key", "admittedBy", "repeats", "loggedNote", "reviewerStates", "caller", "size", "gitlinks", "planSource", "subject", "tokensIn", "tokensOut", "costUsd", "costNote", "usageNote", "authors"]),
+            ["stage", "number", "verdict", "gatingCount", "reviewers", "completedUtc", "status", "startedUtc", "runnerPid", "sha", "note", "key", "admittedBy", "repeats", "loggedNote", "reviewerStates", "caller", "size", "gitlinks", "planSource", "subject", "tokensIn", "tokensOut", "costUsd", "costNote", "usageNote", "authors", "workItem"]),
         (ServerJsonContext.Default.ReviewerState,
             ["provider", "role", "status", "findings", "note", "seconds", "model", "effort", "warning"]),
     ];

@@ -7,7 +7,11 @@ using CoaiMcp.Runners.Worktrees;
 namespace CoaiMcp.Server;
 
 /// <summary>What a caller sent as THE PLAN: its text, or the path of a committed file (and the commit it expects).</summary>
-internal sealed record PlanInput(string Text, string Committed, string ExpectedCommit);
+internal sealed record PlanInput(string Text, string Committed, string ExpectedCommit)
+{
+    /// <summary>The plan item the call named in <c>workItem</c>, as sent — checked by <see cref="WorkItems"/> before any round is spent; empty when none was named.</summary>
+    public string WorkItem { get; init; } = string.Empty;
+}
 
 internal abstract record PlanInputOutcome
 {

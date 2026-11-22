@@ -136,6 +136,16 @@ public sealed record RoundRecord(
     public string Key { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>
+    /// The plan item this round was FOR — the repository-relative feature-folder path the caller named in <c>workItem</c> (coai v2 E3.S8, <see cref="WorkItems"/>),
+    /// one spelling. Empty when it named none, and on every round recorded before the field: "not attributed", never a guess.
+    /// </summary>
+    /// <remarks>
+    /// On the ROUND and not the session: a session is one branch and spans many items, so the item a gate ran for is a fact of the round. Trailing and
+    /// defaulted like <see cref="Key"/>, so every session file on disk stays valid and a save by an older build keeps it in the unknown-member bag.
+    /// </remarks>
+    public string WorkItem { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
     /// The D23 ground this round was admitted on — a <see cref="Core.Rounds.SecondRoundGround"/> by name for
     /// a feature review's second round; empty for every first round and for every other stage.
     /// </summary>
