@@ -46,36 +46,17 @@ public sealed class ConsultLimitsScenarioTests : ConsultScenarioBase
         Refusal(follow).Should().Contain("sat idle for more than 15 minutes");
     }
 
-    [Theory]
-    [InlineData("cadence", "1-3")]
-    [InlineData("risk", "5/5.2")]
-    public async Task AnOrderedConsultation_IsRefusedAFollowUpPastItsTurnCap(string kind, string epics)
+    [Fact]
+    public async Task AConsultation_IsRefusedAFollowUpPastItsTurnCap()
     {
         using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
         var service = Service(turns: 1);
-        var id = Id(await ConsultFor(service, kind, epics));
+        var id = Id(await Consult(service, "the parser returns 3 where 4 is expected"));
 
         Answer("0198-second", Advice);
-        var follow = await ConsultFor(service, kind, epics, "I checked it against the code: it holds", id);
+        var follow = await Consult(service, "I checked it against the code: it holds", id);
 
-        Refusal(follow).Should().Contain("all 1 of its turns are used", $"the turn cap applies to a {kind} consultation too");
-    }
-
-    [Theory]
-    [InlineData("cadence", "1-3")]
-    [InlineData("risk", "5/5.2")]
-    public async Task AFollowUpOfAnOrderedConsultation_SpendsNoStuckBudget(string kind, string epics)
-    {
-        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
-        var service = Service(callsPerSession: 1);
-        Id(await Consult(service, "the parser returns 3 where 4 is expected")); // the one stuck call the cap allows
-        Answer("0198-second", Advice);
-        var id = Id(await ConsultFor(service, kind, epics));
-
-        Answer("0198-third", Advice);
-        var follow = await ConsultFor(service, kind, epics, "I checked it against the code: it holds", id);
-
-        follow.TryGetProperty("error", out _).Should().BeFalse($"a {kind} follow-up is not a stuck call: {follow}");
+        Refusal(follow).Should().Contain("all 1 of its turns are used");
     }
 
     [Fact]

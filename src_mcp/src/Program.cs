@@ -197,16 +197,6 @@ internal static class Program
         CloseConsult,
 
         /// <summary>
-        /// Print a plan's consultation cadence as JSON and leave — what `status` answers as `cadence`.
-        /// </summary>
-        /// <remarks>
-        /// For the SIDEBAR, which reads session files and never calls `status`, and cannot work the cadence
-        /// out from them (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2). See
-        /// <see cref="Server.CadenceReadMode"/>.
-        /// </remarks>
-        Cadence,
-
-        /// <summary>
         /// Print, per caller kind, the consultant it resolves to and what is known of it — and write the same answer
         /// to <c>consultations/health/consultants.json</c>. See <see cref="Server.ConsultantsReadMode"/>.
         /// </summary>
@@ -397,7 +387,6 @@ internal static class Program
                 "--requeue-refused" => Startup.RequeueRefused,
                 "--providers" => Startup.Providers,
                 "--close-consult" => Startup.CloseConsult,
-                "--cadence" => Startup.Cadence,
                 "--consultants" => Startup.Consultants,
                 "--check-consultant" => Startup.CheckConsultant,
                 "--security-prompt-text" => Startup.SecurityPromptText,
@@ -566,10 +555,6 @@ internal static class Program
 
             case Startup.CloseConsult:
                 return await CloseConsultAsync(args);
-
-            case Startup.Cadence:
-                // A one-shot answers on stdout and exits; a writer thread here is one nobody drains.
-                return await Server.CadenceReadMode.RunAsync(args, Server.Noticing.None);
 
             case Startup.Consultants:
                 return await Server.ConsultantsReadMode.RunAsync(args, Server.Noticing.None);

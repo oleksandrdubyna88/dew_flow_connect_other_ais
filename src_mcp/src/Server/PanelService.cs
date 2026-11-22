@@ -42,7 +42,6 @@ public sealed class PanelService
     private readonly RemoteProbe _remote;
     private readonly ConsultationService _consultations;
     private readonly QuestionConsultService _questions;
-    private readonly CadenceDesk _cadence;
 
     /// <summary>
     /// The host's stopping token — what a local round tells a stopping server's cancellation from a person's withdrawal by
@@ -106,18 +105,6 @@ public sealed class PanelService
         // its own record store and its fan-out — kept out of this file, as the consultation is.
         _questions = new QuestionConsultService(
             settings, launcher, executor, _context, prompts, ledger, keys, log, Environment.GetEnvironmentVariable, noticing);
-        var cadenceStore = new CadenceStore(settings.DataDir);
-        // The consultation cadence (research/PLAN_consult_on_a_cadence.md): its record, its gate over the
-        // consultation records, and every decision a round makes about it — kept out of this file.
-        _cadence = new CadenceDesk(
-            settings,
-            cadenceStore,
-            new CadenceGate(_consultations.Store, () => _consultations.Preflight()),
-            _context,
-            new Runners.Collecting.GitHistory(launcher),
-            log,
-            noticing);
-
         // One client for every Team server this configuration names. A probe and a cancellation are
         // both short requests to the same handful of hosts, so a shared handler is the whole point.
         _remote = new RemoteProbe(new HttpClient());
@@ -127,7 +114,7 @@ public sealed class PanelService
         _roster = new RosterBuilder(
             settings, keys, prompts, new ReviewerPrompt(prompts), _remote, CanRun, RuntimeFor, () => PruneOldAnswerDirs(settings.ConsultantHomesRoot, log), log);
 
-        // The orders a round carries, read by the engine for its reply and by the cadence check before a
+        // The orders a round carries, read by the engine for its reply and
         // code round; and the engine every stage runs through. The engine is handed what only this service
         // can say — who a stage excludes, and the sentence for a round nobody could serve — and holds no
         // reference back.
@@ -535,16 +522,13 @@ public sealed class PanelService
     /// own session, which is what every caller before plan 4 meant and still means.
     /// </param>
     public Task<string> StatusAsync(string repoPath, string branch, string document = "") =>
-        StatusAsync(repoPath, branch, document, string.Empty, ct: HostStopping);
+        StatusAsync(repoPath, branch, document, string.Empty, HostStopping);
 
-    /// <param name="plan">A plan to report the consultation cadence of — or empty for the one this session holds,
-    /// if any (<c>research/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
-    /// on every branch the plan is built on.</param>
     /// <param name="feature">
     /// Which plan's FEATURE review, when the session is one: the same <c>planPath</c> that was passed to
     /// <c>review_feature</c>. The branch is then not read — a feature session is keyed by its plan.
     /// </param>
-    public async Task<string> StatusAsync(string repoPath, string branch, string document, string plan, string feature = "", CancellationToken ct = default)
+    public async Task<string> StatusAsync(string repoPath, string branch, string document, string feature = "", CancellationToken ct = default)
     {
         if (Both(document, feature) is { Length: > 0 } both)
         {
@@ -558,11 +542,7 @@ public sealed class PanelService
             return Error(NoSession(document, feature));
         }
 
-        var cadence = _settings.CadenceMode == Core.Cadence.CadenceMode.Off || document.Length > 0 || feature.Length > 0
-            ? null
-            : await _cadence.AnswerAsync(session, plan, await _worktrees.ShaOrNoneAsync(repoPath, branch), ct);
-
-        return Json(SessionAnswerFor(session) with { Cadence = cadence }, ServerJsonContext.Default.SessionAnswer);
+        return Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer);
     }
 
     /// <summary>
@@ -629,21 +609,14 @@ public sealed class PanelService
     /// is expected to sit through.</para>
     /// </remarks>
     public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CancellationToken ct = default) =>
-        ReviewPlanAsync(repoPath, branch, planText, CadenceArgs.None, ct);
-
-    /// <param name="cadence">What the caller declared about the consultation cadence — the plan, the epic, the
-    /// risk answer (<c>research/PLAN_consult_on_a_cadence.md</c>). Checked under the claim; a false declaration is
-    /// refused, and the facts shape the orders the reply carries.</param>
-    public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CadenceArgs cadence, CancellationToken ct = default) =>
-        ReviewPlanAsync(repoPath, branch, new PlanInput(planText, string.Empty, string.Empty), cadence, ct);
+        ReviewPlanAsync(repoPath, branch, new PlanInput(planText, string.Empty, string.Empty), ct);
 
     /// <summary>The same gate for a plan named either way: its text, or a committed file the server reads itself.</summary>
     /// <remarks>
     /// A refusal of the input is answered HERE, before the claim, the begin and any round number — see <see cref="PlanInputs"/>.
     /// </remarks>
-    internal async Task<string> ReviewPlanAsync(string repoPath, string branch, PlanInput input, CadenceArgs cadence, CancellationToken ct = default)
+    internal async Task<string> ReviewPlanAsync(string repoPath, string branch, PlanInput input, CancellationToken ct = default)
     {
-        var trace = new CadenceTrace();
         // The same guard the code stage has had, for the same reason: a round that launches no
         // reviewer is not an empty round, it is an unresolved one, and it sits open for ever. It
         // became reachable here when the plan roster started coming from the catalog.
@@ -718,18 +691,10 @@ public sealed class PanelService
                         scratch: await _roster.ScratchAsync(_launcher, Stage.PlanReview, workingDir, readsCheckout: false, roundToken))).WithUnreviewed(plan.Unreviewed);
             })
         {
-            // The ONE commit the plan was read at: the engine resolves this, so the plan, the cadence outline and the record agree.
+            // The ONE commit the plan was read at: the engine resolves this, so the plan and the record agree.
             Head = plan.Head,
             PlanSource = plan.Source,
             RolesPerVendor = 1,
-            Cadence = trace,
-            // The plan stage refuses only what the declaration itself gets wrong; which groups are owed
-            // is an ORDER here, never a refusal — nothing is built yet.
-            RefuseBeforeBuilding = async (loaded, sha) =>
-            {
-                trace.Call = await _cadence.PrepareAsync(loaded, cadence, repoPath, sha, ct);
-                return trace.Call.Refusal;
-            },
         },
             ct);
     }
@@ -748,15 +713,8 @@ public sealed class PanelService
     /// sending nothing.</para>
     /// </remarks>
     public Task<string> ReviewCodeAsync(
-        string repoPath, string branch, string baseRef, string planText, bool again = false, CancellationToken ct = default) =>
-        ReviewCodeAsync(repoPath, branch, baseRef, planText, again, CadenceArgs.None, ct);
-
-    /// <param name="cadence">The plan and epic this code round is for, and any risk answer — what the
-    /// consultation cadence refuses on in <c>require</c> (<c>research/PLAN_consult_on_a_cadence.md</c>).</param>
-    public Task<string> ReviewCodeAsync(
-        string repoPath, string branch, string baseRef, string planText, bool again, CadenceArgs cadence, CancellationToken ct = default)
+        string repoPath, string branch, string baseRef, string planText, bool again = false, CancellationToken ct = default)
     {
-        var trace = new CadenceTrace();
         // Before the scope check and before anything is built, because it needs nothing to be true:
         // a code round with every role switched off would launch no reviewer, and that is not an
         // empty round — the session counts a round nobody answered as unresolved, so it would sit
@@ -918,29 +876,14 @@ public sealed class PanelService
             // from the session as it stands UNDER the claim — never from a read taken before it, which
             // a round finishing in between would make stale (code round, gemini). Only a finished stage
             // is compared: asking again of a stage still open changes nothing.
-            Cadence = trace,
             RefuseBeforeBuilding = async (loaded, sha) =>
                 await NothingSince(repoPath, sha, again ? SinceWhenFinished(loaded) : NoCodeRound, ct) is { Length: > 0 } unchanged
                     ? unchanged
                     : await NothingOver(repoPath, branch, baseRef, sha, ct) is { Length: > 0 } empty
                         ? empty
-                        : await CadenceBeforeTheCode(loaded, cadence, trace, repoPath, branch, sha, ct),
+                        : string.Empty,
         },
             ct);
-    }
-
-    /// <summary>
-    /// The consultation cadence's word on this code round — after the checks that need nothing but the commit,
-    /// because a round with nothing to review owes no consultation (research/PLAN_consult_on_a_cadence.md, story 3.3).
-    /// </summary>
-    private async Task<string> CadenceBeforeTheCode(
-        PersistedSession loaded, CadenceArgs cadence, CadenceTrace trace, string repoPath, string branch, string sha, CancellationToken ct)
-    {
-        var prepared = await _cadence.PrepareAsync(loaded, cadence, repoPath, sha, ct);
-        var (refusal, call) = _cadence.BeforeTheCode(loaded, prepared, _commands.CommandTextsNow(), branch);
-        trace.Call = call;
-
-        return refusal;
     }
 
     /// <summary>A code round's number and the commit it reviewed; number 0 is "none".</summary>
@@ -1736,13 +1679,6 @@ public sealed class PanelService
             case Transition.Refused refused:
                 return Error(refused.Sentence);
             case Transition.Moved moved:
-                // An epic through its code gate is recorded BEFORE the session moves, so the commoner
-                // failure — this save — cannot lose it; its own failure is logged and reconciled by the
-                // next call, never allowed to fail the resolve (research/PLAN_consult_on_a_cadence.md, D3).
-                if (session.State.Stage == Stage.CodeReview && moved.State.Stage == Stage.Done && session.Rounds.Count > 0)
-                {
-                    _cadence.Close(session, session.Rounds[^1].Verdict);
-                }
                 // A feature review's round-1 decisions are kept for its second round (D23): the reviewers
                 // that answered are not asked again, and what was decided about their findings rides on
                 // round 2's verdict. Empty for every other resolve.
@@ -1780,24 +1716,10 @@ public sealed class PanelService
     public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, CancellationToken ct = default) =>
         _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, ct);
 
-    /// <summary>
-    /// The same, FOR something: a group of epics or a risky piece the cadence ordered
-    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). The three arguments are read into ONE canonical aim before
-    /// anything else, so a spelling the gate would not match is refused rather than paid for.
-    /// </summary>
-    public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, string kind, string plan, string epics, CancellationToken ct = default)
-    {
-        var (aim, refusal) = Core.Consultation.ConsultAim.Parse(kind, plan, epics);
-
-        return refusal.Length > 0
-            ? Task.FromResult(Error(refusal))
-            : _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, aim, ct);
-    }
-
-    /// <summary>Whether a consultation could be had right now — what the cadence gate asks before it refuses.</summary>
+    /// <summary>Whether a consultation could be had right now — what the consultants report asks.</summary>
     public ConsultPreflight ConsultPreflight() => _consultations.Preflight();
 
-    /// <summary>The consultation records, for the cadence gate and the tests that read what was written.</summary>
+    /// <summary>The consultation records, for the tests that read what was written.</summary>
     public ConsultationStore Consultations => _consultations.Store;
 
     /// <summary>

@@ -309,7 +309,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
         var resolved = Parse(await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath));
         resolved.GetProperty("stage").GetString().Should().Be("Done");
         resolved.GetProperty("instruction").GetString().Should().Contain("The feature stage is complete");
-        Parse(await service.StatusAsync(_repo, "any-branch", string.Empty, string.Empty, feature: PlanPath))
+        Parse(await service.StatusAsync(_repo, "any-branch", string.Empty, feature: PlanPath))
             .GetProperty("stage").GetString().Should().Be("Done", "status finds the feature session by its plan");
     }
 

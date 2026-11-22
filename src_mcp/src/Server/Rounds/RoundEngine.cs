@@ -260,18 +260,6 @@ internal sealed class RoundEngine(
                 return SkippedOrOwed(stage, loaded, number, sha, planText, skipped, from);
             }
 
-            // The plan and epic this round is FOR go on the session BEFORE the live round first writes it,
-            // so even a round a crash interrupts carries its epic (the epic-1-3 consultation, point 2).
-            if (stage.Cadence.Call.Plan.Length > 0)
-            {
-                session = session with
-                {
-                    Plan = stage.Cadence.Call.Plan,
-                    Epic = stage.Cadence.Call.Epic,
-                    CadenceRepoId = stage.Cadence.Call.RepoId,
-                };
-            }
-
             // The plan stage gets an empty scratch directory instead of a checkout — there is
             // nothing there to wander into, which is the point.
             await using var lease = stage.NeedsWorktree
@@ -416,8 +404,6 @@ internal sealed class RoundEngine(
                 Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
                 Size = roundWork.Size,
                 Gitlinks = roundWork.Gitlinks,
-                // What the consultation cadence said about this round: met, or stood down and why.
-                CadenceNote = stage.Cadence.Call.Note,
                 // What the round machine decided on its own and why — empty for a plain proceed or revise.
                 Note = AutoNote.Of(completed.Verdict),
                 // The D23 ground a feature review's second round was admitted on — read from the state this
@@ -462,9 +448,6 @@ internal sealed class RoundEngine(
                 // The words of the orders, read for THIS call like the switches: a file a person saved
                 // a second ago rewords this round's order (issue #467).
                 Texts = _commands.CommandTextsNow(),
-                // The consultation cadence as it stands for this call — Off unless the operator switched it on
-                // (research/PLAN_consult_on_a_cadence.md).
-                Cadence = stage.Cadence.Call.Facts,
             };
             // The caller's one order is CLAIMED, and only on a round that would actually give it —
             // a claim taken on a code round would spend it on a round that issues nothing. The

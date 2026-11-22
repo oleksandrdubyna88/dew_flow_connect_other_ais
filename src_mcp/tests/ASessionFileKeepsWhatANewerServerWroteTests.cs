@@ -403,7 +403,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
     private static readonly (JsonTypeInfo Info, string[] Members)[] Committed =
     [
         (ServerJsonContext.Default.PersistedSession,
-            ["state", "rounds", "openedUtc", "pending", "planText", "plan", "epic", "cadenceRepoId", "featureBase", "carried", "caller", "usedPrompts"]),
+            ["state", "rounds", "openedUtc", "pending", "planText", "featureBase", "carried", "caller", "usedPrompts"]),
         (ServerJsonContext.Default.SessionState,
             ["sessionId", "repoPath", "branch", "config", "stage", "roundsRunThisStage", "awaitingResolve", "planProceeded", "advanceOnResolve", "rejections", "secondRound", "document", "isDocumentSession", "feature", "isFeatureSession"]),
         (ServerJsonContext.Default.PanelConfig,
@@ -411,7 +411,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         (ServerJsonContext.Default.RoleGate,
             ["maxRounds", "threshold", "enabled"]),
         (ServerJsonContext.Default.RoundRecord,
-            ["stage", "number", "verdict", "gatingCount", "reviewers", "completedUtc", "status", "startedUtc", "runnerPid", "sha", "planKey", "epicNumber", "cadenceNote", "note", "key", "admittedBy", "repeats", "loggedNote", "reviewerStates", "caller", "size", "gitlinks", "planSource", "subject", "tokensIn", "tokensOut", "costUsd", "costNote", "usageNote", "authors"]),
+            ["stage", "number", "verdict", "gatingCount", "reviewers", "completedUtc", "status", "startedUtc", "runnerPid", "sha", "note", "key", "admittedBy", "repeats", "loggedNote", "reviewerStates", "caller", "size", "gitlinks", "planSource", "subject", "tokensIn", "tokensOut", "costUsd", "costNote", "usageNote", "authors"]),
         (ServerJsonContext.Default.ReviewerState,
             ["provider", "role", "status", "findings", "note", "seconds", "model", "effort", "warning"]),
     ];

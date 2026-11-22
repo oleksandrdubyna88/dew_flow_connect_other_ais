@@ -146,7 +146,7 @@ public sealed record SettingProblem(string Key, string Kind, string Value, strin
 /// </remarks>
 public sealed record OpenConsultation(
     string Id,
-    // stuck, cadence or risk: what it is FOR. Never empty — a record written before the kinds reads stuck.
+    // What it is FOR: always stuck in v2. Never empty — a record written before the kinds reads stuck.
     string Kind,
     string Vendor,
     string Model,
@@ -191,41 +191,7 @@ public sealed record SessionAnswer(
     /// research/PLAN_a_failed_round_can_be_retried.md).
     /// </remarks>
     public IReadOnlyList<Finding> Pending { get; init; } = [];
-
-    /// <summary>
-    /// The plan's consultation cadence — absent unless a plan was asked about or is held by this session
-    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
-    /// from every branch the plan is built on.
-    /// </summary>
-    public CadenceAnswer? Cadence { get; init; }
 }
-
-/// <summary>Where a plan stands against its consultation cadence — what the sidebar line is made of.</summary>
-/// <param name="Plan">The plan, repo-relative, as it was named.</param>
-/// <param name="Mode">off | remind | require, as the operator set it.</param>
-/// <param name="Epics">How many epics the plan holds — its headings, else the declared last number.</param>
-/// <param name="EpicsClosed">The epics whose code gate has passed, in number order.</param>
-/// <param name="Groups">Every group the plan owes a consultation for, and whether it has one closed with an outcome.</param>
-/// <param name="Risk">The risky epics and stories named, and whether each has its consultation.</param>
-/// <param name="RiskAnswered">Whether the risk question has been answered, with items or with a reason for none.</param>
-/// <param name="Unreadable">Why the plan's record could not be read, or empty. When it is not, the closed epics and the
-/// risk items above are NOT the record's — they are what an empty one says, and a line drawn from them would read as
-/// "nothing done yet", which is believable and false (the risk consultation for story 4.2, point 2).</param>
-public sealed record CadenceAnswer(
-    string Plan,
-    string Mode,
-    int Epics,
-    IReadOnlyList<int> EpicsClosed,
-    IReadOnlyList<CadenceGroupAnswer> Groups,
-    IReadOnlyList<CadenceRiskAnswer> Risk,
-    bool RiskAnswered,
-    string Unreadable = "");
-
-/// <summary>One group of epics and whether its consultation is on record.</summary>
-public sealed record CadenceGroupAnswer(string Range, bool Consulted);
-
-/// <summary>One named risky epic or story and whether its consultation is on record.</summary>
-public sealed record CadenceRiskAnswer(string Key, string Reason, bool Consulted);
 
 /// <summary>What a review tool returns: the verdict, the honest reviewer count, the findings.</summary>
 /// <param name="Cost">What the round consumed, as the vendors themselves reported it.</param>

@@ -12,7 +12,7 @@ public sealed record PlanPathCheck(string Path, string Refusal);
 /// the repository, and a name that is never read.
 /// </summary>
 /// <remarks>
-/// <para>Trimmed, and <c>\</c> becomes <c>/</c> first, as the cadence's <c>plan</c> path does: a Windows caller's
+/// <para>Trimmed, and <c>\</c> becomes <c>/</c> first, so a Windows caller's
 /// <c>todo\PLAN_x.md</c> is the committed <c>todo/PLAN_x.md</c>. Then, in this order: not repository-relative
 /// (<see cref="RepoPaths.WhyNotRelative"/>: empty, a NUL, absolute, a drive, <c>..</c>), a trailing <c>/</c> (that names
 /// what is UNDER a directory, never one file), a credential-shaped name (<see cref="CredentialFiles"/>, the same table

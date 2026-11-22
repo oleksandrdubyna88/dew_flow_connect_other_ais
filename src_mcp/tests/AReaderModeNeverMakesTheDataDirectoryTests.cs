@@ -131,14 +131,6 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         code.Should().Be(65, "no consultation can be recorded in a folder that is not there — a refusal, never a write");
     }
 
-    [Fact]
-    public async Task CadenceLeavesAMissingNamedDataDirectoryAbsent()
-    {
-        await Stdout.OfAsync(() => Program.RunAsync(["--cadence", "--repo", _parent, "--branch", "main", "--plan", "x"]));
-
-        Directory.Exists(Missing).Should().BeFalse($"--cadence left the missing data directory behind, holding: {Inside()}");
-    }
-
     /// <summary>
     /// <c>--providers</c> through its injected seam: the real launcher would ask this machine's vault and its CLIs.
     /// </summary>

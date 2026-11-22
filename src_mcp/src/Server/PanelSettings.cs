@@ -403,7 +403,7 @@ public sealed record PanelSettings
         env("COAI_CONSULTANT_HOMES") is { Length: > 0 } homes ? homes : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
     /// <summary>The root a <see cref="Runners.Worktrees.WorktreeManager"/> is given: <see cref="RoundTreeRoot"/>, or the data dir's own.</summary>
-    /// <remarks>One expression for every place that builds a manager — the service and the <c>--cadence</c> reader.</remarks>
+    /// <remarks>One expression for every place that builds a manager.</remarks>
     public string WorktreeRoot => RoundTreeRoot is { Length: > 0 } roundTrees ? roundTrees : Path.Combine(DataDir, "worktrees");
 
     /// <summary>
@@ -498,23 +498,6 @@ public sealed record PanelSettings
     /// (issue #131). Never per story.
     /// </summary>
     public Core.Commands.GateScope GatePer { get; init; } = Core.Commands.GateScope.Epic;
-
-    /// <summary>
-    /// Whether the gate orders a consultation per group of epics, and refuses without one —
-    /// <c>COAI_CADENCE_MODE</c> = off | remind | require (<c>research/PLAN_consult_on_a_cadence.md</c>).
-    /// </summary>
-    /// <remarks><c>remind</c> by default (D4): the extension is on the Marketplace, and a refusal by default
-    /// would change every user's gate on an update. The operator turns <c>require</c> on.</remarks>
-    public Core.Cadence.CadenceMode CadenceMode { get; init; } = Core.Cadence.CadenceMode.Remind;
-
-    /// <summary>One consultation per this many epics — <c>COAI_CADENCE_EVERY</c>, three by the operator's rule.</summary>
-    public int CadenceEvery { get; init; } = Core.Cadence.CadenceRule.DefaultEvery;
-
-    /// <summary>From this many epics the caller is asked which carry the most risk — <c>COAI_CADENCE_RISK_THRESHOLD</c>.</summary>
-    public int CadenceRiskThreshold { get; init; } = Core.Cadence.CadenceRule.DefaultRiskThreshold;
-
-    /// <summary>The most risky epics and stories one plan may name — <c>COAI_CADENCE_RISK_MAX</c> (D6).</summary>
-    public int CadenceRiskMax { get; init; } = Core.Cadence.CadenceRule.DefaultRiskMax;
 
     /// <summary>
     /// How many epics a plan needs before the feature gate runs for it — <c>COAI_FEATURE_MIN_EPICS</c>,
@@ -1019,10 +1002,6 @@ public sealed record PanelSettings
             StopLocalWhenQuiet = Flag(env, "COAI_STOP_LOCAL_WHEN_QUIET"),
             SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
             GatePer = GateScopeOf(env(Key.GatePer) ?? string.Empty),
-            CadenceMode = CadenceModeOf(env(Key.CadenceMode) ?? string.Empty),
-            CadenceEvery = IntVar(env, "COAI_CADENCE_EVERY", Core.Cadence.CadenceRule.DefaultEvery),
-            CadenceRiskThreshold = IntVar(env, "COAI_CADENCE_RISK_THRESHOLD", Core.Cadence.CadenceRule.DefaultRiskThreshold),
-            CadenceRiskMax = IntVar(env, "COAI_CADENCE_RISK_MAX", Core.Cadence.CadenceRule.DefaultRiskMax),
             // `IntVar`: a plan of zero epics is not a plan, so zero falls back rather than meaning "always".
             FeatureMinEpics = IntVar(env, "COAI_FEATURE_MIN_EPICS", Core.Feature.FeatureGate.DefaultMinEpics),
             // Zero is the meaningful value here — single-turn — and the ceiling is a decision, so neither
@@ -1099,7 +1078,6 @@ public sealed record PanelSettings
 
         internal const string GatePer = "COAI_GATE_PER";
 
-        internal const string CadenceMode = "COAI_CADENCE_MODE";
     }
 
     /// <summary>Every setting whose VALUE this build could not use, as one sentence each.</summary>
@@ -1113,7 +1091,7 @@ public sealed record PanelSettings
     /// </remarks>
     private static IReadOnlyList<UnrecognisedSetting> UnknownValues(
         Func<string, string?> env, RolesSetting roles) =>
-        [.. WhyBackoff(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyCadenceMode(env), .. WhyRoles(roles), .. WhyFollowUps(env)];
+        [.. WhyBackoff(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyRoles(roles), .. WhyFollowUps(env)];
 
     /// <summary>
     /// <c>COAI_FEATURE_SOURCE_FOLLOWUPS</c> as a count of follow-up turns: an integer in
@@ -1133,21 +1111,6 @@ public sealed record PanelSettings
               + $"a feature reviewer gets {Core.Feature.SourceBudget.DefaultFollowUps}, as it does by default. "
               + $"The values are the integers 0 to {Core.Feature.SourceBudget.MaxFollowUps}; 0 switches the follow-ups off.")]
             : [];
-
-    private static IReadOnlyList<UnrecognisedSetting> WhyCadenceMode(Func<string, string?> env) =>
-        env(Key.CadenceMode) is { Length: > 0 } mode && CadenceModeOf(mode) == Core.Cadence.CadenceMode.Remind
-        && !string.Equals(mode.Trim(), "remind", StringComparison.OrdinalIgnoreCase)
-            ? [new UnrecognisedSetting(
-                Key.CadenceMode,
-                $"{Key.CadenceMode} is '{mode}', which this server does not know — the consultation cadence "
-              + "reminds, as it does by default. The values are 'off', 'remind' and 'require'.")]
-            : [];
-
-    /// <summary><c>COAI_CADENCE_MODE</c> as a mode; anything it cannot read is <c>remind</c>, said by <see cref="WhyCadenceMode"/>.</summary>
-    private static Core.Cadence.CadenceMode CadenceModeOf(string value) =>
-        Enum.TryParse<Core.Cadence.CadenceMode>(value.Trim(), ignoreCase: true, out var mode) && Enum.IsDefined(mode)
-            ? mode
-            : Core.Cadence.CadenceMode.Remind;
 
     private static IReadOnlyList<UnrecognisedSetting> WhyGatePer(Func<string, string?> env) =>
         env(Key.GatePer) is { Length: > 0 } scope && !AGateScopeWeKnow(scope)

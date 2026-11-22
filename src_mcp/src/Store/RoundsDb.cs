@@ -912,11 +912,10 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$commands", JsonSerializer.Serialize(
             [.. context.Commands.IsDefault ? [] : context.Commands], Server.ServerJsonContext.Default.ListString));
         Bind(write, "$planShape", context.PlanShape ?? string.Empty);
-        // The epic this round was for and what the cadence said — from the ROUND, which owns them, as
-        // the caller is (research/PLAN_consult_on_a_cadence.md).
-        Bind(write, "$planKey", round.PlanKey);
-        Bind(write, "$epicNumber", round.EpicNumber);
-        Bind(write, "$cadenceNote", round.CadenceNote);
+        // The cadence is gone in v2; the columns stay (a schema step is never undone) and are written empty.
+        Bind(write, "$planKey", string.Empty);
+        Bind(write, "$epicNumber", 0);
+        Bind(write, "$cadenceNote", string.Empty);
         // Why a round did NOT run, with its repeat count — the skip reason of the feature stage (S2.1).
         // The upsert on (session, stage, number) is what makes ten identical skips one row: the record
         // keeps its number and this rewrites its count.

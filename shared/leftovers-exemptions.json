@@ -37,7 +37,6 @@
     {"file":"src_mcp/tests/AVibeDiskRowReadsAParentFolderThroughTheServiceTests.cs","line":60,"sha256":"757eac02ac686fd8dd08080da616b9866cb8f7bed35ead27d2d9cb591bdefb5c","class":"raw-worktree","guards":["csharp"]},
     {"file":"src_mcp/tests/AVibeDiskRowSaysWhatItSkippedTests.cs","line":117,"sha256":"255e5118b953ba360a904fa220e366583768a51d8578c260d34f9d942ad0965b","class":"raw-worktree","guards":["csharp"]},
     {"file":"src_mcp/tests/BackfillAuthorsBackupTests.cs","line":149,"sha256":"f67e1234e382b9d1e6f6f7fa553ff728d5ef5cfecaca360748b3d112a29011fd","class":"shared-store","guards":["csharp"]},
-    {"file":"src_mcp/tests/CadenceStoreTests.cs","line":163,"sha256":"844799bc444a4885b3e8ae3980c895102f96549eadb4e4ebdd66cf84cf853459","class":"raw-worktree","guards":["csharp"]},
     {"file":"src_mcp/tests/FilesystemInvariantTests.cs","line":191,"sha256":"95089256f3f3960b1d4869d50c29b5c8d69598faa5b4ea1f8083abfa4eb1b67b","class":"raw-worktree","guards":["csharp"]},
     {"file":"src_mcp/tests/FilesystemInvariantTests.cs","line":222,"sha256":"95089256f3f3960b1d4869d50c29b5c8d69598faa5b4ea1f8083abfa4eb1b67b","class":"raw-worktree","guards":["csharp"]},
     {"file":"src_mcp/tests/FilesystemInvariantTests.cs","line":419,"sha256":"95089256f3f3960b1d4869d50c29b5c8d69598faa5b4ea1f8083abfa4eb1b67b","class":"raw-worktree","guards":["csharp"]},
