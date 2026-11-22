@@ -163,3 +163,5 @@ thing in this file so an appended line lands in it, so notes on rows are written
 | 2026-11-22 | 503a65ad | S2 shell + legacy sidebar | local | win32 | 925.8 | 1258.2 / 2320.9 / 3514.9 | 1230.9 / 2291.3 / 3487.7 | FAIL |
 | 2026-11-22 | 89471dd3 | first paint (sidebar paints before slow reads) | local | linux | 3.2 | 584.2 / 730.1 / 771.9 | 489.6 / 692.5 / 698.6 | PASS |
 | 2026-11-22 | 89471dd3 | first paint (sidebar paints before slow reads) | local | win32 | 60.7 | 672.8 / 736.5 / 1671 | 586.9 / 672.6 / 1654.4 | PASS (M1 limit 100 ms) |
+| 2026-11-22 | 688bda62 | snapshot sidebar (skeleton path, fresh profile) | local | linux | 4.8 | 559.5 / 561.6 / 691.2 | null (read at ready, before the hand-over) | PASS |
+| 2026-11-22 | 688bda62 | snapshot sidebar (skeleton path, fresh profile) | local | win32 | 76.6 | 522.7 / 915.2 / 1403 | null (read at ready, before the hand-over) | PASS |
