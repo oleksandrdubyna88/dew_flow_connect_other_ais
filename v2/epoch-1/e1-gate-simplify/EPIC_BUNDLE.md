@@ -368,3 +368,16 @@ branch is broken, then restore. Report a table: scenario, test name, mutation.
 
 Rejected (reason recorded in the gate): fixtures must come from released binaries — real artifacts were verified by the
 live proof (three real data folders, many releases).
+
+## 6. Epic plan gate round 2 (proceed, 2026-11-22) — accepted changes (supersede §1 and §2 where they differ)
+
+1. **Merge identity includes the path.** A source file is removed only when the SAME relative path in the target holds
+   the same bytes; a different file at that path gets the `.v1-<sha256-8>` suffix; two distinct names with identical bytes
+   are both kept. Test: two names, identical bytes.
+2. **Dry run writes no notice.** The dry run lists proposed notices in the report (`notices: [...]`); only apply (and the
+   automatic run) writes them. Test: an answered hold, no notice file, dry run → file still absent.
+3. **Late v1 cards.** Every v2 start (not gated by the marker) withdraws and archives any OPEN card at the top level of
+   `escalations/` (same step as §1 output 2, journaled). Test: a card written after `v2.done` is withdrawn at the next start.
+4. **Unreadable = incomplete.** Contract change: an `unreadable` object makes apply exit **75** with status `partial`, no
+   marker; scenario 13 becomes "corrupt session → unreadable, untouched, others migrate, exit 75, no marker; after repair
+   the next run converts it and writes the marker". Convert-on-load (§5.1) also converts it once readable.
