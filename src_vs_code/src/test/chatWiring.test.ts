@@ -52,7 +52,7 @@ test('the command the extension registers is the command the manifest declares',
 
   assert.ok(declared.includes(COMMAND), `${COMMAND} is not in contributes.commands`);
   assert.match(
-    read('src/extension.ts'),
+    read(join('shell', 'modules', 'chat', 'register.ts')),
     new RegExp(`registerCommand\\('${COMMAND.replace('.', '\\.')}'`),
     'the manifest declares a command nothing registers — the palette entry would do nothing',
   );
@@ -300,16 +300,19 @@ test('the chat reads no reviewer row, from either side of the machine', () => {
 test('the side is bound before any command can be invoked', () => {
   // `sideRead` falls back to the shared configuration while nothing is bound, which is exactly the
   // behaviour this branch removed. Four reviewers named that window in one round. It is closed by
-  // ORDERING — the binding is the first statement of `activate` — and this is what keeps it closed.
-  const text = read(join('src', 'extension.ts'));
-  const bound = text.indexOf('chatReadsThisSide(context)');
-  const firstCommand = text.indexOf('registerCommand(');
+  // ORDERING — the binding comes before the first registration — and this is what keeps it closed. It holds in BOTH places that
+  // register commands: the old activation, and the chat module's registration (v2 E4), which is where the chat commands are now.
+  for (const file of [join('src', 'extension.ts'), join('shell', 'modules', 'chat', 'register.ts')]) {
+    const text = read(file);
+    const bound = text.indexOf('chatReadsThisSide(context)');
+    const firstCommand = text.indexOf('registerCommand(');
 
-  assert.ok(bound > 0, 'nothing binds this side, so every chat reads the shared settings');
-  assert.ok(
-    firstCommand > bound,
-    'a command is registered before the side is bound — an invocation in that window reads shared settings',
-  );
+    assert.ok(bound > 0, `nothing binds this side in ${file}, so every chat reads the shared settings`);
+    assert.ok(
+      firstCommand > bound,
+      `a command is registered before the side is bound in ${file} — an invocation in that window reads shared settings`,
+    );
+  }
 });
 
 test('the per-side reader is built in exactly one place', () => {
@@ -507,7 +510,7 @@ test('a command that acts inside an open chat is scoped to the chat, and everyth
     // The HANDLER'S body, cut out the way the door test below cuts one: `noteChatDoor` takes a door's
     // short name, never a command id, so searching the file for the id could never fail. (Our own code
     // review.)
-    const source = read('src/extension.ts');
+    const source = read(join('shell', 'modules', 'chat', 'register.ts'));
     const at = source.indexOf("registerCommand('" + command + "'");
     assert.notStrictEqual(at, -1, command + ' is allow-listed and registered by nothing');
     const next = source.indexOf('registerCommand(', at + 20);
@@ -536,7 +539,7 @@ test('a keybinding scoped to our own picker is not a door, and nothing that is a
       command + ' is bound both inside our picker and outside it, so the exclusion hides a real door');
     assert.ok(!inMenus.includes(command),
       command + ' is offered from a right-click menu, where the picker it acts on is not open');
-    assert.ok(!read('src/extension.ts').includes("registerCommand('" + command + "', (...args"),
+    assert.ok(!read(join('shell', 'modules', 'chat', 'register.ts')).includes("registerCommand('" + command + "', (...args"),
       command + ' takes what VS Code hands a menu item, which is not how a command acting on the picker is invoked');
   }
 });
@@ -558,7 +561,7 @@ test('a keybinding scoped to our own picker is not a door, and nothing that is a
  * it recorded nothing. (codex, the code round.)</p>
  */
 test('each door offered by the manifest records itself, once, before it does anything that can refuse', () => {
-  const source = read('src/extension.ts');
+  const source = read(join('shell', 'modules', 'chat', 'register.ts'));
   const CALL = "noteChatDoor('";
   const doors = doorCommands();
 
@@ -582,7 +585,7 @@ test('each door offered by the manifest records itself, once, before it does any
 
 test('S4-T8: the terminal doors are found in the manifest and each records its own short name first', () => {
   const doors = doorCommands();
-  const source = read('src/extension.ts');
+  const source = read(join('shell', 'modules', 'chat', 'register.ts'));
 
   for (const [command, door] of [['coai.takeFromTerminal', 'take'], ['coai.addFromTerminal', 'add'], ['coai.askFromTerminal', 'terminal']] as const) {
     assert.ok(doors.includes(command), command + ' is a door of the terminal title bar and the census does not find it');
@@ -598,7 +601,7 @@ test('S4-T8: the terminal doors are found in the manifest and each records its o
 test('nothing records a door the manifest does not offer', () => {
   // The other direction: a recorder left behind on a command that no longer opens a chat would
   // inflate the count on the page and nothing else would notice.
-  const source = read('src/extension.ts');
+  const source = read(join('shell', 'modules', 'chat', 'register.ts'));
 
   assert.strictEqual(source.split("noteChatDoor('").length - 1, doorCommands().length,
     'the number of recorders and the number of doors the manifest offers have drifted apart');
@@ -621,7 +624,7 @@ test('a prompt button adopts text the person wrote, and a model button leaves it
 });
 
 test('S2-T11: the terminal go-to is found by the census and records its door first', () => {
-  const source = read('src/extension.ts');
+  const source = read(join('shell', 'modules', 'chat', 'register.ts'));
   const command = 'coai.goToFromTerminal';
   const at = source.indexOf("registerCommand('" + command + "'");
 

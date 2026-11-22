@@ -79,7 +79,7 @@ test('the chat tab asks the workbench for that pair', () => {
 
   assert.match(source, /panel\.iconPath = chatTabIcon\(/,
     'no iconPath is set, so the tab wears the generic glyph');
-  assert.match(read(path.join('src', 'extension.ts')),
+  assert.match(read(path.join('shell', 'modules', 'chat', 'register.ts')),
     /chatWithOtherAi\(chatPanels, context\.extensionUri, args\)/,
     'the extension URI never leaves activate, so the panel has nothing to join');
 });
@@ -100,7 +100,8 @@ test('a panel restored after a reload must be built the same way', () => {
       return entry.name.endsWith('.ts') ? [full] : [];
     });
 
-  const files = walk(root);
+  // The chat registration (v2 E4) is where the `coaiChat` serializer is registered now, outside `src`.
+  const files = [...walk(root), path.join(EXTENSION_ROOT, 'shell', 'modules', 'chat', 'register.ts')];
   // Whoever builds a chat panel — `createChatPanel` itself, and anything that calls it. A serializer
   // may reach the builder through one of those rather than call it directly, which is what
   // `extension.ts` does; what it may not do is make a panel of its own, because the builder is the
@@ -124,7 +125,7 @@ test('a panel restored after a reload must be built the same way', () => {
     }
 
     assert.ok(
-      builders.some((builder) => source.includes(`'./${builder}'`)),
+      builders.some((builder) => source.includes(`/${builder}'`)),
       `${path.basename(file)} restores a chat panel without going through the one place that builds one`,
     );
     assert.doesNotMatch(

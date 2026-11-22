@@ -2,6 +2,7 @@ import { join, resolve } from 'node:path';
 import { WatchedDir } from './escalationDirs';
 import { familyOf, otherSideNote, spelledForTheOtherOs, type PathFamily } from './pathFamily';
 import { type PathFinding, type Presence, findingOf } from './pathFindings';
+import { hostRuntime } from './hostRuntime';
 import { DATA_DIRECTORY } from './pathSettings';
 
 /**
@@ -256,7 +257,7 @@ export function storageChoiceFrom(read: (section: string) => unknown): StorageCh
 /**
  * The two settings layers this window read for itself.
  *
- * <p>Module state, deliberately, and with the same justification as `reloadOffered` in
+ * <p>Host state, deliberately (held in the shared runtime, `runtimeState.ts`, so every bundle of the host sees ONE answer — v2 E4), and with the same justification as `reloadOffered` in
  * `sideConfig.ts`: the alternative is a parameter on `coaiDataDir()`, which has fifteen call sites
  * across four modules, and a parameter fifteen callers must remember is a directory fourteen of them
  * will eventually get right. There is ONE answer to "where does this window keep its data"; this is
@@ -266,22 +267,19 @@ export function storageChoiceFrom(read: (section: string) => unknown): StorageCh
  * both compile against it. So the host reads the two layers and installs them here, once, at
  * activation and again whenever the configuration changes.</p>
  */
-let installed: { readonly thisSide: StorageChoice; readonly shared: StorageChoice } = {
-  thisSide: NOTHING_CHOSEN,
-  shared: NOTHING_CHOSEN,
-};
+const installed = (): { readonly thisSide: StorageChoice; readonly shared: StorageChoice } => hostRuntime().dataRoot.installed;
 
 /**
  * Install what this window read. Called at activation BEFORE anything resolves a path — the chat
  * store is constructed from one — and again on every configuration change.
  */
 export function useStorageSettings(thisSide: StorageChoice, shared: StorageChoice): void {
-  installed = { thisSide, shared };
+  hostRuntime().dataRoot.installed = { thisSide, shared };
 }
 
 /** Every layer, in order. */
 function currentChoice(): ChosenStorage {
-  return chooseStorage(environmentChoice(), installed.thisSide, installed.shared);
+  return chooseStorage(environmentChoice(), installed().thisSide, installed().shared);
 }
 
 /**

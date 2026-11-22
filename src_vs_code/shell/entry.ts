@@ -6,20 +6,23 @@
 // `./measure` FIRST: its first statement is the module-evaluation mark of the cold-start measurement.
 import { mark, registerMeasure } from './measure';
 import * as vscode from 'vscode';
-import { COMMANDS, MODULE_LEGACY, MODULE_SIDEBAR, PANEL_CHAT, VIEW_PANEL } from './ids';
-import { lazy, loadedModule, type SidebarModule } from './lazy';
+import { COMMANDS, MODULE_CHAT, MODULE_LEGACY, MODULE_SIDEBAR, moduleOf, PANEL_CHAT, VIEW_PANEL } from './ids';
+import { type ChatModule, lazy, loadedModule, type ShellModule, type SidebarModule } from './lazy';
 
-/** What `activate` returns: a door for the test host, which starts the legacy module on demand. */
+/** What `activate` returns: doors for the test host, which starts the legacy module and the chat module on demand. */
 export interface ShellExports {
   readonly legacy: () => Promise<unknown>;
+  readonly chat: () => Promise<unknown>;
 }
 
 export function activate(context: vscode.ExtensionContext): ShellExports {
   // M1 starts HERE, the first statement: the host's delay between evaluating this file and calling `activate` is `hostDelay`, not the entry's time.
   mark('activateStart');
   const legacy = () => lazy(MODULE_LEGACY);
+  // Chat runs from its own module (v2 E4): its commands and its serializer never load the legacy one.
+  const chat = () => lazy<ChatModule>(MODULE_CHAT);
   context.subscriptions.push(
-    ...COMMANDS.map((id) => vscode.commands.registerCommand(id, (...args: unknown[]) => legacy().then((module) => module.command(context, id, args)))),
+    ...COMMANDS.map((id) => vscode.commands.registerCommand(id, (...args: unknown[]) => (moduleOf(id) === MODULE_CHAT ? chat() : legacy()).then((module) => module.command(context, id, args)))),
     vscode.window.registerWebviewViewProvider(VIEW_PANEL, {
       resolveWebviewView: (view, resolveContext, token) => {
         mark('viewResolve');
@@ -31,7 +34,7 @@ export function activate(context: vscode.ExtensionContext): ShellExports {
       },
     }),
     vscode.window.registerWebviewPanelSerializer(PANEL_CHAT, {
-      deserializeWebviewPanel: (panel, state) => legacy().then((module) => module.restorePanel(context, panel, state)),
+      deserializeWebviewPanel: (panel, state) => chat().then((module) => module.restorePanel(context, panel, state)),
     }),
     vscode.window.registerUriHandler({
       handleUri: (uri) => legacy().then((module) => module.handleUri(context, uri)),
@@ -41,9 +44,12 @@ export function activate(context: vscode.ExtensionContext): ShellExports {
   );
   mark('activateReturn');
 
-  return { legacy: () => legacy().then((module) => module.start(context)) };
+  return { legacy: () => legacy().then((module) => module.start(context)), chat: () => chat().then((module) => module.start(context)) };
 }
 
+/** Every module that was loaded is told; one that was never loaded is not loaded to be told. Both answers are awaited, the chat drain included. */
 export function deactivate(): Thenable<void> | undefined {
-  return loadedModule(MODULE_LEGACY)?.deactivate();
+  const pending = [loadedModule<ShellModule>(MODULE_LEGACY), loadedModule<ChatModule>(MODULE_CHAT)].map((module) => module?.deactivate()).filter((one) => one !== undefined);
+
+  return pending.length === 0 ? undefined : Promise.all(pending).then(() => undefined);
 }

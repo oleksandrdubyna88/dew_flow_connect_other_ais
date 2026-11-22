@@ -156,9 +156,18 @@ test('the shipped bundle loads with a stubbed editor, and exports activate', () 
     // The old code now lives in the `legacy` module, which the entry loads on first use. It is the part that does work at
     // import time (module-level `ThemeIcon`s and the like), so loading it is the same question this test always asked.
     const legacy = createRequire(import.meta.url)(join(ROOT, 'dist', 'modules', 'legacy.js'));
-    for (const member of ['command', 'resolveView', 'restorePanel', 'handleUri', 'start', 'deactivate']) {
+    for (const member of ['command', 'resolveView', 'handleUri', 'start', 'deactivate']) {
       assert.equal(typeof legacy[member], 'function', `the legacy module exports no ${member}, which the shell calls`);
     }
+    assert.equal(legacy.restorePanel, undefined, 'the legacy module still restores chat tabs, which are the chat module\'s since v2 E4');
+
+    // The chat module (v2 E4) is loaded for the same reason: it does work at import time (the chat code's module-level `ThemeIcon`s and the like).
+    const chat = createRequire(import.meta.url)(join(ROOT, 'dist', 'modules', 'chat.js'));
+    for (const member of ['command', 'restorePanel', 'chooseFromBug', 'start', 'deactivate']) {
+      assert.equal(typeof chat[member], 'function', `the chat module exports no ${member}, which the shell calls`);
+    }
+    const runtime = createRequire(import.meta.url)(join(ROOT, 'dist', 'modules', 'runtime.js'));
+    assert.equal(typeof runtime.runtime?.notify?.bounds?.admit, 'function', 'the runtime module does not hold the notify suppressor');
   } finally {
     Module._load = load;
   }

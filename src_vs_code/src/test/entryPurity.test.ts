@@ -176,8 +176,9 @@ test('what activate registers is what the manifest declares: every command, the 
   assert.deepEqual([...run.commandIds].sort(), [...declared].sort(), 'the entry registers other command ids than package.json declares (shell/ids.ts is out of date)');
   assert.deepEqual(run.calls.filter((call) => call !== 'commands.registerCommand' && call !== 'subscriptions.push').sort(),
     ['window.registerUriHandler', 'window.registerWebviewPanelSerializer', 'window.registerWebviewViewProvider']);
-  const returned = run.returned as { readonly legacy?: unknown };
+  const returned = run.returned as { readonly legacy?: unknown; readonly chat?: unknown };
   assert.equal(typeof returned.legacy, 'function', 'activate returns no door for the test host to start the old code');
+  assert.equal(typeof returned.chat, 'function', 'activate returns no door for the test host to start the chat module');
 });
 
 test('with COAI_MEASURE=1 activate registers one more command, coai.__measure, and still only registers; with it unset the command is absent', async () => {

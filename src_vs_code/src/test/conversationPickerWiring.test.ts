@@ -53,12 +53,12 @@ test('a NARROWED list is not filtered again by this window’s first root', () =
     'the picker cannot tell a chosen list from one gathered out of the store');
 });
 
-test('the picker has a command, the manifest declares it, and activate registers it', () => {
+test('the picker has a command, the manifest declares it, and the chat module registers it', () => {
   const declared = MANIFEST.contributes.commands.find((row) => row.command === SWITCH);
 
   assert.ok(declared !== undefined, `${SWITCH} is not in contributes.commands`);
   assert.match(declared.title, /switch conversations/iu, 'the palette entry does not say what it opens');
-  assert.match(read('src/extension.ts'), /registerCommand\('coai\.switchConversations'/u,
+  assert.match(read('shell/modules/chat/register.ts'), /registerCommand\('coai\.switchConversations'/u,
     'the manifest declares a command nothing registers — the palette entry would do nothing');
 });
 

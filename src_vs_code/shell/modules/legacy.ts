@@ -1,4 +1,4 @@
-// The `legacy` module: for this story every command, the sidebar view and the chat serializer load here.
+// The `legacy` module: every command that has not gone to a module of its own, and the sidebar view, load here. Chat has gone (`./chat/index.ts`, v2 E4).
 // On first use it runs the OLD `activate()` (src/extension.ts) exactly once, and forwards to what that call
 // registered. Later stories move features into real modules and this file shrinks to nothing.
 // `../measure` FIRST: this bundle's own copy of the recorder evaluates before the old code does, and that moment is the `moduleEval` mark.
@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { activate as activateOldCode, deactivate as deactivateOldCode, type CoaiExports } from '../../src/extension';
 import { adoptRegistrationsFor } from '../../src/shellBridge';
 import { recordMarksWith } from '../../src/measureMarks';
-import { COMMANDS, PANEL_CHAT, VIEW_PANEL } from '../ids';
+import { COMMANDS, MODULE_LEGACY, moduleOf, VIEW_PANEL } from '../ids';
 import type { ShellModule } from '../lazy';
 
 type Handler = (...args: unknown[]) => unknown;
@@ -17,10 +17,10 @@ recordMarksWith(mark);
 // Every import above has been evaluated: the time from `moduleEval` to here is the old tree's module-level code (the 4 MB of it).
 mark('legacyBody');
 
-const owned = new Set<string>(COMMANDS);
+// The chat commands belong to the chat module: its own adopter holds them, and the old activation no longer registers them.
+const owned = new Set<string>(COMMANDS.filter((id) => moduleOf(id) === MODULE_LEGACY));
 const handlers = new Map<string, Handler>();
 let viewProvider: vscode.WebviewViewProvider | undefined;
-let panelSerializer: vscode.WebviewPanelSerializer | undefined;
 
 /** The outcome of the one run of the old `activate()`; a failure is kept, so a second call re-throws it rather than running the old code again. */
 let outcome: { readonly started: CoaiExports } | { readonly failed: unknown } | undefined;
@@ -43,14 +43,8 @@ function adopt(): void {
 
       return true;
     },
-    serializer: (viewType, serializer) => {
-      if (viewType !== PANEL_CHAT) {
-        return false;
-      }
-      panelSerializer = serializer;
-
-      return true;
-    },
+    // The `coaiChat` serializer is the chat module's; the old activation registers none.
+    serializer: () => false,
   });
 }
 
@@ -91,12 +85,6 @@ export const resolveView: ShellModule['resolveView'] = (context, view, resolveCo
   return viewProvider?.resolveWebviewView(view, resolveContext, token);
 };
 
-export const restorePanel: ShellModule['restorePanel'] = (context, panel, state) => {
-  started(context);
-
-  return panelSerializer?.deserializeWebviewPanel(panel, state);
-};
-
 // The old code has no `vscode://` handler: the link only starts it, which is what `onUri` is for.
 export const handleUri: ShellModule['handleUri'] = (context) => {
   started(context);
@@ -106,15 +94,15 @@ export const handleUri: ShellModule['handleUri'] = (context) => {
 export interface ShellTestDoor {
   /** The command ids the old activation handed to the shell, in no particular order. */
   readonly adoptedCommands: () => readonly string[];
-  /** True once the old activation gave the shell a view provider and a panel serializer. */
-  readonly adoptedViewAndSerializer: () => boolean;
+  /** True once the old activation gave the shell a view provider. */
+  readonly adoptedView: () => boolean;
 }
 
 export const start: ShellModule['start'] = (context) => {
   const old = started(context);
 
   return context.extensionMode === vscode.ExtensionMode.Test
-    ? { ...old, shell: { adoptedCommands: () => [...handlers.keys()], adoptedViewAndSerializer: () => viewProvider !== undefined && panelSerializer !== undefined } satisfies ShellTestDoor }
+    ? { ...old, shell: { adoptedCommands: () => [...handlers.keys()], adoptedView: () => viewProvider !== undefined } satisfies ShellTestDoor }
     : old;
 };
 

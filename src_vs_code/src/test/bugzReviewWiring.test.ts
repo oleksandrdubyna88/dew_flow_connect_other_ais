@@ -461,16 +461,19 @@ test('the sidebar hands its hook to the chat, and the extension gives it the win
   assert.match(code('panelProvider.ts'), /choose: \(chat\) => this\.chooseInChat\?\.\(chat\) \?\? Promise\.resolve\(\),/u,
     'the review page\'s hook must reach the callback the extension handed in');
   const extension = code('extension.ts');
-  const registry = extension.indexOf('const chatPanels = new ChatPanels();');
-  const sidebar = extension.indexOf('new PanelProvider(');
-  assert.ok(registry >= 0 && registry < sidebar, 'the registry must exist before the sidebar is handed it');
+  // Since v2 E4 the registry is the CHAT MODULE's, made once when it starts (`shell/modules/chat/register.ts`): the legacy sidebar reaches it through the shell,
+  // so a bug lands in the same registry as every other chat door, and the old activation builds no second one.
+  assert.ok(!extension.includes('new ChatPanels()'), 'the old activation builds a chat registry of its own, beside the chat module\'s');
+  const chatModule = readFileSync(join(__dirname, '..', '..', 'shell', 'modules', 'chat', 'index.ts'), 'utf8');
+  assert.match(chatModule, /const \{ chatPanels \} = started\(context\);\s*\n\s*return chooseFromBugIn\(chatPanels, context\.extensionUri, chat as /u, 'the chat module hands a bug to a registry other than the one it started');
+  assert.ok(readFileSync(join(__dirname, '..', '..', 'shell', 'modules', 'chat', 'register.ts'), 'utf8').includes('const chatPanels = new ChatPanels();'), 'the chat registration makes no registry');
   // No door is recorded: the door inventory is one recorder per MANIFEST command, and this button is
   // not one — recording it as the right-click `choose` would count a press nobody made there.
-  assert.match(extension, /\}, consultations, \(chat\) => chooseFromBug\(chatPanels, context\.extensionUri, chat\)\.catch\(\(reason: unknown\) => \{/u,
-    'a press goes into THIS window\'s conversations');
+  assert.match(extension, /\}, consultations, \(chat\) => loadShellModule<ChatModuleDoor>\(MODULE_CHAT\)\.then\(\(chatModule\) => chatModule\.chooseFromBug\(context, chat\)\)\.catch\(\(reason: unknown\) => \{/u,
+    'a press goes into THIS window\'s conversations, through the chat module the shell loads');
   // The panel starts the hook with `void`, so a throw nobody catches is a press that does nothing and
   // says nothing — every other action on this page catches and says so. (Our own code reviewer.)
-  const failure = bodyOf(extension, '(chat) => chooseFromBug(chatPanels, context.extensionUri, chat).catch((reason: unknown) => {');
+  const failure = bodyOf(extension, '(chat) => loadShellModule<ChatModuleDoor>(MODULE_CHAT).then((chatModule) => chatModule.chooseFromBug(context, chat)).catch((reason: unknown) => {');
   assert.match(failure, /console\.error\('CoAI: choose on a bug failed', reason\);/u, 'the detail goes to the console');
   assert.match(failure, /notify\(\{\s*as: 'warning',\s*class: 'failure',\s*source: 'bugz',\s*code: 'bug-not-chosen',[\s\S]*?detail: asText\(reason\),/u,
     'and a short sentence to the person, with the detail written down');

@@ -216,7 +216,7 @@ const everySource = (): string => fs.readdirSync(path.join(__dirname, '..', '..'
 test('the extension tells VS Code how to bring a chat tab back, and it reads the STORE to do it', () => {
   // The symptom, as a test: there was no serializer anywhere, so a reload had nothing to restore
   // through and every tab came back empty or not at all.
-  const wiring = source('extension.ts');
+  const wiring = source('../shell/modules/chat/register.ts');
   const handler = wiring.slice(wiring.indexOf('deserializeWebviewPanel'));
 
   assert.match(wiring, /registerWebviewPanelSerializer\(\s*'coaiChat'/,
@@ -235,7 +235,7 @@ test('the serializer waits for the migration before it answers — a tab not yet
   // brief said to dispose: an open tab destroyed on the first reload after the upgrade, the single most
   // visible moment this feature has. The wait has a CEILING and the tab is drawn before it (the code
   // round's four findings on a blank tab) — `chatRestore.test.ts` holds that order.
-  const wiring = source('extension.ts');
+  const wiring = source('../shell/modules/chat/register.ts');
   const panel = source('chatRestorePanel.ts');
   const body = panel.slice(panel.indexOf('export async function restoreAfterReload'), panel.indexOf('export async function restoreChatTab'));
 
@@ -252,7 +252,7 @@ test('the memento is written until the migration has SEALED it — and sealing d
   // the code round found the race in the fix: `ChatTabMemory` QUEUES, so a write issued a moment before
   // the clear lands after it and fills the key again. The seal is the one retirement point: unbind, then
   // drain; and the way back when the clear did not happen.
-  const wiring = source('extension.ts');
+  const wiring = source('../shell/modules/chat/register.ts');
   const host = source('chatHost.ts');
 
   assert.match(wiring, /seal: async \(\) => \{\s*\n\s*retireMemento\(\);\s*\n\s*await chatTabMemory\.settled\(\);/,
@@ -321,7 +321,7 @@ test('a panel whose conversation is NOWHERE is not left as an empty tab — and 
   assert.match(source('chatRestore.ts'), /case 'unavailable':\s*\n\s*return \{ kind: 'notice', sentence: unavailableNotice\(seen\.reason\), retry: true \}/,
     'a disk that would not answer is not given a tab with a retry');
   // And the serializer itself disposes nothing: every decision about a tab is in one module.
-  const wiring = source('extension.ts');
+  const wiring = source('../shell/modules/chat/register.ts');
   const handler = wiring.slice(wiring.indexOf('deserializeWebviewPanel'));
   assert.doesNotMatch(handler.slice(0, 1_400), /panel\.dispose\(\)/,
     'the serializer disposes a panel on its own account, outside the one module that decides');

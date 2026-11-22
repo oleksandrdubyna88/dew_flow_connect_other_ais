@@ -29,8 +29,6 @@ export const OLD_MARKS = [
   'oldSettingsSync',
   'oldMirrorStarted',
   'oldMigrationsKicked',
-  'oldChatStore',
-  'oldHousekeeping',
   'oldCommandsRegistered',
   'oldActivateEnd',
   'sidebarResolve',

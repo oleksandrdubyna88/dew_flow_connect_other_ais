@@ -14,6 +14,10 @@
  * </ul>
  * <p>And the minified output must fit its `budgetBytes` (16 KiB for dist/extension.js).</p>
  *
+ * <p>A bundle may also name `forbidInputs`: source files it must NOT contain, whatever else it holds (v2 E4 s4-chat-carried, extension.md § 10 row 7).
+ * The state that exists once per host (`src/runtimeState.ts`, `shell/modules/runtime.ts`) lives in the `runtime` bundle only; a bundle that carried a
+ * copy would carry a second notify suppressor, data root and findings board. Every module bundle forbids those two files.</p>
+ *
  * <p>`contents` (a test seam) replaces the text of the entry file inside the build, so a test can plant a forbidden
  * `require` and watch this fail without touching the tree.</p>
  */
@@ -70,10 +74,19 @@ export function firewallProblems(bundle, metafile) {
   return problems;
 }
 
+/** The forbidden inputs (`forbidInputs` of the bundle's entry in `bundle-entries.json`) that went into the build. */
+export function forbiddenProblems(bundle, metafile) {
+  const forbidden = new Set(bundle.forbidInputs ?? []);
+
+  return Object.keys(metafile.inputs)
+    .filter((input) => forbidden.has(input))
+    .map((input) => `${bundle.out}: contains ${input}, which exists once per host in the runtime module and must never be bundled twice`);
+}
+
 /** All problems of one bundle: the firewall, if the bundle has one, and its byte budget, if it has one. */
 export async function checkBundle(bundle, config = readEntries(), contents = undefined) {
   const { metafile } = await buildInMemory(bundle, config, contents);
-  const problems = bundle.firewall === undefined ? [] : firewallProblems(bundle, metafile);
+  const problems = [...(bundle.firewall === undefined ? [] : firewallProblems(bundle, metafile)), ...forbiddenProblems(bundle, metafile)];
   const bytes = Object.values(metafile.outputs)[0].bytes;
   if (bundle.budgetBytes !== undefined && bytes > bundle.budgetBytes) {
     problems.push(`${bundle.out}: ${bytes} bytes is over its budget of ${bundle.budgetBytes} bytes`);
@@ -82,9 +95,9 @@ export async function checkBundle(bundle, config = readEntries(), contents = und
   return problems;
 }
 
-/** Every bundle that has a firewall or a budget. */
+/** Every bundle that has a firewall, a budget or forbidden inputs. */
 export async function checkAll(config = readEntries()) {
-  const watched = config.bundles.filter((bundle) => bundle.firewall !== undefined || bundle.budgetBytes !== undefined);
+  const watched = config.bundles.filter((bundle) => bundle.firewall !== undefined || bundle.budgetBytes !== undefined || bundle.forbidInputs !== undefined);
   const lists = await Promise.all(watched.map((bundle) => checkBundle(bundle, config)));
 
   return lists.flat();

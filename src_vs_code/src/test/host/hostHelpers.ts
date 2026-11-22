@@ -43,15 +43,39 @@ export function registeredChat(panels: ChatPanels, key: object, saveId: string, 
 }
 
 /**
- * Activates the extension under test AND starts its old code, then answers what that returned.
+ * Activates the extension under test AND starts its old code and its chat module, then answers what those returned, as one object.
  *
- * <p>The shell's `activate()` only registers (v2 E2 S1), so it returns a door, `legacy()`, that loads the `legacy`
- * module and runs the old `activate()` once; the scenarios below were written against that old call's result and its
- * start-up work (watchers, the settings mirror, the migrations). Asking for it here is what a command or the sidebar
- * does in the field, on first use.</p>
+ * <p>The shell's `activate()` only registers (v2 E2 S1), so it returns two doors: `legacy()` loads the `legacy` module and runs the old `activate()` once,
+ * and `chat()` (v2 E4) loads the `chat` module, which owns the chat commands, the serializer, the remote-sessions road and the skip-list check. The scenarios
+ * below were written against the one old call's result and its start-up work (watchers, the settings mirror, the migrations, the chat store); asking for both
+ * here is what a command, the sidebar or a restored chat tab does in the field, on first use. The two `shell` test doors are joined, so the
+ * hand-over scenario reads one list: the commands the two adopters hold between them, and a view provider AND a serializer.</p>
  */
 export async function activated<T>(extension: vscode.Extension<T>): Promise<T> {
-  const shell = await extension.activate() as unknown as { readonly legacy: () => Promise<T> };
+  const shell = await extension.activate() as unknown as { readonly legacy: () => Promise<T>; readonly chat: () => Promise<ChatDoors> };
+  const old = await shell.legacy() as T & { readonly shell?: LegacyDoor };
+  const chat = await shell.chat();
+  const { chat: chatDoor, ...doors } = chat;
 
-  return shell.legacy();
+  return {
+    ...old,
+    ...doors,
+    ...(old.shell === undefined || chatDoor === undefined ? {} : {
+      shell: {
+        adoptedCommands: () => [...old.shell?.adoptedCommands() ?? [], ...chatDoor.adoptedCommands()],
+        adoptedViewAndSerializer: () => old.shell?.adoptedView() === true && chatDoor.adoptedSerializer(),
+      },
+    }),
+  };
+}
+
+interface LegacyDoor {
+  readonly adoptedCommands: () => readonly string[];
+  readonly adoptedView: () => boolean;
+}
+
+interface ChatDoors {
+  readonly remoteSessions?: unknown;
+  readonly skipShell?: unknown;
+  readonly chat?: { readonly adoptedCommands: () => readonly string[]; readonly adoptedSerializer: () => boolean };
 }

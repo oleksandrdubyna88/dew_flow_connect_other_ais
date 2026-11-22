@@ -79,3 +79,36 @@ test('a planted 100 KiB literal fails the sidebar module\'s budget', async () =>
 
   assert.ok(problems.some((one) => one.includes('over its budget of 98304')), JSON.stringify(problems));
 });
+
+// ── The once-per-host state (v2 E4 s4-chat-carried t1, extension.md § 10 row 7) ──
+
+const chatBundle = config.bundles.find((bundle) => bundle.id === 'chat');
+const runtimeBundle = config.bundles.find((bundle) => bundle.id === 'runtime');
+const chatSource = readFileSync(join(ROOT, chatBundle.entry), 'utf8');
+
+test('the chat module has a byte budget and forbids the runtime state; the runtime module is small and may import only node:crypto', async () => {
+  assert.equal(typeof chatBundle.budgetBytes, 'number', 'the chat module has no byte budget');
+  assert.deepEqual(chatBundle.forbidInputs, ['src/runtimeState.ts', 'shell/modules/runtime.ts']);
+  assert.ok(runtimeBundle.budgetBytes <= 16384, 'the runtime module is not small');
+  assert.deepEqual(runtimeBundle.firewall.imports, ['node:crypto', 'crypto']);
+  assert.deepEqual(await checkBundle(chatBundle, config), []);
+  assert.deepEqual(await checkBundle(runtimeBundle, config), []);
+  // Every module bundle forbids the runtime sources; only the runtime bundle itself holds them.
+  for (const bundle of config.bundles.filter((one) => one.id !== 'runtime')) {
+    assert.deepEqual(bundle.forbidInputs, ['src/runtimeState.ts', 'shell/modules/runtime.ts'], `${bundle.id} does not forbid the runtime state`);
+  }
+});
+
+test('a planted import of the runtime state into the chat module fails: it would be a second copy of the notify suppressor, the data root and the findings board', async () => {
+  const problems = await checkBundle(chatBundle, config, `${chatSource}\nimport { createRuntime } from '../../../src/runtimeState';\nexport const planted = createRuntime;\n`);
+
+  assert.ok(problems.some((one) => one.includes('src/runtimeState.ts') && one.includes('never be bundled twice')), JSON.stringify(problems));
+});
+
+test('a planted import of the runtime module into the legacy module fails', async () => {
+  const legacy = config.bundles.find((bundle) => bundle.id === 'legacy');
+  const text = readFileSync(join(ROOT, legacy.entry), 'utf8');
+  const problems = await checkBundle(legacy, config, `${text}\nimport { runtime } from './runtime';\nexport const planted = runtime;\n`);
+
+  assert.ok(problems.some((one) => one.includes('shell/modules/runtime.ts')), JSON.stringify(problems));
+});
