@@ -600,7 +600,9 @@ internal static class Program
 
             case Startup.MigrateV2:
                 // A one-shot WRITER (with --apply): ONE JSON object on stdout whenever it runs, its sentences on stderr, never 64.
-                return Server.Migrations.MigrateV2Mode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note);
+                return Server.Migrations.MigrateV2Mode.Run(
+                    args, Environment.GetEnvironmentVariable, Console.Out, Note,
+                    MigrationNotices(Environment.GetEnvironmentVariable, NoticeWriter.Shared, Serilog.Core.Logger.None, RunIds.New()));
 
             default:
                 return await ServeAsync();
@@ -2094,6 +2096,19 @@ internal static class Program
         return 74; // EX_IOERR
     }
 
+    /// <summary>
+    /// How the v2 migration writes a notice (E1.S4): through <see cref="NoticeWriter"/> — the one writer thread every notice of this server goes through —
+    /// and then it WAITS for the writer to drain, so "accepted" means "on disk" before the migration goes on to convert the session the notice is about
+    /// (the migration reads the line back before it does). The wait is bounded by <see cref="NoticeWriter.DrainBudget"/>. Here, in <c>Program</c>, because
+    /// the census of who composes a <see cref="Noticing"/> and who reaches for the shared writer names this file and no other.
+    /// </summary>
+    internal static Func<ServerNotice, bool> MigrationNotices(Func<string, string?> env, NoticeWriter writer, Serilog.ILogger log, string run)
+    {
+        var noticing = Noticing.Through(writer, env, log, run);
+
+        return notice => noticing.Offer(notice) && writer.Idle(NoticeWriter.DrainBudget);
+    }
+
     private static async Task<int> ServeAsync()
     {
         // The credential word list is EXERCISED here — before the logger, the settings and the
@@ -2166,7 +2181,8 @@ internal static class Program
             Server.Migrations.MigrateV2Mode.RunAutomatic(
                 dataDir,
                 typeof(Program).Assembly.GetName().Version ?? new Version(0, 0, 0),
-                sentence => log.Warning("{Detail}", sentence));
+                sentence => log.Warning("{Detail}", sentence),
+                MigrationNotices(Environment.GetEnvironmentVariable, notices, log, run));
             var configuration = SettingsFile.Layer(
                 dataDir,
                 Environment.GetEnvironmentVariable,

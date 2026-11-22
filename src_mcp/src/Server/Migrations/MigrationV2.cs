@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CoaiMcp.Core.Notices;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Store;
 
@@ -14,7 +15,9 @@ namespace CoaiMcp.Server.Migrations;
 /// file under the session's claim and turn, re-read under the claim first. (2) Every OPEN escalation card is marked <c>withdrawn_v2</c> in place and moved to
 /// <c>escalations/archive/</c>; answered and expired cards are history and stay. (3) <c>qphase/</c> and <c>cadence/</c> are archived whole. (4) The
 /// settings keys v2 does not read leave <c>settings.json</c> for <c>settings.v1-removed.json</c> under the extension's own <c>settings.lock</c>. (5) The
-/// marker <c>migrations/v2.done</c>.</para>
+/// marker <c>migrations/v2.done</c> — only when nothing was deferred and nothing was unreadable. A held session whose card a person had answered is announced first, by
+/// a notice in <c>server-notices.jsonl</c> (<c>MigrationV2Notices.cs</c>), and converted only when that notice is on disk. Outside a run, a load of a
+/// still-held session converts it too (<see cref="HoldConversion"/>), and every v2 start sweeps the cards a v1 process raised since (<see cref="SweepCards"/>).</para>
 /// <para><b>Idempotence comes from the object, never from the journal.</b> A session is converted while its file still says <c>humanGate: true</c>; a card is
 /// withdrawn while it is open at the top level, and only moved when it is already marked; a store is archived while its source is there; a settings key is
 /// moved while it is in <c>settings.json</c>. Whatever a kill left, the next run reads the objects and does exactly what is left — the journal is evidence
@@ -28,23 +31,25 @@ namespace CoaiMcp.Server.Migrations;
 internal sealed partial class MigrationV2
 {
     /// <summary>What the held round's record says after the conversion. The verdict stays what it was.</summary>
-    public const string ConversionNote = "good_enough — converted from a held gate by v2";
+    public const string ConversionNote = HoldConversion.Note;
 
     /// <summary>The marker's schema number.</summary>
     public const int MarkerSchema = 1;
 
     private readonly string _dataDir;
     private readonly Action<string> _said;
+    private readonly Func<ServerNotice, bool> _notice;
     private readonly MigrationV2Tables _tables;
     private readonly TimeProvider _clock;
     private readonly string _version;
     private readonly SessionStore _store;
     private int _boundaries;
 
-    public MigrationV2(string dataDir, Action<string> said, MigrationV2Tables? tables = null, TimeProvider? clock = null, string version = "")
+    public MigrationV2(string dataDir, Action<string> said, Func<ServerNotice, bool> notice, MigrationV2Tables? tables = null, TimeProvider? clock = null, string version = "")
     {
         _dataDir = dataDir;
         _said = said;
+        _notice = notice;
         _tables = tables ?? MigrationV2Tables.Default;
         _clock = clock ?? TimeProvider.System;
         _version = version;
@@ -53,7 +58,7 @@ internal sealed partial class MigrationV2
 
     /// <summary>
     /// Called at every boundary of an apply (before an object's <c>planned</c> line, after it, after the object's write, after its <c>done</c> line, and once
-    /// before the marker) with the number of boundaries passed before this one. A test throws from it to stand for a kill at that boundary.
+    /// before the marker, after each file of a store merge, and — for a session with answered holds — between its notice and its write) with the number of boundaries passed before this one. A test throws from it to stand for a kill at that boundary.
     /// </summary>
     internal Action<int>? AtBoundary { get; init; }
 
@@ -374,7 +379,10 @@ internal sealed partial class MigrationV2
         return new MigrateV2Report(
             "migrate-v2", Apply: false, _dataDir, status, counts,
             [.. scan.Work.OfType<SessionWork>().SelectMany(w => w.Answered)],
-            [.. scan.Unreadable, .. scan.Work.Select(StepOf)]);
+            [.. scan.Unreadable, .. scan.Work.Select(StepOf)])
+        {
+            Notices = PendingNotices(scan),
+        };
     }
 
     private static readonly MigrateV2Counts NoCounts = new(0, 0, 0, 0, 0, 0, 0);

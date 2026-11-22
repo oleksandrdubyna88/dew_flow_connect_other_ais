@@ -41,7 +41,7 @@ public sealed class MigrateV2RunTests : IDisposable
     {
         var reference = Folder();
         var boundaries = 0;
-        var clean = new MigrationV2(reference, _ => { }) { AtBoundary = _ => boundaries++ }.Apply();
+        var clean = MigrateV2Data.Migration(reference, atBoundary: _ => boundaries++).Apply();
         clean.Status.Should().Be("done");
         clean.Counts.Should().BeEquivalentTo(new MigrateV2Counts(3, 4, 2, 3, 0, 0, 0));
         var expected = MigrateV2Data.Tree(reference, withFolders: true);
@@ -50,7 +50,7 @@ public sealed class MigrateV2RunTests : IDisposable
         for (var k = 0; k < boundaries; k++)
         {
             var dir = Folder();
-            var killed = () => new MigrationV2(dir, _ => { }) { AtBoundary = n => { if (n == k) { throw new SimulatedKill(k); } } }.Apply();
+            var killed = () => MigrateV2Data.Migration(dir, atBoundary: n => { if (n == k) { throw new SimulatedKill(k); } }).Apply();
             killed.Should().Throw<SimulatedKill>($"boundary {k} of {boundaries}");
 
             var resumed = MigrateV2Data.Apply(dir);
@@ -69,7 +69,7 @@ public sealed class MigrateV2RunTests : IDisposable
         var file = MigrateV2Data.SessionFile(dir, "plan");
         var state = MigrateV2Data.Load(dir, file).State;
         SeedDatabase(dir, MigrateV2Data.Load(dir, file));
-        var killed = () => new MigrationV2(dir, _ => { }) { AtBoundary = n => { if (n == 2) { throw new SimulatedKill(n); } } }.Apply();
+        var killed = () => MigrateV2Data.Migration(dir, atBoundary: n => { if (n == 2) { throw new SimulatedKill(n); } }).Apply();
         killed.Should().Throw<SimulatedKill>();
         MigrateV2Data.Load(dir, file).Rounds[^1].Note.Should().Be(MigrationV2.ConversionNote, "boundary 2 is after the session's write");
         NoteInDatabase(dir, state.SessionId).Should().BeEmpty("the kill came before the projection");
@@ -103,7 +103,7 @@ public sealed class MigrateV2RunTests : IDisposable
     }
 
     [Fact]
-    public void S8_ATornLastJournalLine_IsIgnored_AndTheNextLineStandsAlone()
+    public void S8_ATornLastJournalLine_IsIgnoredByTheReader_AndCutAwayBeforeTheNextLine()
     {
         var dir = Folder();
         Directory.CreateDirectory(MigrationV2.MigrationsDir(dir));
@@ -115,6 +115,7 @@ public sealed class MigrateV2RunTests : IDisposable
         var lines = MigrationV2Journal.Read(MigrationV2.JournalFile(dir));
         lines[0].Seq.Should().Be(1);
         lines.Should().Contain(l => l.Seq == 2 && l.Kind == "session" && l.State == "planned", "the first line this run wrote stands on its own line — it was not glued to the torn one");
+        File.ReadAllText(MigrationV2.JournalFile(dir)).Should().NotContain("\"ut\n", "the torn bytes are cut away before the append (SPEC §5.5), not ended with a newline and kept");
         lines.Count.Should().BeGreaterThan(10, "every line after the torn one parsed");
         lines.Select(l => l.Seq).Should().BeInAscendingOrder().And.OnlyHaveUniqueItems();
     }
@@ -264,7 +265,7 @@ public sealed class MigrateV2RunTests : IDisposable
             MigrateV2Data.Tree(dir, withFolders: true, withBookkeeping: true).Should().Equal(before, "nothing changed");
 
             var warnings = new List<string>();
-            var serve = () => MigrateV2Mode.RunAutomatic(dir, new Version(2, 0, 0), warnings.Add);
+            var serve = () => MigrateV2Mode.RunAutomatic(dir, new Version(2, 0, 0), warnings.Add, MigrateV2Data.Sink(dir));
             serve.Should().NotThrow("the automatic run never throws into serve");
             warnings.Should().Contain(w => w.Contains("did not finish", StringComparison.Ordinal), "a warning, and the server starts anyway");
         }
@@ -274,10 +275,10 @@ public sealed class MigrateV2RunTests : IDisposable
         }
     }
 
-    // ---------- scenario 13 ----------
+    // ---------- scenario 13 (rewritten by the epic gate: an unreadable object is an incomplete migration, SPEC §5.2 / §6.4) ----------
 
     [Fact]
-    public void S13_ACorruptSessionFile_IsReportedUnreadable_AndLeftAlone_WhileTheOthersMigrate()
+    public void S13_ACorruptSessionFile_IsUnreadableAndUntouched_Exit75Partial_NoMarker_AndAfterTheRepairTheNextRunConvertsItAndWritesTheMarker()
     {
         var dir = Folder();
         var corrupt = Path.Combine(dir, "sessions", "session-ffffffffffffffff.json");
@@ -285,14 +286,54 @@ public sealed class MigrateV2RunTests : IDisposable
 
         var (code, output, err) = MigrateV2Data.Mode(dir, "--apply");
 
-        code.Should().Be(0, "unreadable is reported, not blocking: " + err);
+        code.Should().Be(75, "an unreadable object is an incomplete migration, not a reported one: " + err);
         var report = MigrateV2Data.Report(output);
+        report.GetProperty("status").GetString().Should().Be("partial");
         report.GetProperty("counts").GetProperty("unreadable").GetInt32().Should().Be(1);
         report.GetProperty("counts").GetProperty("sessions").GetInt32().Should().Be(3, "the other three held sessions migrated");
-        report.GetProperty("status").GetString().Should().Be("done");
-        File.ReadAllText(corrupt).Should().Be("""{"state": {"sessionId": "torn""");
-        File.Exists(MigrationV2.MarkerFile(dir)).Should().BeTrue("the marker is written: a corrupt file is not a reason to migrate again at every start");
+        File.ReadAllText(corrupt).Should().Be("""{"state": {"sessionId": "torn""", "an unreadable file is left exactly as it was");
+        File.Exists(MigrationV2.MarkerFile(dir)).Should().BeFalse("no marker: the next start looks again");
         MigrationV2Journal.Read(MigrationV2.JournalFile(dir)).Should().Contain(l => l.State == "unreadable" && l.Id == "session-ffffffffffffffff.json");
+
+        // The file is repaired: here, a held code session the disk finished writing, under the same odd name.
+        File.Copy(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "migrate-v2", "f3", "code-resolved", "sessions", "session-2daeebe8b876dd85.json"),
+            corrupt,
+            overwrite: true);
+        LegacyHold.Stands(MigrateV2Data.Load(dir, corrupt).State).Should().BeTrue();
+
+        var (second, secondOut, secondErr) = MigrateV2Data.Mode(dir, "--apply");
+
+        second.Should().Be(0, secondErr);
+        var again = MigrateV2Data.Report(secondOut);
+        again.GetProperty("counts").GetProperty("sessions").GetInt32().Should().Be(1, "the repaired file is converted");
+        again.GetProperty("status").GetString().Should().Be("done");
+        LegacyHold.Stands(MigrateV2Data.Load(dir, corrupt).State).Should().BeFalse();
+        File.Exists(MigrationV2.MarkerFile(dir)).Should().BeTrue("the run that found nothing unreadable writes the marker");
+    }
+
+    [Theory]
+    [InlineData("session")]
+    [InlineData("card")]
+    [InlineData("settings")]
+    public void S13_AnUnreadableObjectOfAnyKind_MakesTheApplyPartial_Exit75_AndWritesNoMarker(string kind)
+    {
+        var dir = Folder();
+        var file = kind switch
+        {
+            "session" => Path.Combine(dir, "sessions", "session-eeeeeeeeeeeeeeee.json"),
+            "card" => Path.Combine(dir, "escalations", "zzzzzzzzzzzz.json"),
+            _ => Path.Combine(dir, "settings.json"),
+        };
+        File.WriteAllText(file, "{ this is not json");
+
+        var (code, output, err) = MigrateV2Data.Mode(dir, "--apply");
+
+        code.Should().Be(75, err);
+        MigrateV2Data.Report(output).GetProperty("status").GetString().Should().Be("partial");
+        MigrateV2Data.Report(output).GetProperty("counts").GetProperty("unreadable").GetInt32().Should().Be(1);
+        File.ReadAllText(file).Should().Be("{ this is not json");
+        File.Exists(MigrationV2.MarkerFile(dir)).Should().BeFalse();
     }
 
     // ---------- scenario 14 ----------
@@ -364,7 +405,7 @@ public sealed class MigrateV2RunTests : IDisposable
         second.Counts.Stores.Should().Be(1);
         Directory.Exists(Path.Combine(dir, "qphase")).Should().BeFalse("the source is merged away");
         File.ReadAllBytes(Path.Combine(archive, "qphase", "plan-a.json")).Should().Equal(qphase.Single(q => q.Name == "plan-a.json").Bytes, "an archived file is never overwritten");
-        File.ReadAllText(Path.Combine(archive, "qphase", "plan-a.1.json")).Should().Be("""{"batches":9}""", "the colliding file got a suffix");
+        File.ReadAllText(Path.Combine(archive, "qphase", $"plan-a.v1-{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData("""{"batches":9}"""u8))[..8]}.json")).Should().Be("""{"batches":9}""", "the colliding file got the content-hash suffix (SPEC §5.3)");
         File.ReadAllText(Path.Combine(archive, "qphase", "plan-c.json")).Should().Be("""{"batches":1}""");
         File.Exists(Path.Combine(archive, "qphase", "deeper", "x.json")).Should().BeTrue();
     }
@@ -393,22 +434,22 @@ public sealed class MigrateV2RunTests : IDisposable
         var file = MigrateV2Data.SessionFile(dir, "plan");
         var said = new List<string>();
 
-        MigrateV2Mode.RunAutomatic(dir, new Version(0, 89, 2), said.Add);
+        MigrateV2Mode.RunAutomatic(dir, new Version(0, 89, 2), said.Add, MigrateV2Data.Sink(dir));
         LegacyHold.Stands(MigrateV2Data.Load(dir, file).State).Should().BeTrue("a v1 build never migrates by itself");
         Directory.Exists(MigrationV2.MigrationsDir(dir)).Should().BeFalse();
 
-        MigrateV2Mode.RunAutomatic(dir, new Version(2, 0, 0), said.Add);
+        MigrateV2Mode.RunAutomatic(dir, new Version(2, 0, 0), said.Add, MigrateV2Data.Sink(dir));
         LegacyHold.Stands(MigrateV2Data.Load(dir, file).State).Should().BeFalse("a v2 build migrates before it serves");
         MigrationV2.MarkerHash(dir).Should().Be(hash);
 
         // A second held session appears (a v1 server still alive wrote it) — the marker keeps the automatic run away from it …
         MigrateV2Data.Plant("f3", "plan-pending", dir);
-        MigrateV2Mode.RunAutomatic(dir, new Version(2, 0, 0), said.Add);
+        MigrateV2Mode.RunAutomatic(dir, new Version(2, 0, 0), said.Add, MigrateV2Data.Sink(dir));
         LegacyHold.Stands(MigrateV2Data.Load(dir, file).State).Should().BeTrue("the marker gates the automatic run; only the one-shot mode scans again");
 
         // … until the tables of this build are not the marker's.
         File.WriteAllText(MigrationV2.MarkerFile(dir), """{"schema":1,"tablesHash":"an-older-build","finishedUtc":"2026-01-01T00:00:00Z","version":"2.0.0"}""");
-        MigrateV2Mode.RunAutomatic(dir, new Version(2, 0, 0), said.Add);
+        MigrateV2Mode.RunAutomatic(dir, new Version(2, 0, 0), said.Add, MigrateV2Data.Sink(dir));
         LegacyHold.Stands(MigrateV2Data.Load(dir, file).State).Should().BeFalse("a marker made by other tables runs the migration again");
         MigrationV2.MarkerHash(dir).Should().Be(hash);
     }
@@ -432,7 +473,7 @@ public sealed class MigrateV2RunTests : IDisposable
     {
         var dir = Folder();
 
-        new MigrationV2(dir, _ => { }, version: "2.0.0").Apply();
+        MigrateV2Data.Migration(dir, version: "2.0.0").Apply();
 
         using var marker = JsonDocument.Parse(File.ReadAllText(MigrationV2.MarkerFile(dir)));
         marker.RootElement.GetProperty("schema").GetInt32().Should().Be(1);

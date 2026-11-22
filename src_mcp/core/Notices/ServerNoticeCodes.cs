@@ -64,6 +64,12 @@ public static class ServerNoticeCodes
     /// <summary>A consultation the cadence owed and nobody could have — the round went ahead (research/PLAN_consult_on_a_cadence.md).</summary>
     public const string CadenceStoodDown = "cadence-stood-down";
 
+    /// <summary>
+    /// The v2 migration released a held gate whose card a person had ANSWERED: v1 never applied the answer and v2 never waits, so the session was converted to
+    /// good_enough. Subject is the CARD id — written once per card (E1.S4, <c>v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/SPEC.md</c> §5.4).
+    /// </summary>
+    public const string V2ConvertedAnsweredHold = "v2-converted-answered-hold";
+
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>
     public static IReadOnlyList<string> All =>
     [
@@ -84,5 +90,6 @@ public static class ServerNoticeCodes
         UncleanExit,
         Crash,
         CadenceStoodDown,
+        V2ConvertedAnsweredHold,
     ];
 }

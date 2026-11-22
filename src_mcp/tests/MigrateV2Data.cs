@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CoaiMcp.Core.Notices;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
@@ -138,11 +139,38 @@ internal static class MigrateV2Data
 
     // ---------- running it ----------
 
+    /// <summary>One writer thread for every test of the suite that writes a notice: the process-wide one is never drained here, and this one is never closed.</summary>
+    private static readonly NoticeWriter Writer = new((dir, notice) => ServerNotices.Append(dir, notice));
+
+    /// <summary>The sink the migration writes a notice through, composed by the production composer over a writer whose append is the real one.</summary>
+    internal static Func<ServerNotice, bool> Sink(string dataDir) =>
+        Program.MigrationNotices(name => name == "COAI_DATA_DIR" ? dataDir : null, Writer, Logger.None, "test-run");
+
+    internal static MigrationV2 Migration(string dataDir, MigrationV2Tables? tables = null, string version = "", Action<int>? atBoundary = null) =>
+        new(dataDir, _ => { }, Sink(dataDir), tables, version: version) { AtBoundary = atBoundary };
+
+    /// <summary>Every line of <c>server-notices.jsonl</c> (and its archive) with the given code, parsed.</summary>
+    internal static List<JsonElement> NoticesOf(string dataDir, string code)
+    {
+        var lines = new List<JsonElement>();
+        foreach (var name in new[] { ServerNotices.Archive, ServerNotices.Name })
+        {
+            var file = Path.Combine(dataDir, name);
+            if (File.Exists(file))
+            {
+                lines.AddRange(File.ReadAllLines(file).Where(l => l.Length > 0).Select(l => JsonDocument.Parse(l).RootElement.Clone())
+                    .Where(n => n.GetProperty("code").GetString() == code));
+            }
+        }
+
+        return lines;
+    }
+
     internal static MigrateV2Report Apply(string dataDir, MigrationV2Tables? tables = null) =>
-        new MigrationV2(dataDir, _ => { }, tables).Apply();
+        Migration(dataDir, tables).Apply();
 
     internal static MigrateV2Report Plan(string dataDir, MigrationV2Tables? tables = null) =>
-        new MigrationV2(dataDir, _ => { }, tables).Plan();
+        Migration(dataDir, tables).Plan();
 
     /// <summary>The mode as the dispatch calls it, over a folder: its exit code, its stdout and its stderr.</summary>
     internal static (int Code, string Out, string Err) Mode(string dataDir, params string[] args)
@@ -150,7 +178,7 @@ internal static class MigrateV2Data
         var output = new StringWriter();
         var said = new List<string>();
         var env = new Dictionary<string, string> { ["COAI_DATA_DIR"] = dataDir };
-        var code = MigrateV2Mode.Run(["--migrate-v2", .. args], name => env.GetValueOrDefault(name), output, said.Add);
+        var code = MigrateV2Mode.Run(["--migrate-v2", .. args], name => env.GetValueOrDefault(name), output, said.Add, Sink(dataDir));
 
         return (code, output.ToString(), string.Join('\n', said));
     }

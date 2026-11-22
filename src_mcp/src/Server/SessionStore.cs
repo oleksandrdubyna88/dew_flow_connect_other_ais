@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Server.Migrations;
 
 namespace CoaiMcp.Server;
 
@@ -521,12 +522,59 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 
         try
         {
-            return Normalised(
+            var session = Normalised(
                 JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
+
+            return session is not null && LegacyHold.Stands(session.State) ? ConvertedOnLoad(file, session) : session;
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
             return null; // a torn or momentarily busy file is a fresh session, not a locked repo
+        }
+    }
+
+    /// <summary>
+    /// A session a v1 build HELD, found by a load: left out of its hold with the same conversion the v2 migration makes, saved under the claim and journaled (SPEC §5.1).
+    /// </summary>
+    /// <remarks>
+    /// <para>The migration cannot be the only door. A session it deferred, a file that was unreadable and is readable now, and a held session a v1 process that is still alive
+    /// writes after <c>v2.done</c> would all stay held for ever — and a v2 round machine does not read a hold. So the first load converts it.</para>
+    /// <para><b>Under the claim, or not at all.</b> The claim is taken here and the file read again under it. When another call holds the claim — a round, a resolve, the
+    /// migration — that call owns the file: this load hands back the session as v2 reads it, in memory, and writes nothing; the holder's own save persists it. A read-only
+    /// folder, or a write that fails, ends the same way: the caller gets the converted session and the file is converted by the next load that can.</para>
+    /// <para>The journal line says <c>on-load</c>; the conversion is the migration's own function (<see cref="HoldConversion.Converted"/>), so both doors write the same bytes.</para>
+    /// </remarks>
+    private PersistedSession ConvertedOnLoad(string file, PersistedSession held)
+    {
+        var state = held.State;
+        try
+        {
+            using var claim = SessionClaim.TryTake(dataDir, state.RepoPath, state.Branch, state.Document, state.Feature);
+            if (claim is null)
+            {
+                return HoldConversion.Converted(held);
+            }
+
+            // Read again UNDER the claim: the first read was before it, and the holder that had it may have converted the file.
+            var fresh = Normalised(JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
+            if (fresh is null || !LegacyHold.Stands(fresh.State))
+            {
+                return fresh ?? HoldConversion.Converted(held);
+            }
+
+            var converted = HoldConversion.Converted(fresh);
+            WriteTo(file, converted);
+            HoldConversion.Journaled(dataDir, file, "on-load");
+            if (converted.Rounds.Count > 0)
+            {
+                HoldConversion.WriteNote(dataDir, converted.State.SessionId, converted.Rounds[^1], _ => { });
+            }
+
+            return converted;
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return HoldConversion.Converted(held);
         }
     }
 

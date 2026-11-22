@@ -106,7 +106,7 @@ public sealed class MigrateV2SettingsTests : IDisposable
     }
 
     [Fact]
-    public void S16_ASettingsFileThatIsNotJson_IsLeftUntouched_AndReportedUnreadable()
+    public void S16_ASettingsFileThatIsNotJson_IsLeftUntouched_ReportedUnreadable_AndTheApplyIsPartial()
     {
         File.WriteAllText(Settings, "COAI_ON_EXHAUSTED=human\n");
 
@@ -115,7 +115,8 @@ public sealed class MigrateV2SettingsTests : IDisposable
         File.ReadAllText(Settings).Should().Be("COAI_ON_EXHAUSTED=human\n");
         File.Exists(Removed).Should().BeFalse();
         report.Counts.Unreadable.Should().Be(1);
-        report.Status.Should().Be("done", "unreadable is reported, not blocking");
+        report.Status.Should().Be("partial", "an unreadable object is an incomplete migration (SPEC §6.4): the apply exits 75 and writes no marker");
+        File.Exists(MigrationV2.MarkerFile(Data)).Should().BeFalse();
     }
 
     [Fact]

@@ -98,6 +98,33 @@ public static class ServerNotices
     }
 
     /// <summary>
+    /// Every line already written in a data folder — the previous generation first, then the live file — read without forbidding a writer to append.
+    /// </summary>
+    /// <remarks>
+    /// For the one reader inside this binary: the v2 migration asks "is the notice for this card on disk?" before it converts the session the notice is about, and
+    /// again after it wrote it (<c>MigrationV2</c>). The names stay in this class; a missing file is no lines. A read the disk refuses is the caller's
+    /// <see cref="IOException"/> — an answer that cannot be told from "not written" would convert an answered hold with no notice.
+    /// </remarks>
+    internal static IEnumerable<string> Lines(string dataDir)
+    {
+        foreach (var name in new[] { Archive, Name })
+        {
+            var path = Path.Combine(dataDir, name);
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(file, Encoding.UTF8);
+            while (reader.ReadLine() is { } line)
+            {
+                yield return line;
+            }
+        }
+    }
+
+    /// <summary>
     /// The ceiling. At <see cref="RollAt"/> the live file becomes <see cref="Archive"/> and a new one
     /// starts, so the pair cannot pass the 256 MB the parent plan named.
     /// </summary>

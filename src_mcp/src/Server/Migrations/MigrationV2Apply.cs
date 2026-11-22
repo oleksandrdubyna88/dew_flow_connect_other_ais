@@ -47,9 +47,33 @@ internal sealed partial class MigrationV2
 
     /// <summary>
     /// Migrates the folder. Takes <c>claims/migrate-v2.lease</c> first (<c>busy</c> when another migration holds it, <c>failed</c> when the folder cannot take it),
-    /// then goes object by object, and writes the marker only when nothing was deferred.
+    /// then goes object by object, and writes the marker only when nothing was deferred AND nothing was unreadable (SPEC §5.2, §6.4): an object the run could not
+    /// read is an object it did not migrate, and a marker would tell the next start not to look again.
     /// </summary>
-    public MigrateV2Report Apply()
+    public MigrateV2Report Apply() => Leased(Migrate);
+
+    /// <summary>
+    /// The sweep every v2 start makes, whatever the marker says (SPEC §6.3): every OPEN card at the top level of <c>escalations/</c> is withdrawn and archived,
+    /// journaled like any other card step. A v1 process still running on the folder can raise a card after <c>v2.done</c>; nothing else would ever look at it.
+    /// </summary>
+    /// <remarks>
+    /// Looks first and takes the lease only when there is a card to take: a start with nothing to sweep creates no file. Never writes the marker — it is not the
+    /// migration — and never touches a session, a store or the settings.
+    /// </remarks>
+    public MigrateV2Report SweepCards()
+    {
+        if (!Directory.Exists(_dataDir))
+        {
+            return Failed(apply: true, "the data folder does not exist: " + _dataDir);
+        }
+
+        var scan = new Scan();
+        ExamineCards(scan);
+
+        return scan.Work.OfType<CardWork>().Any() ? Leased(Sweep) : new("migrate-v2", Apply: true, _dataDir, "done", NoCounts, [], []);
+    }
+
+    private MigrateV2Report Leased(Func<MigrateV2Report> body)
     {
         if (!Directory.Exists(_dataDir))
         {
@@ -70,13 +94,30 @@ internal sealed partial class MigrationV2
             {
                 Directory.CreateDirectory(MigrationsDir(_dataDir));
 
-                return Migrate();
+                return body();
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 return Failed(apply: true, "the data folder could not be written: " + e.Message);
             }
         }
+    }
+
+    private MigrateV2Report Sweep()
+    {
+        var journal = new MigrationV2Journal(JournalFile(_dataDir), _clock);
+        var scan = new Scan();
+        ExamineCards(scan);
+        var tally = new Tally(0, 0);
+        foreach (var work in scan.Work.OfType<CardWork>())
+        {
+            Execute(work, journal, tally);
+        }
+
+        var counts = new MigrateV2Counts(0, tally.Cards, 0, 0, 0, tally.Unreadable, tally.Deferred);
+
+        return new MigrateV2Report(
+            "migrate-v2", Apply: true, _dataDir, tally.Deferred == 0 && tally.Unreadable == 0 ? "done" : "partial", counts, [], [.. tally.Steps]);
     }
 
     private MigrateV2Report Migrate()
@@ -95,7 +136,8 @@ internal sealed partial class MigrationV2
         }
 
         Boundary();
-        if (tally.Deferred == 0)
+        var complete = tally.Deferred == 0 && tally.Unreadable == 0;
+        if (complete)
         {
             WriteMarker();
         }
@@ -103,7 +145,10 @@ internal sealed partial class MigrationV2
         var counts = new MigrateV2Counts(tally.Sessions, tally.Cards, tally.Stores, tally.Removed, tally.Renamed, tally.Unreadable, tally.Deferred);
 
         return new MigrateV2Report(
-            "migrate-v2", Apply: true, _dataDir, tally.Deferred == 0 ? "done" : "partial", counts, tally.Answered, [.. scan.Unreadable, .. tally.Steps]);
+            "migrate-v2", Apply: true, _dataDir, complete ? "done" : "partial", counts, tally.Answered, [.. scan.Unreadable, .. tally.Steps])
+        {
+            Notices = [.. _written],
+        };
     }
 
     private void Boundary() => AtBoundary?.Invoke(_boundaries++);
@@ -216,7 +261,18 @@ internal sealed partial class MigrationV2
             return new Outcome("skipped", "the hold is gone");
         }
 
-        var converted = Converted(fresh);
+        // The person is told BEFORE the answer is overridden (MigrationV2Notices): a session that cannot be announced stays held, and the next run tries again.
+        if (!Announced(work.Answered, fresh.State))
+        {
+            return new Outcome("deferred", "the notice of an answered hold could not be written, so the session was not converted");
+        }
+
+        if (work.Answered.Count > 0)
+        {
+            Boundary(); // a kill between the notice and the conversion leaves a held session and its notice: the next run finds the notice and converts
+        }
+
+        var converted = HoldConversion.Converted(fresh);
         _store.SaveTo(work.File, converted);
 
         return new Outcome("done", "released")
@@ -224,16 +280,6 @@ internal sealed partial class MigrationV2
             After = converted.Rounds.Count > 0 ? () => WriteNote(converted.State.SessionId, converted.Rounds[^1]) : null,
         };
     }
-
-    /// <summary>The session as v2 reads it: the hold left, the stage advancing on the next resolve, and the held round's note. Verdict, stage, rejections and pending stay.</summary>
-    private static PersistedSession Converted(PersistedSession session) =>
-        session with
-        {
-            State = LegacyHold.Released(session.State),
-            Rounds = session.Rounds.Count == 0
-                ? session.Rounds
-                : [.. session.Rounds[..^1], session.Rounds[^1] with { Note = ConversionNote }],
-        };
 
     private Outcome Project(ReprojectWork work)
     {
@@ -246,26 +292,7 @@ internal sealed partial class MigrationV2
     }
 
     /// <summary>The note into <c>coai.db</c>, best effort: the database is a projection rebuilt from the session files, and one that is absent or will not open is left alone.</summary>
-    private void WriteNote(string sessionId, RoundRecord round)
-    {
-        if (!File.Exists(Path.Combine(_dataDir, RoundsDb.FileName)))
-        {
-            return;
-        }
-
-        try
-        {
-            using var db = RoundsDb.OpenExisting(_dataDir, Serilog.Core.Logger.None);
-            if (db is not null)
-            {
-                RoundNotes.Write(db, sessionId, round.Stage, round.Number, ConversionNote);
-            }
-        }
-        catch (SqliteException e)
-        {
-            _said($"v2 migration: the note of round {round.Stage} {round.Number} could not be written into coai.db ({e.Message}); the session file has it");
-        }
-    }
+    private void WriteNote(string sessionId, RoundRecord round) => HoldConversion.WriteNote(_dataDir, sessionId, round, _said);
 
     // ---------- cards ----------
 
@@ -339,13 +366,23 @@ internal sealed partial class MigrationV2
         return new Outcome("done", "merged");
     }
 
-    private static void MergeInto(string source, string target)
+    /// <summary>
+    /// Merges a re-created store into the archive of the same name, file by file (SPEC §5.3, §6.1). Every file is decided by ITS PATH and its BYTES alone, so a run that is
+    /// killed between two files and run again decides each remaining file exactly as one clean run would — and a file is never decided by what happens to be in the folder
+    /// next to it: see <see cref="MoveOne"/>.
+    /// </summary>
+    /// <remarks>
+    /// A boundary follows every file, so a test can kill the merge between any two of them. The source folder goes last: a kill before it leaves a folder the next run
+    /// merges again (it holds the files not yet moved, and empty folders).
+    /// </remarks>
+    private void MergeInto(string source, string target)
     {
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
         {
             var destination = Path.Combine(target, Path.GetRelativePath(source, file));
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Move(file, Unoccupied(destination));
+            MoveOne(file, destination);
+            Boundary();
         }
 
         foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
@@ -355,6 +392,51 @@ internal sealed partial class MigrationV2
 
         Directory.Delete(source);
     }
+
+    /// <summary>
+    /// One file into the archive, by its path identity. The same relative path with the same bytes IS the same file: the source is removed. A DIFFERENT file at that path
+    /// goes beside it under <c>name.v1-&lt;first eight hex digits of the SHA-256 of its content&gt;.ext</c> — a name that depends on the content and on nothing the run did, so the
+    /// same file always lands at the same place. Two names with identical bytes are two files, and both stay. Nothing is ever overwritten.
+    /// </summary>
+    private static void MoveOne(string file, string destination)
+    {
+        if (!File.Exists(destination))
+        {
+            File.Move(file, destination);
+
+            return;
+        }
+
+        if (SameBytes(file, destination))
+        {
+            File.Delete(file);
+
+            return;
+        }
+
+        var suffixed = Path.Combine(
+            Path.GetDirectoryName(destination)!,
+            $"{Path.GetFileNameWithoutExtension(destination)}.v1-{ContentHash(file)}{Path.GetExtension(destination)}");
+        if (!File.Exists(suffixed))
+        {
+            File.Move(file, suffixed);
+        }
+        else if (SameBytes(file, suffixed))
+        {
+            File.Delete(file); // this very file was merged by an earlier run
+        }
+        else
+        {
+            File.Move(file, Unoccupied(suffixed)); // eight hex digits of two different contents agree: numbered, never overwritten
+        }
+    }
+
+    private static bool SameBytes(string a, string b) =>
+        new FileInfo(a).Length == new FileInfo(b).Length && File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
+
+    /// <summary>The first eight lowercase hex digits of the SHA-256 of the file's bytes.</summary>
+    private static string ContentHash(string file) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(file)))[..8];
 
     // ---------- settings ----------
 
