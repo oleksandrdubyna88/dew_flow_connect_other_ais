@@ -50,6 +50,7 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
         new("src_mcp/src/Store/ObservedSession.cs", "ReadBudget carries a clock for the transcript read's MaxTime as an instant comparison; the read arms no timer"),
         new("src_mcp/src/Store/RoundsDb.cs", "a wall STAMP for its rows' columns (the clock is what a test controls); its one DateTime.UtcNow is the session row's opened_utc, a stamp and not a budget"),
         new("src_mcp/src/Collecting/CollectRun.cs", "a wall STAMP only: the run id is the clock's instant; the run waits for nothing"),
+        new("src_mcp/src/Install/SetupDependencies.cs", "carries the installer's clock to name a backup folder by its UTC instant (InstallBackup.Create); no timer, no wait — the vendor commands' deadline is the launcher's own Timeout"),
         new("src_bugs/src/RateLimiter.cs", "a rate window compared as instants (GetUtcNow ticks per subject); no timer, no wait — its own tests move the clock"),
     ];
 

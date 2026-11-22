@@ -166,6 +166,15 @@ internal static class Program
         BandJson,
 
         /// <summary>
+        /// Finds claude, codex and agy on this side and writes the <c>coai</c> MCP entry through each one's own command — a backup first, nothing changed when it is already right — and prints ONE JSON object.
+        /// See <see cref="Install.SetupClientsMode"/> (v2 E3.S6). Not a writer of the data directory: its state is <c>~/.local/state/coai</c>.
+        /// </summary>
+        SetupClients,
+
+        /// <summary>The same engine as <see cref="SetupClients"/> under the name the install line uses (v2 E3.S6; <c>--shared</c> is epoch 2).</summary>
+        Install,
+
+        /// <summary>
         /// The measurement behind a vendor dialect: the vault read the product's way, <c>GET /models</c>,
         /// and the S0.5 request matrix, printed as an allowlist of fields.
         /// </summary>
@@ -358,6 +367,8 @@ internal static class Program
                 "--kimi-clear-marker" => Startup.KimiClearMarker,
                 "--host-facts" => Startup.HostFacts,
                 "--band-json" => Startup.BandJson,
+                "--setup-clients" => Startup.SetupClients,
+                "--install" => Startup.Install,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
@@ -469,6 +480,12 @@ internal static class Program
             case Startup.BandJson:
                 // One object on stdout, read-only, exit 0; a wrong argument is 65, never 64.
                 return BandJsonMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
+
+            case Startup.SetupClients:
+            case Startup.Install:
+                // One object on stdout; a bad argument is 65, never 64. The state folder is the installer's own — the data directory is never opened.
+                return await Install.SetupClientsMode.RunAsync(
+                    startup == Startup.Install ? "install" : "setup-clients", args[1..], Install.SetupDependencies.ForThisProcess(VersionText), Console.Out, Note);
 
             case Startup.ProbeApi:
                 // The vault is read the way `--providers` reads it: `creds config`, the one child this
@@ -2581,6 +2598,12 @@ internal static class Program
         from the data directory and never creating it: the consultations in flight (cons asking or open, consask consulting)
         and the failure notices of the last 24 hours. The phrases live in the editor's settings, so the list is empty here.
         Any other argument is 65; a build too old for the mode exits 64.
+        `--setup-clients [--dry-run] [--only claude,codex,agy] [--binary <path>] [--remove | --restore <id|latest>]` finds the CLIs on this side and writes the `coai` MCP
+        entry through each one's own command (`claude mcp add-json --scope user`, `codex mcp add`) — a backup in the state folder first, nothing changed when the entry
+        is already right — and prints ONE JSON object: per CLI found, absent, changed, unchanged, refused, failed or unmeasured (agy), per target the action and the
+        entry before and after (environment NAMES only). `--install` is the same engine (`--shared` is epoch 2: refused, 65). `--dry-run` plans only and answers the code the
+        real run would. Exits 0 every found CLI in the wanted state, 65 bad arguments or an unknown backup id, 69 no CLI found, 73 the backup could not be written,
+        74 a write failed after the backup, 75 another run holds the lock, 78 a CLI refused (the others done) — never 64.
         `--check-model` reads {"row": {…}} on stdin and runs ONE paid check of that catalog row — the consultant's
         check (a scratch repository, a marker, a canary), its record kept as model-<id>. A request without a row exits 65.
         Configure it in your client as:
