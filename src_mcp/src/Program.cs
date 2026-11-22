@@ -2019,6 +2019,7 @@ internal static class Program
             ToolCollection = [.. Tools.All(new Server.RefusingServiceSource(reason))],
             PromptCollection = [.. Prompts.All()],
         };
+        RenamedTools.HideFromLists(options);
         using var stopping = new CancellationTokenSource();
         using var terminated = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, context =>
         {
@@ -2170,7 +2171,7 @@ internal static class Program
                     options.ToolCollection.Add(tool);
                 }
 
-                // And the one PROMPT, which is the person's own trigger: `/mcp__coai__consult` in a
+                // And the one PROMPT, which is the person's own trigger: `/mcp__coai__cons` in a
                 // client that lists them. A prompt calls nothing — it hands the assistant a message —
                 // so every cap, refusal and invariant the tool has still applies to what it decides.
                 options.PromptCollection ??= [];
@@ -2178,6 +2179,9 @@ internal static class Program
                 {
                     options.PromptCollection.Add(prompt);
                 }
+
+                // The v1 names stay callable for older clients and are not listed (RenamedTools).
+                RenamedTools.HideFromLists(options);
 
                 // The client closing stdin is the HOST ending: the host's stopping token (startStop) fires BEFORE the SDK sees its input
                 // end and cancels the in-flight requests' own tokens (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md;

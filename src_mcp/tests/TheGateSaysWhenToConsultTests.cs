@@ -48,14 +48,14 @@ public class TheGateSaysWhenToConsultTests
     /// contain stays green through it. The whole sentence in both is the control.
     /// </remarks>
     private const string ConsultPointer =
-        "A finding that changes your mind about the shape of the work is what `consult` is for — "
+        "A finding that changes your mind about the shape of the work is what `cons` is for — "
         + "call it before `resolve`, once for the round, while the accept-or-reject is still open.";
 
     /// <summary>The sixth trigger, where a caller is standing when it decides to call the tool.</summary>
     [Fact]
     public void TheConsultDescriptionNamesTheFindingThatChangedYourMind()
     {
-        var consult = DescriptionOf("consult");
+        var consult = DescriptionOf("cons");
 
         consult.Should().Contain("a gate finding has changed your mind about the shape of the work",
             "the trigger has to reach a session that never pasted the snippet, which is almost all of them");
@@ -70,7 +70,7 @@ public class TheGateSaysWhenToConsultTests
     [Fact]
     public void TheConsultDescriptionSaysWhatMakesAnAnswerUsable()
     {
-        var consult = DescriptionOf("consult");
+        var consult = DescriptionOf("cons");
 
         consult.Should().Contain("Advice that only asserts is not yet usable",
             "an answer with nothing in it to check is an answer the caller has to throw away");
@@ -135,7 +135,7 @@ public class TheGateSaysWhenToConsultTests
     [Fact]
     public void TheConsultantsDoorCarriesNoPhaseRule()
     {
-        var consask = DescriptionOf("ask_consultants");
+        var consask = DescriptionOf("consask");
 
         consask.Should().NotContain("phase rule").And.NotContain("free batches").And.NotContain("production risk")
             .And.NotContain("productionRisk").And.NotContain("consultantAnswers")

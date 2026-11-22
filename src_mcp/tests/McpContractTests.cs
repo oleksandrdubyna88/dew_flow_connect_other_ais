@@ -64,8 +64,8 @@ public sealed class McpContractTests : IDisposable
 
             names.Should().BeEquivalentTo(
                 ["providers", "open", "review_plan", "review_code", "review_document", "review_feature", "resolve",
-                 "status", "ask_human", "consult", "close_consult", "ask_consultants"],
-                "the twelve tools, unprefixed — the client's `coai` namespace is the only one");
+                 "status", "ask_human", "cons", "cons_close", "consask"],
+                "the twelve tools, unprefixed — the client's `coai` namespace is the only one — with the renamed three under their v2 names and the v1 names not listed");
         }
         finally
         {
@@ -115,7 +115,7 @@ public sealed class McpContractTests : IDisposable
     /// <remarks>
     /// <para>Over the WIRE, because that is the only place this can be wrong: the collection is
     /// registered in `ServeAsync` and nothing in-process would notice it being registered on an
-    /// options object the transport never sees. A client lists this as `/mcp__coai__consult`.</para>
+    /// options object the transport never sees. A client lists this as `/mcp__coai__cons`.</para>
     /// <para>The argument is asked for WITHOUT a value as well, because that is the ordinary use —
     /// a person who types the command alone is saying "you know what we are stuck on".</para>
     /// </remarks>
@@ -136,17 +136,17 @@ public sealed class McpContractTests : IDisposable
                 .Select(p => p.GetProperty("name").GetString())
                 .ToList();
 
-            prompts.Should().BeEquivalentTo(["consult"], "one prompt, unprefixed, like the tools beside it");
+            prompts.Should().BeEquivalentTo(["cons"], "one prompt, unprefixed, like the tools beside it, and the v1 name `consult` not listed");
 
             var got = await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":"The parser returns 3 where 4 is expected."}}}
+                {"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"cons","arguments":{"problem":"The parser returns 3 where 4 is expected."}}}
                 """);
             var message = got.RootElement.GetProperty("result").GetProperty("messages")[0];
 
             message.GetProperty("role").GetString().Should().Be("user");
             var text = message.GetProperty("content").GetProperty("text").GetString()!;
             text.Should().Contain("The parser returns 3 where 4 is expected.", "the person's own words travel unrewritten")
-                .And.Contain("`consult` tool")
+                .And.Contain("`cons` tool")
                 .And.Contain("rev-parse --show-toplevel")
                 .And.Contain("MATERIAL")
                 .And.Contain("Report the verification back");
@@ -158,7 +158,7 @@ public sealed class McpContractTests : IDisposable
             foreach (var arguments in (string[])["{\"problem\":\"\"}", "{}"])
             {
                 var bare = (await RoundTrip(server,
-                    $$$"""{"jsonrpc":"2.0","id":4,"method":"prompts/get","params":{"name":"consult","arguments":{{{arguments}}}}}""")).RootElement;
+                    $$$"""{"jsonrpc":"2.0","id":4,"method":"prompts/get","params":{"name":"cons","arguments":{{{arguments}}}}}""")).RootElement;
 
                 bare.TryGetProperty("error", out _).Should().BeFalse($"arguments {arguments} must be accepted: {bare}");
                 bare.GetProperty("result").GetProperty("messages")[0]
@@ -169,11 +169,91 @@ public sealed class McpContractTests : IDisposable
             // A problem carrying punctuation and a code span travels unrewritten, which is the claim
             // the message makes about the person's words.
             var awkward = await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":"`Count()` returns 3 after two fixes; expected 4."}}}
+                {"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"cons","arguments":{"problem":"`Count()` returns 3 after two fixes; expected 4."}}}
                 """);
             awkward.RootElement.GetProperty("result").GetProperty("messages")[0]
                 .GetProperty("content").GetProperty("text").GetString()
                 .Should().Contain("`Count()` returns 3 after two fixes; expected 4.");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
+    /// The v1 names are hidden aliases (v2 E3.S3 t1): each still ANSWERS — over the real wire, with the same reply the new name gives
+    /// plus a `note` saying what it was renamed to — and none of them is LISTED, so a new client sees the new names only. The
+    /// prompt <c>consult</c> is served the same way.
+    /// </summary>
+    [Theory]
+    [InlineData("consult", "cons", """{"repoPath":"D:/nowhere","problem":"stuck"}""")]
+    [InlineData("close_consult", "cons_close", """{"repoPath":"D:/nowhere","consultationId":"c1","outcome":"solved"}""")]
+    [InlineData("ask_consultants", "consask", """{"repoPath":"D:/nowhere","question":"A or B?","context":"tried both"}""")]
+    public async Task AnOldToolName_StillAnswers_LikeTheNewOne_WithANoteSayingItWasRenamed(string oldName, string newName, string arguments)
+    {
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var listed = await RoundTrip(server, """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
+            var names = listed.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray()
+                .Select(t => t.GetProperty("name").GetString()).ToList();
+            names.Should().Contain(newName).And.NotContain(oldName, "a hidden alias is callable and not listed");
+
+            string Call(int id, string name) =>
+                $$$"""{"jsonrpc":"2.0","id":{{{id}}},"method":"tools/call","params":{"name":"{{{name}}}","arguments":{{{arguments}}}}}""";
+            var viaNew = JsonDocument.Parse((await RoundTrip(server, Call(3, newName), 30)).RootElement
+                .GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!).RootElement;
+            var viaOld = JsonDocument.Parse((await RoundTrip(server, Call(4, oldName), 30)).RootElement
+                .GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!).RootElement;
+
+            viaOld.GetProperty("note").GetString().Should().StartWith($"renamed to {newName}");
+            viaNew.TryGetProperty("note", out _).Should().BeFalse("the new name carries no note");
+            viaOld.EnumerateObject().Where(p => p.Name != "note").Select(p => p.Name)
+                .Should().Equal(viaNew.EnumerateObject().Select(p => p.Name), "the old name answers with the new one's members, in its order");
+            viaOld.EnumerateObject().Where(p => p.Name != "note" && p.Value.ValueKind is JsonValueKind.String)
+                .Select(p => (p.Name, Value: p.Value.GetString()))
+                .Should().Equal(viaNew.EnumerateObject().Where(p => p.Value.ValueKind is JsonValueKind.String).Select(p => (p.Name, Value: p.Value.GetString())),
+                    "and the same words");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    [Fact]
+    public async Task TheOldPromptName_StillGivesTheMessage_ButIsNotListed()
+    {
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var old = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":"red twice"}}}
+                """);
+            var viaNew = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"cons","arguments":{"problem":"red twice"}}}
+                """);
+
+            Text(old).Should().Be(Text(viaNew), "the old prompt hands out the same message");
+            Text(old).Should().Contain("red twice").And.Contain("`cons` tool");
+
+            static string Text(JsonDocument document) =>
+                document.RootElement.GetProperty("result").GetProperty("messages")[0].GetProperty("content").GetProperty("text").GetString()!;
         }
         finally
         {

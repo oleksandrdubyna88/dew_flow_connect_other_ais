@@ -40,14 +40,14 @@ public sealed class ScenarioCoverageTests
             + "no-reviewer skips, all-failed calling a person, a credential file withheld",
         ["resolve"] = "EndToEndTests + RoundAuditTests (a decision is recorded for every finding)",
         ["status"] = "McpContractTests + CallerSessionsTests",
-        ["consult"] = "ConsultScenarioTests — two turns over the fake CLI as codex: a thread opened, "
+        ["cons"] = "ConsultScenarioTests — two turns over the fake CLI as codex: a thread opened, "
             + "resumed by its own id, the cap closing it, the ledger and the record written",
-        ["close_consult"] = "ConsultScenarioTests — a real consultation opened over the fake CLI and "
+        ["cons_close"] = "ConsultScenarioTests — a real consultation opened over the fake CLI and "
             + "then ENDED: the verdict on the record, a repeat that changes nothing, a conflicting "
             + "outcome refused, a cap-closed one lapsing and still taking a verdict",
         ["ask_human"] = "McpContractTests — a REAL server build over real stdio: v2 keeps the tool registered as an alias, and it answers at once "
             + "with exactly {status: ask_in_conversation, note: removed in v2…} whatever the arguments, writing no card",
-        ["ask_consultants"] = "QuestionConsultScenarioTests — the fake CLI as a codex row, a REAL child: the planner's "
+        ["consask"] = "QuestionConsultScenarioTests — the fake CLI as a codex row, a REAL child: the planner's "
             + "argv reaches a process, its answer file is read back fenced, the record and the ledger line are on disk; "
             + "a web question carrying a path refused before any launch. Beneath it: QuestionFanOutTests (one row past "
             + "its deadline → partial; a blocked row never launched; a web row given the sanitised question alone; a none "

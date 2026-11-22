@@ -99,7 +99,7 @@ internal static class Tools
                     verdict (proceed | revise | good_enough | not_reviewed) and what to do next. Then record decisions with `resolve` — every
                     finding, reasons on rejections.
 
-                    A finding that changes your mind about the shape of the work is what `consult`
+                    A finding that changes your mind about the shape of the work is what `cons`
                     is for — call it before `resolve`, once for the round, while the accept-or-reject
                     is still open. And this is the gate for a document that code will be written
                     FROM, the only one that unlocks `review_code`; a document that is itself the
@@ -143,7 +143,7 @@ internal static class Tools
                     pass the commit as `branch` and its parent as `baseRef`.
 
                     Same reply shape and the same `resolve` duty as review_plan. A finding that
-                    changes your mind about the shape of the work is what `consult` is for — call it
+                    changes your mind about the shape of the work is what `cons` is for — call it
                     before `resolve`, once for the round, while the accept-or-reject is still open.
 
                     A code round CLOSES the session once it is resolved. To review the branch again —
@@ -363,7 +363,7 @@ internal static class Tools
                     caller gets an answer: the reply is always `status: "ask_in_conversation"` with a `note`
                     saying so. Ask the person yourself, in this conversation, with your own question tool,
                     offering the options you see, and never decide alone because they have not answered yet.
-                    Use `ask_consultants` first for a question another model could settle.
+                    Use `consask` first for a question another model could settle.
                     """,
                 ReadOnly = true,
                 Idempotent = true,
@@ -371,20 +371,17 @@ internal static class Tools
                 OpenWorld = false,
             });
 
-        yield return McpServerTool.Create(
-            async (string repoPath, string consultationId, string outcome, string? note = null) =>
-                await (await host.CurrentAsync()).CloseConsultAsync(repoPath, consultationId, outcome, note ?? string.Empty),
-            new McpServerToolCreateOptions
-            {
-                Name = "close_consult",
-                Title = "Record how a consultation ended — solved, not solved, or abandoned",
-                Description = """
+        var close = new McpServerToolCreateOptions
+        {
+            Name = "cons_close",
+            Title = "Record how a consultation ended — solved, not solved, or abandoned",
+            Description = """
                     Ends a consultation YOU opened, with what you found. Nothing else on this
                     surface ends one: without this call a consultation sits at `open` until it
                     lapses, and the log can say what it cost but never whether it helped.
 
                     Call it once you have VERIFIED the advice — which is the same moment the
-                    `consult` reply already tells you to report back. `outcome` is one of:
+                    `cons` reply already tells you to report back. `outcome` is one of:
 
                       solved      — you tried it and it worked
                       not_solved  — you tried it and it did not
@@ -403,22 +400,25 @@ internal static class Tools
                     You may only close your own: a consultation belongs to the caller session that
                     opened it.
                     """,
-                ReadOnly = false,
-                Idempotent = true,
-                Destructive = false,
-                OpenWorld = false,
-            });
+            ReadOnly = false,
+            Idempotent = true,
+            Destructive = false,
+            OpenWorld = false,
+        };
         yield return McpServerTool.Create(
-            // Both optional arguments carry a C# default — the `resolve` lesson above: without one
-            // the SDK publishes the argument as REQUIRED, and the ordinary first call, which has no
-            // consultationId yet, fails as "An error occurred invoking 'consult'".
-            async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null) =>
-                await (await host.CurrentAsync()).ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty),
-            new McpServerToolCreateOptions
-            {
-                Name = "consult",
-                Title = "Ask another vendor's model when you are stuck, in this working tree",
-                Description = """
+            async (string repoPath, string consultationId, string outcome, string? note = null) =>
+                await (await host.CurrentAsync()).CloseConsultAsync(repoPath, consultationId, outcome, note ?? string.Empty),
+            close);
+        yield return McpServerTool.Create(
+            async (string repoPath, string consultationId, string outcome, string? note = null) =>
+                RenamedTools.WithNote(await (await host.CurrentAsync()).CloseConsultAsync(repoPath, consultationId, outcome, note ?? string.Empty), "cons_close"),
+            RenamedTools.Alias(close, RenamedTools.OldClose));
+
+        var cons = new McpServerToolCreateOptions
+        {
+            Name = "cons",
+            Title = "Ask another vendor's model when you are stuck, in this working tree",
+            Description = """
                     A consultant — an independent model, chosen by the person for YOUR kind of caller
                     and usually a different vendor's — reads this checkout READ-ONLY together with its uncommitted diff, which the
                     server collects itself, and answers your `problem` in prose. Call it when the same
@@ -450,22 +450,28 @@ internal static class Tools
                     Nothing in your tree is ever changed by this tool; if the consultant's process
                     changes anything, its advice is withheld and the paths are named.
                     """,
-                ReadOnly = true,
-                Idempotent = false,
-                Destructive = false,
-                OpenWorld = true,
-            });
-
+            ReadOnly = true,
+            Idempotent = false,
+            Destructive = false,
+            OpenWorld = true,
+        };
         yield return McpServerTool.Create(
-            // `document` and `feature` carry C# defaults — the `resolve` lesson: without one the SDK publishes
-            // an argument as REQUIRED, and the ordinary question, asked from a branch session, has neither.
-            async (string repoPath, string question, string context, string? document = null, string? feature = null) =>
-                await (await host.CurrentAsync()).AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty),
-            new McpServerToolCreateOptions
-            {
-                Name = "ask_consultants",
-                Title = "Put a question to the configured consultant models, in parallel, before asking the person",
-                Description = """
+            // Both optional arguments carry a C# default — the `resolve` lesson above: without one
+            // the SDK publishes the argument as REQUIRED, and the ordinary first call, which has no
+            // consultationId yet, fails as "An error occurred invoking 'cons'".
+            async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null) =>
+                await (await host.CurrentAsync()).ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty),
+            cons);
+        yield return McpServerTool.Create(
+            async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null) =>
+                RenamedTools.WithNote(await (await host.CurrentAsync()).ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty), "cons"),
+            RenamedTools.Alias(cons, RenamedTools.OldConsult));
+
+        var consask = new McpServerToolCreateOptions
+        {
+            Name = "consask",
+            Title = "Put a question to the configured models, in parallel, before asking the person",
+            Description = """
                     The question consultant: every active row the person configured — one model paired
                     with one base prompt ("study the other projects on this disk", "search the
                     internet", "the best developer's opinion") — answers your question AT ONCE, in
@@ -497,10 +503,20 @@ internal static class Tools
                     question. `document` and `feature` file the question under that review's session.
                     The tool has no mode and no gate: it answers every call the same way.
                     """,
-                ReadOnly = true,
-                Idempotent = false,
-                Destructive = false,
-                OpenWorld = true,
-            });
+            ReadOnly = true,
+            Idempotent = false,
+            Destructive = false,
+            OpenWorld = true,
+        };
+        yield return McpServerTool.Create(
+            // `document` and `feature` carry C# defaults — the `resolve` lesson: without one the SDK publishes
+            // an argument as REQUIRED, and the ordinary question, asked from a branch session, has neither.
+            async (string repoPath, string question, string context, string? document = null, string? feature = null) =>
+                await (await host.CurrentAsync()).AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty),
+            consask);
+        yield return McpServerTool.Create(
+            async (string repoPath, string question, string context, string? document = null, string? feature = null) =>
+                RenamedTools.WithNote(await (await host.CurrentAsync()).AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty), "consask"),
+            RenamedTools.Alias(consask, RenamedTools.OldAsk));
     }
 }
