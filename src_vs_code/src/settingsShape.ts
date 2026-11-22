@@ -432,18 +432,18 @@ export function envBlock(
   // The consultant's key, only when a caller differs from its shipped pair (consultantsWire.ts holds the rule and its reasons).
   Object.assign(env, consultantsEnv(settings.consult, vendors, installedServerVersion, priceOf, features));
   if (settings.consult.turns !== DEFAULT_CONSULT.turns) {
-    env['COAI_CONSULT_TURNS'] = String(settings.consult.turns);
+    env['COAI_CONS_TURNS'] = String(settings.consult.turns);
   }
   if (settings.consult.callsPerSession !== DEFAULT_CONSULT.callsPerSession) {
-    env['COAI_CONSULT_CALLS_PER_SESSION'] = String(settings.consult.callsPerSession);
+    env['COAI_CONS_CALLS_PER_SESSION'] = String(settings.consult.callsPerSession);
   }
   if (settings.consult.idleMinutes !== DEFAULT_CONSULT.idleMinutes) {
-    env['COAI_CONSULT_IDLE_MINUTES'] = String(settings.consult.idleMinutes);
+    env['COAI_CONS_IDLE_MINUTES'] = String(settings.consult.idleMinutes);
   }
   // Written only when OFF, like every role switch: absent means on, and the server encodes that
   // structurally rather than by agreement.
   if (!settings.consult.enabled) {
-    env['COAI_CONSULT_ENABLED'] = 'false';
+    env['COAI_CONS_ENABLED'] = 'false';
   }
   // The question consultant's eight, each only when it differs — and none for a server known to be too old to
   // read them (`QCONSULT_SINCE`), which the section then says in a banner.

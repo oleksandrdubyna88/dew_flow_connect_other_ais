@@ -698,12 +698,12 @@ try {
 }
 
 if (!String(switched.error ?? '').includes('switched off')) {
-  await consultFail(`COAI_CONSULT_ENABLED did not cross the seam, or a live server does not re-read it. The server answered: ${JSON.stringify(switched).slice(0, 400)}`);
+  await consultFail(`COAI_CONS_ENABLED did not cross the seam, or a live server does not re-read it. The server answered: ${JSON.stringify(switched).slice(0, 400)}`);
 }
 
 // The tool must still be THERE while it is off. A caller that cannot see a tool cannot be told why
 // it is not there, and the documentation promises this in those words.
-if (!(listed?.result?.tools ?? []).some((tool) => tool.name === 'consult')) {
+if (!(listed?.result?.tools ?? []).some((tool) => tool.name === 'cons')) {
   await consultFail(`the consult tool vanished from tools/list while the feature was off: ${
     (listed?.result?.tools ?? []).map((tool) => tool.name).join(', ')}`);
 }

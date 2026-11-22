@@ -4,7 +4,7 @@ using CoaiMcp.Runners.Files;
 namespace CoaiMcp.Server;
 
 /// <summary>
-/// The question consultant's settings — the <c>COAI_QCONSULT_*</c> keys of <c>todo/PLAN_question_consultant.md</c> §4,
+/// The consask settings — the <c>COAI_CONSASK_*</c> keys (<c>COAI_QCONSULT_*</c> before v2, still read when the new key is not set) of <c>todo/PLAN_question_consultant.md</c> §4,
 /// in a record of their own (D12: <c>PanelSettings</c> grows by one property, not eight).
 /// </summary>
 /// <remarks>
@@ -52,12 +52,12 @@ public sealed record QuestionConsultSetting(QuestionConsultSettings Settings, IR
 /// <summary>The keys, spelled once — a notice groups on the key, and a key recovered from a sentence stops matching when it is reworded.</summary>
 public static class QuestionConsultKeys
 {
-    public const string Enabled = "COAI_QCONSULT_ENABLED";
-    public const string Rows = "COAI_QCONSULT_ROWS";
-    public const string Prompts = "COAI_QCONSULT_PROMPTS";
-    public const string Roots = "COAI_QCONSULT_ROOTS";
-    public const string RowMinutes = "COAI_QCONSULT_ROW_MINUTES";
-    public const string QuestionsPerSession = "COAI_QCONSULT_QUESTIONS_PER_SESSION";
+    public const string Enabled = "COAI_CONSASK_ENABLED";
+    public const string Rows = "COAI_CONSASK_ROWS";
+    public const string Prompts = "COAI_CONSASK_PROMPTS";
+    public const string Roots = "COAI_CONSASK_ROOTS";
+    public const string RowMinutes = "COAI_CONSASK_ROW_MINUTES";
+    public const string QuestionsPerSession = "COAI_CONSASK_QUESTIONS_PER_SESSION";
 }
 
 /// <summary>
@@ -109,6 +109,8 @@ public static class QuestionConsultReader
 {
     public static QuestionConsultSetting Read(Func<string, string?> env, string dataDir, SystemPlaces places, Func<string, bool>? isDirectory = null)
     {
+        // Asked in the new names; a v1 key (COAI_QCONSULT_*) answers while the new one is unset — whoever calls this, not only PanelSettings.
+        env = PanelSettings.WithRenamedKeys(env);
         var rows = QuestionRows.Parse(env(QuestionConsultKeys.Rows));
         var prompts = QuestionPromptSet.ParseCustom(env(QuestionConsultKeys.Prompts));
         var listed = Listed(env(QuestionConsultKeys.Roots));

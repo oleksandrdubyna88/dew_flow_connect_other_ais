@@ -321,12 +321,12 @@ const SCENARIOS: readonly Scenario[] = [
       const row = { id: 'host-row', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true };
       try {
         await config().update('qconsultRows', [row], vscode.ConfigurationTarget.Global);
-        await settingsUntil(file, (text) => text.includes('COAI_QCONSULT_ROWS') && text.includes('host-row'),
+        await settingsUntil(file, (text) => text.includes('COAI_CONSASK_ROWS') && text.includes('host-row'),
           'a question-consultant row set in this editor never reached the file the server reads');
       } finally {
         await config().update('qconsultRows', undefined, vscode.ConfigurationTarget.Global);
       }
-      await settingsUntil(file, (text) => !text.includes('COAI_QCONSULT_ROWS'), 'removing the row left it in the file');
+      await settingsUntil(file, (text) => !text.includes('COAI_CONSASK_ROWS'), 'removing the row left it in the file');
       await vscode.window.tabGroups.close(tabsOf('coaiSettings'));
 
       await vscode.commands.executeCommand('coai.showRounds');

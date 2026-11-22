@@ -9,7 +9,7 @@ import { Vendor, vendorsFrom } from './vendors';
  *
  * <p>The server owns the fan-out, the gate and every refusal (`QuestionConsultSettings`,
  * `QuestionConsultReader`, `QuestionRows.Parse`); this module is what a person chooses and the
- * `COAI_QCONSULT_*` keys it crosses the seam as. The `cadenceSettings.ts` shape: one reader the section and
+ * `COAI_CONSASK_*` keys it crosses the seam as. The `cadenceSettings.ts` shape: one reader the section and
  * the env block share, each key written only when it differs from the server's own default — so a pristine
  * panel sends nothing and the server's fallback is what runs, which is safe only while the defaults agree,
  * and `qconsultSettings.test.ts` reads the C# to keep them agreeing.</p>
@@ -83,7 +83,7 @@ export const QCONSULT_SETTINGS: readonly string[] = [
 ];
 
 /**
- * The first `coai-mcp` that reads any `COAI_QCONSULT_*` key — the release S5 cuts from this branch, the
+ * The first `coai-mcp` that reads any `COAI_CONSASK_*` key — the release S5 cuts from this branch, the
  * minor after `mcp-v0.40.5`. If another release is cut before this branch merges, move this with it.
  *
  * <p>Below it the keys are KEPT OUT of the settings file (the `API_RUNTIME_SINCE` precedent): such a server
@@ -131,7 +131,7 @@ function text(value: unknown): string {
  * A row that refers to a CATALOG row (one listing the question-consultant use) read as the definition it stands
  * for — the catalog row's launch fields and key name, the question row's own id, prompt, switch and key. Every
  * other row as it is: a definition is itself, and a reference to a plain reviewer row is coai-mcp's to resolve,
- * as it always was. Key order kept, because these rows ARE the wire (`COAI_QCONSULT_ROWS`) and a migrated setup
+ * as it always was. Key order kept, because these rows ARE the wire (`COAI_CONSASK_ROWS`) and a migrated setup
  * must write the same bytes it did (PLAN_one_model_catalog.md E1.3).
  */
 function resolvedAgainst(rows: readonly Vendor[]): (row: QuestionRowSetting) => QuestionRowSetting {
@@ -266,13 +266,13 @@ function rowsOnTheWire(s: QconsultSettings, rowOf: CatalogRowOnTheWire): string 
 
 /** Each env key and the value it carries — one row per setting, so a ninth cannot be half-wired. */
 const QCONSULT_KEYS: readonly (readonly [string, (settings: QconsultSettings, rowOf: CatalogRowOnTheWire) => string])[] = [
-  ['COAI_QCONSULT_ENABLED', (s) => String(s.enabled)],
+  ['COAI_CONSASK_ENABLED', (s) => String(s.enabled)],
   // The rows, the prompts and the roots go out as they are stored: these settings ARE the wire format, as
   // `COAI_ROLES` is — so there is no shape to translate and no second schema to keep level. A row may carry its
   // catalog row beside it (C2).
-  ['COAI_QCONSULT_ROWS', rowsOnTheWire],
-  ['COAI_QCONSULT_PROMPTS', (s) => JSON.stringify(s.prompts)],
-  ['COAI_QCONSULT_ROOTS', (s) => JSON.stringify(s.roots)],
-  ['COAI_QCONSULT_ROW_MINUTES', (s) => String(s.rowMinutes)],
-  ['COAI_QCONSULT_QUESTIONS_PER_SESSION', (s) => String(s.questionsPerSession)],
+  ['COAI_CONSASK_ROWS', rowsOnTheWire],
+  ['COAI_CONSASK_PROMPTS', (s) => JSON.stringify(s.prompts)],
+  ['COAI_CONSASK_ROOTS', (s) => JSON.stringify(s.roots)],
+  ['COAI_CONSASK_ROW_MINUTES', (s) => String(s.rowMinutes)],
+  ['COAI_CONSASK_QUESTIONS_PER_SESSION', (s) => String(s.questionsPerSession)],
 ];

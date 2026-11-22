@@ -50,3 +50,10 @@ test('once the server has answered, its problems are the roots\' findings and th
   assert.deepEqual(agreed(own, undefined, 'windows'), own, 'a server that has not answered, or is older, leaves the window\'s own findings');
   assert.deepEqual([kindOfState('missing'), kindOfState('unknown')], ['missing-folder', 'unreadable-folder']);
 });
+
+test('the roots problem is read under the v2 key, COAI_CONSASK_ROOTS, and under the v1 key an older server names it by', () => {
+  const asked = (key: string) => findingsFromServer([{ key, kind: 'missing-folder', value: 'D:\\gone', sentence: 's' }], 'windows').map((one) => [one.key, one.value, one.state]);
+
+  assert.deepEqual(asked('COAI_CONSASK_ROOTS'), [['coai.qconsultRoots', 'D:\\gone', 'missing']]);
+  assert.deepEqual(asked('COAI_QCONSULT_ROOTS'), [['coai.qconsultRoots', 'D:\\gone', 'missing']], 'a coai-mcp older than 2.0 still names it the old way');
+});

@@ -70,7 +70,7 @@ export async function catalogSeam({ providersIn, fail }) {
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-catalog-'));
   try {
     writeFileSync(join(dir, 'settings.json'), now, 'utf8');
-    const answer = await providersIn({ COAI_DATA_DIR: dir, COAI_VENDORS: '', COAI_PROVIDERS: '', COAI_CONSULTANTS: '', COAI_QCONSULT_ROWS: '' });
+    const answer = await providersIn({ COAI_DATA_DIR: dir, COAI_VENDORS: '', COAI_PROVIDERS: '', COAI_CONSULTANTS: '', COAI_CONSASK_ROWS: '', COAI_QCONSULT_ROWS: '' });
     const ids = (answer.providers ?? []).map((p) => p.provider).sort();
     const expected = ['claude', 'claude-2', 'codex'];
     if (JSON.stringify(ids) !== JSON.stringify(expected)) {

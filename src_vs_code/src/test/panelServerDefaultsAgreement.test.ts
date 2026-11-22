@@ -107,7 +107,7 @@ const panelSettings = fs.readFileSync(mcp('src', 'Server', 'PanelSettings.cs'), 
 const routing = fs.readFileSync(mcp('src', 'Server', 'Consultation', 'ConsultantRouting.cs'), 'utf8');
 const resolution = fs.readFileSync(mcp('runners', 'Consultation', 'ConsultantResolution.cs'), 'utf8');
 
-/** `IntVar(env, "COAI_CONSULT_TURNS", 5)` -> 5. The fallback the server uses with nothing set. */
+/** `IntVar(env, "COAI_CONS_TURNS", 5)` -> 5. The fallback the server uses with nothing set. */
 function serverFallback(key: string): number {
   const m = new RegExp(`"${key}",\\s*(\\d+)`).exec(panelSettings);
 
@@ -117,13 +117,13 @@ function serverFallback(key: string): number {
 }
 
 test("every consult default in the panel is the server's own fallback", () => {
-  assert.strictEqual(DEFAULT_CONSULT.turns, serverFallback('COAI_CONSULT_TURNS'));
-  assert.strictEqual(DEFAULT_CONSULT.callsPerSession, serverFallback('COAI_CONSULT_CALLS_PER_SESSION'));
-  assert.strictEqual(DEFAULT_CONSULT.idleMinutes, serverFallback('COAI_CONSULT_IDLE_MINUTES'));
+  assert.strictEqual(DEFAULT_CONSULT.turns, serverFallback('COAI_CONS_TURNS'));
+  assert.strictEqual(DEFAULT_CONSULT.callsPerSession, serverFallback('COAI_CONS_CALLS_PER_SESSION'));
+  assert.strictEqual(DEFAULT_CONSULT.idleMinutes, serverFallback('COAI_CONS_IDLE_MINUTES'));
   // On unless somebody switched it off, on BOTH sides: the server reads this key through the
   // not-switched-off parser, which is the shape of "absent means on".
   assert.strictEqual(DEFAULT_CONSULT.enabled, true);
-  assert.match(panelSettings, /NotSwitchedOff\(env, "COAI_CONSULT_ENABLED"\)/);
+  assert.match(panelSettings, /NotSwitchedOff\(env, "COAI_CONS_ENABLED"\)/);
 });
 
 test('the shipped consultant for every caller kind is the one the server would choose', () => {

@@ -157,7 +157,7 @@ export function agreed(own: readonly PathFinding[], server: readonly SettingProb
 /** The server's problems as findings — a key this build does not know, or a kind it does not, marks nothing. */
 export function findingsFromServer(problems: readonly SettingProblem[], family: PathFamily): readonly PathFinding[] {
   return problems.flatMap((problem) => {
-    const setting = PATH_SETTINGS.find((one) => one.saidBy === 'server' && one.wireKey === problem.key);
+    const setting = PATH_SETTINGS.find((one) => one.saidBy === 'server' && (one.wireKey === problem.key || one.wireKeyBefore === problem.key));
     const state = STATE_OF_KIND[problem.kind];
 
     return setting === undefined || state === undefined

@@ -824,7 +824,39 @@ public sealed record PanelSettings
         // catalog and the sentences it refused join `Unrecognised`. Calling the parser or the
         // composer again for the second half would let the two halves of one answer describe two
         // different values of the setting. (codex, story B2's second code round.)
+        FromRenamedEnvironment(WithRenamedKeys(env));
+
+    private static PanelSettings FromRenamedEnvironment(Func<string, string?> env) =>
         WithCatalog(env, ParseRoles(env(Key.Roles)));
+
+    /// <summary>
+    /// <c>COAI_CONS_*</c> and <c>COAI_CONSASK_*</c> are the names of what v1 called <c>COAI_CONSULT_*</c> and
+    /// <c>COAI_QCONSULT_*</c> (server.md § 2). The reader asks for the new names; an unset (or empty) new key falls back to the old
+    /// one, so a settings file or an environment an older extension wrote keeps working, and when BOTH are set the new key wins.
+    /// </summary>
+    /// <remarks>
+    /// Spelled as a rule over the prefix, not a list: a key added under one of them later is a fallback too, and the two
+    /// prefixes cannot disagree with the readers. <c>COAI_CONSASK_</c> is tested first because it also begins with
+    /// <c>COAI_CONS</c>. <c>COAI_CONSULTANTS</c> and <c>COAI_CONSULTANT_HOMES</c> are other keys and keep their names.
+    /// </remarks>
+    internal static Func<string, string?> WithRenamedKeys(Func<string, string?> env) => name =>
+    {
+        var value = env(name);
+        if (value is { Length: > 0 })
+        {
+            return value;
+        }
+
+        var old = OldNameOf(name);
+
+        return old is null ? value : env(old) is { Length: > 0 } fallback ? fallback : value;
+    };
+
+    /// <summary>The v1 key a v2 key replaced, or nothing when the key is not one of the renamed families.</summary>
+    internal static string? OldNameOf(string name) =>
+        name.StartsWith("COAI_CONSASK_", StringComparison.Ordinal) ? "COAI_QCONSULT_" + name["COAI_CONSASK_".Length..]
+        : name.StartsWith("COAI_CONS_", StringComparison.Ordinal) ? "COAI_CONSULT_" + name["COAI_CONS_".Length..]
+        : null;
 
     private static PanelSettings WithCatalog(Func<string, string?> env, RolesSetting roles) =>
         WithCatalog(env, roles, RoleComposition.Compose(roles.Rows));
@@ -874,12 +906,12 @@ public sealed record PanelSettings
                 ? roundTrees
                 : Runners.Worktrees.WorktreeManager.MachineLocalRoot,
             Consultants = consultants.Map,
-            ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
-            ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
-            ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONSULT_IDLE_MINUTES", 15)),
+            ConsultTurns = IntVar(env, "COAI_CONS_TURNS", 5),
+            ConsultCallsPerSession = IntVar(env, "COAI_CONS_CALLS_PER_SESSION", 10),
+            ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONS_IDLE_MINUTES", 15)),
             ConsultantHomesRoot = HomesRootOf(env),
             Pace = ServerPace.From(env),
-            ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
+            ConsultEnabled = NotSwitchedOff(env, "COAI_CONS_ENABLED"),
             KimiAllowNetworkSignIn = Flag(env, "COAI_KIMI_ALLOW_NETWORK_SIGNIN"),
             ConsultantsUnreadable = consultants.Unreadable,
             GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
