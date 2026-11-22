@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-stop-signals
+title: "Record real limit, refusal, crash outputs of claude, codex, agy"
+kind: measure
+complexity: 3
+dependsOn: []
+parallel: true
+files:
+  - v2/epoch-3/e1-role-jobs-ba/stories/s3-router-failover/SIGNALS.md
+  - src_mcp/tests/fixtures/role-stops
+dod:
+  - id: d1
+    item: "each fixture is a real output with CLI version and date"
+  - id: d2
+    item: "SIGNALS.md says per vendor if a structured refusal field exists"

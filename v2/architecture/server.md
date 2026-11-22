@@ -385,3 +385,17 @@ in progress / done and progress counts. Every item has a report: gates run (and 
 execution time. Data: an optional `workItem` argument (feature-folder path) on `review_*`, `cons`, `consask` and
 `start_role`, recorded in RoundsDb from 2.0 (epoch 1 E3 s8); `--plan-report <feature-dir> --json` aggregates it; coai sets
 the item status in the YAML deterministically. The page is epoch 4 E5 (was "Features page").
+
+## 22. Spike results 2026-11-23 (v2/spikes/RESULTS_spikes_2026-11-23.md) — design rules
+
+1. **AskUserQuestion hook (claude 2.1.330):** in an interactive session a PreToolUse hook returning `allow` +
+   `updatedInput{questions, answers}` answers the tool: the model gets a normal result ("Your questions have been
+   answered: …"), no widget seen. In `-p` mode the tool is not offered at all (the hook never fires there).
+   **Rule: answer ALL questions or NONE.** A partial `answers` map leaves the other questions unanswered and the person
+   is never asked them; an empty map yields "The user did not answer the questions." So when consask cannot settle
+   every question (no majority on one), `--ask-hook` prints nothing and the native widget shows all of them. Open:
+   `multiSelect` answer format, free-text "Other", hook failure/timeout behaviour, non-auto permission modes.
+2. **systemd-run --user (WSL, systemd 259, Linger=yes):** works; a unit survives the launching shell; `--collect`
+   removes the unit after exit (use `--wait` for the result). **Memory limits need `-p MemorySwapMax=0`** besides
+   `MemoryMax` — without it the 4 GB WSL swap absorbs the excess and nothing is killed. The scheduler (epoch 3 E5) uses
+   both. Open: survival when the whole client process tree is killed, across `wsl --terminate`.

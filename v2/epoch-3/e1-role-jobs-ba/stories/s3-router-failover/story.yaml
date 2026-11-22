@@ -1,0 +1,7 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s3-router-failover
+title: "Router and failover; one line and one notice per switch"
+cornerstone: true
+dependsOn:
+  - s1-job-lease
+  - s2-work-plan-schema

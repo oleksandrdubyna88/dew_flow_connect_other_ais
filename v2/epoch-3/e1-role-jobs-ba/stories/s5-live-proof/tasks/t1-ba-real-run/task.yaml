@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-ba-real-run
+title: "Real BA job on e2-coder-one-task"
+kind: measure
+complexity: 5
+dependsOn: []
+parallel: true
+files:
+  - v2/epoch-3/e2-coder-one-task/stories
+  - v2/epoch-3/e1-role-jobs-ba/RESULTS_ba_proof.md
+dod:
+  - id: d1
+    item: "validate_work valid in 2 repair turns or fewer; number recorded"
+  - id: d2
+    item: "--role-delta at the commit after the plan gate: changedShare below 0.20"
+  - id: d3
+    item: "2 real runs at most, the second only after a recorded prompt change; both reported"

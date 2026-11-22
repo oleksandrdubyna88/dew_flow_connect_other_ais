@@ -328,7 +328,7 @@
             "doneWhen": [
               "no onStartupFinished; activate() only registers (entryPurity test)",
               "entry firewall checks inputs and output imports; byte budgets green",
-              "M1 ≤ 50 ms; M2 maximum of 3 fresh samples ≤ 2000 ms on Linux CI, Windows CI and Remote-WSL",
+              "M2 = command → the REAL sidebar menu (section headers Notifications, Active gates, Active consultations, Phrases, Bugz) painted AND interactive (page posts menuReady; a skeleton or inert snapshot does not count) ≤ 2000 ms in every sample, on Linux CI, Windows CI and Remote-WSL (owner, 2026-11-23); M1 ≤ 100 ms",
               "v1 baseline and per-step marks of the old activate() recorded",
               "joint smoke with the E1 binary passes; settings-mirror check done"
             ]
@@ -1012,7 +1012,9 @@
               "sidebar polls only while visible",
               "all chat host scenarios pass",
               "M2 still ≤ 2000 ms",
-              "no escalation or cadence control or watcher in the bundle"
+              "no escalation or cadence control or watcher in the bundle",
+              "--setup-clients runs after every activation (after ready) and finishes an interrupted client update",
+              "the sidebar module draws the real interactive menu itself (collapsed section headers) without the legacy bundle; opening a section before the old code is ready shows loading for that section only; menuReady ≤ 2000 ms in every sample"
             ]
           },
           "stories": [
@@ -1156,6 +1158,10 @@
                     {
                       "id": "d1",
                       "item": "M2 does not include install work"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "after the binary check, runs coai --setup-clients (no --binary unless needed) once per activation, after the first ready; an interrupted Claude update is finished from its manifest (E3 plan-gate decision on finding 5)"
                     }
                   ]
                 }
@@ -1371,8 +1377,467 @@
               "FakeCli refusal / limit / crash → next model; one log line and one notification per switch",
               "work-plan schema with the security flag; validate_work; workMethod limits from the device config",
               "complexity 10 or security → the important model list"
-            ]
-          }
+            ],
+            "spec": "SPEC.md"
+          },
+          "stories": [
+            {
+              "dir": "s1-job-lease",
+              "yaml": {
+                "id": "s1-job-lease",
+                "title": "Detached role job: lease, generation, role tools",
+                "cornerstone": true,
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t1-detach-measure",
+                  "title": "Measure the open detach cases",
+                  "kind": "measure",
+                  "complexity": 3,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "v2/spikes/RESULTS_detach.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "result recorded: client process tree killed; no user manager; Windows client job object; wsl --terminate"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "the launcher order of spec A is confirmed or corrected"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-job-store",
+                  "title": "RoleJobStore: lease, generation, heartbeat, cancel, sweep; RoundsDb step 26",
+                  "kind": "code",
+                  "complexity": 7,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "src_mcp/src/Server/RoleJobs/RoleJobStore.cs",
+                    "src_mcp/src/Store",
+                    "shared/data-inventory.json",
+                    "src_mcp/tests/ARoleJobLeaseTests.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "scenarios A2 to A5 and A16 pass"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "an unwritable database changes no job result"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-detached-runner",
+                  "title": "One-shot --role-run and the detached launcher",
+                  "kind": "code",
+                  "complexity": 8,
+                  "dependsOn": [
+                    "t1-detach-measure",
+                    "t2-job-store"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/runners/Detach",
+                    "src_mcp/src/Server/RoleJobs/RoleRunMode.cs",
+                    "src_mcp/src/Program.cs",
+                    ".agents/PROJECT.md",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "A1 and A14 pass; without a user manager the systemd case is skipped with a reason"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "unknown job id exits 65, never 64; mode listed in PROJECT.md"
+                    }
+                  ]
+                },
+                {
+                  "id": "t4-role-tools",
+                  "title": "Tools start_role, role_status, role_cancel; workItem; live-job cap",
+                  "kind": "code",
+                  "complexity": 6,
+                  "dependsOn": [
+                    "t3-detached-runner"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Tools.cs",
+                    "src_mcp/src/Server/RoleJobs/RoleJobService.cs",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "A6 and A15 pass; start_role answers in 2 s or less"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "a role without a descriptor is refused"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s2-work-plan-schema",
+              "yaml": {
+                "id": "s2-work-plan-schema",
+                "title": "Work-plan schema, validate_work, limits from the device config",
+                "cornerstone": true,
+                "dependsOn": []
+              },
+              "tasks": [
+                {
+                  "id": "t1-yaml-aot-spike",
+                  "title": "YamlDotNet RepresentationModel under Native AOT",
+                  "kind": "measure",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "v2/spikes/RESULTS_yaml_aot.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "linux-x64 and win-x64 publish: zero new warnings, no NoWarn; the native binary reads all v2 YAML"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "decision recorded: YamlDotNet or the subset reader"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-schema-vectors-limits",
+                  "title": "Schema, vectors, work-method.md; two new limits; ba default list [fable, opus]",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "shared/work-plan.schema.json",
+                    "shared/work-plan-vectors.json",
+                    "shared/work-method.md",
+                    "shared/role-defaults.json",
+                    "src_mcp/src/Roles",
+                    "src_mcp/tests/AWorkMethodLimitTests.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "each error code has one failing and one passing vector"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "roles answers maxStoriesPerEpic and maxTasksPerStory; an unknown key keeps the other keys"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-validator",
+                  "title": "core/Work: IYamlReader, model, IWorkFolder, WorkPlanValidator",
+                  "kind": "code",
+                  "complexity": 8,
+                  "dependsOn": [
+                    "t1-yaml-aot-spike",
+                    "t2-schema-vectors-limits"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/core/Work",
+                    "Directory.Packages.props",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "B1 to B10 and B13 pass"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "no limit constant in the validator"
+                    }
+                  ]
+                },
+                {
+                  "id": "t4-validate-work-surface",
+                  "title": "One-shot --validate-work and tool validate_work",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [
+                    "t3-validator"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/ValidateWorkMode.cs",
+                    "src_mcp/src/Program.cs",
+                    "src_mcp/src/Tools.cs",
+                    ".agents/PROJECT.md",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "B11 and B12 pass"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "the mode makes no data directory"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s3-router-failover",
+              "yaml": {
+                "id": "s3-router-failover",
+                "title": "Router and failover; one line and one notice per switch",
+                "cornerstone": true,
+                "dependsOn": [
+                  "s1-job-lease",
+                  "s2-work-plan-schema"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-stop-signals",
+                  "title": "Record real limit, refusal, crash outputs of claude, codex, agy",
+                  "kind": "measure",
+                  "complexity": 3,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "v2/epoch-3/e1-role-jobs-ba/stories/s3-router-failover/SIGNALS.md",
+                    "src_mcp/tests/fixtures/role-stops"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "each fixture is a real output with CLI version and date"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "SIGNALS.md says per vendor if a structured refusal field exists"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-router",
+                  "title": "Pure RoleRouter and ImportantRule with vectors",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "src_mcp/core/Roles",
+                    "shared/role-route-vectors.json",
+                    "src_mcp/tests/ARoleIsRoutedTests.cs"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "A12 passes from the vectors"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "no IO; core stays IsAotCompatible"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-failover-loop",
+                  "title": "Stop classification, attempt loop, switch line and notices",
+                  "kind": "code",
+                  "complexity": 8,
+                  "dependsOn": [
+                    "t1-stop-signals",
+                    "t2-router"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Server/RoleJobs",
+                    "src_mcp/core/Notices/ServerNoticeCodes.cs",
+                    "src_mcp/tests_fakecli",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "A7 to A11 and A13 pass with FakeCli"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "one usage-ledger line for each launch; the new codes pass the redaction test"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s4-ba-role",
+              "yaml": {
+                "id": "s4-ba-role",
+                "title": "BA role: structured output, repair turns, change measure",
+                "dependsOn": [
+                  "s2-work-plan-schema",
+                  "s3-router-failover"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-ba-contract",
+                  "title": "ba-output schema, prompt, descriptor, YAML emitter",
+                  "kind": "code",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": false,
+                  "files": [
+                    "shared/ba-output.schema.json",
+                    "src_mcp/src/Roles/prompts/ba.md",
+                    "src_mcp/core/Work/WorkPlanYaml.cs",
+                    "src_mcp/core/Roles/RoleDescriptors.cs",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "emit then read gives equal nodes for every v2 task file"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "a changed limit shows in the built prompt"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-ba-run-repair",
+                  "title": "BA run: overlay validation, 2 repair turns, files, manifest",
+                  "kind": "code",
+                  "complexity": 8,
+                  "dependsOn": [
+                    "t1-ba-contract"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/Server/RoleJobs/BaRun.cs",
+                    "src_mcp/tests_fakecli",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "FakeCli: valid at turn 0; valid after 1 repair in the same session; invalid 3 times ends output-invalid, zero files written"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "nothing outside the epic folder changes; an epic with a story is refused before a launch"
+                    }
+                  ]
+                },
+                {
+                  "id": "t3-role-delta",
+                  "title": "One-shot --role-delta",
+                  "kind": "code",
+                  "complexity": 4,
+                  "dependsOn": [
+                    "t2-ba-run-repair"
+                  ],
+                  "parallel": false,
+                  "files": [
+                    "src_mcp/src/RoleDeltaMode.cs",
+                    "src_mcp/src/Program.cs",
+                    ".agents/PROJECT.md",
+                    "src_mcp/tests"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "10 task files: 1 edited = 0.10 pass; 1 edited + 1 deleted = 0.20 fail; an added task counts; a CRLF-only change does not"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "exits 0, 65, 74; never 64"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "dir": "s5-live-proof",
+              "yaml": {
+                "id": "s5-live-proof",
+                "title": "Live proof: the BA writes epoch-3 e2-coder-one-task",
+                "dependsOn": [
+                  "s4-ba-role"
+                ]
+              },
+              "tasks": [
+                {
+                  "id": "t1-ba-real-run",
+                  "title": "Real BA job on e2-coder-one-task",
+                  "kind": "measure",
+                  "complexity": 5,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "v2/epoch-3/e2-coder-one-task/stories",
+                    "v2/epoch-3/e1-role-jobs-ba/RESULTS_ba_proof.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "validate_work valid in 2 repair turns or fewer; number recorded"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "--role-delta at the commit after the plan gate: changedShare below 0.20"
+                    },
+                    {
+                      "id": "d3",
+                      "item": "2 real runs at most, the second only after a recorded prompt change; both reported"
+                    }
+                  ]
+                },
+                {
+                  "id": "t2-epic-acceptance",
+                  "title": "Acceptance suite on the real binary; tool docs",
+                  "kind": "test",
+                  "complexity": 4,
+                  "dependsOn": [],
+                  "parallel": true,
+                  "files": [
+                    "src_mcp/tests/TheRoleJobsEpicAcceptanceTests.cs",
+                    "ARCHITECTURE.md",
+                    "README.md"
+                  ],
+                  "dod": [
+                    {
+                      "id": "d1",
+                      "item": "refusal, limit, crash each go to the next model: 3 switches, 3 log lines, 3 notices"
+                    },
+                    {
+                      "id": "d2",
+                      "item": "the MCP server restarts in mid-job and the job ends succeeded"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         },
         {
           "dir": "e2-coder-one-task",

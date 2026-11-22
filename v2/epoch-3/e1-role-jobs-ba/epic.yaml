@@ -10,3 +10,4 @@ doneWhen:
   - "FakeCli refusal / limit / crash → next model; one log line and one notification per switch"
   - "work-plan schema with the security flag; validate_work; workMethod limits from the device config"
   - "complexity 10 or security → the important model list"
+spec: SPEC.md
