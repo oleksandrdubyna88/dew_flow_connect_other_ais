@@ -127,9 +127,9 @@ internal sealed class InstallWorld : IDisposable
     }
 
     /// <summary>Steers one vendor stand-in: <c>fail: "add-json:1"</c> fails its first <c>add-json</c>; <c>hang</c> sleeps past the installer's timeout. Rewrites the wrapper.</summary>
-    internal void Steer(Client cli, string fail = "", string hang = "")
+    internal void Steer(Client cli, string fail = "", string hang = "", bool echo = false)
     {
-        _steering[cli] = $"FAKECLI_MCP_FAIL='{fail}' FAKECLI_MCP_HANG='{hang}'";
+        _steering[cli] = $"FAKECLI_MCP_FAIL='{fail}' FAKECLI_MCP_HANG='{hang}' FAKECLI_MCP_ECHO='{(echo ? "1" : "0")}'";
         WriteWrappers();
     }
 

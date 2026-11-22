@@ -14,7 +14,7 @@ namespace CoaiMcp.FakeCli;
 /// <para>It is deliberately no more forgiving than the real ones (a fake may be stricter and never more permissive): claude's <c>add-json</c> refuses an existing name and a file it cannot parse
 /// (leaving a <c>.corrupted</c> copy); codex's <c>add</c> REPLACES an existing entry — its old env lost — and drops an inline comment on a line it rewrites. Every `mcp` call is logged first (a `--version` is the CLI's identity, not a configuration call, and is not), one line, with the
 /// four variables the child saw, so a test can prove that nothing ran, that nothing reached a real home, and that <c>mcp get</c> was never asked.</para>
-/// <para>Steering by environment, set in the wrapper: <c>FAKECLI_MCP_LOG</c> (the log file); <c>FAKECLI_MCP_FAIL</c> and <c>FAKECLI_MCP_HANG</c> — a comma list of verbs (<c>add-json</c>, <c>add</c>, <c>remove</c>, <c>version</c>),
+/// <para>Steering by environment, set in the wrapper: <c>FAKECLI_MCP_LOG</c> (the log file); <c>FAKECLI_MCP_ECHO</c> (a failure quotes the arguments it was given); <c>FAKECLI_MCP_FAIL</c> and <c>FAKECLI_MCP_HANG</c> — a comma list of verbs (<c>add-json</c>, <c>add</c>, <c>remove</c>, <c>version</c>),
 /// each optionally <c>:n</c> to act only on the first n calls of it.</para>
 /// </remarks>
 internal static class McpVendor
@@ -37,7 +37,9 @@ internal static class McpVendor
 
         if (Steered("FAKECLI_MCP_FAIL", verb, calls))
         {
-            Console.Error.WriteLine($"fake {which}: {verb} failed (steered)");
+            // A vendor that quotes what it was handed in its error: FAKECLI_MCP_ECHO=1 makes this one do it, so a test can see whether a value reaches a sentence.
+            var quoted = Environment.GetEnvironmentVariable("FAKECLI_MCP_ECHO") == "1" ? $" — arguments: {string.Join(' ', argv)}" : string.Empty;
+            Console.Error.WriteLine($"fake {which}: {verb} failed (steered){quoted}");
 
             return 1;
         }

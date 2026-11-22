@@ -37,7 +37,7 @@ internal sealed class VendorCommands(InstallHost host, IProcessLauncher launcher
 
             return answer.ExitCode == 0
                 ? VendorAnswer.Success
-                : new VendorAnswer(false, Scrub($"`{Describe(executable, args)}` exited {answer.ExitCode}: {FirstLine(answer.StdErr.Length > 0 ? answer.StdErr : answer.StdOut)}"));
+                : new VendorAnswer(false, Cut(Scrub($"`{Describe(executable, args)}` exited {answer.ExitCode}: {FirstLine(answer.StdErr.Length > 0 ? answer.StdErr : answer.StdOut)}")));
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
         {
@@ -51,12 +51,11 @@ internal sealed class VendorCommands(InstallHost host, IProcessLauncher launcher
 
     private string WorkingDirectory() => host.HasHome && Directory.Exists(host.Home) ? host.Home : AppContext.BaseDirectory;
 
-    private static string FirstLine(string text)
-    {
-        var line = text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+    private static string FirstLine(string text) =>
+        text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
 
-        return line.Length > 200 ? line[..200] : line;
-    }
+    /// <summary>Cut AFTER the scrub: a value that straddled the cut would otherwise leave its first half in the sentence.</summary>
+    private static string Cut(string line) => line.Length > 200 ? line[..200] : line;
 
     private string Scrub(string text) =>
         secrets.Where(secret => secret.Length >= 3).Aggregate(text, (clean, secret) => clean.Replace(secret, "***", StringComparison.Ordinal));

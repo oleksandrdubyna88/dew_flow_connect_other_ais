@@ -56,10 +56,11 @@ public sealed class AFailedVendorCommandPutsTheOldEntryBackTests
     {
         using var world = InstallWorld.Create(claude: false);
         InstallOutput.WithOldEntries(world);
-        world.Steer(Client.Codex, fail: "add");
+        world.Steer(Client.Codex, fail: "add", echo: true);
 
         var (_, output, err) = await world.RunAsync("--binary", world.Binary);
 
+        output.Client("codex").GetProperty("reason").GetString().Should().Contain("failed", "positive control: the failure sentence is there, quoting what the vendor was handed");
         output.ToString().Should().NotContain("/data/coai");
         err.Should().NotContain("/data/coai");
     }
