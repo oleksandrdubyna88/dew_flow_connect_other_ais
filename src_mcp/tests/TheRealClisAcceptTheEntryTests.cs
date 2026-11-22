@@ -47,11 +47,25 @@ public sealed class TheRealClisAcceptTheEntryTests
         var errors = new List<string>();
         var code = await SetupClientsMode.RunAsync("setup-clients", ["--only", "claude,codex", "--binary", binary], deps, output, errors.Add);
 
-        code.Should().Be(0, string.Join('\n', errors) + output);
-        JsonDocument.Parse(output.ToString()).RootElement.Result("claude").Should().Be("changed");
+        var root = JsonDocument.Parse(output.ToString()).RootElement;
+        root.Result("codex").Should().Be("changed", string.Join('\n', errors) + output);
+        if (Environment.GetEnvironmentVariable("CLAUDECODE") is { Length: > 0 })
+        {
+            // Measured 2026-11-22 on claude 2.1.330: inside a Claude Code session `claude mcp add-json` REFUSES stdin ("its permission prompt would not show the server"). The installer must report that
+            // as a failure with the vendor's sentence, change nothing, and say so — not get round it. "Connected" is then NOT verified by this run: it needs a terminal outside a session.
+            code.Should().Be(74, output.ToString());
+            root.Result("claude").Should().Be("failed");
+            root.Client("claude").GetProperty("reason").GetString().Should().Contain("inside a Claude Code session");
+            var claudeJson = Path.Combine(env["HOME"]!, ".claude.json");
+            (File.Exists(claudeJson) ? File.ReadAllText(claudeJson) : string.Empty).Should().NotContain("coai-mcp", "the refused command registered nothing (claude itself writes its first-run file)");
+        }
+        else
+        {
+            code.Should().Be(0, string.Join('\n', errors) + output);
+            root.Result("claude").Should().Be("changed");
+            Run(claude, ["mcp", "get", "coai"], env).Should().Contain("Connected", "claude started the registered server and it answered");
+        }
 
-        var claudeGet = Run(claude, ["mcp", "get", "coai"], env);
-        claudeGet.Should().Contain("Connected", "claude started the registered server and it answered");
         var codexGet = Run(codex, ["mcp", "get", "coai", "--json"], env);
         codexGet.Should().Contain(binary.Replace("\\", "\\\\"));
     }
