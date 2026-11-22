@@ -96,7 +96,7 @@ test('M2 a planted 3 s sleep in activation fails the launch, naming M1', async (
   const { code, errors } = await run(t, [], (sample) => ({ write: record(sample, { m1: sample === 2 ? 3000 : 15 }) }));
 
   assert.equal(code, 1);
-  assert.match(errors.join('\n'), /M1 max 3000 ms is over the 50 ms limit/);
+  assert.match(errors.join('\n'), /M1 max 3000 ms is over the 100 ms limit/);
 });
 
 test('M3 an M2 over 2000 ms in any one sample fails, a missing ack fails, and the others still ran', async (t) => {

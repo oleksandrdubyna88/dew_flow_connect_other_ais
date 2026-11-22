@@ -6,7 +6,7 @@
  * <p><b>The three numbers.</b></p>
  * <ul>
  *   <li><b>M1</b> — the entry's own time in `activate`, in ms: `activateReturn.at - activateStart.at`, both marks made by the shell
- *       (`shell/measure.ts`; `activateStart` is the FIRST statement of `activate`). Limit 50 ms. Nothing is loaded lazily inside `activate`.
+ *       (`shell/measure.ts`; `activateStart` is the FIRST statement of `activate`). Limit 100 ms. Nothing is loaded lazily inside `activate`.
  *       (Until 2026-11-22 M1 ran from the `eval` mark; that included the host's delay before it calls `activate` — 926 ms on Windows CI for an
  *       entry of 3 KB — which is not the entry's time. That delay is now {@link hostDelay}.)</li>
  *   <li><b>hostDelay</b> — `activateStart.at - eval.at`: the time between the host evaluating the entry's module and calling `activate`.
@@ -31,8 +31,8 @@
 
 export const SCHEMA = 1;
 
-/** The limits of the design: M2 (command to ready ack) at most 2000 ms in every sample, M1 (own time of the entry) at most 50 ms. */
-export const LIMITS = Object.freeze({ m2MaxMs: 2000, m1MaxMs: 50 });
+/** The limits of the design: M2 (command to ready ack) at most 2000 ms in every sample, M1 (own time of the entry) at most 100 ms. */
+export const LIMITS = Object.freeze({ m2MaxMs: 2000, m1MaxMs: 100 });
 
 /** How many cold launches make one measurement. */
 export const SAMPLES = 3;

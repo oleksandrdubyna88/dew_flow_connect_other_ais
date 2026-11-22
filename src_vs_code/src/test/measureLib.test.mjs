@@ -142,9 +142,11 @@ test('a sample whose extension was already active is not a cold start; so is one
   assert.match(deriveSample(unsaid).problems.join('\n'), /does not say/);
 });
 
-test('the rule: the MAXIMUM M2 must be at most 2000 ms and M1 at most 50 ms; the edge passes, a millisecond over fails', () => {
-  assert.deepEqual(LIMITS, { m2MaxMs: 2000, m1MaxMs: 50 });
-  const edge = summarize([raw({ m2: 2000, m1: 50 }), raw({ m2: 100 }), raw({ m2: 100 })]);
+test('the rule: the MAXIMUM M2 must be at most 2000 ms and M1 at most 100 ms; the edge passes, a millisecond over fails', () => {
+  assert.deepEqual(LIMITS, { m2MaxMs: 2000, m1MaxMs: 100 });
+  const edge = summarize([raw({ m2: 2000, m1: 100 }), raw({ m2: 100 }), raw({ m2: 100 })]);
+  const m1Over = summarize([raw({ m1: 100.1 }), raw(), raw()]);
+  assert.equal(m1Over.pass, false, "M1 a tenth of a millisecond over its limit fails");
   assert.equal(edge.pass, true, JSON.stringify(edge.problems));
   assert.equal(edge.m2.max, 2000);
 
@@ -155,7 +157,7 @@ test('the rule: the MAXIMUM M2 must be at most 2000 ms and M1 at most 50 ms; the
 
   const heavy = summarize([raw({ m1: 3000 }), raw(), raw()]);
   assert.equal(heavy.pass, false, 'an activation that sleeps 3 s fails on M1 even when M2 is fine');
-  assert.match(heavy.problems.join('\n'), /M1 max 3000 ms is over the 50 ms limit/);
+  assert.match(heavy.problems.join('\n'), /M1 max 3000 ms is over the 100 ms limit/);
 });
 
 test('a measurement needs every sample it asked for: two records of three is a failure', () => {

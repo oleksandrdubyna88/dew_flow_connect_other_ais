@@ -154,6 +154,6 @@ test('a 3 s sleep planted in activate fails the verdict on M1; the same bundle w
 
   assert.equal(verdict.pass, false);
   assert.ok(verdict.m1.max >= 2900, `M1 max ${verdict.m1.max}`);
-  assert.match(verdict.problems.join('\n'), /M1 max \d+(\.\d+)? ms is over the 50 ms limit/);
+  assert.match(verdict.problems.join('\n'), /M1 max \d+(\.\d+)? ms is over the 100 ms limit/);
   assert.equal(summarize([{ ...fast, sample: 1 }, { ...fast, sample: 2 }, { ...fast, sample: 3 }]).pass, true, 'the bundle as it ships is inside the budget');
 });
