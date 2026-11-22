@@ -150,3 +150,20 @@ plan gate.
    the < 20 % orchestrator-change measure; the credential-words note flags security text.
 8. The `ba` default list holds only fable → no failover until a second model is set. **Decision:** default `ba` list
    becomes [fable, opus] (both claude CLI) in s2 t2.
+
+## E. Epic plan gate (proceed, 2026-11-23) — accepted changes
+
+1. **Ids cannot escape a folder.** Story ids must match `^s\d+-[a-z0-9-]+$` in full, task ids `^t\d+-[a-z0-9-]+$`, epic
+   ids `^e\d+-[a-z0-9-]+$` (schema + validator + BA output); every resolved output path is checked to stay under the epic
+   folder before any write. Test: an id `s1-../../../outside` and an id with `/` are refused before a launch result is
+   written.
+2. **BA output is published atomically.** The validated output is written to `<epic>/.coai-ba-staging-<jobId>/` (same
+   file system), then moved into `stories/` with one directory rename; `ba-manifest.json` is written last inside the
+   staging folder and moved with it. A killed run leaves only a staging folder, which the next BA job for that epic (or the
+   start-up sweep) removes; "an epic with a story is refused" ignores staging folders. Test: kill at every write boundary
+   → either no `stories/` change or the complete set.
+3. **Cancel stops a stalled runner.** The runner records its own pid (and start time) in `job.json` at take-over;
+   `role_cancel` writes `cancel`, waits 10 s, then kills the recorded runner process tree and its CLI child (identity
+   checked by pid + start time, the `OrphanSweep` rule) and bumps `generation`, so a resumed stale runner refuses to publish
+   (exit 75). Test: holder stopped (SIGSTOP), cancel → tree gone in ≤ 10 s, job `cancelled`, a resumed runner publishes
+   nothing.
