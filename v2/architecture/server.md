@@ -274,3 +274,24 @@ A provider that cannot read them is skipped with a `SkippedRole` note and shown 
 **Open measurements:** partial answers in the hook; YamlDotNet under AOT; agy MCP config path; codex attachments;
 codex/agy model names for role-defaults; `codex exec resume --output-schema`; MTP under default `dotnet test`;
 `systemd-run --user` under this WSL distro.
+
+## 16. Consultant review 1 (cons, codex gpt-6.2-astra, 2026-11-22) — decisions
+
+Each point was checked in the code by the main session before it was decided.
+
+| # | Finding | Checked | Decision |
+|---|---|---|---|
+| 1 | A coder branch has no approved plan: `review_code` loads the session by repo+branch (PanelService.cs:790) and refuses without `PlanProceeded` (RoundMachine.cs:230) | yes | **Accept.** E8: a task session binds to the approved plan revision of its feature (plan proceed is inherited by `coder/*` and `work/*` branches of that feature); test: two sibling tasks resolve findings independently |
+| 2 | The hook gives the second question (and a tie / all-consultants-failed) to the person — "auto mode hands control to a person" | yes | **Reject.** The owner's explicit rule (item 7): first question answered by consask, later ones in 30 min go to the person. Auto mode means the GATE never waits for a person; the CLI's own questions after the first are the owner's chosen design. The `ask_human` alias reply stays. Keep: move the real-client spike before E3 installs the hook |
+| 3 | A personal-token-only hub cannot boot: `Startup.Guard` throws with no Entra/Google/Local (Startup.cs:32, Program.cs:103); auth middleware is global | yes | **Accept.** Hub route group with its own authentication and startup condition (hub mode alone boots); tests: device token refused on Team routes and on another device; Team session refused on hub routes |
+| 4 | The scheduler can merge two disjoint, each-green tasks whose combination fails; a conflict rebase changes the green SHA | — | **Accept.** Affected checks run on the candidate merge SHA before the integration branch advances |
+| 5 | Detached worker: a green task strands at `awaiting_resolve` when the main AI disconnects; a paused worker can be marked lost while its child lives | — | **Accept.** Pending resolution persisted and listed by `work_status`; a job lease with a generation number is required before publishing a result or merging |
+| 6 | Shared VM update: a user agent cannot rename in root-owned `/opt/coai`; existing db/WAL files keep old permissions | yes (design) | **Accept.** Binaries live in `/var/lib/coai/versions/<v>` with `current` there (group coai, setgid), no root needed after the first install; `--install --shared` repairs ownership/mode of existing db, -wal, -shm; test with a second UID |
+| 7 | Slots are per data folder, and the RAM check races | — | **Accept.** One host-level slot directory (`/var/lib/coai/slots` or `~/.local/state/coai/slots`, not per data root); estimated bytes reserved atomically with the slot; test with two roots and no systemd user manager |
+| 8 | The main-checkout snapshot cannot tell the coder's write from a person's edit (FilesystemInvariant.cs:19) | — | **Accept.** Write boundary enforced at launch (sandbox flags / cwd / read-only mounts) for the coder and its build commands; the snapshot stays as diagnostic evidence only |
+| 9 | Detection at the base SHA misses a project the task adds; `git diff --name-status` without both SHAs is empty after a commit; this repo needs its MTP executable | — | **Accept.** Changes = `git diff --name-status <baseSha> <headSha>`; detect on both trees; this repository is an E7 fixture that must run a real test |
+| 10 | Removing the conventions tier leaves `SubmodulePopulator` (populates every submodule, SubmodulePopulator.cs:29) and the missing-mount notice (RuleFiles.cs:360) | yes | **Accept.** E2 excludes the conventions mount from population and notices; ordinary submodules and repo-local rules stay |
+| 11 | Acceptance wording: E1 must keep `revise`; YAML limits come from the device config; "2 GB" must say retained bytes vs file size (SQLite keeps freed pages) | — | **Accept.** E1 done-when names revise; validator reads configured limits (test: cap 3 with a 4-epic fixture); hub sweep measures retained bytes and db+WAL size (incremental vacuum) |
+| 12 | Deleting the legacy-hold reader in 2.1 strands a direct v1 → 2.1 upgrade | — | **Accept.** The legacy reader stays until no supported upgrade path skips 2.0 |
+
+Sound as written (consultant): the codex resume shape (CodexConsultant.cs:108, :26); the held-session migration fixture (LegacyHoldTests.cs:94).
