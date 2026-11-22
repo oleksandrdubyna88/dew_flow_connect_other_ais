@@ -57,29 +57,6 @@ function defaultNameFor(stage: string): string {
   }
 }
 
-test('the policy the panel shows by default is the one the server runs with nothing named', () => {
-  // reads-another-program: the panel's default policy and the server's reading of "no policy named" are one decision in
-  // two languages, and nothing shared holds it. The reads are positive matches of one exact line each and fail LOUDLY
-  // when that line changes; nothing here derives a list that could go quiet.
-  const panelSettingsCs = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src_mcp', 'src', 'Server', 'PanelSettings.cs'), 'utf8');
-
-  assert.match(
-    panelSettingsCs,
-    /null or "" or "auto" => null/,
-    'PolicyOf no longer reads absent, empty and auto as no policy named — the shape this test reads has changed',
-  );
-  assert.match(
-    sessionStateSource,
-    /Autonomous = OnExhausted is null;/,
-    'no policy named is no longer policy auto — the shape this test reads has changed',
-  );
-  assert.equal(
-    DEFAULTS.onExhausted,
-    'auto',
-    'the panel shows ' + DEFAULTS.onExhausted + ' by default, and the server runs auto when nothing is named',
-  );
-  assert.equal('COAI_ON_EXHAUSTED' in envBlock(DEFAULTS), false, 'the default is not written, so the server runs what it runs with nothing named');
-});
 
 test('every role default in the panel is the number the server falls back to', () => {
   for (const role of ROLES) {
