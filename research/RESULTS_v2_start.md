@@ -8,17 +8,32 @@
 > [`coldstart-lib.mjs`](../src_vs_code/scripts/coldstart-lib.mjs), the marks in
 > [`shell/measure.ts`](../src_vs_code/shell/measure.ts).
 >
-> **State when this was written (2026-11-22): the table at the end is EMPTY.** The harness was written on a machine
-> that cannot start VS Code (no `libnspr4`, no sudo), so no number below has been measured yet. Every row comes from
-> a run in CI or on the owner's machine; nothing here is a prediction written as a result.
+> **State (2026-11-22): the table at the end has the first two rows, both from CI (PR #1032, run 45055101329), both FAIL.**
+> The harness was written on a machine that cannot start VS Code (no `libnspr4`, no sudo); every row comes from a run in
+> CI or on the owner's machine, and nothing here is a prediction written as a result. The v1 baseline row is not there yet.
 
 ## 1. What is measured
 
 | Name | From | To | Limit |
 |---|---|---|---|
-| **M1** | module evaluation of `dist/extension.js` (mark `eval`, the first statement of the bundle) | `activate` returns (mark `activateReturn`) | at most 50 ms in every sample |
+| **M1** | the first statement of `activate` (mark `activateStart`) | `activate` returns (mark `activateReturn`) | at most 50 ms in every sample |
+| **hostDelay** | module evaluation of `dist/extension.js` (mark `eval`, the first statement of the bundle) | `activate` is called (mark `activateStart`) | none: recorded only (the editor's own time, not the entry's) |
 | **M2** | the driver's clock, started just before it runs `workbench.view.extension.coai` | the sidebar webview's `ready` acknowledgement reaches the host (mark `ready`) | at most **2000 ms**; the **maximum** of the samples counts |
 | **M3** | the same clock | the first state handed to the sidebar webview (mark `firstData`) | none: recorded only |
+
+**M1 changed its definition on 2026-11-22.** It first ran from `eval`, and the first CI run read 925.8 ms on Windows for an entry of 3 KB
+that registers 37 commands: the `eval` mark includes the host's wait before it calls `activate()`. M1 now starts at `activateStart`, the first
+statement of `activate()`, and the wait is recorded separately as `hostDelay` (no limit). The two rows in § 5 were measured with the OLD
+definition; their M1 column is `eval` to `activateReturn` and must not be compared with a later row.
+
+**The per-step table.** Every mark is a row of a table the measurement prints in the log (and keeps in the JSON, `steps`, per sample and over the
+samples): the time since the driver's clock (min / median / max) and the time since the row above it. The shell marks `eval`, `activateStart`,
+`activateReturn`, `viewResolve`, `moduleRequire` / `moduleEval` / `moduleLoaded` (the load of the `legacy` bundle), `legacyBody`, `legacyActivateStart` /
+`legacyActivateEnd`. The old code marks, through `src/measureMarks.ts` (`OLD_MARKS`): the phases of `src/extension.ts` `activate()` (`oldActivateStart`,
+`oldNotifications`, `oldStorageSide`, `oldPathWatch`, `oldBindings`, `oldWatchersBuilt`, `oldRoundsLog`, `oldPanelBuilt`, `oldWatchersStarted`,
+`oldFeaturesCache`, `oldSettingsSync`, `oldMirrorStarted`, `oldMigrationsKicked`, `oldChatStore`, `oldHousekeeping`, `oldCommandsRegistered`,
+`oldActivateEnd`), the sidebar's `sidebarResolve`, each awaited read of the sidebar's FIRST render (`renderStart` ... `renderDiscovery`), `firstData` and `ready`.
+A mark is a timestamp pushed onto a list; the table is how the next run shows where M2 goes.
 
 Marks are wall-clock milliseconds (`performance.timeOrigin + performance.now()`) made in the extension host; the driver reads
 its clock the same way in the same host, so the differences are exact to a fraction of a millisecond. The marks are readable
@@ -34,7 +49,7 @@ Rules that make a sample count (all in `coldstart-lib.mjs`, all unit-tested):
   from the record).
 - A **fresh** `ready` is one marked at or after the clock. A missing acknowledgement fails the launch; it is never read as zero.
 - Three samples; a launch that fails or leaves no record is a failed sample, not a smaller measurement.
-- The `mark` of a sample is the first one after the clock; M1 comes from the first `eval` / `activateReturn` pair.
+- The `mark` of a sample is the first one after the clock; M1 comes from the first `activateStart` / `activateReturn` pair, the host delay from `eval` / `activateStart`.
 
 What a "ready" is: the sidebar's script posts `{ type: 'ready' }` as the last statement of its page script, after the page is built and
 every handler is bound (a unit test runs the page script and asserts it, `theSidebarSaysItIsReady.test.ts`). The host marks `ready`
@@ -44,7 +59,7 @@ mark's handshake), so no page change was needed for S2.
 ## 2. How to run it
 
 **Linux and Windows CI** run it on every pull request (`.github/workflows/ci.yml`, job `measure`, required): Linux under `xvfb-run`,
-Windows with no display. The numbers are in the job log and in the `cold-start-<os>` artifact. Locally, on a machine where a VS
+Windows with no display. The numbers, with the per-step table, are in the job log and in the `cold-start-<os>` artifact. Locally, on a machine where a VS
 Code starts (needs the libraries VS Code needs; under WSL `libnspr4` and a display or `xvfb-run`):
 
 ```
@@ -56,19 +71,27 @@ xvfb-run -a npm run measure:host -- --json /tmp/cold-start.json --row --label "m
 `--row` appends one row to the table below (date, commit, label, place, platform, M1 max, M2 and M3 min / median / max, verdict);
 `--samples N` changes the number of launches; the exit code is 0 for a pass and 1 for a failure.
 
-**The v1 baseline (task t0).** Version 1 has no marks, so the harness is laid over the old commit. In GitHub: Actions → `ci` →
-*Run workflow* → `measure_ref` = `c24e5141` (job `measure-ref`; only runs on a manual dispatch). It checks out the ref beside the
-current tree, runs `node src_vs_code/scripts/coldstart-overlay.mjs measure-target` (copies the launcher, the scenario and the recorder
-over the old tree and applies `scripts/measure-v1.patch`: the old extension gets the recorder, `coai.__measure`, `activateReturn`, the
-sidebar's `ready` and its first data, and nothing else), compiles it and measures it with `--record-only` — no limits, the extension
-may already be active, the result says so. The log has the row; copy it into the table (label `v1 baseline …`). The same steps by hand:
+**The v1 baseline (task t0).** Version 1 has no marks, so the harness is laid over the old commit on a LOCAL branch, and a draft pull request
+makes CI measure that branch. There is no manual CI job for a ref (it checked out an arbitrary ref and ran its `npm ci` and compile, which
+CodeQL rightly flagged as `actions/cache-poisoning/poisonable-step`; it was removed). From the root of a checkout of the v2 branch (the overlay script
+is not in c24e5141, so it runs from here and writes into the other tree):
 
 ```
-git worktree add ../coai-v1 c24e5141
-node src_vs_code/scripts/coldstart-overlay.mjs ../coai-v1
-cd ../coai-v1/src_vs_code && npm ci && npm run compile
-xvfb-run -a node scripts/run-host.mjs measure --record-only --json /tmp/v1.json --label "v1 baseline, my machine"
+git worktree add -b measure/v1-baseline ../coai-v1-baseline c24e5141
+node src_vs_code/scripts/coldstart-overlay.mjs ../coai-v1-baseline
+git -C ../coai-v1-baseline add -A
+git -C ../coai-v1-baseline commit -m "chore: cold-start harness over the v1 baseline (measurement only, never merge)"
+git -C ../coai-v1-baseline push origin measure/v1-baseline
+gh pr create --draft --base main --head measure/v1-baseline --title "measure: v1 baseline cold start (do not merge)" --body "Measurement only. CI measures c24e5141 with the E2 harness; the numbers are in the job logs."
 ```
+
+The overlay (`scripts/coldstart-overlay.mjs`) copies the launcher, the scenario and the recorder over the old tree, applies `scripts/measure-v1.patch` (the old
+extension gets the recorder, `coai.__measure`, `activateStart`, `activateReturn`, the phases of the old `activate()` and of the sidebar's first render with
+the same names the shell's legacy module records, the sidebar's `ready` and its first data, and nothing else) and writes one workflow,
+`.github/workflows/cold-start-baseline.yml` (from `scripts/coldstart-baseline.workflow.yml`), because c24e5141's own `ci.yml` has no cold-start job. The
+workflow runs on the pull request, on Linux and Windows, with `--record-only` (no limits: the old extension activates itself at start-up, and the result says
+whether it was already active at the clock). Copy the summary line, the per-step table and the row from each job's log into this file (label `v1 baseline ...`);
+the JSON is in the artifact `cold-start-baseline-<os>`. Close the draft pull request afterwards (`git worktree remove ../coai-v1-baseline`); the branch is never merged.
 
 Done for t0 when the table has a v1 row from **Linux with three samples**.
 
@@ -121,7 +144,17 @@ steps are not, and the first run may need a correction. Say so in the row's labe
 ## 5. Results
 
 One row per measurement, newest last. Rows are appended by `--row` (and by hand for the v1 baseline); the table must stay the **last**
-thing in this file so an appended line lands in it.
+thing in this file so an appended line lands in it, so notes on rows are written here, above it.
+
+- **The first two rows** are the CI run of PR #1032 (run 45055101329, `ubuntu-latest` and `windows-latest`), commit `503a65ad` (S2: the thin shell with the
+  legacy sidebar behind it), three cold launches each. Both fail: M2 max is over 2000 ms on both (2386.1 and 3514.9), M1 max is over 50 ms on both.
+- **Their M1 was measured with the OLD definition** (`eval` to `activateReturn`, § 1), so it includes the host's delay before `activate` is called; it says
+  nothing about the entry's own time. The next run measures M1 from `activateStart` and records `hostDelay` beside it.
+- The rows were written by hand from the job logs; the per-step table did not exist yet, so they do not say where M2 goes (the legacy bundle's load, the old
+  `activate()` and the first sidebar render are all inside it). The next run prints that table.
+- `platform` is Node's `process.platform`: `win32` is the Windows runner.
 
 | date | commit | label | host location | platform | M1 max ms | M2 min / median / max ms | M3 min / median / max ms | verdict |
 |---|---|---|---|---|---|---|---|---|
+| 2026-11-22 | 503a65ad | S2 shell + legacy sidebar | local | linux | 173.1 | 1890.1 / 2176.4 / 2386.1 | 1807.4 / 2072.6 / 2315.3 | FAIL |
+| 2026-11-22 | 503a65ad | S2 shell + legacy sidebar | local | win32 | 925.8 | 1258.2 / 2320.9 / 3514.9 | 1230.9 / 2291.3 / 3487.7 | FAIL |

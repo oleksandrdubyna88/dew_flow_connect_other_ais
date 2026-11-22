@@ -1,25 +1,130 @@
 diff --git a/src_vs_code/src/extension.ts b/src_vs_code/src/extension.ts
-index c065a36..0f49c93 100644
+index c065a36..46387e5 100644
 --- a/src_vs_code/src/extension.ts
 +++ b/src_vs_code/src/extension.ts
 @@ -96,6 +96,8 @@ import { ON_EXHAUSTED_MIGRATION_KEY } from './onExhaustedMigration';
  import { startOnExhaustedMigration } from './onExhaustedMigrationHost';
  import { vendorsFrom } from './vendors';
  import { askPerson } from './personWait';
++import { measureMark, recordMarksWith } from './measureMarks';
 +import { mark, registerMeasure } from './measure';
-+import { recordMarksWith } from './measureMarks';
  
  /**
   * What activation hands back. Read-only, and read by the `test:host` scenarios — a host cannot reach this extension's
-@@ -132,6 +134,7 @@ export interface CoaiExports {
+@@ -132,9 +134,14 @@ export interface CoaiExports {
   * there is still nothing listening on a socket.</p>
   */
  export function activate(context: vscode.ExtensionContext): CoaiExports {
++  // The recorder first: the old code's marks (src/measureMarks.ts) and the shell's `mark` are one list (shell/measure.ts, laid over this tree as src/measure.ts).
 +  recordMarksWith(mark);
++  mark('activateStart');
++  measureMark('oldActivateStart');
    // One per window, kept for the window's life: the page is cheap to redraw and expensive to
    // rebuild, and `retainContextWhenHidden` means a reopened tab keeps its scroll and its tab.
    const notifications = new NotificationsPanel();
-@@ -636,6 +639,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
++  measureMark('oldNotifications');
+ 
+   // BEFORE even that: WHERE this window keeps its data. Every line below that resolves a path — the
+   // two watchers immediately after this, the chat store, the panel — asks `dataDir.ts`, and until
+@@ -144,6 +151,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+   // And how this host asks the disk whether a CLI path of the other OS's spelling is a file HERE (paths per side, E1.2):
+   // before this every such path is "unknown" and kept. Installed, not imported, because the page's modules may not reach node:fs.
+   useFileProbe(fileAt(statSync));
++  measureMark('oldStorageSide');
+   // The paths of THIS side, asked of the disk and said when missing (paths per side, E5.3) — started here, before the
+   // settings mirror below writes the data directory, because the mirror and every ledger ask the watch's answer first
+   // (E5.0): a named data root that is missing is never created by them.
+@@ -151,6 +159,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+   // A per-side CLI path a save by an extension that does not know it dropped is said, and offered back on a click — never
+   // restored on its own (paths per side, E3 as built). Looked at now and on every settings change below.
+   const cliPathKeep = startCliPathKeep(context);
++  measureMark('oldPathWatch');
+   // The review roles know this window's side from the start: the Settings page edits them as well as the Review
+   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
+   bindRoles(context);
+@@ -171,6 +180,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+   // and `chatWiring.test.ts` now fails if this line ever drifts below a `registerCommand`.
+   chatReadsThisSide(context);
+   bindChatPresets(context);
++  measureMark('oldBindings');
+   const watcher = new EscalationWatcher(dataDir());
+   // The second watcher, and it asks for nothing from anybody: a consultation blocks nothing, so it
+   // has no modal and no status-bar item — it appears in the sidebar where a person is already
+@@ -179,6 +189,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+   // The third, for Active questions (todo/PLAN_question_consultant.md, S4): a question the consultants are
+   // answering blocks nothing either, so it too is drawn where a person is looking and raises nothing.
+   const questionConsults = new QuestionConsultWatcher(dataDir());
++  measureMark('oldWatchersBuilt');
+ 
+   // Exports run one at a time: two dialogs answered with the same path would otherwise race,
+   // and the file would hold whichever write finished last while both reported success.
+@@ -316,6 +327,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
+   // Made before the sidebar, which hands the review page's bugs to it (issue #487).
+   const chatPanels = new ChatPanels();
++  measureMark('oldRoundsLog');
+   // A terminal that opens (creds opens its terminals late, after the serializer restored the chats) takes back the conversation of its name (E3.S1).
+   bindReattach(context, chatPanels);
+   // The page draws what the watch publishes, and repaints when it changes; the server's answer about the roots reaches
+@@ -345,6 +357,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+       mirrorSettings(mirroring);
+     }
+   });
++  measureMark('oldPanelBuilt');
+   // What coai-mcp said about its settings by kind reaches the path watch through the panel's probe (paths per side, E5.6).
+   panel.onServerProblems = (problems) => { pathWatch.serverSaid(problems); };
+   // Whatever a page is still waiting on is settled as not done when the window goes away (inFlight.ts).
+@@ -393,6 +406,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+     void panel.render();
+   };
+   questionConsults.start();
++  measureMark('oldWatchersStarted');
+ 
+   // A Models card offers a dropped per-side CLI path back with Restore, and repaints when the keeper's list changes (E4.1).
+   panel.cliPathKeep = cliPathKeep;
+@@ -424,6 +438,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+   });
+   // The sidebar asks THIS cache too — a page that meets an updated binary re-asks the one the file is written from.
+   panel.useFeatures(features);
++  measureMark('oldFeaturesCache');
+   const askFeatures = (): ReturnType<FeaturesCache['of']> => features.of(serverPath(context.globalStorageUri)?.fsPath, serverRun);
+   const settingsSync = new ServerSettingsSync(
+     () => readCoaiConfiguration(context),
+@@ -444,7 +459,9 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+     // Never written into a NAMED data root that is missing (E5.7): the watch's answer, waited for (bounded).
+     () => pathWatch.dataRootMissing(),
+   );
++  measureMark('oldSettingsSync');
+   mirrorSettings(settingsSync);
++  measureMark('oldMirrorStarted');
+   // Every saved choice of When the rounds run out is reset to Auto once, per profile and for the user settings once for every
+   // machine Settings Sync reaches — from activation, never from the panel (onExhaustedMigrationHost.ts). The overlay clear fires
+   // no configuration event, so its `after` mirrors and redraws the panel, as the catalog migration's does.
+@@ -493,6 +510,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+     console.error('ConnectOtherAIs: the sweep of unfinished role deletions failed', reason);
+   });
+ 
++  measureMark('oldMigrationsKicked');
+   // Where conversations are kept so a window reload does not empty every chat tab: the store on
+   // disk, one file per conversation beside the two chat ledgers, under the same data directory the
+   // MCP server uses. It is the source of truth — the serializer below reads it.
+@@ -506,6 +524,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+   const chatTabMemory = new ChatTabMemory(context.workspaceState);
+   rememberChatsIn(chatTabMemory);
+   keepChatsIn(chatStore);
++  measureMark('oldChatStore');
+   // What restoring a tab needs; one object, so the serializer and every retry read the same store,
+   // the same memento and the same workspace the writers use.
+   const restoreDeps: RestoreDeps = {
+@@ -564,6 +583,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+   pulseChatsThrough(() => {
+     housekeeping.heartbeat.pulse();
+   });
++  measureMark('oldHousekeeping');
+   // A FILE THAT MOVES takes its conversation with it. `onDidRenameFiles` is the only event that
+   // carries an explicit old-to-new mapping, which is why it is the one followed: saving an untitled
+   // buffer reports no previous uri at all, so a conversation opened from one keeps its `untitled:`
+@@ -636,6 +656,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
        }
      }),
      vscode.commands.registerCommand('coai.restoreCatalogBackup', () => restoreFromBeforeTheCatalog(context)),
@@ -27,28 +132,38 @@ index c065a36..0f49c93 100644
      watcher,
      consultations,
      questionConsults,
-@@ -930,6 +934,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+@@ -928,7 +949,10 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+     vscode.commands.registerCommand('coai.answerQuestionWaiting', () => answerQuestion(watcher)),
+   );
  
++  measureMark('oldCommandsRegistered');
    void offerUpdate(context);
- 
++  measureMark('oldActivateEnd');
 +  mark('activateReturn');
-+
+ 
    return {
      sidesSeen: () => sidesIn(context.globalState, Date.now()),
-     ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote), skipShell } : {}),
 diff --git a/src_vs_code/src/panelProvider.ts b/src_vs_code/src/panelProvider.ts
-index 78209e1..0524ecc 100644
+index 78209e1..2a5c33b 100644
 --- a/src_vs_code/src/panelProvider.ts
 +++ b/src_vs_code/src/panelProvider.ts
 @@ -4,6 +4,7 @@
  import { GLANCE_CEILING_MS, LedgerGlance, NOT_LOOKED, UNREADABLE_GLANCE } from './notificationsCount';
  import { glanceAtLedgers } from './notificationsGlance';
  import { withinTheClock } from './withinTheClock';
-+import { measureMark } from './measureMarks';
++import { measureMark, type OldMark } from './measureMarks';
  import { readFile } from 'node:fs/promises';
  import * as vscode from 'vscode';
  import { DISCOVERY_KEY } from './chatDiscovery';
-@@ -1280,6 +1281,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+@@ -614,6 +615,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+   }
+ 
+   resolveWebviewView(view: vscode.WebviewView): void {
++    measureMark('sidebarResolve');
+     // A new document: nothing in it is painted or focused yet, whatever the last one left behind. The
+     // slot lets go of a view only when it is still the one held: VS Code re-creates a hidden view when
+     // it is shown again, so a late callback from a replaced view must not blank the live one.
+@@ -1280,6 +1282,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
        // A document that has just loaded asks what is running: anything announced while it was being replaced
        // reached the document it replaced (research/PLAN_model_search_and_busy_marks.md §3.12).
        from.post({ type: 'busy', ...this.inFlight.snapshot() });
@@ -56,7 +171,7 @@ index 78209e1..0524ecc 100644
      } else if (m.type === 'tab') {
        // Held by the host, never drawn into the markup (D6), and answered with the tab now held: a page
        // that was repainted while the press was on its way shows the tab the person chose, and a page
-@@ -1294,6 +1296,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+@@ -1294,6 +1297,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
      }
    }
  
@@ -70,7 +185,142 @@ index 78209e1..0524ecc 100644
    /** What a slot paints on, and the page it paints — the page built only if the key says it is due. */
    private pageFor(slot: SurfaceSlot, state: PanelState): { key: string; html: () => string } {
      // What is in flight rides with the caret: read when BUILT, never in the key (busyMark.ts).
-@@ -1569,6 +1578,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+@@ -1385,11 +1395,22 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+     return this.renders.run();
+   }
+ 
++  /** The render that is measured: the first one that finds a view. Its number is kept; any other render's `step` marks nothing. */
++  private measuredRender = 0;
++
++  private measureStep(number: number): (name: OldMark) => void {
++    this.measuredRender ||= number;
++
++    return this.measuredRender === number ? (name) => { measureMark(name); } : () => undefined;
++  }
++
+   /** The render itself: the configuration, the sessions, the ledger and the probes, then the paint. */
+   private async renderNow(number: number): Promise<void> {
+     if (!anyHeld(this.slots)) {
+       return;
+     }
++    const step = this.measureStep(number);
++    step('renderStart');
+     // Never render from a configuration this panel has not finished writing. Blur fires `change`
+     // and then `focusout`, and the render the release asks for would otherwise overtake the write
+     // it followed and re-stamp the box with the value being replaced — the symptom, reintroduced by
+@@ -1398,6 +1419,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+     // Awaited until it is STABLE and bounded — see `WriteQueue.settled`. Never awaited FROM a write:
+     // that is a wait on itself (`afterTheWrite`).
+     await this.writes.settled();
++    step('renderWrites');
++    // The per-step table of the cold-start measurement: the FIRST render that finds a view marks each awaited read of the state (a cheap push, nothing else).
++    const after = <T>(name: OldMark, value: T): T => {
++      step(name);
++
++      return value;
++    };
+     const config = vscode.workspace.getConfiguration('coai');
+     // THIS side's settings, like the vendors on the next line: a side that keeps its own settings runs with its
+     // overlay, and a page drawn from the shared layer showed values it does not run with.
+@@ -1405,10 +1433,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+     const vendors = vendorsFrom(this.read(config)('vendors'));
+     this.codexModels = await this.readCodexModels();
+     this.agyModels = await this.readAgyModels(vendors);
++    step('renderCliModels');
+     // The published version is read FIRST because the server's status is stated against it — and
+     // both belong to the side this extension host is running on, never to "the machine".
+     const published = await this.publishedVersion();
++    step('renderPublished');
+     const sessions = await this.readSessions();
++    step('renderSessions');
+     // A round that stopped running since the last paint brings the round count forward; the read itself is not awaited
+     // here — the cards draw the cached count, and a read that lands repaints (story 2.4, never a spawn per render).
+     // Only while the Settings page is open: its Models cards are the one surface here that draws the count, and the
+@@ -1424,13 +1455,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+     // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
+     const features = await this.binaryFeatures();
+     const server = await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published);
++    step('renderFeatures');
+     const state = {
+       settings,
+       vendors: shown,
+       // The Settings page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the reviewers only.
+       catalogRows: vendors,
+       securityTry: this.securityTry,
+-      ...(await this.newPageReads(server)),
++      ...after('renderNewPageReads', await this.newPageReads(server)),
+       // The data folder's last move (E4.5), which survives a reload so the delete can be offered — a read of memory.
+       lastDataMove: this.context.globalState.get<MoveRecord>(MOVE_RECORD),
+       codexModels: this.codexModels,
+@@ -1440,7 +1472,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+       claudeProbe: this.claudeProbes.answer(vendors, settings.consult),
+       askingClaude: this.claudeProbes.looking,
+       server,
+-      hostKind: await this.hostKindHere,
++      hostKind: after('renderHostKind', await this.hostKindHere),
+       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
+       perSide: this.perSide(config),
+       // Read from globalState on EVERY render (E2.2): a side another window stamped appears at the next repaint.
+@@ -1453,25 +1485,25 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+       // Never awaited: the probe and the watcher land on their own and repaint (epic 5 of the consultant plan). Only while
+       // the Consultant tab is SHOWING — --consultants asks every CLI its version — and paused otherwise (the review, N2).
+       consultantHealth: this.consultantHealth.stateWhile(consultantTabShowing(this.settingsTab.view?.visible === true, heldSettingsTab())),
+-      usage: this.remembered(await this.readUsage()),
++      usage: this.remembered(after('renderUsage', await this.readUsage())),
+       usageWindow: this.usageWindow,
+       latestServerVersion: published,
+       latestTeamServerVersion: this.latestTeamServer,
+-      storage: await whereThisWindowKeepsItsData(),
+-      cliStatus: await this.vendorCliStatus(vendors),
+-      cardPrices: await this.cardPrices(vendors),
++      storage: after('renderStorage', await whereThisWindowKeepsItsData()),
++      cliStatus: after('renderCliStatus', await this.vendorCliStatus(vendors)),
++      cardPrices: after('renderCardPrices', await this.cardPrices(vendors)),
+       roundsSnapshot: this.roundCounts.current(),
+       // Story 6.2 of research/PLAN_every_round_is_counted.md: the plan prices as stored, and the last one refused at its card.
+       planPrices: planPricesFrom(config.get(PLAN_PRICES_SETTING)),
+       planPriceRefusal: this.planPriceRefusal,
+-      snippetStatus: await pastedSnippetStatus(),
++      snippetStatus: after('renderSnippet', await pastedSnippetStatus()),
+       consultPrompt: await this.consultPrompt.readConsultPrompt(),
+-      qconsultPromptOverrides: await this.qconsult.overrides(),
++      qconsultPromptOverrides: after('renderPrompts', await this.qconsult.overrides()),
+       // Read only while the Settings page exists: the sidebar never draws a prompt card.
+       securityPromptDir: promptsDir(this.dataDir.fsPath),
+       securityPromptText: this.settingsTab.view === undefined ? undefined
+         : await this.securityPromptText.states(this.dataDir.fsPath, settings.securityLane.prompts.map(p => p.id)),
+-      qconsultPlaces: await this.qconsult.places(settings.qconsult.roots),
++      qconsultPlaces: after('renderPlaces', await this.qconsult.places(settings.qconsult.roots)),
+       // Which rows' CLI paths this side skips as the other side's — asked of the disk HERE (paths per side, E1.5).
+       otherSideClis: otherSideClis(vendors, hostExecutableSide()),
+       // The paths of this side that are missing or unanswerable, as the watch last published them (E5.4): the marks
+@@ -1487,7 +1519,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+       // Read from the cache and NEVER awaited here; the look is started below, after the html
+       // has gone out, so a slow disk delays the count and not the panel.
+       notifications: this.notificationsGlance,
+-      localEngines: await this.probeLocalEngines(vendors),
++      localEngines: after('renderLocalEngines', await this.probeLocalEngines(vendors)),
+       rankByRuntime: hasFeature(features, FEATURES.bugzRuntime),
+       // The Settings page (PLAN_one_model_catalog.md E3): what the binary takes once it has said, when each new
+       // control was first seen, and the clock its "new" marks are measured against.
+@@ -1510,7 +1542,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+       enginesByEndpoint: this.consultEnginesAnswer(settings.consult),
+       // The corpus and the last run, cached for a few seconds: this is a process spawn and a
+       // repaint is frequent. It is what puts a running collect on the screen without a poller.
+-      bugz: await this.bugz(),
++      bugz: after('renderBugz', await this.bugz()),
+       teamServers: this.teamServerStates(config),
+       providers: this.providerHealth(),
+       // From the person's own settings, exactly as the COMMAND reads it — not through the per-side
+@@ -1534,6 +1566,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+     // the conversation on the row's own model instead. Written on every render, so it is as fresh as
+     // the panel is.
+     await this.rememberDiscovery(state);
++    step('renderDiscovery');
+ 
+     // Two update paths, and which one runs is the whole fix for the pickers.
+     //
+@@ -1569,6 +1602,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
      }
      const live = { type: 'live', ...liveRegions(state) };
      paintEach(this.slots, (slot) => this.pageFor(slot, state), live);

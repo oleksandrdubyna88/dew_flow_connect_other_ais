@@ -2,14 +2,15 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { owned } from '../../scripts/owned.mjs';
 import { overlay } from '../../scripts/coldstart-overlay.mjs';
 
 /**
- * `coldstart-overlay.mjs` lays the measurement over an older checkout (the v1 baseline, CI job `measure-ref`). The patch itself fits only c24e5141, which a
- * shallow CI clone does not have, so CI's own `measure-ref` run is what proves it applies; here: the patch is checked before it is applied, the harness files
- * all exist and land where the old tree compiles them, and a folder that is not a checkout of this repository is refused.
+ * `coldstart-overlay.mjs` lays the measurement over an older checkout (the v1 baseline, branch `measure/v1-baseline`). The patch itself fits only c24e5141, so the
+ * run of that branch in CI is what proves it applies; here: the patch is checked before it is applied, the harness files and the baseline workflow all exist
+ * and land where the old tree compiles them, the patch only touches the two old files it was made for, and a folder that is not a checkout of this repository is refused.
  */
 
 test('O1 the patch is checked, then applied, then every harness file lands in the old tree', (t) => {
@@ -25,6 +26,19 @@ test('O1 the patch is checked, then applied, then every harness file lands in th
     assert.ok(fs.existsSync(path.join(repo, 'src_vs_code', file)), `${file} was not laid over the old tree`);
   }
   assert.equal(fs.readFileSync(path.join(repo, 'src_vs_code', 'src', 'measure.ts'), 'utf8').includes("import type * as vscode from 'vscode'"), true);
+  const workflow = fs.readFileSync(path.join(repo, '.github', 'workflows', 'cold-start-baseline.yml'), 'utf8');
+  assert.match(workflow, /^name: cold-start-baseline$/mu);
+  assert.match(workflow, /run-host\.mjs measure --record-only/u, 'the old extension is measured with no limits: it activates itself at start-up');
+});
+
+test('O3 the patch changes the two old files it was made for, and only adds marks and the recorder to them', () => {
+  const patch = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'scripts', 'measure-v1.patch'), 'utf8');
+  const files = [...patch.matchAll(/^diff --git a\/(\S+) /gmu)].map((one) => one[1]);
+
+  assert.deepEqual(files, ['src_vs_code/src/extension.ts', 'src_vs_code/src/panelProvider.ts']);
+  for (const name of ['activateStart', 'activateReturn', 'oldActivateStart', 'oldActivateEnd', 'sidebarResolve', 'renderStart', 'firstData', 'ready']) {
+    assert.ok(patch.includes(`'${name}'`), `the patch has no ${name} mark`);
+  }
 });
 
 test('O2 a folder without the extension package is refused before anything is changed', (t) => {
