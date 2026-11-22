@@ -32,7 +32,7 @@ samples): the time since the driver's clock (min / median / max) and the time si
 `legacyActivateEnd`. The old code marks, through `src/measureMarks.ts` (`OLD_MARKS`): the phases of `src/extension.ts` `activate()` (`oldActivateStart`,
 `oldNotifications`, `oldStorageSide`, `oldPathWatch`, `oldBindings`, `oldWatchersBuilt`, `oldRoundsLog`, `oldPanelBuilt`, `oldWatchersStarted`,
 `oldFeaturesCache`, `oldSettingsSync`, `oldMirrorStarted`, `oldMigrationsKicked`, `oldChatStore`, `oldHousekeeping`, `oldCommandsRegistered`,
-`oldActivateEnd`), the sidebar's `sidebarResolve`, each awaited read of the sidebar's FIRST render (`renderStart` ... `renderDiscovery`), `firstData` and `ready`.
+`oldActivateEnd`), the sidebar's `sidebarResolve`, each awaited read of the sidebar's FIRST render (`renderStart` ... `renderDiscovery`), `firstPaint` (the sidebar's first html, handed to the webview from what is known, before the slow reads — `src/firstPaint.ts`), `firstData` (the first state with its data: the sidebar's own slow cards filled) and `ready`.
 A mark is a timestamp pushed onto a list; the table is how the next run shows where M2 goes.
 
 Marks are wall-clock milliseconds (`performance.timeOrigin + performance.now()`) made in the extension host; the driver reads

@@ -16,6 +16,7 @@ import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset, type ModelPreset } from './chatPresets';
 import { savedModels } from './chatConfig';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
+import { filledSidebarState, paintSidebarInStages, sidebarState, type SidebarReads } from './firstPaint';
 import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
 import { catalogHtml, catalogKey } from './catalogPage';
 import { FIRST_SEEN_KEY } from './newTags';
@@ -62,6 +63,7 @@ import {
 import { rememberCliStatus } from './cliVersionMemory';
 import { askVersion, capture } from './versionProbe';
 import { CADENCE_CAP_MS, CadenceProbes } from './cadenceProbe';
+import type { CadenceLine } from './cadenceLine';
 import { ConsultantHealthPanel } from './consultantHealthPanel';
 import { consultantTabShowing } from './consultantHealthWatcher';
 import { ClaudeProbeCache } from './claudeProbeCache';
@@ -620,6 +622,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // slot lets go of a view only when it is still the one held: VS Code re-creates a hidden view when
     // it is shown again, so a late callback from a replaced view must not blank the live one.
     this.sidebar.attach(view);
+    // A new document has nothing in it: the render that finds it paints it first from what is known (`paintSidebarFirst`).
+    this.sidebarPainted = false;
     view.onDidDispose(() => { this.sidebar.detach(view); });
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage((m: PanelMessage) => { this.receive(this.sidebar, m); });
@@ -1404,6 +1408,127 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return this.measuredRender === number ? (name) => { measureMark(name); } : () => undefined;
   }
 
+  /** Whether the held sidebar document has been painted at all — by the first paint or by a render's own. A new document starts unpainted. */
+  private sidebarPainted = false;
+
+  /**
+   * The sidebar's first paint and the fill of its slow cards (`firstPaint.ts`), before the render reads anything else.
+   *
+   * <p>The M2 of the cold-start measurement ends at the sidebar's `ready`, and a document comes only with the first paint — which used to wait for
+   * every read of the whole state. The sidebar draws almost none of them, so it is painted from what is known, and the Settings page (not painted
+   * from this) and the rest of the state come after, in the render that follows. Only the FIRST render of a document does this; a document already
+   * painted is repainted by the ordinary path alone.</p>
+   *
+   * @returns what the fill read, for the render's state to reuse; `undefined` when the sidebar needed no first paint
+   */
+  private async paintSidebarFirst(
+    number: number, settings: CoaiSettings, vendors: readonly Vendor[], step: (name: OldMark) => void,
+  ): Promise<{ readonly bugz: BugCorpus; readonly localEngines: Record<string, LocalEngine> } | undefined> {
+    if (this.sidebarPainted || this.sidebar.view === undefined) {
+      return undefined;
+    }
+    let kept: { readonly bugz: BugCorpus; readonly localEngines: Record<string, LocalEngine> } | undefined;
+    await paintSidebarInStages({
+      first: async () => {
+        const state = sidebarState(await this.sidebarKnown(settings, vendors));
+        step('renderSessions');
+
+        return state;
+      },
+      paintFirst: (state) => {
+        if (!this.sidebarPainted) {
+          this.paintSidebarOnly(state);
+          measureMark('firstPaint');
+        }
+      },
+      fill: async (first) => {
+        const { bugz, localEngines } = kept = await this.sidebarSlow(vendors, step);
+
+        return filledSidebarState(first, {
+          bugz, localEngines, cadence: this.cadenceLines(settings, first.sessions), rankByRuntime: await this.rankByRuntime(),
+        });
+      },
+      paintFill: (state) => {
+        if (!this.renders.superseded(number)) {
+          this.paintSidebarOnly(state);
+          measureMark('firstData');
+        }
+      },
+    });
+
+    return kept;
+  }
+
+  /** What the sidebar is drawn from without waiting for anything slow: the settings, the rows, the sessions (local files) and the caches. */
+  private async sidebarKnown(settings: CoaiSettings, vendors: readonly Vendor[]): Promise<SidebarReads> {
+    const sessions = await this.readSessions();
+
+    return {
+      ...this.sidebarCaches(),
+      settings,
+      vendors: vendors.filter(isReviewerRow),
+      catalogRows: vendors,
+      sessions,
+      // Starts no probe: the lines wait for the fill, which asks for them.
+      cadence: [],
+      rankByRuntime: this.rankByRuntimeKnown(),
+      hostKind: await this.hostKindHere,
+      bugz: undefined,
+    };
+  }
+
+  private questionsAnswering(): NonNullable<PanelState['qconsults']> {
+    return this.questionConsults?.questions ?? [];
+  }
+
+  private consultationsRunning(): NonNullable<PanelState['consultations']> {
+    return this.consultations?.running ?? [];
+  }
+
+  /** The live regions' own caches and the rest of what the host already holds in memory — read, never asked. */
+  private sidebarCaches(): Pick<SidebarReads, 'questions' | 'openSections' | 'qconsults' | 'consultations' | 'notifications' | 'phrases' | 'localEngines'> {
+    return {
+      questions: this.watcher.openQuestions,
+      openSections: this.openSections,
+      qconsults: this.questionsAnswering(),
+      consultations: this.consultationsRunning(),
+      notifications: this.notificationsGlance,
+      phrases: this.phrases(),
+      localEngines: this.localEngines,
+    };
+  }
+
+  /** The reads only the sidebar's cards wait for: the corpus (a spawn) and the local engines (probes of ports). */
+  private async sidebarSlow(vendors: readonly Vendor[], step: (name: OldMark) => void): Promise<{ readonly bugz: BugCorpus; readonly localEngines: Record<string, LocalEngine> }> {
+    const bugz = await this.bugz();
+    step('renderBugz');
+    const localEngines = await this.probeLocalEngines(vendors);
+    step('renderLocalEngines');
+
+    return { bugz, localEngines };
+  }
+
+  /** Whether the installed server ranks by runtime, asking the binary for its feature list (a spawn the first time). */
+  private async rankByRuntime(): Promise<boolean> {
+    return hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime);
+  }
+
+  /** The same, from what the binary last settled on saying — never a spawn, so the first paint may ask it. */
+  private rankByRuntimeKnown(): boolean {
+    return hasFeature({ features: this.features?.known() ?? [], why: '', settled: false }, FEATURES.bugzRuntime);
+  }
+
+  /** The cadence lines — and a probe for whatever is stale, so only where the sidebar may wait for one. Not asked while the cadence is off. */
+  private cadenceLines(settings: CoaiSettings, sessions: readonly SessionFile[]): readonly CadenceLine[] {
+    return settings.cadence.mode === 'off' ? [] : this.cadenceProbes.lines(sessions);
+  }
+
+  /** Paints the sidebar alone, from a state that never carries what the Settings page draws, and marks the document painted. */
+  private paintSidebarOnly(state: PanelState): void {
+    paintEach([this.sidebar], (slot) => this.pageFor(slot, state), { type: 'live', ...liveRegions(state) });
+    this.sidebarPainted = true;
+  }
+
   /** The render itself: the configuration, the sessions, the ledger and the probes, then the paint. */
   private async renderNow(number: number): Promise<void> {
     if (!anyHeld(this.slots)) {
@@ -1431,6 +1556,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // overlay, and a page drawn from the shared layer showed values it does not run with.
     const settings = settingsFrom(this.read(config));
     const vendors = vendorsFrom(this.read(config)('vendors'));
+    // The sidebar is painted BEFORE the slow reads below, and filled when its own slow cards land (`firstPaint.ts`); what it read is kept for the state.
+    const staged = await this.paintSidebarFirst(number, settings, vendors, step);
     this.codexModels = await this.readCodexModels();
     this.agyModels = await this.readAgyModels(vendors);
     step('renderCliModels');
@@ -1519,7 +1646,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // Read from the cache and NEVER awaited here; the look is started below, after the html
       // has gone out, so a slow disk delays the count and not the panel.
       notifications: this.notificationsGlance,
-      localEngines: after('renderLocalEngines', await this.probeLocalEngines(vendors)),
+      localEngines: after('renderLocalEngines', staged?.localEngines ?? await this.probeLocalEngines(vendors)),
       rankByRuntime: hasFeature(features, FEATURES.bugzRuntime),
       // The Settings page (PLAN_one_model_catalog.md E3): what the binary takes once it has said, when each new
       // control was first seen, and the clock its "new" marks are measured against.
@@ -1542,7 +1669,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       enginesByEndpoint: this.consultEnginesAnswer(settings.consult),
       // The corpus and the last run, cached for a few seconds: this is a process spawn and a
       // repaint is frequent. It is what puts a running collect on the screen without a poller.
-      bugz: after('renderBugz', await this.bugz()),
+      bugz: after('renderBugz', staged?.bugz ?? await this.bugz()),
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
       // From the person's own settings, exactly as the COMMAND reads it — not through the per-side
@@ -1602,7 +1729,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
     const live = { type: 'live', ...liveRegions(state) };
     paintEach(this.slots, (slot) => this.pageFor(slot, state), live);
-    // The first state handed to the webview, which is where M3 (command -> first data) ends.
+    this.sidebarPainted ||= this.sidebar.view !== undefined;
+    // The first state with its data handed to the webview, which is where M3 (command -> first data) ends. The sidebar's own cards may have been filled earlier.
     measureMark('firstData');
 
     // Never awaited: the section draws from what is already known, and this repaints when it

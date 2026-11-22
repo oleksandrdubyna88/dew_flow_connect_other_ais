@@ -374,6 +374,11 @@ export interface PanelState {
    * exactly that — never as "there is no material", which is a different and untrue sentence.</p>
    */
   readonly bugz?: BugCorpus | undefined;
+  /**
+   * The corpus has been asked for and has not answered: the Bugz card says it is loading, rather than "not read" (which is the
+   * answer of a server that is not installed). The first paint of the sidebar sets it (`firstPaint.ts`); absent means not loading.
+   */
+  readonly bugzLoading?: boolean;
 
   /**
    * What the CLAUDE.md snippet pasted into this workspace is, next to what this build hands out.
@@ -636,6 +641,7 @@ function bugzSection(state: PanelState): string {
     // for one commit, and nothing assigned those fields — so choosing a model did nothing.
     model: state.settings.bugzModel,
     server: state.settings.bugzServer,
+    loading: state.bugzLoading === true,
   });
 }
 

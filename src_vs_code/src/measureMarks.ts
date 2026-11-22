@@ -11,7 +11,8 @@
  * The moments the old code names, in the order the old activation and the first sidebar paint reach them (v2 E2 S2, step marks).
  *
  * <p>`oldActivate*` are the main phases of `src/extension.ts` `activate()`; `sidebarResolve` is the sidebar's `resolveWebviewView`; `render*` are the phases
- * of the FIRST sidebar render (`PanelProvider.renderNow`: each awaited read of the state), ending in `firstData` (the paint); `ready` is the page's
+ * of the FIRST sidebar render (`PanelProvider.renderNow`: each awaited read of the state). `firstPaint` is the sidebar's first html, handed to the webview from what is
+ * known, before the slow reads (`src/firstPaint.ts`); `firstData` is the first state with its data, which ends M3; `ready` is the page's
  * acknowledgement. The names are the rows of the per-step table the measurement prints, so a name is a stable word, not a sentence.</p>
  */
 export const OLD_MARKS = [
@@ -35,6 +36,7 @@ export const OLD_MARKS = [
   'sidebarResolve',
   'renderStart',
   'renderWrites',
+  'firstPaint',
   'renderCliModels',
   'renderPublished',
   'renderSessions',
