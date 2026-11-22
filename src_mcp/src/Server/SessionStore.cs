@@ -490,6 +490,18 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// <summary>The write road of one session file: (file, whole text). <see cref="AtomicFile.Write"/> with its shared window by default; a seam so a test can hold, fail or pause the write.</summary>
     internal Action<string, string> FileWriter { get; init; } = static (file, json) => Runners.Files.AtomicFile.Write(file, json, Runners.Files.AtomicFile.SharingRetry);
 
+    /// <summary>
+    /// Where a notice about an answered hold is written AND settled (<see cref="Noticing.Settled"/>): the convert-on-load door announces an answered hold through it before it converts the
+    /// session. Absent means the store cannot announce — a held session with an answered card then stays held when it is loaded, and a held session with none converts as always.
+    /// </summary>
+    internal Func<CoaiMcp.Core.Notices.ServerNotice, bool>? Notice { get; init; }
+
+    /// <summary>The clock of the convert-on-load door: its journal line and its notices are stamped from it.</summary>
+    internal TimeProvider Clock { get; init; } = TimeProvider.System;
+
+    /// <summary>Where the convert-on-load door says what it could not do. The host passes its own log; the default is Serilog's global one, which a bare store in a tool or a test may leave silent.</summary>
+    internal Serilog.ILogger Log { get; init; } = Serilog.Log.Logger;
+
     private string SessionsDir => Path.Combine(dataDir, "sessions");
 
     /// <summary>
@@ -542,29 +554,42 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// <para><b>Under the claim, or not at all.</b> The claim is taken here and the file read again under it. When another call holds the claim — a round, a resolve, the
     /// migration — that call owns the file: this load hands back the session as v2 reads it, in memory, and writes nothing; the holder's own save persists it. A read-only
     /// folder, or a write that fails, ends the same way: the caller gets the converted session and the file is converted by the next load that can.</para>
-    /// <para>The journal line says <c>on-load</c>; the conversion is the migration's own function (<see cref="HoldConversion.Converted"/>), so both doors write the same bytes.</para>
+    /// <para>The journal line says <c>on-load</c>; the conversion is the migration's own function (<see cref="HoldConversion.Converted"/>) behind the migration's own boundary
+    /// (<see cref="HoldBoundary"/>), so both doors write the same bytes <b>and the same notice</b>: an answered hold is announced, and the notice read back from disk, BEFORE the
+    /// session leaves its hold. When the notice cannot be confirmed — no sink, a writer that refuses, a line the disk never took — the session is returned as it was loaded, STILL
+    /// HELD (a v2 code path reads a held session as a normal one), nothing is written, and the next load or migration tries again; converting it anyway would end the only
+    /// chance of the notice, because no later run lists a session that is no longer held. The same rule covers the two ways out that do not write
+    /// (<see cref="HoldBoundary.InMemory"/>): a conversion handed to a caller is a conversion that caller may save.</para>
+    /// <para>Every step that falls back is SAID through <see cref="Log"/>: a save or a re-read that failed, and a session left held.</para>
     /// </remarks>
     private PersistedSession ConvertedOnLoad(string file, PersistedSession held)
     {
         var state = held.State;
+        var boundary = new HoldBoundary(dataDir, Notice, Clock);
         try
         {
             using var claim = SessionClaim.TryTake(dataDir, state.RepoPath, state.Branch, state.Document, state.Feature);
             if (claim is null)
             {
-                return HoldConversion.Converted(held);
+                return InMemory(boundary, file, held);
             }
 
             // Read again UNDER the claim: the first read was before it, and the holder that had it may have converted the file.
             var fresh = Normalised(JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
             if (fresh is null || !LegacyHold.Stands(fresh.State))
             {
-                return fresh ?? HoldConversion.Converted(held);
+                return fresh ?? InMemory(boundary, file, held);
             }
 
-            var converted = HoldConversion.Converted(fresh);
+            if (boundary.Released(fresh, file) is not { } converted)
+            {
+                Log.Warning("v2 convert on load: the notice of an answered hold of {File} could not be written and read back, so the session stays held and is converted by a later load or migration", Path.GetFileName(file));
+
+                return fresh;
+            }
+
             WriteTo(file, converted);
-            HoldConversion.Journaled(dataDir, file, "on-load", SaidInTheLog);
+            HoldConversion.Journaled(dataDir, file, "on-load", SaidInTheLog, Clock);
             if (converted.Rounds.Count > 0)
             {
                 HoldConversion.WriteNote(dataDir, converted.State.SessionId, converted.Rounds[^1], SaidInTheLog);
@@ -574,12 +599,29 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
-            return HoldConversion.Converted(held);
+            Log.Warning(e, "v2 convert on load: the claimed session {File} could not be read again or saved, so the caller gets it in memory and the file is converted by a later load", Path.GetFileName(file));
+
+            return InMemory(boundary, file, held);
         }
     }
 
-    /// <summary>The diagnostic of a best-effort step of the convert-on-load door: the server's own log, which is stderr and the run's file — never stdout.</summary>
-    private static void SaidInTheLog(string sentence) => Serilog.Log.Logger.Warning("{Sentence}", sentence);
+    /// <summary>The session as v2 reads it, unwritten (<see cref="HoldBoundary.InMemory"/>); a notice history that cannot be read leaves it held, and says so.</summary>
+    private PersistedSession InMemory(HoldBoundary boundary, string file, PersistedSession held)
+    {
+        try
+        {
+            return boundary.InMemory(held, file);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(e, "v2 convert on load: the notice history could not be read for {File}, so the session is returned held", Path.GetFileName(file));
+
+            return held;
+        }
+    }
+
+    /// <summary>The diagnostic of a best-effort step of the convert-on-load door: the store's <see cref="Log"/>, which is the server's own — stderr and the run's file, never stdout.</summary>
+    private void SaidInTheLog(string sentence) => Log.Warning("{Sentence}", sentence);
 
     /// <summary>
     /// One session file by its PATH, made whole like <see cref="Load"/> — but read WITHOUT the turn, and a file that cannot be read THROWS

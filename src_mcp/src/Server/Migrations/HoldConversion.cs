@@ -9,7 +9,8 @@ namespace CoaiMcp.Server.Migrations;
 /// read (<see cref="SessionStore.Load"/>, SPEC §5.1).
 /// </summary>
 /// <remarks>
-/// Two doors, one function, so a session converted by a client request and one converted by the migration are the same bytes — the tests compare them.
+/// Two doors, one function, so a session converted by a client request and one converted by the migration are the same bytes — the tests compare them. What happens BEFORE the
+/// conversion — an answered hold announced and the notice confirmed on disk — is the one <see cref="HoldBoundary"/>, which both doors cross.
 /// </remarks>
 internal static class HoldConversion
 {
@@ -27,15 +28,15 @@ internal static class HoldConversion
         };
 
     /// <summary>
-    /// The journal line for a session converted outside a migration run (<c>kind: session</c>, <c>state: done</c>, the detail naming the door). Best effort — a failed append is SAID through <paramref name="said"/> and never thrown: the journal is
+    /// The journal line for a session converted outside a migration run (<c>kind: session</c>, <c>state: done</c>, the detail naming the door, the time read from <paramref name="clock"/>). Best effort — a failed append is SAID through <paramref name="said"/> and never thrown: the journal is
     /// evidence, not authority, and a folder that cannot take the line has still had its session converted.
     /// </summary>
-    public static void Journaled(string dataDir, string sessionFile, string detail, Action<string> said)
+    public static void Journaled(string dataDir, string sessionFile, string detail, Action<string> said, TimeProvider clock)
     {
         try
         {
             Directory.CreateDirectory(MigrationV2.MigrationsDir(dataDir));
-            new MigrationV2Journal(MigrationV2.JournalFile(dataDir), TimeProvider.System).Append("session", Path.GetFileName(sessionFile), "done", detail);
+            new MigrationV2Journal(MigrationV2.JournalFile(dataDir), clock).Append("session", Path.GetFileName(sessionFile), "done", detail);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

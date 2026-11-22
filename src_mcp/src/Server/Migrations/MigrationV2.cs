@@ -16,8 +16,8 @@ namespace CoaiMcp.Server.Migrations;
 /// <c>escalations/archive/</c>; answered and expired cards are history and stay. (3) <c>qphase/</c> and <c>cadence/</c> are archived whole. (4) The
 /// settings keys v2 does not read leave <c>settings.json</c> for <c>settings.v1-removed.json</c> under the extension's own <c>settings.lock</c>. (5) The
 /// marker <c>migrations/v2.done</c> — only when nothing was deferred and nothing was unreadable. A held session whose card a person had answered is announced first, by
-/// a notice in <c>server-notices.jsonl</c> (<c>MigrationV2Notices.cs</c>), and converted only when that notice is on disk. Outside a run, a load of a
-/// still-held session converts it too (<see cref="HoldConversion"/>), and every v2 start sweeps the cards a v1 process raised since (<see cref="SweepCards"/>).</para>
+/// a notice in <c>server-notices.jsonl</c> (<see cref="HoldBoundary"/>), and converted only when that notice is on disk. Outside a run, a load of a
+/// still-held session converts it too, across the same boundary (<see cref="HoldConversion"/>), and every v2 start sweeps the cards a v1 process raised since (<see cref="SweepCards"/>).</para>
 /// <para><b>Idempotence comes from the object, never from the journal.</b> A session is converted while its file still says <c>humanGate: true</c>; a card is
 /// withdrawn while it is open at the top level, and only moved when it is already marked; a store is archived while its source is there; a settings key is
 /// moved while it is in <c>settings.json</c>. Whatever a kill left, the next run reads the objects and does exactly what is left — the journal is evidence
@@ -65,6 +65,9 @@ internal sealed partial class MigrationV2
     /// <summary>The seam of the notice history's read: every line of <c>server-notices.jsonl</c> and its archive. A test counts how often a run reads it.</summary>
     internal Func<string, IEnumerable<string>> NoticeLines { get; init; } = ServerNotices.Lines;
 
+    /// <summary>The seam of the confirm after a notice is written: the lines of the live notices file from a byte offset. A test checks where it starts and how much it reads.</summary>
+    internal Func<string, long, IEnumerable<string>> NoticeTail { get; init; } = ServerNotices.LinesFrom;
+
     public static string MigrationsDir(string dataDir) => Path.Combine(dataDir, "migrations");
 
     public static string MarkerFile(string dataDir) => Path.Combine(MigrationsDir(dataDir), "v2.done");
@@ -73,7 +76,7 @@ internal sealed partial class MigrationV2
 
     private static string ArchiveDir(string dataDir) => Path.Combine(MigrationsDir(dataDir), "v1-archive");
 
-    private static string CardsDir(string dataDir) => Path.Combine(dataDir, "escalations");
+    internal static string CardsDir(string dataDir) => Path.Combine(dataDir, "escalations");
 
     private static string SettingsFile(string dataDir) => Path.Combine(dataDir, "settings.json");
 
@@ -141,7 +144,7 @@ internal sealed partial class MigrationV2
 
     private Scan Examine()
     {
-        _noticed = null; // a run reads the notice history afresh, once (MigrationV2Notices.cs)
+        Holds.Forget(); // a run reads the notice history afresh, once (HoldBoundary)
         var scan = new Scan();
         ExamineSessions(scan);
         ExamineCards(scan);
@@ -171,7 +174,7 @@ internal sealed partial class MigrationV2
 
             if (LegacyHold.Stands(session.State))
             {
-                scan.Work.Add(new SessionWork(file, session, AnsweredHoldsOf(id, session.State)));
+                scan.Work.Add(new SessionWork(file, session, Holds.AnsweredOf(id, session.State)));
             }
             else if (database && !done.Contains(id) && session.Rounds.Count > 0 && session.Rounds[^1].Note == ConversionNote)
             {
@@ -211,66 +214,6 @@ internal sealed partial class MigrationV2
         return true;
     }
 
-    /// <summary>The cards of one held session that a person ANSWERED: named in its <c>holdQuestions</c>, or carrying its session id.</summary>
-    private List<MigrateV2AnsweredHold> AnsweredHoldsOf(string sessionFile, SessionState state)
-    {
-        var holds = new List<MigrateV2AnsweredHold>();
-        var dir = CardsDir(_dataDir);
-        if (!Directory.Exists(dir))
-        {
-            return holds;
-        }
-
-        var named = state.Unknown is { } bag && bag.TryGetValue("holdQuestions", out var questions) && questions.ValueKind == JsonValueKind.Array
-            ? questions.EnumerateArray().Where(q => q.ValueKind == JsonValueKind.String).Select(q => q.GetString()!).ToHashSet()
-            : [];
-        foreach (var card in TopLevelCards(dir))
-        {
-            var id = Path.GetFileNameWithoutExtension(card);
-            if ((named.Contains(id) || CardOfSession(card, state.SessionId)) && AnswerOf(id) is { } decision)
-            {
-                holds.Add(new MigrateV2AnsweredHold(sessionFile, id, decision));
-            }
-        }
-
-        return holds;
-    }
-
-    private static IEnumerable<string> TopLevelCards(string dir) =>
-        Directory.EnumerateFiles(dir, "*.json").Where(f => !f.EndsWith(".answer.json", StringComparison.Ordinal)).Order(StringComparer.Ordinal);
-
-    private static bool CardOfSession(string card, string sessionId)
-    {
-        try
-        {
-            return JsonNode.Parse(File.ReadAllText(card)) is JsonObject json && json["sessionId"]?.GetValue<string>() == sessionId;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>The decision a person's non-empty answer carries (empty for a typed answer), or null when there is no answer — a missing, empty or malformed file is none.</summary>
-    private string? AnswerOf(string cardId)
-    {
-        try
-        {
-            using var answer = JsonDocument.Parse(File.ReadAllText(Path.Combine(CardsDir(_dataDir), cardId + ".answer.json")));
-            var root = answer.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("answer", out var words) || words.ValueKind != JsonValueKind.String || words.GetString()!.Length == 0)
-            {
-                return null;
-            }
-
-            return root.TryGetProperty("decision", out var decision) && decision.ValueKind == JsonValueKind.String ? decision.GetString()! : string.Empty;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return null;
-        }
-    }
-
     private void ExamineCards(Scan scan)
     {
         var dir = CardsDir(_dataDir);
@@ -279,7 +222,7 @@ internal sealed partial class MigrationV2
             return;
         }
 
-        foreach (var file in TopLevelCards(dir))
+        foreach (var file in HoldBoundary.TopLevelCards(dir))
         {
             var id = Path.GetFileNameWithoutExtension(file);
             JsonObject card;
@@ -303,7 +246,7 @@ internal sealed partial class MigrationV2
             {
                 scan.Work.Add(new CardWork(file, Withdraw: false));
             }
-            else if (StatusOf(card).Length == 0 && AnswerOf(id) is null)
+            else if (StatusOf(card).Length == 0 && HoldBoundary.AnswerOf(_dataDir, id) is null)
             {
                 scan.Work.Add(new CardWork(file, Withdraw: true));
             }

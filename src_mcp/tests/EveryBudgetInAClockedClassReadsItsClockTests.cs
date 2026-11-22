@@ -46,6 +46,7 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     [
         new("src_mcp/src/Server/Backfill/BackfillAttribution.cs", "forwards its clock to the peer lookup (AuthorPeers.Find) as a deadline instant; no timer, no wait — E5/E7's own tests pin it"),
         new("src_mcp/src/Server/Backfill/BackfillRun.cs", "only defaults and forwards the clock to BackfillAttribution; it arms nothing itself"),
+        new("src_mcp/src/Server/Migrations/HoldBoundary.cs", "a wall STAMP only: the notice's utc comes from the clock, and the two doors (the migration, convert-on-load) hand it their own; it waits for nothing and arms no timer (E1.S4)"),
         new("src_mcp/src/Server/Migrations/MigrationV2.cs", "a wall STAMP only: the marker's finishedUtc and the journal lines' utc come from the clock; the migration waits for nothing and arms no timer (E1.S4)"),
         new("src_mcp/src/Server/Migrations/MigrationV2Journal.cs", "a wall STAMP only: each line's utc; it waits for nothing and arms no timer (E1.S4)"),
         new("src_mcp/src/Server/Rounds/RoundAuthorsStep.cs", "reads its clock as instants (a deadline, an elapsed from GetTimestamp) for the round-authors step; no timer, no wait"),

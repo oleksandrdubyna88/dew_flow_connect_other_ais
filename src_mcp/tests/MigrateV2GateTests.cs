@@ -440,7 +440,7 @@ public sealed class MigrateV2GateTests : IDisposable
     }
 
     [Fact]
-    public void AnApplyOverThreeAnsweredHolds_ReadsTheNoticeHistoryOnce_AndOnceMorePerNoticeItWrites_ToReadItBack()
+    public void AnApplyOverThreeAnsweredHolds_ReadsTheNoticeHistoryOnce_AndConfirmsEachNoticeFromItsTailOnly()
     {
         var dir = FolderWithThreeAnsweredHolds();
         var (migration, scans) = CountingScans(dir);
@@ -449,7 +449,7 @@ public sealed class MigrateV2GateTests : IDisposable
 
         report.Status.Should().Be("done");
         MigrateV2Data.NoticesOf(dir, "v2-converted-answered-hold").Select(n => n.GetProperty("subject").GetString()).Should().BeEquivalentTo(AnsweredCard, "bbbbbbbbbbbb", "cccccccccccc");
-        scans().Should().Be(1 + 3, "one read to learn what is there, then one read-back per written notice — the check before a write is answered by the set, not by the file");
+        scans().Should().Be(1, "one read to learn what is there; the check before a write is answered by the set, and a written notice is confirmed from its tail (MigrateV2FinalRoundTests), not by another read of the history");
     }
 
     [Fact]
@@ -594,7 +594,7 @@ public sealed class MigrateV2GateTests : IDisposable
         Directory.CreateDirectory(MigrationV2.JournalFile(dir)); // a directory where the journal file belongs: the append is refused
         var said = new List<string>();
 
-        HoldConversion.Journaled(dir, file, "on-load", said.Add);
+        HoldConversion.Journaled(dir, file, "on-load", said.Add, TimeProvider.System);
 
         said.Should().ContainSingle().Which.Should().Contain("journal").And.Contain(Path.GetFileName(file), "the sentence names what was not written down");
         LegacyHold.Stands(state).Should().BeTrue("this test only drives the journal door; the session file is untouched here");
@@ -606,7 +606,7 @@ public sealed class MigrateV2GateTests : IDisposable
         var (dir, file, _) = MigratedFolderWithALateHold();
         var said = new List<string>();
 
-        HoldConversion.Journaled(dir, file, "on-load", said.Add);
+        HoldConversion.Journaled(dir, file, "on-load", said.Add, TimeProvider.System);
 
         said.Should().BeEmpty();
         MigrationV2Journal.Read(MigrationV2.JournalFile(dir)).Should().Contain(l => l.Detail == "on-load");

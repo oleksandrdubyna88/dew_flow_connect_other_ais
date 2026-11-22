@@ -101,8 +101,8 @@ public static class ServerNotices
     /// Every line already written in a data folder — the previous generation first, then the live file — read without forbidding a writer to append.
     /// </summary>
     /// <remarks>
-    /// For the one reader inside this binary: the v2 migration asks "is the notice for this card on disk?" before it converts the session the notice is about, and
-    /// again after it wrote it (<c>MigrationV2</c>). The names stay in this class; a missing file is no lines. A read the disk refuses is the caller's
+    /// For the one reader inside this binary: the v2 hold boundary (<c>HoldBoundary</c>) asks "is the notice for this card on disk?" before it converts the session the notice is about —
+    /// ONCE per run, into a set. After it wrote one it reads only the tail (<see cref="LinesFrom"/>). The names stay in this class; a missing file is no lines. A read the disk refuses is the caller's
     /// <see cref="IOException"/> — an answer that cannot be told from "not written" would convert an answered hold with no notice.
     /// </remarks>
     internal static IEnumerable<string> Lines(string dataDir)
@@ -121,6 +121,34 @@ public static class ServerNotices
             {
                 yield return line;
             }
+        }
+    }
+
+    /// <summary>The byte length of the live notices file in a data folder, zero when there is none (or it cannot be measured): the offset a confirm of the next append starts from.</summary>
+    internal static long Length(string dataDir) => Size(Path.Combine(dataDir, Name));
+
+    /// <summary>
+    /// The lines of the LIVE notices file from a byte offset, read without forbidding a writer to append — what a caller reads to confirm the append it made after it recorded
+    /// <see cref="Length"/>. A file SHORTER than the offset is a new file (the live one was rolled aside, <see cref="RollAt"/>), and is read from its start.
+    /// </summary>
+    /// <remarks>
+    /// Reads only the bytes from the offset to the end, so the cost of a confirm is the appended bytes and not the history. An offset that falls inside a line (a neighbour's torn
+    /// append) yields a torn first line, which no reader takes for a notice; the confirm then fails and the caller defers — never converts on a guess.
+    /// </remarks>
+    internal static IEnumerable<string> LinesFrom(string dataDir, long offset)
+    {
+        var path = Path.Combine(dataDir, Name);
+        if (!File.Exists(path))
+        {
+            yield break;
+        }
+
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        file.Seek(file.Length < offset ? 0 : offset, SeekOrigin.Begin);
+        using var reader = new StreamReader(file, Encoding.UTF8);
+        while (reader.ReadLine() is { } line)
+        {
+            yield return line;
         }
     }
 

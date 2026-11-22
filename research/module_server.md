@@ -75,8 +75,12 @@ written. (2) The automatic run, `MigrateV2Mode.RunAutomatic`, in `ServeAsync` af
 version ≥ 2 — a dev build is 0.0.0 and a v1 release is 0.x — and the marker absent or made by other tables), and at every v2 start, marker or not, `SweepCards`. It never throws into serve
 (the one catch-all sits there, because it passes no fault seam) and never writes stdout. (3) **Convert on load** — `SessionStore.Load` converts a session still held when it is read, with the
 same function (`HoldConversion.Converted`) under the session's claim, so the migration is not the only door: a session the run deferred, a file that was unreadable and is readable now, and a held
-session a still-running v1 process writes after `v2.done` would otherwise stay held for ever. A load that cannot take the claim returns the converted session in memory and writes nothing — the
-holder's own save persists it. Both doors write the same bytes (a test compares them).
+session a still-running v1 process writes after `v2.done` would otherwise stay held for ever. Both doors write the same bytes (a test compares them) and cross the same boundary, `HoldBoundary`:
+an answered hold is announced, and its notice read back from the file, BEFORE the session is converted (see *A person's answer v1 never applied*). A load whose notice cannot be confirmed — no
+`SessionStore.Notice` sink, a writer that refuses, a line the disk never took — returns the session as loaded, STILL HELD, writes nothing and logs a warning (v2 code reads a held session as a
+normal one); the next load or migration tries again, so the notice is never lost to a conversion the migration did not see. A load that cannot take the claim returns the converted session in
+memory and writes nothing — the holder's own save persists it — unless an answered hold's notice is not on disk, when it returns the session held: whoever saves the result must not persist a
+conversion nobody announced.
 
 **What each step does.** *Sessions:* a session whose unknown-member bag says `humanGate: true` (`LegacyHold.Stands`) becomes `LegacyHold.Released` — `AwaitingResolve` and `AdvanceOnResolve` set
 together, the hold members dropped — and the held round's note reads `good_enough — converted from a held gate by v2`; the verdict, stage, rejections, pending findings and round count stay. It is
@@ -93,6 +97,9 @@ already marked; a store is archived while its source is there; a key is moved wh
 resumed by reading the objects. `migrations/v2.journal` is JSON Lines, append-only, flushed per line (`{seq, utc, kind, id, state, detail}`), and is EVIDENCE for one purpose: a session that carries the
 conversion note and has no `done` line gets its `coai.db` projection written again. A line torn by a kill is ignored on read, and the next append cuts the file back to its last newline first.
 A journal line the convert-on-load door cannot write is reported through the server log (a warning), never thrown: the session is converted and the journal is evidence only (`HoldConversion.Journaled`).
+The door's journal line and its notices are stamped from the store's injected clock (`SessionStore.Clock`, the `TimeProvider` passed on to `MigrationV2Journal` and `HoldBoundary`), as the migration's are.
+A claimed session that cannot be read again or saved is also reported (a warning with the exception) before the caller gets the conversion in memory; the store's `Log` is the host's logger (`PanelService`
+passes its own — Serilog's global logger is never set in production, so a default-logger warning would reach no one).
 
 **The marker.** `migrations/v2.done` (`schema`, `tablesHash`, `finishedUtc`, `version`) is written only when nothing was deferred AND nothing was unreadable: an object the run could not read is an
 object it did not migrate, so an unreadable file keeps the marker away (exit 75, status `partial`) and the next start retries — the run never loops inside one start.
@@ -102,10 +109,11 @@ has a card to take. `MigrationV2Lease.Take` answers a closed hierarchy `LeaseTak
 
 **A person's answer v1 never applied.** A held session whose card a person had answered (`fix`, `discuss`, `continue`) is converted to `good_enough` — v1 never applied the answer and v2 never waits — and the
 person is told FIRST: one entry per card in `server-notices.jsonl`, code `v2-converted-answered-hold`, subject = the card id, written through the notice writer and READ BACK from the file before
-the session is converted (the sink answers "accepted"; the disk can still refuse). A session whose notice cannot be written stays held and the run is `partial`. The card id is the key, so a kill
-between the notice and the conversion leaves a held session and a notice, and the next run finds the notice and converts. The history is read ONCE per run into a set of card ids
-(`MigrationV2.Noticed`; a run that finds every notice already written reads the file once in all) and read again only to confirm a write, which replaces the set — the set is fed by what a read of the file
-found, never by the sink's answer. A dry run lists the notices it would write (`notices`) and writes none.
+the session is converted (the sink answers "accepted"; the disk can still refuse). A session whose notice cannot be written stays held and the run is `partial`; a load in the same case leaves it held
+(both are `HoldBoundary.Released`). The card id is the key, so a kill between the notice and the conversion leaves a held session and a notice, and the next run — or load — finds the notice and converts.
+The history is read ONCE per run into a set of card ids (`HoldBoundary.Noticed`; a run that finds every notice already written reads the file once in all). A write is confirmed by reading ONLY the bytes
+appended after the length of `server-notices.jsonl` recorded just before it (`ServerNotices.Length`, `ServerNotices.LinesFrom` — a file shorter than the offset was rolled and is read from its start), so the
+cost of a notice does not grow with the history; the tail must contain the card's own line, and what it holds joins the set — the set is fed by what a read of the file found, never by the sink's answer. A dry run lists the notices it would write (`notices`) and writes none.
 
 **What it must not change:** `RetiredMembers.Shipped` stays empty (retiring `humanGate` before the migration ran would lose the evidence), non-held sessions, a session's file name, cadence and
 question-phase code (E3 removes them and adds rows to the tables), and any Team-server wire field.
@@ -2153,7 +2161,7 @@ the real one, retried briefly (see *A session is saved under its own scratch nam
 reads as a fresh session rather than a locked repo. Round trail (`RoundRecord`) and pending findings ride in the same file — `status`
 survives a server restart, per the durable-status rule.
 
-**v2 (E1.S4):** a load of a session that is still held converts it (`SessionStore.ConvertedOnLoad`, under the claim, journaled `on-load`; a step it cannot finish — the journal line, the `coai.db` note — is
+**v2 (E1.S4):** a load of a session that is still held converts it (`SessionStore.ConvertedOnLoad`, under the claim, across the shared `HoldBoundary` — an answered hold is announced first, else the session stays held — journaled `on-load`; a step it cannot finish — the journal line, the `coai.db` note, a re-read or a save — is
 said through the server log, never thrown), `LoadFile(path)` reads one file by path for the migration and throws on a torn or unreadable file instead of answering "fresh", and `SaveTo(path, session)` writes
 it back to the SAME path. The folder gains `migrations/` (`v2.done`, `v2.journal`, `v1-archive/`), `claims/migrate-v2.lease` and `settings.v1-removed.json` — see *The v2 data migration*, above.
 

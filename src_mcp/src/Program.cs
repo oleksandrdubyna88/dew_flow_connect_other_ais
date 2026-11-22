@@ -2102,12 +2102,8 @@ internal static class Program
     /// (the migration reads the line back before it does). The wait is bounded by <see cref="NoticeWriter.DrainBudget"/>. Here, in <c>Program</c>, because
     /// the census of who composes a <see cref="Noticing"/> and who reaches for the shared writer names this file and no other.
     /// </summary>
-    internal static Func<ServerNotice, bool> MigrationNotices(Func<string, string?> env, NoticeWriter writer, Serilog.ILogger log, string run)
-    {
-        var noticing = Noticing.Through(writer, env, log, run);
-
-        return notice => noticing.Offer(notice) && writer.Idle(NoticeWriter.DrainBudget);
-    }
+    internal static Func<ServerNotice, bool> MigrationNotices(Func<string, string?> env, NoticeWriter writer, Serilog.ILogger log, string run) =>
+        Noticing.Through(writer, env, log, run).Settled;
 
     private static async Task<int> ServeAsync()
     {
