@@ -5,8 +5,12 @@
  *
  * <p><b>The three numbers.</b></p>
  * <ul>
- *   <li><b>M1</b> — module evaluation to `activate` return, in ms: `activateReturn.at - eval.at`, both marks made by the shell
- *       (`shell/measure.ts`). Limit 50 ms. Nothing is loaded lazily inside `activate`, so this is the entry's own time.</li>
+ *   <li><b>M1</b> — the entry's own time in `activate`, in ms: `activateReturn.at - activateStart.at`, both marks made by the shell
+ *       (`shell/measure.ts`; `activateStart` is the FIRST statement of `activate`). Limit 50 ms. Nothing is loaded lazily inside `activate`.
+ *       (Until 2026-11-22 M1 ran from the `eval` mark; that included the host's delay before it calls `activate` — 926 ms on Windows CI for an
+ *       entry of 3 KB — which is not the entry's time. That delay is now {@link hostDelay}.)</li>
+ *   <li><b>hostDelay</b> — `activateStart.at - eval.at`: the time between the host evaluating the entry's module and calling `activate`.
+ *       Recorded, never a limit: it is the editor's, not ours.</li>
  *   <li><b>M2</b> — the driver's clock, started just before it runs `workbench.view.extension.coai`, to the sidebar's webview
  *       `ready` acknowledgement reaching the host: `ready.at - t0`, using the FIRST `ready` made at or after `t0`. Limit 2000 ms,
  *       and the MAXIMUM of the samples counts.</li>
@@ -17,6 +21,9 @@
  * the clock started is refused (restored view state activated it before the clock), and so is a sample with no `ready` made
  * after the clock started — a missing acknowledgement is a failure, never a zero. `recordOnly` (the v1 baseline) turns the
  * limits off and lets the extension have been active, because v1 activates itself at start-up (`onStartupFinished`).</p>
+ *
+ * <p><b>The steps.</b> Every mark of a sample is a row of the per-step table ({@link stepsTable}): its time since the clock, and the time since the
+ * step before it. The old activation and the sidebar's first render name their phases (`src/measureMarks.ts`), so the table shows where M2 goes.</p>
  *
  * <p>Marks are wall-clock milliseconds since 1970 (`performance.timeOrigin + performance.now()`), taken in the extension host;
  * the driver reads its own clock the same way in the same host, so the subtraction is exact to a fraction of a millisecond.</p>
@@ -57,12 +64,15 @@ export function deriveSample(raw, { recordOnly = false } = {}) {
       : 'the record does not say whether the extension was active when the clock started');
   }
 
-  const evaluated = first(marks, 'eval');
-  const returned = evaluated === undefined ? undefined : first(marks, 'activateReturn', evaluated.at);
-  const m1 = evaluated !== undefined && returned !== undefined ? returned.at - evaluated.at : null;
+  const started = first(marks, 'activateStart');
+  const returned = started === undefined ? undefined : first(marks, 'activateReturn', started.at);
+  const m1 = started !== undefined && returned !== undefined ? returned.at - started.at : null;
   if (m1 === null && !recordOnly) {
-    problems.push('the marks have no eval -> activateReturn pair, so M1 cannot be read');
+    problems.push('the marks have no activateStart -> activateReturn pair, so M1 cannot be read');
   }
+  // The host's delay before it called `activate`: recorded beside M1, never judged.
+  const evaluated = first(marks, 'eval');
+  const hostDelay = evaluated !== undefined && started !== undefined ? started.at - evaluated.at : null;
 
   const ready = first(marks, 'ready', t0);
   const m2 = ready === undefined ? null : ready.at - t0;
@@ -81,10 +91,89 @@ export function deriveSample(raw, { recordOnly = false } = {}) {
     platform: raw?.host?.platform ?? null,
     vscodeVersion: raw?.host?.vscodeVersion ?? null,
     m1: round(m1),
+    hostDelay: round(hostDelay),
     m2: round(m2),
     m3: round(m3),
+    steps: stepsOf(marks, t0),
     problems,
   };
+}
+
+/**
+ * One sample's steps: each mark name once (its first one at or after the clock, else its first), oldest first, with `since` (ms after the clock,
+ * negative before it) and `delta` (ms after the step before it; `null` for the first).
+ */
+export function stepsOf(marks, t0) {
+  const byName = new Map();
+  for (const one of marks) {
+    const kept = byName.get(one.name);
+    const fresh = Number.isFinite(t0) && one.at >= t0;
+    if (kept === undefined || (fresh && !kept.fresh)) {
+      byName.set(one.name, { name: one.name, at: one.at, fresh });
+    }
+  }
+  const ordered = [...byName.values()].sort((a, b) => a.at - b.at);
+  const base = Number.isFinite(t0) ? t0 : (ordered[0]?.at ?? 0);
+
+  return ordered.map((one, at) => ({ name: one.name, since: round(one.at - base), delta: at === 0 ? null : round(one.at - ordered[at - 1].at) }));
+}
+
+/**
+ * The per-step table of a measurement: one row per mark name, in the order of the middle sample's times, each with min / median / max of `since`
+ * and of `delta` over the samples that have it. A row's `delta` here is the time since the row ABOVE it, taken sample by sample, so the column adds up.
+ */
+export function aggregateSteps(samples) {
+  const names = new Map();
+  for (const sample of samples) {
+    for (const step of sample.steps ?? []) {
+      names.set(step.name, [...(names.get(step.name) ?? []), step.since]);
+    }
+  }
+  const order = [...names.entries()].map(([name, sinces]) => ({ name, middle: stats(sinces).median })).sort((a, b) => a.middle - b.middle).map((one) => one.name);
+
+  return order.map((name, at) => {
+    const sinces = samples.map((sample) => (sample.steps ?? []).find((step) => step.name === name)?.since ?? null);
+    const above = at === 0 ? undefined : order[at - 1];
+    const deltas = samples.map((sample) => {
+      const here = (sample.steps ?? []).find((step) => step.name === name)?.since;
+      const before = above === undefined ? undefined : (sample.steps ?? []).find((step) => step.name === above)?.since;
+
+      return here === undefined || before === undefined ? null : round(here - before);
+    });
+
+    return { name, samples: sinces.filter((one) => one !== null).length, since: stats(sinces), delta: above === undefined ? null : stats(deltas) };
+  });
+}
+
+/** The one line of a log: the three numbers, and the host's delay beside M1. */
+export function summaryLine(result) {
+  return `cold start (${result.location}): M1 ${result.m1?.max ?? 'n/a'} ms max (activateStart to activateReturn), host delay ${JSON.stringify(result.hostDelay)}, M2 ${JSON.stringify(result.m2)}, M3 ${JSON.stringify(result.m3)}`;
+}
+
+const pad = (text, width) => String(text).padEnd(width);
+const padLeft = (text, width) => String(text).padStart(width);
+
+/** The lines of the per-step table, for a log: the step, its time since the clock (median, and min..max), and the time since the row above (median, max). */
+export function stepsTable(result) {
+  const rows = result.steps ?? [];
+  if (rows.length === 0) {
+    return ['per-step table: no marks'];
+  }
+  const width = Math.max(4, ...rows.map((row) => row.name.length));
+  const lines = [`${pad('step', width)} | ${padLeft('since t0 median', 15)} | ${padLeft('min', 8)} | ${padLeft('max', 8)} | ${padLeft('step median', 11)} | ${padLeft('step max', 8)} | n`];
+  for (const row of rows) {
+    lines.push([
+      pad(row.name, width),
+      padLeft(cell(row.since?.median), 15),
+      padLeft(cell(row.since?.min), 8),
+      padLeft(cell(row.since?.max), 8),
+      padLeft(cell(row.delta?.median), 11),
+      padLeft(cell(row.delta?.max), 8),
+      row.samples,
+    ].join(' | '));
+  }
+
+  return lines;
 }
 
 /** min / median / max of the numbers that exist, or `null` when none does. */
@@ -110,6 +199,7 @@ export function summarize(raws, { expected = SAMPLES, recordOnly = false, limits
     problems.push(`${samples.length} sample(s) came back, ${expected} were needed`);
   }
   const m1 = stats(samples.map((one) => one.m1));
+  const hostDelay = stats(samples.map((one) => one.hostDelay));
   const m2 = stats(samples.map((one) => one.m2));
   const m3 = stats(samples.map((one) => one.m3));
   const locations = [...new Set(samples.map((one) => one.location))];
@@ -136,8 +226,10 @@ export function summarize(raws, { expected = SAMPLES, recordOnly = false, limits
     vscodeVersion: samples[0]?.vscodeVersion ?? null,
     samples: samples.map(({ problems: _problems, ...rest }) => rest),
     m1,
+    hostDelay,
     m2,
     m3,
+    steps: aggregateSteps(samples),
     pass: problems.length === 0,
     problems,
   };

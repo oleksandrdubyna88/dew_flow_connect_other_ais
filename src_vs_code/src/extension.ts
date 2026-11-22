@@ -96,6 +96,7 @@ import { ON_EXHAUSTED_MIGRATION_KEY } from './onExhaustedMigration';
 import { startOnExhaustedMigration } from './onExhaustedMigrationHost';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
+import { measureMark } from './measureMarks';
 import * as bridge from './shellBridge';
 
 /**
@@ -133,9 +134,11 @@ export interface CoaiExports {
  * there is still nothing listening on a socket.</p>
  */
 export function activate(context: vscode.ExtensionContext): CoaiExports {
+  measureMark('oldActivateStart');
   // One per window, kept for the window's life: the page is cheap to redraw and expensive to
   // rebuild, and `retainContextWhenHidden` means a reopened tab keeps its scroll and its tab.
   const notifications = new NotificationsPanel();
+  measureMark('oldNotifications');
 
   // BEFORE even that: WHERE this window keeps its data. Every line below that resolves a path — the
   // two watchers immediately after this, the chat store, the panel — asks `dataDir.ts`, and until
@@ -145,6 +148,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // And how this host asks the disk whether a CLI path of the other OS's spelling is a file HERE (paths per side, E1.2):
   // before this every such path is "unknown" and kept. Installed, not imported, because the page's modules may not reach node:fs.
   useFileProbe(fileAt(statSync));
+  measureMark('oldStorageSide');
   // The paths of THIS side, asked of the disk and said when missing (paths per side, E5.3) — started here, before the
   // settings mirror below writes the data directory, because the mirror and every ledger ask the watch's answer first
   // (E5.0): a named data root that is missing is never created by them.
@@ -152,6 +156,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // A per-side CLI path a save by an extension that does not know it dropped is said, and offered back on a click — never
   // restored on its own (paths per side, E3 as built). Looked at now and on every settings change below.
   const cliPathKeep = startCliPathKeep(context);
+  measureMark('oldPathWatch');
   // The review roles know this window's side from the start: the Settings page edits them as well as the Review
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
@@ -172,6 +177,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // and `chatWiring.test.ts` now fails if this line ever drifts below a `registerCommand`.
   chatReadsThisSide(context);
   bindChatPresets(context);
+  measureMark('oldBindings');
   const watcher = new EscalationWatcher(dataDir());
   // The second watcher, and it asks for nothing from anybody: a consultation blocks nothing, so it
   // has no modal and no status-bar item — it appears in the sidebar where a person is already
@@ -180,6 +186,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // The third, for Active questions (todo/PLAN_question_consultant.md, S4): a question the consultants are
   // answering blocks nothing either, so it too is drawn where a person is looking and raises nothing.
   const questionConsults = new QuestionConsultWatcher(dataDir());
+  measureMark('oldWatchersBuilt');
 
   // Exports run one at a time: two dialogs answered with the same path would otherwise race,
   // and the file would hold whichever write finished last while both reported success.
@@ -317,6 +324,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
   // Made before the sidebar, which hands the review page's bugs to it (issue #487).
   const chatPanels = new ChatPanels();
+  measureMark('oldRoundsLog');
   // A terminal that opens (creds opens its terminals late, after the serializer restored the chats) takes back the conversation of its name (E3.S1).
   bindReattach(context, chatPanels);
   // The page draws what the watch publishes, and repaints when it changes; the server's answer about the roots reaches
@@ -346,6 +354,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
       mirrorSettings(mirroring);
     }
   });
+  measureMark('oldPanelBuilt');
   // What coai-mcp said about its settings by kind reaches the path watch through the panel's probe (paths per side, E5.6).
   panel.onServerProblems = (problems) => { pathWatch.serverSaid(problems); };
   // Whatever a page is still waiting on is settled as not done when the window goes away (inFlight.ts).
@@ -394,6 +403,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     void panel.render();
   };
   questionConsults.start();
+  measureMark('oldWatchersStarted');
 
   // A Models card offers a dropped per-side CLI path back with Restore, and repaints when the keeper's list changes (E4.1).
   panel.cliPathKeep = cliPathKeep;
@@ -425,6 +435,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   });
   // The sidebar asks THIS cache too — a page that meets an updated binary re-asks the one the file is written from.
   panel.useFeatures(features);
+  measureMark('oldFeaturesCache');
   const askFeatures = (): ReturnType<FeaturesCache['of']> => features.of(serverPath(context.globalStorageUri)?.fsPath, serverRun);
   const settingsSync = new ServerSettingsSync(
     () => readCoaiConfiguration(context),
@@ -445,7 +456,9 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // Never written into a NAMED data root that is missing (E5.7): the watch's answer, waited for (bounded).
     () => pathWatch.dataRootMissing(),
   );
+  measureMark('oldSettingsSync');
   mirrorSettings(settingsSync);
+  measureMark('oldMirrorStarted');
   // Every saved choice of When the rounds run out is reset to Auto once, per profile and for the user settings once for every
   // machine Settings Sync reaches — from activation, never from the panel (onExhaustedMigrationHost.ts). The overlay clear fires
   // no configuration event, so its `after` mirrors and redraws the panel, as the catalog migration's does.
@@ -494,6 +507,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     console.error('ConnectOtherAIs: the sweep of unfinished role deletions failed', reason);
   });
 
+  measureMark('oldMigrationsKicked');
   // Where conversations are kept so a window reload does not empty every chat tab: the store on
   // disk, one file per conversation beside the two chat ledgers, under the same data directory the
   // MCP server uses. It is the source of truth — the serializer below reads it.
@@ -507,6 +521,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   const chatTabMemory = new ChatTabMemory(context.workspaceState);
   rememberChatsIn(chatTabMemory);
   keepChatsIn(chatStore);
+  measureMark('oldChatStore');
   // What restoring a tab needs; one object, so the serializer and every retry read the same store,
   // the same memento and the same workspace the writers use.
   const restoreDeps: RestoreDeps = {
@@ -565,6 +580,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   pulseChatsThrough(() => {
     housekeeping.heartbeat.pulse();
   });
+  measureMark('oldHousekeeping');
   // A FILE THAT MOVES takes its conversation with it. `onDidRenameFiles` is the only event that
   // carries an explicit old-to-new mapping, which is why it is the one followed: saving an untitled
   // buffer reports no previous uri at all, so a conversation opened from one keeps its `untitled:`
@@ -929,7 +945,9 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     bridge.registerCommand('coai.answerQuestionWaiting', () => answerQuestion(watcher)),
   );
 
+  measureMark('oldCommandsRegistered');
   void offerUpdate(context);
+  measureMark('oldActivateEnd');
 
   return {
     sidesSeen: () => sidesIn(context.globalState, Date.now()),

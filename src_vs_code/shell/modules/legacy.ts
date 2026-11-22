@@ -1,18 +1,21 @@
 // The `legacy` module: for this story every command, the sidebar view and the chat serializer load here.
 // On first use it runs the OLD `activate()` (src/extension.ts) exactly once, and forwards to what that call
 // registered. Later stories move features into real modules and this file shrinks to nothing.
+// `../measure` FIRST: this bundle's own copy of the recorder evaluates before the old code does, and that moment is the `moduleEval` mark.
+import { mark } from '../measure';
 import * as vscode from 'vscode';
 import { activate as activateOldCode, deactivate as deactivateOldCode, type CoaiExports } from '../../src/extension';
 import { adoptRegistrationsFor } from '../../src/shellBridge';
 import { recordMarksWith } from '../../src/measureMarks';
 import { COMMANDS, PANEL_CHAT, VIEW_PANEL } from '../ids';
 import type { ShellModule } from '../lazy';
-import { mark } from '../measure';
 
 type Handler = (...args: unknown[]) => unknown;
 
-// The old code names two cold-start moments (the sidebar's `ready`, its first data); the shell's marks record them.
+// The old code names its own cold-start moments (its activation's phases, the sidebar's render, `ready`, first data); the shell's marks record them.
 recordMarksWith(mark);
+// Every import above has been evaluated: the time from `moduleEval` to here is the old tree's module-level code (the 4 MB of it).
+mark('legacyBody');
 
 const owned = new Set<string>(COMMANDS);
 const handlers = new Map<string, Handler>();
@@ -54,6 +57,7 @@ function adopt(): void {
 /** Runs the old `activate()` once and answers what it returned. */
 function started(context: vscode.ExtensionContext): CoaiExports {
   if (outcome === undefined) {
+    mark('legacyActivateStart');
     adopt();
     try {
       outcome = { started: activateOldCode(context) };
@@ -61,6 +65,7 @@ function started(context: vscode.ExtensionContext): CoaiExports {
       outcome = { failed };
     } finally {
       adoptRegistrationsFor(undefined);
+      mark('legacyActivateEnd');
     }
   }
   if ('failed' in outcome) {

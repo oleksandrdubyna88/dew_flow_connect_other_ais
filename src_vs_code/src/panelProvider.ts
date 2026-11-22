@@ -4,7 +4,7 @@
 import { GLANCE_CEILING_MS, LedgerGlance, NOT_LOOKED, UNREADABLE_GLANCE } from './notificationsCount';
 import { glanceAtLedgers } from './notificationsGlance';
 import { withinTheClock } from './withinTheClock';
-import { measureMark } from './measureMarks';
+import { measureMark, type OldMark } from './measureMarks';
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { DISCOVERY_KEY } from './chatDiscovery';
@@ -615,6 +615,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
+    measureMark('sidebarResolve');
     // A new document: nothing in it is painted or focused yet, whatever the last one left behind. The
     // slot lets go of a view only when it is still the one held: VS Code re-creates a hidden view when
     // it is shown again, so a late callback from a replaced view must not blank the live one.
@@ -1394,11 +1395,22 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return this.renders.run();
   }
 
+  /** The render that is measured: the first one that finds a view. Its number is kept; any other render's `step` marks nothing. */
+  private measuredRender = 0;
+
+  private measureStep(number: number): (name: OldMark) => void {
+    this.measuredRender ||= number;
+
+    return this.measuredRender === number ? (name) => { measureMark(name); } : () => undefined;
+  }
+
   /** The render itself: the configuration, the sessions, the ledger and the probes, then the paint. */
   private async renderNow(number: number): Promise<void> {
     if (!anyHeld(this.slots)) {
       return;
     }
+    const step = this.measureStep(number);
+    step('renderStart');
     // Never render from a configuration this panel has not finished writing. Blur fires `change`
     // and then `focusout`, and the render the release asks for would otherwise overtake the write
     // it followed and re-stamp the box with the value being replaced — the symptom, reintroduced by
@@ -1407,6 +1419,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // Awaited until it is STABLE and bounded — see `WriteQueue.settled`. Never awaited FROM a write:
     // that is a wait on itself (`afterTheWrite`).
     await this.writes.settled();
+    step('renderWrites');
+    // The per-step table of the cold-start measurement: the FIRST render that finds a view marks each awaited read of the state (a cheap push, nothing else).
+    const after = <T>(name: OldMark, value: T): T => {
+      step(name);
+
+      return value;
+    };
     const config = vscode.workspace.getConfiguration('coai');
     // THIS side's settings, like the vendors on the next line: a side that keeps its own settings runs with its
     // overlay, and a page drawn from the shared layer showed values it does not run with.
@@ -1414,10 +1433,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const vendors = vendorsFrom(this.read(config)('vendors'));
     this.codexModels = await this.readCodexModels();
     this.agyModels = await this.readAgyModels(vendors);
+    step('renderCliModels');
     // The published version is read FIRST because the server's status is stated against it — and
     // both belong to the side this extension host is running on, never to "the machine".
     const published = await this.publishedVersion();
+    step('renderPublished');
     const sessions = await this.readSessions();
+    step('renderSessions');
     // A round that stopped running since the last paint brings the round count forward; the read itself is not awaited
     // here — the cards draw the cached count, and a read that lands repaints (story 2.4, never a spawn per render).
     // Only while the Settings page is open: its Models cards are the one surface here that draws the count, and the
@@ -1433,13 +1455,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
     const features = await this.binaryFeatures();
     const server = await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published);
+    step('renderFeatures');
     const state = {
       settings,
       vendors: shown,
       // The Settings page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the reviewers only.
       catalogRows: vendors,
       securityTry: this.securityTry,
-      ...(await this.newPageReads(server)),
+      ...after('renderNewPageReads', await this.newPageReads(server)),
       // The data folder's last move (E4.5), which survives a reload so the delete can be offered — a read of memory.
       lastDataMove: this.context.globalState.get<MoveRecord>(MOVE_RECORD),
       codexModels: this.codexModels,
@@ -1449,7 +1472,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       claudeProbe: this.claudeProbes.answer(vendors, settings.consult),
       askingClaude: this.claudeProbes.looking,
       server,
-      hostKind: await this.hostKindHere,
+      hostKind: after('renderHostKind', await this.hostKindHere),
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       perSide: this.perSide(config),
       // Read from globalState on EVERY render (E2.2): a side another window stamped appears at the next repaint.
@@ -1462,25 +1485,25 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // Never awaited: the probe and the watcher land on their own and repaint (epic 5 of the consultant plan). Only while
       // the Consultant tab is SHOWING — --consultants asks every CLI its version — and paused otherwise (the review, N2).
       consultantHealth: this.consultantHealth.stateWhile(consultantTabShowing(this.settingsTab.view?.visible === true, heldSettingsTab())),
-      usage: this.remembered(await this.readUsage()),
+      usage: this.remembered(after('renderUsage', await this.readUsage())),
       usageWindow: this.usageWindow,
       latestServerVersion: published,
       latestTeamServerVersion: this.latestTeamServer,
-      storage: await whereThisWindowKeepsItsData(),
-      cliStatus: await this.vendorCliStatus(vendors),
-      cardPrices: await this.cardPrices(vendors),
+      storage: after('renderStorage', await whereThisWindowKeepsItsData()),
+      cliStatus: after('renderCliStatus', await this.vendorCliStatus(vendors)),
+      cardPrices: after('renderCardPrices', await this.cardPrices(vendors)),
       roundsSnapshot: this.roundCounts.current(),
       // Story 6.2 of research/PLAN_every_round_is_counted.md: the plan prices as stored, and the last one refused at its card.
       planPrices: planPricesFrom(config.get(PLAN_PRICES_SETTING)),
       planPriceRefusal: this.planPriceRefusal,
-      snippetStatus: await pastedSnippetStatus(),
+      snippetStatus: after('renderSnippet', await pastedSnippetStatus()),
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
-      qconsultPromptOverrides: await this.qconsult.overrides(),
+      qconsultPromptOverrides: after('renderPrompts', await this.qconsult.overrides()),
       // Read only while the Settings page exists: the sidebar never draws a prompt card.
       securityPromptDir: promptsDir(this.dataDir.fsPath),
       securityPromptText: this.settingsTab.view === undefined ? undefined
         : await this.securityPromptText.states(this.dataDir.fsPath, settings.securityLane.prompts.map(p => p.id)),
-      qconsultPlaces: await this.qconsult.places(settings.qconsult.roots),
+      qconsultPlaces: after('renderPlaces', await this.qconsult.places(settings.qconsult.roots)),
       // Which rows' CLI paths this side skips as the other side's — asked of the disk HERE (paths per side, E1.5).
       otherSideClis: otherSideClis(vendors, hostExecutableSide()),
       // The paths of this side that are missing or unanswerable, as the watch last published them (E5.4): the marks
@@ -1496,7 +1519,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // Read from the cache and NEVER awaited here; the look is started below, after the html
       // has gone out, so a slow disk delays the count and not the panel.
       notifications: this.notificationsGlance,
-      localEngines: await this.probeLocalEngines(vendors),
+      localEngines: after('renderLocalEngines', await this.probeLocalEngines(vendors)),
       rankByRuntime: hasFeature(features, FEATURES.bugzRuntime),
       // The Settings page (PLAN_one_model_catalog.md E3): what the binary takes once it has said, when each new
       // control was first seen, and the clock its "new" marks are measured against.
@@ -1519,7 +1542,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       enginesByEndpoint: this.consultEnginesAnswer(settings.consult),
       // The corpus and the last run, cached for a few seconds: this is a process spawn and a
       // repaint is frequent. It is what puts a running collect on the screen without a poller.
-      bugz: await this.bugz(),
+      bugz: after('renderBugz', await this.bugz()),
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
       // From the person's own settings, exactly as the COMMAND reads it — not through the per-side
@@ -1543,6 +1566,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // the conversation on the row's own model instead. Written on every render, so it is as fresh as
     // the panel is.
     await this.rememberDiscovery(state);
+    step('renderDiscovery');
 
     // Two update paths, and which one runs is the whole fix for the pickers.
     //

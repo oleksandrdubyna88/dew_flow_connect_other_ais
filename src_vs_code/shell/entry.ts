@@ -15,6 +15,8 @@ export interface ShellExports {
 }
 
 export function activate(context: vscode.ExtensionContext): ShellExports {
+  // M1 starts HERE, the first statement: the host's delay between evaluating this file and calling `activate` is `hostDelay`, not the entry's time.
+  mark('activateStart');
   const legacy = () => lazy(MODULE_LEGACY);
   context.subscriptions.push(
     ...COMMANDS.map((id) => vscode.commands.registerCommand(id, (...args: unknown[]) => legacy().then((module) => module.command(context, id, args)))),

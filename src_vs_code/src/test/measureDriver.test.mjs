@@ -54,7 +54,7 @@ const answer = () => {
 
   return {
     schema: 1,
-    marks: [{ name: 'eval', at: now - 3000 }, { name: 'activateReturn', at: now - 2990 }, { name: 'viewResolve', at: now - 1 }, { name: 'firstData', at: now }, { name: 'ready', at: now }],
+    marks: [{ name: 'eval', at: now - 3000 }, { name: 'activateStart', at: now - 3000 }, { name: 'activateReturn', at: now - 2990 }, { name: 'viewResolve', at: now - 1 }, { name: 'firstData', at: now }, { name: 'ready', at: now }],
     host: { remoteName: 'wsl', uiKind: 1, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Code' },
   };
 };

@@ -1,7 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { deriveSample, LIMITS, parseMeasureArgs, stats, summarize, tableRow, TABLE_HEADER } from '../../scripts/coldstart-lib.mjs';
+import { deriveSample, LIMITS, parseMeasureArgs, stats, stepsOf, stepsTable, summarize, summaryLine, tableRow, TABLE_HEADER } from '../../scripts/coldstart-lib.mjs';
 
 /**
  * The pure parts of the cold-start measurement (v2 extension.md § 2, epic E2 story S2): how M1/M2/M3 are read off the marks, which samples do not
@@ -11,11 +11,12 @@ import { deriveSample, LIMITS, parseMeasureArgs, stats, summarize, tableRow, TAB
 
 const T0 = 1_000_000;
 
-/** A raw record like `measureScenario.ts` writes: M1 = `m1` ms, M2 = `m2` ms, M3 = `m3` ms (null: none). */
-function raw({ sample = 1, m1 = 12, m2 = 800, m3 = 700, startedActive = false, remoteName = null, extra = [] } = {}) {
+/** A raw record like `measureScenario.ts` writes: M1 = `m1` ms, host delay = `hostDelay` ms, M2 = `m2` ms, M3 = `m3` ms (null: none). */
+function raw({ sample = 1, m1 = 12, hostDelay = 40, m2 = 800, m3 = 700, startedActive = false, remoteName = null, extra = [] } = {}) {
   const marks = [
     { name: 'eval', at: T0 - 5_000 },
-    { name: 'activateReturn', at: T0 - 5_000 + m1 },
+    { name: 'activateStart', at: T0 - 5_000 + hostDelay },
+    { name: 'activateReturn', at: T0 - 5_000 + hostDelay + m1 },
     { name: 'viewResolve', at: T0 + 30 },
     ...(m3 === null ? [] : [{ name: 'firstData', at: T0 + m3 }]),
     ...(m2 === null ? [] : [{ name: 'ready', at: T0 + m2 }]),
@@ -25,12 +26,77 @@ function raw({ sample = 1, m1 = 12, m2 = 800, m3 = 700, startedActive = false, r
   return { schema: 1, sample, t0: T0, startedActive, marks, host: { remoteName, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Code' } };
 }
 
-test('M1 is activateReturn minus eval, M2 is the first ready at or after the clock minus the clock, M3 is firstData minus the clock', () => {
-  const derived = deriveSample(raw({ m1: 12.34, m2: 800.06, m3: 700 }));
+test('M1 is activateReturn minus activateStart, the host delay is activateStart minus eval, M2 is the first ready at or after the clock minus the clock, M3 is firstData minus the clock', () => {
+  const derived = deriveSample(raw({ m1: 12.34, hostDelay: 55.55, m2: 800.06, m3: 700 }));
 
-  assert.deepEqual([derived.m1, derived.m2, derived.m3], [12.3, 800.1, 700]);
+  assert.deepEqual([derived.m1, derived.hostDelay, derived.m2, derived.m3], [12.3, 55.6, 800.1, 700]);
   assert.deepEqual(derived.problems, []);
   assert.equal(derived.location, 'local');
+});
+
+test('M1 does not contain the host\'s delay: 926 ms between eval and activate is recorded as the host delay, and the sample passes on M1 of 12 ms', () => {
+  const derived = deriveSample(raw({ m1: 12, hostDelay: 925.8 }));
+
+  assert.equal(derived.m1, 12);
+  assert.equal(derived.hostDelay, 925.8);
+  assert.deepEqual(derived.problems, []);
+  const result = summarize([raw({ hostDelay: 925.8 }), raw({ hostDelay: 10 }), raw({ hostDelay: 20 })]);
+  assert.equal(result.pass, true, JSON.stringify(result.problems));
+  assert.deepEqual(result.hostDelay, { min: 10, median: 20, max: 925.8 }, 'the host delay has statistics and no limit');
+  assert.deepEqual(result.m1, { min: 12, median: 12, max: 12 });
+});
+
+test('a record with no activateStart cannot give M1 and says so (the old eval-based pair is not read as M1)', () => {
+  const old = raw();
+  old.marks = old.marks.filter((one) => one.name !== 'activateStart');
+  const derived = deriveSample(old);
+
+  assert.equal(derived.m1, null);
+  assert.equal(derived.hostDelay, null);
+  assert.match(derived.problems.join('\n'), /no activateStart -> activateReturn pair/);
+});
+
+test('the steps of a sample: each name once (its first mark after the clock), oldest first, with the time since the clock and since the step above', () => {
+  const steps = stepsOf([
+    { name: 'eval', at: T0 - 100 },
+    { name: 'moduleEval', at: T0 + 10 },
+    { name: 'oldActivateStart', at: T0 + 30 },
+    { name: 'oldActivateStart', at: T0 + 31 },
+    { name: 'ready', at: T0 - 5 },
+    { name: 'ready', at: T0 + 60.04 },
+  ], T0);
+
+  assert.deepEqual(steps, [
+    { name: 'eval', since: -100, delta: null },
+    { name: 'moduleEval', since: 10, delta: 110 },
+    { name: 'oldActivateStart', since: 30, delta: 20 },
+    { name: 'ready', since: 60, delta: 30 },
+  ]);
+});
+
+test('the per-step table: rows in the order of the middle sample, min / median / max since the clock, and a step time that adds up row by row', () => {
+  const sample = (shift) => raw({ extra: [{ name: 'oldActivateStart', at: T0 + 100 + shift }, { name: 'renderStart', at: T0 + 300 + shift }] });
+  const result = summarize([sample(0), sample(50), sample(100)]);
+  const names = result.steps.map((row) => row.name);
+
+  assert.deepEqual(names, ['eval', 'activateStart', 'activateReturn', 'viewResolve', 'oldActivateStart', 'renderStart', 'firstData', 'ready']);
+  const render = result.steps.find((row) => row.name === 'renderStart');
+  assert.deepEqual(render.since, { min: 300, median: 350, max: 400 });
+  assert.deepEqual(render.delta, { min: 200, median: 200, max: 200 });
+  assert.equal(result.steps[0].delta, null, 'the first row has no row above it');
+  assert.ok(result.steps.every((row) => row.samples === 3));
+
+  const lines = stepsTable(result);
+  assert.match(lines[0], /^step\s+\| since t0 median/);
+  assert.equal(lines.length, result.steps.length + 1);
+  assert.match(lines.find((line) => line.startsWith('renderStart')), /\| +350 \| +300 \| +400 \| +200 \| +200 \| 3$/);
+  assert.deepEqual(stepsTable({ steps: [] }), ['per-step table: no marks']);
+});
+
+test('the log line names the host delay beside M1', () => {
+  const line = summaryLine(summarize([raw(), raw(), raw()]));
+
+  assert.match(line, /^cold start \(local\): M1 12 ms max \(activateStart to activateReturn\), host delay \{"min":40,"median":40,"max":40\}, M2 \{/);
 });
 
 test('a ready ack from BEFORE the clock is not an ack: the first ready after it is used, and with none the sample fails naming a stale ack', () => {
@@ -131,10 +197,12 @@ test('statistics: min, median (mean of the middle two when even) and max of the 
 test('the JSON shape of a result: schema, kind, limits, place, samples without their problems, the three statistics, the verdict', () => {
   const result = summarize([raw({ sample: 1 }), raw({ sample: 2 }), raw({ sample: 3 })]);
 
-  assert.deepEqual(Object.keys(result), ['schema', 'kind', 'recordOnly', 'limits', 'location', 'platform', 'vscodeVersion', 'samples', 'm1', 'm2', 'm3', 'pass', 'problems']);
+  assert.deepEqual(Object.keys(result), ['schema', 'kind', 'recordOnly', 'limits', 'location', 'platform', 'vscodeVersion', 'samples', 'm1', 'hostDelay', 'm2', 'm3', 'steps', 'pass', 'problems']);
   assert.equal(result.kind, 'coai-cold-start');
   assert.equal(result.schema, 1);
-  assert.deepEqual(result.samples[0], { sample: 1, startedActive: false, location: 'local', platform: 'linux', vscodeVersion: '1.99.0', m1: 12, m2: 800, m3: 700 });
+  const { steps, ...numbers } = result.samples[0];
+  assert.deepEqual(numbers, { sample: 1, startedActive: false, location: 'local', platform: 'linux', vscodeVersion: '1.99.0', m1: 12, hostDelay: 40, m2: 800, m3: 700 });
+  assert.deepEqual(steps.map((one) => one.name), ['eval', 'activateStart', 'activateReturn', 'viewResolve', 'firstData', 'ready'], 'each sample keeps its steps, oldest first');
   assert.deepEqual(JSON.parse(JSON.stringify(result)), result, 'the result survives JSON, so what a file holds is what the verdict said');
 });
 

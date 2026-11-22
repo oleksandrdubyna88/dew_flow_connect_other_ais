@@ -7,8 +7,56 @@
  * tests, any caller outside the shell — a mark is nothing. This file imports nothing, so a unit test can load it.</p>
  */
 
+/**
+ * The moments the old code names, in the order the old activation and the first sidebar paint reach them (v2 E2 S2, step marks).
+ *
+ * <p>`oldActivate*` are the main phases of `src/extension.ts` `activate()`; `sidebarResolve` is the sidebar's `resolveWebviewView`; `render*` are the phases
+ * of the FIRST sidebar render (`PanelProvider.renderNow`: each awaited read of the state), ending in `firstData` (the paint); `ready` is the page's
+ * acknowledgement. The names are the rows of the per-step table the measurement prints, so a name is a stable word, not a sentence.</p>
+ */
+export const OLD_MARKS = [
+  'oldActivateStart',
+  'oldNotifications',
+  'oldStorageSide',
+  'oldPathWatch',
+  'oldBindings',
+  'oldWatchersBuilt',
+  'oldRoundsLog',
+  'oldPanelBuilt',
+  'oldWatchersStarted',
+  'oldFeaturesCache',
+  'oldSettingsSync',
+  'oldMirrorStarted',
+  'oldMigrationsKicked',
+  'oldChatStore',
+  'oldHousekeeping',
+  'oldCommandsRegistered',
+  'oldActivateEnd',
+  'sidebarResolve',
+  'renderStart',
+  'renderWrites',
+  'renderCliModels',
+  'renderPublished',
+  'renderSessions',
+  'renderFeatures',
+  'renderNewPageReads',
+  'renderHostKind',
+  'renderUsage',
+  'renderStorage',
+  'renderCliStatus',
+  'renderCardPrices',
+  'renderSnippet',
+  'renderPrompts',
+  'renderPlaces',
+  'renderLocalEngines',
+  'renderBugz',
+  'renderDiscovery',
+  'firstData',
+  'ready',
+] as const;
+
 /** A moment the old code names. */
-export type OldMark = 'ready' | 'firstData';
+export type OldMark = typeof OLD_MARKS[number];
 
 let recorder: ((name: OldMark) => void) | undefined;
 

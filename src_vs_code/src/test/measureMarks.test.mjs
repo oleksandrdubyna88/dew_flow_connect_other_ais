@@ -78,13 +78,13 @@ test('without COAI_MEASURE=1 the command is not registered, and with it it is: i
   assert.equal(activated(code, { env: { COAI_MEASURE: '1' } }).has('coai.__measure'), true);
 });
 
-test('the command answers eval before activateReturn, the place of the host, and nothing else about the editor', async () => {
+test('the command answers eval, activateStart and activateReturn in that order, the place of the host, and nothing else about the editor', async () => {
   const code = await entryCode();
   const report = activated(code, { env: { COAI_MEASURE: '1' }, remoteName: 'wsl' }).get('coai.__measure')();
 
   assert.equal(report.schema, 1);
-  assert.deepEqual(report.marks.map((one) => one.name), ['eval', 'activateReturn']);
-  assert.ok(report.marks[0].at <= report.marks[1].at);
+  assert.deepEqual(report.marks.map((one) => one.name), ['eval', 'activateStart', 'activateReturn']);
+  assert.ok(report.marks[0].at <= report.marks[1].at && report.marks[1].at <= report.marks[2].at);
   assert.ok(Math.abs(report.marks[0].at - Date.now()) < 5_000, 'a mark is a wall-clock moment in ms since 1970');
   assert.deepEqual(report.host, { remoteName: 'wsl', uiKind: 1, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Visual Studio Code' });
   assert.equal(activated(code, { env: { COAI_MEASURE: '1' } }).get('coai.__measure')().host.remoteName, null, 'a local host says null, not a name');
@@ -107,10 +107,10 @@ test('the view provider marks viewResolve at once, before it loads anything', as
   await assert.rejects(async () => provider.resolveWebviewView({}, {}, {}), /the entry may not load/, 'the module cannot be loaded in this fake, which is how the mark is shown to come first');
   const names = handlers.get('coai.__measure')().marks.map((one) => one.name);
 
-  assert.deepEqual(names, ['eval', 'activateReturn', 'viewResolve']);
+  assert.deepEqual(names, ['eval', 'activateStart', 'activateReturn', 'viewResolve', 'moduleRequire'], 'viewResolve is first, then the loader marks the start of the require that this fake cannot finish');
 });
 
-test('another bundle\'s copy of shell/measure.ts writes into the same list, and its module-evaluation mark does not count twice', async () => {
+test('another bundle\'s copy of shell/measure.ts writes into the same list, and its module-evaluation mark is moduleEval, not a second eval', async () => {
   const code = await entryCode();
   const handlers = activated(code, { env: { COAI_MEASURE: '1' } });
   // The legacy module bundle carries its own copy of the file: build one alone and run it as that bundle would.
@@ -121,7 +121,7 @@ test('another bundle\'s copy of shell/measure.ts writes into the same list, and 
   exported.exports.mark('firstData');
   const names = handlers.get('coai.__measure')().marks.map((one) => one.name);
 
-  assert.deepEqual(names, ['eval', 'activateReturn', 'ready', 'firstData']);
+  assert.deepEqual(names, ['eval', 'activateStart', 'activateReturn', 'moduleEval', 'ready', 'firstData']);
 });
 
 test('only a few marks of one name are kept: a panel that repaints all day cannot grow the list', async () => {

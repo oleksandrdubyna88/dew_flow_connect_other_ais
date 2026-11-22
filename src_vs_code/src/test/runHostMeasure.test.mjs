@@ -22,7 +22,7 @@ const T0 = 5_000_000;
 
 /** What the scenario writes for one sample; `m2: null` is a launch whose ack never came. */
 function record(sample, { m1 = 15, m2 = 900, startedActive = false } = {}) {
-  const marks = [{ name: 'eval', at: T0 - 3000 }, { name: 'activateReturn', at: T0 - 3000 + m1 }, ...(m2 === null ? [] : [{ name: 'firstData', at: T0 + 700 }, { name: 'ready', at: T0 + m2 }])];
+  const marks = [{ name: 'eval', at: T0 - 3000 }, { name: 'activateStart', at: T0 - 3000 }, { name: 'activateReturn', at: T0 - 3000 + m1 }, ...(m2 === null ? [] : [{ name: 'firstData', at: T0 + 700 }, { name: 'ready', at: T0 + m2 }])];
 
   return { schema: 1, sample, t0: T0, startedActive, marks, host: { remoteName: null, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Code' } };
 }

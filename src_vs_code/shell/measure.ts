@@ -12,8 +12,14 @@ import type * as vscode from 'vscode';
 /** The command that answers the marks; registered only when COAI_MEASURE=1, in every extension mode. */
 export const MEASURE_COMMAND = 'coai.__measure';
 
-/** The marks, in the order the extension makes them. `eval` and `activateReturn` bound M1; `ready` ends M2; `firstData` ends M3. */
-export type MarkName = 'eval' | 'activateReturn' | 'viewResolve' | 'ready' | 'firstData';
+/**
+ * The marks the shell makes, in the order it makes them. `activateStart` and `activateReturn` bound M1 (the entry's own time inside `activate`);
+ * `eval` to `activateStart` is the host's own delay before it calls `activate` (`hostDelay`, recorded, no limit); `ready` ends M2; `firstData` ends M3.
+ * `moduleRequire` / `moduleEval` / `moduleLoaded` bracket the load of a lazy module's bundle; `legacyBody` and `legacyActivate*` are the legacy module's
+ * (`shell/modules/legacy.ts`). The old code's own marks (`src/measureMarks.ts`, `OLD_MARKS`) go through the same `mark`, so the name is a plain string here:
+ * this file may not import `src/`.
+ */
+export type MarkName = string;
 
 export interface Mark {
   readonly name: string;
@@ -66,10 +72,9 @@ export function mark(name: MarkName): void {
 export const marksSoFar = (): readonly Mark[] => [...store()];
 
 // MODULE EVALUATION START: the first statement this bundle runs, because `entry.ts` imports this file before anything else.
-// Only the first copy counts — the module bundles evaluate their own copy of this file later.
-if (!store().some((one) => one.name === 'eval')) {
-  mark('eval');
-}
+// Only the first copy is `eval` — a module bundle evaluates its own copy of this file when it is first required, and that is `moduleEval`,
+// the start of that bundle's evaluation (its first import must be this file).
+mark(store().some((one) => one.name === 'eval') ? 'moduleEval' : 'eval');
 
 /** The api this file needs; the entry passes the `vscode` namespace. */
 type Api = Pick<typeof vscode, 'commands' | 'env' | 'version'>;

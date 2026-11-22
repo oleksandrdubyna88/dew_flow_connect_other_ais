@@ -3,6 +3,7 @@
 // Allowed inputs of the entry bundle: shell/entry.ts, lazy.ts, ids.ts, measure.ts (scripts/entry-firewall.mjs).
 import { join } from 'node:path';
 import type * as vscode from 'vscode';
+import { mark } from './measure';
 
 /** What every module under `dist/modules/<id>.js` exports; the shell calls these and nothing else. */
 export interface ShellModule {
@@ -40,7 +41,9 @@ export function lazy(id: string): Promise<ShellModule> {
   if (pending === undefined) {
     pending = new Promise<ShellModule>((resolve) => {
       const startedAt = performance.now();
+      mark('moduleRequire');
       const module = require(join(__dirname, 'modules', `${id}.js`)) as ShellModule;
+      mark('moduleLoaded');
       loadMarks.push({ id, startedAt, ms: performance.now() - startedAt });
       loaded.set(id, module);
       resolve(module);

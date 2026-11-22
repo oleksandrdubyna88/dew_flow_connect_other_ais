@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain, loadOwned } from './run-tests.mjs';
-import { parseMeasureArgs, summarize } from './coldstart-lib.mjs';
+import { parseMeasureArgs, stepsTable, summarize, summaryLine } from './coldstart-lib.mjs';
 import { writeResult } from './coldstart-output.mjs';
 
 /**
@@ -241,7 +241,11 @@ export async function measure({
     for (const problem of result.problems) {
       failures.push(problem);
     }
-    log(`cold start (${result.location}): M1 ${result.m1?.max ?? 'n/a'} ms max, M2 ${JSON.stringify(result.m2)}, M3 ${JSON.stringify(result.m3)}`);
+    log(summaryLine(result));
+    // Where the time goes: every mark, its time since the clock and since the step above (the old activation and the first sidebar render name their phases).
+    for (const line of stepsTable(result)) {
+      log(line);
+    }
   });
   if (result !== undefined) {
     writeResult(result, options, output);

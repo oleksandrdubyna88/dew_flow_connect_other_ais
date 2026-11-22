@@ -56,7 +56,7 @@ v2:
 Measurement: reuse `scripts/run-host.mjs` (bundles first :85/:117; real VS Code via @vscode/test-electron with own
 workspace, data dir and `--user-data-dir` :110-113/:130; poison env removed :50; two launches today :141/:147). Add a
 launch `measure` (`node scripts/run-host.mjs measure`: `COAI_MEASURE=1`, `out/test/host/measureScenario.js`, one editor launch per sample with a fresh profile): run `workbench.view.extension.coai`, read
-the marks through `coai.__measure` (S2 built this; results in `research/RESULTS_v2_start.md`). M1 = module evaluation → `activate` return (≤ 50 ms own time); M2 = command → webview `ready`
+the marks through `coai.__measure` (S2 built this; results in `research/RESULTS_v2_start.md`). M1 = first statement of `activate` → `activate` return (≤ 50 ms own time; the host's delay from module evaluation to the `activate` call is `hostDelay`, recorded, no limit); M2 = command → webview `ready`
 acknowledgement (≤ 2000 ms). 3 cold launches, the maximum counts. Linux CI (xvfb), Windows CI; Remote-WSL by
 `scripts/measure-remote-wsl.ps1` on the owner's Windows (VSIX + a tiny driver VSIX in a fresh `--extensions-dir`,
 `code --remote wsl+<distro>`), result committed to `research/RESULTS_v2_start.md`.

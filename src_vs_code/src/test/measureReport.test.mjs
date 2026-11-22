@@ -17,7 +17,7 @@ const quiet = () => {};
 const T0 = 7_000_000;
 const sample = (n, remoteName = 'wsl', m2 = 900) => ({
   schema: 1, sample: n, t0: T0, startedActive: false,
-  marks: [{ name: 'eval', at: T0 - 100 }, { name: 'activateReturn', at: T0 - 90 }, { name: 'firstData', at: T0 + 500 }, { name: 'ready', at: T0 + m2 }],
+  marks: [{ name: 'eval', at: T0 - 100 }, { name: 'activateStart', at: T0 - 100 }, { name: 'activateReturn', at: T0 - 90 }, { name: 'firstData', at: T0 + 500 }, { name: 'ready', at: T0 + m2 }],
   host: { remoteName, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Code' },
 });
 
