@@ -19,7 +19,7 @@
  */
 import { build } from 'esbuild';
 import { isMain, optionsFor, readEntries, ROOT } from './bundle-lib.mjs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const BANNED = ['child_process', 'fs', 'https', 'http', 'net'];
 const bareName = (name) => name.replace(/^node:/u, '').split('/')[0];
@@ -32,7 +32,7 @@ async function buildInMemory(bundle, config, contents) {
     options.plugins = [{
       name: 'planted-entry',
       setup(b) {
-        b.onLoad({ filter: /\.ts$/ }, (args) => (args.path === entry ? { contents, loader: 'ts', resolveDir: join(ROOT, 'shell') } : undefined));
+        b.onLoad({ filter: /\.ts$/ }, (args) => (args.path === entry ? { contents, loader: 'ts', resolveDir: dirname(entry) } : undefined));
       },
     }];
   }
@@ -47,7 +47,8 @@ export function firewallProblems(bundle, metafile) {
   // A planted import of the old tree drags hundreds of files in: list a few and count the rest.
   const sample = (list) => (list.length > 5 ? `${list.slice(0, 5).join(', ')} and ${list.length - 5} more` : list.join(', '));
   const inputs = Object.keys(metafile.inputs);
-  const old = inputs.filter((input) => input.startsWith('src/'));
+  // A file under src/ is the old code unless the bundle's own list names it: the sidebar module reads one small file of its own from there.
+  const old = inputs.filter((input) => input.startsWith('src/') && !allowed.has(input));
   const others = inputs.filter((input) => !input.startsWith('src/') && !allowed.has(input));
   if (old.length > 0) {
     problems.push(`${bundle.out}: ${old.length} input(s) under src/ — the entry must not reach the old code: ${sample(old)}`);

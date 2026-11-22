@@ -4,6 +4,9 @@
 /** The module a command, view or panel belongs to; for this story every one of them belongs to `legacy`. */
 export const MODULE_LEGACY = 'legacy';
 
+/** The module that paints the sidebar's last snapshot before the legacy module has loaded, then hands the view to the legacy one (v2 E4). */
+export const MODULE_SIDEBAR = 'sidebar';
+
 /** The sidebar view (`contributes.views`). */
 export const VIEW_PANEL = 'coai.panel';
 

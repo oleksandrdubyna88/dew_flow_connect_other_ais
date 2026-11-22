@@ -46,6 +46,9 @@ const MAX_PER_NAME = 8;
 
 const KEY = Symbol.for('coai.measure.marks');
 
+/** Where the loader (`lazy.ts`) says which module it is requiring, for the duration of the `require`: a module's `moduleEval` mark names it. */
+export const LOADING = Symbol.for('coai.measure.loading');
+
 /** The wall-clock moment now, in milliseconds since 1970. */
 export const now = (): number => performance.timeOrigin + performance.now();
 
@@ -74,7 +77,11 @@ export const marksSoFar = (): readonly Mark[] => [...store()];
 // MODULE EVALUATION START: the first statement this bundle runs, because `entry.ts` imports this file before anything else.
 // Only the first copy is `eval` — a module bundle evaluates its own copy of this file when it is first required, and that is `moduleEval`,
 // the start of that bundle's evaluation (its first import must be this file).
-mark(store().some((one) => one.name === 'eval') ? 'moduleEval' : 'eval');
+{
+  const loading = (globalThis as unknown as Record<symbol, string | undefined>)[LOADING];
+  // The legacy module keeps the plain name; any other module (the sidebar's) is `moduleEval:<id>`, so the table has a row for each load.
+  mark(store().some((one) => one.name === 'eval') ? (loading === undefined || loading === 'legacy' ? 'moduleEval' : `moduleEval:${loading}`) : 'eval');
+}
 
 /** The api this file needs; the entry passes the `vscode` namespace. */
 type Api = Pick<typeof vscode, 'commands' | 'env' | 'version'>;

@@ -17,6 +17,8 @@ import { chatModelPresetsFrom, vendorOfPreset, type ModelPreset } from './chatPr
 import { savedModels } from './chatConfig';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
 import { filledSidebarState, paintSidebarInStages, sidebarState, type SidebarReads } from './firstPaint';
+import { extensionVersionOf, NONCE_PLACEHOLDER } from './sidebarSnapshot';
+import { SidebarSnapshotWriter } from './sidebarSnapshotStore';
 import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
 import { catalogHtml, catalogKey } from './catalogPage';
 import { FIRST_SEEN_KEY } from './newTags';
@@ -415,6 +417,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** Engines probed for CONSULTANT endpoints, keyed by the endpoint the row stores. */
   private consultEngines: Record<string, LocalEngine> = {};
   private consultEngineAt: Record<string, number> = {};
+  /**
+   * The last page the sidebar was painted with, kept on disk for the NEXT window (`sidebarSnapshot.ts`, v2 E4): the sidebar module paints it
+   * before this code has loaded. Offered after a paint that has the sidebar's data; written later, never on the render's path.
+   */
+  private snapshotWriter: SidebarSnapshotWriter | undefined;
   /** One nonce per panel instance: the CSP admits our one script, and a repaint reuses it. */
   private readonly nonce = webviewNonce();
   /** Which sections the person has open — kept HERE because the panel repaints on every
@@ -616,6 +623,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     });
   }
 
+  /**
+   * @param view a view the shell's sidebar module may ALREADY have resolved (v2 E4): it holds the last snapshot's page, with options set and its own
+   *        message listener removed. Nothing here assumes an empty document — the slot forgets what was painted, so the first render writes the page
+   *        again, with live data, over the snapshot.
+   */
   resolveWebviewView(view: vscode.WebviewView): void {
     measureMark('sidebarResolve');
     // A new document: nothing in it is painted or focused yet, whatever the last one left behind. The
@@ -1367,6 +1379,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     this.rolesRedraw.dispose();
     this.commandsRedraw.dispose();
     this.chatPresetsRedraw.dispose();
+    this.snapshotWriter?.dispose();
   }
 
   /**
@@ -1451,6 +1464,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       paintFill: (state) => {
         if (!this.renders.superseded(number)) {
           this.paintSidebarOnly(state);
+          this.keepSnapshot(state);
           measureMark('firstData');
         }
       },
@@ -1527,6 +1541,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private paintSidebarOnly(state: PanelState): void {
     paintEach([this.sidebar], (slot) => this.pageFor(slot, state), { type: 'live', ...liveRegions(state) });
     this.sidebarPainted = true;
+  }
+
+  /** Offers the sidebar's page, with its data, as the next window's first paint. No focus and nothing in flight: a snapshot is a still picture. */
+  private keepSnapshot(state: PanelState): void {
+    this.snapshotWriter ??= new SidebarSnapshotWriter({ directory: () => this.context.globalStorageUri.fsPath, version: extensionVersionOf(this.context) });
+    this.snapshotWriter.offer(() => panelHtml({ ...state, focus: undefined, busy: undefined }, NONCE_PLACEHOLDER));
   }
 
   /** The render itself: the configuration, the sessions, the ledger and the probes, then the paint. */
@@ -1730,6 +1750,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const live = { type: 'live', ...liveRegions(state) };
     paintEach(this.slots, (slot) => this.pageFor(slot, state), live);
     this.sidebarPainted ||= this.sidebar.view !== undefined;
+    this.keepSnapshot(state);
     // The first state with its data handed to the webview, which is where M3 (command -> first data) ends. The sidebar's own cards may have been filled earlier.
     measureMark('firstData');
 

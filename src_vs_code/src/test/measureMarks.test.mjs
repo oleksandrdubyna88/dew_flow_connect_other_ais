@@ -107,7 +107,7 @@ test('the view provider marks viewResolve at once, before it loads anything', as
   await assert.rejects(async () => provider.resolveWebviewView({}, {}, {}), /the entry may not load/, 'the module cannot be loaded in this fake, which is how the mark is shown to come first');
   const names = handlers.get('coai.__measure')().marks.map((one) => one.name);
 
-  assert.deepEqual(names, ['eval', 'activateStart', 'activateReturn', 'viewResolve', 'moduleRequire'], 'viewResolve is first, then the loader marks the start of the require that this fake cannot finish');
+  assert.deepEqual(names, ['eval', 'activateStart', 'activateReturn', 'viewResolve', 'moduleRequire:sidebar', 'moduleRequire'], 'viewResolve is first, then the loader marks the start of the sidebar module\'s require and, that failing in this fake, the legacy module\'s');
 });
 
 test('another bundle\'s copy of shell/measure.ts writes into the same list, and its module-evaluation mark is moduleEval, not a second eval', async () => {
@@ -122,6 +122,26 @@ test('another bundle\'s copy of shell/measure.ts writes into the same list, and 
   const names = handlers.get('coai.__measure')().marks.map((one) => one.name);
 
   assert.deepEqual(names, ['eval', 'activateStart', 'activateReturn', 'moduleEval', 'ready', 'firstData']);
+});
+
+test('a module the loader is requiring names its own evaluation mark: moduleEval:<id>; the legacy module keeps moduleEval', async () => {
+  const code = await entryCode();
+  const handlers = activated(code, { env: { COAI_MEASURE: '1' } });
+  const copy = (await build({ ...optionsFor({ entry: 'shell/measure.ts', out: 'unused.js' }, { write: false }, config), minify: false })).outputFiles[0].text;
+  const evaluate = (loading) => {
+    const exported = { exports: {} };
+    globalThis[Symbol.for('coai.measure.loading')] = loading;
+    try {
+      new Function('module', 'exports', 'require', 'process', copy)(exported, exported.exports, () => undefined, { env: {} });
+    } finally {
+      globalThis[Symbol.for('coai.measure.loading')] = undefined;
+    }
+  };
+  evaluate('sidebar');
+  evaluate('legacy');
+  const names = handlers.get('coai.__measure')().marks.map((one) => one.name);
+
+  assert.deepEqual(names, ['eval', 'activateStart', 'activateReturn', 'moduleEval:sidebar', 'moduleEval']);
 });
 
 test('only a few marks of one name are kept: a panel that repaints all day cannot grow the list', async () => {

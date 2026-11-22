@@ -6,8 +6,8 @@
 // `./measure` FIRST: its first statement is the module-evaluation mark of the cold-start measurement.
 import { mark, registerMeasure } from './measure';
 import * as vscode from 'vscode';
-import { COMMANDS, MODULE_LEGACY, PANEL_CHAT, VIEW_PANEL } from './ids';
-import { lazy, loadedModule } from './lazy';
+import { COMMANDS, MODULE_LEGACY, MODULE_SIDEBAR, PANEL_CHAT, VIEW_PANEL } from './ids';
+import { lazy, loadedModule, type SidebarModule } from './lazy';
 
 /** What `activate` returns: a door for the test host, which starts the legacy module on demand. */
 export interface ShellExports {
@@ -23,8 +23,11 @@ export function activate(context: vscode.ExtensionContext): ShellExports {
     vscode.window.registerWebviewViewProvider(VIEW_PANEL, {
       resolveWebviewView: (view, resolveContext, token) => {
         mark('viewResolve');
-
-        return legacy().then((module) => module.resolveView(context, view, resolveContext, token));
+        // The sidebar module (v2 E4) paints the last snapshot of the sidebar NOW and loads the legacy module after the page says it is ready, handing it
+        // this same view. If it cannot be loaded or throws, the legacy module resolves the view alone, as it did before it existed.
+        return lazy<SidebarModule>(MODULE_SIDEBAR)
+          .then((sidebar) => sidebar.resolveSidebar(context, view, resolveContext, token, legacy))
+          .catch(() => legacy().then((module) => module.resolveView(context, view, resolveContext, token)));
       },
     }),
     vscode.window.registerWebviewPanelSerializer(PANEL_CHAT, {

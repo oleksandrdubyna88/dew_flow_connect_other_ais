@@ -10,6 +10,13 @@
       "firewall": { "inputs": ["shell/entry.ts", "shell/lazy.ts", "shell/ids.ts", "shell/measure.ts"], "imports": ["vscode", "node:path", "path"] }
     },
     {
+      "id": "sidebar",
+      "entry": "shell/modules/sidebar.ts",
+      "out": "dist/modules/sidebar.js",
+      "budgetBytes": 98304,
+      "firewall": { "inputs": ["shell/modules/sidebar.ts", "shell/measure.ts", "src/sidebarSnapshot.ts", "src/webviewNonce.ts"], "imports": ["vscode", "node:fs", "fs", "node:path", "path", "node:crypto", "crypto"] }
+    },
+    {
       "id": "legacy",
       "entry": "shell/modules/legacy.ts",
       "out": "dist/modules/legacy.js"

@@ -51,3 +51,31 @@ test('a planted 20 KiB literal fails the byte budget', async () => {
 
   assert.ok(problems.some((one) => one.includes('over its budget of 16384')), JSON.stringify(problems));
 });
+
+const sidebar = config.bundles.find((bundle) => bundle.id === 'sidebar');
+const sidebarSource = readFileSync(join(ROOT, sidebar.entry), 'utf8');
+
+test('the sidebar module is under a firewall and a budget of its own: 96 KiB, its two files of src/, and Node\'s fs, path and crypto only', async () => {
+  assert.equal(sidebar.budgetBytes, 98304);
+  assert.deepEqual(sidebar.firewall.inputs, ['shell/modules/sidebar.ts', 'shell/measure.ts', 'src/sidebarSnapshot.ts', 'src/webviewNonce.ts']);
+  assert.deepEqual(await checkBundle(sidebar, config), []);
+});
+
+test('the sidebar module may not reach the old code, a process, the network or a second file of src/', async () => {
+  const old = await checkBundle(sidebar, config, `${sidebarSource}\nimport { activate as old } from '../../src/extension';\nexport const planted = old;\n`);
+  assert.ok(old.some((one) => /input\(s\) under src\//u.test(one)), JSON.stringify(old));
+  const panel = await checkBundle(sidebar, config, `${sidebarSource}\nimport { PanelProvider } from '../../src/panelProvider';\nexport const planted = PanelProvider;\n`);
+  assert.ok(panel.some((one) => /input\(s\) under src\//u.test(one)), JSON.stringify(panel));
+  for (const name of ['node:child_process', 'node:http', 'node:https', 'node:net']) {
+    const problems = await checkBundle(sidebar, config, `${sidebarSource}\nexport const planted = require('${name}');\n`);
+
+    assert.ok(problems.some((one) => one.includes(`imports ${name}`)), `a planted require('${name}') was not reported: ${JSON.stringify(problems)}`);
+  }
+});
+
+test('a planted 100 KiB literal fails the sidebar module\'s budget', async () => {
+  const noise = Array.from({ length: 20000 }, (_, at) => (at * 2654435761 % 4294967296).toString(36)).join('');
+  const problems = await checkBundle(sidebar, config, `${sidebarSource}\nexport const planted = '${noise}';\n`);
+
+  assert.ok(problems.some((one) => one.includes('over its budget of 98304')), JSON.stringify(problems));
+});
