@@ -47,6 +47,8 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--round-counts-merged" },
         new[] { "--round-authors" },
         new[] { "--features" },
+        // The Claude mod's band: lists consultation files and reads the notices tail; answers three empty lists for a folder that is not there.
+        new[] { "--band-json" },
         new[] { "--version" },
         // Launched on a person's act, but it reads stdin and answers stdout only (research/PLAN_names_and_a_missing_root.md 3.3).
         new[] { "--check-security" },

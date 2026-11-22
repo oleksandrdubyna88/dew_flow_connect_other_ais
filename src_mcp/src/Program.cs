@@ -160,6 +160,12 @@ internal static class Program
         HostFacts,
 
         /// <summary>
+        /// The Claude mod's band, in one JSON object: <c>{phrases[], consultations[], failures[]}</c>, read from the local data folder — read-only, never makes the data directory.
+        /// See <see cref="BandJsonMode"/> (v2 E3.S4).
+        /// </summary>
+        BandJson,
+
+        /// <summary>
         /// The measurement behind a vendor dialect: the vault read the product's way, <c>GET /models</c>,
         /// and the S0.5 request matrix, printed as an allowlist of fields.
         /// </summary>
@@ -351,6 +357,7 @@ internal static class Program
                 "--ask-acp" => Startup.AskAcp,
                 "--kimi-clear-marker" => Startup.KimiClearMarker,
                 "--host-facts" => Startup.HostFacts,
+                "--band-json" => Startup.BandJson,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
@@ -458,6 +465,10 @@ internal static class Program
             case Startup.HostFacts:
                 // One line on stdout, read-only (no home, lock, network or data folder), exit 0 — never 64.
                 return HostFactsMode.Run(Console.Out);
+
+            case Startup.BandJson:
+                // One object on stdout, read-only, exit 0; a wrong argument is 65, never 64.
+                return BandJsonMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
 
             case Startup.ProbeApi:
                 // The vault is read the way `--providers` reads it: `creds config`, the one child this
@@ -2566,6 +2577,10 @@ internal static class Program
         the check's lock cannot be opened.
         `--features` prints the capabilities this build has as {"features":[...]} — what the extension asks
         before it sends a catalog field. A build too old for it exits 64.
+        `--band-json` prints ONE JSON object {"phrases":[],"consultations":[],"failures":[]} for the Claude mod's band, read
+        from the data directory and never creating it: the consultations in flight (cons asking or open, consask consulting)
+        and the failure notices of the last 24 hours. The phrases live in the editor's settings, so the list is empty here.
+        Any other argument is 65; a build too old for the mode exits 64.
         `--check-model` reads {"row": {…}} on stdin and runs ONE paid check of that catalog row — the consultant's
         check (a scratch repository, a marker, a canary), its record kept as model-<id>. A request without a row exits 65.
         Configure it in your client as:
