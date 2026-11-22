@@ -39,11 +39,8 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
     private static string Instructions => Program.Instructions;
 
     [Fact]
-    public void ARoundsReplyCanCarryCommandsThatOutrankTheCallersDefaults() =>
-        Instructions.Should().Contain("COMMANDS")
-            .And.Contain("outrank")
-            .And.Contain("empty list",
-                "a caller who never sees a commands list must know that empty is the default, not a fault");
+    public void TheInstructionsSayNothingOfCommands_ARoundOrdersNothingInV2() =>
+        Instructions.Should().NotContain("COMMANDS").And.NotContain("outrank");
 
     [Fact]
     public void RejectInRoundOneIsOnTheServersOwnSurface() =>

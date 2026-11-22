@@ -47,9 +47,8 @@ public sealed class TheInstructionsFitWhatAClientKeepsTests
             "the end of the text is what a budget overrun eats first, so the end is what is pinned");
 
     [Fact]
-    public void TheThreeThatOnlyLivedInASharedRuleAreStillHere() =>
-        Program.Instructions.Should().Contain("COMMANDS")
-            .And.Contain("Reject in round ONE")
+    public void TheTwoThatOnlyLivedInASharedRuleAreStillHere() =>
+        Program.Instructions.Should().Contain("Reject in round ONE")
             .And.Contain("Nothing holds the gate",
                 "these are the reason the shared rule can be reduced; losing them to a budget would "
                 + "take them off every surface at once");

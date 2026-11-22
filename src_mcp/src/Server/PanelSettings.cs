@@ -312,36 +312,6 @@ public sealed record PanelSettings
     /// </remarks>
     public IReadOnlyList<TimeSpan> RetryLadder { get; init; } = Runners.Reviewers.RetryLadder.Default;
 
-    /// <summary>
-    /// Which prompt each role uses on each round — <c>role -> [round1, round2, ...]</c>, by
-    /// catalog id. An empty or unknown entry falls back to the rotation or the universal prompt.
-    /// </summary>
-    /// <summary>
-    /// Deal the PLAN stage's lenses across the vendors instead of giving every vendor the same one.
-    /// </summary>
-    /// <remarks>
-    /// <para>Opt-in, and off by default, because of what it trades. With it off — the shipped
-    /// behaviour — every vendor answers the same question and <c>FindingDedup</c> merges what they
-    /// agree on, which is the strongest signal this product produces. With it on every lens gets
-    /// asked once instead, at half the launches, and that agreement is gone.</para>
-    /// <para>Two flags rather than one because the stages are not alike: a plan has three lenses for
-    /// one role, a code round has three roles.</para>
-    /// </remarks>
-    public bool DealPlanLenses { get; init; }
-
-    public bool DealCodeLenses { get; init; }
-
-    public IReadOnlyDictionary<string, IReadOnlyList<string>> PromptsPerRound { get; init; } =
-        new Dictionary<string, IReadOnlyList<string>>();
-
-    /// <summary>
-    /// Spend the rounds on DIFFERENT lenses instead of asking the same broad question again.
-    /// </summary>
-    /// <remarks>
-    /// Off by default: rotation changes what a second round means, and a person who has not asked
-    /// for it should get the prompt they last read in the panel.
-    /// </remarks>
-
     /// <summary>Where sessions, prompts overrides and round artifacts live.</summary>
     public string DataDir { get; init; } = DefaultDataDir;
 
@@ -449,55 +419,6 @@ public sealed record PanelSettings
     /// healthy and fast for a capped request.
     /// </remarks>
     public int LocalMaxTokens { get; init; } = 8192;
-
-    /// <summary>
-    /// Work without interrupting the person until there is no other way.
-    /// </summary>
-    /// <remarks>
-    /// Off by default, like the two below: a gate that starts issuing orders nobody asked for is one
-    /// people turn off entirely. What it produces is a COMMAND in the round's reply, not a change to
-    /// what the gate decides.
-    /// </remarks>
-    public bool Autonomous { get; init; }
-
-    /// <summary>Break an accepted plan into epics and stories, and close each one properly.</summary>
-    public bool SplitPlan { get; init; }
-
-    /// <summary>
-    /// The local reviewer stands down once every cloud reviewer has answered and they found at most one
-    /// remark between them — the launch already on the card finishes, no other starts (issue #485). Off by
-    /// default: it changes what the gate RUNS. From <c>COAI_STOP_LOCAL_WHEN_QUIET</c>.
-    /// </summary>
-    public bool StopLocalWhenQuiet { get; init; }
-
-    /// <summary>
-    /// Order the work in the subagent model tiers, on the caller's own three models (strongest, implementation, coder).
-    /// </summary>
-    /// <remarks>
-    /// The name is historical: the switch named Fable to every caller until issue #117 made the models
-    /// a per-caller choice (<see cref="CommandModels"/>). Renaming the stored key would be a migration of
-    /// every settings file for a word nobody sees.
-    /// </remarks>
-    public bool SplitWithFable { get; init; }
-
-    /// <summary>
-    /// The models (three slots) a person configured, per caller kind — only those; the rest resolve through
-    /// <see cref="Core.Commands.CommandModels.For"/>. From <c>COAI_COMMAND_MODELS</c>; issue #117.
-    /// </summary>
-    public IReadOnlyDictionary<string, Core.Commands.ModelPair> CommandModels { get; init; } =
-        new Dictionary<string, Core.Commands.ModelPair>();
-
-    /// <summary>
-    /// The commands a person added, from <c>COAI_COMMANDS</c> (issue #467) — handed to the caller after the
-    /// built-in orders, each with the text of its own file. None unless somebody added one.
-    /// </summary>
-    public IReadOnlyList<Core.Commands.CustomCommand> CustomCommands { get; init; } = [];
-
-    /// <summary>
-    /// How often split work is gated — once per epic unless <c>COAI_GATE_PER</c> says <c>task</c>
-    /// (issue #131). Never per story.
-    /// </summary>
-    public Core.Commands.GateScope GatePer { get; init; } = Core.Commands.GateScope.Epic;
 
     /// <summary>
     /// How many epics a plan needs before the feature gate runs for it — <c>COAI_FEATURE_MIN_EPICS</c>,
@@ -915,8 +836,6 @@ public sealed record PanelSettings
         WithCatalog(
             env, roles, catalog, ResolveDataDir(env),
             ConsultantRouting.Parse(env("COAI_CONSULTANTS")),
-            CommandModelsSetting.Parse(env(CommandModelsSetting.Key)),
-            CommandsSetting.Parse(env(CommandsSetting.Key)),
             QuestionConsultReader.Read(env, ResolveDataDir(env), SystemPlaces.Current));
 
     /// <remarks>
@@ -933,8 +852,6 @@ public sealed record PanelSettings
         RoleCatalog catalog,
         string dataDir,
         ConsultantsSetting consultants,
-        CommandModelsSetting commandModels,
-        CommandsSetting customCommands,
         QuestionConsultSetting questions) => new PanelSettings
         {
             Rounds = Config(env, catalog),
@@ -951,16 +868,10 @@ public sealed record PanelSettings
                 .. catalog.Dropped.Select(dropped => new UnrecognisedSetting(Key.Roles, dropped)),
                 .. consultants.Complaints.Select(
                     complaint => new UnrecognisedSetting(Key.Consultants, complaint)),
-                .. commandModels.Complaints.Select(
-                    complaint => new UnrecognisedSetting(CommandModelsSetting.Key, complaint)),
-                .. customCommands.Complaints.Select(
-                    complaint => new UnrecognisedSetting(CommandsSetting.Key, complaint)),
                 .. questions.Complaints,
                 .. HomesRootProblems(env),
             ],
             QuestionConsult = questions.Settings,
-            CommandModels = commandModels.Map,
-            CustomCommands = customCommands.Commands,
             RoundTreeRoot = env("COAI_ROUND_WORKTREES") is { Length: > 0 } roundTrees
                 ? roundTrees
                 : Runners.Worktrees.WorktreeManager.MachineLocalRoot,
@@ -997,11 +908,6 @@ public sealed record PanelSettings
             DataDir = dataDir,
             AgentLogDir = env("COAI_AGENT_LOG_DIR") is { Length: > 0 } logs ? Path.GetFullPath(logs) : string.Empty,
             LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
-            Autonomous = Flag(env, "COAI_AUTONOMOUS"),
-            SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),
-            StopLocalWhenQuiet = Flag(env, "COAI_STOP_LOCAL_WHEN_QUIET"),
-            SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
-            GatePer = GateScopeOf(env(Key.GatePer) ?? string.Empty),
             // `IntVar`: a plan of zero epics is not a plan, so zero falls back rather than meaning "always".
             FeatureMinEpics = IntVar(env, "COAI_FEATURE_MIN_EPICS", Core.Feature.FeatureGate.DefaultMinEpics),
             // Zero is the meaningful value here — single-turn — and the ceiling is a decision, so neither
@@ -1019,9 +925,6 @@ public sealed record PanelSettings
                 IntVar(env, "COAI_LOCAL_MAX_TOKENS", 0),
                 IntVar(env, "COAI_FEATURE_API_REVIEW_MINUTES", 0)),
             CodeWorkspace = WorkspaceOf(env(Key.Workspace)),
-            DealPlanLenses = Flag(env, "COAI_DEAL_PLAN") || Flag(env, "COAI_ROTATE_PROMPTS"),
-            DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
-            PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
         }.WithProvidersFrom(env);
 
     /// <summary>Where a code reviewer runs, or the checkout when this build does not know the name.</summary>
@@ -1076,8 +979,6 @@ public sealed record PanelSettings
 
         internal const string Consultants = "COAI_CONSULTANTS";
 
-        internal const string GatePer = "COAI_GATE_PER";
-
     }
 
     /// <summary>Every setting whose VALUE this build could not use, as one sentence each.</summary>
@@ -1091,7 +992,7 @@ public sealed record PanelSettings
     /// </remarks>
     private static IReadOnlyList<UnrecognisedSetting> UnknownValues(
         Func<string, string?> env, RolesSetting roles) =>
-        [.. WhyBackoff(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyRoles(roles), .. WhyFollowUps(env)];
+        [.. WhyBackoff(env), .. WhyWorkspace(env), .. WhyRoles(roles), .. WhyFollowUps(env)];
 
     /// <summary>
     /// <c>COAI_FEATURE_SOURCE_FOLLOWUPS</c> as a count of follow-up turns: an integer in
@@ -1111,27 +1012,6 @@ public sealed record PanelSettings
               + $"a feature reviewer gets {Core.Feature.SourceBudget.DefaultFollowUps}, as it does by default. "
               + $"The values are the integers 0 to {Core.Feature.SourceBudget.MaxFollowUps}; 0 switches the follow-ups off.")]
             : [];
-
-    private static IReadOnlyList<UnrecognisedSetting> WhyGatePer(Func<string, string?> env) =>
-        env(Key.GatePer) is { Length: > 0 } scope && !AGateScopeWeKnow(scope)
-            ? [new UnrecognisedSetting(
-                Key.GatePer,
-                $"{Key.GatePer} is '{scope}', which this server does not know — split work is gated "
-              + "once per epic, as it is by default. The values are 'epic' and 'task'.")]
-            : [];
-
-    private static bool AGateScopeWeKnow(string value) =>
-        string.Equals(value.Trim(), "epic", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value.Trim(), "task", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// <c>COAI_GATE_PER</c> as a scope: <c>task</c> is one gate for the whole task, anything else is
-    /// per epic — an unknown word is said by <see cref="WhyGatePer"/> (issue #131).
-    /// </summary>
-    private static Core.Commands.GateScope GateScopeOf(string value) =>
-        string.Equals(value.Trim(), "task", StringComparison.OrdinalIgnoreCase)
-            ? Core.Commands.GateScope.Task
-            : Core.Commands.GateScope.Epic;
 
     private static IReadOnlyList<UnrecognisedSetting> WhyBackoff(Func<string, string?> env) =>
         env(Key.Backoff) is { Length: > 0 } backoff
@@ -1171,35 +1051,6 @@ public sealed record PanelSettings
               + "roles it shipped with, and nothing you added is in this round. The form is an "
               + """array of rows: [{"id":"Requirements","name":"...","stage":"result","prompts":[…]}].""")]
             : [];
-
-    /// <summary>
-    /// <c>{"Architecture":["architecture","arch-boundaries"],...}</c> — the panel's per-round
-    /// choice. Malformed JSON is no choice at all rather than a half-applied one.
-    /// </summary>
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ParsePromptRounds(string? json)
-    {
-        if (json is not { Length: > 0 })
-        {
-            return new Dictionary<string, IReadOnlyList<string>>();
-        }
-
-        try
-        {
-            var parsed = System.Text.Json.JsonSerializer.Deserialize(
-                json, SettingsJsonContext.Default.DictionaryStringListString);
-            // `{"Architecture": null}` is valid JSON and would put a NULL list in the map, which
-            // the round then dereferences. Found by the gate reviewing this very commit: a
-            // hand-edited settings file could crash every round with no useful message.
-            return parsed?
-                       .Where(e => e.Value is not null)
-                       .ToDictionary(e => e.Key, e => (IReadOnlyList<string>)e.Value)
-                   ?? new Dictionary<string, IReadOnlyList<string>>();
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return new Dictionary<string, IReadOnlyList<string>>();
-        }
-    }
 
     /// <summary>Whether the text is a JSON array with nothing in it — said, not malformed and not absent.</summary>
     private static bool IsEmptyList(string json)

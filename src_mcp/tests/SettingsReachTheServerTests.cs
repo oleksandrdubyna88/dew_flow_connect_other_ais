@@ -54,9 +54,7 @@ public sealed class SettingsReachTheServerTests : IDisposable
             ("COAI_GATE_THRESHOLD", "1"),
             ("COAI_MAX_CONCURRENCY", "7"),
             ("COAI_MAX_PER_PROVIDER", "4"),
-            ("COAI_REVIEWER_TIMEOUT_MINUTES", "12"),
-            ("COAI_ROTATE_PROMPTS", "true"),
-            ("COAI_PROMPTS_PER_ROUND", """{"SecurityReliability":["sec-attack","sec-memory-leaks"]}"""));
+            ("COAI_REVIEWER_TIMEOUT_MINUTES", "12"));
 
         var s = host.Current.Settings;
 
@@ -68,25 +66,25 @@ public sealed class SettingsReachTheServerTests : IDisposable
         s.GlobalConcurrency.Should().Be(7);
         s.PerProviderConcurrency.Should().Be(4);
         s.ReviewerTimeout.Should().Be(TimeSpan.FromMinutes(12));
-        s.DealPlanLenses.Should().BeTrue("the legacy rotate flag still turns dealing on");
-        s.PromptsPerRound["SecurityReliability"].Should().Equal("sec-attack", "sec-memory-leaks");
     }
 
     [Fact]
-    public void APromptChosenInThePanel_IsThePromptTheNextRoundRuns()
+    public void AnOldPromptPickerSetting_ChangesNothing_AndCostsNoNotice()
     {
-        // The setting is only real if it reaches the decision. This asserts the value AND what the
-        // round does with it, which is the question a person is actually asking.
+        // v2: one prompt per role. The extension of an older build may still write the picker and the dealing flags; the
+        // server reads none of them, so a round runs the role's general prompt and nothing is said about a setting it never read.
         var host = Host();
         host.Current.Should().NotBeNull();
 
-        PanelWrites(("COAI_PROMPTS_PER_ROUND", """{"Architecture":["arch-evolution"]}"""));
+        PanelWrites(
+            ("COAI_PROMPTS_PER_ROUND", """{"Architecture":["arch-evolution"]}"""),
+            ("COAI_ROTATE_PROMPTS", "true"),
+            ("COAI_DEAL_PLAN", "true"));
 
         var settings = host.Current.Settings;
-        RoleCatalog.Builtin.ForRound(
-            RoleCatalog.ArchitectureRole, 1,
-            settings.PromptsPerRound.GetValueOrDefault(RoleCatalog.ArchitectureRole, []))
-            .Id.Should().Be("arch-evolution");
+        RoleCatalog.Builtin.ForRound(RoleCatalog.ArchitectureRole, 1, [])
+            .Id.Should().Be(RoleCatalog.Builtin.UniversalFor(RoleCatalog.ArchitectureRole).Id);
+        settings.Unrecognised.Should().BeEmpty();
     }
 
     [Fact]

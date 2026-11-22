@@ -206,12 +206,6 @@ public sealed record ReviewAnswer(
     string Instruction,
     RoundCost? Cost = null,
     /// <summary>
-    /// What the operator's switches tell the caller to do, and the sentence that says they must be
-    /// followed. Empty when no switch is on, which is every release before this one.
-    /// </summary>
-    IReadOnlyList<string>? Commands = null,
-    string? CommandsPreamble = null,
-    /// <summary>
     /// Each reviewer's prose about the whole artefact, when its prompt asked for one — the SUMMARY.
     /// </summary>
     /// <remarks>
@@ -221,12 +215,6 @@ public sealed record ReviewAnswer(
     /// destroys the only property that makes reading them worth the tokens.
     /// </remarks>
     IReadOnlyList<ReviewerNote>? Notes = null,
-    /// <summary>
-    /// The custom commands a person switched on that could not be given, each with why — today only "it
-    /// has no text", naming the file to write (issue #467). Null when there is nothing to say, like
-    /// <see cref="Notes"/>: an empty list in every reply teaches a reader to stop seeing the field.
-    /// </summary>
-    IReadOnlyList<string>? CommandsSkipped = null,
     /// <summary>
     /// A feature review's round-1 findings and what was decided about them, on its second round's verdict
     /// (D23): decided already, carried as they were resolved, not to be decided again. Null on every other

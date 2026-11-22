@@ -1,6 +1,5 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
-using CoaiMcp.Core.Commands;
 using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Core.Rounds;
@@ -12,7 +11,6 @@ namespace CoaiMcp.Core.Rounds;
 /// <param name="Bucket">Which roles review it: the ONE bridge to the string a role is persisted with.</param>
 /// <param name="Phrase">The stage as a person would say it ("plan review"), for a notice or a log line.</param>
 /// <param name="Kind">The adjective in "every code-review role": one word inside a refusal.</param>
-/// <param name="Commands">Which of a person's custom commands a round of this stage is given.</param>
 /// <param name="AdvancesTo">Where <c>resolve</c> moves the session once a round of this stage passed.</param>
 /// <param name="CompletedSentence">What <c>resolve</c> says at that moment — the caller's next move.</param>
 /// <param name="ReviseInstruction">
@@ -46,7 +44,6 @@ public sealed record StageDescriptor(
     RoleBucket Bucket,
     string Phrase,
     string Kind,
-    CommandStage Commands,
     Stage AdvancesTo,
     string CompletedSentence,
     string ReviseInstruction,
@@ -68,28 +65,28 @@ public static class Stages
     /// </summary>
     public static readonly ImmutableArray<StageDescriptor> All =
     [
-        new(Stage.PlanReview, RoleBuckets.PlanCode, "plan review", "plan", CommandStage.Plan,
+        new(Stage.PlanReview, RoleBuckets.PlanCode, "plan review", "plan",
             AdvancesTo: Stage.CodeReview,
             CompletedSentence: "The plan stage is complete. Implement the plan on the branch, then call review_code.",
             ReviseInstruction: RunThisReviewAgain,
             RecordsSha: false,
             Answers: SchemaShape.Finding,
             Reads: ReaderMaterial.Change),
-        new(Stage.CodeReview, RoleBuckets.ResultCode, "code review", "code", CommandStage.Code,
+        new(Stage.CodeReview, RoleBuckets.ResultCode, "code review", "code",
             AdvancesTo: Stage.Done,
             CompletedSentence: "The code stage is complete. This session is done.",
             ReviseInstruction: RunThisReviewAgain,
             RecordsSha: true,
             Answers: SchemaShape.Finding,
             Reads: ReaderMaterial.Change),
-        new(Stage.Done, RoleBuckets.PlanCode, "done", "code", CommandStage.Any,
+        new(Stage.Done, RoleBuckets.PlanCode, "done", "code",
             AdvancesTo: Stage.Done,
             CompletedSentence: string.Empty,
             ReviseInstruction: RunThisReviewAgain,
             RecordsSha: false,
             Answers: SchemaShape.Finding,
             Reads: ReaderMaterial.Change),
-        new(Stage.DocumentReview, RoleBuckets.ResultDocument, "document review", "document", CommandStage.Any,
+        new(Stage.DocumentReview, RoleBuckets.ResultDocument, "document review", "document",
             AdvancesTo: Stage.Done,
             CompletedSentence: "The document stage is complete. This review is done.",
             ReviseInstruction: RunThisReviewAgain,
@@ -99,7 +96,7 @@ public static class Stages
         // The fourth stage (S2.1 of the feature-review plan). Its fixes land ELSEWHERE — the epics
         // have merged, so a fix is a new pull request — and the review runs again over the head those
         // pull requests moved, which is why it records the head it read: `again` compares against it.
-        new(Stage.FeatureReview, RoleBuckets.FeatureCode, "feature review", "feature", CommandStage.Any,
+        new(Stage.FeatureReview, RoleBuckets.FeatureCode, "feature review", "feature",
             AdvancesTo: Stage.Done,
             CompletedSentence: "The feature stage is complete. This review is done.",
             ReviseInstruction: "fix the accepted ones as new pull requests, then run this review again with the new head",

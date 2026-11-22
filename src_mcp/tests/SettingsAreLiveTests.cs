@@ -53,102 +53,45 @@ public sealed class SettingsAreLiveTests : IDisposable
     }
 
     [Fact]
-    public void ASwitchTickedASecondAgo_GovernsTheNextCall()
+    public void ASettingChangedASecondAgo_GovernsTheNextCall()
     {
-        Write("""{ "COAI_AUTONOMOUS": "false" }""");
+        Write("""{ "COAI_CONSULT_TURNS": "3" }""");
         var host = Host();
 
-        host.Current.Settings.Autonomous.Should().BeFalse();
+        host.Current.Settings.ConsultTurns.Should().Be(3);
 
         // A second later, because that is the operator's own example — and because the stamp is the
         // file's write time and length, which a same-second rewrite of the same length would not
         // change. One second is longer than any editor takes to save.
         Thread.Sleep(1100);
-        Write("""{ "COAI_AUTONOMOUS": "true" }""");
+        Write("""{ "COAI_CONSULT_TURNS": "4" }""");
 
-        host.Current.Settings.Autonomous.Should().BeTrue("the next call reads the file, not the memory of it");
+        host.Current.Settings.ConsultTurns.Should().Be(4, "the next call reads the file, not the memory of it");
     }
 
     [Fact]
-    public void HowOftenSplitWorkIsGated_IsLive()
+    public void ASwitchTickedASecondAgo_GovernsTheNextCall_AndSwitchingItBackOffIsLiveToo()
     {
-        // Issue #131: choosing one gate for the whole task must govern the NEXT round.
-        Write("{}");
+        // The direction nobody tests: a reload that only ever adds is a reload that cannot take anything away.
+        Write("""{ "COAI_CONSULT_ENABLED": "false" }""");
         var host = Host();
-        host.Current.Settings.GatePer.Should().Be(Core.Commands.GateScope.Epic);
-
-        Thread.Sleep(1100);
-        Write("""{ "COAI_GATE_PER": "task" }""");
-
-        host.Current.Settings.GatePer.Should().Be(Core.Commands.GateScope.Task);
-    }
-
-    [Fact]
-    public void AGateScopeThisServerDoesNotKnow_IsSaidAndFallsBackToPerEpic()
-    {
-        var settings = PanelSettings.FromEnvironment(key => key == "COAI_GATE_PER" ? "per-story" : null);
-
-        settings.GatePer.Should().Be(Core.Commands.GateScope.Epic);
-        settings.UnrecognisedSettings.Should().ContainSingle(u => u.Key == "COAI_GATE_PER")
-            .Which.Sentence.Should().Contain("'epic' and 'task'");
-    }
-
-    [Fact]
-    public void TheModelsTheSplitOrderNames_AreLive()
-    {
-        // Issue #117: typing a model into the panel's box must govern the NEXT round, the way the
-        // three switches beside it already do.
-        Write("{}");
-        var host = Host();
-        host.Current.Settings.CommandModels.Should().BeEmpty();
-
-        Thread.Sleep(1100);
-        Write("""{ "COAI_COMMAND_MODELS": "{\"codex\":{\"strongest\":\"gpt-6-astra\"}}" }""");
-
-        host.Current.Settings.CommandModels.Should().ContainKey("codex")
-            .WhoseValue.Strongest.Should().Be("gpt-6-astra");
-    }
-
-    [Fact]
-    public void EveryOneOfTheThreeSwitches_IsLive()
-    {
-        Write("{}");
-        var host = Host();
-        host.Current.Settings.SplitPlan.Should().BeFalse();
-        host.Current.Settings.SplitWithFable.Should().BeFalse();
-
-        Thread.Sleep(1100);
-        Write("""{ "COAI_SPLIT_PLAN": "true", "COAI_SPLIT_WITH_FABLE": "true" }""");
-
-        var now = host.Current.Settings;
-        now.SplitPlan.Should().BeTrue();
-        now.SplitWithFable.Should().BeTrue();
-    }
-
-    [Fact]
-    public void SwitchingOneBackOff_IsAlsoLive()
-    {
-        // The direction nobody tests, and the one that matters when somebody wants the orders to
-        // STOP: a reload that only ever adds is a reload that cannot take anything away.
-        Write("""{ "COAI_AUTONOMOUS": "true" }""");
-        var host = Host();
-        host.Current.Settings.Autonomous.Should().BeTrue();
+        host.Current.Settings.ConsultEnabled.Should().BeFalse();
 
         Thread.Sleep(1100);
         Write("{}");
 
-        host.Current.Settings.Autonomous.Should().BeFalse();
+        host.Current.Settings.ConsultEnabled.Should().BeTrue("a key removed from the file is the default again");
     }
 
     [Fact]
     public void NoFileAtAll_IsTheDefaults_AndCreatingOneCounts()
     {
         var host = Host();
-        host.Current.Settings.Autonomous.Should().BeFalse("nothing is switched on until somebody switches it");
+        host.Current.Settings.ConsultTurns.Should().Be(5, "nothing is changed until somebody changes it");
 
         Thread.Sleep(1100);
-        Write("""{ "COAI_AUTONOMOUS": "true" }""");
+        Write("""{ "COAI_CONSULT_TURNS": "2" }""");
 
-        host.Current.Settings.Autonomous.Should().BeTrue("a file that did not exist and now does is a change");
+        host.Current.Settings.ConsultTurns.Should().Be(2, "a file that did not exist and now does is a change");
     }
 }

@@ -34,7 +34,6 @@ public sealed class PanelService
 
     private readonly ContextAssembler _context;
     private readonly RosterBuilder _roster;
-    private readonly RoundCommands _commands;
     private readonly RoundEngine _engine;
     private readonly FeatureStage _feature;
     private readonly Store.Projection _projection;
@@ -96,7 +95,6 @@ public sealed class PanelService
             problem => _log.Warning("evidence: {Problem}", problem));
         var prompts = new RolePrompts(settings.DataDir);
         var ledger = new UsageLedger(settings.DataDir);
-        var callers = new CallerSessions(settings.DataDir);
         _projection = new Store.Projection(settings.DataDir, log);
         _consultations = new ConsultationService(
             settings, launcher, executor, _context, prompts, ledger, log,
@@ -114,14 +112,11 @@ public sealed class PanelService
         _roster = new RosterBuilder(
             settings, keys, prompts, new ReviewerPrompt(prompts), _remote, CanRun, RuntimeFor, () => PruneOldAnswerDirs(settings.ConsultantHomesRoot, log), log);
 
-        // The orders a round carries, read by the engine for its reply and
-        // code round; and the engine every stage runs through. The engine is handed what only this service
-        // can say — who a stage excludes, and the sentence for a round nobody could serve — and holds no
-        // reference back.
-        _commands = new RoundCommands(settings, prompts, log);
+        // The engine every stage runs through. It is handed what only this service can say — who a stage excludes, and
+        // the sentence for a round nobody could serve — and holds no reference back.
         _engine = new RoundEngine(
-            settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, ledger,
-            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
+            settings, log, noticing, _store, _worktrees, scheduler, executor, ledger,
+            _projection, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
         // The fourth gate, in a file of its own (S2.2b): its inputs, its refs and its pack, over the same
         // engine. The outliner is the in-process tree-sitter one the pack is measured with.
         _feature = new FeatureStage(settings, launcher, _engine, _roster, new Normalizer.TreeSitterOutliner(), log, noticing);
@@ -684,8 +679,6 @@ public sealed class PanelService
                         round,
                         stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
-                        planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
-                        deal: _settings.DealPlanLenses,
                         codexTiers: tiers,
                         // The round's own scratch (D17's homes); a plan round mounts no checkout, so no snapshot.
                         scratch: await _roster.ScratchAsync(_launcher, Stage.PlanReview, workingDir, readsCheckout: false, roundToken))).WithUnreviewed(plan.Unreviewed);
@@ -847,7 +840,7 @@ public sealed class PanelService
                     _roster.BuildWork(roles, workingDir, context, round,
                         stage: Stage.CodeReview, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
-                        deal: _settings.DealCodeLenses, securityFiles: collected.Files, securitySources: securitySources,
+                        securityFiles: collected.Files, securitySources: securitySources,
                         codexTiers: tiers,
                         // The round's own scratch: D17's homes, and D6's sanitised snapshot of the pinned tree for a runtime
                         // that must not start in the checkout — made here, once, because BuildWork cannot await.
@@ -1237,52 +1230,6 @@ public sealed class PanelService
         $"## What this document is for\n\n{purposeText}\n\n"
         + RulesText.Section(rules, rules.TierCoverage(StageRules.Document))
         + $"## The document under review — {document.Name}\n\n{document.Text}";
-
-    /// <summary>
-    /// The plan lenses this session has not spent yet, one for each vendor that can run.
-    /// </summary>
-    /// <remarks>
-    /// <para>The plan role has a universal prompt and two narrow lenses. A round deals one to each
-    /// vendor, so two vendors cover the pool in two rounds — instead of both being asked the
-    /// universal question while the two lenses go unasked, which is what handing every vendor the
-    /// same prompt did.</para>
-    /// <para>When the pool is empty the whole list comes back: a fourth round asks the universal
-    /// question again rather than nothing at all.</para>
-    /// </remarks>
-    private IReadOnlyList<string> UnspentPlanLenses(PersistedSession session, IReadOnlyList<string> roles)
-    {
-        // Every role in the round contributes, and the pool was read from the shipped plan role
-        // alone — which was the whole plan stage until a person could add a second role to it. With
-        // dealing switched on, every question in the hand then belonged to PlanCritique, so a round
-        // configured for two plan roles asked one of them twice and the other nothing.
-        //
-        // One lens each first, so no role is starved by the take below; then the first role tops the
-        // hand up to one question per vendor, which is what the take has always been for.
-        var hand = new List<string>();
-        foreach (var role in roles)
-        {
-            if (Pool(session, role) is [var first, ..])
-            {
-                hand.Add(first);
-            }
-        }
-
-        var vendors = Math.Max(_settings.Providers.Count(p => p.Enabled), 1);
-
-        return [.. hand, .. roles.Count > 0 ? Pool(session, roles[0]).Skip(1).Take(Math.Max(vendors - hand.Count, 0)) : []];
-    }
-
-    /// <summary>One role's lenses, the unspent ones first and its general prompt first of those.</summary>
-    private IReadOnlyList<string> Pool(PersistedSession session, string role)
-    {
-        var all = _settings.Rounds.Catalog.For(role)
-            .OrderByDescending(p => p.Universal)
-            .Select(p => p.Id)
-            .ToList();
-        var unspent = all.Where(id => !session.UsedPrompts.Contains(id)).ToList();
-
-        return unspent.Count > 0 ? unspent : all;
-    }
 
     /// <summary>
     /// A seed that is the same on every replay of one round, and different for the next.

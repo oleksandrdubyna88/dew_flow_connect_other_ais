@@ -95,7 +95,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
         foreach (var seed in Enumerable.Range(0, 10))
         {
             var work = service.Roster.BuildWork(
-                ["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, seed: seed, deal: true, codexTiers: CodexTiers.None);
+                ["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, seed: seed, codexTiers: CodexTiers.None);
 
             work.Reviewers.Should().ContainSingle($"seed {seed}: some vendor here can run this role")
                 .Which.Invocation.Provider.Should().Be("local");
@@ -270,14 +270,14 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
     /// (gemini, this story's code round.)
     /// </remarks>
     [Fact]
-    public void OneRoleIsExcludedOnce_HoweverManyLensesItWouldHaveBeenDealt()
+    public void OneRoleIsExcludedOnce_HoweverManyPromptsItHas()
     {
         Prompt("req-general", "Whether the requirement is met.");
         Prompt("req-gaps", "What the requirement does not say.");
 
         var work = Service(With("req-general", "req-gaps"), withTeamServer: true).Roster.BuildWork(
             ["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true,
-            planPrompts: ["req-general", "req-gaps"], codexTiers: CodexTiers.None);
+            codexTiers: CodexTiers.None);
 
         work.Excluded.Should().ContainSingle().Which.Role.Should().Be("Requirements");
     }

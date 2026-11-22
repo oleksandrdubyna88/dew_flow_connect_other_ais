@@ -28,10 +28,8 @@ internal sealed class RoundEngine(
     WorktreeManager worktrees,
     BoundedScheduler scheduler,
     ReviewerExecutor executor,
-    RoundCommands commands,
     UsageLedger ledger,
     Store.Projection projection,
-    CallerSessions callers,
     RemoteProbe remote,
     RoundAuthorsStep authors,
     Func<Stage, IReadOnlyList<string>> excludedFrom,
@@ -47,10 +45,8 @@ internal sealed class RoundEngine(
     private readonly ReviewerExecutor _executor = executor;
     private readonly UsageLedger _ledger = ledger;
     private readonly Store.Projection _projection = projection;
-    private readonly CallerSessions _callers = callers;
     private readonly RemoteProbe _remote = remote;
     private readonly RoundAuthorsStep _authors = authors;
-    private readonly RoundCommands _commands = commands;
     private readonly Func<Stage, IReadOnlyList<string>> _excludedFrom = excludedFrom;
     private readonly Func<Stage, RoundWork, string> _noReviewerRefusal = noReviewerRefusal;
     private readonly CancellationToken _hostStopping = hostStopping;
@@ -342,8 +338,8 @@ internal sealed class RoundEngine(
                         EndCauseOf(finished, cancellation, progress.LandedAt));
                 }
             },
-            // Issue #485: with the switch on, the local reviewer stands down once the cloud was quiet.
-            _settings.StopLocalWhenQuiet ? StandDown.For(work) : null,
+            // The operator's stop-local-when-quiet switch is gone in v2: no stand-down.
+            null,
             PlanIncomplete.Settler(stage.Stage, planText));
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
             //
@@ -414,61 +410,7 @@ internal sealed class RoundEngine(
             // Who wrote what this round reviewed: computed HERE, before the save below and before the projection opens the database, and
             // never part of the `with` above (its initializer cannot name the record it is building). Null for a round that is not settled.
             record = record with { Authors = _authors.For(session, record) };
-            // The operator's own switches, read for THIS call: the settings file is stamped and
-            // reloaded per tool call, so a box ticked a second ago governs this round.
-            var caller = RoundCommands.CallerFor(session);
-            var callerKind = CallerIdentity.KindFrom(Environment.GetEnvironmentVariable);
-            var provisional = new Core.Commands.CommandContext(
-                Autonomous: _settings.Autonomous,
-                SplitPlan: _settings.SplitPlan,
-                SplitWithFable: _settings.SplitWithFable,
-                // The plan THIS round reviewed, not the one the session remembers. `session` was
-                // loaded before the round and its PlanText is the PREVIOUS round's — empty on the
-                // first plan round, which is the ordinary case — so every verdict was computed
-                // from nothing and every plan came back "small enough to build as it stands".
-                // Found end-to-end by SplitOrderTests: "Measured from the plan you sent: 0 lines,
-                // 0 build step(s), 0 file(s) named" for a plan of four hundred.
-                PlanText: planText,
-                // A plan that did NOT pass is not a plan to go and build: with the switch on, a
-                // `revise` or a `call_human` verdict was still telling the caller to split it into
-                // stories and start committing. The order to build follows permission to build.
-                PlanStage: session.State.Stage == Stage.PlanReview && RoundCommands.MayProceed(completed.Verdict),
-                // Once per CALLER, not once per session: the epics a split produces come back as
-                // their own sessions on their own branches, so a per-session memory would order
-                // every one of them to split again — epics of epics, with no floor.
-                FirstPlanRound: true)
-            {
-                // The CALLER carries the model order out, so it names the caller's own models: the
-                // kind comes from the vendor's session variable — the same answer the consultant is
-                // chosen by — and the pair from the panel (issue #117). A client nobody can identify
-                // is `other`, and is named no model rather than another vendor's.
-                Models = Core.Commands.CommandModels.For(_settings.CommandModels, callerKind),
-                // Once per epic or once for the task, never per story (issue #131).
-                GatePer = _settings.GatePer,
-                // The words of the orders, read for THIS call like the switches: a file a person saved
-                // a second ago rewords this round's order (issue #467).
-                Texts = _commands.CommandTextsNow(),
-            };
-            // The caller's one order is CLAIMED, and only on a round that would actually give it —
-            // a claim taken on a code round would spend it on a round that issues nothing. The
-            // product's own predicate asks the question, so the condition cannot drift from what
-            // `For` then does with it.
-            var context = Core.Commands.GateCommands.OrdersSplit(provisional)
-                ? provisional with
-                {
-                    FirstPlanRound = _callers.TryClaimSplitOrder(
-                        caller, DateTime.UtcNow, message => _log.Warning("{Message}", message)),
-                }
-                : provisional;
-            // The person's own commands come AFTER the built-in orders, which keep the positions every
-            // caller and the bench already read them at (issue #467).
-            var custom = _commands.CustomOrdersFor(stage.Stage, context.Texts);
-            var commands = (IReadOnlyList<string>)[.. Core.Commands.GateCommands.For(context), .. custom.Orders];
-            if (Core.Commands.GateCommands.OrdersSplit(context))
-            {
-                _log.Information(
-                    "split ordered to caller {Caller} ({CallerKind}); {Models}", caller, callerKind, RoundCommands.ModelsInLog(context));
-            }
+            var caller = RoundCaller.For(session);
             // Built HERE because this is the only place that holds both a reviewer's answer and the
             // invocation that produced it, which is the same reason the ROLE is stamped on a finding
             // twenty lines up. A note with no name on it is three accounts in a heap.
@@ -483,12 +425,9 @@ internal sealed class RoundEngine(
             answer = answer with
             {
                 Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd),
-                Commands = commands.Count == 0 ? null : commands,
-                CommandsPreamble = commands.Count == 0 ? null : Core.Commands.GateCommands.PreambleFor(context),
                 // Absent rather than empty when nobody wrote one, which is every code round: an
                 // empty list in every reply would teach a reader to stop seeing the field.
                 Notes = notes.Count == 0 ? null : notes,
-                CommandsSkipped = custom.Skipped.Count == 0 ? null : custom.Skipped,
             };
             // REQUIRED, and the previous attempt at this was worse than the bug it fixed. Making it
             // best-effort stopped the round dying and started it LYING: the caller was handed
@@ -531,10 +470,6 @@ internal sealed class RoundEngine(
                         // From the work, because the stage that assembled the diff is the only thing
                         // that resolved it. A plan round assembles none and leaves this empty.
                         BaseRef = roundWork.BaseRef,
-                        // What this round ORDERED, and the size a split order was computed from —
-                        // written down so "why five epics?" has an answer (issue #131).
-                        Commands = [.. commands],
-                        PlanShape = Core.Commands.GateCommands.ShapeOrdered(context),
                     });
                 recorded = true;
 

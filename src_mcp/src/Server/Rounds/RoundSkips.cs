@@ -77,7 +77,7 @@ internal sealed class RoundSkips(
         // Best-effort, as every projection is; `head_sha` comes from the context because that is the
         // column the log reads, and the skip is the one round whose record and context name the same commit.
         projection.Write(db => db.RecordRound(
-            loaded.State, record, [], new Store.RoundContext(planText, sha, RoundCommands.CallerFor(loaded))));
+            loaded.State, record, [], new Store.RoundContext(planText, sha, RoundCaller.For(loaded))));
 
         var answer = new ReviewAnswer(
             RoundRecord.Skipped, 0, settings.Rounds.For(loaded.State.Stage).Threshold, reason, [], [], [],

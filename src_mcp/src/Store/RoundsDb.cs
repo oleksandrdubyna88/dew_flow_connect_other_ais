@@ -907,11 +907,10 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$client", calledBy.Client);
         Bind(write, "$clientVersion", calledBy.ClientVersion);
         Bind(write, "$model", calledBy.Model);
-        // What the round ORDERED (issue #131). `[]` for a round that gave none — the empty string is
-        // the column's default and means a round recorded before this was written down at all.
-        Bind(write, "$commands", JsonSerializer.Serialize(
-            [.. context.Commands.IsDefault ? [] : context.Commands], Server.ServerJsonContext.Default.ListString));
-        Bind(write, "$planShape", context.PlanShape ?? string.Empty);
+        // Operator orders are gone in v2: a round orders nothing. The columns stay (a schema step is never undone), written as
+        // a round that gave none writes them — `[]` and empty.
+        Bind(write, "$commands", "[]");
+        Bind(write, "$planShape", string.Empty);
         // The cadence is gone in v2; the columns stay (a schema step is never undone) and are written empty.
         Bind(write, "$planKey", string.Empty);
         Bind(write, "$epicNumber", 0);

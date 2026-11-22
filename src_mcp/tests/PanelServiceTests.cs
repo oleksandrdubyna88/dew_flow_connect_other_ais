@@ -296,66 +296,6 @@ public sealed class PanelServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// With dealing ON, a round asks every lens once instead of asking one lens twice.
-    /// </summary>
-    /// <remarks>
-    /// Opt-in, because of what it trades: with it off two vendors answer the same question and the
-    /// dedup merges what they agree on, which is the strongest signal this product produces. On, the
-    /// round costs half the launches and every lens gets used. The operator chose to have the choice.
-    /// </remarks>
-    [Fact]
-    public async Task WithDealingOn_ACodeRound_AsksEachRoleOnce_AcrossTheVendors()
-    {
-        using var record = TempDir.For("coai-deal-");
-        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
-        try
-        {
-            var service = _h.Service(deal: true);
-            await service.OpenAsync(_h.Repo, "feature");
-            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
-            await service.ResolveAsync(_h.Repo, "feature", "[]");
-            foreach (var file in Directory.GetFiles(record))
-            {
-                File.Delete(file);
-            }
-
-            await service.ReviewCodeAsync(_h.Repo, "feature", "main", Scope);
-
-            var argvs = Directory.GetFiles(record, "*.argv").Select(f => LaunchRecords.Read(f).Split((char)0)).ToList();
-            argvs.Should().HaveCount(3, "three roles dealt across two vendors, one each");
-            argvs.Select(a => a[^1]).Distinct().Should().HaveCount(3, "and no prompt asked twice");
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
-        }
-    }
-
-    [Fact]
-    public async Task WithDealingOn_ThePlanRound_SpendsADifferentLensPerVendor()
-    {
-        using var record = TempDir.For("coai-deal-plan-");
-        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
-        try
-        {
-            var service = _h.Service(deal: true);
-            await service.OpenAsync(_h.Repo, "feature");
-            await service.ReviewPlanAsync(_h.Repo, "feature", "the plan");
-
-            var prompts = Directory.GetFiles(record, "*.argv")
-                .Select(f => LaunchRecords.Read(f).Split((char)0)[^1])
-                .ToList();
-            prompts.Should().HaveCount(2, "one per vendor");
-            prompts.Distinct().Should().HaveCount(2,
-                "each vendor got a DIFFERENT lens — asking both the same one is what this replaces");
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
-        }
-    }
-
-    /// <summary>
     /// A family mount with one rule of the plan tier in it, and one rule that is not.
     /// </summary>
     private void WriteFamilyRules()

@@ -103,103 +103,13 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
     }
 
     [Fact]
-    public void ThePlanStagesLensPath_ResolvesThroughTheCatalogToo()
+    public void ACustomRole_IsAskedItsOwnGeneralPrompt_FromTheCatalog()
     {
-        // `Items` has a second branch — the plan stage dealing unspent lenses — that takes its
-        // prompt ids from the caller rather than from `ChoiceFor`, and `Add` then looks each one up.
-        // A custom role reaching one and not the other would be a round that works until somebody
-        // ticks "deal the lenses". (codex, B1's plan round.)
-        var catalog = RoleComposition.Compose([
-            new RoleEntry("Brief", Name: "The brief", Stage: RoleStages.Plan,
-                Prompts:
-                [
-                    new PromptEntry("brief-general", "General", "The whole brief."),
-                    new PromptEntry("brief-gaps", "Gaps", "What it does not say."),
-                ]),
-        ]);
-        var service = Service(catalog);
-        File.WriteAllText(Path.Combine(_dataDir, "prompts", "brief-gaps.md"), "What does it leave out?");
-
-        var work = service.Roster.BuildWork(["Brief"], Scratch(), "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            planPrompts: ["brief-gaps"], codexTiers: CodexTiers.None).Reviewers;
-
-        work.Should().ContainSingle().Which.Prompt.Should().Be("brief-gaps");
-        Handed(work[0]).Should().Contain("What does it leave out?");
-    }
-
-    /// <summary>
-    /// A dealt lens goes to the role that owns it, not to whichever role happened to be first.
-    /// </summary>
-    /// <remarks>
-    /// <c>Items</c> paired every dealt prompt with <c>roles[0]</c>, which was true for as long as a
-    /// plan round had exactly one role in it. The moment a person adds a second plan role, the first
-    /// role is asked every lens — including the ones belonging to the other role, whose text it then
-    /// reviews under its own name. (Found while fixing the hardcoded plan roster this story's code
-    /// round raised.)
-    /// </remarks>
-    [Fact]
-    public void ADealtPlanLens_GoesToTheRoleThatOwnsIt()
-    {
-        var catalog = RoleComposition.Compose([
-            new RoleEntry("Brief", Name: "The brief", Stage: RoleStages.Plan,
-                Prompts:
-                [
-                    new PromptEntry("brief-general", "General", "The whole brief."),
-                    new PromptEntry("brief-gaps", "Gaps", "What it does not say."),
-                ]),
-        ]);
-        var service = Service(catalog);
-        File.WriteAllText(Path.Combine(_dataDir, "prompts", "brief-gaps.md"), "What does it leave out?");
-
-        var work = service.Roster.BuildWork(
-            [RoleCatalog.PlanRole, "Brief"], Scratch(), "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            planPrompts: ["brief-gaps"], codexTiers: CodexTiers.None).Reviewers;
-
-        work.Should().ContainSingle().Which.Invocation.Role.Should().Be("Brief",
-            "brief-gaps is the brief role's lens, and the shipped plan role has never heard of it");
-    }
-
-    /// <summary>
-    /// A lens whose owner is not in this round is not handed to somebody else.
-    /// </summary>
-    /// <remarks>
-    /// The fallback to the round's first role is right for a lens id the catalog does not know at
-    /// all — a stale pick must not leave a round with nothing. It is wrong for a lens the catalog
-    /// knows perfectly well and assigns to a role that is switched off or out of rounds: that lens
-    /// is then answered by a different reviewer under a different name, and the round reports the
-    /// wrong role as having asked the question. (codex and gemini, story B2's second code round.)
-    /// </remarks>
-    [Fact]
-    public void ALensWhoseRoleIsNotInTheRound_IsDropped_NotReassigned()
-    {
-        var catalog = RoleComposition.Compose([
-            new RoleEntry("Brief", Name: "The brief", Stage: RoleStages.Plan,
-                Prompts:
-                [
-                    new PromptEntry("brief-general", "General", "The whole brief."),
-                    new PromptEntry("brief-gaps", "Gaps", "What it does not say."),
-                ]),
-        ]);
-        var service = Service(catalog);
-        File.WriteAllText(Path.Combine(_dataDir, "prompts", "brief-gaps.md"), "What does it leave out?");
-
-        var work = service.Roster.BuildWork(
-            [RoleCatalog.PlanRole], Scratch(), "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            planPrompts: ["brief-gaps", "plan-critique"], codexTiers: CodexTiers.None).Reviewers;
-
-        work.Should().ContainSingle().Which.Prompt.Should().Be("plan-critique",
-            "the brief's lens belongs to a role this round is not running");
-    }
-
-    [Fact]
-    public void APromptIdNobodyKnows_FallsBackToTheRolesOwnGeneralPrompt()
-    {
-        // `Add`'s second lookup: a stale pick from the settings must not leave a round with no
-        // prompt, and for a custom role the fallback has to come from the catalog rather than from
-        // a compiled list that has never heard of it.
+        // One prompt per role in v2: for a custom role it has to come from the catalog rather than
+        // from a compiled list that has never heard of it.
         var work = Service(WithRequirements()).Roster.BuildWork(
             ["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true,
-            planPrompts: ["a-prompt-that-was-deleted"], codexTiers: CodexTiers.None).Reviewers;
+            codexTiers: CodexTiers.None).Reviewers;
 
         work[0].Prompt.Should().Be("req-general", "the role's first prompt is its general one");
         Handed(work[0]).Should().Contain(TheText);

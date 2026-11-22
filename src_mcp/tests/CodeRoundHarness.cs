@@ -107,7 +107,6 @@ internal sealed class CodeRoundHarness : IAsyncLifetime
     public PanelService Service(
         int threshold = 2,
         int maxRounds = 3,
-        bool deal = false,
         IProcessLauncher? through = null,
         string workspace = "none",
         Serilog.ILogger? log = null) =>
@@ -123,8 +122,6 @@ internal sealed class CodeRoundHarness : IAsyncLifetime
                 DataDir = Data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
-                DealPlanLenses = deal,
-                DealCodeLenses = deal,
                 CodeWorkspace = workspace,
             },
             VaultKeys.None("no vault in tests"),
