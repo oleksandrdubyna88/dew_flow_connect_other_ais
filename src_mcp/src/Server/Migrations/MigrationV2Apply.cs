@@ -80,14 +80,17 @@ internal sealed partial class MigrationV2
             return Failed(apply: true, "the data folder does not exist: " + _dataDir);
         }
 
-        var (lease, busy, why) = MigrationV2Lease.Take(_dataDir);
-        if (lease is null)
+        return MigrationV2Lease.Take(_dataDir) switch
         {
-            return busy
-                ? Failed(apply: true, why, "busy")
-                : Failed(apply: true, "the data folder cannot take the migration's lease: " + why);
-        }
+            LeaseTake.Taken taken => RunLeased(taken.Lease, body),
+            LeaseTake.Busy busy => Failed(apply: true, busy.Why, "busy"),
+            LeaseTake.Unusable unusable => Failed(apply: true, "the data folder cannot take the migration's lease: " + unusable.Why),
+            _ => Failed(apply: true, "the data folder cannot take the migration's lease"),
+        };
+    }
 
+    private MigrateV2Report RunLeased(MigrationV2Lease lease, Func<MigrateV2Report> body)
+    {
         using (lease)
         {
             try

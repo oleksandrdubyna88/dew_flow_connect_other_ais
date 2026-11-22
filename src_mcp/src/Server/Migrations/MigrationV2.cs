@@ -62,6 +62,9 @@ internal sealed partial class MigrationV2
     /// </summary>
     internal Action<int>? AtBoundary { get; init; }
 
+    /// <summary>The seam of the notice history's read: every line of <c>server-notices.jsonl</c> and its archive. A test counts how often a run reads it.</summary>
+    internal Func<string, IEnumerable<string>> NoticeLines { get; init; } = ServerNotices.Lines;
+
     public static string MigrationsDir(string dataDir) => Path.Combine(dataDir, "migrations");
 
     public static string MarkerFile(string dataDir) => Path.Combine(MigrationsDir(dataDir), "v2.done");
@@ -138,6 +141,7 @@ internal sealed partial class MigrationV2
 
     private Scan Examine()
     {
+        _noticed = null; // a run reads the notice history afresh, once (MigrationV2Notices.cs)
         var scan = new Scan();
         ExamineSessions(scan);
         ExamineCards(scan);

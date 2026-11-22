@@ -27,10 +27,10 @@ internal static class HoldConversion
         };
 
     /// <summary>
-    /// The journal line for a session converted outside a migration run (<c>kind: session</c>, <c>state: done</c>, the detail naming the door). Best effort: the journal is
+    /// The journal line for a session converted outside a migration run (<c>kind: session</c>, <c>state: done</c>, the detail naming the door). Best effort — a failed append is SAID through <paramref name="said"/> and never thrown: the journal is
     /// evidence, not authority, and a folder that cannot take the line has still had its session converted.
     /// </summary>
-    public static void Journaled(string dataDir, string sessionFile, string detail)
+    public static void Journaled(string dataDir, string sessionFile, string detail, Action<string> said)
     {
         try
         {
@@ -39,7 +39,7 @@ internal static class HoldConversion
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // evidence only
+            said($"v2 migration: the journal line for {Path.GetFileName(sessionFile)} ({detail}) could not be written ({e.Message}); the session file is converted, the journal is evidence only");
         }
     }
 

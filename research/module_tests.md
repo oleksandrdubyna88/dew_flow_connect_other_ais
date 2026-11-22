@@ -6884,3 +6884,36 @@ counts the bytes it reads through `RegularFiles.Capped`. `RegularFiles` was wide
 **What cannot be proved here.** The race itself (a replacement between the old size check and the old second open) cannot be forced deterministically, and no ordinary file claims a length different from what it serves, so no test
 pretends to force it. What is proved is what it implies: the limit is applied to the bytes a read returns, whatever the stream claims (the lying stream), and the read of a real file asks no length. The macOS leg of `OpenRegular`
 (no `statx`: a descriptor that cannot seek is refused) is written but was not run on a macOS host from here; the Linux leg is `Judged`, the descriptor judgement `ReadOwned` already used.
+
+## v2 E1.S4 — the data migration's scenario harness, and the epic code gate's findings (2026-11-22)
+
+**Where it lives.** `src_mcp/tests/MigrateV2*Tests.cs` (cards, gate, mode, run, session, settings), the fixture builder `MigrateV2Data.cs`, and the frozen v1 data under
+`src_mcp/tests/fixtures/migrate-v2/{f1,f2,f3}/` — session files and escalation cards written by REAL v1 code at `c24e5141` (`HoldFromBeforeAutoFixture.RaiseAsync`), the repository path rewritten to
+`/fixture/repo` and each file named by the key it carries; `f3` is what 0.66.0 wrote, `f2` and `f1` are derived by removing members. Run: `node .agents/conventions/tools/low-priority.mjs
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests --filter-class "*MigrateV2*"` (the MTP executable, never `dotnet test`). The numbered scenarios are `v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/SPEC.md` §2, §5 and §6.
+
+| Flow | Status | Where |
+|---|---|---|
+| Held session (plan, code, document, feature; resolved and pending; F1/F2/F3) leaves its hold, advances once on `resolve` | covered | `MigrateV2SessionTests` |
+| Open card withdrawn and archived; answered and expired cards untouched; answered hold listed | covered | `MigrateV2CardTests` |
+| Removed and renamed settings keys, `settings.lock`, non-JSON `settings.json` | covered | `MigrateV2SettingsTests` |
+| Kill at every boundary, then one clean run equals one clean run; idempotence; dry run equals apply; two real processes; read-only folder; unreadable and deferred objects | covered | `MigrateV2RunTests` |
+| Convert on load; unreadable blocks the marker; path-identity store merge; durable answered-hold notices (read back); late-card sweep at every start; torn journal tail | covered | `MigrateV2GateTests` |
+| `--migrate-v2` as a one-shot: exactly one JSON object on stdout, 0/65/74/75, never 64 | covered | `MigrateV2ModeTests` (and the real binary in `MigrateV2RunTests`) |
+| The automatic first start of a v2 SERVER on real data | **not covered** | measured once by hand, on copies, in `research/RESULTS_v2_gate_core.md` §2 (the one-shot ran; the server start did not) |
+| A v1 `coai-mcp` still alive on the folder while the migration runs | **not covered** | only its after-effects are tested (a held session or a card written after the marker) |
+
+What these tests do not prove: that the real v2 binary migrates a folder whose objects are held and UNanswered or unreadable on REAL data (the live proof saw neither), and that no future v1 release writes a shape the frozen fixtures lack.
+
+### The epic code gate's findings (E1, 2026-11-22) — RED, GREEN, RED again
+
+| Test | RED against the unfixed code | Plant (RED again) |
+|---|---|---|
+| `MigrateV2GateTests.AJournalLineTheFolderCannotTake_IsReportedThroughTheCallback_AndTheConversionStillStands` (a directory where `v2.journal` belongs) | `said` was never called: the failed append was swallowed (`Expected said to contain a single item, but the collection is empty`) | the `said(...)` call replaced by a discard: red |
+| `MigrateV2GateTests.AJournalLineTheFolderCanTake_SaysNothing` | guard — green before and after | — |
+| `MigrateV2GateTests.AnApplyOverThreeAnsweredHolds_ReadsTheNoticeHistoryOnce_AndOnceMorePerNoticeItWrites_ToReadItBack` (a counting seam, `MigrationV2.NoticeLines`) | 6 reads of the history for three holds; now `1 + 3` | the read-back no longer replaces the set: red (the set never learns the write, the session stays deferred) |
+| `MigrateV2GateTests.AnApplyWhoseNoticesAreAllOnDisk_ReadsTheNoticeHistoryOnce_AndWritesNoSecondNotice` | 3 reads; now 1 | same plant |
+| `MigrateV2GateTests.ADryRunOverThreeAnsweredHolds_ReadsTheNoticeHistoryOnce` | 3 reads; now 1 | — (same set) |
+| `MigrateV2GateTests.ANoticeThatTheDiskNeverTook_IsNotInTheSet_SoTheReadBackStillRefuses` | guard — green before and after: the set is fed by a read of the file, never by the sink's "accepted" | — |
+| `MigrateV2GateTests.TakingTheLease_AnswersTaken_ThenBusyWhileHeld_ThenTakenAgainOnceReleased`, `…ADataFolderThatCannotHoldTheLeaseFolder_AnswersUnusable_NamingWhy` | a refactor to a closed hierarchy (`LeaseTake`): behaviour unchanged, so guards — the three cases are now asserted directly | `Busy` answered as a plain failure: the two real-process busy tests (`S11_*`) go red |
+| `theInventoryIsComplete.test.ts` — *the archived v1 stores travel with the data folder, and the marker, the journal and the claims stay behind* | `migrations/v1-archive/` had no inventory entry | the line removed from `DATA_TO_MOVE`: three tests red (what moves, what clashes, and this one) |

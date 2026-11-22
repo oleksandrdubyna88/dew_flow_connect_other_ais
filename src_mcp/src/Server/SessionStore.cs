@@ -564,10 +564,10 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 
             var converted = HoldConversion.Converted(fresh);
             WriteTo(file, converted);
-            HoldConversion.Journaled(dataDir, file, "on-load");
+            HoldConversion.Journaled(dataDir, file, "on-load", SaidInTheLog);
             if (converted.Rounds.Count > 0)
             {
-                HoldConversion.WriteNote(dataDir, converted.State.SessionId, converted.Rounds[^1], _ => { });
+                HoldConversion.WriteNote(dataDir, converted.State.SessionId, converted.Rounds[^1], SaidInTheLog);
             }
 
             return converted;
@@ -577,6 +577,9 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
             return HoldConversion.Converted(held);
         }
     }
+
+    /// <summary>The diagnostic of a best-effort step of the convert-on-load door: the server's own log, which is stderr and the run's file — never stdout.</summary>
+    private static void SaidInTheLog(string sentence) => Serilog.Log.Logger.Warning("{Sentence}", sentence);
 
     /// <summary>
     /// One session file by its PATH, made whole like <see cref="Load"/> — but read WITHOUT the turn, and a file that cannot be read THROWS

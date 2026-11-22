@@ -11,6 +11,7 @@ namespace CoaiMcp.Server.Migrations;
 /// <remarks>
 /// <para><b>Why before.</b> After the conversion the session is no longer held, so no later run lists the answered hold again: a kill between the conversion and the
 /// notice would lose the notice for good. Written first, a kill leaves a held session and a notice; the next run finds the notice (the card id is the key) and converts.</para>
+/// <para><b>One read of the history per run.</b> The card ids that already have a notice are read once into a set (<see cref="Noticed"/>) and every "is it written?" before a write is answered by the set; the read-back after a write reads the file again and replaces the set, so a run costs one read plus one per notice it writes.</para>
 /// <para><b>Why read back.</b> The sink answers "accepted" — the writer's queue took it — and the append itself can still be refused by the disk; the writer only logs that.
 /// The migration trusts the file: the session is converted only when the line is there, and is deferred (no marker, the next run tries again) when it is not. An answer that
 /// v2 overrides is never overridden unannounced.</para>
@@ -19,6 +20,8 @@ namespace CoaiMcp.Server.Migrations;
 internal sealed partial class MigrationV2
 {
     private readonly List<MigrateV2Notice> _written = [];
+
+    private HashSet<string>? _noticed;
 
     private static MigrateV2Notice RecordOf(MigrateV2AnsweredHold hold, SessionState state) =>
         new(ServerNoticeCodes.V2ConvertedAnsweredHold, hold.Card, state.SessionId, hold.Decision);
@@ -41,7 +44,7 @@ internal sealed partial class MigrationV2
                 continue;
             }
 
-            if (!_notice(NoticeOf(hold, state)) || !NoticeWritten(hold.Card))
+            if (!_notice(NoticeOf(hold, state)) || !ReadBack(hold.Card))
             {
                 return false;
             }
@@ -69,21 +72,38 @@ internal sealed partial class MigrationV2
         Session = state.SessionId,
     };
 
-    /// <summary>Whether a notice of the answered-hold code with this card id as its subject is already in <c>server-notices.jsonl</c> (or its archive).</summary>
-    private bool NoticeWritten(string card)
+    /// <summary>
+    /// The card ids that already have a converted-hold notice in <c>server-notices.jsonl</c> (or its archive), read ONCE per run and kept; a run that finds nothing to write
+    /// never reads the file again. Fed only by a read of the file: the sink's "accepted" never adds to it.
+    /// </summary>
+    private HashSet<string> Noticed => _noticed ??= NoticeSubjects();
+
+    private HashSet<string> NoticeSubjects()
     {
-        foreach (var line in ServerNotices.Lines(_dataDir))
+        var subjects = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var line in NoticeLines(_dataDir))
         {
-            if (line.Contains(ServerNoticeCodes.V2ConvertedAnsweredHold, StringComparison.Ordinal) && IsNoticeOf(line, card))
+            if (line.Contains(ServerNoticeCodes.V2ConvertedAnsweredHold, StringComparison.Ordinal) && SubjectOf(line) is { Length: > 0 } subject)
             {
-                return true;
+                subjects.Add(subject);
             }
         }
 
-        return false;
+        return subjects;
     }
 
-    private static bool IsNoticeOf(string line, string card)
+    private bool NoticeWritten(string card) => Noticed.Contains(card);
+
+    /// <summary>After a write: the file is read again — the sink answers "accepted", not "written" — and the set becomes what that read found.</summary>
+    private bool ReadBack(string card)
+    {
+        _noticed = NoticeSubjects();
+
+        return _noticed.Contains(card);
+    }
+
+    /// <summary>The subject of a converted-hold notice line, or empty for any other line (and for a torn one: somebody else's half-written append is not this card's notice).</summary>
+    private static string SubjectOf(string line)
     {
         try
         {
@@ -92,11 +112,13 @@ internal sealed partial class MigrationV2
 
             return root.ValueKind == JsonValueKind.Object
                 && root.TryGetProperty("code", out var code) && code.ValueEquals(ServerNoticeCodes.V2ConvertedAnsweredHold)
-                && root.TryGetProperty("subject", out var subject) && subject.ValueEquals(card);
+                && root.TryGetProperty("subject", out var subject) && subject.ValueKind == JsonValueKind.String
+                    ? subject.GetString() ?? string.Empty
+                    : string.Empty;
         }
         catch (JsonException)
         {
-            return false; // a torn line of somebody else's append is not this card's notice
+            return string.Empty;
         }
     }
 }

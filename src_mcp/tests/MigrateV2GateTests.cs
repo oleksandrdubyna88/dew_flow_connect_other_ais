@@ -407,6 +407,91 @@ public sealed class MigrateV2GateTests : IDisposable
         MigrateV2Data.Plan(dir).Notices.Should().BeEmpty("the session left its hold and the notice is in the file");
     }
 
+    // ---------- one scan of the notice history per run, not one per answered hold ----------
+
+    /// <summary>The held plan session with THREE answered cards: the fixture's own, and two copies under other ids (a card names its session, not its sibling).</summary>
+    private string FolderWithThreeAnsweredHolds()
+    {
+        var dir = FolderWithAnAnsweredHold();
+        var cards = Path.Combine(dir, "escalations");
+        foreach (var id in new[] { "bbbbbbbbbbbb", "cccccccccccc" })
+        {
+            File.WriteAllText(Path.Combine(cards, id + ".json"), File.ReadAllText(Path.Combine(cards, AnsweredCard + ".json")).Replace(AnsweredCard, id));
+            File.WriteAllText(Path.Combine(cards, id + ".answer.json"), File.ReadAllText(Path.Combine(cards, AnsweredCard + ".answer.json")).Replace(AnsweredCard, id));
+        }
+
+        return dir;
+    }
+
+    private static (MigrationV2 Migration, Func<int> Scans) CountingScans(string dir)
+    {
+        var scans = 0;
+        var migration = new MigrationV2(dir, _ => { }, MigrateV2Data.Sink(dir))
+        {
+            NoticeLines = folder =>
+            {
+                scans++;
+
+                return ServerNotices.Lines(folder);
+            },
+        };
+
+        return (migration, () => scans);
+    }
+
+    [Fact]
+    public void AnApplyOverThreeAnsweredHolds_ReadsTheNoticeHistoryOnce_AndOnceMorePerNoticeItWrites_ToReadItBack()
+    {
+        var dir = FolderWithThreeAnsweredHolds();
+        var (migration, scans) = CountingScans(dir);
+
+        var report = migration.Apply();
+
+        report.Status.Should().Be("done");
+        MigrateV2Data.NoticesOf(dir, "v2-converted-answered-hold").Select(n => n.GetProperty("subject").GetString()).Should().BeEquivalentTo(AnsweredCard, "bbbbbbbbbbbb", "cccccccccccc");
+        scans().Should().Be(1 + 3, "one read to learn what is there, then one read-back per written notice — the check before a write is answered by the set, not by the file");
+    }
+
+    [Fact]
+    public void AnApplyWhoseNoticesAreAllOnDisk_ReadsTheNoticeHistoryOnce_AndWritesNoSecondNotice()
+    {
+        var dir = FolderWithThreeAnsweredHolds();
+        MigrateV2Data.Apply(dir).Status.Should().Be("done");
+        MigrateV2Data.Plant("f3", "plan-answered", dir, cards: false); // the held session a late v1 process wrote again; the notices are already in the file
+        var (migration, scans) = CountingScans(dir);
+
+        migration.Apply();
+
+        scans().Should().Be(1, "three answered holds, three subjects already in the set");
+        MigrateV2Data.NoticesOf(dir, "v2-converted-answered-hold").Should().HaveCount(3, "no notice twice");
+    }
+
+    [Fact]
+    public void ADryRunOverThreeAnsweredHolds_ReadsTheNoticeHistoryOnce()
+    {
+        var dir = FolderWithThreeAnsweredHolds();
+        var (migration, scans) = CountingScans(dir);
+
+        var plan = migration.Plan();
+
+        plan.Notices.Should().HaveCount(3);
+        scans().Should().Be(1);
+    }
+
+    [Fact]
+    public void ANoticeThatTheDiskNeverTook_IsNotInTheSet_SoTheReadBackStillRefuses()
+    {
+        var dir = FolderWithThreeAnsweredHolds();
+        var file = MigrateV2Data.SessionFile(dir, "plan");
+        var bytes = File.ReadAllBytes(file);
+        var accepting = new MigrationV2(dir, _ => { }, _ => true) { NoticeLines = ServerNotices.Lines };
+
+        var report = accepting.Apply();
+
+        report.Status.Should().Be("partial");
+        File.ReadAllBytes(file).Should().Equal(bytes, "the set is never fed by the answer of the sink, only by what a read of the file found");
+    }
+
     // ---------- §6.3 late v1 cards ----------
 
     private static string WriteOpenCard(string dir, string id)
@@ -470,6 +555,61 @@ public sealed class MigrateV2GateTests : IDisposable
 
         start.Should().NotThrow();
         File.Exists(late).Should().BeTrue("the lease is another process's: the next start sweeps");
+    }
+
+    // ---------- the lease answers a closed set of three cases ----------
+
+    [Fact]
+    public void TakingTheLease_AnswersTaken_ThenBusyWhileHeld_ThenTakenAgainOnceReleased()
+    {
+        var dir = Folder();
+
+        var first = MigrationV2Lease.Take(dir);
+        var taken = first.Should().BeOfType<LeaseTake.Taken>().Subject;
+        var second = MigrationV2Lease.Take(dir);
+        second.Should().BeOfType<LeaseTake.Busy>().Which.Why.Should().Be(MigrationV2Lease.BusySentence);
+        taken.Lease.Dispose();
+
+        using var again = MigrationV2Lease.Take(dir).Should().BeOfType<LeaseTake.Taken>().Subject.Lease;
+        again.Should().NotBeNull("a released lease can be taken again — the kernel's hold, not a stale file");
+    }
+
+    [Fact]
+    public void ADataFolderThatCannotHoldTheLeaseFolder_AnswersUnusable_NamingWhy()
+    {
+        var dir = Folder();
+        File.WriteAllText(Path.Combine(dir, "claims"), "a file where the folder belongs");
+
+        var answer = MigrationV2Lease.Take(dir);
+
+        answer.Should().BeOfType<LeaseTake.Unusable>().Which.Why.Should().NotBeEmpty();
+    }
+
+    // ---------- a journal line that could not be written is said, not swallowed ----------
+
+    [Fact]
+    public void AJournalLineTheFolderCannotTake_IsReportedThroughTheCallback_AndTheConversionStillStands()
+    {
+        var (dir, file, state) = MigratedFolderWithALateHold();
+        Directory.CreateDirectory(MigrationV2.JournalFile(dir)); // a directory where the journal file belongs: the append is refused
+        var said = new List<string>();
+
+        HoldConversion.Journaled(dir, file, "on-load", said.Add);
+
+        said.Should().ContainSingle().Which.Should().Contain("journal").And.Contain(Path.GetFileName(file), "the sentence names what was not written down");
+        LegacyHold.Stands(state).Should().BeTrue("this test only drives the journal door; the session file is untouched here");
+    }
+
+    [Fact]
+    public void AJournalLineTheFolderCanTake_SaysNothing()
+    {
+        var (dir, file, _) = MigratedFolderWithALateHold();
+        var said = new List<string>();
+
+        HoldConversion.Journaled(dir, file, "on-load", said.Add);
+
+        said.Should().BeEmpty();
+        MigrationV2Journal.Read(MigrationV2.JournalFile(dir)).Should().Contain(l => l.Detail == "on-load");
     }
 
     // ---------- §5.5 a torn journal tail ----------
