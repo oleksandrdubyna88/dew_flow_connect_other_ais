@@ -7,7 +7,7 @@
       "entry": "shell/entry.ts",
       "out": "dist/extension.js",
       "budgetBytes": 16384,
-      "firewall": { "inputs": ["shell/entry.ts", "shell/lazy.ts", "shell/ids.ts"], "imports": ["vscode", "node:path", "path"] }
+      "firewall": { "inputs": ["shell/entry.ts", "shell/lazy.ts", "shell/ids.ts", "shell/measure.ts"], "imports": ["vscode", "node:path", "path"] }
     },
     {
       "id": "legacy",

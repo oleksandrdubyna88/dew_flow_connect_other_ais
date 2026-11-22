@@ -4,10 +4,15 @@
 import * as vscode from 'vscode';
 import { activate as activateOldCode, deactivate as deactivateOldCode, type CoaiExports } from '../../src/extension';
 import { adoptRegistrationsFor } from '../../src/shellBridge';
+import { recordMarksWith } from '../../src/measureMarks';
 import { COMMANDS, PANEL_CHAT, VIEW_PANEL } from '../ids';
 import type { ShellModule } from '../lazy';
+import { mark } from '../measure';
 
 type Handler = (...args: unknown[]) => unknown;
+
+// The old code names two cold-start moments (the sidebar's `ready`, its first data); the shell's marks record them.
+recordMarksWith(mark);
 
 const owned = new Set<string>(COMMANDS);
 const handlers = new Map<string, Handler>();

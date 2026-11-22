@@ -1,7 +1,10 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain, loadOwned } from './run-tests.mjs';
+import { parseMeasureArgs, summarize } from './coldstart-lib.mjs';
+import { writeResult } from './coldstart-output.mjs';
 
 /**
  * Run the scenarios inside a REAL VS Code, and exit non-zero unless they actually ran.
@@ -85,12 +88,13 @@ const runInTheEditor = async (options) => (await import('@vscode/test-electron')
 const bundleTheExtension = () => execFileSync('npm', ['run', 'bundle'], { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' });
 
 /**
- * Runs both launches and answers the exit code: 0 when every scenario passed, 1 otherwise, 78 when the run folder could not be made. `launch` (test-electron's `runTests`),
- * `bundle`, `env` (the process's own by default: the editor inherits it), `root` (the temp root), `onExit`, `log`, `error`, `importOwned` and `socketLimit` are the seams of its test.
+ * The run folder of one invocation and everything that must happen around it, shared by the scenario run (`main`) and the cold-start measurement
+ * (`measure`): the poisoned variables removed, the run folder made (78 when it cannot be), `body` run with the folders' helpers, every failure it
+ * collects reported together, and the folders removed BEFORE the exit code is returned. `body` gets `{ owned, profileFolder, failures }`:
+ * `owned(what)` makes an owned folder inside the run folder, `profileFolder()` makes an editor user-data folder short enough for the socket path, `failures` collects what
+ * made the run fail.
  */
-export async function main({
-  launch = runInTheEditor, bundle = bundleTheExtension, env = process.env, root, onExit, log = console.log, error = console.error, importOwned, socketLimit = PLATFORM_SOCKET_LIMIT,
-} = {}) {
+async function inRunFolder({ env, root, onExit, log, error, importOwned, socketLimit, title }, body) {
   const wrap = await loadOwned({ ...(importOwned === undefined ? {} : { importOwned }), error, prefix: 'run-host' });
   for (const name of POISONED) {
     delete env[name];
@@ -107,36 +111,69 @@ export async function main({
   const failures = [];
   try {
     const owned = (what) => wrap.owned.ownedDir(scope, what, { parent: run.folder });
+    // The editor's IPC socket lives in the user-data directory and a socket path has a byte limit: the profile folder keeps its own name unless that would pass it.
+    const profileFolder = () => {
+      const room = socketRoom(join(run.folder, `${wrap.owned.ownedPrefix('host-profile')}abcdef`), socketLimit);
+      const profile = owned(room >= 0 ? 'host-profile' : 'hp');
+      if (socketRoom(profile, socketLimit) < 0) {
+        log(`run-host: the editor's IPC socket path under ${profile} is ${-socketRoom(profile, socketLimit)} bytes over the platform's limit; point TMPDIR at a shorter folder if the editor reports it`);
+      }
+
+      return profile;
+    };
+    await body({ owned, profileFolder, failures });
+  } catch (reason) {
+    failures.push(reason instanceof Error ? reason.message : String(reason));
+  } finally {
+    // BEFORE the process can exit: the owned folders and their claims, then the run folder and its claim.
+    await scope.close();
+    run.end();
+  }
+  if (failures.length > 0) {
+    error(`${title}: FAILED`);
+    error(failures.join('\n'));
+    return 1;
+  }
+  log(`${title}: passed`);
+  return 0;
+}
+
+/** One launch of the editor, bounded; a failure is pushed onto `failures` instead of thrown, so the next launch still runs. */
+async function launchBounded(launch, failures, label, options) {
+  try {
+    await Promise.race([launch(options), bounded(LAUNCH_MS, label)]);
+    return true;
+  } catch (reason) {
+    failures.push(`${label}: ${reason instanceof Error ? reason.message : String(reason)}`);
+    return false;
+  }
+}
+
+/**
+ * Runs both launches and answers the exit code: 0 when every scenario passed, 1 otherwise, 78 when the run folder could not be made. `launch` (test-electron's `runTests`),
+ * `bundle`, `env` (the process's own by default: the editor inherits it), `root` (the temp root), `onExit`, `log`, `error`, `importOwned` and `socketLimit` are the seams of its test.
+ */
+export async function main({
+  launch = runInTheEditor, bundle = bundleTheExtension, env = process.env, root, onExit, log = console.log, error = console.error, importOwned, socketLimit = PLATFORM_SOCKET_LIMIT,
+} = {}) {
+  return inRunFolder({ env, root, onExit, log, error, importOwned, socketLimit, title: 'extension-host scenarios' }, async ({ owned, profileFolder, failures }) => {
     const workspace = owned('host-ws');
     const dataHome = owned('host-data');
-    const room = socketRoom(join(run.folder, `${wrap.owned.ownedPrefix('host-profile')}abcdef`), socketLimit);
-    const profile = owned(room >= 0 ? 'host-profile' : 'hp');
-    if (socketRoom(profile, socketLimit) < 0) {
-      log(`run-host: the editor's IPC socket path under ${profile} is ${-socketRoom(profile, socketLimit)} bytes over the platform's limit; point TMPDIR at a shorter folder if the editor reports it`);
-    }
+    const profile = profileFolder();
     bundle();
 
     // Two launches, BOTH run whatever the first one says: a scenario that fails in the first (the clipboard ones do, on
     // some machines) must not hide the second launch's answer, which is about something else entirely. The failures are
     // collected and reported together, so the exit code is still non-zero for either.
-    const run1 = async (label, extensionTestsEnv) => {
-      try {
-        await Promise.race([
-          launch({
-            extensionDevelopmentPath: ROOT,
-            extensionTestsPath: join(ROOT, 'out', 'test', 'host', 'scenarios.js'),
-            // `--disable-extensions` so a developer's own installed extensions cannot change the answer,
-            // and a user-data dir of this run's own so neither can their settings.
-            launchArgs: [workspace, '--disable-extensions', `--user-data-dir=${profile}`],
-            // The host process's environment, which is what the extension AND the scenarios read.
-            extensionTestsEnv,
-          }),
-          bounded(LAUNCH_MS, label),
-        ]);
-      } catch (reason) {
-        failures.push(`${label}: ${reason instanceof Error ? reason.message : String(reason)}`);
-      }
-    };
+    const run1 = (label, extensionTestsEnv) => launchBounded(launch, failures, label, {
+      extensionDevelopmentPath: ROOT,
+      extensionTestsPath: join(ROOT, 'out', 'test', 'host', 'scenarios.js'),
+      // `--disable-extensions` so a developer's own installed extensions cannot change the answer,
+      // and a user-data dir of this run's own so neither can their settings.
+      launchArgs: [workspace, '--disable-extensions', `--user-data-dir=${profile}`],
+      // The host process's environment, which is what the extension AND the scenarios read.
+      extensionTestsEnv,
+    });
 
     await run1('the extension host', { COAI_DATA_DIR: dataHome, COAI_DATA_SIDE: '' });
 
@@ -146,23 +183,74 @@ export async function main({
     // it drives; the environment variable is what tells the runner which list this launch is.
     await run1('the extension host, second launch',
       { COAI_DATA_DIR: join(dataHome, 'named-but-missing'), COAI_DATA_SIDE: '', COAI_HOST_MISSING_DATA_ROOT: '1' });
+  });
+}
+
+/**
+ * The cold-start measurement (v2 extension.md § 2; `node scripts/run-host.mjs measure [flags]`, flags in `coldstart-lib.mjs`'s `parseMeasureArgs`).
+ *
+ * <p>Each of the samples is its OWN editor launch with a user-data directory, an extensions directory, a workspace and a data directory made
+ * fresh for that launch, so a restored view or a warm profile cannot have started the extension before the scenario's clock
+ * (`measureScenario.ts` asserts `isActive === false` and starts the clock itself). The launch sets COAI_MEASURE=1 so the extension registers
+ * `coai.__measure`, and COAI_MEASURE_OUT, the file this sample's raw record goes to. A launch that fails, or leaves no record, is a failed sample:
+ * the others still run, and the verdict says which one failed.</p>
+ *
+ * <p>The verdict (`coldstart-lib.mjs`): the MAXIMUM M2 over the samples at most 2000 ms, M1 at most 50 ms, a fresh ready ack in every sample.
+ * `--record-only` is the v1 baseline: no limits, and the extension may have been active. `--json PATH` writes the result; `--row` appends a row to
+ * `research/RESULTS_v2_start.md`. `measure` answers the same codes as `main`: 0 pass, 1 fail, 78 no run folder.</p>
+ */
+export async function measure({
+  argv = [], launch = runInTheEditor, bundle = bundleTheExtension, env = process.env, root, onExit, log = console.log, error = console.error, importOwned,
+  socketLimit = PLATFORM_SOCKET_LIMIT, output = {},
+} = {}) {
+  let options;
+  try {
+    options = parseMeasureArgs(argv);
   } catch (reason) {
-    failures.push(reason instanceof Error ? reason.message : String(reason));
-  } finally {
-    // BEFORE the process can exit: the three folders and their claims, then the run folder and its claim.
-    await scope.close();
-    run.end();
+    error(`run-host measure: ${reason instanceof Error ? reason.message : String(reason)}`);
+    return 64;
   }
-  if (failures.length > 0) {
-    error('extension-host scenarios: FAILED');
-    error(failures.join('\n'));
-    return 1;
+  let result;
+  const code = await inRunFolder({ env, root, onExit, log, error, importOwned, socketLimit, title: 'cold-start measurement' }, async ({ owned, profileFolder, failures }) => {
+    bundle();
+    const raws = [];
+    for (let sample = 1; sample <= options.samples; sample += 1) {
+      // Everything of this sample is new: the editor's user data, its extensions folder, the workspace and the extension's data directory.
+      const profile = profileFolder();
+      const extensions = owned('host-ext');
+      const workspace = owned('host-ws');
+      const dataHome = owned('host-data');
+      const record = join(owned('host-out'), 'sample.json');
+      await launchBounded(launch, failures, `sample ${sample}`, {
+        extensionDevelopmentPath: ROOT,
+        extensionTestsPath: join(ROOT, 'out', 'test', 'host', 'measureScenario.js'),
+        launchArgs: [workspace, '--disable-extensions', `--user-data-dir=${profile}`, `--extensions-dir=${extensions}`],
+        extensionTestsEnv: {
+          COAI_MEASURE: '1', COAI_MEASURE_OUT: record, COAI_MEASURE_SAMPLE: String(sample), COAI_MEASURE_RECORD_ONLY: options.recordOnly ? '1' : '0',
+          COAI_DATA_DIR: dataHome, COAI_DATA_SIDE: '',
+        },
+      });
+      // A launch that failed may still have left a record (the scenario writes it before its last assertion): it is read so the verdict names the number.
+      if (existsSync(record)) {
+        raws.push(JSON.parse(readFileSync(record, 'utf8')));
+      } else {
+        failures.push(`sample ${sample}: the launch left no record, so there is nothing to measure`);
+      }
+    }
+    result = summarize(raws, { expected: options.samples, recordOnly: options.recordOnly });
+    for (const problem of result.problems) {
+      failures.push(problem);
+    }
+    log(`cold start (${result.location}): M1 ${result.m1?.max ?? 'n/a'} ms max, M2 ${JSON.stringify(result.m2)}, M3 ${JSON.stringify(result.m3)}`);
+  });
+  if (result !== undefined) {
+    writeResult(result, options, output);
   }
-  log('extension-host scenarios: passed');
-  return 0;
+
+  return code;
 }
 
 // Importable for its own test; still a script when node is pointed at it.
 if (isMain(import.meta.url)) {
-  process.exit(await main());
+  process.exit(process.argv[2] === 'measure' ? await measure({ argv: process.argv.slice(3) }) : await main());
 }

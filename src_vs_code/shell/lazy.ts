@@ -1,6 +1,6 @@
 // The loader: one `require` per module id, memoised, with a timing mark. It reads no file itself —
 // `require` does, when a command or a view first needs the module — and this file imports only `node:path`.
-// Allowed inputs of the entry bundle: shell/entry.ts, shell/lazy.ts, shell/ids.ts (scripts/entry-firewall.mjs).
+// Allowed inputs of the entry bundle: shell/entry.ts, lazy.ts, ids.ts, measure.ts (scripts/entry-firewall.mjs).
 import { join } from 'node:path';
 import type * as vscode from 'vscode';
 

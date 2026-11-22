@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      measure_ref:
+        description: 'Measure the cold start of this ref (a commit, tag or branch) with the current harness, job measure-ref: v2 baseline = c24e5141. Empty: no ref is measured.'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -644,6 +650,118 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/host-job-streak.mjs
+
+  # THE COLD-START MEASUREMENT (v2 extension.md § 2; epic E2, story S2). REQUIRED — no `continue-on-error`, unlike the job above: a sidebar that
+  # takes more than two seconds to paint, or an entry that spends more than 50 ms in `activate`, is a regression of the one thing the thin
+  # shell is for, and a check that reports and cannot fail would be read as a number nobody has to keep.
+  #
+  # Each of three samples is its OWN launch of a real VS Code with a fresh user-data directory, extensions directory, workspace and data directory
+  # (`scripts/run-host.mjs measure`); the scenario asserts the extension is not active, starts its clock, runs `workbench.view.extension.coai`,
+  # waits for a fresh `ready` acknowledgement and reads the marks through `coai.__measure`. It fails when the MAXIMUM M2 is over 2000 ms, M1 over
+  # 50 ms, or an acknowledgement is missing; M3 (first data) is recorded. Linux runs under xvfb exactly like the job above; Windows needs no display.
+  # The numbers are in the log and in the `cold-start-<os>` artifact; the Remote-WSL leg is run by hand (`scripts/measure-remote-wsl.ps1`).
+  measure:
+    name: extension · cold start (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .agents/conventions
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+
+      - name: Shared instruction dependencies
+        run: npm ci --ignore-scripts --prefix .agents/conventions
+
+      - name: Install
+        working-directory: src_vs_code
+        run: npm ci
+
+      - name: Cold start in a real editor (Linux, under xvfb)
+        if: runner.os == 'Linux'
+        working-directory: src_vs_code
+        shell: bash
+        run: xvfb-run -a npm run measure:host -- --json "$RUNNER_TEMP/cold-start.json" --label "ci ${{ matrix.os }}"
+
+      - name: Cold start in a real editor (Windows)
+        if: runner.os == 'Windows'
+        working-directory: src_vs_code
+        shell: bash
+        run: npm run measure:host -- --json "$RUNNER_TEMP/cold-start.json" --label "ci ${{ matrix.os }}"
+
+      # `if: always()`: the numbers of a run that failed are the ones worth reading.
+      - name: Keep the numbers
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cold-start-${{ matrix.os }}
+          path: ${{ runner.temp }}/cold-start.json
+          if-no-files-found: warn
+
+  # THE v1 BASELINE, and any other ref (v2 epic E2 story S2 task t0). Manual only: Actions → ci → Run workflow → measure_ref (v1 = c24e5141, the last
+  # commit before the thin shell). The CURRENT tree is the harness; the ref is checked out beside it and gets the harness laid over it
+  # (`scripts/coldstart-overlay.mjs`: the launcher, the scenario, the mark recorder, and `scripts/measure-v1.patch`, the old extension's few marks).
+  # The old extension activates itself at start-up, so it is measured with `--record-only`: three cold launches, no limits, and whether it was already
+  # active at the clock is in the result. The row goes into the log and the `cold-start-ref` artifact; copy it into research/RESULTS_v2_start.md.
+  measure-ref:
+    name: extension · cold start of a ref
+    if: github.event_name == 'workflow_dispatch' && inputs.measure_ref != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.measure_ref }}
+          path: measure-target
+          submodules: true
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+
+      - name: Shared instruction dependencies
+        working-directory: measure-target
+        run: npm ci --ignore-scripts --prefix .agents/conventions
+
+      - name: Lay the harness over the ref
+        run: node src_vs_code/scripts/coldstart-overlay.mjs measure-target
+
+      - name: Install
+        working-directory: measure-target/src_vs_code
+        run: npm ci
+
+      - name: Compile the ref with the harness
+        working-directory: measure-target/src_vs_code
+        run: npm run compile
+
+      - name: Cold start of the ref, three samples
+        working-directory: measure-target/src_vs_code
+        env:
+          MEASURE_REF: ${{ inputs.measure_ref }}
+        run: xvfb-run -a node scripts/run-host.mjs measure --record-only --json "$RUNNER_TEMP/cold-start-ref.json" --label "v1 baseline, ci ubuntu-latest, ref $MEASURE_REF" --commit "$(git -C .. rev-parse --short=8 HEAD)"
+
+      - name: Keep the numbers
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cold-start-ref
+          path: ${{ runner.temp }}/cold-start-ref.json
+          if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
   # The workflows themselves are code, and nothing checked them until now.

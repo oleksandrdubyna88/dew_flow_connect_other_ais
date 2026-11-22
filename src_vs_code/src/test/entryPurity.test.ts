@@ -66,8 +66,11 @@ interface Run {
   readonly returned: unknown;
 }
 
-/** Runs `activate` of `code` against recorders and answers what it did. */
-function runActivate(code: string): Run {
+/**
+ * Runs `activate` of `code` against recorders and answers what it did. `env` is what `process.env` holds: the entry may read
+ * exactly one variable from it, COAI_MEASURE (the cold-start measurement's switch); every other read of `process` is forbidden.
+ */
+function runActivate(code: string, env: Readonly<Record<string, string>> = {}): Run {
   const accessed = new Set<string>();
   const calls: string[] = [];
   const forbidden: string[] = [];
@@ -125,7 +128,16 @@ function runActivate(code: string): Run {
   };
   const module = { exports: {} as { activate?: (c: unknown) => unknown } };
   const wrapper = new Function('module', 'exports', 'require', '__dirname', 'setTimeout', 'setInterval', 'setImmediate', 'fetch', 'process', code);
-  wrapper(module, module.exports, fakeRequire, join(ROOT, 'dist'), shout('setTimeout'), shout('setInterval'), shout('setImmediate'), shout('fetch'), new Proxy({}, { get: (_t, key) => { forbidden.push(`process.${String(key)} was read`); return undefined; } }));
+  wrapper(module, module.exports, fakeRequire, join(ROOT, 'dist'), shout('setTimeout'), shout('setInterval'), shout('setImmediate'), shout('fetch'), new Proxy({}, {
+    get: (_t, key) => {
+      if (key === 'env') {
+        return new Proxy({}, { get: (_e, name) => { if (name !== 'COAI_MEASURE') { forbidden.push(`process.env.${String(name)} was read`); } return env[String(name)]; } });
+      }
+      forbidden.push(`process.${String(key)} was read`);
+
+      return undefined;
+    },
+  }));
   const activate = module.exports.activate;
   assert.equal(typeof activate, 'function', 'the entry exports no activate');
   const returned = activate?.(context);
@@ -166,6 +178,19 @@ test('what activate registers is what the manifest declares: every command, the 
     ['window.registerUriHandler', 'window.registerWebviewPanelSerializer', 'window.registerWebviewViewProvider']);
   const returned = run.returned as { readonly legacy?: unknown };
   assert.equal(typeof returned.legacy, 'function', 'activate returns no door for the test host to start the old code');
+});
+
+test('with COAI_MEASURE=1 activate registers one more command, coai.__measure, and still only registers; with it unset the command is absent', async () => {
+  const code = await entryCode();
+  const off = runActivate(code);
+  const on = runActivate(code, { COAI_MEASURE: '1' });
+  const declared = manifest.contributes.commands.map((one) => one.command);
+
+  assert.deepEqual(violations(on), []);
+  assert.equal(on.pushed, 1, 'the measure command is pushed with the other registrations, not in a second push');
+  assert.equal(off.commandIds.includes('coai.__measure'), false, 'the measure command is registered without COAI_MEASURE=1');
+  assert.deepEqual([...on.commandIds].sort(), [...declared, 'coai.__measure'].sort());
+  assert.equal(runActivate(code, { COAI_MEASURE: '0' }).commandIds.includes('coai.__measure'), false, 'only the value 1 switches it on');
 });
 
 test('the activation events are the views, panels and uri links this shell registers for, and never onStartupFinished', () => {

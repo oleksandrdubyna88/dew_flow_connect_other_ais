@@ -9,7 +9,7 @@ import { readEntries, ROOT } from '../../scripts/bundle-lib.mjs';
 /**
  * The entry firewall is a CI step, so it is tested by FAILING (v2 extension.md § 2, epic E2 story S1 task t3).
  *
- * <p>The real tree must pass: every input of dist/extension.js is one of shell/entry.ts, lazy.ts, ids.ts; its run-time imports are
+ * <p>The real tree must pass: every input of dist/extension.js is one of shell/entry.ts, lazy.ts, ids.ts, measure.ts; its run-time imports are
  * `vscode` and `node:path`; it fits 16 KiB. Then each way of breaking it is PLANTED into the entry's text inside the build (the
  * tree is not touched) and the firewall must report it — `outputs[*].imports` for a builtin, which is external and so absent from
  * `inputs`, the allow-list for a sibling file, the `src/` rule for the old code, and the byte budget. Every one of those is a build

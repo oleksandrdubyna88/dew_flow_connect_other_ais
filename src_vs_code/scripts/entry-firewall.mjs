@@ -7,7 +7,7 @@
  * with a metafile and checked twice:</p>
  * <ul>
  *   <li>`inputs` — every source file that went into the bundle must be on the bundle's allow-list (`bundle-entries.json`:
- *       shell/entry.ts, shell/lazy.ts, shell/ids.ts), and none may be under `src/`;</li>
+ *       shell/entry.ts, lazy.ts, ids.ts, measure.ts), and none may be under `src/`;</li>
  *   <li>`outputs[*].imports` — every module the bundle `require`s at run time. This is the second check on purpose: a
  *       Node builtin is external, so it is NOT among the inputs and shows only here (consultant review 1, finding 7).
  *       Only `vscode` and `path` may be there: no `child_process`, `fs`, `http`, `https`, `net`, nothing under `src/`.</li>

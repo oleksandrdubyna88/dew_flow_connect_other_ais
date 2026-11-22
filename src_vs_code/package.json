@@ -1434,6 +1434,7 @@
     "lint": "eslint src shell",
     "test": "npm run compile && node scripts/run-tests.mjs",
     "test:host": "npm run compile && node scripts/run-host.mjs",
+    "measure:host": "npm run compile && node scripts/run-host.mjs measure",
     "test:contract": "npm run compile && node scripts/run-contract.mjs",
     "test:seam": "npm run compile && node scripts/run-seam.mjs",
     "test:parity": "node scripts/run-parity.mjs",

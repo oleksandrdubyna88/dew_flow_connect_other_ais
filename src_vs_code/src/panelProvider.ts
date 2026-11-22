@@ -4,6 +4,7 @@
 import { GLANCE_CEILING_MS, LedgerGlance, NOT_LOOKED, UNREADABLE_GLANCE } from './notificationsCount';
 import { glanceAtLedgers } from './notificationsGlance';
 import { withinTheClock } from './withinTheClock';
+import { measureMark } from './measureMarks';
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { DISCOVERY_KEY } from './chatDiscovery';
@@ -1280,6 +1281,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // A document that has just loaded asks what is running: anything announced while it was being replaced
       // reached the document it replaced (research/PLAN_model_search_and_busy_marks.md §3.12).
       from.post({ type: 'busy', ...this.inFlight.snapshot() });
+      this.markSidebarReady(from);
     } else if (m.type === 'tab') {
       // Held by the host, never drawn into the markup (D6), and answered with the tab now held: a page
       // that was repainted while the press was on its way shows the tab the person chose, and a page
@@ -1291,6 +1293,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       if (consultantTabShowing(true, before) !== consultantTabShowing(true, shown)) {
         void this.render();
       }
+    }
+  }
+
+  /** The sidebar's `ready` acknowledgement is where the cold-start measurement ends M2 (shell/measure.ts; a no-op outside the shell). */
+  private markSidebarReady(from: SurfaceSlot): void {
+    if (from === this.sidebar) {
+      measureMark('ready');
     }
   }
 
@@ -1569,6 +1578,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
     const live = { type: 'live', ...liveRegions(state) };
     paintEach(this.slots, (slot) => this.pageFor(slot, state), live);
+    // The first state handed to the webview, which is where M3 (command -> first data) ends.
+    measureMark('firstData');
 
     // Never awaited: the section draws from what is already known, and this repaints when it
     // lands. A render that waited on a Team server would be a panel that hangs when one is slow.

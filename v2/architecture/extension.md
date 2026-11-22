@@ -13,7 +13,7 @@ src_vs_code/
   shell/entry.ts            -> dist/extension.js  (registration only; imports vscode + shell/lazy.ts + shell/ids.ts)
   shell/lazy.ts             require(join(__dirname,'modules',id+'.js')) once, memoised; timing marks
   shell/ids.ts              command / view / panel ids (constants)
-  shell/measure.ts          perf marks, exported only in ExtensionMode.Test
+  shell/measure.ts          perf marks; read through `coai.__measure`, registered only when COAI_MEASURE=1 (any extension mode)
   shell/modules/
     sidebar/  -> dist/modules/sidebar.js   coai.panel: failures, active cons/consask, last rounds, page links
     pages/    -> dist/modules/pages.js     one WebviewPanel per page id, reveal-if-open, write queue, revisions
@@ -55,8 +55,8 @@ v2:
 
 Measurement: reuse `scripts/run-host.mjs` (bundles first :85/:117; real VS Code via @vscode/test-electron with own
 workspace, data dir and `--user-data-dir` :110-113/:130; poison env removed :50; two launches today :141/:147). Add a
-third launch `measure` (`COAI_MEASURE=1`, `out/test/host/measureScenario.js`): run `workbench.view.extension.coai`, read
-the test-mode exports. M1 = module evaluation → `activate` return (≤ 50 ms own time); M2 = command → webview `ready`
+launch `measure` (`node scripts/run-host.mjs measure`: `COAI_MEASURE=1`, `out/test/host/measureScenario.js`, one editor launch per sample with a fresh profile): run `workbench.view.extension.coai`, read
+the marks through `coai.__measure` (S2 built this; results in `research/RESULTS_v2_start.md`). M1 = module evaluation → `activate` return (≤ 50 ms own time); M2 = command → webview `ready`
 acknowledgement (≤ 2000 ms). 3 cold launches, the maximum counts. Linux CI (xvfb), Windows CI; Remote-WSL by
 `scripts/measure-remote-wsl.ps1` on the owner's Windows (VSIX + a tiny driver VSIX in a fresh `--extensions-dir`,
 `code --remote wsl+<distro>`), result committed to `research/RESULTS_v2_start.md`.

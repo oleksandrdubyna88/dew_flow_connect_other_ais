@@ -117,16 +117,16 @@ export default tseslint.config(
     },
   },
   {
-    // THE ENTRY'S FIREWALL, source half (v2 extension.md § 2). The three files that make `dist/extension.js` may import `vscode`,
+    // THE ENTRY'S FIREWALL, source half (v2 extension.md § 2). The four files that make `dist/extension.js` (entry, lazy, ids, measure) may import `vscode`,
     // `node:path` and each other, and nothing else: no `fs`, no process, no network, nothing under `src/`. The regex bans every
     // specifier except those four. `scripts/entry-firewall.mjs` is the other half: it reads what esbuild actually bundled, which
     // also catches a `require()` this rule cannot see.
-    files: ['shell/entry.ts', 'shell/lazy.ts', 'shell/ids.ts'],
+    files: ['shell/entry.ts', 'shell/lazy.ts', 'shell/ids.ts', 'shell/measure.ts'],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [{
-          regex: '^(?!(vscode|node:path|\\./(entry|lazy|ids))$)',
-          message: 'The shell entry may import only vscode, node:path and its own siblings (entry, lazy, ids); load anything else lazily from a module.',
+          regex: '^(?!(vscode|node:path|\\./(entry|lazy|ids|measure))$)',
+          message: 'The shell entry may import only vscode, node:path and its own siblings (entry, lazy, ids, measure); load anything else lazily from a module.',
         }],
       }],
     },
@@ -134,7 +134,7 @@ export default tseslint.config(
   {
     // `lazy.ts` is the one file that calls `require`, and with a computed path: that is what loading a module lazily IS.
     // The entry and the ids may not call it at all.
-    files: ['shell/entry.ts', 'shell/ids.ts'],
+    files: ['shell/entry.ts', 'shell/ids.ts', 'shell/measure.ts'],
     rules: { 'no-restricted-globals': ['error', { name: 'require', message: 'Only shell/lazy.ts loads modules.' }] },
   },
   {

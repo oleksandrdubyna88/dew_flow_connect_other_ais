@@ -1,0 +1,81 @@
+diff --git a/src_vs_code/src/extension.ts b/src_vs_code/src/extension.ts
+index c065a36..0f49c93 100644
+--- a/src_vs_code/src/extension.ts
++++ b/src_vs_code/src/extension.ts
+@@ -96,6 +96,8 @@ import { ON_EXHAUSTED_MIGRATION_KEY } from './onExhaustedMigration';
+ import { startOnExhaustedMigration } from './onExhaustedMigrationHost';
+ import { vendorsFrom } from './vendors';
+ import { askPerson } from './personWait';
++import { mark, registerMeasure } from './measure';
++import { recordMarksWith } from './measureMarks';
+ 
+ /**
+  * What activation hands back. Read-only, and read by the `test:host` scenarios — a host cannot reach this extension's
+@@ -132,6 +134,7 @@ export interface CoaiExports {
+  * there is still nothing listening on a socket.</p>
+  */
+ export function activate(context: vscode.ExtensionContext): CoaiExports {
++  recordMarksWith(mark);
+   // One per window, kept for the window's life: the page is cheap to redraw and expensive to
+   // rebuild, and `retainContextWhenHidden` means a reopened tab keeps its scroll and its tab.
+   const notifications = new NotificationsPanel();
+@@ -636,6 +639,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+       }
+     }),
+     vscode.commands.registerCommand('coai.restoreCatalogBackup', () => restoreFromBeforeTheCatalog(context)),
++    ...registerMeasure(vscode, process.env),
+     watcher,
+     consultations,
+     questionConsults,
+@@ -930,6 +934,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
+ 
+   void offerUpdate(context);
+ 
++  mark('activateReturn');
++
+   return {
+     sidesSeen: () => sidesIn(context.globalState, Date.now()),
+     ...(context.extensionMode === vscode.ExtensionMode.Test ? { remoteSessions: testDoorOf(remote), skipShell } : {}),
+diff --git a/src_vs_code/src/panelProvider.ts b/src_vs_code/src/panelProvider.ts
+index 78209e1..0524ecc 100644
+--- a/src_vs_code/src/panelProvider.ts
++++ b/src_vs_code/src/panelProvider.ts
+@@ -4,6 +4,7 @@
+ import { GLANCE_CEILING_MS, LedgerGlance, NOT_LOOKED, UNREADABLE_GLANCE } from './notificationsCount';
+ import { glanceAtLedgers } from './notificationsGlance';
+ import { withinTheClock } from './withinTheClock';
++import { measureMark } from './measureMarks';
+ import { readFile } from 'node:fs/promises';
+ import * as vscode from 'vscode';
+ import { DISCOVERY_KEY } from './chatDiscovery';
+@@ -1280,6 +1281,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+       // A document that has just loaded asks what is running: anything announced while it was being replaced
+       // reached the document it replaced (research/PLAN_model_search_and_busy_marks.md §3.12).
+       from.post({ type: 'busy', ...this.inFlight.snapshot() });
++      this.markSidebarReady(from);
+     } else if (m.type === 'tab') {
+       // Held by the host, never drawn into the markup (D6), and answered with the tab now held: a page
+       // that was repainted while the press was on its way shows the tab the person chose, and a page
+@@ -1294,6 +1296,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+     }
+   }
+ 
++  /** The sidebar's `ready` acknowledgement is where the cold-start measurement ends M2 (shell/measure.ts; a no-op outside the shell). */
++  private markSidebarReady(from: SurfaceSlot): void {
++    if (from === this.sidebar) {
++      measureMark('ready');
++    }
++  }
++
+   /** What a slot paints on, and the page it paints — the page built only if the key says it is due. */
+   private pageFor(slot: SurfaceSlot, state: PanelState): { key: string; html: () => string } {
+     // What is in flight rides with the caret: read when BUILT, never in the key (busyMark.ts).
+@@ -1569,6 +1578,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
+     }
+     const live = { type: 'live', ...liveRegions(state) };
+     paintEach(this.slots, (slot) => this.pageFor(slot, state), live);
++    // The first state handed to the webview, which is where M3 (command -> first data) ends.
++    measureMark('firstData');
+ 
+     // Never awaited: the section draws from what is already known, and this repaints when it
+     // lands. A render that waited on a Team server would be a panel that hangs when one is slow.

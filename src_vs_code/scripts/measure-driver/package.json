@@ -1,0 +1,14 @@
+{
+  "name": "coai-measure-driver",
+  "displayName": "coai cold-start measure driver",
+  "description": "Runs the cold-start measurement steps of the ConnectOtherAIs extension inside an extension host and writes the raw record (scripts/measure-remote-wsl.ps1 installs and uses it; it is never published).",
+  "version": "0.0.1",
+  "publisher": "coai-measure",
+  "license": "MIT",
+  "private": true,
+  "engines": { "vscode": "^1.85.0" },
+  "extensionKind": ["workspace"],
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {}
+}

@@ -1,5 +1,5 @@
 // Every id the shell registers, as constants. This file imports nothing: the entry firewall
-// (scripts/entry-firewall.mjs) allows the entry bundle three files and no others.
+// (scripts/entry-firewall.mjs) allows the entry bundle four files (entry, lazy, ids, measure) and no others.
 
 /** The module a command, view or panel belongs to; for this story every one of them belongs to `legacy`. */
 export const MODULE_LEGACY = 'legacy';
