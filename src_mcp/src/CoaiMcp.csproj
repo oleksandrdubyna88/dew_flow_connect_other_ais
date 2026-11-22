@@ -50,6 +50,8 @@
          extension's generate-help-prompts.mjs walks that folder and refuses any file the role seed
          does not name, and a consultation has no role. -->
     <EmbeddedResource Include="consultant\consult.md" LogicalName="CoaiMcp.prompts.consult.md" />
+    <!-- The roles' defaults per main-AI vendor (v2 E3.S7): inside the binary for the same reason as the prompts above. -->
+    <EmbeddedResource Include="..\..\shared\role-defaults.json" LogicalName="CoaiMcp.role-defaults.json" />
   </ItemGroup>
 
   <ItemGroup>

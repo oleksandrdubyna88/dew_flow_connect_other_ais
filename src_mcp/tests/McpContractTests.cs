@@ -43,7 +43,7 @@ public sealed class McpContractTests : IDisposable
         StdioServer.RoundTrip(server, request, timeoutSeconds);
 
     [Fact]
-    public async Task Initialize_ThenToolsList_NamesTheTwelveTools_AndStdoutStaysPure()
+    public async Task Initialize_ThenToolsList_NamesTheThirteenTools_AndStdoutStaysPure()
     {
         using var server = Start();
         try
@@ -64,8 +64,8 @@ public sealed class McpContractTests : IDisposable
 
             names.Should().BeEquivalentTo(
                 ["providers", "open", "review_plan", "review_code", "review_document", "review_feature", "resolve",
-                 "status", "ask_human", "cons", "cons_close", "consask"],
-                "the twelve tools, unprefixed — the client's `coai` namespace is the only one — with the renamed three under their v2 names and the v1 names not listed");
+                 "status", "ask_human", "cons", "cons_close", "consask", "roles"],
+                "the thirteen tools, unprefixed — the client's `coai` namespace is the only one — with the renamed three under their v2 names and the v1 names not listed");
         }
         finally
         {

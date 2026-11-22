@@ -166,6 +166,12 @@ internal static class Program
         BandJson,
 
         /// <summary>
+        /// The roles table in one JSON object (<c>--format json</c>) or as Claude Code's SessionStart hook output (<c>--format claude-hook</c>) — read-only, never makes the data directory.
+        /// See <see cref="Roles.RolesMode"/> (v2 E3.S7).
+        /// </summary>
+        Roles,
+
+        /// <summary>
         /// Finds claude, codex and agy on this side and writes the <c>coai</c> MCP entry through each one's own command — a backup first, nothing changed when it is already right — and prints ONE JSON object.
         /// See <see cref="Install.SetupClientsMode"/> (v2 E3.S6). Not a writer of the data directory: its state is <c>~/.local/state/coai</c>.
         /// </summary>
@@ -367,6 +373,7 @@ internal static class Program
                 "--kimi-clear-marker" => Startup.KimiClearMarker,
                 "--host-facts" => Startup.HostFacts,
                 "--band-json" => Startup.BandJson,
+                "--roles" => Startup.Roles,
                 "--setup-clients" => Startup.SetupClients,
                 "--install" => Startup.Install,
                 "--probe-api" => Startup.ProbeApi,
@@ -480,6 +487,10 @@ internal static class Program
             case Startup.BandJson:
                 // One object on stdout, read-only, exit 0; a wrong argument is 65, never 64.
                 return BandJsonMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
+
+            case Startup.Roles:
+                // One object on stdout, read-only, exit 0; a wrong argument is 65, never 64. A hook calls this, so nothing here may take a session down.
+                return Roles.RolesMode.Run(args[1..], Environment.GetEnvironmentVariable, Console.Out, Note);
 
             case Startup.SetupClients:
             case Startup.Install:
@@ -2598,6 +2609,10 @@ internal static class Program
         from the data directory and never creating it: the consultations in flight (cons asking or open, consask consulting)
         and the failure notices of the last 24 hours. The phrases live in the editor's settings, so the list is empty here.
         Any other argument is 65; a build too old for the mode exits 64.
+        `--roles [--format json|claude-hook]` prints the roles table: the main AI, an ORDERED model list per role (the order is the failover order), the complexity bands,
+        the task kinds a small model may take, the work method and a settings revision — as ONE JSON object, or with `claude-hook` as Claude Code's SessionStart hook output
+        (a short role table and the work-method sentence in `hookSpecificOutput.additionalContext`). Read from the settings file and the environment (`COAI_ROLES_MODELS`,
+        `COAI_ROLES_BANDS`, `COAI_ROLES_HAIKU_KINDS`, `COAI_ROLES_WORK_METHOD`, `COAI_ROLES_MAIN_AI`) and never creating the data directory. A wrong argument is 65.
         `--setup-clients [--dry-run] [--only claude,codex,agy] [--binary <path>] [--remove | --restore <id|latest>]` finds the CLIs on this side and writes the `coai` MCP
         entry through each one's own command (`claude mcp add-json --scope user`, `codex mcp add`) — a backup in the state folder first, nothing changed when the entry
         is already right — and prints ONE JSON object: per CLI found, absent, changed, unchanged, refused, failed or unmeasured (agy), per target the action and the

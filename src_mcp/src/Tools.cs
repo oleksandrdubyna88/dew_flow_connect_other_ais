@@ -4,7 +4,7 @@ using ModelContextProtocol.Server;
 namespace CoaiMcp;
 
 /// <summary>
-/// The twelve tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
+/// The thirteen tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
 /// namespaces by its config key, so these surface as <c>mcp__coai__review_plan</c> and so on.
 /// Every answer is a JSON string — trivial schemas, which is what an AOT binary with
 /// reflection-based JSON turned off wants, and what agents read anyway.
@@ -518,5 +518,28 @@ internal static class Tools
             async (string repoPath, string question, string context, string? document = null, string? feature = null) =>
                 RenamedTools.WithNote(await (await host.CurrentAsync()).AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty), "consask"),
             RenamedTools.Alias(consask, RenamedTools.OldAsk));
+
+        yield return McpServerTool.Create(
+            // `McpServer` is injected, not part of the schema: the client's own name tells which AI is the main one. Read afresh per call (the settings file may have changed), and it needs no service —
+            // so it answers while the first one is still being built.
+            (McpServer server) => Roles.RolesAnswer.Json(Roles.RolesAnswer.Compute(
+                Roles.RolesMode.Layered(Environment.GetEnvironmentVariable), server.ClientInfo?.Name ?? string.Empty, server.ClientInfo?.Version ?? string.Empty, claudeHook: false)),
+            new McpServerToolCreateOptions
+            {
+                Name = "roles",
+                Title = "Which model each role runs, the complexity bands and the work method",
+                Description = """
+                    The roles table of this machine: the main AI (vendor, cli, version), an ORDERED list of
+                    models per role — orchestrator, coder, scout, important, ba — where the order is the
+                    failover order, the complexity bands (a task scored min..max runs that model), the task
+                    kinds a small model may take, the work method (MVP epics, epics per epoch, consults) and a
+                    `settingsRevision` that changes when a person changes the table. A setting that could not
+                    be read is named in `unrecognised` and its default stands. Call it at the start of a task.
+                    """,
+                ReadOnly = true,
+                Idempotent = true,
+                Destructive = false,
+                OpenWorld = false,
+            });
     }
 }

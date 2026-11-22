@@ -47,6 +47,7 @@ public sealed class ScenarioCoverageTests
             + "outcome refused, a cap-closed one lapsing and still taking a verdict",
         ["ask_human"] = "McpContractTests — a REAL server build over real stdio: v2 keeps the tool registered as an alias, and it answers at once "
             + "with exactly {status: ask_in_conversation, note: removed in v2…} whatever the arguments, writing no card",
+        ["roles"] = "TheRolesToolTests — a REAL server over real stdio: the table for the client that called, a setting read from the environment; beneath it ARolesAnswerTests (the owner's Claude table, the ordered failover list, codex and agy empty, every override and its refusal) and TheRolesModeTests (--roles, the hook output, 65, no data directory)",
         ["consask"] = "QuestionConsultScenarioTests — the fake CLI as a codex row, a REAL child: the planner's "
             + "argv reaches a process, its answer file is read back fenced, the record and the ledger line are on disk; "
             + "a web question carrying a path refused before any launch. Beneath it: QuestionFanOutTests (one row past "

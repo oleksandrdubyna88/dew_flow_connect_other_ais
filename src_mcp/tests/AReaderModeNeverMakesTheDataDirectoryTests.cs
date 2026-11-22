@@ -84,6 +84,17 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
             $"`coai-mcp {string.Join(' ', args)}` exited {code} and left the missing data directory behind, holding: {Inside()}");
     }
 
+    [Theory]
+    [InlineData("--roles")]
+    [InlineData("--roles", "--format", "claude-hook")]
+    public async Task RolesLeavesAMissingNamedDataDirectoryAbsent(params string[] args)
+    {
+        var (_, code) = await Stdout.OfAsync(() => Program.RunAsync(args));
+
+        code.Should().Be(0);
+        Directory.Exists(Missing).Should().BeFalse($"`coai-mcp {string.Join(' ', args)}` made the missing data directory, holding: {Inside()}");
+    }
+
     [Fact]
     public async Task FindingsManyLeavesAMissingNamedDataDirectoryAbsent()
     {
