@@ -236,7 +236,7 @@ public sealed class ConsultPreflightTests : IDisposable
         new PanelSettings
         {
             Providers = providers ?? [new("codex") { ExecutablePath = FakeCliExe }],
-            Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+            Rounds = PanelConfig.Uniform(3, 2),
             DataDir = _data,
             ConsultEnabled = enabled,
             ConsultantsUnreadable = unreadable,

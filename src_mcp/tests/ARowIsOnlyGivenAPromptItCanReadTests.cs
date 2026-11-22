@@ -45,7 +45,7 @@ public sealed class ARowIsOnlyGivenAPromptItCanReadTests : IDisposable
             {
                 DataDir = _data,
                 CodeWorkspace = "none",
-                Rounds = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog },
+                Rounds = new PanelConfig(Roles: null) { Catalog = catalog },
                 Providers = rows,
             },
             VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);

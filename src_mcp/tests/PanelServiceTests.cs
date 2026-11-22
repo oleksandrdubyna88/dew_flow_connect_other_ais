@@ -282,7 +282,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task MaxRoundsExhausted_YieldsCallHuman_WithTheOpenCount()
+    public async Task MaxRoundsExhausted_YieldsGoodEnough_WithTheOpenCount()
     {
         CodeRoundHarness.SetAnswer(OneMajor);
         var service = _h.Service(threshold: 0, maxRounds: 1);
@@ -290,8 +290,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
 
         var answer = Parse(await service.ReviewPlanAsync(_h.Repo, "feature", "the plan"));
 
-        answer.GetProperty("verdict").GetString().Should().Be("call_human");
-        answer.GetProperty("instruction").GetString().Should().Contain("do not proceed on your own");
+        answer.GetProperty("verdict").GetString().Should().Be("good_enough");
+        answer.GetProperty("gatingCount").GetInt32().Should().Be(1, "the open count rides with the verdict");
+        answer.GetProperty("instruction").GetString().Should().Contain("READ the open findings");
     }
 
     /// <summary>

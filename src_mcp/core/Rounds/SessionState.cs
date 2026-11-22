@@ -5,37 +5,6 @@ using CoaiMcp.Core.Gate;
 
 namespace CoaiMcp.Core.Rounds;
 
-/// <summary>What happens when max rounds are exhausted and findings still gate.</summary>
-public enum StagePolicy
-{
-    /// <summary>Proceed as-is, saying so.</summary>
-    Continue,
-
-    /// <summary>Call a human.</summary>
-    Human,
-
-    /// <summary>Climb the escalation ladder, then a fresh set of rounds.</summary>
-    Escalate,
-
-    /// <summary>Good enough: read the findings, apply what is true and useful, and move on.</summary>
-    /// <remarks>
-    /// The gap between the other three, and the ordinary case. The reviewers found real things, they
-    /// are not worth another round each, and the right move is to WORK them rather than to stop or
-    /// to ignore them. <see cref="Continue"/> is not this: it proceeds and leaves every finding
-    /// untouched, which is how a gate becomes decoration.
-    /// </remarks>
-    GoodEnough,
-}
-
-/// <summary>The ladder, in the only order it fires. The arbiter moves last — changing the author
-/// of the plan is the most expensive step available.</summary>
-public enum EscalationStep
-{
-    ReviewerEffortUp,
-    ReviewerModelUp,
-    ArbiterModelUp,
-}
-
 /// <summary>One role's budget: how many attempts it gets, and how much may still be open.</summary>
 /// <param name="Enabled">
 /// <para>Whether this role takes part at all. Asked for on 2026-09-08 as a checkbox on each of the
@@ -79,55 +48,17 @@ public sealed record StageGate(int MaxRounds, int Threshold);
 /// </remarks>
 public sealed record PanelConfig
 {
-    /// <summary>A config made IN CODE. No policy named is policy auto; a policy named is that policy and never auto.</summary>
+    /// <summary>The deserialiser's constructor, and the one code calls: the per-role gates, or the shipped ones.</summary>
     /// <remarks>
-    /// Always writes <see cref="Autonomous"/> as <c>true</c> or <c>false</c>: a config made in code is never "from before policy
-    /// auto". The parameter names stay capitalised, because call sites name them (<c>OnExhausted:</c>).
-    /// </remarks>
-    public PanelConfig(IReadOnlyDictionary<string, RoleGate>? Roles = null, StagePolicy? OnExhausted = null)
-    {
-        this.Roles = Roles ?? Defaults();
-        this.OnExhausted = OnExhausted ?? StagePolicy.GoodEnough;
-        Autonomous = OnExhausted is null;
-    }
-
-    /// <summary>A config as a SESSION FILE holds it: the deserialiser's constructor, and the store's for a file with no config.</summary>
-    /// <remarks>
-    /// <para><c>autonomous</c> has NO default and <see cref="Autonomous"/> has no initializer, and both are on purpose. A file
-    /// written before policy auto has no such member, and absent has to read as <c>null</c>: a constructor parameter with a
-    /// declared default reads it as that default (measured: <c>bool? Autonomous = true</c> reads <c>true</c>), and an
-    /// <c>init</c> property with an initializer reads <c>null</c> through the generated context and the initializer through the
-    /// reflection serializer. The shape here reads <c>null</c> through both. The one default that stays is today's: no
-    /// <c>onExhausted</c> reads <c>Human</c>.</para>
-    /// <para>Called from code at one production site, <c>SessionStore</c>'s file with no config; tests may call it to build a
-    /// config "as a build before policy auto wrote it".</para>
+    /// The parameter name stays capitalised because call sites name it (<c>Roles:</c>). Members an older build wrote
+    /// (<c>onExhausted</c>, <c>autonomous</c>) are not known here and land in <see cref="Unknown"/>: v2 has one outcome policy,
+    /// so a session file that carries them still loads.
     /// </remarks>
     [JsonConstructor]
-    public PanelConfig(IReadOnlyDictionary<string, RoleGate>? roles, bool? autonomous, StagePolicy onExhausted = StagePolicy.Human)
+    public PanelConfig(IReadOnlyDictionary<string, RoleGate>? Roles = null)
     {
-        Roles = roles ?? Defaults();
-        OnExhausted = onExhausted;
-        Autonomous = autonomous;
+        this.Roles = Roles ?? Defaults();
     }
-
-    /// <summary>What happens when the rounds run out. Written with <see cref="Autonomous"/> and never alone.</summary>
-    public StagePolicy OnExhausted { get; private init; }
-
-    /// <summary>
-    /// Whether this session runs under policy auto: <c>true</c> or <c>false</c> as written by a build that knows it, and
-    /// <c>null</c> only for a session file that had no such member — a session from before policy auto.
-    /// </summary>
-    public bool? Autonomous { get; private init; }
-
-    /// <summary>Policy auto. Implies <c>OnExhausted == GoodEnough</c>, because nothing outside the type can write the halves apart.</summary>
-    [JsonIgnore] public bool IsAutonomous => Autonomous == true;
-
-    /// <summary>The session file had no marker: it was written before policy auto existed.</summary>
-    [JsonIgnore] public bool PredatesAuto => Autonomous is null;
-
-    /// <summary>This config under the policy of <paramref name="current"/> — both halves, never one.</summary>
-    public PanelConfig UnderPolicyOf(PanelConfig current) =>
-        this with { OnExhausted = current.OnExhausted, Autonomous = current.IsAutonomous };
 
     /// <summary>One attempt, at most six findings open.</summary>
     /// <remarks>
@@ -322,8 +253,8 @@ public sealed record PanelConfig
     /// The same gate for every role — what the legacy single-value settings mean, and what a test
     /// that does not care about the split is asking for.
     /// </summary>
-    public static PanelConfig Uniform(int maxRounds, int threshold, StagePolicy? onExhausted = null) =>
-        new(AllRoles.ToDictionary(r => r, _ => new RoleGate(maxRounds, threshold)), onExhausted);
+    public static PanelConfig Uniform(int maxRounds, int threshold) =>
+        new(AllRoles.ToDictionary(r => r, _ => new RoleGate(maxRounds, threshold)));
 }
 
 /// <summary>
@@ -464,8 +395,6 @@ public sealed record SessionState(
 
     public int RoundsRunThisStage { get; init; }
 
-    public int EscalationsUsed { get; init; }
-
     /// <summary>A round's verdict is out and decisions have not been recorded yet.</summary>
     public bool AwaitingResolve { get; init; }
 
@@ -474,55 +403,6 @@ public sealed record SessionState(
 
     /// <summary>Pending stage advance, decided at round completion, applied by resolve.</summary>
     public bool AdvanceOnResolve { get; init; }
-
-    /// <summary>
-    /// The last verdict was <c>call_human</c> — the ONLY state in which a human "proceed" override
-    /// is honoured. Its own flag rather than an inference from round counts, because the first
-    /// code-gate run proved the inference wrong: an exhausted Escalate stage also has no rounds
-    /// left, and the override could skip the configured ladder.
-    /// </summary>
-    public bool HumanGate { get; init; }
-
-    /// <summary>
-    /// The escalation ids raised FOR the current hold: the <c>call_human</c> notice the round that raised
-    /// it wrote, and every <c>ask_human</c> question asked while it stands. A person's answer releases the
-    /// hold only when it answers one of these — the hold is bound to its answer by IDENTITY, not by time.
-    /// </summary>
-    /// <remarks>
-    /// <para>Why identity. The rule before this was the round's clock: the newest answer counted when it
-    /// was given after the last round completed. So a question asked during an EARLIER hold, left
-    /// unanswered and answered now, released the CURRENT hold — the answer was newer than the round,
-    /// and nothing asked which question it answered (found by the epic 3 risk consultation, 2026-09-26).</para>
-    /// <para>Empty when no hold stands, and for a hold an older build raised without recording it — which
-    /// NO answer releases: there is no id to bind to, and the clock deciding instead was the bypass the
-    /// binding closed (the gate's findings #24/#30, 2026-09-26); the engine re-issues such a hold's notice
-    /// so the person answers a question this build records. Normalised where it is declared, for the
-    /// reason <see cref="Document"/> spells out: a file written before the field existed has no such
-    /// member, and the deserializer runs no initializer for an absent one.</para>
-    /// </remarks>
-    public IReadOnlyList<string> HoldQuestions
-    {
-        get => field ?? [];
-        init => field = value ?? [];
-    }
-
-    /// <summary>
-    /// The <c>ask_human</c> question ids asked on a FEATURE session after its first round, while no hold
-    /// stands — the questions whose answer can be the person's request for round 2 (D23's third ground).
-    /// </summary>
-    /// <remarks>
-    /// <para>The request is bound to its question by IDENTITY, as a hold is to its notice: the newest
-    /// <c>continue</c>/<c>fix</c> newer than round 1 was the rule before, and any question of the session
-    /// answered that way admitted round 2 — one asked before round 1, one an older build filed (the gate's
-    /// finding #27, 2026-09-26). Recorded by <c>RoundMachine.RecordQuestion</c> as each is asked, spent when
-    /// the request is applied, and reset with the count.</para>
-    /// <para>Normalised where it is declared, as <see cref="HoldQuestions"/> is and for the same reason.</para>
-    /// </remarks>
-    public IReadOnlyList<string> RequestQuestions
-    {
-        get => field ?? [];
-        init => field = value ?? [];
-    }
 
     public ImmutableArray<PriorRejection> Rejections { get; init; } = [];
 

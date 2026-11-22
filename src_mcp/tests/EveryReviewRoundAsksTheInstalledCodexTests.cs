@@ -108,7 +108,7 @@ public sealed class EveryReviewRoundAsksTheInstalledCodexTests : IAsyncLifetime
                 // Fast left at its default — Off, the state that fails on 0.110–0.130.
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
                 SecurityLane = lane,
-                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human) with { SecurityLane = lane.Gate },
+                Rounds = PanelConfig.Uniform(3, 2) with { SecurityLane = lane.Gate },
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),

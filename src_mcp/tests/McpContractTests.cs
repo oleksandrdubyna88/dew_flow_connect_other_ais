@@ -253,53 +253,11 @@ public sealed class McpContractTests : IDisposable
     }
 
     /// <summary>
-    /// With nobody at the keyboard, the escalation waits its budget and then tells the model to
-    /// ask in the chat — the family's `remote-ask` fallback, observed over the real wire. The question is the GATE's
-    /// (the session is held), the only kind that reaches VS Code (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1).
+    /// <c>ask_human</c> over the real wire in v2: the tool stays registered for old callers, no card is written and nothing waits — the
+    /// reply is the one JSON object that tells the caller to ask in its own conversation.
     /// </summary>
     [Fact]
-    public async Task AskHuman_WithNobodyListening_WaitsThenSaysToAskInTheChat()
-    {
-        HeldGateAtNowhere();
-        // The card and its wait are the policies that ask a person's; policy auto (the default) answers a held gate at once.
-        using var server = Start("debug", 3, ("COAI_ON_EXHAUSTED", "human"));
-        try
-        {
-            await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
-                """);
-            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
-            await server.StandardInput.FlushAsync();
-
-            // The budget is short here; the read must still outlast it.
-            var answer = await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ask_human","arguments":{"repoPath":"D:/nowhere","branch":"main","question":"ship it?"}}}
-                """, timeoutSeconds: 60);
-            var text = answer.RootElement.GetProperty("result").GetProperty("content")[0]
-                .GetProperty("text").GetString();
-
-            text.Should().Contain("no_answer_yet").And.Contain("ask the person directly");
-            Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
-                .Should().ContainSingle("the question stays open — a person may still answer it");
-        }
-        finally
-        {
-            server.Kill(entireProcessTree: true);
-            await server.WaitForExitAsync();
-        }
-    }
-
-    /// <summary>A held gate on the path the two card tests ask about — the session a <c>call_human</c> leaves behind.</summary>
-    private void HeldGateAtNowhere() =>
-        new CoaiMcp.Server.SessionStore(_data).Save(new CoaiMcp.Server.PersistedSession(
-            new CoaiMcp.Core.Rounds.SessionState("s-held", "D:/nowhere", "main", CoaiMcp.Core.Rounds.PanelConfig.Uniform(3, 2, CoaiMcp.Core.Rounds.StagePolicy.Human)) { HumanGate = true }, []));
-
-    /// <summary>
-    /// The AI's own question, over the real wire: no card, no wait — the reply tells it to ask in its own conversation
-    /// (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2).
-    /// </summary>
-    [Fact]
-    public async Task AskHuman_ForTheAisOwnQuestion_AnswersAtOnceToAskInTheConversation()
+    public async Task AskHuman_IsAnAlias_AnswersAtOnceToAskInTheConversation_WhateverTheArguments()
     {
         using var server = Start(escalationSeconds: 60);
         try
@@ -315,59 +273,11 @@ public sealed class McpContractTests : IDisposable
                 """, timeoutSeconds: 20);
             var text = answer.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
 
-            text.Should().Contain("ask_in_conversation", "the wait is 60 s and the read 20 s: only an answer that did not wait arrives");
+            var reply = JsonDocument.Parse(text!).RootElement;
+            reply.GetProperty("status").GetString().Should().Be("ask_in_conversation", "the wait is 60 s and the read 20 s: only an answer that did not wait arrives");
+            reply.GetProperty("note").GetString().Should().Be("removed in v2: coai never waits for a person; ask in your own conversation");
+            reply.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["status", "note"], "nothing else rides on it");
             Directory.Exists(Path.Combine(_data, "escalations")).Should().BeFalse("no card was written");
-        }
-        finally
-        {
-            server.Kill(entireProcessTree: true);
-            await server.WaitForExitAsync();
-        }
-    }
-
-    [Fact]
-    public async Task AskHuman_AnsweredInVsCode_ReturnsThePersonsWords()
-    {
-        HeldGateAtNowhere();
-        using var server = Start("debug", 60, ("COAI_ON_EXHAUSTED", "human"));
-        try
-        {
-            await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
-                """);
-            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
-            await server.StandardInput.FlushAsync();
-
-            await server.StandardInput.WriteLineAsync("""
-                {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"ask_human","arguments":{"repoPath":"D:/nowhere","branch":"main","question":"ship it?"}}}
-                """);
-            await server.StandardInput.FlushAsync();
-
-            // Stand in for the extension: wait for the question file, then write the answer.
-            var dir = Path.Combine(_data, "escalations");
-            string? question = null;
-            for (var i = 0; i < 200 && question is null; i++)
-            {
-                question = Directory.Exists(dir)
-                    ? Directory.GetFiles(dir, "*.json").FirstOrDefault(f => !f.EndsWith(".answer.json"))
-                    : null;
-                if (question is null)
-                {
-                    await Task.Delay(50);
-                }
-            }
-
-            question.Should().NotBeNull("the question must appear immediately, not when the wait ends");
-            var id = Path.GetFileNameWithoutExtension(question!);
-            await File.WriteAllTextAsync(
-                Path.Combine(dir, $"{id}.answer.json"),
-                $$"""{"id":"{{id}}","answer":"no, fix it first","answeredUtc":"{{DateTime.UtcNow:O}}"}""");
-
-            var line = await server.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(60));
-            var text = JsonDocument.Parse(line!).RootElement
-                .GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
-
-            text.Should().Contain("answered").And.Contain("no, fix it first");
         }
         finally
         {
@@ -413,14 +323,12 @@ public sealed class McpContractTests : IDisposable
     }
 
     /// <summary>
-    /// <c>todo/PLAN_only_a_person_releases_the_gate.md</c> over the real wire: the schema still takes <c>humanDecision</c> (every
-    /// existing client keeps calling), and on a held gate with no card answered the value is a refusal SENTENCE that names the
-    /// card — not an SDK error, and not a release.
+    /// An old caller still sends <c>humanDecision: proceed</c>: v2's <c>resolve</c> does not declare it, the SDK drops an undeclared
+    /// argument without an error, and the answer is our own sentence — not an invocation failure, and no release of anything.
     /// </summary>
     [Fact]
-    public async Task Resolve_WithHumanDecisionProceed_AndNoCard_IsARefusalSentence_NotAnSdkError()
+    public async Task Resolve_FromAnOldCaller_WithHumanDecisionProceed_IsAnAnswer_NotAnSdkError()
     {
-        HeldGateAtNowhere();
         using var server = Start();
         try
         {
@@ -435,9 +343,7 @@ public sealed class McpContractTests : IDisposable
                 """);
 
             var text = answer.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
-            JsonDocument.Parse(text!).RootElement.GetProperty("error").GetString()
-                .Should().Contain("Proceed despite the findings").And.Contain("ask_human").And.Contain("never from this argument");
-            new CoaiMcp.Server.SessionStore(_data).Load("D:/nowhere", "main")!.State.HumanGate.Should().BeTrue("the argument released nothing");
+            JsonDocument.Parse(text!).RootElement.GetProperty("error").GetString().Should().Contain("call open first");
         }
         finally
         {

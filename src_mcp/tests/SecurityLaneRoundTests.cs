@@ -71,7 +71,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
             Providers = [new("codex") { ExecutablePath = Exe, Feature = true, Enabled = providerEnabled },
                 .. secondRow is null ? Array.Empty<ProviderSettings>() : [secondRow]],
             SecurityLane = lane,
-            Rounds = (rounds ?? new PanelConfig(OnExhausted: StagePolicy.Human)) with { SecurityLane = lane.Gate },
+            Rounds = (rounds ?? new PanelConfig()) with { SecurityLane = lane.Gate },
             ReviewerTimeout = TimeSpan.FromSeconds(15),
             RoundTimeout = roundTimeout,
             CodeWorkspace = "none",
@@ -172,7 +172,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     {
         using var answer = JsonDocument.Parse(await Run(Service(failLane: true), laneOnly: true));
         answer.RootElement.TryGetProperty("error", out _).Should().BeFalse(answer.RootElement.ToString());
-        answer.RootElement.GetProperty("verdict").GetString().Should().Be("call_human");
+        answer.RootElement.GetProperty("verdict").GetString().Should().Be("not_reviewed");
     }
 
     [Fact]
@@ -263,7 +263,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     {
         using var answer = JsonDocument.Parse(await Run(Service(failOrdinary: true)));
         answer.RootElement.TryGetProperty("error", out _).Should().BeFalse(answer.RootElement.ToString());
-        answer.RootElement.GetProperty("verdict").GetString().Should().Be("call_human");
+        answer.RootElement.GetProperty("verdict").GetString().Should().Be("not_reviewed");
     }
 
     [Fact]
@@ -347,11 +347,11 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     {
         var lane = Lane("""{"enabled":true,"maxRounds":2,"prompts":[{"id":"redteam-general"}],"runs":[{"vendor":"codex","prompt":"redteam-general"}]}""");
         using var answer = JsonDocument.Parse(await RunFeature(
-            Service(failOrdinary: true, laneSetting: lane, rounds: PanelConfig.Uniform(1, 5, StagePolicy.Human))));
+            Service(failOrdinary: true, laneSetting: lane, rounds: PanelConfig.Uniform(1, 5))));
         answer.RootElement.TryGetProperty("error", out _).Should().BeFalse(answer.RootElement.ToString());
-        answer.RootElement.GetProperty("verdict").GetString().Should().Be("call_human",
+        answer.RootElement.GetProperty("verdict").GetString().Should().Be("not_reviewed",
             "the operator gave the ordinary feature roles one round, and the lane's own budget is not theirs to spend");
-        answer.RootElement.ToString().Should().Contain("the feature budget is one round");
+        answer.RootElement.GetProperty("instruction").GetString().Should().Contain("reviewer answered");
     }
 
     [Theory]
@@ -364,25 +364,25 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
         using var answer = JsonDocument.Parse(await Run(Service(laneSetting: lane), laneOnly: true,
             files: [new("Fixed.cs", "@@ -1 +1 @@\n-old\n+return 42;")]));
         answer.RootElement.TryGetProperty("error", out _).Should().BeFalse(answer.RootElement.ToString());
-        answer.RootElement.GetProperty("verdict").GetString().Should().Be("call_human",
-            "nothing reviewed the lane's round, so a person decides rather than the gate passing over nobody");
+        answer.RootElement.GetProperty("verdict").GetString().Should().Be("not_reviewed",
+            "nothing reviewed the lane's round, so it is said out loud rather than the gate passing over nobody");
         answer.RootElement.ToString().Should().Contain(SecurityCatalog.Gate + " was not asked");
         var session = new SessionStore(_data).Load(_repo.Path, "main")!;
         session.Rounds.Should().ContainSingle("the round is on the record, with its reason");
-        session.State.HumanGate.Should().BeTrue();
+        session.State.AdvanceOnResolve.Should().BeTrue("nobody is held: the stage moves on resolve");
     }
 
     [Fact]
     public async Task A_feature_round_admitted_for_a_lane_finding_with_no_lane_work_is_recorded_not_refused()
     {
         var lane = Lane("""{"enabled":true,"runs":[{"vendor":"codex","prompt":"redteam-sql"}]}""");
-        var service = Service(laneSetting: lane, rounds: PanelConfig.Uniform(1, 5, StagePolicy.Human));
+        var service = Service(laneSetting: lane, rounds: PanelConfig.Uniform(1, 5));
         using var answer = JsonDocument.Parse(await RunFeature(service, roundsRun: 1, ground: SecondRoundGround.BlockingFinding,
             files: [new("Fixed.cs", "@@ -1 +1 @@\n-old\n+return 42;")]));
         answer.RootElement.TryGetProperty("error", out _).Should().BeFalse(answer.RootElement.ToString());
-        answer.RootElement.GetProperty("verdict").GetString().Should().Be("call_human",
+        answer.RootElement.GetProperty("verdict").GetString().Should().Be("not_reviewed",
             "a refusal would leave the admitted round standing, and every later call would meet it again");
-        new SessionStore(_data).Load(_repo.Path, SessionKey.FeatureBranch, "", "plan.md")!.State.HumanGate.Should().BeTrue();
+        new SessionStore(_data).Load(_repo.Path, SessionKey.FeatureBranch, "", "plan.md")!.State.AdvanceOnResolve.Should().BeTrue();
     }
 
     [Fact]

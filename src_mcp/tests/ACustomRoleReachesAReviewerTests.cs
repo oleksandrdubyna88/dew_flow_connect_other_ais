@@ -46,7 +46,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
         {
             DataDir = _dataDir,
             CodeWorkspace = "none",
-            Rounds = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog },
+            Rounds = new PanelConfig(Roles: null) { Catalog = catalog },
             Providers = [new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "m" }],
         };
 

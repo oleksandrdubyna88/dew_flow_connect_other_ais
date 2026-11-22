@@ -87,7 +87,7 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
         new PanelSettings
         {
             Providers = [],
-            Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+            Rounds = PanelConfig.Uniform(3, 2),
             DataDir = _data,
             ReviewerTimeout = TimeSpan.FromSeconds(30),
             QuestionConsult = new QuestionConsultSettings { Rows = rows, RowBudget = TimeSpan.FromSeconds(30) },

@@ -109,16 +109,10 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
     }
 
     /// <summary>One custom DOCUMENT role, with every shipped role switched off.</summary>
-    /// <param name="escalationBudget">
-    /// How long <c>ask_human</c> waits for a person. The shipped thirty minutes for every test that
-    /// never asks one; a test that DOES ask sets a budget nobody is expected to meet.
-    /// </param>
     /// <param name="threshold">
-    /// The gating count a round must fall under. Zero makes any gating finding hold the gate — one round, then
-    /// <c>call_human</c> — which is how a test reaches a HELD document session, the only one whose
-    /// <c>ask_human</c> becomes a card.
+    /// The gating count a round must fall under.
     /// </param>
-    private PanelService Service(TimeSpan? escalationBudget = null, int threshold = 5)
+    private PanelService Service(int threshold = 5)
     {
         var catalog = RoleComposition.Compose([
             new RoleEntry(RoleCatalog.PlanRole, Active: false),
@@ -138,13 +132,12 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
                 Rounds = new PanelConfig(
-                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, threshold)), StagePolicy.Human)
+                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, threshold)))
                 {
                     Catalog = catalog,
                 },
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
-                EscalationBudget = escalationBudget ?? TimeSpan.FromMinutes(30),
             },
             VaultKeys.None("no vault in tests"),
             default,
@@ -340,7 +333,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
                 Rounds = new PanelConfig(
-                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)), StagePolicy.Human)
+                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)))
                 {
                     Catalog = catalog,
                 },
@@ -443,17 +436,8 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
 
     // ---------- what the feature-review plan found (§9, 2026-09-25) ----------
 
-    /// <summary>
-    /// A document round nobody answered calls the person about the DOCUMENT gate — not about a gate
-    /// called "done".
-    /// </summary>
-    /// <remarks>
-    /// <c>RoundSubject.StageName</c> knew two stages and answered <c>done</c> for everything else, so
-    /// the notice a document round left in the panel read "The done gate needs your decision". A
-    /// person reading that has no idea which of their reviews stopped. (§9.1)
-    /// </remarks>
     [Fact]
-    public async Task ADocumentRoundNobodyAnswered_AsksThePersonAboutTheDocumentGate_NotAboutDone()
+    public async Task ADocumentRoundNobodyAnswered_IsNotReviewed_AndWritesNoCard()
     {
         var service = Service();
         await service.OpenAsync(_repo, "main");
@@ -463,15 +447,9 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         Environment.SetEnvironmentVariable("FAKECLI_EXIT", "1");
         Environment.SetEnvironmentVariable("FAKECLI_STDERR", "429 Too Many Requests");
         var answer = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()));
-        answer.GetProperty("verdict").GetString().Should().Be("call_human", $"nothing was reviewed: {answer}");
 
-        var notice = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
-            .Single(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
-        var question = JsonDocument.Parse(await File.ReadAllTextAsync(notice)).RootElement.GetProperty("question").GetString();
-
-        question.Should().StartWith("The document review gate needs your decision",
-            "the notice names the gate a person can find in their panel");
-        question.Should().NotContain("done gate");
+        answer.GetProperty("verdict").GetString().Should().Be("not_reviewed", $"nothing was reviewed: {answer}");
+        Directory.Exists(Path.Combine(_data, "escalations")).Should().BeFalse("no person is called, so no card is written");
     }
 
     /// <summary>
@@ -500,42 +478,6 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// <c>ask_human</c> for a document review is filed under the DOCUMENT's session, with that
-    /// session's open findings — so the person's answer reaches the review that asked.
-    /// </summary>
-    /// <remarks>
-    /// It always loaded the branch session: for a document review it showed the wrong pending
-    /// findings and filed the question under the branch session's id, so <c>Escalations.DecisionFor</c>
-    /// — keyed by session id — never found the person's answer for the document session. (§9.3)
-    /// The document's gate is HELD here (one round, a threshold of zero): only a held gate's question becomes a
-    /// card (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1).
-    /// </remarks>
-    [Fact]
-    public async Task AskHumanForADocumentReview_FilesTheQuestionUnderTheDocumentsSession_WithItsFindings()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), threshold: 0);
-        await service.OpenAsync(_repo, "main");
-        Script(WithNotes);
-        Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()))
-            .GetProperty("verdict").GetString().Should().Be("call_human", "the fixture must hold the document's gate");
-        var documentSession = Parse(await service.StatusAsync(_repo, "main", "docs/spec.md")).GetProperty("sessionId").GetString();
-        var branchSession = Parse(await service.StatusAsync(_repo, "main")).GetProperty("sessionId").GetString();
-        documentSession.Should().NotBe(branchSession, "the fixture holds two sessions, or the test proves nothing");
-
-        var reply = Parse(await service.AskHumanAsync(_repo, "main", "Ship the spec as it stands?", document: "docs/spec.md"));
-
-        reply.GetProperty("status").GetString().Should().Be("no_answer_yet", "nobody is at the keyboard in a test");
-        var question = await TheCardAsking("Ship the spec");
-        question.GetProperty("sessionId").GetString().Should().Be(documentSession,
-            "the person's answer is looked up by session id, so a question filed under the branch's session is never answered");
-        question.GetProperty("openFindings").GetArrayLength().Should().Be(1,
-            "the document round's own gating finding rides with the question");
-        question.GetProperty("kind").GetString().Should().Be(EscalationKinds.Question);
-        (await TheCardAsking("The document review gate")).GetProperty("kind").GetString().Should().Be(EscalationKinds.Notice,
-            "the round's call_human notice says which producer wrote it, so the panel never has to guess");
-    }
-
-    /// <summary>
     /// Asking about a document that was never reviewed — a path with no file behind it, or a name — is
     /// answered with the no-session sentence, never an exception.
     /// </summary>
@@ -558,141 +500,5 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
 
         status.GetProperty("error").GetString().Should().Contain("no review of");
         resolve.GetProperty("error").GetString().Should().Contain("no review of");
-    }
-
-    /// <summary>
-    /// And with no document named, the question is the BRANCH session's — which is not held, so it is the AI's own
-    /// question and is asked in its conversation. The reply names the mistake that lands an AI here: a question about
-    /// the held document review must pass <c>document</c> (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2).
-    /// </summary>
-    [Fact]
-    public async Task AskHumanWithNoDocument_AsksAboutTheBranch_AndSaysToNameTheDocumentForItsHeldReview()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), threshold: 0);
-        await service.OpenAsync(_repo, "main");
-        Script(WithNotes);
-        await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument());
-        var notices = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json").Count(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
-
-        var reply = Parse(await service.AskHumanAsync(_repo, "main", "Ship it?"));
-
-        reply.GetProperty("status").GetString().Should().Be("ask_in_conversation", reply.ToString());
-        reply.GetProperty("instruction").GetString().Should().Contain("`document`");
-        Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json").Count(f => !f.EndsWith(".answer.json", StringComparison.Ordinal))
-            .Should().Be(notices, "the branch's question wrote no card beside the document's own call_human notice");
-    }
-
-    /// <summary>
-    /// <c>todo/PLAN_only_a_person_releases_the_gate.md</c> on a DOCUMENT review: the argument releases nothing, and once the person
-    /// pressed Proceed on the notice every review entry says to call <c>resolve</c> (§11.7), which then closes the review.
-    /// </summary>
-    [Fact]
-    public async Task AHeldDocumentReview_IsReleasedByThePersonsProceedOnItsNotice_AndByNothingTheAiPasses()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), threshold: 0);
-        await service.OpenAsync(_repo, "main");
-        Script(WithNotes);
-        Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()))
-            .GetProperty("verdict").GetString().Should().Be("call_human", "the fixture must hold the document's gate");
-
-        var claimed = Parse(await service.ResolveAsync(_repo, "main", "[]", true, document: "docs/spec.md"));
-        claimed.TryGetProperty("error", out _).Should().BeTrue($"the argument is no decision: {claimed}");
-        claimed.GetProperty("error").GetString().Should().Contain("Proceed despite the findings");
-
-        var notice = await TheCardAsking("The document review gate");
-        var id = notice.GetProperty("id").GetString()!;
-        await File.WriteAllTextAsync(
-            Path.Combine(_data, "escalations", $"{id}.answer.json"),
-            $$"""{"id":"{{id}}","answer":"Proceed despite the findings","decision":"proceed","answeredUtc":"{{DateTime.UtcNow:O}}"}""");
-
-        var review = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()));
-        review.GetProperty("error").GetString().Should().Contain("a person pressed Proceed on the held gate — call resolve to advance");
-
-        var resolved = Parse(await service.ResolveAsync(_repo, "main", "[]", document: "docs/spec.md"));
-        resolved.TryGetProperty("error", out var error).Should().BeFalse($"the person's Proceed closes the review: {error}");
-        resolved.GetProperty("stage").GetString().Should().Be("Done");
-    }
-
-    /// <summary>A document review held by <c>call_human</c>, its round resolved by the AI — still held, no longer awaiting a resolve.</summary>
-    private async Task<PanelService> HeldAndResolvedByTheAiAsync()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), threshold: 0);
-        await service.OpenAsync(_repo, "main");
-        Script(WithNotes);
-        Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()))
-            .GetProperty("verdict").GetString().Should().Be("call_human", "the fixture must hold the document's gate");
-        var resolved = Parse(await service.ResolveAsync(_repo, "main", """[{"finding":0,"action":"accept"}]""", document: "docs/spec.md"));
-        resolved.TryGetProperty("error", out var error).Should().BeFalse($"the AI's own decisions are recorded: {error}");
-
-        return service;
-    }
-
-    private bool ASessionExists(string identity) => new SessionStore(_data).Exists(_repo, "main", identity);
-
-    /// <summary>
-    /// A held document review cannot be walked out of by starting another: <c>newReview</c> over a hold that the AI already
-    /// resolved (so no round awaits it) would make <c>docs/spec.md#2</c> with no hold and a fresh budget, and
-    /// <c>resolve</c> and <c>status</c> would then address it (<c>todo/PLAN_only_a_person_releases_the_gate.md</c>).
-    /// </summary>
-    [Fact]
-    public async Task ANewReviewOfAHeldDocument_IsRefused_AndTheHoldStays()
-    {
-        var service = await HeldAndResolvedByTheAiAsync();
-
-        var reply = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument(), newReview: true));
-
-        reply.TryGetProperty("error", out var error).Should().BeTrue($"a held review is not started over, but the reply was {reply}");
-        error.GetString().Should().Contain("a person has to decide");
-        ASessionExists("docs/spec.md#2").Should().BeFalse("the refusal made no second review");
-        var status = Parse(await service.StatusAsync(_repo, "main", "docs/spec.md"));
-        status.GetProperty("rounds").GetArrayLength().Should().Be(1, "status still addresses the held review");
-    }
-
-    [Fact]
-    public async Task ANewReviewOfAHeldDocument_AfterAPersonsProceed_SaysToResolve()
-    {
-        var service = await HeldAndResolvedByTheAiAsync();
-        var id = (await TheCardAsking("The document review gate")).GetProperty("id").GetString()!;
-        await File.WriteAllTextAsync(
-            Path.Combine(_data, "escalations", $"{id}.answer.json"),
-            $$"""{"id":"{{id}}","answer":"Proceed despite the findings","decision":"proceed","answeredUtc":"{{DateTime.UtcNow:O}}"}""");
-
-        var reply = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument(), newReview: true));
-
-        reply.TryGetProperty("error", out var error).Should().BeTrue($"a Proceed on file is consumed by resolve, not by a new review, but the reply was {reply}");
-        error.GetString().Should().Contain("a person pressed Proceed on the held gate — call resolve to advance");
-        ASessionExists("docs/spec.md#2").Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task ANewReviewOfADocument_StartsOnceAPersonsProceedWasResolved()
-    {
-        var service = await HeldAndResolvedByTheAiAsync();
-        var id = (await TheCardAsking("The document review gate")).GetProperty("id").GetString()!;
-        await File.WriteAllTextAsync(
-            Path.Combine(_data, "escalations", $"{id}.answer.json"),
-            $$"""{"id":"{{id}}","answer":"Proceed despite the findings","decision":"proceed","answeredUtc":"{{DateTime.UtcNow:O}}"}""");
-        Parse(await service.ResolveAsync(_repo, "main", "[]", document: "docs/spec.md"))
-            .GetProperty("stage").GetString().Should().Be("Done");
-
-        var reply = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument(), newReview: true));
-
-        reply.TryGetProperty("error", out var error).Should().BeFalse($"the hold was released by a person, so a fresh review may start: {error}");
-        ASessionExists("docs/spec.md#2").Should().BeTrue();
-    }
-
-    /// <summary>The card a question asked, found by its text — a held gate also carries its own call_human notice.</summary>
-    private async Task<JsonElement> TheCardAsking(string beginning)
-    {
-        foreach (var file in Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json").Where(f => !f.EndsWith(".answer.json", StringComparison.Ordinal)))
-        {
-            var card = JsonDocument.Parse(await File.ReadAllTextAsync(file)).RootElement;
-            if (card.GetProperty("question").GetString()!.StartsWith(beginning, StringComparison.Ordinal))
-            {
-                return card;
-            }
-        }
-
-        throw new InvalidOperationException($"no card asks \"{beginning}\"");
     }
 }

@@ -100,8 +100,7 @@ internal static class Tools
                     Every reviewer is told the plan ends at its `END OF PLAN` line; one that did not receive it
                     whole does not count as answering. The reply
                     carries the merged, de-duplicated findings, the honest reviewer count, the
-                    verdict (proceed | revise | continue_anyway | good_enough | not_reviewed |
-                    call_human | escalated) and what to do next. Then record decisions with `resolve` — every
+                    verdict (proceed | revise | good_enough | not_reviewed) and what to do next. Then record decisions with `resolve` — every
                     finding, reasons on rejections.
 
                     A finding that changes your mind about the shape of the work is what `consult`
@@ -130,7 +129,7 @@ internal static class Tools
                 Name = "review_code",
                 Title = "One independent reviewer per configured role, per provider, over the branch diff",
                 Description = """
-                    The code gate — REFUSES until the plan stage advanced (a round that ended `proceed`, `continue_anyway`,
+                    The code gate — REFUSES until the plan stage advanced (a round that ended `proceed`,
                     `good_enough` or `not_reviewed`, then `resolve`d), and REFUSES a bare diff. Per enabled provider, one reviewer per role configured for this
                     stage — conventions / architecture / security+reliability / UX-DX & code
                     performance as shipped, plus any role the operator has added — reads the SCOPE,
@@ -262,7 +261,7 @@ internal static class Tools
 
                     `repoPath` — the repository's top level (`git rev-parse --show-toplevel`).
                     `planPath` — the plan file, inside the repository (`todo/PLAN_x.md`). Its PATH is the
-                    review's identity: pass the same value to `resolve`, `status` and `ask_human` as
+                    review's identity: pass the same value to `resolve` and `status` as
                     `feature`.
                     `baseRef` — the commit BEFORE the first epic (a SHA, a tag, or a branch still pointing
                     at it). Refused unless it resolves, differs from HEAD, is an ancestor of HEAD, and
@@ -300,14 +299,11 @@ internal static class Tools
                     with a reason), land the accepted fixes as NEW pull requests, and no second review reads
                     them. `revise` means a second round runs, and it runs ONLY when round 1 had a reviewer
                     failure (a retry asks only the reviewers that failed, over the same HEAD, and carries
-                    the answered reviewers' decided findings under `carried`), a `blocking` finding came
-                    back (fix it, then call again with `again: true` over the new HEAD), or the person asks
-                    for one — through `ask_human` with `feature`, answered on their panel with
-                    "Keep going — more rounds" (never under policy `auto`, which asks no person); no
-                    argument of yours can grant it, `again: true` included.
-                    A second round that still carries a `blocking` finding, or fails again, is `call_human`,
-                    which does block — under `auto` it is `good_enough`, or `not_reviewed` when nobody answered
-                    in it. A third round is never run. `again: true` is refused when nothing moved and when no
+                    the answered reviewers' decided findings under `carried`) or a `blocking` finding came
+                    back (fix it, then call again with `again: true` over the new HEAD).
+                    A second round that still carries a `blocking` finding, or fails again, ends as `good_enough`,
+                    or `not_reviewed` when nobody answered in it — nobody is waited for. A third round is never run.
+                    `again: true` is refused when nothing moved and when no
                     ground admits a round; against a NEW `baseRef` it starts a fresh review of the same plan.
                     """,
                 ReadOnly = true,
@@ -317,16 +313,11 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            // `humanDecision` MUST carry a default: without one the SDK publishes it as a REQUIRED
-            // argument, and then the ordinary resolve — decisions, no override, every single round
-            // — fails as "An error occurred invoking 'resolve'". Found by a live run in WSL; the
-            // Windows run before it had always passed the override, which is the one call that
-            // does not need to work. It stays in the schema for every client that sends it; it is a CLAIM
-            // the service judges, never a decision (todo/PLAN_only_a_person_releases_the_gate.md).
-            async (string repoPath, string branch, string decisions, string? humanDecision = null,
+            // The SDK drops an argument a tool does not declare without an error, so an old caller that still
+            // sends `humanDecision` is not broken by its removal (v2: coai never waits for a person).
+            async (string repoPath, string branch, string decisions,
                    string? document = null, string? feature = null) =>
                 await (await host.CurrentAsync()).ResolveAsync(repoPath, branch, decisions,
-                    string.Equals(humanDecision, "proceed", StringComparison.OrdinalIgnoreCase),
                     document ?? string.Empty, feature ?? string.Empty),
             new McpServerToolCreateOptions
             {
@@ -339,19 +330,7 @@ internal static class Tools
                     reason refuses the whole call; a reasoned rejection is discounted in later
                     rounds unless a reviewer re-raises it with a genuinely new argument.
 
-                    Under a policy that asks a person, a call_human verdict holds the gate; policy `auto`
-                    raises no hold, and `not_reviewed` and `good_enough` are resolved like `proceed`.
-                    After a call_human verdict a held gate is released only by an
-                    answer on the notice card — the person's "Proceed despite the findings" button there. `humanDecision`
-                    is not a decision: the server never reads the release from this argument, it
-                    is refused while a gate is held and no such answer is on file, and ignored when one
-                    is. When the person has pressed Proceed, `status` and every refused review say
-                    so; call resolve — with your decisions, or none — and the stage advances, the
-                    findings you left undecided recorded as proceeded over (not as rejections: raised
-                    again in a later round they still gate).
-                    Policy auto also releases a hold left by a build before auto, and every review
-                    call then says so: call resolve — with your decisions, or none — and the stage
-                    advances, once.
+                    No verdict holds the gate: `not_reviewed` and `good_enough` are resolved like `proceed`.
 
                     A DOCUMENT round is resolved with its `document`; a FEATURE round with its `feature` —
                     the same `planPath` you gave `review_feature` (the branch is then not read).
@@ -390,78 +369,23 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            // The three gate arguments carry defaults, so every client that predates them keeps calling with three. The
-            // token is the SDK's, bound per request and never part of the schema: a client that cancels — or whose own
-            // tool timeout fires first — stops a production risk's consultants rather than paying for answers nobody
-            // receives (research/PLAN_ask_human_is_for_the_gate.md, the own review of 2026-10-03).
-            async (string repoPath, string branch, string question, string? document = null, string? feature = null,
-                   string? consultId = null, bool productionRisk = false, string? riskReason = null, CancellationToken cancellationToken = default) =>
-                await (await host.CurrentAsync()).AskHumanAsync(
-                    repoPath, branch, question, document ?? string.Empty, feature ?? string.Empty,
-                    consultId ?? string.Empty, productionRisk, riskReason ?? string.Empty, cancellationToken),
+            // Kept registered for old callers; the arguments are accepted and ignored (v2: coai never waits for a person).
+            (string repoPath, string branch, string question, string? document = null, string? feature = null,
+             string? consultId = null, bool productionRisk = false, string? riskReason = null) =>
+                AskHumanRemovedAnswer.Reply,
             new McpServerToolCreateOptions
             {
                 Name = "ask_human",
-                Title = "Put a question to the person — the gate's on a card in VS Code, your own back to your chat",
+                Title = "Removed in v2 — ask the person in your own conversation",
                 Description = """
-                    Two kinds of question, and the server tells them apart by the session you name.
-
-                    UNDER POLICY `auto` (the default of When the rounds run out) this call never waits
-                    for the person and writes no card (the consultants of a production risk still run, and
-                    their answers come back before this call returns). Your own question without a `consultId` is answered
-                    `status: "consult_first"` — ask the consultants, settle it with them, and come back
-                    with the consultId only if you did not. A held gate is answered `no_answer_yet` at
-                    once: a hold the person owns names its notice; a hold left by a build before auto
-                    that could not be released yet says why — call again.
-
-                    THE GATE'S QUESTION — the session is held by a `call_human` verdict, or it is a
-                    feature review after its first round, where the person may ask for the second. It
-                    appears in VS Code (a dialog, the status bar, the open-questions list) with the
-                    round's still-gating findings, and under any other policy THIS CALL BLOCKS until they
-                    answer or the budget runs out (15 minutes by default).
-
-                    YOUR OWN QUESTION — anything else: a choice about the work, a missing detail. No
-                    card is written and nothing waits: the reply is `status: "ask_in_conversation"`,
-                    and you ask the person yourself, in this conversation, with your own question
-                    tool, offering the options you see. Never decide alone because they have not
-                    answered yet.
-
-                    The phase rule, which the server enforces on your own questions: a question asked while the plan is being
-                    formed, and the first 2 batches of questions after the plan's `proceed`, go to the person
-                    directly; every question after that, until the work is released to the stage environment,
-                    goes through `ask_consultants` first and reaches `ask_human` with the `consultId` it
-                    returned — unless `productionRisk: true` with a `riskReason` says a wrong answer could
-                    take production down, which makes `ask_human` ask the consultants first and return their
-                    answers in `consultantAnswers`. After the release, questions go to the person directly again.
-                    The gate's own question is never sent to the consultants; a production risk on it, in the
-                    building phase, puts the card up at once with the consultants beside it. A `consultId` is VERIFIED,
-                    never trusted: a consultation this caller session asked in this repository, finished,
-                    under 30 minutes old and not yet used — anything else counts as none. Under `require` a
-                    question the rule sends to the consultants is refused naming `ask_consultants`; under
-                    `remind` it is let through with a `note`; when no consultant can be had the gate stands
-                    down and the `note` says so. `productionRisk` without a `riskReason` is refused.
-
-                    Asking about a DOCUMENT review: pass `document` — the same `documentPath` or
-                    `documentName` you gave `review_document`, exactly as `resolve` and `status`
-                    take it. A document review is its own session, and without it the question is
-                    filed under the branch's session, carries the branch's findings, and the
-                    person's answer never reaches the review that asked. A FEATURE review asks with
-                    `feature` — the `planPath` you gave `review_feature` — for the same reason. Forgetting it on
-                    a held document or feature review is the one way the gate's question comes back as
-                    `ask_in_conversation`: the branch's own session is not the held one.
-
-                    Four possible replies. `status: "consult_first"` — policy auto, your own question:
-                    call ask_consultants first, as above. `status: "ask_in_conversation"` — your own
-                    question: ask in this conversation, as above. `status: "answered"` carries their
-                    words in `answer` — act on them. `status: "no_answer_yet"` means nobody was at the
-                    keyboard: ask the person directly in this conversation and wait for their reply —
-                    under any other policy; under `auto` it comes at once, and its instruction says what
-                    to do instead. Never decide alone because nobody answered. The question is then marked expired in VS Code —
-                    out of the active list, kept in the log for seven days — and every reply's `note`
-                    carries what the gate said beside the door.
+                    Removed in v2: coai never waits for a person and writes no card. The tool stays so an old
+                    caller gets an answer: the reply is always `status: "ask_in_conversation"` with a `note`
+                    saying so. Ask the person yourself, in this conversation, with your own question tool,
+                    offering the options you see, and never decide alone because they have not answered yet.
+                    Use `ask_consultants` first for a question another model could settle.
                     """,
                 ReadOnly = true,
-                Idempotent = false,
+                Idempotent = true,
                 Destructive = false,
                 OpenWorld = false,
             });

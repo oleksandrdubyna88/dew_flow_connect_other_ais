@@ -288,7 +288,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             {
                 ConsultantHomesRoot = _homes,
                 Providers = [],
-                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+                Rounds = PanelConfig.Uniform(3, 2),
                 DataDir = _dir.At("data"),
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 QuestionConsult = new QuestionConsultSettings { Rows = [DiskRow()], Roots = [Granted], RowBudget = TimeSpan.FromSeconds(30) },

@@ -90,14 +90,6 @@ public static class ConsultationSweeper
                 log.Information("swept {Count} question consultation(s): interrupted by a dead server, past retention, or over the file cap", questions);
             }
 
-            // The person's cards and the phase records on the same beat (A4, S3): seven days for an answered or expired
-            // question, an orphan or a temp file; thirty for a phase record; a held question is kept.
-            var cards = service.SweepEscalations();
-            if (cards > 0)
-            {
-                log.Information("swept {Count} escalation file(s) and question-phase record(s) past retention", cards);
-            }
-
             // The product's scratch directories in temp on the same beat (PLAN_vibe_and_kimi_runtimes.md §7): the round's
             // build path was the only caller of this throttled sweep, so a crashed consult's snapshot outlived every server
             // that ran no round. Throttled to once in ten minutes by the service itself; a quiet server pays one walk.

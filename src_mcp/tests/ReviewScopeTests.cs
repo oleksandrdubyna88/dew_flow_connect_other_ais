@@ -70,8 +70,7 @@ public sealed class ReviewScopeTests : IDisposable
         // start a round with no reviewers in it, and a round nobody answered is counted UNRESOLVED —
         // so it would sit open for ever and the next call would be refused for the wrong reason.
         var allOff = new PanelConfig(
-            PanelConfig.CodeRoleNames.ToDictionary(r => r, _ => new RoleGate(1, 5, Enabled: false)),
-            StagePolicy.Human);
+            PanelConfig.CodeRoleNames.ToDictionary(r => r, _ => new RoleGate(1, 5, Enabled: false)));
         var service = new PanelService(
             new PanelSettings { DataDir = _data, Rounds = allOff },
             VaultKeys.None("not configured for this test"), default, new ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);

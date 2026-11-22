@@ -29,10 +29,8 @@ internal sealed class RoundEngine(
     BoundedScheduler scheduler,
     ReviewerExecutor executor,
     RoundCommands commands,
-    Escalations escalations,
     UsageLedger ledger,
     Store.Projection projection,
-    SessionPolicy policy,
     CallerSessions callers,
     RemoteProbe remote,
     RoundAuthorsStep authors,
@@ -47,10 +45,8 @@ internal sealed class RoundEngine(
     private readonly WorktreeManager _worktrees = worktrees;
     private readonly BoundedScheduler _scheduler = scheduler;
     private readonly ReviewerExecutor _executor = executor;
-    private readonly Escalations _escalations = escalations;
     private readonly UsageLedger _ledger = ledger;
     private readonly Store.Projection _projection = projection;
-    private readonly SessionPolicy _policy = policy;
     private readonly CallerSessions _callers = callers;
     private readonly RemoteProbe _remote = remote;
     private readonly RoundAuthorsStep _authors = authors;
@@ -72,102 +68,6 @@ internal sealed class RoundEngine(
             .Where(row => row.Second.Outcome is not ReviewerOutcome.StoodDown)
             .Select(row => row.First.Prompt)
             .Where(p => p.Length > 0);
-
-    /// <summary>
-    /// A held gate, opened by the answer a person actually gave — read at the last moment.
-    /// </summary>
-    /// <remarks>
-    /// <para>The decision lives in the escalation answer file, keyed by session, because that is
-    /// where the panel writes it (anything that writes <c>&lt;id&gt;.answer.json</c> is a writer). Reading it HERE, immediately before a round
-    /// would begin, means the person can answer at any point during the wait and the next attempt
-    /// simply works — no restart, no re-open, nothing to poll.</para>
-    /// <para><c>Continue</c> and <c>Fix</c> grant a fresh set of rounds; <c>Discuss</c> and a typed
-    /// answer with no button pressed leave the gate held, which is what both of them mean. <c>Proceed</c>
-    /// is left to <c>resolve</c> — the stage advances in one place — so the begin that follows refuses it
-    /// with the sentence naming <c>resolve</c> (<see cref="RoundMachine.ReviewAfterProceed"/>).</para>
-    /// <para>A held session read here also has its standing notice refreshed in place when an older server wrote it
-    /// without its <c>decisions</c> list (<see cref="Escalations.OfferHeldNotices"/>), so a hold that outlived an upgrade
-    /// offers Proceed on the card it already has — never on a second one.</para>
-    /// <para><b>Only an answer to THIS hold</b> (<see cref="CurrentAnswer"/>): the newest answered
-    /// question is walked to past an unanswered notice, so an answer to an earlier hold opened a later
-    /// one on its own until the reader asked when the answer was given (D12, 2026-09-26).</para>
-    /// </remarks>
-    private PersistedSession ApplyAnyHumanDecision(PersistedSession session)
-    {
-        if (!session.State.HumanGate)
-        {
-            return session;
-        }
-
-        if (session.State.HoldQuestions.Count == 0)
-        {
-            return WithTheHoldReissued(session);
-        }
-
-        _escalations.OfferHeldNotices(session);
-        var decision = CurrentAnswer.DecisionFor(session, _escalations, _log);
-        var opened = RoundMachine.ApplyHumanDecision(session.State, decision);
-        if (ReferenceEquals(opened, session.State) || opened.HumanGate)
-        {
-            return session;
-        }
-
-        _log.Information(
-            "a person chose {Decision}: the {Stage} stage gets a fresh set of rounds",
-            decision,
-            session.State.Stage);
-        var next = session with { State = opened };
-        _store.Save(next);
-        return next;
-    }
-
-    /// <summary>
-    /// The sentence every review entry answers once the person has pressed Proceed on the held gate and nothing has consumed it
-    /// yet — or empty. Held and answered-Proceed only: <c>GateHeld</c> remains what an unanswered, or otherwise answered, hold gets.
-    /// </summary>
-    private string ProceedOnFile(PersistedSession session) =>
-        session.State.HumanGate && CurrentAnswer.DecisionFor(session, _escalations, _log) == HumanDecision.Proceed
-            ? RoundMachine.ReviewAfterProceed
-            : string.Empty;
-
-    /// <summary>
-    /// What a review entry that would START a session beside a held one is told: the sentence naming <c>resolve</c> once a Proceed is
-    /// on file, else <c>GateHeld</c> — the sentences the held session's own entries answer. A new session is not a door out of a hold.
-    /// </summary>
-    internal string HeldSentence(PersistedSession held)
-    {
-        _escalations.OfferHeldNotices(held);
-
-        return ProceedOnFile(held) is { Length: > 0 } pressed ? pressed : RoundMachine.GateHeld;
-    }
-
-    /// <summary>
-    /// A held gate that records no question — a hold an older build raised — is released by NO answer:
-    /// the notice is re-issued through the same road a round's <c>call_human</c> takes, its id recorded on
-    /// the session under the claim, so the person answers a question this build can bind.
-    /// </summary>
-    /// <remarks>
-    /// The clock used to decide here as the residual for exactly this session, and it was the bypass in a
-    /// smaller coat: an old question answered late released the hold (the gate's findings #24/#30,
-    /// 2026-09-26). Saved before it is written, as the round's notice is, so the hold is recorded with the
-    /// question that releases it; the begin that follows still refuses with <c>GateHeld</c>, which is the
-    /// caller's instruction to ask the person.
-    /// </remarks>
-    private PersistedSession WithTheHoldReissued(PersistedSession session)
-    {
-        var notice = HoldNotice(
-            session,
-            "the earlier notice could not be matched to an answer, so it is asked again",
-            [.. session.Pending.Where(f => f.IsGating)]);
-        var recorded = session with { State = session.State with { HoldQuestions = [notice.Id] } };
-        _store.Save(recorded);
-        _escalations.Notify(notice);
-        _log.Information(
-            "the {Stage} gate of session {SessionId} is held with no question recorded for it; its notice was re-issued as {Id}",
-            session.State.Stage, session.State.SessionId, notice.Id);
-
-        return recorded;
-    }
 
     /// <summary>
     /// Ask every configured Team server which roles it runs. EVERY round, without exception.
@@ -266,33 +166,10 @@ internal sealed class RoundEngine(
             return Error("no session for this repo+branch — call open first", from);
         }
 
-        var release = _policy.Released(session);
-        if (release.NotWritten.Length > 0)
-        {
-            return Error(LegacyHold.NotWrittenSentence(SessionPolicy.StageOf(session), release.NotWritten), from);
-        }
-        session = ApplyAnyHumanDecision(release.Session);
-        // ONE hold check for every review entry — review_plan, review_code, review_document and review_feature all come through
-        // here (§11.7 of todo/PLAN_only_a_person_releases_the_gate.md): GateHeld while no person has answered, and the sentence
-        // naming `resolve` once a Proceed is on file. Nothing is saved for a refusal.
-        if (ProceedOnFile(session) is { Length: > 0 } pressed)
-        {
-            return Error(pressed, from);
-        }
-
-        if (SessionPolicy.AwaitsItsResolve(session))
-        {
-            return Error(LegacyHold.ReleasedSentence(SessionPolicy.StageOf(session)), from);
-        }
-
         session = session with
         {
-            State = session.State with
-            { Config = LegacyHold.Stamped(session.State, _settings.Rounds) with { SecurityLane = _settings.SecurityLane.Gate } }
+            State = session.State with { Config = session.State.Config with { SecurityLane = _settings.SecurityLane.Gate } }
         };
-        // And the person's request for a feature review's second round (D23), read from the same road —
-        // the answer file — and from nothing a caller passes. Nothing is saved for it here.
-        session = PersonsRequest.Apply(session, _escalations, _log);
         // The session as read under the claim, BEFORE a begin moves it — what a refusal compares with.
         var loaded = session;
 
@@ -541,7 +418,7 @@ internal sealed class RoundEngine(
                 Gitlinks = roundWork.Gitlinks,
                 // What the consultation cadence said about this round: met, or stood down and why.
                 CadenceNote = stage.Cadence.Call.Note,
-                // What policy auto decided and why — empty for every round a person's policy decided.
+                // What the round machine decided on its own and why — empty for a plain proceed or revise.
                 Note = AutoNote.Of(completed.Verdict),
                 // The D23 ground a feature review's second round was admitted on — read from the state this
                 // round BEGAN from, because completing it is what spends the ground.
@@ -640,14 +517,9 @@ internal sealed class RoundEngine(
             // findings, numbered, and told to resolve them — while `resolve` reads the pending list
             // from a file that was never written, so the round sat at `running` with nothing to
             // decide on. An answer whose findings cannot be resolved is not an answer.
-            // The notice a `call_human` verdict puts in front of the person, minted BEFORE the save so the
-            // hold is recorded with the question that releases it: an answer counts for this hold only
-            // when it answers this notice, or an `ask_human` question asked while the hold stands
-            // (`CurrentAnswer`). A round that ended any other way ended whatever hold stood.
-            var notice = NoticeIfAPersonMustDecide(completed.Verdict, session, merged);
             _store.Save(session with
             {
-                State = completed.State with { HoldQuestions = notice is null ? [] : [notice.Id] },
+                State = completed.State,
                 Rounds = [.. session.Rounds, record],
                 Pending = [.. merged],
                 // The lenses this round spent, so the next one asks the ones nobody has yet.
@@ -712,11 +584,6 @@ internal sealed class RoundEngine(
                 Store.RoundCountsSnapshot.TryWrite(_settings.DataDir, DateTime.UtcNow, _log);
             }
 
-            if (notice is not null)
-            {
-                _escalations.Notify(notice);
-                _log.Information("a person was asked to decide: {Reason}", ((RoundVerdict.CallHuman)completed.Verdict).Reason);
-            }
 
             return JsonSerializer.Serialize(answer, ServerJsonContext.Default.ReviewAnswer);
         }
@@ -846,46 +713,6 @@ internal sealed class RoundEngine(
     }
 
     /// <summary>
-    /// A <c>call_human</c> verdict reaches the PERSON, not only the AI that asked.
-    /// </summary>
-    /// <remarks>
-    /// The verdict is an instruction to the caller, and the caller decides what to do with it —
-    /// so a gate that had exhausted its rounds could be answered by an AI writing a paragraph in
-    /// a chat window while the panel stayed empty all day. That is what happened. The notice is
-    /// the same shape as any escalation, so it shows up where a person is already looking and can
-    /// be answered there; it does not block, because the round has already returned.
-    /// <para>BUILT before the session is saved and WRITTEN after: its id is recorded on the session as the
-    /// hold's question (<c>SessionState.HoldQuestions</c>), so the person's answer is bound to this hold
-    /// by identity rather than by the clock — the clock let a question asked for an earlier hold, answered
-    /// late, release this one (the epic 3 risk consultation, 2026-09-26). Null for every other verdict.</para>
-    /// </remarks>
-    private static EscalationQuestion? NoticeIfAPersonMustDecide(RoundVerdict verdict, PersistedSession session, ImmutableArray<Finding> merged) =>
-        verdict is not RoundVerdict.CallHuman human
-            ? null
-            : HoldNotice(session, human.Reason, [.. merged.Where(f => f.IsGating)]);
-
-    /// <summary>The one shape a hold's notice has — minted for a <c>call_human</c> verdict, and again for a hold no question binds.</summary>
-    private static EscalationQuestion HoldNotice(PersistedSession session, string reason, IReadOnlyList<Finding> gating) =>
-        new(
-            Guid.NewGuid().ToString("N")[..12],
-            session.State.SessionId,
-            session.State.RepoPath,
-            session.State.Branch,
-            $"The {RoundSubject.StageName(session.State.Stage.ToString())} gate needs your decision: {reason}. " +
-            "Proceed anyway, or fix the findings and review again?",
-            string.Empty,
-            "en",
-            string.Empty,
-            [.. gating],
-            DateTime.UtcNow.ToString("O"))
-        {
-            Kind = EscalationKinds.Notice,
-            // The only card that offers Proceed: it lists the findings being overridden (G4/G5 of
-            // todo/PLAN_only_a_person_releases_the_gate.md). A card an older server wrote has no list, and offers three.
-            Decisions = EscalationDecisions.Notice,
-        };
-
-    /// <summary>
     /// How long this round may take: what was configured, or what its shape earns.
     /// </summary>
     /// <remarks>
@@ -938,20 +765,17 @@ internal sealed class RoundEngine(
         int threshold)
     {
         var rejectedEntries = reviews.SelectMany(r => r.Rejected).Select(r => $"entry {r.Index}: {r.Reason}").ToList();
-        var (name, step, instruction) = verdict switch
+        var (name, instruction) = verdict switch
         {
-            RoundVerdict.Proceed => ("proceed", (string?)null,
+            RoundVerdict.Proceed => ("proceed",
                 "The gate passed. Record a decision for EVERY finding via resolve (rejections need reasons); the next stage opens after that."),
-            RoundVerdict.Revise r => ("revise", null,
+            RoundVerdict.Revise r => ("revise",
                 $"Findings gate. Resolve every finding with accept/reject + reason, {Stages.Of(stage).ReviseInstruction} ({r.RoundsLeft} round(s) left)."),
-            RoundVerdict.ContinueAnyway => ("continue_anyway", null,
-                "Rounds exhausted; policy says proceed as-is. Record decisions via resolve and say in your summary that findings remain."),
-            RoundVerdict.GoodEnough => ("good_enough", null,
+            RoundVerdict.GoodEnough => ("good_enough",
                 "Rounds exhausted; policy says good enough. READ the open findings and apply the ones " +
-                "that are true and useful — that is the point of this setting, and it is what makes it " +
-                "different from continue_anyway. Reject the rest with reasons via resolve, say in your " +
+                "that are true and useful — that is the point of this verdict. Reject the rest with reasons via resolve, say in your " +
                 "summary what you took and what you declined, then proceed."),
-            RoundVerdict.NotReviewed => ("not_reviewed", null,
+            RoundVerdict.NotReviewed => ("not_reviewed",
                 // Only the security lane's findings can stand when no ordinary reviewer answered, and `resolve` refuses an empty list while any is
                 // pending — so "there is nothing to decide" would send the caller into a refusal.
                 merged.Length > 0
@@ -960,10 +784,6 @@ internal sealed class RoundEngine(
                       "say in your summary that the ordinary reviewers did not review this stage and why, then proceed."
                     : $"No reviewer answered — {summary.Sentence}. Policy `auto` proceeds WITHOUT a review. Call resolve (there is nothing to decide), " +
                       "say in your summary that this stage was not reviewed and why, then proceed."),
-            RoundVerdict.CallHuman h => ("call_human", null,
-                $"Rounds exhausted: {h.Reason}. A human decides — surface the open findings to them; do not proceed on your own."),
-            RoundVerdict.Escalated e => ("escalated", e.Step.ToString(),
-                $"Rounds exhausted; the ladder fires {e.Step}. Resolve the findings, apply the step, and run a fresh round."),
             // A verdict with no case here used to return ("unknown", null, "") — a name with no
             // instruction behind it, which is the same silence a button wired to nothing produces.
             // The union is closed, so reaching this is a programming error; the outer catch turns it
@@ -971,7 +791,7 @@ internal sealed class RoundEngine(
             _ => throw new InvalidOperationException($"no instruction for verdict {verdict.GetType().Name}"),
         };
         return new ReviewAnswer(
-            name, step, gate.GatingCount, threshold, summary.Sentence,
+            name, gate.GatingCount, threshold, summary.Sentence,
             [.. merged], [.. gate.Discounted], rejectedEntries, instruction);
     }
 

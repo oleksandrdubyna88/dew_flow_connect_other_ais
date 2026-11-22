@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 public sealed class SecurityLaneBudgetTests
 {
     private static readonly PanelConfig OneOrdinaryRoundTwoLaneRounds =
-        PanelConfig.Uniform(1, 5, StagePolicy.Human) with { SecurityLane = new RoleGate(2, 0, true) };
+        PanelConfig.Uniform(1, 5) with { SecurityLane = new RoleGate(2, 0, true) };
 
     private static SessionState FeatureRoundOne() =>
         new("feature", "repo", SessionKey.FeatureBranch, OneOrdinaryRoundTwoLaneRounds)
@@ -46,7 +46,7 @@ public sealed class SecurityLaneBudgetTests
         var completed = (Transition.Ok)RoundMachine.CompleteRound(FeatureRoundOne(), Blocking(RoleCatalog.FeatureRole),
             ReviewerSummary.AllAnswered(2));
 
-        completed.Verdict.Should().BeOfType<RoundVerdict.CallHuman>()
+        completed.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>()
             .Which.Reason.Should().Contain("the feature budget is one round");
     }
 
@@ -56,7 +56,7 @@ public sealed class SecurityLaneBudgetTests
         var oneFailed = new ReviewerSummary(2, 1, ["codex/FeatureReview: exit 7"]);
 
         RoundMachine.CompleteRound(FeatureRoundOne(), Blocking(SecurityCatalog.Gate), oneFailed)
-            .Should().BeOfType<Transition.Ok>().Which.Verdict.Should().BeOfType<RoundVerdict.CallHuman>(
+            .Should().BeOfType<Transition.Ok>().Which.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>(
                 "round two would be the lane's alone and could never retry the ordinary reviewer that failed");
     }
 
@@ -67,7 +67,7 @@ public sealed class SecurityLaneBudgetTests
             [.. Blocking(SecurityCatalog.Gate).Gating, .. Blocking(RoleCatalog.FeatureRole).Gating], [], _ => 0);
 
         RoundMachine.CompleteRound(FeatureRoundOne(), both, ReviewerSummary.AllAnswered(2))
-            .Should().BeOfType<Transition.Ok>().Which.Verdict.Should().BeOfType<RoundVerdict.CallHuman>();
+            .Should().BeOfType<Transition.Ok>().Which.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>();
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class SecurityLaneBudgetTests
         var off = FeatureRoundOne() with { Config = OneOrdinaryRoundTwoLaneRounds with { SecurityLane = new RoleGate(2, 0, false) } };
 
         RoundMachine.CompleteRound(off, Blocking(SecurityCatalog.Gate), ReviewerSummary.AllAnswered(2))
-            .Should().BeOfType<Transition.Ok>().Which.Verdict.Should().BeOfType<RoundVerdict.CallHuman>();
+            .Should().BeOfType<Transition.Ok>().Which.Verdict.Should().BeOfType<RoundVerdict.GoodEnough>();
     }
 
     [Theory]

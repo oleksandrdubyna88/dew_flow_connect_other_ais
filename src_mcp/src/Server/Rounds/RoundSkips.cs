@@ -80,7 +80,7 @@ internal sealed class RoundSkips(
             loaded.State, record, [], new Store.RoundContext(planText, sha, RoundCommands.CallerFor(loaded))));
 
         var answer = new ReviewAnswer(
-            RoundRecord.Skipped, null, 0, settings.Rounds.For(loaded.State.Stage).Threshold, reason, [], [], [],
+            RoundRecord.Skipped, 0, settings.Rounds.For(loaded.State.Stage).Threshold, reason, [], [], [],
             $"The {phrase} did not run: {reason}. This does NOT block the release — tell the person the {phrase} "
             + "did not run, and why. Nothing about this session changed; call it again once the reason is gone.");
 

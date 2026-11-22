@@ -103,7 +103,7 @@ public sealed class ADocumentRoleHasARoundTests
     {
         var catalog = With(Role("Requirements", RoleStages.Result, programmingTask: false));
         var config = new PanelConfig(
-            catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(2, 5)), StagePolicy.Human)
+            catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(2, 5)))
         {
             Catalog = catalog,
         };
@@ -123,7 +123,7 @@ public sealed class ADocumentRoleHasARoundTests
     {
         var catalog = With(Role("Requirements", RoleStages.Result, programmingTask: false));
         var config = new PanelConfig(
-            catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(2, 5, Enabled: false)), StagePolicy.Human)
+            catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(2, 5, Enabled: false)))
         {
             Catalog = catalog,
         };

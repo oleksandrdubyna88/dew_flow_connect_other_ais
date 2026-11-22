@@ -148,33 +148,16 @@ public class TheGateSaysWhenToConsultTests
         + "answer could take production down, which makes `ask_human` ask the consultants first and return their answers "
         + "in `consultantAnswers`. After the release, questions go to the person directly again.";
 
-    /// <summary>Both doors carry the phase rule, whole — the gate's and the consultants'.</summary>
+    /// <summary>The consultants' door carries the phase rule, whole; <c>ask_human</c> no longer enforces anything (v2: it only points back to the conversation).</summary>
     [Fact]
-    public void BothDoorsCarryThePhaseRule_Whole()
+    public void TheConsultantsDoorCarriesThePhaseRule_Whole()
     {
-        DescriptionOf("ask_human").Should().Contain(PhaseRule,
-            "the gate that refuses lives behind this tool, so the rule has to be readable where the refusal lands");
         DescriptionOf("ask_consultants").Should().Contain(PhaseRule,
-            "and the tool the rule sends a caller to has to say the same thing, or the two drift");
+            "the tool the rule sends a caller to has to say it");
 
-        DescriptionOf("ask_human").Should().NotContain("the question stays open in VS Code either way",
-            "that ending predates the fifteen-minute wait: a question nobody answered is marked expired now, not left open");
+        DescriptionOf("ask_human").Should().NotContain(PhaseRule, "ask_human is an alias in v2 and enforces no phase rule");
         DescriptionOf("ask_consultants").Should().NotEndWith("`ask_human` takes them.",
             "that is where this description used to stop, so if it still does the rule is not in it");
-    }
-
-    /// <summary>The three arguments the gate reads are named where a caller learns to pass them, and the wait is fifteen minutes.</summary>
-    [Fact]
-    public void AskHumanNamesItsGateArguments_AndTheFifteenMinuteWait()
-    {
-        var askHuman = DescriptionOf("ask_human");
-
-        askHuman.Should().Contain("`consultId`", "the proof that the consultants were asked first travels on this call");
-        askHuman.Should().Contain("`productionRisk`").And.Contain("`riskReason`",
-            "the one bypass, spelled as the operator spelled it (A8) — never as a severity");
-        askHuman.Should().Contain("15 minutes by default", "A10: the wait is fifteen minutes, then no_answer_yet");
-        askHuman.Should().NotContain("30 minutes by default", "the old default, which left a person's card open for half an hour");
-        askHuman.Should().Contain("expired", "a question nobody answered leaves the active list and stays in the log");
     }
 
     /// <summary>A plan is not a document, said where a caller chooses between the two gates.</summary>

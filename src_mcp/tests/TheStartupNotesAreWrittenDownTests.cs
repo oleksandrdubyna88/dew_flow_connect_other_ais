@@ -432,13 +432,12 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
         var settings = PanelSettings.FromEnvironment(name => name switch
         {
             "COAI_RETRY_BACKOFF" => "soon",
-            "COAI_ON_EXHAUSTED" => "carry-on",
             "COAI_CODE_WORKSPACE" => "somewhere",
             "COAI_ROLES" => "not json",
             _ => null,
         });
 
-        settings.UnrecognisedSettings.Should().HaveCount(4, "one per bad value, and no more");
+        settings.UnrecognisedSettings.Should().HaveCount(3, "one per bad value, and no more");
         settings.UnrecognisedSettings.Should().OnlyContain(
             one => one.Sentence.Contains(one.Key, StringComparison.Ordinal));
     }

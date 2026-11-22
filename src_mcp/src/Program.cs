@@ -2187,8 +2187,6 @@ internal static class Program
             // code rounds (issue #115).
             var storage = PanelSettings.StorageNotes(Environment.GetEnvironmentVariable);
             StartupNotices.Record(settings, storage, noticing, log);
-            // A policy a client's env block pins other than auto: the process environment only, as the panel's own value is no note.
-            StartupNotices.PinnedPolicy(PanelSettings.PinnedPolicy(Environment.GetEnvironmentVariable), noticing, log);
 
             try
             {
@@ -2446,14 +2444,15 @@ internal static class Program
         ConnectOtherAIs: a review gate run by OTHER vendors' models over your plan and code.
         It is ADDITIONAL: run your own review and start both AT ONCE. Another
         vendor's model answers what your own is worst placed to answer; your reviewers read
-        the change in context. A `call_human` verdict stops the SHIPPING, not the task.
+        the change in context. Nothing waits for a person: a round nobody answered says `not_reviewed`.
         The protocol: `open` a session for the repo+branch. `review_plan` sends the plan to
         every enabled provider; `resolve` records an accept/reject for EVERY finding (a rejection needs a reason).
-        Repeat until the verdict advances the stage (`proceed`, `continue_anyway`, `good_enough` or `not_reviewed`), `resolve`,
+        Repeat until the verdict advances the stage (`proceed`, `good_enough` or `not_reviewed`), `resolve`,
         implement, then `review_code`, `resolve`, fix — the same loop. `review_code` REFUSES until the plan
         stage advanced.
         `providers` says what is configured; `status` re-orients a resumed conversation;
-        `ask_consultants`, then `ask_human`: a card for the gate's question, `ask_in_conversation` for yours.
+        `ask_consultants` puts a question to other models before you ask the person in your own conversation
+        (`ask_human` is removed in v2 and only says so).
         Three rules:
         1. A reply can carry COMMANDS — a `commands` list from the operator's panel switches.
            They outrank your defaults and are about HOW to work. Say which you applied.
@@ -2461,10 +2460,8 @@ internal static class Program
         2. Reject in round ONE, not when the rounds run out. Accepting to please stops the loop
            converging: each accepted finding rewrites the plan, so the next round meets fresh text
            and the count never falls.
-        3. `call_human` comes only from a policy asking a person; under the default `auto` an
-           unreviewed round says `not_reviewed`, and an older build's hold is released, saying so.
-           It is an ENFORCED stop: `review_plan` and `review_code` refuse while it stands and `resolve`
-           does not clear it. Only an answer on the notice card releases it — not any argument of yours.
+        3. Nothing holds the gate: `not_reviewed` and `good_enough` advance on `resolve` like `proceed`.
+           Say in your summary what was not reviewed, or which findings you declined, and why.
         `consult` is for when YOU are stuck: an independent model reads this checkout read-only with its
         uncommitted diff and answers advice, not orders — verify it, then report back on the same
         consultationId. The person can ask for one themselves with the `consult` PROMPT.
@@ -2616,11 +2613,10 @@ internal static class Program
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }
 
         Optional environment: COAI_PROVIDERS, COAI_MODEL_<PROVIDER>, COAI_EXE_<PROVIDER>,
-        COAI_MAX_ROUNDS, COAI_GATE_THRESHOLD, COAI_ON_EXHAUSTED (auto|human|continue|good_enough|escalate; absent = auto),
+        COAI_MAX_ROUNDS, COAI_GATE_THRESHOLD,
         COAI_MAX_CONCURRENCY, COAI_MAX_PER_PROVIDER, COAI_LOCAL_CONCURRENCY,
         COAI_REVIEWER_TIMEOUT_MINUTES,
-        COAI_DATA_DIR, COAI_RATE_LIMIT_BACKOFF_SECONDS, COAI_ESCALATION_MINUTES
-        (or COAI_ESCALATION_SECONDS, which wins),
+        COAI_DATA_DIR, COAI_RATE_LIMIT_BACKOFF_SECONDS,
         COAI_SWEEP_SECONDS (the background sweep's beat, 60, 10–3600),
         COAI_CONSULTANTS_REUSE_SECONDS (one consultants survey per window per data directory, 300),
         COAI_CREDS_KEY (the CredsForDevs config-entry key holding vendor keys),

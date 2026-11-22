@@ -47,7 +47,6 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
         new("src_mcp/src/Server/Backfill/BackfillAttribution.cs", "forwards its clock to the peer lookup (AuthorPeers.Find) as a deadline instant; no timer, no wait — E5/E7's own tests pin it"),
         new("src_mcp/src/Server/Backfill/BackfillRun.cs", "only defaults and forwards the clock to BackfillAttribution; it arms nothing itself"),
         new("src_mcp/src/Server/Rounds/RoundAuthorsStep.cs", "reads its clock as instants (a deadline, an elapsed from GetTimestamp) for the round-authors step; no timer, no wait"),
-        new("src_mcp/src/Server/SessionHolds.cs", "a wall STAMP only: a cached entry's age against the ten-minute recheck; it waits for nothing"),
         new("src_mcp/src/Store/ObservedSession.cs", "ReadBudget carries a clock for the transcript read's MaxTime as an instant comparison; the read arms no timer"),
         new("src_mcp/src/Store/RoundsDb.cs", "a wall STAMP for its rows' columns (the clock is what a test controls); its one DateTime.UtcNow is the session row's opened_utc, a stamp and not a budget"),
         new("src_mcp/src/Collecting/CollectRun.cs", "a wall STAMP only: the run id is the clock's instant; the run waits for nothing"),

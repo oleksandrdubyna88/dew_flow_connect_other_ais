@@ -37,8 +37,8 @@ public sealed class TheOrderTextAgreesWithThePolicyTests
             "COAI_QCONSULT_FREE_BATCHES defaults to the policy; a person who changes nothing gets the policy");
 
     [Fact]
-    public void TheToolDescriptionsNumber_IsTheSameConstant() =>
-        TheGateSaysWhenToConsultTests.DescriptionOf("ask_human").Should().Contain($"the first {QuestionPolicy.FreeBatches} batches",
+    public void TheConsultantsDescriptionNumber_IsTheSameConstant() =>
+        TheGateSaysWhenToConsultTests.DescriptionOf("ask_consultants").Should().Contain($"the first {QuestionPolicy.FreeBatches} batches",
             "the third copy of the number — in the description a caller reads before any round — is held to the same constant");
 
     [Fact]

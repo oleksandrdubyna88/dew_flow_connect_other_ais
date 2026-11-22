@@ -128,8 +128,7 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
                 // One round each, and a threshold generous enough that a clean plan proceeds: the
                 // subject here is which ROLE reviews, not what the gate makes of what it finds.
                 Rounds = new PanelConfig(
-                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)),
-                    StagePolicy.Human)
+                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)))
                 {
                     Catalog = catalog,
                 },
@@ -161,7 +160,7 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
-                Rounds = new PanelConfig(catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)), StagePolicy.Human)
+                Rounds = new PanelConfig(catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)))
                 {
                     Catalog = catalog,
                 },

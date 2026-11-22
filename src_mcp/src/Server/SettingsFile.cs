@@ -97,7 +97,7 @@ public static class SettingsFile
     /// A file that is there and unusable says why. A side file that is NOT there after an adoption that SAID something is the other case: the
     /// adoption succeeds by publishing the side file (then the read sees it), so a sentence beside a missing file is an adoption that failed — the
     /// root file the operator's settings are in could not be read or published. Those settings are unread, and a default taken from them must
-    /// not release a hold (<see cref="SessionPolicy"/>; PR #1011, CodeRabbit).
+    /// not release a hold (PR #1011, CodeRabbit).
     /// </remarks>
     private static string UnreadBecause(SettingsRead read, IReadOnlyList<string> adopted) => read switch
     {

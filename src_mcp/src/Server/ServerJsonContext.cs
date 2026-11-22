@@ -169,28 +169,6 @@ public sealed record SessionAnswer(
     IReadOnlyList<RoundRecord> Rounds)
 {
     /// <summary>
-    /// What the PERSON answered a <c>call_human</c> with, if they have: <c>continue</c>, <c>fix</c>, <c>discuss</c>,
-    /// <c>proceed</c>, or empty. Their own words come with it whether or not they pressed a button. <c>proceed</c> is
-    /// reported only for the answer to the hold's own notice, and it applies nothing here: <c>resolve</c> is where it takes
-    /// effect (<see cref="HumanNote"/> says so).
-    /// </summary>
-    /// <remarks>
-    /// Here because a resumed conversation must be able to LEARN of the decision rather than be
-    /// told about it. The notice used to be written by a round that then returned, so a person's
-    /// answer landed in a file nothing read — they could decide, watch the card disappear, and have
-    /// changed nothing.
-    /// </remarks>
-    public string HumanDecision { get; init; } = string.Empty;
-
-    /// <summary>
-    /// What the AI must DO about the person's decision, when there is one it has not acted on: while a Proceed is on file and
-    /// not yet consumed, <c>a person pressed Proceed on the held gate — call resolve to advance</c>. Empty otherwise.
-    /// </summary>
-    public string HumanNote { get; init; } = string.Empty;
-
-    public string HumanAnswer { get; init; } = string.Empty;
-
-    /// <summary>
     /// Consultations still open in this repository — none, almost always.
     /// </summary>
     /// <remarks>
@@ -253,7 +231,6 @@ public sealed record CadenceRiskAnswer(string Key, string Reason, bool Consulted
 /// <param name="Cost">What the round consumed, as the vendors themselves reported it.</param>
 public sealed record ReviewAnswer(
     string Verdict,
-    string? EscalationStep,
     int GatingCount,
     int Threshold,
     string Reviewers,
@@ -325,34 +302,19 @@ public sealed record CloseAnswer(string Id, string Outcome, bool Recorded, strin
 public sealed record RoundKeyDto(string SessionId = "", string Stage = "", int Number = -1);
 
 /// <summary>
-/// What `ask_human` returns: the person's decision, or why there is none yet.
+/// What <c>ask_human</c> answers in v2: the tool stays registered for old callers and only points them back to their own conversation.
 /// </summary>
-/// <param name="Answer">In the language the question was asked in.</param>
-/// <param name="AnswerOriginal">The person's own words, verbatim — empty when nobody answered.</param>
-public sealed record HumanAnswer(string Status, string Answer, string AnswerOriginal, string Instruction)
-{
-    /// <summary>S3 of the question consultant: what the gate said beside the person's door — a reminder, a stand-down, the free batch; empty when nothing.</summary>
-    public string Note { get; init; } = string.Empty;
-}
-
-/// <summary>
-/// What <c>ask_human</c> answers when the question is the AI's own rather than the gate's — no card was written, and
-/// the AI asks the person in its own conversation (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2/G3).
-/// </summary>
-/// <remarks>
-/// Its own record rather than three more members on <see cref="HumanAnswer"/>: the context writes no null and every
-/// member there has a default, so the person's <c>answered</c> reply would have grown two empty fields it never means.
-/// </remarks>
-/// <param name="Status">One of the two: <see cref="AskInConversation"/>, or <see cref="ConsultFirst"/> under policy auto.</param>
-/// <param name="ConsultId">The consultation that ran first for a production risk; empty when none did.</param>
-/// <param name="ConsultantAnswers">Its rows, fenced <c>advisory_only</c> exactly as <c>ask_consultants</c> returns them.</param>
-public sealed record ConversationAnswer(
-    string Status, string Instruction, string Note, string ConsultId, IReadOnlyList<QuestionRowAnswer> ConsultantAnswers)
+/// <param name="Status">Always <see cref="AskInConversation"/>.</param>
+/// <param name="Note">Always <see cref="RemovedNote"/>.</param>
+public sealed record AskHumanRemovedAnswer(string Status, string Note)
 {
     public const string AskInConversation = "ask_in_conversation";
 
-    /// <summary>Policy auto, the AI's own question with no proof: the consultants come before the person, and nothing was spent.</summary>
-    public const string ConsultFirst = "consult_first";
+    public const string RemovedNote = "removed in v2: coai never waits for a person; ask in your own conversation";
+
+    /// <summary>The one reply, whatever the arguments.</summary>
+    public static string Reply =>
+        System.Text.Json.JsonSerializer.Serialize(new AskHumanRemovedAnswer(AskInConversation, RemovedNote), ServerJsonContext.Default.AskHumanRemovedAnswer);
 }
 
 /// <summary>The wire shape of one decision passed to `resolve`.</summary>
@@ -381,8 +343,7 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(ResolveAnswer))]
 [JsonSerializable(typeof(ErrorAnswer))]
 [JsonSerializable(typeof(CloseAnswer))]
-[JsonSerializable(typeof(HumanAnswer))]
-[JsonSerializable(typeof(ConversationAnswer))]
+[JsonSerializable(typeof(AskHumanRemovedAnswer))]
 [JsonSerializable(typeof(ConsultAnswer))]
 // The question consultant (PLAN_question_consultant.md, S2): the `ask_consultants` reply.
 [JsonSerializable(typeof(AskConsultantsAnswer))]

@@ -325,17 +325,17 @@ public sealed class PanelServiceHostTests : IDisposable
 
     private static Heard NewHeard() => new([], []);
 
-    private const string BusyHuman = """{"COAI_ON_EXHAUSTED":"human"}""";
+    private const string BusyHuman = """{"COAI_MAX_CONCURRENCY":"7"}""";
 
     private static string SentenceOf(CoaiMcp.Core.Notices.ServerNotice notice) => (notice.Detail?.Length > 0 ? notice.Detail : notice.Title) ?? string.Empty;
 
     /// <summary>
-    /// The first read at start is busy while the file holds the operator's <c>human</c>. The default a failed read gives is policy auto, so the
-    /// service runs on it and releases nothing — and, because the stamp is NOT recorded for a read that gave nothing, the first call after the file
-    /// can be read gives the operator's own policy (F25: the stamp used to be taken before the first read, so the defaults stayed for good).
+    /// The first read at start is busy while the file holds the operator's own value (a concurrency of 7). A failed read gives the shipped defaults, so
+    /// the service runs on them — and, because the stamp is NOT recorded for a read that gave nothing, the first call after the file
+    /// can be read gives the operator's own values (F25: the stamp used to be taken before the first read, so the defaults stayed for good).
     /// </summary>
     [Fact]
-    public void ABusyReadAtStart_IsReadAgain_AndThePolicyIsTheOperatorsOnceItReads()
+    public void ABusyReadAtStart_IsReadAgain_AndTheValuesAreTheOperatorsOnceItReads()
     {
         File.WriteAllText(SettingsPath, BusyHuman);
         var heard = NewHeard();
@@ -348,23 +348,20 @@ public sealed class PanelServiceHostTests : IDisposable
         var whileBusy = new[] { first, host.Current, host.Current };
 
         whileBusy.Should().OnlyContain(service => ReferenceEquals(service, first), "one service per stamp, not one per call");
-        first.Settings.Rounds.IsAutonomous.Should().BeTrue("a read that gave nothing runs on the shipped default, which is policy auto");
-        first.Settings.PolicyUnread.Should().BeTrue();
+        first.Settings.GlobalConcurrency.Should().Be(3, "a read that gave nothing runs on the shipped defaults");
         heard.Notes().Should().ContainSingle("the note is said once, however many calls ask");
         var notice = heard.NoticesOfTheNote().Should().ContainSingle().Subject;
         notice.Code.Should().Be("unrecognised-setting");
         notice.Class.Should().Be("stand-down");
         notice.Subject.Should().Be(Path.GetFullPath(SettingsPath));
         var sentence = heard.Notes().Single();
-        sentence.Should().Contain(SettingsPath).And.Contain("held open by its writer").And.Contain("Auto by default").And.Contain("not released");
+        sentence.Should().Contain(SettingsPath).And.Contain("held open by its writer").And.Contain("is at its default");
         SentenceOf(notice).Should().Contain(SettingsPath).And.Contain("held open by its writer");
 
         busy = false;
         var after = host.Current.Settings;
 
-        after.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, "the file can be read now, and it says human");
-        after.Rounds.IsAutonomous.Should().BeFalse();
-        after.PolicyUnread.Should().BeFalse();
+        after.GlobalConcurrency.Should().Be(7, "the file can be read now, and it says 7");
     }
 
     /// <summary>
@@ -390,7 +387,6 @@ public sealed class PanelServiceHostTests : IDisposable
         heard.Notes()[1].Should().NotContain("held open by its writer", "that was the first read's reason, not this one's");
         heard.NoticesOfTheNote().Should().HaveCount(2);
         again.Should().BeSameAs(second, "the same stamp and the same reason build nothing more");
-        second.Settings.PolicyUnread.Should().BeTrue();
     }
 
     public static TheoryData<string, bool> UnusableFiles() => new()
@@ -407,7 +403,7 @@ public sealed class PanelServiceHostTests : IDisposable
     /// </summary>
     [Theory]
     [MemberData(nameof(UnusableFiles))]
-    public void AnUnusableFile_RunsAutoWithItsNote_IsReadAgainWithoutARebuild_AndIsTheOperatorsOnceRepaired(string how, bool onReload)
+    public void AnUnusableFile_RunsOnDefaultsWithItsNote_IsReadAgainWithoutARebuild_AndIsTheOperatorsOnceRepaired(string how, bool onReload)
     {
         var denied = how == "a denied read";
         var failing = false;
@@ -430,7 +426,7 @@ public sealed class PanelServiceHostTests : IDisposable
         {
             File.WriteAllText(SettingsPath, BusyHuman);
             host = Build();
-            host.Current.Settings.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, "the fixture starts from a good human file");
+            host.Current.Settings.GlobalConcurrency.Should().Be(7, "the fixture starts from a good file");
             Touch(Break);
         }
         else
@@ -443,8 +439,7 @@ public sealed class PanelServiceHostTests : IDisposable
         var again = new[] { host.Current, host.Current };
 
         again.Should().OnlyContain(service => ReferenceEquals(service, first), $"{how}: one service per stamp, not one per call");
-        first.Settings.Rounds.IsAutonomous.Should().BeTrue(how);
-        first.Settings.PolicyUnread.Should().BeTrue(how);
+        first.Settings.GlobalConcurrency.Should().Be(3, how);
         heard.Notes().Should().ContainSingle($"{how}: one warning for that stamp");
         heard.NoticesOfTheNote().Should().ContainSingle($"{how}: one notice for that stamp");
         heard.Notes().Single().Should().Contain(SettingsPath, how);
@@ -453,52 +448,29 @@ public sealed class PanelServiceHostTests : IDisposable
         {
             failing = false;
             var own = host.Current.Settings;
-            own.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, "the denial lifted and the file is untouched: its own values");
-            own.PolicyUnread.Should().BeFalse();
+            own.GlobalConcurrency.Should().Be(7, "the denial lifted and the file is untouched: its own values");
 
             return;
         }
 
         Touch(() => File.WriteAllText(SettingsPath, BusyHuman));
         var repaired = host.Current.Settings;
-        repaired.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, how);
-        repaired.PolicyUnread.Should().BeFalse(how);
+        repaired.GlobalConcurrency.Should().Be(7, how);
 
         Touch(() => File.WriteAllText(SettingsPath, Spoiled()));
-        host.Current.Settings.PolicyUnread.Should().BeTrue("broken again");
+        host.Current.Settings.GlobalConcurrency.Should().Be(3, "broken again");
         File.Delete(SettingsPath);
         var removed = host.Current.Settings;
-        removed.Rounds.IsAutonomous.Should().BeTrue("a file that is not there is a read that succeeded: auto by default");
-        removed.PolicyUnread.Should().BeFalse("nothing was unreadable");
-    }
-
-    [Theory]
-    [InlineData("auto")]
-    [InlineData("human")]
-    public void APolicyNamedInTheEnvironment_IsRead_WhateverTheFileDoes(string named)
-    {
-        File.WriteAllText(SettingsPath, "not json");
-        var heard = NewHeard();
-        var host = new PanelServiceHost(
-            name => name switch { "COAI_DATA_DIR" => _dataDir, "COAI_ON_EXHAUSTED" => named, _ => null },
-            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), heard.Log, heard.Noticing, CancellationToken.None);
-
-        var settings = host.Current.Settings;
-
-        settings.PolicyUnread.Should().BeFalse("the policy comes from this server's own environment, which was read");
-        settings.Rounds.IsAutonomous.Should().Be(named == "auto");
-        settings.Rounds.OnExhausted.Should().Be(named == "auto" ? CoaiMcp.Core.Rounds.StagePolicy.GoodEnough : CoaiMcp.Core.Rounds.StagePolicy.Human);
-        var note = heard.NoticesOfTheNote().Should().ContainSingle("the note is still written").Subject;
-        SentenceOf(note).Should().Contain("comes from this server's own environment").And.NotContain("Auto by default");
+        removed.GlobalConcurrency.Should().Be(3, "a file that is not there is a read that succeeded: the defaults");
     }
 
     /// <summary>
-    /// A side with no settings file of its own whose ROOT file cannot be read is an unread policy, as a side file that cannot be read is
-    /// (CodeRabbit on PR #1011: the adoption's failure was only a sentence, so the layer read the missing side file as "read, empty" and
-    /// auto released a hold the operator's own policy raised). Repairing the root file ends it: the next call adopts it.
+    /// A side with no settings file of its own whose ROOT file cannot be read has unread settings, as a side file that cannot be read has
+    /// (CodeRabbit on PR #1011: the adoption's failure was only a sentence, so the layer read the missing side file as "read, empty").
+    /// Repairing the root file ends it: the next call adopts it.
     /// </summary>
     [Fact]
-    public void ASideWhoseRootSettingsCannotBeAdopted_HasItsPolicyUnread_UntilTheRootIsRepaired()
+    public void ASideWhoseRootSettingsCannotBeAdopted_RunsOnDefaults_UntilTheRootIsRepaired()
     {
         var sideSettings = Path.Combine(_dataDir, "wsl", SettingsFile.Name);
         var rootSettings = Path.Combine(_dataDir, SettingsFile.Name);
@@ -510,36 +482,33 @@ public sealed class PanelServiceHostTests : IDisposable
 
         var settings = host.Current.Settings;
 
-        settings.PolicyUnread.Should().BeTrue("the operator's settings exist in the root and could not be adopted: auto here is a default, not a choice");
-        settings.Rounds.IsAutonomous.Should().BeTrue();
+        settings.GlobalConcurrency.Should().Be(3, "the operator's settings exist in the root and could not be adopted: these are defaults, not a choice");
         File.Exists(sideSettings).Should().BeFalse("nothing was adopted");
         for (var again = 0; again < 3; again++)
         {
-            host.Current.Settings.PolicyUnread.Should().BeTrue("every call retries the adoption");
+            host.Current.Settings.GlobalConcurrency.Should().Be(3, "every call retries the adoption");
         }
 
         heard.AdoptionWarnings().Should().ContainSingle("an adoption that keeps failing the same way is said once, however many calls retry it");
         heard.AdoptionNotices().Should().ContainSingle("and offered once");
 
         File.WriteAllText(rootSettings, "[1]");
-        host.Current.Settings.PolicyUnread.Should().BeTrue("still not adoptable");
-        host.Current.Settings.PolicyUnread.Should().BeTrue();
+        host.Current.Settings.GlobalConcurrency.Should().Be(3, "still not adoptable");
         heard.AdoptionWarnings().Should().HaveCount(2, "a different failure is said again, once");
         heard.AdoptionNotices().Should().HaveCount(2);
         heard.AdoptionWarnings()[1].Should().NotBe(heard.AdoptionWarnings()[0]);
 
         File.WriteAllText(rootSettings, "{ not json");
-        host.Current.Settings.PolicyUnread.Should().BeTrue();
+        host.Current.Settings.GlobalConcurrency.Should().Be(3);
         heard.AdoptionWarnings().Should().HaveCount(3, "the first failure again, after a different one, is a change");
 
-        heard.NoticesOfTheNote().Select(SentenceOf).Should().Contain(s => s.Contains("Auto by default") && s.Contains(SettingsFile.NotAdopted), "the person is told the settings are unread, and why");
+        heard.NoticesOfTheNote().Select(SentenceOf).Should().Contain(s => s.Contains("is at its default") && s.Contains(SettingsFile.NotAdopted), "the person is told the settings are unread, and why");
 
         File.WriteAllText(rootSettings, BusyHuman);
         var repaired = host.Current.Settings;
 
-        repaired.PolicyUnread.Should().BeFalse("the root file was adopted and read");
+        repaired.GlobalConcurrency.Should().Be(7, "the root file was adopted and read: the operator's own value");
         heard.AdoptionWarnings().Should().HaveCount(4, "the adoption itself is said once, as it always was");
-        repaired.Rounds.OnExhausted.Should().Be(CoaiMcp.Core.Rounds.StagePolicy.Human, "the operator's own policy");
     }
 
     private static string CodexModel(PanelServiceHost host) =>

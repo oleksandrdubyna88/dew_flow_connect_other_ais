@@ -10,8 +10,8 @@ namespace CoaiMcp.Server;
 /// guard, the read under the turn, the UTC stamp and its parse, and the delete that says when it could not delete.
 /// </summary>
 /// <remarks>
-/// <para>One copy for <see cref="QuestionConsultStore"/>, <see cref="ConsultationStore"/>, <see cref="QuestionPhaseStore"/>
-/// and <see cref="EscalationRetention"/>, which each held their own — and they had begun to differ: one delete warned, one
+/// <para>One copy for <see cref="QuestionConsultStore"/>, <see cref="ConsultationStore"/>
+/// and <see cref="QuestionPhaseStore"/>, which each held their own — and they had begun to differ: one delete warned, one
 /// did not; one parse fell back to "now", another to nothing.</para>
 /// <para>What stays with each store is what is genuinely its own: its record type, its sweep's rules, and the sentence
 /// naming what a delete was about.</para>

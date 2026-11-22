@@ -336,7 +336,7 @@ public sealed class AnApiRowIsSettableTests : IDisposable
             new PanelSettings
             {
                 Providers = PanelSettings.ParseVendors(Row(rowTail, row)),
-                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+                Rounds = PanelConfig.Uniform(3, 2),
                 DataDir = _dir,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 ApiOverrides = overrides ?? ApiOverrides.None,

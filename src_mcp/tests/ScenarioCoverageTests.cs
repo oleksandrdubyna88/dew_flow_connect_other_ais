@@ -45,21 +45,8 @@ public sealed class ScenarioCoverageTests
         ["close_consult"] = "ConsultScenarioTests — a real consultation opened over the fake CLI and "
             + "then ENDED: the verdict on the record, a repeat that changes nothing, a conflicting "
             + "outcome refused, a cap-closed one lapsing and still taking a verdict",
-        ["ask_human"] = "AskHumanScenarioTests — a REAL server build over real stdio (S3 of the question consultant): the plan "
-            + "proceeded, two free batches answered at once with ask_in_conversation (the AI's own questions write no card), the "
-            + "third refused naming ask_consultants, the consultants answering through the fake CLI as a codex row, and "
-            + "ask_human with that consultId allowed — the record marked person_asked_in_conversation. The CARD and its wait, "
-            + "over the same wire: McpContractTests on a held gate (no_answer_yet, the file kept; the person's words returned) "
-            + "and the AI's own question answered without waiting. Beneath it: AskHumanServiceTests (every row of the gate's "
-            + "table against the real service: the plan stage, the free batches counted, the third refused, a verified "
-            + "consultId spent once — two in flight included — a fabricated, foreign, consulting or stale one refused as none, "
-            + "remind, off, the stand-down when no row is on or the switch is off, the release, a plan key counting under the "
-            + "plan, an unreadable phase record allowing, a held gate's question past the free batches carded and uncounted, "
-            + "a typed answer releasing nothing, a production risk on a held gate's card with the answers folded under it, one "
-            + "outside the gate consulting FIRST and returning the fenced answers, the wait ending in no_answer_yet with the "
-            + "file expired and an answered question never expired), AQuestionIsTheGatesTests, AskGateTests (the pure table), "
-            + "TheStatusReportsOnlyTheGatesAnswerTests, QuestionPhaseStoreTests, StageReleaseTests, EscalationRetentionTests, "
-            + "EscalationsTests and HumanDecisionTests",
+        ["ask_human"] = "McpContractTests — a REAL server build over real stdio: v2 keeps the tool registered as an alias, and it answers at once "
+            + "with exactly {status: ask_in_conversation, note: removed in v2…} whatever the arguments, writing no card",
         ["ask_consultants"] = "QuestionConsultScenarioTests — the fake CLI as a codex row, a REAL child: the planner's "
             + "argv reaches a process, its answer file is read back fenced, the record and the ledger line are on disk; "
             + "a web question carrying a path refused before any launch. Beneath it: QuestionFanOutTests (one row past "
@@ -74,10 +61,7 @@ public sealed class ScenarioCoverageTests
     /// </summary>
     private static readonly Dictionary<string, string> NotCovered = new(StringComparer.Ordinal)
     {
-        // Empty since S3 of the question consultant: `ask_human` was the one debt — its wait IS the behaviour, and a
-        // scenario answering it from a fake surface would have exercised the fake — and the gate changed the shape of
-        // the question: the refusal does not wait at all, and the allowed path's wait is a budget the scenario sets
-        // and asserts the expiry of, through the file the person's surface reads rather than a fake of the person.
+        // Empty: `ask_human` was the one debt once, and v2 removed its wait — the alias is covered over the real wire.
     };
 
     [Fact]

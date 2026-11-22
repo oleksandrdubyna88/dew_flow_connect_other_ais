@@ -145,7 +145,7 @@ public static class AskGate
     /// Policy auto (O3) — the person is never asked first. A held gate's card is answered by the service at once, so no consultant
     /// runs beside it; a production risk on the AI's own question is today's decision — the phase exclusion included, so in Planning or
     /// Released it reaches the person at once with an empty note (the reply still tells the AI to ask them in the conversation, <c>Reply</c> in
-    /// <c>AskHumanService</c>); any other question of the AI's goes to the consultants first, in every phase and mode, unless a verified
+    /// <c>AskHumanService</c> (removed in v2)); any other question of the AI's goes to the consultants first, in every phase and mode, unless a verified
     /// consultId or a stand-down lets it through to the person. For those, the phase rule and the free batches decide nothing here; the
     /// batches stay a record of what reached the person.
     /// </summary>

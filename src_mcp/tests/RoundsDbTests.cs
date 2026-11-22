@@ -109,14 +109,20 @@ public sealed class RoundsDbTests : IDisposable
     }
 
     [Fact]
-    public void AFindingAPersonProceededOver_IsStoredAsItsOwnDisposition_AndCountsAsNeitherAcceptedNorRejected()
+    public void ARowAnOlderBuildStoredAsProceededOver_StillReadsAsNeitherAcceptedNorRejected()
     {
         using var db = RoundsDb.Open(_dir, _log)!;
         var findings = new[] { Found("taken"), Found("argued"), Found("left open") };
         db.RecordRound(Session, Round(), findings);
 
         db.RecordDecisions("s1", "CodeReview", 1,
-            [Decisions.Accept(findings, 0), Decisions.Reject(findings, 1, "the caller owns it"), Decisions.ProceedOver(findings, 2)]);
+            [Decisions.Accept(findings, 0), Decisions.Reject(findings, 1, "the caller owns it")]);
+        // v2 never writes this disposition; a database an older build wrote still holds it, and its readers must keep counting it as neither.
+        using (var older = new SqliteConnection($"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False"))
+        {
+            older.Open();
+            Execute(older, "UPDATE findings SET resolution = 'proceeded', reason = 'proceeded over by a person' WHERE ordinal = 2");
+        }
 
         var rows = Query("SELECT title, resolution, reason FROM findings ORDER BY ordinal");
         rows[2]["resolution"].Should().Be("proceeded", "its own audited disposition — not accept, not reject");

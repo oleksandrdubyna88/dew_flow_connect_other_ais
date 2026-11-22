@@ -80,7 +80,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
             {
                 DataDir = _dataDir,
                 CodeWorkspace = "none",
-                Rounds = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = With("req-general") },
+                Rounds = new PanelConfig(Roles: null) { Catalog = With("req-general") },
                 Providers =
                 [
                     new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "m" },
@@ -113,7 +113,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
         {
             DataDir = _dataDir,
             CodeWorkspace = "none",
-            Rounds = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog },
+            Rounds = new PanelConfig(Roles: null) { Catalog = catalog },
             Providers = withTeamServer
                 ?
                 [

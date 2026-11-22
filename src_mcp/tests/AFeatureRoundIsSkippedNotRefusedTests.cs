@@ -122,8 +122,7 @@ public sealed class AFeatureRoundIsSkippedNotRefusedTests : IAsyncLifetime
             {
                 Providers = providers,
                 Rounds = new PanelConfig(
-                    PanelConfig.AllRoles.ToDictionary(r => r, r => new RoleGate(2, 5, Enabled: r != RoleCatalog.FeatureRole || featureRoleOn)),
-                    StagePolicy.Human),
+                    PanelConfig.AllRoles.ToDictionary(r => r, r => new RoleGate(2, 5, Enabled: r != RoleCatalog.FeatureRole || featureRoleOn))),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
@@ -266,7 +265,6 @@ public sealed class AFeatureRoundIsSkippedNotRefusedTests : IAsyncLifetime
         session.State.Stage.Should().Be(Stage.FeatureReview, "not Done");
         session.State.AwaitingResolve.Should().BeFalse("nothing to decide");
         session.State.RoundsRunThisStage.Should().Be(0, "no budget spent");
-        session.State.HumanGate.Should().BeFalse();
 
         var rows = RowsOf();
         rows.Should().ContainSingle();
@@ -312,27 +310,19 @@ public sealed class AFeatureRoundIsSkippedNotRefusedTests : IAsyncLifetime
         RowsOf().Select(r => r.Number).Should().Equal([1, 2, 3]);
     }
 
-    // ---------- the human-gate row: all failed twice → a person; un-ticking everyone is not a way past ----------
+    // ---------- all failed twice: not reviewed, said out loud — nobody is held ----------
 
     [Fact]
-    public async Task WhenEveryReviewerFailsTwice_APersonIsCalled_AndSwitchingTheReviewersOffDoesNotSkipPastThem()
+    public async Task WhenEveryReviewerFailsTwice_ItIsNotReviewed_AndNobodyIsWaitedFor()
     {
         Script(Clean, exit: 1, stderr: "429 Too Many Requests");
         var service = Service(featureRoleOn: true, Ticked());
         var retry = Parse(await RunAsync(service));
         retry.GetProperty("verdict").GetString().Should().Be("revise", $"the first failure buys a retry (D23): {retry}");
         await service.ResolveAsync(_repo, SessionKey.FeatureBranch, "[]", feature: Plan);
-        var called = Parse(await RunAsync(service));
-        called.GetProperty("verdict").GetString().Should().Be("call_human", $"all failed twice blocks: {called}");
-        FeatureSession()!.State.HumanGate.Should().BeTrue();
-
-        // Now nobody serves the stage. `stage.Begin` runs BEFORE the skip branch, on purpose: a standing
-        // call_human is a person's decision, and un-ticking every vendor must not dissolve it.
-        var answer = Parse(await RunAsync(Service(featureRoleOn: true, NotTicked())));
-
-        answer.TryGetProperty("verdict", out var verdict).Should().BeFalse($"not a skip: {verdict}");
-        answer.GetProperty("error").GetString().Should().Contain("call_human").And.Contain("ask_human",
-            "the human-gate sentence, not 'skipped'");
+        var second = Parse(await RunAsync(service));
+        second.GetProperty("verdict").GetString().Should().Be("not_reviewed", $"all failed twice, and an outage never waves a feature through as a pass: {second}");
+        FeatureSession()!.State.AdvanceOnResolve.Should().BeTrue("the review closes on resolve; there is no hold");
     }
 
     // ---------- the session is created under the claim ----------

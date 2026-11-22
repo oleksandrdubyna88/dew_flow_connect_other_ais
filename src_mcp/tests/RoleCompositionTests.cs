@@ -49,7 +49,7 @@ public sealed class RoleCompositionTests
     [Fact]
     public void WithNothingConfigured_TheRoundIsExactlyWhatTheProductShips()
     {
-        var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = Composed() };
+        var config = new PanelConfig(Roles: null) { Catalog = Composed() };
 
         config.RolesForRound(Stage.PlanReview, round: 1).Should().Equal("PlanCritique");
         config.RolesForRound(Stage.CodeReview, round: 1).Should().Equal(

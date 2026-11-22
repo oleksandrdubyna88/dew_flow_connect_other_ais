@@ -235,12 +235,12 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
         var settings = PanelSettings.FromEnvironment(name => name switch
         {
             "COAI_ROLES" => """[{"id":"1bad","stage":"result","prompts":[{"id":"bad-general"}]}]""",
-            "COAI_ON_EXHAUSTED" => "whenever",
+            "COAI_CODE_WORKSPACE" => "whenever",
             _ => null,
         });
 
         settings.Unrecognised.Should().HaveCount(2)
-            .And.Contain(u => u.Contains("COAI_ON_EXHAUSTED"))
+            .And.Contain(u => u.Contains("COAI_CODE_WORKSPACE"))
             .And.Contain(u => u.Contains("1bad"));
     }
 
@@ -368,7 +368,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
                 Prompts: [new PromptEntry("req-general", "General", "Whether the requirement is met.")]),
         ]);
 
-        return new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog };
+        return new PanelConfig(Roles: null) { Catalog = catalog };
     }
 
     private static string Scratch()

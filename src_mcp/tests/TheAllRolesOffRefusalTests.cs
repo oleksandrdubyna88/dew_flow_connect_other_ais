@@ -25,8 +25,7 @@ public sealed class TheAllRolesOffRefusalTests
         {
             DataDir = TempDir.For("coai-refusal-").Path,
             Rounds = new PanelConfig(
-                    catalog.Roles.ToDictionary(r => r.Id, r => new RoleGate(1, 5, Enabled: false)),
-                    StagePolicy.Human)
+                    catalog.Roles.ToDictionary(r => r.Id, r => new RoleGate(1, 5, Enabled: false)))
             {
                 Catalog = catalog,
             },
@@ -150,7 +149,7 @@ public sealed class TheAllRolesOffRefusalTests
         // Written by a server that knew the role, read by one configured with the same catalog.
         new SessionStore(dir).Save(new PersistedSession(
             new SessionState("s1", "D:/repo", "main", new PanelConfig(
-                catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(3, 5)), StagePolicy.Human)),
+                catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(3, 5)))),
             []));
 
         var loaded = new SessionStore(dir, catalog).Load("D:/repo", "main")!;
@@ -164,7 +163,7 @@ public sealed class TheAllRolesOffRefusalTests
     public void ASessionFileCarriesTheGates_AndNotTheCatalog()
     {
         var session = new PersistedSession(
-            new SessionState("s1", "D:/repo", "main", new PanelConfig(Roles: null, StagePolicy.Human)),
+            new SessionState("s1", "D:/repo", "main", new PanelConfig(Roles: null)),
             []);
 
         var json = JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession);

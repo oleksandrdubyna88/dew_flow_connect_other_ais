@@ -223,7 +223,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     /// <param name="roundTimeout">The operator's explicit whole for the round; none (the derivation) unless a test needs one.</param>
     /// <param name="log">What the engine logs to; nothing unless a test reads it.</param>
     private PanelService Service(
-        bool ticked = true, int minEpics = 3, TimeSpan? escalationBudget = null, IProcessLauncher? launcher = null, RoleGate? gate = null,
+        bool ticked = true, int minEpics = 3, IProcessLauncher? launcher = null, RoleGate? gate = null,
         int followUps = 3, TimeSpan? reviewerTimeout = null, bool secondVendor = false, int promptCapKib = 0,
         TimeSpan? roundTimeout = null, Serilog.ILogger? log = null) =>
         new(
@@ -233,13 +233,12 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
                     ? [new("codex") { ExecutablePath = FakeCliExe, Feature = ticked },
                        new("grok") { Runtime = "codex", ExecutablePath = FakeCliExe, Model = FailingModel, Feature = ticked }]
                     : [new("codex") { ExecutablePath = FakeCliExe, Feature = ticked, PromptCap = CoaiMcp.Core.Catalog.PromptCap.OfKib(promptCapKib) }],
-                Rounds = new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => gate ?? new RoleGate(2, 5)), StagePolicy.Human),
+                Rounds = new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => gate ?? new RoleGate(2, 5))),
                 DataDir = _data,
                 ReviewerTimeout = reviewerTimeout ?? TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
                 FeatureMinEpics = minEpics,
                 FeatureSourceFollowUps = followUps,
-                EscalationBudget = escalationBudget ?? TimeSpan.FromMinutes(30),
                 RoundTimeout = roundTimeout ?? TimeSpan.Zero,
             },
             VaultKeys.None("no vault in tests"),
@@ -277,32 +276,6 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     /// <summary>The feature session's rounds, as the trail has them.</summary>
     private IReadOnlyList<RoundRecord> FeatureRounds() =>
         [.. Session().Rounds.Where(r => r.Stage == nameof(Stage.FeatureReview))];
-
-    /// <summary>
-    /// The person's answer to the newest question of the feature session, written exactly as the panel
-    /// writes it (<c>escalationAnswer.ts</c>): the id, their words, the button, the time — beside the question.
-    /// </summary>
-    /// <param name="question">Which question — its text's beginning — when the newest is not the one; a notice begins with "The".</param>
-    private void ThePersonAnswers(string decision, string words = "Keep going — more rounds", string question = "")
-    {
-        var featureSession = Session().State.SessionId;
-        var asked = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
-            .Where(f => !f.EndsWith(".answer.json", StringComparison.Ordinal))
-            .Select(f => JsonDocument.Parse(File.ReadAllText(f)).RootElement)
-            .Where(q => q.GetProperty("sessionId").GetString() == featureSession)
-            .Where(q => q.GetProperty("question").GetString()!.StartsWith(question, StringComparison.Ordinal))
-            .OrderByDescending(q => q.GetProperty("askedUtc").GetString())
-            .First();
-        var id = asked.GetProperty("id").GetString()!;
-        var answer = JsonSerializer.Serialize(new Dictionary<string, string>
-        {
-            ["id"] = id,
-            ["answer"] = words,
-            ["decision"] = decision,
-            ["answeredUtc"] = DateTime.UtcNow.ToString("O"),
-        });
-        File.WriteAllText(Path.Combine(_data, "escalations", $"{id}.answer.json"), answer);
-    }
 
     // ---------- the proceed path: the pack reaches the reviewer, resolve closes the review ----------
 
@@ -410,7 +383,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task AFailedSecondTurn_StillCostsWhatTheFirstTurnCost_InTheLedgerAndTheRoundTotal()
     {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
+        var service = Service();
         Turn(1, AsksForSell, stdout: OneThousandIn);
         Turn(2, Clean, exit: 1, stderr: "the model fell over");
 
@@ -462,7 +435,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task AReviewerThatAsksOnEveryTurn_IsReviewedEndToEnd_ARealProcessSmokeTestOfTheWiring()
     {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), reviewerTimeout: TimeSpan.FromSeconds(2));
+        var service = Service(reviewerTimeout: TimeSpan.FromSeconds(2));
         Script(AsksForSell);
 
         var answer = Parse(await ReviewAsync(service));
@@ -530,53 +503,16 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
         var refused = Parse(await ReviewAsync(service, again: true));
 
         refused.TryGetProperty("error", out var error).Should().BeTrue($"again over the same base is refused after a non-blocking round: {refused}");
-        error.GetString().Should().Contain("reviewer failure").And.Contain("blocking").And.Contain("person", "the sentence names D23's grounds");
+        error.GetString().Should().Contain("reviewer failure").And.Contain("blocking", "the sentence names D23's grounds");
         FeatureRounds().Should().ContainSingle("no second round ran");
     }
 
-    [Fact]
-    public async Task TheCallerCannotClaimThePersonsRequest_AndThePersonsAnswerAdmitsRoundTwo()
-    {
-        var service = Service(gate: new RoleGate(2, 0), escalationBudget: TimeSpan.FromMilliseconds(200));
-        Script(OneFinding);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("good_enough");
-        await service.ResolveAsync(_repo, "any-branch", RejectTheFinding, feature: PlanPath);
-        Write("src/Shop.cs", Shop("var total = n * 3;"));
-        await Commit("the fix pull request");
-
-        // Every argument the caller has: `again`, `humanDecision: proceed`, and a question it asked itself.
-        Parse(await ReviewAsync(service, again: true)).TryGetProperty("error", out _).Should().BeTrue("again: true alone is no ground");
-        Parse(await service.ResolveAsync(_repo, "any-branch", "[]", callerClaimsProceed: true, feature: PlanPath))
-            .TryGetProperty("error", out _).Should().BeTrue("there is nothing to resolve, and the override is not the person's request either");
-        Parse(await service.AskHumanAsync(_repo, "any-branch", "Round 1 found a seam. Review the feature again?", feature: PlanPath))
-            .GetProperty("status").GetString().Should().Be("no_answer_yet");
-        Parse(await ReviewAsync(service, again: true)).TryGetProperty("error", out _).Should().BeTrue("a question nobody answered is not a request");
-
-        Script(Clean);
-        ThePersonAnswers("continue");
-        var second = Parse(await ReviewAsync(service, again: true));
-
-        second.TryGetProperty("error", out var error).Should().BeFalse($"the person's answer is the third ground: {error}");
-        second.GetProperty("verdict").GetString().Should().Be("proceed");
-        FeatureRounds().Select(r => r.Number).Should().Equal([1, 2], "round two of this review, beside round one");
-        FeatureRounds()[1].AdmittedBy.Should().Be(nameof(SecondRoundGround.PersonAsked), "the ground is recorded on the round it admitted");
-        Session().FeatureBase.Should().Be(_base);
-
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-        await CommitMore(2);
-        ThePersonAnswers("continue", "once more");
-        var third = Parse(await ReviewAsync(service, again: true));
-
-        third.TryGetProperty("error", out var refusedAgain).Should().BeTrue($"a third round is refused, whoever asks (D23: at most two): {third}");
-        refusedAgain.GetString().Should().Contain("two rounds");
-    }
-
-    // ---------- D23: a blocking finding admits round 2, and a blocking round 2 calls a person ----------
+    // ---------- D23: a blocking finding admits round 2, and a blocking round 2 ends good enough ----------
 
     [Fact]
-    public async Task ABlockingFinding_AdmitsRoundTwo_AndABlockingRoundTwoCallsAPerson_WhomUntickingDoesNotDissolve()
+    public async Task ABlockingFinding_AdmitsRoundTwo_AndABlockingRoundTwoEndsGoodEnough_WithNobodyHeld()
     {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
+        var service = Service();
         Script(BlockingFinding);
 
         var first = Parse(await ReviewAsync(service));
@@ -590,72 +526,11 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
 
         var second = Parse(await ReviewAsync(service, again: true));
 
-        second.GetProperty("verdict").GetString().Should().Be("call_human", $"round 2 still carries a blocking finding: {second}");
+        second.GetProperty("verdict").GetString().Should().Be("good_enough", $"round 2 still carries a blocking finding, and nobody is waited for: {second}");
         FeatureRounds()[1].AdmittedBy.Should().Be(nameof(SecondRoundGround.BlockingFinding));
-        Session().State.HumanGate.Should().BeTrue();
-
-        // A standing call_human is a person's decision, and un-ticking every vendor must not dissolve it (§4.4).
-        Parse(await ReviewAsync(Service(ticked: false))).GetProperty("error").GetString().Should().Contain("ask_human");
-    }
-
-    /// <summary>
-    /// <c>todo/PLAN_only_a_person_releases_the_gate.md</c> on a FEATURE review held by <c>call_human</c>: the caller's argument releases
-    /// nothing, a person's Proceed on the notice is refused to every review entry with the sentence naming <c>resolve</c> (§11.7), and
-    /// <c>resolve</c> then closes the review with the findings recorded as proceeded over (§11.5).
-    /// </summary>
-    [Fact]
-    public async Task AHeldFeatureReview_IsReleasedByThePersonsProceedOnItsNotice_AndByNothingTheCallerPasses()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
-        Script(BlockingFinding);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise");
-        await service.ResolveAsync(_repo, "any-branch", AcceptTheFinding, feature: PlanPath);
-        Write("src/Shop.cs", Shop("var total = n * 3;"));
-        await Commit("the fix pull request");
-        Parse(await ReviewAsync(service, again: true)).GetProperty("verdict").GetString().Should().Be("call_human");
-
-        var claimed = Parse(await service.ResolveAsync(_repo, "any-branch", RejectTheFinding, true, feature: PlanPath));
-        claimed.TryGetProperty("error", out _).Should().BeTrue($"the caller's argument is no decision: {claimed}");
-        claimed.GetProperty("error").GetString().Should().Contain("Proceed despite the findings");
-        Session().State.HumanGate.Should().BeTrue();
-
-        ThePersonAnswers("proceed", "Proceed despite the findings", question: "The ");
-        var review = Parse(await ReviewAsync(service, again: true));
-        review.GetProperty("error").GetString().Should().Contain("a person pressed Proceed on the held gate — call resolve to advance");
-
-        var resolved = Parse(await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath));
-        resolved.TryGetProperty("error", out var error).Should().BeFalse($"the person's Proceed closes the review: {error}");
-        Session().State.HumanGate.Should().BeFalse();
-        Session().State.Stage.Should().Be(Stage.Done);
-    }
-
-    /// <summary>
-    /// The sweep of the same shape as a new document review over a hold: another base is a different review
-    /// (<c>RoundMachine.FreshFeatureReview</c>), but it must not be a way out of a held gate. The begin still refuses it and
-    /// nothing is saved.
-    /// </summary>
-    [Fact]
-    public async Task AHeldFeatureReview_IsNotStartedOverByAnotherBase_AndTheHoldStays()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
-        Script(BlockingFinding);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise");
-        await service.ResolveAsync(_repo, "any-branch", AcceptTheFinding, feature: PlanPath);
-        Write("src/Shop.cs", Shop("var total = n * 3;"));
-        await Commit("the fix pull request");
-        Parse(await ReviewAsync(service, again: true)).GetProperty("verdict").GetString().Should().Be("call_human");
-        var held = Session();
-        var laterBase = await Rev("HEAD");
-        await CommitMore(1);
-
-        var reply = Parse(await ReviewAsync(service, again: true, baseRef: laterBase));
-
-        reply.TryGetProperty("error", out var error).Should().BeTrue($"another base is not a door out of a hold, but the reply was {reply}");
-        error.GetString().Should().Contain("a person has to decide");
-        var after = Session();
-        after.State.HumanGate.Should().BeTrue();
-        after.FeatureBase.Should().Be(held.FeatureBase, "the base is saved only with a round that runs");
-        after.State.RoundsRunThisStage.Should().Be(held.State.RoundsRunThisStage);
+        Session().State.AdvanceOnResolve.Should().BeTrue("the review closes on resolve; there is no hold");
+        Parse(await service.ResolveAsync(_repo, "any-branch", RejectTheFinding, feature: PlanPath))
+            .GetProperty("stage").GetString().Should().Be("Done");
     }
 
     // ---------- D23: a partly failed round retries only the reviewers that failed ----------
@@ -767,24 +642,6 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AgainAgainstANewBase_StillWaitsForAPerson()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
-        Script(Clean, exit: 1, stderr: "429 Too Many Requests");
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise", "the first failure buys a retry (D23)");
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("call_human", "the retry failed too");
-        var laterBase = await Rev("HEAD");
-        await CommitMore(1);
-        Script(Clean);
-
-        var answer = Parse(await ReviewAsync(service, again: true, baseRef: laterBase));
-
-        answer.TryGetProperty("error", out var error).Should().BeTrue($"a standing call_human is a person's decision, and a new base does not dissolve it: {answer}");
-        error.GetString().Should().Contain(RoundMachine.GateHeld);
-    }
-
-    [Fact]
     public async Task ASkippedFirstCall_PinsNoBase_SoALaterCallMayNameAnother()
     {
         var service = Service(ticked: false);
@@ -878,102 +735,18 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
         FeatureRounds().Should().ContainSingle().Which.Verdict.Should().Be("skipped", "the skip is on the trail");
     }
 
-    // ---------- a person's answer belongs to the hold it answered ----------
-
-    /// <summary>
-    /// The newest ANSWERED question is walked to past an unanswered notice, so the "keep going" a person gave
-    /// on hold one used to open hold two by itself — through the engine before a round and through
-    /// <c>resolve</c>. Both readers now take the answer only when it came after the round that raised the hold.
-    /// </summary>
-    [Fact]
-    public async Task AnAnswerToAnEarlierHold_DoesNotReopenALaterOne_AndTheNewAnswerDoes()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
-        Script(Clean, exit: 1, stderr: "429 Too Many Requests");
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise");
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("call_human", "hold one");
-        ThePersonAnswers("continue", "keep going — hold one");
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-
-        // Hold one is answered: a fresh set runs, fails twice more, and hold two is raised — with an OPEN notice.
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise", "the person's fresh set: round one, a retry");
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("call_human", "hold two");
-        var resolved = Parse(await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath));
-        resolved.TryGetProperty("error", out _).Should().BeFalse($"{resolved}");
-        Session().State.RoundsRunThisStage.Should().Be(2, "resolve on hold two must not spend hold one's answer on the count");
-
-        var answer = Parse(await ReviewAsync(service));
-
-        answer.TryGetProperty("error", out var error).Should().BeTrue($"hold one's answer must not open hold two: {answer}");
-        error.GetString().Should().Be(RoundMachine.GateHeld);
-        Session().State.HumanGate.Should().BeTrue();
-
-        Script(Clean);
-        ThePersonAnswers("continue", "keep going — hold two");
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("proceed", "the answer to THIS hold opens it");
-    }
-
-    /// <summary>
-    /// The clock alone was not enough: a question asked for hold one and left open is NEWER than nothing when
-    /// it is finally answered, so answering it after hold two was raised released hold two (found by the epic 3
-    /// risk consultation 159f0397). A hold is bound to its own questions — the notice the round wrote and what
-    /// <c>ask_human</c> asked while it stood — recorded on the session the moment they are raised.
-    /// </summary>
-    [Fact]
-    public async Task AQuestionLeftOpenOnAnEarlierHold_AnsweredAfterALaterOne_DoesNotReleaseIt_AndTheLaterHoldsOwnQuestionsDo()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
-        Script(Clean, exit: 1, stderr: "429 Too Many Requests");
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise");
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("call_human", "hold one");
-        // The AI asks under hold one; nobody answers in the budget, and the question stays open on disk.
-        Parse(await service.AskHumanAsync(_repo, "any-branch", "Release the cart anyway?", feature: PlanPath))
-            .GetProperty("status").GetString().Should().Be("no_answer_yet");
-        ThePersonAnswers("continue", "keep going — hold one", question: "The ");
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-
-        // Hold one's notice was answered: a fresh set runs, fails twice more, and hold two is raised.
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise", "the person's fresh set: round one, a retry");
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("call_human", "hold two");
-        Parse(await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath)).TryGetProperty("error", out _).Should().BeFalse();
-
-        // Now the person answers the OLD question — asked for hold one, newer than hold two's round when answered.
-        ThePersonAnswers("continue", "an old question, answered late", question: "Release the cart anyway?");
-        var answer = Parse(await ReviewAsync(service));
-
-        answer.TryGetProperty("error", out var error).Should().BeTrue($"a question asked for hold one cannot release hold two, whenever it is answered: {answer}");
-        error.GetString().Should().Be(RoundMachine.GateHeld);
-        Session().State.HumanGate.Should().BeTrue();
-        var holdTwo = Session().State.HoldQuestions.Should().ContainSingle("hold two's notice was recorded on the session the moment it was raised").Subject;
-
-        // A question the AI asks FOR hold two is hold two's, and the person's answer to it releases the hold.
-        Parse(await service.AskHumanAsync(_repo, "any-branch", "Ship the cart?", feature: PlanPath))
-            .GetProperty("status").GetString().Should().Be("no_answer_yet");
-        Session().State.HoldQuestions.Should().HaveCount(2, "ask_human under a held gate records its question on the hold")
-            .And.HaveElementAt(0, holdTwo);
-        Script(Clean);
-        ThePersonAnswers("continue", "keep going — hold two", question: "Ship the cart?");
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("proceed", "the answer to a question asked for THIS hold opens it");
-        Session().State.HoldQuestions.Should().BeEmpty("the hold is over, and its questions with it");
-    }
-
     // ---------- all failed: a retry of everyone, then a person — and ask_human reaches the feature session ----------
 
     [Fact]
-    public async Task WhenEveryReviewerFails_TheRetryAsksEveryone_ThenAPersonIsCalled_AndTheQuestionIsFiledUnderTheFeatureSession()
+    public async Task WhenEveryReviewerFails_TheRetryAsksEveryone_ThenItIsNotReviewed_AndNobodyIsHeld()
     {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
+        var service = Service();
         Script(Clean, exit: 1, stderr: "429 Too Many Requests");
 
         var first = Parse(await ReviewAsync(service));
 
-        first.GetProperty("verdict").GetString().Should().Be("revise", $"every reviewer failed in round 1: a retry is admitted, not a person (D23): {first}");
+        first.GetProperty("verdict").GetString().Should().Be("revise", $"every reviewer failed in round 1: a retry is admitted (D23): {first}");
         first.GetProperty("instruction").GetString().Should().Contain("retry").And.Contain("no new head");
-        Session().State.HumanGate.Should().BeFalse();
         await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
         // A 429 is retried on the rate-limit ladder, so one reviewer is more than one launch; the retry ROUND
         // is what adds launches, and every one of them is the one reviewer there is.
@@ -981,38 +754,15 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
 
         var answer = Parse(await ReviewAsync(service));
 
-        answer.GetProperty("verdict").GetString().Should().Be("call_human", $"the retry failed too — an outage must not wave a feature through (D1): {answer}");
+        answer.GetProperty("verdict").GetString().Should().Be("not_reviewed", $"the retry failed too — said out loud, never a pass (D1): {answer}");
         Launches().Should().HaveCountGreaterThan(launchesInRoundOne, "the retry asked the one reviewer there was, again, over the same head")
             .And.AllSatisfy(launch => launch.Should().Contain("codex-FeatureReview"));
         FeatureRounds()[1].AdmittedBy.Should().Be(nameof(SecondRoundGround.ReviewerFailure));
-        var status = Parse(await service.StatusAsync(_repo, "any-branch", string.Empty, string.Empty, feature: PlanPath));
-        var featureSession = status.GetProperty("sessionId").GetString();
-
-        var reply = Parse(await service.AskHumanAsync(_repo, "any-branch", "Release the cart anyway?", feature: PlanPath));
-
-        reply.GetProperty("status").GetString().Should().Be("no_answer_yet", "nobody is at the keyboard in a test");
-        var asked = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
-            .Where(f => !f.EndsWith(".answer.json", StringComparison.Ordinal))
-            .Select(f => JsonDocument.Parse(File.ReadAllText(f)).RootElement)
-            .Single(q => q.GetProperty("question").GetString() == "Release the cart anyway?");
-        asked.GetProperty("sessionId").GetString().Should().Be(featureSession,
-            "the person's answer is looked up by session id, so the question must be the feature session's");
+        Directory.Exists(Path.Combine(_data, "escalations")).Should().BeFalse("no person is called, so no card is written");
+        Session().State.AdvanceOnResolve.Should().BeTrue("the review closes on resolve");
     }
 
     // ---------- epic 3's code round: four ways past the gate, each closed ----------
-
-    /// <summary>Every question filed under the feature session, oldest first: its id and its text.</summary>
-    private IReadOnlyList<(string Id, string Question)> QuestionsOfTheFeatureSession()
-    {
-        var featureSession = Session().State.SessionId;
-
-        return [.. Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
-            .Where(f => !f.EndsWith(".answer.json", StringComparison.Ordinal))
-            .Select(f => JsonDocument.Parse(File.ReadAllText(f)).RootElement)
-            .Where(q => q.GetProperty("sessionId").GetString() == featureSession)
-            .OrderBy(q => q.GetProperty("askedUtc").GetString())
-            .Select(q => (q.GetProperty("id").GetString()!, q.GetProperty("question").GetString()!))];
-    }
 
     /// <summary>
     /// D14 for a blocking second round does not depend on <c>again</c>: after a blocking round 1 a PLAIN
@@ -1056,12 +806,11 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
         Script(Clean, exit: 1, stderr: "429 Too Many Requests");
         Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise", "a reviewer failure admits a retry (D23)");
         await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-        Session().State.HumanGate.Should().BeFalse("no hold stands — the retry is owed, not a person's decision");
 
         var unticked = Parse(await ReviewAsync(Service(ticked: false)));
 
         unticked.TryGetProperty("verdict", out var verdict).Should().BeFalse($"not a skip: {verdict}");
-        unticked.GetProperty("error").GetString().Should().Contain("second round").And.Contain("ask_human").And.Contain("no vendor is ticked");
+        unticked.GetProperty("error").GetString().Should().Contain("second round").And.Contain("no vendor is ticked");
         var fewerEpics = Parse(await ReviewAsync(service, epics: TwoEpics));
         fewerEpics.TryGetProperty("verdict", out verdict).Should().BeFalse($"the D17 door is the same door: {verdict}");
         fewerEpics.GetProperty("error").GetString().Should().Contain("second round").And.Contain("epic");
@@ -1072,85 +821,5 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
         Script(Clean);
         Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("proceed", "re-ticked, the retry runs");
         FeatureRounds()[1].AdmittedBy.Should().Be(nameof(SecondRoundGround.ReviewerFailure));
-    }
-
-    /// <summary>
-    /// The person's second-round request is bound to a question asked FOR it: one the AI asked on the
-    /// feature session after round 1. A question asked before round 1 — here, while the review was still
-    /// skipped — and answered "continue" after it used to admit round 2 by the clock alone (the gate's
-    /// finding #27). Since 2026-10-03 such a question is not the gate's at all, so it is no card the person
-    /// could press "continue" on: it is asked in the AI's conversation (<c>research/PLAN_ask_human_is_for_the_gate.md</c>,
-    /// G1/G2), and round 2 still waits for a question asked after round 1.
-    /// </summary>
-    [Fact]
-    public async Task AQuestionAskedBeforeRoundOne_IsNotThePersonsRequest_AndOneAskedAfterItIs()
-    {
-        var early = Service(ticked: false, gate: new RoleGate(2, 0), escalationBudget: TimeSpan.FromMilliseconds(200));
-        Parse(await ReviewAsync(early)).GetProperty("verdict").GetString().Should().Be("skipped", "the session exists from the first call");
-        Parse(await early.AskHumanAsync(_repo, "any-branch", "Shall I run the feature review now?", feature: PlanPath))
-            .GetProperty("status").GetString().Should().Be("ask_in_conversation", "before round 1 nothing can be requested — the question is the AI's own");
-
-        var service = Service(gate: new RoleGate(2, 0), escalationBudget: TimeSpan.FromMilliseconds(200));
-        Script(OneFinding);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("good_enough");
-        await service.ResolveAsync(_repo, "any-branch", RejectTheFinding, feature: PlanPath);
-        Write("src/Shop.cs", Shop("var total = n * 3;"));
-        await Commit("the fix pull request");
-        Directory.Exists(Path.Combine(_data, "escalations")).Should().BeFalse("the early question left no card to answer");
-
-        var refused = Parse(await ReviewAsync(service, again: true));
-
-        refused.TryGetProperty("error", out var error).Should().BeTrue($"a question asked before round 1 was not asked for round 2, whenever it is answered: {refused}");
-        error.GetString().Should().Contain("reviewer failure").And.Contain("person");
-        FeatureRounds().Where(r => r.Verdict != RoundRecord.Skipped).Should().ContainSingle("no round 2 ran on the old answer");
-
-        Parse(await service.AskHumanAsync(_repo, "any-branch", "Round 1 found a seam. Review the feature again?", feature: PlanPath))
-            .GetProperty("status").GetString().Should().Be("no_answer_yet");
-        Script(Clean);
-        ThePersonAnswers("continue", question: "Round 1 found");
-        var second = Parse(await ReviewAsync(service, again: true));
-
-        second.TryGetProperty("error", out error).Should().BeFalse($"the feature session's own question, asked after round 1, is the request: {error}");
-        second.GetProperty("verdict").GetString().Should().Be("proceed");
-        FeatureRounds()[^1].AdmittedBy.Should().Be(nameof(SecondRoundGround.PersonAsked));
-    }
-
-    /// <summary>
-    /// A held gate that records no question — a session an OLDER build held — is not released by a
-    /// time-matched answer any more: that was the clock rule the identity binding replaced, kept as a
-    /// residual (the gate's findings #24/#30). Instead the hold's notice is re-issued through the normal
-    /// road, which records its id, and the person's answer to THAT releases the hold.
-    /// </summary>
-    [Fact]
-    public async Task AHoldWithNoRecordedQuestion_IsNotReleasedByAnOldAnswer_ItsNoticeIsReissued_AndThatAnswerReleasesIt()
-    {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
-        Script(Clean, exit: 1, stderr: "429 Too Many Requests");
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise");
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("call_human", "the hold");
-        await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath);
-        var held = Session();
-        held.State.HoldQuestions.Should().ContainSingle();
-        // As an older build wrote it: the hold stands, and no question is recorded for it.
-        new SessionStore(_data).Save(held with { State = held.State with { HoldQuestions = [] } });
-        var oldNotice = QuestionsOfTheFeatureSession().Should().ContainSingle().Subject;
-        ThePersonAnswers("continue", "an answer this build cannot bind", question: "The ");
-        Script(Clean);
-
-        var answer = Parse(await ReviewAsync(service));
-
-        answer.TryGetProperty("error", out var error).Should().BeTrue($"a time-matched answer to a question the hold does not record must not release it: {answer}");
-        error.GetString().Should().Be(RoundMachine.GateHeld);
-        Session().State.HumanGate.Should().BeTrue();
-        var questions = QuestionsOfTheFeatureSession();
-        questions.Should().HaveCount(2, "the hold's notice was re-issued so the person can answer a question this build can bind");
-        questions[1].Id.Should().NotBe(oldNotice.Id);
-        questions[1].Question.Should().StartWith("The feature review gate");
-        Session().State.HoldQuestions.Should().Equal([questions[1].Id], "the re-issued notice is recorded on the hold");
-
-        ThePersonAnswers("continue", "keep going — this hold", question: "The ");
-        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("proceed", "the answer to the re-issued notice releases the hold");
-        Session().State.HoldQuestions.Should().BeEmpty();
     }
 }

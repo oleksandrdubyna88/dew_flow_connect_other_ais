@@ -52,11 +52,9 @@ public sealed class SettingsReachTheServerTests : IDisposable
             ("COAI_VENDORS", """[{"id":"antigravity","runtime":"antigravity","model":"gemini-3.7-flash-high","baseUrl":""}]"""),
             ("COAI_MAX_ROUNDS", "5"),
             ("COAI_GATE_THRESHOLD", "1"),
-            ("COAI_ON_EXHAUSTED", "escalate"),
             ("COAI_MAX_CONCURRENCY", "7"),
             ("COAI_MAX_PER_PROVIDER", "4"),
             ("COAI_REVIEWER_TIMEOUT_MINUTES", "12"),
-            ("COAI_ESCALATION_MINUTES", "45"),
             ("COAI_ROTATE_PROMPTS", "true"),
             ("COAI_PROMPTS_PER_ROUND", """{"SecurityReliability":["sec-attack","sec-memory-leaks"]}"""));
 
@@ -67,11 +65,9 @@ public sealed class SettingsReachTheServerTests : IDisposable
         s.Providers[0].Model.Should().Be("gemini-3.7-flash-high");
         s.Rounds.For(Stage.PlanReview).MaxRounds.Should().Be(5);
         s.Rounds.For(Stage.PlanReview).Threshold.Should().Be(1);
-        s.Rounds.OnExhausted.Should().Be(StagePolicy.Escalate);
         s.GlobalConcurrency.Should().Be(7);
         s.PerProviderConcurrency.Should().Be(4);
         s.ReviewerTimeout.Should().Be(TimeSpan.FromMinutes(12));
-        s.EscalationBudget.Should().Be(TimeSpan.FromMinutes(45));
         s.DealPlanLenses.Should().BeTrue("the legacy rotate flag still turns dealing on");
         s.PromptsPerRound["SecurityReliability"].Should().Equal("sec-attack", "sec-memory-leaks");
     }

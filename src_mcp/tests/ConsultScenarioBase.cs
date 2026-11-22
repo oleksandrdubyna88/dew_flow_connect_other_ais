@@ -154,7 +154,7 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
         {
             ConsultantHomesRoot = homes,
             Providers = providers ?? [new("codex") { ExecutablePath = FakeCliExe }],
-            Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+            Rounds = PanelConfig.Uniform(3, 2),
             DataDir = _data,
             ReviewerTimeout = reviewerTimeout ?? TimeSpan.FromSeconds(30),
             ConsultTurns = turns,

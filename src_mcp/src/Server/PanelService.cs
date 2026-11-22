@@ -37,11 +37,7 @@ public sealed class PanelService
     private readonly RoundCommands _commands;
     private readonly RoundEngine _engine;
     private readonly FeatureStage _feature;
-    private readonly Escalations _escalations;
-    private readonly AskHumanService _askHuman;
-    private readonly EscalationRetention _retention;
     private readonly Store.Projection _projection;
-    private readonly SessionPolicy _policy;
     private readonly Runners.Processes.ProcessTracking _tracking;
     private readonly RemoteProbe _remote;
     private readonly ConsultationService _consultations;
@@ -100,11 +96,9 @@ public sealed class PanelService
             // takes as proof that no round was ever silent.
             problem => _log.Warning("evidence: {Problem}", problem));
         var prompts = new RolePrompts(settings.DataDir);
-        _escalations = new Escalations(settings.DataDir);
         var ledger = new UsageLedger(settings.DataDir);
         var callers = new CallerSessions(settings.DataDir);
         _projection = new Store.Projection(settings.DataDir, log);
-        _policy = new SessionPolicy(settings, _store, _escalations, _projection, log);
         _consultations = new ConsultationService(
             settings, launcher, executor, _context, prompts, ledger, log,
             Environment.GetEnvironmentVariable, noticing, keys);
@@ -113,11 +107,6 @@ public sealed class PanelService
         _questions = new QuestionConsultService(
             settings, launcher, executor, _context, prompts, ledger, keys, log, Environment.GetEnvironmentVariable, noticing);
         var cadenceStore = new CadenceStore(settings.DataDir);
-        // ask_human with its gate (S3): the desk gathers the phase from the session and the cadence record, verifies
-        // a consultId against the question records, and runs the consultants beside a production risk.
-        _askHuman = new AskHumanService(settings, _store, _escalations, log, noticing, AddressOf,
-            new AskGateDesk(_questions, cadenceStore, new QuestionPhaseStore(settings.DataDir), _escalations, Environment.GetEnvironmentVariable, log), _policy);
-        _retention = new EscalationRetention(_escalations, _store.HeldQuestions, message => _log.Warning("escalations: {Detail}", message));
         // The consultation cadence (research/PLAN_consult_on_a_cadence.md): its record, its gate over the
         // consultation records, and every decision a round makes about it — kept out of this file.
         _cadence = new CadenceDesk(
@@ -144,8 +133,8 @@ public sealed class PanelService
         // reference back.
         _commands = new RoundCommands(settings, prompts, log);
         _engine = new RoundEngine(
-            settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, _escalations, ledger,
-            _projection, _policy, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
+            settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, ledger,
+            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
         // The fourth gate, in a file of its own (S2.2b): its inputs, its refs and its pack, over the same
         // engine. The outliner is the in-process tree-sitter one the pack is measured with.
         _feature = new FeatureStage(settings, launcher, _engine, _roster, new Normalizer.TreeSitterOutliner(), log, noticing);
@@ -186,9 +175,6 @@ public sealed class PanelService
         }
 
         _log.Debug("re-projected {Count} question consultation(s) into the rounds database", _questions.Reproject());
-        // And the person's cards (A4, S3): answered and expired questions, orphans and temp files older than seven
-        // days go; a question a live session still holds is kept. The phase records they count into go after thirty.
-        _log.Debug("swept {Count} escalation file(s) and phase record(s)", SweepEscalations());
         _log.Debug("retired {Count} Kimi lock key(s)", SweepKimiLocks());
 
         // And the reviewers those rounds left RUNNING, which is the more expensive half of the
@@ -566,13 +552,12 @@ public sealed class PanelService
         }
 
         var at = AddressOf(repoPath, branch, document, feature);
-        var session = LoadedUnderThePolicy(repoPath, at);
+        var session = _store.Load(repoPath, at.Branch, at.Document, at.Feature);
         if (session is null)
         {
             return Error(NoSession(document, feature));
         }
 
-        _escalations.OfferHeldNotices(session);
         var cadence = _settings.CadenceMode == Core.Cadence.CadenceMode.Off || document.Length > 0 || feature.Length > 0
             ? null
             : await _cadence.AnswerAsync(session, plan, await _worktrees.ShaOrNoneAsync(repoPath, branch), ct);
@@ -1145,9 +1130,6 @@ public sealed class PanelService
     /// Why a FRESH review of this document may not start beside the current one, or null.
     /// </summary>
     /// <remarks>
-    /// <para>Not over a held gate: a new session has no hold and a fresh budget, and <c>resolve</c> and <c>status</c> would address
-    /// it, so the AI would leave the hold on its own. It is told what the held session's own entries are told
-    /// (<see cref="RoundEngine.HeldSentence"/>) — ask the person, or call <c>resolve</c> once a Proceed is on file.</para>
     /// <para>Not over a round nobody has decided on: the old session would sit awaiting a resolve that now has no way to reach it,
     /// which is the orphaning this whole design was rewritten to prevent — one ordinal further along. (codex, the code round.)</para>
     /// </remarks>
@@ -1155,25 +1137,13 @@ public sealed class PanelService
     {
         var identity = DocumentSessions.Which(document, newReview: false, id => _store.Exists(repoPath, branch, id));
 
-        // The session is read through policy auto first (a hold from before policy auto is released by whichever call reads it first),
-        // so a released one says so — and never "nobody has decided" — and one whose release could not be written says why.
-        return _policy.CurrentUnclaimed(_store.Load(repoPath, branch, identity), repoPath, new SessionAddress(branch, identity, string.Empty)) switch
+        return _store.Load(repoPath, branch, identity) switch
         {
             null => null,
-            { NotWritten.Length: > 0 } release => LegacyHold.NotWrittenSentence(SessionPolicy.StageOf(release.Session), release.NotWritten),
-            { Session.State.HumanGate: true } release => _engine.HeldSentence(release.Session),
-            { Session: var released } when SessionPolicy.AwaitsItsResolve(released) => LegacyHold.ReleasedSentence(SessionPolicy.StageOf(released)),
-            { Session.State.AwaitingResolve: true } => DocumentSessions.StillOpen(document),
+            { State.AwaitingResolve: true } => DocumentSessions.StillOpen(document),
             _ => null,
         };
     }
-
-    /// <summary>
-    /// The session at this address, after a hold from before policy auto was released by whichever call reads it first; this call holds no
-    /// claim, so it takes it for the release alone. Null for no session.
-    /// </summary>
-    private PersistedSession? LoadedUnderThePolicy(string repoPath, SessionAddress at) =>
-        _policy.CurrentUnclaimed(_store.Load(repoPath, at.Branch, at.Document, at.Feature), repoPath, at)?.Session;
 
     /// <summary>
     /// The session at this identity: the one that is there, or a new one.
@@ -1650,9 +1620,8 @@ public sealed class PanelService
     /// Which plan's feature review is being resolved: the same <c>planPath</c> passed to
     /// <c>review_feature</c>. The branch is then not read.
     /// </param>
-    /// <param name="callerClaimsProceed">The AI's <c>humanDecision</c>: a claim <see cref="RoundMachine.ClaimRefusal"/> judges, never a decision.</param>
     public Task<string> ResolveAsync(
-        string repoPath, string branch, string decisionsJson, bool callerClaimsProceed = false, string document = "", string feature = "")
+        string repoPath, string branch, string decisionsJson, string document = "", string feature = "")
     {
         if (Both(document, feature) is { Length: > 0 } both)
         {
@@ -1665,22 +1634,17 @@ public sealed class PanelService
         using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, at.Branch, at.Document, at.Feature);
         return claim is null
             ? Task.FromResult(Error(SessionClaim.Busy(branch)))
-            : ResolveUnderClaim(repoPath, at, decisionsJson, callerClaimsProceed, NoSession(document, feature));
+            : ResolveUnderClaim(repoPath, at, decisionsJson, NoSession(document, feature));
     }
 
     private Task<string> ResolveUnderClaim(
-        string repoPath, SessionAddress at, string decisionsJson, bool callerClaimsProceed, string noSession)
+        string repoPath, SessionAddress at, string decisionsJson, string noSession)
     {
         var session = _store.Load(repoPath, at.Branch, at.Document, at.Feature);
         if (session is null)
         {
             return Task.FromResult(Error(noSession));
         }
-
-        // Under the claim this call holds: a hold from before policy auto is released here, and the decisions below are made on what it left.
-        session = _policy.Current(session).Session;
-        _escalations.OfferHeldNotices(session);
-        var persons = PersonsDecision(session);
 
         List<DecisionDto>? dtos;
         try
@@ -1694,11 +1658,9 @@ public sealed class PanelService
 
         if (dtos is null or [])
         {
-            return Task.FromResult(session.Pending.Count == 0 || persons == HumanDecision.Proceed
-                ? Finish(session, [], persons, callerClaimsProceed)
-                : Error(RoundMachine.ClaimRefusal(session.State, persons, callerClaimsProceed) is { Length: > 0 } claimed
-                    ? claimed
-                    : $"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
+            return Task.FromResult(session.Pending.Count == 0
+                ? Finish(session, [])
+                : Error($"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
         }
 
         // Each decision keeps the NUMBER the caller made it by. The projection used to take that
@@ -1752,7 +1714,7 @@ public sealed class PanelService
             decisions.Add(made);
         }
 
-        return Task.FromResult(Finish(session, decisions, persons, callerClaimsProceed));
+        return Task.FromResult(Finish(session, decisions));
     }
 
     /// <summary>
@@ -1764,42 +1726,12 @@ public sealed class PanelService
     /// </remarks>
     private void Project(Action<Store.RoundsDb> write) => _projection.Write(write);
 
-    /// <summary>
-    /// What the PERSON pressed on a <c>call_human</c> notice, if they pressed anything — the machine applies it
-    /// (<see cref="RoundMachine.Resolve"/> takes the decision, not a flag).
-    /// </summary>
-    /// <remarks>
-    /// <para>Continue and Fix mean "the stage is not finished, carry on": another set of rounds either way, differing only in
-    /// whether the AI changes something first. So both reset the stage's round count — which is the whole unblocking, and it is the
-    /// person's doing, not the AI's. Proceed advances the stage over the open findings, and it is the person's alone: read from
-    /// the answer file of the hold's own notice, never from an argument of the caller's. <c>Discuss</c> leaves the session exactly
-    /// where it is: the AI is meant to stop and talk.</para>
-    /// <para><b>Only while the gate is HELD, and only an answer to THIS hold</b> — the guards the engine's
-    /// own reader has, through the one rule (<see cref="CurrentAnswer"/>). Without the first, the newest
-    /// answered notice of the session was applied on EVERY later resolve, so one "keep going" reset the
-    /// round count for the life of the session: a feature review's second round resolved to a count of
-    /// zero, and D23's cap let a third round run. Without the second, an answer to an earlier hold was
-    /// spent on a later one's count (both found by S3.4's scenarios, 2026-09-26).</para>
-    /// </remarks>
-    private HumanDecision PersonsDecision(PersistedSession session)
+    private string Finish(PersistedSession session, List<DecisionAt> decisions)
     {
-        var decision = session.State.HumanGate ? CurrentAnswer.DecisionFor(session, _escalations, _log) : HumanDecision.None;
-        if (decision != HumanDecision.None)
-        {
-            _log.Information("the person chose {Decision} on the held {Stage} gate", decision, session.State.Stage);
-        }
-
-        return decision;
-    }
-
-    private string Finish(PersistedSession session, List<DecisionAt> given, HumanDecision persons, bool callerClaimsProceed)
-    {
-        // Under a person's Proceed, the findings nobody decided are recorded as proceeded over, never dropped (§11.5).
-        var decisions = ProceededOver.Recorded(session.Pending, given, persons, session.State.HumanGate);
         // The state machine judges DECISIONS and has no use for the numbers they were made by; the
         // projection needs both. One projection here rather than two lists carried side by side.
         var judged = decisions.Select(d => d.Decision).ToList();
-        switch (RoundMachine.Resolve(session.State, judged, persons, callerClaimsProceed))
+        switch (RoundMachine.Resolve(session.State, judged))
         {
             case Transition.Refused refused:
                 return Error(refused.Sentence);
@@ -1832,7 +1764,7 @@ public sealed class PanelService
                 // owns the sentence. It read `Done => "The code stage is complete"`, which told a
                 // document review a code round had finished (§9.2 of the feature-review plan).
                 var instruction = moved.State.Stage != session.State.Stage
-                    ? ProceededOver.Instruction(session.State, persons)
+                    ? Stages.Of(session.State.Stage).CompletedSentence
                     : "Decisions recorded. Apply the accepted findings, then run the review again.";
                 return Json(new ResolveAnswer(moved.State.Stage.ToString(), moved.State.AwaitingResolve, decisions.Count, instruction),
                     ServerJsonContext.Default.ResolveAnswer);
@@ -1840,20 +1772,6 @@ public sealed class PanelService
                 return Error("unexpected transition — this is a bug, report it");
         }
     }
-
-    // ---------- ask_human ----------
-
-    /// <summary>
-    /// Puts the question in front of a person and waits — <see cref="AskHumanService"/>, which the block moved
-    /// to as a proved move (PLAN_question_consultant.md, S2, D12). A delegation, so every caller is unchanged.
-    /// </summary>
-    public Task<string> AskHumanAsync(
-        string repoPath, string branch, string question, string document = "", string feature = "",
-        string consultId = "", bool productionRisk = false, string riskReason = "", CancellationToken ct = default) =>
-        _askHuman.AskHumanAsync(repoPath, branch, question, document, feature, consultId, productionRisk, riskReason, ct);
-
-    /// <summary>The escalation cards' retention and the phase records' (S3), for <see cref="ConsultationSweeper"/>'s beat beside the other two sweeps.</summary>
-    public int SweepEscalations() => _retention.Sweep(DateTime.UtcNow) + _askHuman.SweepPhases(DateTime.UtcNow);
 
     /// <summary>
     /// The ninth tool: another vendor's model, consulted about the LIVE working tree — a thin
@@ -1958,10 +1876,7 @@ public sealed class PanelService
 
     // ---------- plumbing ----------
 
-    private SessionAnswer SessionAnswerFor(PersistedSession session) => SessionAnswerFor(
-        session, CurrentAnswer.TheGatesAnswer(session, _escalations), CurrentAnswer.TheGatesDecision(session, _escalations));
-
-    private SessionAnswer SessionAnswerFor(PersistedSession session, EscalationAnswer? gatesAnswer, HumanDecision gatesDecision) => new(
+    private SessionAnswer SessionAnswerFor(PersistedSession session) => new(
         session.State.SessionId,
         session.State.Stage.ToString(),
         session.State.RoundsRunThisStage,
@@ -1973,10 +1888,6 @@ public sealed class PanelService
         // the session file and the rounds page keep it) and without the members a newer server wrote (the session-file guard, #868).
         WithoutUnknownMembers(session.Rounds.Select(round => round with { Authors = null })))
     {
-        HumanDecision = CurrentAnswer.WordFor(gatesDecision),
-        // Told, not left to be inferred: a Proceed on file is waiting for the AI's `resolve`, and nothing else moves the stage (D8, §11.6).
-        HumanNote = gatesDecision == HumanDecision.Proceed && session.State.HumanGate ? RoundMachine.ProceedPressed : string.Empty,
-        HumanAnswer = gatesAnswer?.Answer ?? string.Empty,
         Consultations = _consultations.OpenIn(session.State.RepoPath),
         Pending = session.State.AwaitingResolve ? session.Pending : [],
     };

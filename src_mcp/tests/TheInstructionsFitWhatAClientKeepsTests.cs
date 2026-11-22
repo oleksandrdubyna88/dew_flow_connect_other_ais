@@ -50,8 +50,7 @@ public sealed class TheInstructionsFitWhatAClientKeepsTests
     public void TheThreeThatOnlyLivedInASharedRuleAreStillHere() =>
         Program.Instructions.Should().Contain("COMMANDS")
             .And.Contain("Reject in round ONE")
-            .And.Contain("ENFORCED stop")
-            .And.Contain("answer on the notice card",
+            .And.Contain("Nothing holds the gate",
                 "these are the reason the shared rule can be reduced; losing them to a budget would "
                 + "take them off every surface at once");
 }

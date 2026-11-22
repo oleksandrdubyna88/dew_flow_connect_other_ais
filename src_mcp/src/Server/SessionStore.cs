@@ -624,27 +624,6 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         return swept;
     }
 
-    /// <summary>
-    /// Every question the sessions on disk hold — on a hold (<see cref="SessionState.HoldQuestions"/>) or as a feature
-    /// session's request (<see cref="SessionState.RequestQuestions"/>) — read again only when the sessions directory
-    /// changed. What <see cref="EscalationRetention"/> asks before it takes a card: a hold is bound to its question by
-    /// identity, and the file is what the person answers. It used to be asked per id, reading every session each
-    /// time — the idle-CPU defect of 2026-10-06 (<see cref="SessionHolds"/> says the rest).
-    /// </summary>
-    public HeldQuestions HeldQuestions() => Holds.Read();
-
-    /// <summary>How many session files <see cref="HeldQuestions"/> has parsed — for the idle-budget tests.</summary>
-    internal int HeldQuestionParses => Holds.Parses;
-
-    /// <summary>
-    /// Built on first use: it needs <see cref="TryRead"/>, which a field initializer cannot name. Two threads racing the
-    /// first use can each build one; the loser's cache is simply dropped.
-    /// </summary>
-    private SessionHolds Holds => field ??= new SessionHolds(SessionsDir, TryRead, TimeProvider.System);
-
-    /// <summary>The one session reader, for a test that builds a <see cref="SessionHolds"/> of its own.</summary>
-    internal PersistedSession? TryReadForTests(string file) => TryRead(file);
-
     /// <summary>One session file, or nothing — torn, busy or not a session is nothing, and a sweep walks on.</summary>
     private PersistedSession? TryRead(string file)
     {
@@ -697,12 +676,12 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         // A file written before `config` existed deserialises with a NULL one — the same shape of
         // absence `UsedPrompts` documents next door, and `ASessionFromAnOlderBuildStillRuns` is what
         // found it here. It gets the shipped defaults, which is what a session that never recorded a
-        // budget was always running on — and no policy-auto marker: a file with no config predates policy auto. Without this it
+        // budget was always running on. Without this it
         // got a NullReferenceException the moment the
         // catalog was reattached.
         var config = whole.State.Config is { } configured
             ? configured with { Catalog = live }
-            : new PanelConfig(roles: null, autonomous: null) { Catalog = live };
+            : new PanelConfig() { Catalog = live };
 
         return whole with { State = whole.State with { Config = config } };
     }
