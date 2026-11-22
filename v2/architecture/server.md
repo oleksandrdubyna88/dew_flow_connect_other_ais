@@ -367,3 +367,13 @@ decision, cornerstone spec; read-only; strict JSON verdict/findings). One tool f
 brief, repoPath, model?, timeoutMinutes?)` / `role_status(jobId, maxSeconds)` / `role_cancel(jobId)`; the role decides
 the model (roles table / complexity band), the permissions and the output schema; `start_coder` is the coder case (no
 separate tool). Placement in the epochs: decided with the Fable split review.
+
+## 20. Important / responsible role and vendor failover (owner, 2026-11-22)
+
+- The **important** role always runs the strongest model, selectable per device (e.g. `fable`, codex `astra`). The router
+  sends it every task with `complexity: 10` and every security task (`security: true` in task.yaml, or kind `security`:
+  crypto, authN/authZ, secrets).
+- **Per-role failover:** each role has an ordered model list (e.g. important: fable → codex astra). A run that stops with
+  a refusal, a spend/rate limit or an error is re-run on the next model in the list; the switch is recorded in the job
+  envelope (`attempts: [{model, vendor, stop, reason}]`), logged, and raised as a notification. The other vendor's own
+  policy applies to it; nothing is hidden. A list that is exhausted ends the task `failed` with every attempt named.
