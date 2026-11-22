@@ -100,7 +100,7 @@ internal sealed class HoldBoundary(string dataDir, Func<ServerNotice, bool>? not
     }
 
     /// <summary>The ids of the top-level cards that belong to this held session, in a fixed order.</summary>
-    private IEnumerable<string> HeldCardIds(SessionState state)
+    internal IEnumerable<string> HeldCardIds(SessionState state)
     {
         var dir = MigrationV2.CardsDir(dataDir);
         if (!Directory.Exists(dir))

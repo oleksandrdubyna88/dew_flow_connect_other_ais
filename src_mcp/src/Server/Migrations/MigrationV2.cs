@@ -13,7 +13,7 @@ namespace CoaiMcp.Server.Migrations;
 /// <remarks>
 /// <para><b>The order, and why.</b> (1) Every held session leaves its hold: <see cref="LegacyHold.Released"/>, the held round's note, written to the SAME
 /// file under the session's claim and turn, re-read under the claim first. (2) Every OPEN escalation card is marked <c>withdrawn_v2</c> in place and moved to
-/// <c>escalations/archive/</c>; answered and expired cards are history and stay. (3) <c>qphase/</c> and <c>cadence/</c> are archived whole. (4) The
+/// <c>escalations/archive/</c>; answered and expired cards are history and stay for <see cref="CardRetention"/> (30 days), then move there too with their answer files. (3) <c>qphase/</c> and <c>cadence/</c> are archived whole. (4) The
 /// settings keys v2 does not read leave <c>settings.json</c> for <c>settings.v1-removed.json</c> under the extension's own <c>settings.lock</c>. (5) The
 /// marker <c>migrations/v2.done</c> — only when nothing was deferred and nothing was unreadable. A held session whose card a person had answered is announced first, by
 /// a notice in <c>server-notices.jsonl</c> (<see cref="HoldBoundary"/>), and converted only when that notice is on disk. Outside a run, a load of a
@@ -126,7 +126,11 @@ internal sealed partial class MigrationV2
     /// <summary>A converted session whose conversion has no <c>done</c> line: its projection into <c>coai.db</c> is written again.</summary>
     private sealed record ReprojectWork(string File, PersistedSession Session) : Work("session", Path.GetFileName(File));
 
-    private sealed record CardWork(string File, bool Withdraw) : Work("card", Path.GetFileNameWithoutExtension(File));
+    /// <summary>
+    /// A card to move to <c>escalations/archive/</c>: <paramref name="Withdraw"/> — an open card, marked <c>withdrawn_v2</c> first; neither flag — one already marked;
+    /// <paramref name="Aged"/> — an answered or expired card (and its answer file) older than <see cref="CardRetention"/>.
+    /// </summary>
+    private sealed record CardWork(string File, bool Withdraw, bool Aged = false) : Work("card", Path.GetFileNameWithoutExtension(File));
 
     private sealed record StoreWork(string Name) : Work("store", Name);
 
@@ -230,6 +234,7 @@ internal sealed partial class MigrationV2
             return;
         }
 
+        var held = new Lazy<HashSet<string>?>(HeldCardIds);
         foreach (var file in HoldBoundary.TopLevelCards(dir))
         {
             var id = Path.GetFileNameWithoutExtension(file);
@@ -249,7 +254,7 @@ internal sealed partial class MigrationV2
                 continue;
             }
 
-            if (CardWorkOf(file, id, card) is { } work)
+            if (CardWorkOf(file, id, card, held) is { } work)
             {
                 scan.Work.Add(work);
             }
@@ -257,7 +262,7 @@ internal sealed partial class MigrationV2
     }
 
     /// <summary>What one readable card needs, or null for a card that is history. A marked one only moves; an open one is withdrawn.</summary>
-    private Work? CardWorkOf(string file, string id, JsonObject card)
+    private Work? CardWorkOf(string file, string id, JsonObject card, Lazy<HashSet<string>?> held)
     {
         var status = StatusOf(card);
         if (status == WithdrawnStatus)
@@ -265,19 +270,94 @@ internal sealed partial class MigrationV2
             return new CardWork(file, Withdraw: false);
         }
 
-        return status.Length == 0 ? OpenCardWork(file, id) : null;
+        if (status.Length == 0)
+        {
+            return OpenCardWork(file, id, card, held);
+        }
+
+        return status == ExpiredStatus && IsOld(card, null, held, id) ? new CardWork(file, Withdraw: false, Aged: true) : null;
+    }
+
+    /// <summary>What a card says when v1 let it expire.</summary>
+    public const string ExpiredStatus = "expired";
+
+    /// <summary>How long an answered or expired card stays in <c>escalations/</c> before the start-up sweep archives it (SPEC E1.S4 risk 7, decided there).</summary>
+    public static readonly TimeSpan CardRetention = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Whether a history card is older than <see cref="CardRetention"/> — by the moment it was answered or expired, else the moment it was asked — and may leave <c>escalations/</c>:
+    /// not when its date cannot be read, and not while a held session still names it (the held session's conversion announces an answered card; the card must be where it finds it).
+    /// </summary>
+    private bool IsOld(JsonObject card, DateTimeOffset? answeredUtc, Lazy<HashSet<string>?> held, string id)
+    {
+        var when = answeredUtc ?? (StatusOf(card) == ExpiredStatus ? UtcOf(card, "expiredUtc") : null) ?? UtcOf(card, "askedUtc");
+
+        return when is { } at && _clock.GetUtcNow() - at >= CardRetention && held.Value is { } names && !names.Contains(id);
+    }
+
+    private static DateTimeOffset? UtcOf(JsonObject json, string name) =>
+        json[name] is JsonValue value && value.TryGetValue<string>(out var text)
+        && DateTimeOffset.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed
+            : null;
+
+    /// <summary>The card ids the held sessions of this folder name, or null when a session could not be read — then no card ages out, because it may belong to that one.</summary>
+    private HashSet<string>? HeldCardIds()
+    {
+        var sessions = Path.Combine(_dataDir, "sessions");
+        HashSet<string> names = [];
+        if (!Directory.Exists(sessions))
+        {
+            return names;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(sessions, "session-*.json"))
+        {
+            try
+            {
+                if (_store.LoadFile(file) is not { } session)
+                {
+                    return null;
+                }
+
+                if (LegacyHold.Stands(session.State))
+                {
+                    names.UnionWith(Holds.HeldCardIds(session.State));
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+            {
+                return null;
+            }
+        }
+
+        return names;
     }
 
     /// <summary>
     /// Open = no status, or the empty one, and no answer a person gave. Expired and answered cards are history. A card whose answer file exists and cannot be read is NOT open:
     /// withdrawing it would move the card out from under the held session that names it, and the answer's notice could never be issued — it is deferred.
     /// </summary>
-    private Work? OpenCardWork(string file, string id) => HoldBoundary.ReadAnswer(_dataDir, id) switch
+    private Work? OpenCardWork(string file, string id, JsonObject card, Lazy<HashSet<string>?> held) => HoldBoundary.ReadAnswer(_dataDir, id) switch
     {
         AnswerRead.None => new CardWork(file, Withdraw: true),
         AnswerRead.Unreadable unreadable => new DeferredWork("card", id, $"its answer file exists and could not be read: {unreadable.Why}"),
+        AnswerRead.Given when IsOld(card, AnsweredAt(id), held, id) => new CardWork(file, Withdraw: false, Aged: true),
         _ => null,
     };
+
+    /// <summary>When a person answered the card, from its answer file; null when the file does not say.</summary>
+    private DateTimeOffset? AnsweredAt(string id)
+    {
+        try
+        {
+            return ReadObject(Path.Combine(CardsDir(_dataDir), id + ".answer.json")) is { } answer ? UtcOf(answer, "answeredUtc") : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>What a card says once the migration withdrew it.</summary>
     public const string WithdrawnStatus = "withdrawn_v2";
@@ -330,6 +410,7 @@ internal sealed partial class MigrationV2
     {
         SessionWork s => new(work.Kind, work.Id, "convert", "leave the held gate" + (s.Answered.Count > 0 ? "; a person had answered it" : string.Empty)),
         ReprojectWork => new(work.Kind, work.Id, "project", "write the conversion note into coai.db again"),
+        CardWork { Aged: true } => new(work.Kind, work.Id, "archive", "move the answered or expired card, 30 days or older, to escalations/archive"),
         CardWork { Withdraw: true } => new(work.Kind, work.Id, "withdraw", "mark it withdrawn_v2 and move it to escalations/archive"),
         CardWork => new(work.Kind, work.Id, "archive", "move the withdrawn card to escalations/archive"),
         StoreWork => new(work.Kind, work.Id, "archive", $"move {work.Id}/ to migrations/v1-archive/{work.Id}/"),

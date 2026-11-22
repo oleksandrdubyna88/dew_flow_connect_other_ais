@@ -89,7 +89,7 @@ public sealed class MigrateV2CardTests : IDisposable
         var id = Path.GetFileNameWithoutExtension(open);
         File.WriteAllText(
             Path.Combine(Data, "escalations", id + ".answer.json"),
-            """{"id":"x","answer":"Fix the findings","decision":"fix","answeredUtc":"2026-11-20T10:00:00Z"}""");
+            $$"""{"id":"x","answer":"Fix the findings","decision":"fix","answeredUtc":"{{DateTimeOffset.UtcNow:O}}"}""");
         var file = MigrateV2Data.SessionFile(Data, "plan");
         var answered = MigrateV2Data.Tree(Data).Where(e => e.Key.StartsWith("escalations/", StringComparison.Ordinal)).ToList();
 

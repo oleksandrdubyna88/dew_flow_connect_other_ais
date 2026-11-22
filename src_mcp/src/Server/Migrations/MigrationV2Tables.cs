@@ -21,10 +21,49 @@ internal sealed record MigrationV2Tables(
     IReadOnlyList<(string Old, string New)> RenamedSettings,
     IReadOnlyList<string> Stores)
 {
-    /// <summary>What this build ships with. Removed by E1.S1: the escalation wait and the exhaustion policy. Renamed: nothing yet.</summary>
+    /// <summary>
+    /// What this build ships with. Removed by E1.S1: the escalation wait and the exhaustion policy. Removed by E3.S2: the autonomous switch, the operator commands and
+    /// their models, the split-plan, split-with-Fable, gate-per, stop-local-when-quiet, deal-plan, deal-code, rotate-prompts and prompts-per-round settings, the security lane,
+    /// the question consultant's mode and free batches, and the cadence. Renamed by E3.S3: <c>COAI_CONSULT_*</c> to <c>COAI_CONS_*</c> and <c>COAI_QCONSULT_*</c> to
+    /// <c>COAI_CONSASK_*</c> — every key the server reads under the new name; the server still reads the old one while the new one is unset, so a folder nobody migrated
+    /// keeps working, and one that was migrated has only the new names.
+    /// </summary>
     public static MigrationV2Tables Default { get; } = new(
-        ["COAI_ON_EXHAUSTED", "COAI_ESCALATION_MINUTES", "COAI_ESCALATION_SECONDS"],
-        [],
+        [
+            "COAI_ON_EXHAUSTED",
+            "COAI_ESCALATION_MINUTES",
+            "COAI_ESCALATION_SECONDS",
+            "COAI_AUTONOMOUS",
+            "COAI_COMMANDS",
+            "COAI_COMMAND_MODELS",
+            "COAI_SPLIT_PLAN",
+            "COAI_SPLIT_WITH_FABLE",
+            "COAI_GATE_PER",
+            "COAI_STOP_LOCAL_WHEN_QUIET",
+            "COAI_DEAL_PLAN",
+            "COAI_DEAL_CODE",
+            "COAI_ROTATE_PROMPTS",
+            "COAI_PROMPTS_PER_ROUND",
+            "COAI_SECURITY_LANE",
+            "COAI_QCONSULT_MODE",
+            "COAI_QCONSULT_FREE_BATCHES",
+            "COAI_CADENCE_MODE",
+            "COAI_CADENCE_EVERY",
+            "COAI_CADENCE_RISK_THRESHOLD",
+            "COAI_CADENCE_RISK_MAX",
+        ],
+        [
+            ("COAI_CONSULT_ENABLED", "COAI_CONS_ENABLED"),
+            ("COAI_CONSULT_TURNS", "COAI_CONS_TURNS"),
+            ("COAI_CONSULT_CALLS_PER_SESSION", "COAI_CONS_CALLS_PER_SESSION"),
+            ("COAI_CONSULT_IDLE_MINUTES", "COAI_CONS_IDLE_MINUTES"),
+            ("COAI_QCONSULT_ENABLED", "COAI_CONSASK_ENABLED"),
+            ("COAI_QCONSULT_ROWS", "COAI_CONSASK_ROWS"),
+            ("COAI_QCONSULT_PROMPTS", "COAI_CONSASK_PROMPTS"),
+            ("COAI_QCONSULT_ROOTS", "COAI_CONSASK_ROOTS"),
+            ("COAI_QCONSULT_ROW_MINUTES", "COAI_CONSASK_ROW_MINUTES"),
+            ("COAI_QCONSULT_QUESTIONS_PER_SESSION", "COAI_CONSASK_QUESTIONS_PER_SESSION"),
+        ],
         ["qphase", "cadence"]);
 
     /// <summary>A fingerprint of the rows, in the marker: sixteen hex digits of the SHA-256 of their canonical text.</summary>

@@ -230,6 +230,7 @@ internal sealed partial class MigrationV2
             {
                 SessionWork session => ConvertSession(session),
                 ReprojectWork reproject => Project(reproject),
+                CardWork { Aged: true } card => ArchiveAgedCard(card),
                 CardWork card => WithdrawCard(card),
                 StoreWork store => ArchiveStore(store),
                 SettingsWork => MoveSettings(),
@@ -318,6 +319,41 @@ internal sealed partial class MigrationV2
         File.Move(work.File, Unoccupied(Path.Combine(archive, Path.GetFileName(work.File))));
 
         return new Outcome("done", "withdrawn_v2");
+    }
+
+    /// <summary>
+    /// An answered or expired card that is 30 days old or more moves to <c>escalations/archive/</c> with its answer file, the card LAST: a kill between the two moves leaves a card whose
+    /// answer is archived — read as an open card, withdrawn by the next sweep — rather than an answer with no card. Judged again here, from the files, so a card a person answered since the
+    /// scan is not moved out from under a reader.
+    /// </summary>
+    private Outcome ArchiveAgedCard(CardWork work)
+    {
+        var id = Path.GetFileNameWithoutExtension(work.File);
+        if (!File.Exists(work.File))
+        {
+            return new Outcome("skipped", "the card is gone");
+        }
+
+        var card = JsonNode.Parse(File.ReadAllText(work.File)) as JsonObject ?? throw new JsonException("the card is not a JSON object");
+        var held = new Lazy<HashSet<string>?>(HeldCardIds);
+        var status = StatusOf(card);
+        var history = status == ExpiredStatus || (status.Length == 0 && HoldBoundary.ReadAnswer(_dataDir, id) is AnswerRead.Given);
+        if (!history || !IsOld(card, status.Length == 0 ? AnsweredAt(id) : null, held, id))
+        {
+            return new Outcome("skipped", "the card is no longer old history");
+        }
+
+        var archive = Path.Combine(CardsDir(_dataDir), "archive");
+        Directory.CreateDirectory(archive);
+        var answer = Path.Combine(CardsDir(_dataDir), id + ".answer.json");
+        if (File.Exists(answer))
+        {
+            File.Move(answer, Unoccupied(Path.Combine(archive, Path.GetFileName(answer))));
+        }
+
+        File.Move(work.File, Unoccupied(Path.Combine(archive, Path.GetFileName(work.File))));
+
+        return new Outcome("done", "archived after 30 days");
     }
 
     /// <summary>The path, or the first <c>name.N.ext</c> beside it that nothing occupies — an archive never overwrites.</summary>

@@ -33,9 +33,14 @@ internal static class MigrateV2Data
 
     private static string Fixtures => Path.Combine(AppContext.BaseDirectory, "fixtures", "migrate-v2");
 
-    /// <summary>Copies a fixture's <c>sessions/</c> and <c>escalations/</c> into the data folder (files already there are overwritten).</summary>
+    /// <summary>
+    /// Copies a fixture's <c>sessions/</c> and <c>escalations/</c> into the data folder (files already there are overwritten). A card's moments (<c>askedUtc</c>, <c>expiredUtc</c>,
+    /// <c>answeredUtc</c>) are restamped to NOW: the fixtures were raised on 2026-11-22, and the start-up sweep archives an answered or expired card 30 days old (E3), so a card
+    /// that kept its own date would stay history only until then. A test of the age plants its own dates (<see cref="Stamp"/>).
+    /// </summary>
     internal static void Plant(string format, string name, string dataDir, bool sessions = true, bool cards = true)
     {
+        var at = PlantedAt;
         foreach (var (folder, wanted) in new[] { ("sessions", sessions), ("escalations", cards) })
         {
             var from = Path.Combine(Fixtures, format, name, folder);
@@ -44,10 +49,30 @@ internal static class MigrateV2Data
                 Directory.CreateDirectory(Path.Combine(dataDir, folder));
                 foreach (var file in Directory.GetFiles(from))
                 {
-                    File.Copy(file, Path.Combine(dataDir, folder, Path.GetFileName(file)), overwrite: true);
+                    var target = Path.Combine(dataDir, folder, Path.GetFileName(file));
+                    File.Copy(file, target, overwrite: true);
+                    if (folder == "escalations" && file.EndsWith(".json", StringComparison.Ordinal))
+                    {
+                        Stamp(target, at);
+                    }
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// The moment planted cards carry: the start of the test process, ONE value for every plant in it, because a test plants twice and compares the two folders byte for byte
+    /// (<c>MigrateV2RunTests</c>, the kill-at-every-boundary run) — two plants a millisecond apart would differ in their stamps alone.
+    /// </summary>
+    private static readonly DateTimeOffset PlantedAt = DateTimeOffset.UtcNow;
+
+    /// <summary>Sets every moment a card or an answer file carries (<c>askedUtc</c>, <c>expiredUtc</c> when it has one, <c>answeredUtc</c>) to <paramref name="at"/>.</summary>
+    internal static void Stamp(string file, DateTimeOffset at)
+    {
+        var text = File.ReadAllText(file);
+        var stamped = System.Text.RegularExpressions.Regex.Replace(
+            text, "\"(askedUtc|answeredUtc|expiredUtc)\"\\s*:\\s*\"[^\"]+\"", m => $"\"{m.Groups[1].Value}\": \"{at:O}\"");
+        File.WriteAllText(file, stamped);
     }
 
     /// <summary>One fixture's session of a kind: the document's own, the feature's own, or the branch's.</summary>
