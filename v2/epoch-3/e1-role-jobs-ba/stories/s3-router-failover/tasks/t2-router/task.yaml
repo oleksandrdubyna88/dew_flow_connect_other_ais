@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-router
+title: "Pure RoleRouter and ImportantRule with vectors"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: true
+files:
+  - src_mcp/core/Roles
+  - shared/role-route-vectors.json
+  - src_mcp/tests/ARoleIsRoutedTests.cs
+dod:
+  - id: d1
+    item: "A12 passes from the vectors"
+  - id: d2
+    item: "no IO; core stays IsAotCompatible"

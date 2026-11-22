@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-yaml-aot-spike
+title: "YamlDotNet RepresentationModel under Native AOT"
+kind: measure
+complexity: 4
+dependsOn: []
+parallel: true
+files:
+  - v2/spikes/RESULTS_yaml_aot.md
+dod:
+  - id: d1
+    item: "linux-x64 and win-x64 publish: zero new warnings, no NoWarn; the native binary reads all v2 YAML"
+  - id: d2
+    item: "decision recorded: YamlDotNet or the subset reader"
