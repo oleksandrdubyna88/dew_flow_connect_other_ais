@@ -152,6 +152,13 @@ test('the shipped bundle loads with a stubbed editor, and exports activate', () 
       'the bundle loaded but exports no activate — VS Code would have nothing to call');
     assert.equal(typeof required.deactivate, 'function',
       'the bundle exports no deactivate, so nothing runs when the host shuts the extension down');
+
+    // The old code now lives in the `legacy` module, which the entry loads on first use. It is the part that does work at
+    // import time (module-level `ThemeIcon`s and the like), so loading it is the same question this test always asked.
+    const legacy = createRequire(import.meta.url)(join(ROOT, 'dist', 'modules', 'legacy.js'));
+    for (const member of ['command', 'resolveView', 'restorePanel', 'handleUri', 'start', 'deactivate']) {
+      assert.equal(typeof legacy[member], 'function', `the legacy module exports no ${member}, which the shell calls`);
+    }
   } finally {
     Module._load = load;
   }
@@ -170,7 +177,9 @@ test('the shipped bundle carries every credential word as a quoted literal', () 
   // that the module really is reachable from the entry point. It does NOT prove the redactor uses
   // them; `generate-credential-words.mjs --check` is the guard for the copy being current, and the
   // C# side has its own.
-  const bundle = readFileSync(join(ROOT, 'dist', 'extension.js'), 'utf8');
+  // Now in `dist/modules/legacy.js`: `dist/extension.js` is the shell's entry (a few KiB that registers and loads), and the old
+  // code, credential words included, is the module it loads on first use.
+  const bundle = readFileSync(join(ROOT, 'dist', 'modules', 'legacy.js'), 'utf8');
   const seed = JSON.parse(readFileSync(join(ROOT, '..', 'shared', 'credential-words.json'), 'utf8'));
   const words = [...seed.anywhere, ...seed.wholePart];
 
@@ -184,6 +193,21 @@ test('the shipped bundle carries every credential word as a quoted literal', () 
       + 'while the server still does, which is a secret in a file on one path and not the other',
     );
   }
+});
+
+test('the packaged extension lists every bundle: dist/extension.js and every dist/modules chunk, and none of the sources', () => {
+  // `vsce ls` is the packager's own answer to "what goes into the VSIX", read with `.vscodeignore` applied — so a pattern that hides
+  // `dist/modules` (or a bundle that was never built) is seen here and not by the first user who installs a VSIX whose entry
+  // cannot find its module. It runs after the bundle test above has built `dist/`.
+  const config = JSON.parse(readFileSync(join(ROOT, 'scripts', 'bundle-entries.json'), 'utf8'));
+  const listed = execFileSync(process.execPath, [join(ROOT, 'node_modules', '@vscode', 'vsce', 'vsce'), 'ls', '--no-dependencies'], { cwd: ROOT, encoding: 'utf8' })
+    .split(/\r?\n/u).map((line) => line.trim()).filter((line) => line !== '');
+
+  for (const bundle of config.bundles) {
+    assert.ok(listed.includes(bundle.out), `the VSIX would not contain ${bundle.out}; it lists: ${listed.join(', ')}`);
+  }
+  assert.ok(listed.some((file) => file.startsWith('dist/modules/')), 'the VSIX contains no dist/modules chunk, so the shell has nothing to load');
+  assert.deepEqual(listed.filter((file) => file.startsWith('shell/') || file.startsWith('src/')), [], 'sources are in the VSIX');
 });
 
 /**

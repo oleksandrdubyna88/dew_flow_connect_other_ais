@@ -8,6 +8,7 @@ import { applyRevisionChoice, chatConflictsReading, type PresetConflict, type Re
 import { presetEdit, type RevisionChoice } from '../../chatPresetsMessages';
 import { userChatPresets } from '../../modelKeys';
 import { recordsIn, type RawRecord } from '../settingsFileFixture';
+import { activated } from './hostHelpers';
 
 /**
  * R7 (research/PLAN_one_model_catalog.md, epic 5 prerequisite (a)) in a REAL editor — its code round's finding 0.
@@ -115,7 +116,7 @@ const fieldsOf = (all: readonly PresetConflict[]): readonly string[] => all.flat
 export async function aRevisionInARealEditor(): Promise<void> {
   const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  await extension.activate();
+  await activated(extension);
   const before = KEYS.map((key) => [key, userValue(key)] as const);
   try {
     // 1. This build moves the preset — the shipped extension's own migration, triggered by the change.

@@ -96,6 +96,7 @@ import { ON_EXHAUSTED_MIGRATION_KEY } from './onExhaustedMigration';
 import { startOnExhaustedMigration } from './onExhaustedMigrationHost';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
+import * as bridge from './shellBridge';
 
 /**
  * What activation hands back. Read-only, and read by the `test:host` scenarios — a host cannot reach this extension's
@@ -635,15 +636,15 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
         void scheduleCatalogMigration(context);
       }
     }),
-    vscode.commands.registerCommand('coai.restoreCatalogBackup', () => restoreFromBeforeTheCatalog(context)),
+    bridge.registerCommand('coai.restoreCatalogBackup', () => restoreFromBeforeTheCatalog(context)),
     watcher,
     consultations,
     questionConsults,
-    vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
+    bridge.registerWebviewViewProvider(PanelProvider.viewType, panel),
     // The key is typed HERE or in the tab, and stored in the editor's secret storage either way.
     // A command as well as a button because the tab cannot be opened usefully without a key, and a
     // door that only exists behind the thing it unlocks is not a door.
-    vscode.commands.registerCommand('coai.setBugsAdminKey', async () => {
+    bridge.registerCommand('coai.setBugsAdminKey', async () => {
       // The SAME panel the section button opens, so a key set here redraws a tab that is already
       // open instead of leaving it on the face it had before the key existed.
       await usersPanel(context.secrets, () => bugzServerThisSide(context)).askForKey();
@@ -654,54 +655,54 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // one: a door that exists only behind the thing it unlocks is not a door.
     // Bugz keys saved before they were filed per server: the way back to them is this command, which the toast below
     // only opens — nothing is filed by guessing which server issued them (research/PLAN_bugz_keys_per_server.md).
-    vscode.commands.registerCommand('coai.settleOldBugzKeys', () => settleOldBugzKeys(context.secrets, () => bugzServerThisSide(context))),
-    vscode.commands.registerCommand('coai.setBugsContributorKey', async () => {
+    bridge.registerCommand('coai.settleOldBugzKeys', () => settleOldBugzKeys(context.secrets, () => bugzServerThisSide(context))),
+    bridge.registerCommand('coai.setBugsContributorKey', async () => {
       await askForContributorKey(context.secrets, bugzServerThisSide(context));
       await panel.render();
     }),
     // The three tabs these opened are gone (PLAN_one_model_catalog.md E5.1 step 4): each command opens the Settings
     // page at the place that holds its editor now, for one more release.
-    ...editorRedirects((command, run) => vscode.commands.registerCommand(command, run), (place) => { openSettings(panel, place); }),
-    vscode.commands.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
+    ...editorRedirects((command, run) => bridge.registerCommand(command, run), (place) => { openSettings(panel, place); }),
+    bridge.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
     // The page every notification has been going into since S1. One panel for the window, so a
     // second press reveals the one already open rather than stacking another over it.
-    vscode.commands.registerCommand('coai.showNotifications', () => { void notifications.show(); }),
+    bridge.registerCommand('coai.showNotifications', () => { void notifications.show(); }),
 
     // Story 3.2b: seeing what review checkouts this machine holds, and giving one back. A PICKER
     // rather than a block on the review page, and the reason is in `reviewTreesCommand.ts` — chiefly
     // that "one at a time" becomes true by construction when the control returns one item.
-    vscode.commands.registerCommand('coai.reviewTrees', () => {
+    bridge.registerCommand('coai.reviewTrees', () => {
       void manageReviewTrees(reviewTreeDeps(context));
     }),
     // The same question the first install on a side asks, reachable afterwards. One flow: two ways
     // of asking it would be two ways of answering it differently.
-    vscode.commands.registerCommand('coai.changeDataDirectory', async () => {
+    bridge.registerCommand('coai.changeDataDirectory', async () => {
       await askWhereDataLives(context);
       await panel.render();
     }),
-    vscode.commands.registerCommand('coai.moveDataDirectory', async () => {
+    bridge.registerCommand('coai.moveDataDirectory', async () => {
       // The counter is passed IN rather than reached for, because it is the one part of a move that
       // needs a process: rounds are counted in SQL by the server binary, and counting them at the
       // DESTINATION means running that binary against a directory this window is not pointed at yet.
       await moveDataDirectory(context, (directory) => countStorage(context, directory));
       await panel.render();
     }),
-    vscode.commands.registerCommand('coai.deleteOldDataFolder', async () => {
+    bridge.registerCommand('coai.deleteOldDataFolder', async () => {
       // The same counter the move used: the old folder is read ONE more time, right before it is
       // deleted, and compared with what the move recorded. It is the only thing standing between a
       // round written after the copy and a directory that is gone.
       await deleteTheOldDataFolder(context, (directory) => countStorage(context, directory));
       await panel.render();
     }),
-    vscode.commands.registerCommand('coai.help', showHelp),
+    bridge.registerCommand('coai.help', showHelp),
     // The gear in the panel's title bar: everything configured once, in an editor tab of its own, painted by
     // the same provider as the sidebar (research/PLAN_settings_page.md). The argument, when there is one, is a
     // tab id; the title bar and the palette pass none, and anything that is not a tab changes nothing.
-    vscode.commands.registerCommand('coai.openSettings', (tab?: unknown) => { openSettings(panel, tab); }),
+    bridge.registerCommand('coai.openSettings', (tab?: unknown) => { openSettings(panel, tab); }),
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.
-    vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
+    bridge.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
       // RECORDED FIRST, in every one of these. The count on the spending page is of how often
       // the chat was reached for, so a door that then refuses — no CLI, nothing captured — is still
       // one of them. Nothing waits for the write.
@@ -711,7 +712,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // The terminal's own door: the icon in the terminal panel's title bar and Ctrl+Alt+A typed in a terminal. A terminal is
     // not a tab, so it has its own command and never goes through the file door's tab match. RECORDED FIRST, like the rest.
     // The rejection is caught for the same reason `coai.takeTheQuestion`'s is: a press that does nothing explains nothing.
-    vscode.commands.registerCommand('coai.askFromTerminal', () => {
+    bridge.registerCommand('coai.askFromTerminal', () => {
       noteChatDoor('terminal');
       askFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal).catch((reason: unknown) => {
         console.error('coai.askFromTerminal failed', reason);
@@ -728,11 +729,11 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // The two menu items, which differ from the chord in one way: each SAYS what it will do, so
     // neither reads `coai.chatAutoSend`. An item whose behaviour depends on a setting in another
     // window is an item nobody can predict from its own label.
-    vscode.commands.registerCommand('coai.chatNow', (...args: unknown[]) => {
+    bridge.registerCommand('coai.chatNow', (...args: unknown[]) => {
       noteChatDoor('default');
       void chatWithOtherAi(chatPanels, context.extensionUri, args, true);
     }),
-    vscode.commands.registerCommand('coai.chatChoose', (...args: unknown[]) => {
+    bridge.registerCommand('coai.chatChoose', (...args: unknown[]) => {
       noteChatDoor('choose');
       void chatWithOtherAi(chatPanels, context.extensionUri, args, false);
     }),
@@ -742,7 +743,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     //
     // The rejection is CAUGHT rather than dropped: a command that fails silently at the activation
     // boundary is a keypress that does nothing and explains nothing. (CodeRabbit, PR #206.)
-    vscode.commands.registerCommand('coai.takeTheQuestion', () => {
+    bridge.registerCommand('coai.takeTheQuestion', () => {
       noteChatDoor('take');
       takeTheQuestion(chatPanels, context.extensionUri).catch((reason: unknown) => {
         // The DETAIL to the console, a short sentence to the person. A stack or a filesystem path in
@@ -765,7 +766,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // The same reader, the other verb: ADDED to what the composer already holds rather than put in
     // its place. Asked for after using the pair — `choose` had just composed a turn and `take` threw
     // it away, when what was wanted was the question underneath it as more material.
-    vscode.commands.registerCommand('coai.addTheQuestion', () => {
+    bridge.registerCommand('coai.addTheQuestion', () => {
       noteChatDoor('add');
       takeTheQuestion(chatPanels, context.extensionUri, true).catch((reason: unknown) => {
         console.error('coai.addTheQuestion failed', reason);
@@ -783,7 +784,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // (the road of `remoteSessionHost`), and the items sit in the terminal panel's overflow while the terminal reads a session. Each
     // records its door FIRST. THE CATCH LOGS A FIXED SENTENCE and passes no error and no message on: a V8 `JSON.parse` error quotes its
     // input, and here the input is the transcript.
-    vscode.commands.registerCommand('coai.takeFromTerminal', () => {
+    bridge.registerCommand('coai.takeFromTerminal', () => {
       noteChatDoor('take');
       takeFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal, false).catch(() => {
         console.error('coai.takeFromTerminal failed');
@@ -796,7 +797,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
         });
       });
     }),
-    vscode.commands.registerCommand('coai.addFromTerminal', () => {
+    bridge.registerCommand('coai.addFromTerminal', () => {
       noteChatDoor('add');
       addFromTerminal(chatPanels, context.extensionUri, vscode.window.activeTerminal).catch(() => {
         console.error('coai.addFromTerminal failed');
@@ -821,7 +822,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // working in. Its decision is `chatGoto.ts`; everything here is the registration and the door.
     // Detached with a catch of its own, like every command that awaits: the store answers in
     // outcomes and never rejects, so anything arriving there is a defect worth a line.
-    vscode.commands.registerCommand('coai.goToConversation', () => {
+    bridge.registerCommand('coai.goToConversation', () => {
       noteChatDoor('goto');
       void goToConversation(chatPanels, housekeeping.index, chatStore, context.extensionUri)
         .catch((reason: unknown) => {
@@ -839,7 +840,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // GO TO from a terminal (E3.S2): the same go-to, pressed IN a terminal, for THAT terminal — a command of its own because
     // `coai.goToConversation` reads the active TAB and its chord keeps `!terminalFocus`. It is a door like the others, so it is
     // recorded FIRST; it reads the active terminal as `coai.askFromTerminal` does and never goes through the tab match.
-    vscode.commands.registerCommand('coai.goToFromTerminal', () => {
+    bridge.registerCommand('coai.goToFromTerminal', () => {
       noteChatDoor('goto');
       void goToFromTerminal(chatPanels, housekeeping.index, chatStore, context.extensionUri, vscode.window.activeTerminal)
         .catch((reason: unknown) => {
@@ -857,7 +858,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // The road back (issue #314): from a coai chat to the tab, session or file it came from. NOT a
     // chat door — it opens no conversation — so nothing is recorded for it. Its decision is
     // `chatReturn.ts`; a right-click hands it the page's conversation id, the chord hands it nothing.
-    vscode.commands.registerCommand('coai.backToSource', (asked?: unknown) => {
+    bridge.registerCommand('coai.backToSource', (asked?: unknown) => {
       void backToSource(chatPanels, asked)
         .catch((reason: unknown) => {
           console.error('ConnectOtherAIs: going back from a chat threw', reason);
@@ -871,7 +872,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
           });
         });
     }),
-    vscode.commands.registerCommand('coai.switchConversations', () => {
+    bridge.registerCommand('coai.switchConversations', () => {
       noteChatDoor('switch');
       switchConversations(chatPanels, {
         index: housekeeping.index,
@@ -885,7 +886,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // keybinding scoped to `coai.conversationsPickerOpen` from the doors it derives from the manifest.
     // It takes no arguments because a keybinding passes none: the row it means is the one being
     // looked at, and only the picker knows which that is.
-    vscode.commands.registerCommand('coai.forgetPickedConversation', () => {
+    bridge.registerCommand('coai.forgetPickedConversation', () => {
       forgetPickedConversation();
     }),
     // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
@@ -900,7 +901,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // to be a conversation is worse than none; a record this build cannot read, or a disk that would
     // not answer, keeps the tab and SAYS so, with a retry where one makes sense. Disposing over either
     // of those would throw a person's tab away over a permissions error or a downgrade.
-    vscode.window.registerWebviewPanelSerializer('coaiChat', {
+    bridge.registerWebviewPanelSerializer('coaiChat', {
       deserializeWebviewPanel: (panel: vscode.WebviewPanel, state: unknown) =>
         restoreAfterReload(restoreDeps, panel, state, migration).catch((reason: unknown) => {
           // The store answers in outcomes and never rejects, so anything here is a defect — said on
@@ -912,20 +913,20 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // Both doors repaint. The panel's own button used to be the only path that did — it awaits
     // the command and then renders — so an update started from THIS menu left the MCP server tab
     // showing the version it had replaced, which is the very symptom the button was fixed for.
-    vscode.commands.registerCommand('coai.installServer', async () => {
+    bridge.registerCommand('coai.installServer', async () => {
       await installServer(context);
       // A (re)installed server reads the roots afresh on its start; the page asks the disk afresh too.
       panel.forgetQconsultRootAnswers();
       await panel.render();
     }),
-    vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
-    vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
+    bridge.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
+    bridge.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
     ...registerConfigTransfer(context, () => panel.vaultKeyNames()),
-    vscode.commands.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher, panel)),
-    vscode.commands.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
+    bridge.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher, panel)),
+    bridge.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
     // The same action under a second id, so the title bar can show a green icon while a question
     // is waiting — a menu icon cannot be recoloured by state, but which command is shown can.
-    vscode.commands.registerCommand('coai.answerQuestionWaiting', () => answerQuestion(watcher)),
+    bridge.registerCommand('coai.answerQuestionWaiting', () => answerQuestion(watcher)),
   );
 
   void offerUpdate(context);

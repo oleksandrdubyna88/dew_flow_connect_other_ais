@@ -1,4 +1,5 @@
 import * as assert from 'node:assert/strict';
+import type * as vscode from 'vscode';
 
 import { ChatPanels } from '../../chatPanels';
 import { threads, type Thread } from '../../chatThread';
@@ -39,4 +40,18 @@ export function registeredChat(panels: ChatPanels, key: object, saveId: string, 
   }));
 
   return id;
+}
+
+/**
+ * Activates the extension under test AND starts its old code, then answers what that returned.
+ *
+ * <p>The shell's `activate()` only registers (v2 E2 S1), so it returns a door, `legacy()`, that loads the `legacy`
+ * module and runs the old `activate()` once; the scenarios below were written against that old call's result and its
+ * start-up work (watchers, the settings mirror, the migrations). Asking for it here is what a command or the sidebar
+ * does in the field, on first use.</p>
+ */
+export async function activated<T>(extension: vscode.Extension<T>): Promise<T> {
+  const shell = await extension.activate() as unknown as { readonly legacy: () => Promise<T> };
+
+  return shell.legacy();
 }

@@ -118,7 +118,8 @@ test('a panel restored after a reload must be built the same way', () => {
 
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
-    if (!source.includes('registerWebviewPanelSerializer')) {
+    // `shellBridge.ts` only FORWARDS a serializer another file built (the thin shell holds it, v2 E2 S1); it builds no panel.
+    if (!source.includes('registerWebviewPanelSerializer') || path.basename(file) === 'shellBridge.ts') {
       continue;
     }
 

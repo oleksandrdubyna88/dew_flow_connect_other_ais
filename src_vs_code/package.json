@@ -1429,15 +1429,15 @@
     "pretypecheck": "npm run prepare:gate",
     "prebundle": "npm run prepare:gate",
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
-    "compile": "npm run clean && tsc -p ./",
-    "typecheck": "tsc -p ./ --noEmit",
-    "lint": "eslint src",
+    "compile": "npm run clean && tsc -p ./ && tsc -p shell",
+    "typecheck": "tsc -p ./ --noEmit && tsc -p shell",
+    "lint": "eslint src shell",
     "test": "npm run compile && node scripts/run-tests.mjs",
     "test:host": "npm run compile && node scripts/run-host.mjs",
     "test:contract": "npm run compile && node scripts/run-contract.mjs",
     "test:seam": "npm run compile && node scripts/run-seam.mjs",
     "test:parity": "node scripts/run-parity.mjs",
-    "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "bundle": "node scripts/bundle.mjs",
     "vscode:prepublish": "npm run bundle",
     "package": "npm run test && npm run bundle && vsce package --no-dependencies",
     "icon": "node scripts/generate-icon.mjs",
@@ -1478,7 +1478,9 @@
     "@azure/msal-node": "^7.1.0"
   },
   "activationEvents": [
-    "onStartupFinished"
+    "onView:coai.panel",
+    "onWebviewPanel:coaiChat",
+    "onUri"
   ],
   "icon": "media/icon.png",
   "keywords": [

@@ -16,6 +16,7 @@ import { promptFile, promptsDir } from './rolesPrompts';
 import { askPerson } from './personWait';
 import { makeDataDirectory } from './dataDirMaker';
 import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
+import { registerCommand } from './shellBridge';
 
 /**
  * Export config / Import config, the `…` menu's pair — issue #467. Only VS Code here: what travels is
@@ -37,8 +38,8 @@ type VaultKeys = () => readonly string[] | undefined;
 
 export function registerConfigTransfer(context: vscode.ExtensionContext, vaultKeys: VaultKeys): vscode.Disposable[] {
   return [
-    vscode.commands.registerCommand('coai.exportConfig', () => exportConfig(context)),
-    vscode.commands.registerCommand('coai.importConfig', () => oneImport(() => importConfig(context, vaultKeys))),
+    registerCommand('coai.exportConfig', () => exportConfig(context)),
+    registerCommand('coai.importConfig', () => oneImport(() => importConfig(context, vaultKeys))),
   ];
 }
 

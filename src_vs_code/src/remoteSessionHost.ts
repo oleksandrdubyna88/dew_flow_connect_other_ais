@@ -6,6 +6,7 @@ import { askPerson } from './personWait';
 import { HostAnswer, PickRow, Picked, Purpose, RemoteAnswer, RoadSeams, answersOf, onePerTerminal, reachOf, readsKey, remoteRoad, withAnswer, withoutHost } from './remoteRead';
 import { runRemote } from './remoteSsh';
 import { liveTerminals } from './terminalHost';
+import { registerCommand } from './shellBridge';
 
 /**
  * The `vscode` seams of the road to a terminal's remote Claude session (E2.S3, contract C4). Host code: every decision is
@@ -218,7 +219,7 @@ export function bindRemoteSessions(context: vscode.ExtensionContext): RemoteSess
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTerminal(() => { setReadsKey(sessions.answers); }),
     vscode.window.onDidCloseTerminal((closed) => { sessions.forget(closed); }),
-    vscode.commands.registerCommand('coai.terminalHosts', () => sessions.changeHosts()),
+    registerCommand('coai.terminalHosts', () => sessions.changeHosts()),
   );
 
   return sessions;

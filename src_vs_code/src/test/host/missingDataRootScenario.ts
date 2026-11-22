@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { activated as startedOldCode } from './hostHelpers';
 
 /**
  * A NAMED data directory that is missing is always red, and nothing creates it (research/PLAN_paths_per_side.md E5.7, D3)
@@ -36,7 +37,7 @@ export const settle = (ms: number): Promise<void> => new Promise((resolve) => { 
 export async function activated(): Promise<void> {
   const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  await extension.activate();
+  await startedOldCode(extension);
 }
 
 export async function until(ready: () => boolean, whatDidNotHappen: string, ms = 15_000): Promise<void> {

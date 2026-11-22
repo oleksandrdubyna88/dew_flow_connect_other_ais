@@ -1,0 +1,18 @@
+{
+  "_": "The one list of bundles, read by scripts/bundle.mjs (npm run bundle), scripts/entry-firewall.mjs and src/test/entryPurity.test.ts. One CommonJS esbuild entry per module: the extension host loads CommonJS, ESM splitting is not used, and duplicate code costs disk, not start time. 'firewall' bundles are bounded by entry-firewall.mjs (allowed inputs and external imports); 'budgetBytes' is the minified size ceiling.",
+  "common": { "format": "cjs", "platform": "node", "external": ["vscode"], "minify": true },
+  "bundles": [
+    {
+      "id": "extension",
+      "entry": "shell/entry.ts",
+      "out": "dist/extension.js",
+      "budgetBytes": 16384,
+      "firewall": { "inputs": ["shell/entry.ts", "shell/lazy.ts", "shell/ids.ts"], "imports": ["vscode", "node:path", "path"] }
+    },
+    {
+      "id": "legacy",
+      "entry": "shell/modules/legacy.ts",
+      "out": "dist/modules/legacy.js"
+    }
+  ]
+}
