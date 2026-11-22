@@ -356,3 +356,14 @@ Sound as written (consultant): the codex resume shape (CodexConsultant.cs:108, :
 7. **Old/new compatibility before 2.0.** Epoch 1 changes no Team-server wire field. Before the 2.0 release (epoch 1 E5):
    the `http/` contract suite runs live against the deployed Team server (0.16.x), new client ↔ old server and old
    client (extension 0.89.x) ↔ new mcp are checked; the hub (epoch 2) is a new route group that old clients never call.
+
+## 19. External roles (owner, 2026-11-22)
+
+"External roles" = roles relative to the main AI. Every role except the orchestrator is an MCP tool: **coder** (writes
+code in its worktree — § 2 coder delegation + § 10 fix loop), **scout** (read-only research → strict JSON
+`{facts:[{claim, evidence:[file:line]}], files:[]}`), **BA** (splits a plan into epochs/epics/stories/tasks; writes only
+the feature folder; the result must pass `validate_work`), **important/judge** (Fable by default; review, design
+decision, cornerstone spec; read-only; strict JSON verdict/findings). One tool family: `start_role(role, taskFile |
+brief, repoPath, model?, timeoutMinutes?)` / `role_status(jobId, maxSeconds)` / `role_cancel(jobId)`; the role decides
+the model (roles table / complexity band), the permissions and the output schema; `start_coder` is the coder case (no
+separate tool). Placement in the epochs: decided with the Fable split review.
