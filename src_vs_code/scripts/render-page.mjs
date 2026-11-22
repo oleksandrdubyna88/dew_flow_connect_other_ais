@@ -14,7 +14,7 @@
  *
  *   npm run compile && node scripts/render-page.mjs <page> <out.png> [width] [height] [--size n] [--browser path]
  *
- * <page>: sidebar · sidebar-question · settings[:<tab>] · catalog[:<place>] · security
+ * <page>: sidebar · sidebar-question · settings[:<tab>] · catalog[:<place>]
  *
  * Width: headless Chromium lays a page out at no less than about 500px and CROPS a narrower screenshot, so
  * a 340px sidebar comes out cut at the right edge rather than wrapped. Render the sidebar at 500.
@@ -127,13 +127,6 @@ function DEMO_SIDEBAR() {
   return {
     sessions: [{ state: { sessionId: 's1', repoPath: 'D:/work/app', branch: 'feat/settings-page', stage: 'CodeReview', awaitingResolve: false }, rounds: [round] }],
     consultations: [consultation],
-    cadence: [{
-      repoPath: 'D:/work/app', branch: 'feat/settings-page',
-      answer: {
-        plan: 'todo/PLAN_settings_page.md', mode: 'remind', epics: 5, epicsClosed: [1, 2],
-        groups: [{ range: '1-3', consulted: true }], risk: [], riskAnswered: true, unreadable: '',
-      },
-    }],
     phrases: [
       { id: 'p1', name: 'Explain', text: 'Explain, and what do you think about it?' },
       { id: 'p2', name: 'Your thoughts?', text: 'What would you advise here?' },
@@ -142,8 +135,8 @@ function DEMO_SIDEBAR() {
   };
 }
 
-/** What the stubbed `getState` answers, by page: the page-local state it restores (the Security lane tab's open folds). */
-const SAVED = { security: { seclaneOpen: ['redteam-sql'] } };
+/** What the stubbed `getState` answers, by page: the page-local state it restores (none today). */
+const SAVED = {};
 
 /** The page's html, with the theme and a stubbed editor API in front of its own script; `saved` is what getState answers. */
 function dressed(html, saved, theme) {
@@ -163,7 +156,7 @@ function page(name, size) {
   const text = { uiScale: size, textTone: 0 };
   switch (which) {
     case 'sidebar': {
-      const open = ['notifications', 'rounds', 'consultations', 'cadence', 'phrases', 'bugz'];
+      const open = ['notifications', 'rounds', 'consultations', 'phrases', 'bugz'];
       return from('panelView.js').panelHtml({ ...panelState(''), ...text, ...DEMO_SIDEBAR(), openSections: open }, NONCE);
     }
     case 'sidebar-question': {
@@ -178,11 +171,10 @@ function page(name, size) {
     }
     case 'catalog':
       // The new Settings page, on a place: `catalog`, `catalog:setup/team` (research/PLAN_one_model_catalog.md E3).
-      // The shipped roles and commands, as the host reads them (E4.3, E4.4) — one command of your own, nothing rewritten.
+      // The shipped roles, as the host reads them (E4.3) — nothing rewritten.
       return from('catalogPage.js').catalogHtml({
         ...panelState(''), ...text,
         roles: { rows: [], texts: {}, serverVersion: '', perSide: false, stranded: [] },
-        commands: { rows: [{ id: 'cmd-ab12', title: 'Run the linter', stage: 'code', enabled: true }], texts: {}, serverVersion: '', perSide: false },
         // Two chat models that can answer, one that cannot, two prompts (E4.6b).
         chat: {
           // No older build's edit to settle (R7's conflicts) — the field every ChatSettings carries since PR #707.
@@ -199,37 +191,10 @@ function page(name, size) {
       // An old tab id, drawn where the new page holds it now (`OLD_TAB_PLACES`; research/PLAN_one_model_catalog.md E5.1 step
       // 3): `settings:gate` is `catalog:reviews/gate`, so a screenshot shows the page a person sees.
       return page(`catalog:${from('catalogPlaces.js').OLD_TAB_PLACES[tab ?? 'reviewers'] ?? tab}`, size);
-    case 'security':
-      return securityDemo(text);
     default:
-      console.log(`unknown page "${name}" — sidebar, settings[:<tab>], catalog[:<place>], or security — the roles, commands and presets are catalog:reviews/roles, catalog:reviews/commands and catalog:chat`);
+      console.log(`unknown page "${name}" — sidebar, settings[:<tab>] or catalog[:<place>] — the roles and presets are catalog:reviews/roles and catalog:chat`);
       process.exit(2);
   }
-}
-
-/**
- * The Security lane tab with every card state on it (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 4): an edited
- * preset (override text), a preset whose conditions changed, a custom prompt with no text yet, pairs including general,
- * and one conditions fold opened the way a person's toggle leaves it in the page's own state.
- */
-function securityDemo(text) {
-  const { panelState } = from('test/panelPageHarness.js');
-  const { DEFAULTS } = from('settingsShape.js');
-  const { securityLaneFrom } = from('securityLane.js');
-  const lane = securityLaneFrom({
-    enabled: true,
-    prompts: [{ id: 'redteam-sql', triggers: ['sql', 'xss'] }, { id: 'redteam-mine', triggers: [], focus: [] }],
-    runs: [{ vendor: 'codex', prompt: 'redteam-general' }, { vendor: 'codex', prompt: 'redteam-authz' }, { vendor: 'antigravity', prompt: 'redteam-mine' }],
-  });
-  // On the new page's Security lane (E5.1 step 3), whose pairs pick from the rows ticked for the lane — so both are.
-  const { DEFAULT_VENDORS } = from('vendors.js');
-  return from('catalogPage.js').catalogHtml({
-    ...panelState(''), ...text, settings: { ...DEFAULTS, securityLane: lane },
-    vendors: DEFAULT_VENDORS.map((row) => ({ ...row, uses: ['security'] })),
-    server: { kind: 'known', version: '0.43.0', remembered: false, updateOffered: false },
-    securityPromptText: { 'redteam-authz': 'written', 'redteam-mine': 'none' },
-    securityPromptDir: 'C:/Users/me/AppData/Roaming/coai/prompts',
-  }, NONCE, 'security');
 }
 
 const [name, target, width = '1200', height = '900'] = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !all[i - 1]?.startsWith('--'));

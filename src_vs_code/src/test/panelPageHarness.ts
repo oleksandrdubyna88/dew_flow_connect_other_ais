@@ -525,8 +525,8 @@ export function runPanel(state: PanelState, options: RunOptions = {}): Page {
     addEventListener: () => undefined,
     querySelectorAll: (selector: string): readonly Control[] => selected(selector, controls, commands, prompts, folds),
     querySelector: (): null => null,
-    // The live regions answer, so the script's live push can be watched landing — widened when the
-    // cadence line joined Active rounds, now Active gates (PR #556, CodeRabbit). And the busy bar, when the page
+    // The live regions answer, so the script's live push can be watched landing — widened when a
+    // second region joined Active rounds, now Active gates (PR #556, CodeRabbit). And the busy bar, when the page
     // drew one (`busyMark.ts`). Every other id is absent, as before.
     getElementById: (id: string): Region | Control | null => (id === 'busy-bar' ? bar : regions.get(id) ?? null),
     createElement: createdElement,

@@ -26,7 +26,7 @@ test('closing the Settings tab writes what was still settling in every editor on
   // tabs each flushed their queue on dispose, so a closed tab never dropped the last keystrokes.
   const disposed = /onDidDispose\(\(\) => \{([\s\S]*?)\}\);/u.exec(attachSettings())?.[1] ?? '';
 
-  for (const flush of ['flushRoleEdits()', 'flushCommandEdits()', 'flushChatPresetEdits()']) {
+  for (const flush of ['flushRoleEdits()', 'flushChatPresetEdits()']) {
     assert.ok(disposed.includes(flush), `closing the Settings tab does not call ${flush}, so what was settling is lost`);
   }
 });

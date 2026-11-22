@@ -58,21 +58,9 @@ function defaultNameFor(stage: string): string {
 }
 
 test('the policy the panel shows by default is the one the server runs with nothing named', () => {
-  // reads-another-program: the panel's default policy and the server's reading of "no policy named" are one decision in
-  // two languages, and nothing shared holds it. The reads are positive matches of one exact line each and fail LOUDLY
-  // when that line changes; nothing here derives a list that could go quiet.
-  const panelSettingsCs = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src_mcp', 'src', 'Server', 'PanelSettings.cs'), 'utf8');
-
-  assert.match(
-    panelSettingsCs,
-    /null or "" or "auto" => null/,
-    'PolicyOf no longer reads absent, empty and auto as no policy named — the shape this test reads has changed',
-  );
-  assert.match(
-    sessionStateSource,
-    /Autonomous = OnExhausted is null;/,
-    'no policy named is no longer policy auto — the shape this test reads has changed',
-  );
+  // The server dropped its policy (PolicyOf, StagePolicy) with the held gates in v2 E1.S1: a round ends in one of four
+  // outcomes, which is what `auto` always meant. So what is left to hold is the panel's own side: it shows auto by default
+  // and writes nothing for it.
   assert.equal(
     DEFAULTS.onExhausted,
     'auto',

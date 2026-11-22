@@ -92,7 +92,7 @@ test('no write the panel queues waits for a repaint, however many calls down', (
 
 test('the scan still reads the provider’s own methods, so its walk is not a walk through nothing', () => {
   const names = methods(blanked(fs.readFileSync(PROVIDER, 'utf8'))).map((m) => m.name);
-  for (const known of ['write', 'choosePrompt', 'writeApiSetting', 'snapBack', 'render', 'saveWrite']) {
+  for (const known of ['write', 'writeApiSetting', 'snapBack', 'render', 'saveWrite']) {
     assert.ok(names.includes(known), `the method scan no longer finds ${known}, so a chain through it would be invisible`);
   }
 });
@@ -101,7 +101,6 @@ test('the scan still finds the writes the panel queues', () => {
   const roots = queuedRoots(fs.readFileSync(PROVIDER, 'utf8'));
 
   assert.ok(roots.includes('write'), `the setting write is queued, and the scan did not see it: ${roots.join(', ')}`);
-  assert.ok(roots.includes('choosePrompt'), `the prompt choice is queued, and the scan did not see it: ${roots.join(', ')}`);
 });
 
 test('the scan finds the shape it exists for, two calls down', () => {

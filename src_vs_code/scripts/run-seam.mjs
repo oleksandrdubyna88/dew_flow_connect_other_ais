@@ -56,10 +56,6 @@ const { tokenFileName } = await import('../out/teamServers.js');
 // copies of them.
 const { refusalSeam } = await import('./seam-refusal.mjs');
 const { answerOf, sessionsFor } = await import('./seam-session.mjs');
-// The security lane's leg, in a module of its own for the same reason as the sixth.
-const { securitySeam } = await import('./seam-security.mjs');
-// The security prompt text leg: the tab's reading of real prompt files against the server's (epic 2).
-const { securityTextSeam } = await import('./seam-security-text.mjs');
 const { catalogSeam } = await import('./seam-catalog.mjs');
 const { usageCountsSeam } = await import('./seam-usage-counts.mjs');
 // E3's ledger fields: the lines the REAL writer leaves, read through the extension's own parseUsageLine.
@@ -552,19 +548,6 @@ const capabilities = await featuresSeam({ binary, olderExpected: olderForFeature
 console.log(capabilities.older
   ? '  skip the named server was declared older than --features; run the seam without COAI_MCP_DLL to ask this repository\x27s own build'
   : `  ok  the server lists ${capabilities.listed.join(', ')} — every capability the extension knows`);
-
-// The EIGHTH leg: the security lane as the extension serializes it — a well-formed lane draws no
-// complaint, its unknown trigger is refused by name, and its malformed form is refused, not ignored.
-const security = await securitySeam({ providersIn, fail });
-console.log(`  ok  the security lane crosses the seam; the unknown trigger was refused: "${security.refusal}"`);
-
-// The NINTH leg: real prompt override files read by the extension and by the server, compared file by file.
-// A skip needs BOTH: a named binary, and the person running it declaring that binary older than the mode.
-const olderExpected = (process.env['COAI_MCP_DLL'] ?? '').length > 0 && process.env['COAI_SEAM_OLDER_SERVER'] === '1';
-const text = await securityTextSeam({ binary, olderExpected, fail, timeoutMs: TIMEOUT_MS });
-console.log(text.older
-  ? '  skip the named server was declared older than --security-prompt-text (MCP 0.43.0); run the seam without COAI_MCP_DLL to compare this repository\'s own build'
-  : `  ok  ${text.compared} prompt ids (every fixture file, and one with none) read alike by the Security lane tab and the server`);
 
 // The SIXTH leg: a real refusal over stdio, its secret taken out, read back by the extension.
 const refusal = await refusalSeam({ serverSession, resolvedFor, answerOf, fail, timeoutMs: TIMEOUT_MS });

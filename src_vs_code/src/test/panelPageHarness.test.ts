@@ -73,14 +73,6 @@ test('a control outside a running page has nowhere to insert anything', () => {
     /not in a running page/u);
 });
 
-test('a prompt picker answers [data-prompt] and select, and never [data-setting]', () => {
-  const page = runPanel(panelState('prompts'));
-
-  assert.ok(page.prompts.length > 0, 'the prompts section draws prompt pickers');
-  assert.ok(page.prompts.every((one) => one.tagName === 'SELECT' && one.dataset['prompt'] !== undefined));
-  assert.ok(page.controls.every((one) => one.dataset['prompt'] === undefined), 'a setting query must not answer a prompt picker');
-});
-
 test('the webview state a run starts from is what getState answers, and what the page saves is kept as a copy', () => {
   const page = runPanel(panelState('reviewers'), { saved: { search: { kept: 'opus' } } });
 
@@ -147,9 +139,9 @@ test('an option the page drew disabled reads disabled, with its title — and an
 });
 
 test('a fixture opening a place of the NEW page runs that page, opened on the place — never the sidebar (E5.1 code round, finding 4)', () => {
-  // An old tab id reaches its place through `OLD_TAB_PLACES`; a place's own id (`models`, `reviews/commands`) must reach
+  // An old tab id reaches its place through `OLD_TAB_PLACES`; a place's own id (`models`, `reviews/gate`) must reach
   // it too, as `render-page.mjs` does, or a test of the new page silently reads the sidebar's markup instead.
-  for (const place of ['models', 'reviews/commands', 'setup/team']) {
+  for (const place of ['models', 'reviews/gate', 'setup/team']) {
     const { html } = runPanel(panelState(place));
     assert.match(html, /<main class="settings catalog">/u, `${place} ran the sidebar, not the Settings page`);
 

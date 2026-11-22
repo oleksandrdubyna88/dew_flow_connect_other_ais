@@ -72,22 +72,6 @@ test('a malformed line mentioning a refusal cannot throw past the leg\'s cleanup
   }
 });
 
-test('only a server the run DECLARES older may skip the text leg; a refusal alone, from any binary, still fails', async () => {
-  // Measured 2026-10-04: `COAI_MCP_DLL` pointed at mcp 0.42.0 — the mixed-version run the plan's DoD asks for —
-  // ended the WHOLE seam at the ninth leg (`exited 64: unknown argument '--security-prompt-text'`), so the legs
-  // after it never ran against the older server. The mode is new in 0.43.0; an older binary cannot answer it.
-  // Against the binary this repository just built, the same refusal is a regression and must still fail — and so must
-  // a NAMED binary that refuses it unannounced (CodeRabbit on #675): a 0.43 build that lost the mode would otherwise
-  // skip and go green. The skip needs COAI_SEAM_OLDER_SERVER=1 beside COAI_MCP_DLL: the person running it says so.
-  const { textLegVerdict } = await import('../../scripts/seam-security-text.mjs');
-  const refused = "[coai-mcp] unknown argument '--security-prompt-text' - this binary takes none; an MCP client speaks to it over stdin.";
-
-  assert.equal(textLegVerdict({ olderExpected: true, code: 64, stderr: refused }), 'older');
-  assert.equal(textLegVerdict({ olderExpected: false, code: 64, stderr: refused }), 'fail', 'an unannounced refusal skipped');
-  assert.equal(textLegVerdict({ olderExpected: true, code: 1, stderr: 'boom' }), 'fail');
-  assert.equal(textLegVerdict({ olderExpected: true, code: 0, stderr: '' }), 'ok');
-});
-
 /**
  * The folders the held-gate leg makes in this run's temp folder, claims aside: the wrap's own prefix for each name the leg gives `ownedDir`
  * (`owned.ownedPrefix`) followed by an id of exactly the wrap's six-character alphabet (`ID_ALPHABET` in the reference, letters and digits).

@@ -4,17 +4,17 @@ import { test } from 'node:test';
 import { CATALOG_TABS, OLD_TAB_PLACES, placeOf } from '../catalogPlaces';
 
 /**
- * Where the new Settings page opens (research/PLAN_one_model_catalog.md, E3.1; D11): six tabs, their sub-tabs, and a place
+ * Where the new Settings page opens (research/PLAN_one_model_catalog.md, E3.1; D11): five tabs, their sub-tabs, and a place
  * for every id the OLD page answered to — `coai.openSettings('gate')` from a help article, a notification or another
  * extension must land on the gate, not on the first tab.
  */
 
 const PLACES = CATALOG_TABS.flatMap((tab) => (tab.subs.length === 0 ? [tab.id] : tab.subs.map((sub) => `${tab.id}/${sub.id}`)));
 
-test('the six tabs, in order, with the sub-tabs the design gives them', () => {
-  assert.deepEqual(CATALOG_TABS.map((tab) => tab.id), ['models', 'reviews', 'consultants', 'security', 'chat', 'setup']);
+test('the five tabs, in order, with the sub-tabs the design gives them', () => {
+  assert.deepEqual(CATALOG_TABS.map((tab) => tab.id), ['models', 'reviews', 'consultants', 'chat', 'setup']);
   assert.deepEqual(CATALOG_TABS.find((tab) => tab.id === 'reviews')?.subs.map((sub) => sub.id),
-    ['stages', 'roles', 'prompts', 'gate', 'commands', 'limits']);
+    ['stages', 'roles', 'gate', 'limits']);
   assert.deepEqual(CATALOG_TABS.find((tab) => tab.id === 'setup')?.subs.map((sub) => sub.id), ['keys', 'team', 'mcp', 'side']);
 });
 
@@ -41,7 +41,8 @@ test('an old id, a new place or a bare tab is taken; anything else leaves the he
   assert.equal(placeOf('gate', 'models'), 'reviews/gate', 'an old id opens its new place');
   assert.equal(placeOf('setup/team', 'models'), 'setup/team');
   assert.equal(placeOf('reviews', 'models'), 'reviews/stages', 'a bare tab opens its first sub-tab');
-  assert.equal(placeOf('security', 'models'), 'security');
+  assert.equal(placeOf('security', 'models'), 'models', 'the Security lane tab is gone, so its name is no place');
+  assert.equal(placeOf('securityLane', 'models'), 'reviews/stages', 'an old id of a removed place opens the nearest one that is left');
   for (const stray of [undefined, 42, { tab: 'gate' }, 'nonsense', 'reviews/nonsense', '']) {
     assert.equal(placeOf(stray, 'chat'), 'chat', `${JSON.stringify(stray)} changes nothing`);
   }

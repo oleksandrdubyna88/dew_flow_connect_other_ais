@@ -16,7 +16,6 @@ import type { Vendor } from './vendors';
 
 /** What each catalog use is called on a card. */
 export const USE_LABELS: Readonly<Record<CatalogUse, string>> = {
-  security: 'security lane',
   consultant: 'consultant',
   qconsult: 'question consultant',
   chat: 'chat',

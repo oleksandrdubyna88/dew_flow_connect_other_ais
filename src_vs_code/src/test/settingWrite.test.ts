@@ -140,57 +140,6 @@ test('writing one role keeps the other three', () => {
   assert.deepEqual(current.Architecture, 2, 'the stored record is not mutated');
 });
 
-test('the number of prompt pickers follows that role\u2019s rounds', () => {
-  // The second half of the report: "the rounds count does not change the number of dropdowns". The
-  // rendering was always right — it sized the pickers from `settings.rounds[role]` — and it was
-  // reading a value nothing could change. Asserted here so it is guarded rather than inferred.
-  const html = (rounds: Record<string, number>): string =>
-    everyPageHtml({
-      settings: { ...DEFAULTS, rounds },
-      vendors: DEFAULT_VENDORS,
-      codexModels: [], agyModels: [],
-    localEngines: {},
-      server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
-      hostKind: 'windows',
-      side: '',
-      perSide: false,
-      latestServerVersion: '',
-      questions: [],
-      sessions: [],
-      openSections: [],
-      usage: [],
-      usageWindow: 'week',
-    cliStatus: {},
-    cardPrices: {},
-    snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
-    }, 'nonce');
-
-  const pickers = (page: string, role: string): number =>
-    [...page.matchAll(new RegExp(`data-prompt="${role}" data-round="\\d+"`, 'g'))].length;
-
-  const four = html({ ...DEFAULTS.rounds, Architecture: 4 });
-  assert.equal(pickers(four, 'Architecture'), 4);
-  // Against the DEFAULT rather than a literal: what this line is about is that raising one role's
-  // budget leaves the others alone, and writing the number here made it a second assertion about
-  // what the default happens to be \u2014 which is how it went red when the defaults changed and
-  // nothing about picker sizing did.
-  assert.equal(
-    pickers(four, 'SecurityReliability'),
-    DEFAULTS.rounds['SecurityReliability'],
-    'one role\u2019s budget is not another\u2019s',
-  );
-
-  const one = html({ ...DEFAULTS.rounds, UxDxPerformance: 1 });
-  assert.equal(pickers(one, 'UxDxPerformance'), 1, 'a single round shows a single picker');
-
-  // The clamp: six is the input's own maximum, and a stored value beyond it must not render a wall
-  // of controls for rounds no stage will reach.
-  const absurd = html({ ...DEFAULTS.rounds, Architecture: 99 });
-  assert.equal(pickers(absurd, 'Architecture'), 6);
-});
-
-// ---------- a side of its own ----------
-
 test('an overlaid setting comes from the side, and everything else from the shared settings', () => {
   // One machine, two companies: a Windows window on one subscription and a WSL distro on another,
   // needing different proxies, different CLI paths and different logins. VS Code hands the SAME
