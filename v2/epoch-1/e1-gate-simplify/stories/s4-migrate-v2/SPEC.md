@@ -127,3 +127,25 @@ branch is broken, then restore. Report a table: scenario, test name, mutation.
 8. t3 (inventory) must be in the t1 commit, not parallel. **Decision:** follow the brief order (6) — same commit.
 9. The schema step (`coder_jobs`, `work_*`) and `device-settings.json` are not s4 — they belong to epoch 3 E1 and
    epoch 2 E3.
+
+## 5. Epic plan gate round 1 (2026-11-22) — accepted changes
+
+1. **Convert on load.** `SessionStore` load converts a session whose unknown-member bag has `humanGate: true` with the
+   same `LegacyHold.Released` + note, saves it under the claim and journals it (`kind: session, detail: on-load`). This
+   covers a session the automatic run deferred, a file that was unreadable and is readable later, and a held session a
+   still-running v1 process writes after `v2.done`. Test: a client request on a deferred session; a v1-shaped held file
+   written after the marker; both convert once.
+2. **Unreadable blocks the marker.** An `unreadable` object leaves `v2.done` unwritten and the automatic run retries at
+   the next start (the one-shot reports it); the run never loops inside one start. Test: unreadable → no marker; file
+   fixed → next start completes and writes the marker.
+3. **Restart-safe store merge.** Per-file moves are deterministic: a collision gets the suffix `.v1-<sha256-8 of the
+   source content>`; a source file whose content already exists in the target under any name is removed, not copied.
+   Test: kill between individual file moves, including a collision; the end tree equals one clean run, no duplicates.
+4. **Answered holds reach the person durably.** The automatic run and the one-shot write one entry per answered hold to
+   `server-notices.jsonl` through `NoticeWriter` with a new catalog code `v2-converted-answered-hold` (session, card,
+   decision); the extension already shows server notices. Restart-safe: the notice key is the card id, written once.
+5. **Torn journal tail.** Before appending, a journal whose last byte is not `\n` is truncated back to its last `\n`.
+   Test: crash during a journal write, then two restarts; every line parses.
+
+Rejected (reason recorded in the gate): fixtures must come from released binaries — real artifacts were verified by the
+live proof (three real data folders, many releases).
