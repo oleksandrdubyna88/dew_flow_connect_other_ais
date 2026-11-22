@@ -41,13 +41,11 @@ public sealed class QuestionConsultSettingsTests : IDisposable
 
         read.Should().BeEquivalentTo(QuestionConsultSettings.Default);
         read.Enabled.Should().BeTrue();
-        read.Mode.Should().Be("require");
         read.Rows.Should().BeEmpty();
         read.Prompts.Prompts.Should().HaveCount(3, "the shipped three");
         read.Roots.Should().BeEmpty();
         read.RowBudget.Should().Be(TimeSpan.FromMinutes(5));
         read.QuestionsPerSession.Should().Be(10);
-        read.FreeBatches.Should().Be(2);
         PanelSettings.FromEnvironment(Env()).QuestionConsult.Should().BeEquivalentTo(QuestionConsultSettings.Default,
             "one property on PanelSettings, the record's own defaults");
     }
@@ -57,39 +55,38 @@ public sealed class QuestionConsultSettingsTests : IDisposable
     {
         var env = Env(
             (QuestionConsultKeys.Enabled, "false"),
-            (QuestionConsultKeys.Mode, "Remind"),
             (QuestionConsultKeys.Rows, """[{"id":"a","vendor":"claude","runtime":"claude","prompt":"question-disk"}]"""),
             (QuestionConsultKeys.Prompts, """[{"id":"own","title":"Own","capability":"none","text":"t"}]"""),
             (QuestionConsultKeys.Roots, $"[\"{_projects.Replace('\\', '/')}\"]"),
             (QuestionConsultKeys.RowMinutes, "7"),
-            (QuestionConsultKeys.QuestionsPerSession, "3"),
-            (QuestionConsultKeys.FreeBatches, "4"));
+            (QuestionConsultKeys.QuestionsPerSession, "3"));
 
         var read = QuestionConsultReader.Read(env, _data, Places);
 
         read.Complaints.Should().BeEmpty();
         read.Settings.Enabled.Should().BeFalse();
-        read.Settings.Mode.Should().Be("remind", "read without case");
         read.Settings.Rows.Should().ContainSingle().Which.Id.Should().Be("a");
         read.Settings.Prompts.Find("own").Should().NotBeNull();
         read.Settings.Roots.Should().ContainSingle().Which.Should().Be(Path.GetFullPath(_projects), "a root is kept as its full path");
         read.Settings.RowBudget.Should().Be(TimeSpan.FromMinutes(7));
         read.Settings.QuestionsPerSession.Should().Be(3);
-        read.Settings.FreeBatches.Should().Be(4);
         var panel = PanelSettings.FromEnvironment(env);
-        panel.QuestionConsult.Mode.Should().Be("remind", "the whole reader rides into PanelSettings");
+        panel.QuestionConsult.Should().BeEquivalentTo(read.Settings, "the whole reader rides into PanelSettings");
         panel.Unrecognised.Should().BeEmpty();
     }
 
     [Fact]
-    public void AnUnknownMode_IsRequire_AndSaidUnderItsKey()
+    public void TheRemovedModeAndFreeBatchKeys_AreIgnored_NotComplainedAbout()
     {
-        var read = QuestionConsultReader.Read(Env((QuestionConsultKeys.Mode, "sometimes")), _data, Places);
+        // v2: consask has no mode, no phase rule and no free batches. A settings file an older build (or the
+        // extension) wrote still carries the keys; they change nothing and cost no toast.
+        var env = Env(("COAI_QCONSULT_MODE", "off"), ("COAI_QCONSULT_FREE_BATCHES", "9"), ("COAI_QCONSULT_MODE_X", "sometimes"));
 
-        read.Settings.Mode.Should().Be("require");
-        var complaint = read.Complaints.Should().ContainSingle().Subject;
-        complaint.Key.Should().Be(QuestionConsultKeys.Mode);
-        complaint.Sentence.Should().Contain("'sometimes'").And.Contain("'off', 'remind' and 'require'");
+        var read = QuestionConsultReader.Read(env, _data, Places);
+
+        read.Complaints.Should().BeEmpty();
+        read.Settings.Should().BeEquivalentTo(QuestionConsultSettings.Default);
+        PanelSettings.FromEnvironment(env).Unrecognised.Should().BeEmpty();
     }
 
     [Fact]
@@ -106,11 +103,10 @@ public sealed class QuestionConsultSettingsTests : IDisposable
     public void ZeroAndNonsense_FallBackForTheThreeNumbers()
     {
         var read = QuestionConsultReader.Read(Env(
-            (QuestionConsultKeys.RowMinutes, "0"), (QuestionConsultKeys.QuestionsPerSession, "lots"), (QuestionConsultKeys.FreeBatches, "-1")), _data, Places).Settings;
+            (QuestionConsultKeys.RowMinutes, "0"), (QuestionConsultKeys.QuestionsPerSession, "lots")), _data, Places).Settings;
 
         read.RowBudget.Should().Be(TimeSpan.FromMinutes(5));
         read.QuestionsPerSession.Should().Be(10);
-        read.FreeBatches.Should().Be(2);
     }
 
     // ---------- D14 (c): the roots ----------
@@ -338,7 +334,6 @@ public sealed class QuestionConsultSettingsTests : IDisposable
         // VS Code user settings are shared by a WSL window and a Windows window, so the root written from one side
         // reaches the other. It is not this machine's folder to judge: the server on that side reads it.
         var env = Env(
-            (QuestionConsultKeys.Mode, "remind"),
             (QuestionConsultKeys.Rows, """[{"id":"a","vendor":"claude","runtime":"claude","prompt":"question-disk","enabled":true}]"""),
             (QuestionConsultKeys.Roots, $"[\"{OtherSidesRoot.Replace(@"\", @"\\")}\", \"{_projects.Replace('\\', '/')}\"]"));
 
@@ -347,7 +342,6 @@ public sealed class QuestionConsultSettingsTests : IDisposable
         read.Complaints.Should().BeEmpty("a folder of the other side is skipped, never a failure said on every start of this one");
         read.Settings.OtherSideRoots.Should().Equal([OtherSidesRoot], "what was skipped is kept, so it can be said where a person looks");
         read.Settings.Roots.Should().ContainSingle("this machine's folder still applies").Which.Should().Be(Path.GetFullPath(_projects));
-        read.Settings.Mode.Should().Be("remind");
         read.Settings.Rows.Should().ContainSingle().Which.Enabled.Should().BeTrue();
         PanelSettings.FromEnvironment(env).Unrecognised.Should().BeEmpty("nothing reaches the panel's 'could not understand a setting' toast");
     }

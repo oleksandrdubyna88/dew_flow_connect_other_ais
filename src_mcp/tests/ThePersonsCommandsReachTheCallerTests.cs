@@ -1,5 +1,4 @@
 using CoaiMcp.Core.Commands;
-using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Server;
 using CoaiMcp.Store;
 using FluentAssertions;
@@ -24,18 +23,7 @@ public sealed class ThePersonsCommandsReachTheCallerTests : FakeCliRoundTests
         File.WriteAllText(PromptFile(id), text);
     }
 
-    /// <summary>
-    /// The question consultant's facts as the engine reads them off THESE settings (S3 of the question consultant):
-    /// since S3 the autonomy switch also hands back the question-consult order under the shipped mode, so the
-    /// expected context is derived from the settings the service is given rather than built bare.
-    /// </summary>
-    private static QuestionConsultFacts FactsOf(PanelSettings settings) =>
-        settings.QuestionConsult.Enabled
-            ? new QuestionConsultFacts(QuestionModes.Of(settings.QuestionConsult.Mode), settings.QuestionConsult.FreeBatches)
-            : QuestionConsultFacts.Off;
-
-    private static CommandContext AutonomousUnder(PanelSettings settings) =>
-        new(Autonomous: true) { QuestionConsult = FactsOf(settings) };
+    private static CommandContext AutonomousUnder(PanelSettings settings) => new(Autonomous: true);
 
     [Fact]
     public async Task AnOverrideFile_RewordsTheOrder_AndDeletingItRestoresTheShippedOne()
@@ -47,8 +35,7 @@ public sealed class ThePersonsCommandsReachTheCallerTests : FakeCliRoundTests
         var answer = await PlanRound(ServiceFor(settings), "feature", Plan);
 
         CommandsOf(answer).Should().Equal(
-            "Work AUTONOMOUSLY. Work without asking, and re-read the whole plan before you do ask.",
-            QuestionConsultOrder.For(FactsOf(settings), CommandTexts.Shipped));
+            "Work AUTONOMOUSLY. Work without asking, and re-read the whole plan before you do ask.");
         answer.GetProperty("commandsPreamble").GetString().Should().Be("Orders from the panel.");
 
         File.Delete(PromptFile(CommandTexts.Autonomy));
@@ -78,10 +65,9 @@ public sealed class ThePersonsCommandsReachTheCallerTests : FakeCliRoundTests
         var answer = await PlanRound(ServiceFor(settings), "feature", Plan);
 
         var commands = CommandsOf(answer);
-        commands.Should().HaveCount(3, "the two built-in orders the autonomy switch gives since S3, then the person's");
+        commands.Should().HaveCount(2, "the autonomy order, then the person's");
         commands[0].Should().StartWith(GateCommands.AutonomyMarker);
-        commands[1].Should().StartWith(GateCommands.QuestionConsultMarker);
-        commands[2].Should().Be("Update the module docs with every change.");
+        commands[1].Should().Be("Update the module docs with every change.");
         ListOf(answer, "commandsSkipped").Should().BeEmpty();
         var round = RoundsQuery.Read(_data).Rounds.Should().ContainSingle().Subject;
         RoundsQuery.FindingsOf(_data, round.SessionId, round.Stage, round.Number).Orders!.Commands

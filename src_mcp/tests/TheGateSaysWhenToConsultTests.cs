@@ -131,33 +131,17 @@ public class TheGateSaysWhenToConsultTests
             "and that is where this one used to stop");
     }
 
-    /// <summary>
-    /// The phase rule, pinned WHOLE in BOTH descriptions (<c>todo/PLAN_question_consultant.md</c> §4, S3): the server
-    /// enforces it in <c>ask_human</c>, and <c>ask_consultants</c> is where a caller stands when it decides to obey it.
-    /// </summary>
-    /// <remarks>
-    /// One sentence, two carriers, for the reason <see cref="ConsultPointer"/> gives: a fragment both still contain
-    /// stays green when the trigger is widened in one of them. The number in it is held to
-    /// <c>QuestionPolicy.FreeBatches</c> by <c>TheOrderTextAgreesWithThePolicyTests</c>.
-    /// </remarks>
-    private const string PhaseRule =
-        "The phase rule, which the server enforces on your own questions: a question asked while the plan is being formed, "
-        + "and the first 2 batches of questions after the plan's `proceed`, go to the person directly; every question after "
-        + "that, until the work is released to the stage environment, goes through `ask_consultants` first and reaches "
-        + "`ask_human` with the `consultId` it returned — unless `productionRisk: true` with a `riskReason` says a wrong "
-        + "answer could take production down, which makes `ask_human` ask the consultants first and return their answers "
-        + "in `consultantAnswers`. After the release, questions go to the person directly again.";
-
-    /// <summary>The consultants' door carries the phase rule, whole; <c>ask_human</c> no longer enforces anything (v2: it only points back to the conversation).</summary>
+    /// <summary>v2: consask has no mode, no phase rule, no free batches and no consultId proof — its description says none of it.</summary>
     [Fact]
-    public void TheConsultantsDoorCarriesThePhaseRule_Whole()
+    public void TheConsultantsDoorCarriesNoPhaseRule()
     {
-        DescriptionOf("ask_consultants").Should().Contain(PhaseRule,
-            "the tool the rule sends a caller to has to say it");
+        var consask = DescriptionOf("ask_consultants");
 
-        DescriptionOf("ask_human").Should().NotContain(PhaseRule, "ask_human is an alias in v2 and enforces no phase rule");
-        DescriptionOf("ask_consultants").Should().NotEndWith("`ask_human` takes them.",
-            "that is where this description used to stop, so if it still does the rule is not in it");
+        consask.Should().NotContain("phase rule").And.NotContain("free batches").And.NotContain("production risk")
+            .And.NotContain("productionRisk").And.NotContain("consultantAnswers")
+            .And.NotContain("Pass this reply's `consultId`");
+        consask.Should().Contain("has no mode and no gate");
+        DescriptionOf("ask_human").Should().NotContain("phase rule");
     }
 
     /// <summary>A plan is not a document, said where a caller chooses between the two gates.</summary>
