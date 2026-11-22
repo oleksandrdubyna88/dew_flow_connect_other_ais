@@ -15,3 +15,5 @@ dod:
     item: "active cards move to escalations/archive as withdrawn_v2; qphase and cadence stores archived, not deleted"
   - id: d3
     item: "removed settings keys land in settings.v1-removed.json"
+  - id: d4
+    item: "a step journal migrations/v2.journal makes every step idempotent across partial writes"

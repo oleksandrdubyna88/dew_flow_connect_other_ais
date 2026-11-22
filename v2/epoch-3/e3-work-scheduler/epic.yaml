@@ -8,3 +8,4 @@ doneWhen:
   - "DAG from YAML; host-level slots with atomic RAM reservation; WSL ceiling 2"
   - "checks on the candidate merge SHA before the integration branch advances"
   - "pending resolutions persisted; a run ends partial cleanly"
+  - "a rebase or conflict resolution that changes reviewed content re-runs the code gate on the candidate SHA"

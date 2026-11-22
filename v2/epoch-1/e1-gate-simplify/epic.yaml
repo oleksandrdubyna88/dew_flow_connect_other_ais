@@ -12,3 +12,4 @@ doneWhen:
   - "cons, cons_close, consask served; consult, close_consult, ask_consultants answer as aliases; ask_human answers 'removed in v2'"
   - "--migrate-v2 converts every released session/card/settings fixture exactly once (run twice = one change)"
   - "no .agents/conventions path is read by a review round; ordinary submodules still populate"
+  - "an interrupted migration (killed at each step boundary) ends equal to one clean run (step journal)"

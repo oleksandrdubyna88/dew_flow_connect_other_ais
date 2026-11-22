@@ -118,10 +118,12 @@ user's MCP config at the shared binary with `COAI_DATA_DIR=/var/lib/coai`. Regis
 ## 6. Install and update
 
 `--install`: finds CLIs (`ExecutablePaths.cs`; claude, codex, agy); MCP config via vendor commands (`claude mcp add-json
---scope user`, `codex mcp add`; agy path to be measured); merges into `~/.claude/settings.json` the PreToolUse
-AskUserQuestion → `--ask-hook` and SessionStart → `--roles --format claude-hook` hooks (backup first, idempotent by
-command path); for codex/agy one line in their global instructions ("call coai `roles` at task start").
-Enrol line: `curl -fsSL https://<hub>/hub/install.sh | COAI_ENROLL=<token> sh -s -- [--shared]` (pwsh `iwr … | iex`):
+--scope user`, `codex mcp add`; agy path to be measured); merges into `~/.claude/settings.json` the SessionStart →
+`--roles --format claude-hook` hook (backup first, idempotent by command path); the PreToolUse AskUserQuestion →
+`--ask-hook` hook only from epoch 3 E4 and only after its spike passed (§ 17.5); for codex/agy one line in their global
+instructions ("call coai `roles` at task start").
+Enrol line (amended by § 17.1 and § 17.3 — download, verify the hub-shown sha256, then run; key single-use, not in
+history): originally `curl -fsSL https://<hub>/hub/install.sh | COAI_ENROLL=<token> sh -s -- [--shared]`:
 download the release asset named in `releases/desired`, check sha256, unpack to `~/.local/share/coai/versions/<v>` (or
 `/opt/coai/versions/<v>`), `--hub-enroll`, `--install`. Update: agent downloads, checks sha256, smoke `--version`,
 swaps `current` (Linux `rename(2)`; Windows junction under the lease); keeps the last 2 versions. Windows is the only
@@ -149,7 +151,7 @@ server instructions, an MCP prompt and `roles.workMethod`. `shared/work-plan.sch
 `<epic>/epic.yaml`, `stories/<story>/story.yaml`, `tasks/<task>/task.yaml`; free `*.md` allowed beside each.
 Task: id, title, kind (enum incl. Haiku kinds), complexity 0–10, dependsOn[], parallel, files[], dod[{id,item}].
 Parsed by YamlDotNet RepresentationModel (AOT-safe; spike under TreatWarningsAsErrors; JSON-in-YAML fallback).
-Validator rules: folder name = id; ≤ 5 epics per epoch; 1–2 `mvp:true` epics first; every dependsOn resolves, no cycles;
+Validator rules: folder name = id for epoch, epic, story and task nodes (the feature id is free, § 17.7); ≤ 5 epics per epoch; 1–2 `mvp:true` epics first; every dependsOn resolves, no cycles;
 parallel siblings have no dependency path and no overlapping `files`; dod not empty. `review_plan(featureFolder)` reads
 from git at the branch tip, validates first (invalid → refused, no round spent), packs in topological order (≤ 256 KiB).
 `review_feature(featureFolder)` takes epics from the YAML. `start_coder` picks the model by the task's band.
@@ -295,3 +297,34 @@ Each point was checked in the code by the main session before it was decided.
 | 12 | Deleting the legacy-hold reader in 2.1 strands a direct v1 → 2.1 upgrade | — | **Accept.** The legacy reader stays until no supported upgrade path skips 2.0 |
 
 Sound as written (consultant): the codex resume shape (CodexConsultant.cs:108, :26); the held-session migration fixture (LegacyHoldTests.cs:94).
+
+## 17. Plan gate round 1 (review_plan, 2026-11-22) — accepted fixes
+
+1. **Enrolment secret not left in history or environment.** The enrol key is single-use, consumed at `/enroll`, valid
+   30 minutes, and the hub page shows it only once. The bash line starts with a space (`HISTCONTROL=ignorespace`) and
+   passes the key on stdin to the verified script (`… | sh -s` reads it from a here-string, never `export`); the pwsh line
+   reads it with `Read-Host -AsSecureString` prompt-free from the clipboard helper and removes the variable after use.
+   The installer never writes the key to a log; after use it is worthless.
+2. **Migration survives interruption.** `--migrate-v2` keeps a step journal `migrations/v2.journal` (one line per
+   object: session id / card id / settings key, with state `planned → done`); every step is idempotent (a card already in
+   `archive/` is skipped; a session already `AwaitingResolve` with the note is skipped). Test: kill and restart at each
+   boundary before the completion marker; the end state equals one clean run.
+3. **Bootstrap verified before it runs.** The pasted line downloads to a file and checks a SHA-256 printed on the hub
+   page (trust anchor = the owner's authenticated session on the hub page, not the downloaded script), then runs it:
+   `curl -fsSLo /tmp/coai-install.sh <url> && echo "<sha256>  /tmp/coai-install.sh" | sha256sum -c - && sh /tmp/coai-install.sh`
+   (pwsh: `Invoke-WebRequest -OutFile`, `Get-FileHash` compare, then run). The script then verifies the release asset by
+   its own pinned sha256 from `releases/desired`.
+4. **No merge of an unreviewed SHA.** When a rebase or conflict resolution changes the reviewed content (tree diff of the
+   reviewed SHA vs the candidate, restricted to the task's files, is not empty), the code gate runs again on the
+   candidate (`again:true`) and the task advances only after its findings are resolved; checks also run on that SHA.
+5. **AskUserQuestion hook only after its spike.** `--install` in epoch 1 writes the MCP config and the SessionStart
+   `roles` hook only. The AskUserQuestion hook is written by the installer from epoch 3 E4, and only when the spike
+   passed for the installed Claude Code version (a recorded capability); otherwise it stays off and the notification says
+   why.
+6. **Local outbox bounded.** `hub/outbox/` holds at most 20 MB per stream; on overflow the oldest lines are dropped and
+   one `dropped: N` line is kept; delivered lines are removed after the hub acknowledges their seq; restart-safe
+   (append + cursor file, fsync on rotate). Test: hub down, 30 MB of errors → outbox ≤ 20 MB + one dropped line;
+   hub back → delivered, outbox empty.
+7. **Folder-name rule scoped.** The rule "folder name = id" applies to epoch, epic, story and task nodes. The feature
+   node's id is free (the folder is wherever the plan lives — here `v2/`, id `coai-v2`). The v2 folder is a validator
+   acceptance fixture.

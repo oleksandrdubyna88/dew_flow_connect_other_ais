@@ -8,3 +8,5 @@ doneWhen:
   - "two VM users and WSL appear on the hub from pasted lines"
   - "settings round-trip with offline cache; single writer; foreign edit put back"
   - "shared /var/lib/coai with group coai; existing db/WAL permissions repaired; second-UID test"
+  - "the pasted line downloads, checks the hub-shown sha256, then runs; the single-use key is not left in history or environment"
+  - "local outbox ≤ 20 MB per stream with a dropped-N line; delivered lines removed after ack"

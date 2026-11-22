@@ -10,3 +10,4 @@ doneWhen:
   - "review_plan(featureFolder) validates first, packs in topological order"
   - "roles returns main AI, role table, complexity bands, Haiku kinds, work method"
   - "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent"
+  - "the folder-name rule applies to epoch/epic/story/task nodes; the feature id is free; --install writes NO AskUserQuestion hook"

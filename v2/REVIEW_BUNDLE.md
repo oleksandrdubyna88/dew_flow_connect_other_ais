@@ -180,10 +180,12 @@ user's MCP config at the shared binary with `COAI_DATA_DIR=/var/lib/coai`. Regis
 ## 6. Install and update
 
 `--install`: finds CLIs (`ExecutablePaths.cs`; claude, codex, agy); MCP config via vendor commands (`claude mcp add-json
---scope user`, `codex mcp add`; agy path to be measured); merges into `~/.claude/settings.json` the PreToolUse
-AskUserQuestion → `--ask-hook` and SessionStart → `--roles --format claude-hook` hooks (backup first, idempotent by
-command path); for codex/agy one line in their global instructions ("call coai `roles` at task start").
-Enrol line: `curl -fsSL https://<hub>/hub/install.sh | COAI_ENROLL=<token> sh -s -- [--shared]` (pwsh `iwr … | iex`):
+--scope user`, `codex mcp add`; agy path to be measured); merges into `~/.claude/settings.json` the SessionStart →
+`--roles --format claude-hook` hook (backup first, idempotent by command path); the PreToolUse AskUserQuestion →
+`--ask-hook` hook only from epoch 3 E4 and only after its spike passed (§ 17.5); for codex/agy one line in their global
+instructions ("call coai `roles` at task start").
+Enrol line (amended by § 17.1 and § 17.3 — download, verify the hub-shown sha256, then run; key single-use, not in
+history): originally `curl -fsSL https://<hub>/hub/install.sh | COAI_ENROLL=<token> sh -s -- [--shared]`:
 download the release asset named in `releases/desired`, check sha256, unpack to `~/.local/share/coai/versions/<v>` (or
 `/opt/coai/versions/<v>`), `--hub-enroll`, `--install`. Update: agent downloads, checks sha256, smoke `--version`,
 swaps `current` (Linux `rename(2)`; Windows junction under the lease); keeps the last 2 versions. Windows is the only
@@ -211,7 +213,7 @@ server instructions, an MCP prompt and `roles.workMethod`. `shared/work-plan.sch
 `<epic>/epic.yaml`, `stories/<story>/story.yaml`, `tasks/<task>/task.yaml`; free `*.md` allowed beside each.
 Task: id, title, kind (enum incl. Haiku kinds), complexity 0–10, dependsOn[], parallel, files[], dod[{id,item}].
 Parsed by YamlDotNet RepresentationModel (AOT-safe; spike under TreatWarningsAsErrors; JSON-in-YAML fallback).
-Validator rules: folder name = id; ≤ 5 epics per epoch; 1–2 `mvp:true` epics first; every dependsOn resolves, no cycles;
+Validator rules: folder name = id for epoch, epic, story and task nodes (the feature id is free, § 17.7); ≤ 5 epics per epoch; 1–2 `mvp:true` epics first; every dependsOn resolves, no cycles;
 parallel siblings have no dependency path and no overlapping `files`; dod not empty. `review_plan(featureFolder)` reads
 from git at the branch tip, validates first (invalid → refused, no round spent), packs in topological order (≤ 256 KiB).
 `review_feature(featureFolder)` takes epics from the YAML. `start_coder` picks the model by the task's band.
@@ -358,6 +360,37 @@ Each point was checked in the code by the main session before it was decided.
 
 Sound as written (consultant): the codex resume shape (CodexConsultant.cs:108, :26); the held-session migration fixture (LegacyHoldTests.cs:94).
 
+## 17. Plan gate round 1 (review_plan, 2026-11-22) — accepted fixes
+
+1. **Enrolment secret not left in history or environment.** The enrol key is single-use, consumed at `/enroll`, valid
+   30 minutes, and the hub page shows it only once. The bash line starts with a space (`HISTCONTROL=ignorespace`) and
+   passes the key on stdin to the verified script (`… | sh -s` reads it from a here-string, never `export`); the pwsh line
+   reads it with `Read-Host -AsSecureString` prompt-free from the clipboard helper and removes the variable after use.
+   The installer never writes the key to a log; after use it is worthless.
+2. **Migration survives interruption.** `--migrate-v2` keeps a step journal `migrations/v2.journal` (one line per
+   object: session id / card id / settings key, with state `planned → done`); every step is idempotent (a card already in
+   `archive/` is skipped; a session already `AwaitingResolve` with the note is skipped). Test: kill and restart at each
+   boundary before the completion marker; the end state equals one clean run.
+3. **Bootstrap verified before it runs.** The pasted line downloads to a file and checks a SHA-256 printed on the hub
+   page (trust anchor = the owner's authenticated session on the hub page, not the downloaded script), then runs it:
+   `curl -fsSLo /tmp/coai-install.sh <url> && echo "<sha256>  /tmp/coai-install.sh" | sha256sum -c - && sh /tmp/coai-install.sh`
+   (pwsh: `Invoke-WebRequest -OutFile`, `Get-FileHash` compare, then run). The script then verifies the release asset by
+   its own pinned sha256 from `releases/desired`.
+4. **No merge of an unreviewed SHA.** When a rebase or conflict resolution changes the reviewed content (tree diff of the
+   reviewed SHA vs the candidate, restricted to the task's files, is not empty), the code gate runs again on the
+   candidate (`again:true`) and the task advances only after its findings are resolved; checks also run on that SHA.
+5. **AskUserQuestion hook only after its spike.** `--install` in epoch 1 writes the MCP config and the SessionStart
+   `roles` hook only. The AskUserQuestion hook is written by the installer from epoch 3 E4, and only when the spike
+   passed for the installed Claude Code version (a recorded capability); otherwise it stays off and the notification says
+   why.
+6. **Local outbox bounded.** `hub/outbox/` holds at most 20 MB per stream; on overflow the oldest lines are dropped and
+   one `dropped: N` line is kept; delivered lines are removed after the hub acknowledges their seq; restart-safe
+   (append + cursor file, fsync on rotate). Test: hub down, 30 MB of errors → outbox ≤ 20 MB + one dropped line;
+   hub back → delivered, outbox empty.
+7. **Folder-name rule scoped.** The rule "folder name = id" applies to epoch, epic, story and task nodes. The feature
+   node's id is free (the folder is wherever the plan lives — here `v2/`, id `coai-v2`). The v2 folder is a validator
+   acceptance fixture.
+
 # coai v2 — extension half (architecture blueprint)
 
 > Status: **blueprint, nothing built, 2026-11-22.** Written by an Opus architect from the code (read-only); key references
@@ -449,7 +482,7 @@ a fakeDom test and an axe test:
 | Rounds & notifications | `--log`, `--findings` (roundsDbRead.ts) + hub logs; notification ledger | Tabs, DataTable | K2 |
 | Features (new) | `--plan-tree <feature-dir> --json` (server parses/validates YAML; the extension never parses YAML); watched while visible | StatusMark | K3 epoch→epic→story→task (status, complexity, model, parallel lane, depends-on), K2, K6 DoD |
 
-Enrolment: single-use key, 15 min; two copy lines (`curl … | COAI_ENROL=<key> sh`, `$env:COAI_ENROL='<key>'; irm … | iex`).
+Enrolment: single-use key, 30 min, shown once; two copy lines that download, verify the hub-shown sha256, then run (server.md § 17.1, § 17.3).
 "Update everywhere": `POST /hub/rollout`, per-device progress until every device reports the new version.
 
 Conventions dropped: remove `claudeSnippet.ts` (imports generated conventions rule texts, lines 1-4) and its readers;
@@ -555,7 +588,7 @@ creds UseTools.cs:88-100, notify.ts:45-52).
 | 3 | Remote-WSL timing: an installed VSIX runs in Production, marks are exported only in Test; run-host.mjs shares one profile across launches, so restored view state can activate coai before the clock | **Accept.** Each sample gets a fresh profile and data dir; assert `isActive === false`; the clock starts in the driver before dispatch; a fresh `ready` ack is required; the WSL driver reads marks through a measure command available when `COAI_MEASURE=1` (any mode); record the extension-host location. M2 = painted usable shell ≤ 2000 ms (hard); M3 = first local data, recorded |
 | 4 | The chat extraction misses initialization (data root, side models, remote sessions, presets — extension.ts:143, :616) and teardown (heartbeat, queued usage writes — :953); shell and copied block would both register chat commands and the `coaiChat` serializer (:903) | **Accept.** The shell registers once; its thunks share one lazy chat instance; `deactivate` forwards to it when loaded. Test: cold chat command and a restored legacy tab without ever opening the sidebar, custom data root, side-specific model, close right after a turn |
 | 5 | Chat presets come from VS Code configuration (chatPresetsHost.ts:52); phrases are person-level and verbatim (phrases.ts:12) — not device-document data | **Accept.** Presets and phrases keep their current sources (person-level, unchanged features); the mod gets phrases through `--band-json` reading the same source; tests: a preset edit affects the next chat; switching device keeps the same phrase text |
-| 6 | Contracts disagree: Main AI lacks the `workMethod` editor; enrolment 15 min vs 24 h; Features calls a local `--plan-tree` for a folder that may live on another device | **Accept.** `shared/hub-contract.json` fixes: enrolment key 24 h single-use; `workMethod` block edited on Main AI; a remote feature tree is fetched through the hub (device agent runs `--plan-tree` on request) — E3 demonstrates one Windows window opening a remote-only feature and following a rollout through the real agent + updater, not only a hub fake |
+| 6 | Contracts disagree: Main AI lacks the `workMethod` editor; enrolment 15 min vs 24 h; Features calls a local `--plan-tree` for a folder that may live on another device | **Accept.** `shared/hub-contract.json` fixes: enrolment key single-use, 30 min, shown once (server.md § 17.1); `workMethod` block edited on Main AI; a remote feature tree is fetched through the hub (device agent runs `--plan-tree` on request) — E3 demonstrates one Windows window opening a remote-only feature and following a rollout through the real agent + updater, not only a hub fake |
 | 7 | The metafile firewall must check `outputs[*].imports` too (an external builtin shows only there); separately bundled modules duplicate module-local state (notify.ts suppressor) | **Accept.** Firewall checks inputs AND output imports; shared mutable services (notify, ledger, data root) live in one runtime module that other bundles reach through the shell, never bundled twice |
 | 8 | Kit additions: the strict DOM also limits attributes/properties; test the shipped page bundle (labelled toggle edit + Save, chip+text filter after refresh, keyboard expansion with focus kept). Mod: keep inherited entries on first write, platform delimiter, second setup a no-op, both install orders with agent-models | **Accept** as acceptance tests of E2 and E5 |
 
@@ -580,6 +613,7 @@ doneWhen:
   - "cons, cons_close, consask served; consult, close_consult, ask_consultants answer as aliases; ask_human answers 'removed in v2'"
   - "--migrate-v2 converts every released session/card/settings fixture exactly once (run twice = one change)"
   - "no .agents/conventions path is read by a review round; ordinary submodules still populate"
+  - "an interrupted migration (killed at each step boundary) ends equal to one clean run (step journal)"
 ```
 
 ## v2/epoch-1/e1-gate-simplify/stories/s1-verdicts-and-holds/story.yaml
@@ -829,13 +863,15 @@ dod:
     item: "active cards move to escalations/archive as withdrawn_v2; qphase and cadence stores archived, not deleted"
   - id: d3
     item: "removed settings keys land in settings.v1-removed.json"
+  - id: d4
+    item: "a step journal migrations/v2.journal makes every step idempotent across partial writes"
 ```
 
 ## v2/epoch-1/e1-gate-simplify/stories/s4-migrate-v2/tasks/t2-migrate-fixtures/task.yaml
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t2-migrate-fixtures
-title: "Fixtures of each released session format migrated twice: one advance, note present, no active card"
+title: "Fixtures of each released session format migrated twice: one advance, note present, no active card; kill and restart at each step boundary"
 kind: test
 complexity: 5
 dependsOn:
@@ -1260,6 +1296,7 @@ doneWhen:
   - "review_plan(featureFolder) validates first, packs in topological order"
   - "roles returns main AI, role table, complexity bands, Haiku kinds, work method"
   - "--install on a clean WSL box gives a working Claude + Codex (+ agy) MCP setup with the SessionStart roles hook; idempotent"
+  - "the folder-name rule applies to epoch/epic/story/task nodes; the feature id is free; --install writes NO AskUserQuestion hook"
 ```
 
 ## v2/epoch-1/e4-kit-local-pages/epic.yaml
@@ -1333,6 +1370,8 @@ doneWhen:
   - "two VM users and WSL appear on the hub from pasted lines"
   - "settings round-trip with offline cache; single writer; foreign edit put back"
   - "shared /var/lib/coai with group coai; existing db/WAL permissions repaired; second-UID test"
+  - "the pasted line downloads, checks the hub-shown sha256, then runs; the single-use key is not left in history or environment"
+  - "local outbox ≤ 20 MB per stream with a dropped-N line; delivered lines removed after ack"
 ```
 
 ## v2/epoch-2/e3-update-everywhere/epic.yaml
@@ -1434,6 +1473,7 @@ doneWhen:
   - "DAG from YAML; host-level slots with atomic RAM reservation; WSL ceiling 2"
   - "checks on the candidate merge SHA before the integration branch advances"
   - "pending resolutions persisted; a run ends partial cleanly"
+  - "a rebase or conflict resolution that changes reviewed content re-runs the code gate on the candidate SHA"
 ```
 
 ## v2/epoch-3/e4-ask-hook/epic.yaml
@@ -1447,6 +1487,7 @@ doneWhen:
   - "spike on the installed Claude Code: updatedInput.answers skips the widget"
   - "first question answered by consask; later ones in 30 min reach the person; fails open"
   - "exit 0 always; one JSON object or nothing; one winner for parallel calls"
+  - "the installer writes the hook only when the spike passed for the installed Claude Code version"
 ```
 
 ## v2/epoch-3/e5-sessions-mod/epic.yaml
