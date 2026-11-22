@@ -54,6 +54,9 @@ internal sealed class InstallWorld : IDisposable
 
     internal string Log { get; }
 
+    /// <summary>Whether this scratch machine is a Claude Code session — the variable the vendor itself reads to refuse a registration on stdin.</summary>
+    internal bool ChildSession { get; set; }
+
     /// <summary>The <c>coai-mcp</c> the installer registers (<c>--binary</c>).</summary>
     internal string Binary { get; }
 
@@ -61,6 +64,13 @@ internal sealed class InstallWorld : IDisposable
     internal string Root => _root.Path;
 
     internal string ClaudeJson => Path.Combine(ClaudeConfigDir.Length > 0 ? ClaudeConfigDir : Home, ".claude.json");
+
+    /// <summary>Claude's settings file (the hook's): <c>$CLAUDE_CONFIG_DIR/settings.json</c>, else <c>~/.claude/settings.json</c>.</summary>
+    internal string ClaudeSettings => Path.Combine(ClaudeConfigDir.Length > 0 ? ClaudeConfigDir : Path.Combine(Home, ".claude"), "settings.json");
+
+    internal string ClaudeSettingsText => File.Exists(ClaudeSettings) ? File.ReadAllText(ClaudeSettings) : string.Empty;
+
+    internal string CodexAgents => Path.Combine(CodexHome.Length > 0 ? CodexHome : Path.Combine(Home, ".codex"), "AGENTS.md");
 
     internal string CodexToml => Path.Combine(CodexHome.Length > 0 ? CodexHome : Path.Combine(Home, ".codex"), "config.toml");
 
@@ -77,6 +87,8 @@ internal sealed class InstallWorld : IDisposable
         ["CODEX_HOME"] = CodexHome.Length > 0 ? CodexHome : null,
         ["PATH"] = Bin,
         ["LOCALAPPDATA"] = Path.Combine(Home, "AppData", "Local"),
+        // The test process may itself run inside a Claude Code session; the installer must meet the world this scratch machine describes, not the one the suite was started in.
+        ["CLAUDE_CODE_CHILD_SESSION"] = ChildSession ? "1" : null,
     };
 
     /// <summary>Every file the installer could name in this world — what the guard test checks against the real home.</summary>
@@ -86,7 +98,7 @@ internal sealed class InstallWorld : IDisposable
         {
             var host = InstallHost.From(name => Env.GetValueOrDefault(name), OperatingSystem.IsWindows());
 
-            return [host.ClaudeJson, host.ClaudeSettings, host.CodexToml, host.AgyJson, host.StateDir, host.BackupsDir, host.LockFile, host.LocalBin];
+            return [host.ClaudeJson, host.ClaudeSettings, host.CodexToml, host.CodexAgents, host.AgyJson, host.StateDir, host.BackupsDir, host.LockFile, host.LocalBin];
         }
     }
 

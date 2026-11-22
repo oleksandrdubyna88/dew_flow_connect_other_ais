@@ -62,6 +62,13 @@ internal sealed class CodexMcp : McpTarget
         return new McpEntry(command, args, env);
     }
 
+    public override string Via(PlanAction action) => action switch
+    {
+        PlanAction.Add or PlanAction.Update or PlanAction.Restore => "codex mcp add",
+        PlanAction.Remove => "codex mcp remove",
+        _ => string.Empty,
+    };
+
     protected override Task<VendorAnswer> AddAsync(McpEntry entry, ApplyContext context, CancellationToken ct)
     {
         List<string> args = ["mcp", "add"];

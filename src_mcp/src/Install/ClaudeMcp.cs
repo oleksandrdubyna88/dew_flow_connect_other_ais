@@ -15,6 +15,9 @@ namespace CoaiMcp.Install;
 /// </remarks>
 internal sealed class ClaudeMcp : McpTarget
 {
+    /// <summary>What a person is told when the installer runs inside a Claude Code session: the vendor's own refusal, met BEFORE the lock and the backup, not got round.</summary>
+    internal const string SessionRefusal = "inside a Claude Code session the claude CLI refuses this registration; run the install from the extension or a normal terminal";
+
     private static readonly JsonWriterOptions Writer = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public override Client Cli => Client.Claude;
@@ -77,11 +80,11 @@ internal sealed class ClaudeMcp : McpTarget
     }
 
     /// <summary>A new entry for <paramref name="command"/>: stdio, no arguments, no environment.</summary>
-    internal static McpEntry NewEntry(string command) =>
+    public override McpEntry NewEntry(string command) =>
         new(command, [], new Dictionary<string, string>(), Text(new JsonObject { ["type"] = "stdio", ["command"] = command, ["args"] = new JsonArray() }));
 
     /// <summary><paramref name="before"/> with <c>command</c> replaced and every other key kept as it was — the update of the contract.</summary>
-    internal static McpEntry Updated(McpEntry before, string command)
+    public override McpEntry WithCommand(McpEntry before, string command)
     {
         var body = before.RawJson.Length > 0 && JsonNode.Parse(before.RawJson) is JsonObject raw ? raw : new JsonObject { ["type"] = "stdio", ["args"] = new JsonArray() };
         body["command"] = command;
@@ -103,6 +106,14 @@ internal sealed class ClaudeMcp : McpTarget
 
     protected override Task<VendorAnswer> AddAsync(McpEntry entry, ApplyContext context, CancellationToken ct) =>
         context.Vendor.RunAsync(context.CliPath, ["mcp", "add-json", "--scope", "user", "coai", "-"], entry.RawJson.Length > 0 ? entry.RawJson : NewEntry(entry.Command).RawJson, ct);
+
+    public override string Via(PlanAction action) => action switch
+    {
+        PlanAction.Add => "claude mcp add-json",
+        PlanAction.Update or PlanAction.Restore => "claude mcp remove + claude mcp add-json",
+        PlanAction.Remove => "claude mcp remove",
+        _ => string.Empty,
+    };
 
     protected override Task<VendorAnswer> RemoveAsync(ApplyContext context, CancellationToken ct) =>
         context.Vendor.RunAsync(context.CliPath, ["mcp", "remove", "--scope", "user", "coai"], string.Empty, ct);

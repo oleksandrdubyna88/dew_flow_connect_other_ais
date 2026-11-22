@@ -23,7 +23,7 @@ public sealed class TheInstallerKeepsItsBackupsTests
         File.ReadAllText(Path.Combine(dir, "codex-mcp-config.toml")).Should().Be(InstallOutput.LivedInCodexToml);
         var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "manifest.json"))).RootElement;
         manifest.GetProperty("id").GetString().Should().Be(output.GetProperty("backup").GetProperty("id").GetString());
-        var claude = manifest.GetProperty("targets").EnumerateArray().Single(target => target.GetProperty("cli").GetString() == "claude");
+        var claude = manifest.GetProperty("targets").EnumerateArray().Single(target => target.GetProperty("cli").GetString() == "claude" && target.GetProperty("kind").GetString() == "mcp");
         claude.GetProperty("sha256Before").GetString().Should().Be(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(InstallOutput.LivedInClaudeJson))));
         claude.GetProperty("before").ValueKind.Should().Be(JsonValueKind.Null);
         claude.GetProperty("after").GetProperty("command").GetString().Should().Be(world.Binary);

@@ -19,7 +19,8 @@ internal sealed record InstallHost(
     string CodexHome,
     string LocalAppData,
     string PathVariable,
-    IReadOnlyDictionary<string, string?> VendorEnvironment)
+    IReadOnlyDictionary<string, string?> VendorEnvironment,
+    bool InClaudeSession = false)
 {
     private char Separator => IsWindows ? '\\' : '/';
 
@@ -28,6 +29,9 @@ internal sealed record InstallHost(
 
     /// <summary>Claude's settings file: <c>${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json</c> (the hook's file; s7 writes it).</summary>
     internal string ClaudeSettings => Join(ClaudeConfigDir.Length > 0 ? ClaudeConfigDir : Join(Home, ".claude"), "settings.json");
+
+    /// <summary>Codex's global instruction file: <c>${CODEX_HOME:-$HOME/.codex}/AGENTS.md</c> (measured on codex-cli 0.171.0).</summary>
+    internal string CodexAgents => Join(CodexHome.Length > 0 ? CodexHome : Join(Home, ".codex"), "AGENTS.md");
 
     /// <summary>Codex's config: <c>${CODEX_HOME:-$HOME/.codex}/config.toml</c>.</summary>
     internal string CodexToml => Join(CodexHome.Length > 0 ? CodexHome : Join(Home, ".codex"), "config.toml");
@@ -70,8 +74,12 @@ internal sealed record InstallHost(
                 ["USERPROFILE"] = NullIfEmpty(Value("USERPROFILE")),
                 ["CLAUDE_CONFIG_DIR"] = NullIfEmpty(Value("CLAUDE_CONFIG_DIR")),
                 ["CODEX_HOME"] = NullIfEmpty(Value("CODEX_HOME")),
-            });
+            },
+            InSession(Value("CLAUDE_CODE_CHILD_SESSION")));
     }
+
+    /// <summary>Claude Code starts every process of a session with <c>CLAUDE_CODE_CHILD_SESSION</c> set, and its own commands that read a server definition from stdin refuse to run when it is (measured in claude 2.1.330's binary and run).</summary>
+    private static bool InSession(string value) => value.Length > 0 && !value.Equals("0", StringComparison.Ordinal) && !value.Equals("false", StringComparison.OrdinalIgnoreCase);
 
     private static string? NullIfEmpty(string value) => value.Length == 0 ? null : value;
 }

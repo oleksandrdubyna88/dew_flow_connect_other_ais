@@ -19,18 +19,30 @@ internal sealed record TargetOutcome(OutcomeKind Kind, string Reason)
 }
 
 /// <summary>
-/// One thing the installer can change for a client — an MCP entry now, and the SessionStart hook of s7 later. A client has an ORDERED list of them, so a new
+/// One thing the installer can change for a client — an MCP entry, and (Claude) the SessionStart hook of s7. A client has an ORDERED list of them, so a new
 /// kind is a new element of <see cref="InstallTargets.For"/> and nothing else moves.
 /// </summary>
 internal interface IInstallTarget
 {
     Client Cli { get; }
 
-    /// <summary>The kind word of the output: <c>mcp</c>.</summary>
+    /// <summary>The kind word of the output: <c>mcp</c> or <c>hook</c>.</summary>
     string Kind { get; }
 
     /// <summary>The file this target lives in on this side.</summary>
     string FileOf(InstallHost host);
+
+    /// <summary>A new entry for <paramref name="binary"/>: what the file will hold when none is there.</summary>
+    McpEntry NewEntry(string binary);
+
+    /// <summary><paramref name="before"/> with its command replaced and everything else kept — the update of the contract.</summary>
+    McpEntry WithCommand(McpEntry before, string binary);
+
+    /// <summary>The words for what <paramref name="action"/> does to this target, for the output (empty when nothing outside the file is run).</summary>
+    string Via(PlanAction action);
+
+    /// <summary>Whether what the target holds is a function of the binary registered (an MCP entry, the hook) — false for text that does not name the binary, which is the same on every run.</summary>
+    bool FollowsBinary { get; }
 
     /// <summary>What the file's text holds — pure; a missing file is <see langword="null"/>.</summary>
     ConfigRead Read(string? text);
@@ -43,9 +55,9 @@ internal interface IInstallTarget
 internal sealed record ApplyContext(InstallHost Host, string CliPath, VendorCommands Vendor, InstallBackup Backup, InstallFaults Faults);
 
 /// <summary>
-/// A seam for a test to END the process between two steps — the killed run of scenario 12. Production holds none: <see cref="None"/> does nothing.
+/// Seams for a test: to END the process between two steps (the killed run of scenario 12), and to change settings.json between the hook target's read and its write (scenario 10; called with the file and the attempt, from 1). Production holds none: <see cref="None"/> does nothing.
 /// </summary>
-internal sealed record InstallFaults(Action<Client, string, string> AfterState)
+internal sealed record InstallFaults(Action<Client, string, string> AfterState, Action<string, int>? AfterSettingsRead = null)
 {
     internal static InstallFaults None { get; } = new((_, _, _) => { });
 }
@@ -55,8 +67,8 @@ internal static class InstallTargets
 {
     internal static IReadOnlyList<IInstallTarget> For(Client client) => client switch
     {
-        Client.Claude => [new ClaudeMcp()],
-        Client.Codex => [new CodexMcp()],
+        Client.Claude => [new ClaudeMcp(), new ClaudeHook()],
+        Client.Codex => [new CodexMcp(), new CodexInstructions()],
         _ => [new AgyMcp()],
     };
 }

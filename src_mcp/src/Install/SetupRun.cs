@@ -153,7 +153,7 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
 
     private IReadOnlyList<ClientRun> Plan(IReadOnlyList<FoundClient> found, string binary, ManifestRecord? restore)
     {
-        var inputs = new PlanInputs(args.Remove ? Wanted.Remove : Wanted.Install, binary, args.Binary.Length > 0, host.IsWindows, File.Exists);
+        var inputs = new PlanInputs(args.Remove ? Wanted.Remove : Wanted.Install, binary, args.Binary.Length > 0, host.IsWindows, File.Exists, host.InClaudeSession);
 
         return [.. found.Select(client => new ClientRun(client, client.Found ? PlanTargets(client.Cli, inputs, restore) : []))];
     }
@@ -175,7 +175,7 @@ internal sealed class SetupRun(string mode, SetupArgs args, InstallHost host, Se
 
             return line is null
                 ? PlannedTarget.Nothing(target.Cli, target.Kind, target.FileOf(host), "that install did not change this target")
-                : Writable(ClientPlan.Restore(target, host, read, line.Before?.ToEntry(), line.After?.ToEntry()));
+                : Writable(ClientPlan.Restore(target, host, read, line.Before?.ToEntry(), line.After?.ToEntry(), host.InClaudeSession));
         }
 
         var interrupted = inputs.Wanted == Wanted.Install && read is ConfigRead.Found { Entry: null } ? InstallBackup.InterruptedEntry(host, target.Cli, target.Kind) : null;

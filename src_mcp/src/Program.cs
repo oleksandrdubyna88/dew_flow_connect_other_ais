@@ -2616,7 +2616,8 @@ internal static class Program
         `--setup-clients [--dry-run] [--only claude,codex,agy] [--binary <path>] [--remove | --restore <id|latest>]` finds the CLIs on this side and writes the `coai` MCP
         entry through each one's own command (`claude mcp add-json --scope user`, `codex mcp add`) — a backup in the state folder first, nothing changed when the entry
         is already right — and prints ONE JSON object: per CLI found, absent, changed, unchanged, refused, failed or unmeasured (agy), per target the action and the
-        entry before and after (environment NAMES only). `--install` is the same engine (`--shared` is epoch 2: refused, 65). `--dry-run` plans only and answers the code the
+        entry before and after (environment NAMES only). Claude also gets ONE SessionStart hook (`--roles --format claude-hook`) in its settings.json, and Codex ONE block between `<!-- coai:roles:start -->` and
+        `<!-- coai:roles:end -->` in its AGENTS.md; inside a Claude Code session the claude MCP target is refused (the vendor refuses a registration there), the others done. `--install` is the same engine (`--shared` is epoch 2: refused, 65). `--dry-run` plans only and answers the code the
         real run would. Exits 0 every found CLI in the wanted state, 65 bad arguments or an unknown backup id, 69 no CLI found, 73 the backup could not be written,
         74 a write failed after the backup, 75 another run holds the lock, 78 a CLI refused (the others done) — never 64.
         `--check-model` reads {"row": {…}} on stdin and runs ONE paid check of that catalog row — the consultant's

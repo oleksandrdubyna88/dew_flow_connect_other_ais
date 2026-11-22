@@ -10,7 +10,9 @@
     "notes": [
       "an existing name makes add-json exit 1 and change nothing, so an update is remove + add-json",
       "a malformed file makes it exit 1, leave the file unchanged and write a .corrupted copy",
-      "`claude mcp get` and `claude mcp list` START the server for a health check: never called in product code"
+      "`claude mcp get` and `claude mcp list` START the server for a health check: never called in product code",
+      "inside a Claude Code session `claude mcp add-json` REFUSES a definition on stdin (\"Reading the JSON from stdin is refused inside a Claude Code session…\"): the vendor tests the environment variable CLAUDE_CODE_CHILD_SESSION (read from the 2.1.330 binary and met by a real run), NOT CLAUDECODE — so the installer reports the claude MCP target refused (exit 78) before any lock or backup, and never strips the variable or switches input form",
+      "the hook (kind hook) is a direct edit of `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json` — hooks.SessionStart, ONE handler {type:command, command:<coai-mcp>, args:[--roles,--format,claude-hook], timeout:10}; there is no vendor command for hooks"
     ]
   },
   "codex": {
@@ -23,12 +25,14 @@
       "add REPLACES an existing entry: its old env and startup_timeout_sec are lost, so an update passes the old env again",
       "a rewrite dropped an inline comment on another server's line",
       "malformed TOML makes it exit 1 and leave the file unchanged",
-      "it warns on stderr for a HOME under /tmp: only stdout is read"
+      "it warns on stderr for a HOME under /tmp: only stdout is read",
+      "global instructions: `${CODEX_HOME:-$HOME/.codex}/AGENTS.md` — MEASURED with `codex debug prompt-input` (no model call) in a scratch HOME and a scratch CODEX_HOME: a marker line in that file is in the model-visible prompt input, and CODEX_HOME moves the file. The installer keeps ONE block between `<!-- coai:roles:start -->` and `<!-- coai:roles:end -->` there (kind instructions)"
     ]
   },
   "agy": {
     "version": "1.5.14",
     "status": "unmeasured",
+    "instructions": "not done: agy's global instruction file could not be measured without a signed-in model turn (the binary names ~/.gemini/GEMINI.md and ~/.gemini/AGENTS.md as strings, which is not a measurement), so no agy instruction block is written",
     "reason": "measured on Linux only; the Windows repeat of the spec's measurement has not been run, so the installer writes nothing for agy",
     "measured": {
       "linux": {

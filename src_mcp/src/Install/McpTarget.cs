@@ -14,6 +14,14 @@ internal abstract class McpTarget : IInstallTarget
 
     public abstract ConfigRead Read(string? text);
 
+    public virtual McpEntry NewEntry(string binary) => new(binary, [], new Dictionary<string, string>());
+
+    public virtual McpEntry WithCommand(McpEntry before, string binary) => before.WithCommand(binary);
+
+    public virtual string Via(PlanAction action) => string.Empty;
+
+    public bool FollowsBinary => true;
+
     /// <summary>Whether the client refuses to add over an existing entry (Claude), so an update is a remove and an add.</summary>
     protected abstract bool RemoveBeforeAdd { get; }
 

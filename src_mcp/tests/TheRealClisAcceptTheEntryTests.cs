@@ -32,6 +32,8 @@ public sealed class TheRealClisAcceptTheEntryTests
             ["CODEX_HOME"] = null,
             ["PATH"] = Environment.GetEnvironmentVariable("PATH"),
             ["LOCALAPPDATA"] = scratch.At("home", "AppData", "Local"),
+            // Passed on as it is: the installer meets the real condition (a session or not) exactly as a person would, and the vendor child inherits the same variable.
+            ["CLAUDE_CODE_CHILD_SESSION"] = Environment.GetEnvironmentVariable("CLAUDE_CODE_CHILD_SESSION"),
         };
         Directory.CreateDirectory(env["HOME"]!);
         var host = InstallHost.From(name => env.GetValueOrDefault(name), OperatingSystem.IsWindows());
@@ -49,15 +51,15 @@ public sealed class TheRealClisAcceptTheEntryTests
 
         var root = JsonDocument.Parse(output.ToString()).RootElement;
         root.Result("codex").Should().Be("changed", string.Join('\n', errors) + output);
-        if (Environment.GetEnvironmentVariable("CLAUDECODE") is { Length: > 0 })
+        if (InstallHost.From(name => env.GetValueOrDefault(name), OperatingSystem.IsWindows()).InClaudeSession)
         {
-            // Measured 2026-11-22 on claude 2.1.330: inside a Claude Code session `claude mcp add-json` REFUSES stdin ("its permission prompt would not show the server"). The installer must report that
-            // as a failure with the vendor's sentence, change nothing, and say so — not get round it. "Connected" is then NOT verified by this run: it needs a terminal outside a session.
-            code.Should().Be(74, output.ToString());
-            root.Result("claude").Should().Be("failed");
-            root.Client("claude").GetProperty("reason").GetString().Should().Contain("inside a Claude Code session");
+            // Measured 2026-11-22 on claude 2.1.330: inside a Claude Code session (CLAUDE_CODE_CHILD_SESSION set) `claude mcp add-json` REFUSES stdin. The installer meets that BEFORE any command: claude is `refused`,
+            // the exit is 78, the vendor is not asked, and the session variable is not stripped. "Connected" is then NOT verified by this run: it needs a terminal outside a session.
+            code.Should().Be(78, output.ToString());
+            root.Result("claude").Should().Be("refused");
+            root.Client("claude").GetProperty("reason").GetString().Should().Contain("inside a Claude Code session the claude CLI refuses this registration");
             var claudeJson = Path.Combine(env["HOME"]!, ".claude.json");
-            (File.Exists(claudeJson) ? File.ReadAllText(claudeJson) : string.Empty).Should().NotContain("coai-mcp", "the refused command registered nothing (claude itself writes its first-run file)");
+            (File.Exists(claudeJson) ? File.ReadAllText(claudeJson) : string.Empty).Should().NotContain("coai-mcp", "nothing was registered (claude itself writes its first-run file)");
         }
         else
         {

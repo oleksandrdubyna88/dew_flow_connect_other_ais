@@ -13,10 +13,11 @@ internal static class InstallOutput
 
     internal static string Result(this JsonElement output, string cli) => output.Client(cli).GetProperty("result").GetString()!;
 
-    /// <summary>The only target of a client (one kind exists until s7 adds the hook).</summary>
-    internal static JsonElement Target(this JsonElement output, string cli) => output.Client(cli).GetProperty("targets").EnumerateArray().Single();
+    /// <summary>The MCP target of a client; the hook, which Claude also has, is asked for by its kind.</summary>
+    internal static JsonElement Target(this JsonElement output, string cli, string kind = "mcp") =>
+        output.Client(cli).GetProperty("targets").EnumerateArray().Single(one => one.GetProperty("kind").GetString() == kind);
 
-    internal static string Action(this JsonElement output, string cli) => output.Target(cli).GetProperty("action").GetString()!;
+    internal static string Action(this JsonElement output, string cli, string kind = "mcp") => output.Target(cli, kind).GetProperty("action").GetString()!;
 
     /// <summary>The <c>coai</c> entry of a <c>.claude.json</c> text.</summary>
     internal static JsonNode? ClaudeEntry(string text) => JsonNode.Parse(text)?["mcpServers"]?["coai"];
