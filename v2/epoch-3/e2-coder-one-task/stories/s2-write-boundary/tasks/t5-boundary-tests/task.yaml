@@ -1,8 +1,8 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t5-boundary-tests
-title: "Boundary scenarios with FakeCli: a write outside the worktree, an edit of the main checkout, a person's edit of the main checkout during the job"
+title: "Boundary scenarios with FakeCli under the OS layer: a write outside the worktree, an edit of the main checkout, the D-Bus escape, the .git write, the HOME write, a person's edit of the main checkout during the job"
 kind: test
-complexity: 6
+complexity: 7
 dependsOn:
   - t3-claude-write-launch
   - t4-checks-inside-boundary
@@ -13,6 +13,10 @@ files:
   - src_mcp/tests
 dod:
   - id: d1
-    item: "FakeCli as coder that writes into the main checkout or beside the worktree: the launch-level boundary is what stops or reports it; the answer names the path and the job does not publish a green result"
+    item: "the claude coder process itself runs inside the R12-shape OS layer (main checkout and coder root read-only, the worktree writable); FakeCli as coder that writes into the main checkout or beside the worktree is stopped by that layer; the answer names the path and the job does not publish a green result"
   - id: d2
+    item: "a fixture check that tries systemd-run --user, a write to <main>/.git, a write to the real HOME, or a Windows .exe is stopped and the main checkout is byte-equal after"
+  - id: d3
+    item: "on a platform with no effective boundary (no user manager, a failed preflight) the job is refused before any launch"
+  - id: d4
     item: "an edit of the main checkout by another process during a coder job does NOT fail the job (unlike a read-only role's tree-changed): it is recorded as snapshot evidence only (server.md section 16, decision 8)"

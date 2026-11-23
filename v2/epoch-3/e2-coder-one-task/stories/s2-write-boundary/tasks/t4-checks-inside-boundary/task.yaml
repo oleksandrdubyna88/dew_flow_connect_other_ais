@@ -1,8 +1,8 @@
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t4-checks-inside-boundary
-title: "The check commands (build, test, formatter) run inside the same boundary: cwd in the worktree, minimal environment, main checkout read-only where the launcher can do it"
+title: "The check commands (build, test) run inside an OS boundary checked by a preflight: a named systemd-run unit with the main checkout and the worktree .git read-only, no D-Bus, no WSL interop, per-job HOME and caches; no effective boundary = the job is refused"
 kind: security
-complexity: 7
+complexity: 8
 dependsOn:
   - t1-boundary-measure
   - t2-coder-worktree
@@ -10,11 +10,20 @@ parallel: false
 security: true
 files:
   - src_mcp/runners/Toolchain/CheckBoundary.cs
+  - src_mcp/runners/Toolchain/CheckRunner.cs
+  - src_mcp/runners/Toolchain/ChecksAtBase.cs
+  - src_mcp/runners/Collecting/GitHistory.cs
   - src_mcp/tests
 dod:
   - id: d1
-    item: "a check command is started with the worktree as cwd and an allow-listed environment (no vendor key and no COAI_ secret name reaches it; a test lists what does)"
+    item: "a check step runs in a named systemd-run --user unit with the must-have property set of RESULTS_coder_write_boundary_judgement.md (ProtectSystem=strict, ProtectHome=tmpfs, TemporaryFileSystem=/run/user and /mnt, InaccessiblePaths=-/run/WSL, BindPaths=<worktree> as the only writable source path, BindReadOnlyPaths=<main> and <worktree>/.git, per-job /tmp, /var/tmp and HOME on a real disk, NoNewPrivileges, PrivateUsers, RuntimeMaxSec, MemoryMax, MemorySwapMax=0); the shared NuGet and npm caches are read-only with per-job writable package folders"
   - id: d2
-    item: "under the systemd-run launcher a fixture build command that writes a file into the main checkout fails and the main checkout is unchanged; on a launcher with no OS boundary the result records `boundary: cwd-only` and the filesystem snapshot of the main checkout is kept as evidence"
+    item: "the environment is set by env -i with the allow-list INSIDE the unit; a test reads the environment from inside the unit and no vendor key, COAI_ name, SSH_AUTH_SOCK, DBUS_SESSION_BUS_ADDRESS or GPG_AGENT_INFO is there"
   - id: d3
-    item: "when an effective OS write boundary cannot be enforced for the coder launch or the checks on this platform, the job is refused before any launch with a sentence naming why (plan gate)"
+    item: "a preflight with no model runs the exact property set before each job: a write to the main checkout fails, a write to its .git fails, systemd-run --user true fails, a Windows .exe in the worktree does not run, HOME is not the real HOME, a worktree write works; any wrong answer refuses the job before any launch with a sentence naming why (plan gate). No user manager, native Windows, macOS = refused (no cwd-only mode in this epic)"
+  - id: d4
+    item: "timeout and cancel stop the unit (systemctl --user stop) and no process of the step stays (a test); exit code and output pass through; the check result records the boundary, the properties and the network state"
+  - id: d5
+    item: "coai's own git commands on a coder worktree pass -c core.hooksPath=/dev/null -c core.fsmonitor=false, run with cwd = the worktree root, never run git submodule update there, and the base toolchain is read from the main repository path, not through the worktree .git pointer; a changed .git pointer is detected before each git command"
+  - id: d6
+    item: "the test step runs with PrivateNetwork=yes if this repository's suite passes under it (measured and recorded); otherwise the result records network: host and the reason"
