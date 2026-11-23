@@ -288,12 +288,34 @@ public sealed class ACoderTaskCheckTests
     }
 
     [Fact]
-    public async Task AnExplicitNonClaudeModel_IsDropped_AndTheRestOfTheRouteStands()
+    public async Task AnExplicitNonClaudeModel_IsRefused_WithASentence_AndMakesNoFolder()
     {
         using var world = new RoleJobWorld();
         using var repo = Repo();
 
-        Route(Parse(await StartWith(world, repo, TaskOf(complexity: 4), model: "gpt-5.5"))).Should().Equal("claude/sonnet");
+        var answer = Parse(await StartWith(world, repo, TaskOf(complexity: 4), model: "gpt-5.5"));
+
+        Error(answer).Should().Be("the coder is claude only in this epic; gpt-5.5 is codex", "the caller asked for that model: it is refused, never swapped for another one");
+        NoJobFolder(world);
+    }
+
+    [Fact]
+    public async Task AnExplicitClaudeModel_StillGoesFirst()
+    {
+        using var world = new RoleJobWorld();
+        using var repo = Repo();
+
+        Route(Parse(await StartWith(world, repo, TaskOf(complexity: 4), model: "opus"))).Should().StartWith("claude/opus");
+    }
+
+    [Fact]
+    public void Narrow_RefusesTheModelTheCallerNamed_WhenItIsNotClaude_AndDropsTheListEntriesThatAreNot()
+    {
+        var routed = new RouteResult.Routed([new ModelRef("gpt-5.5", "codex"), new ModelRef("sonnet", "claude")], "the model the caller named, then the coder list");
+
+        CoderRoute.Narrow(routed, "gpt-5.5").Should().BeOfType<RouteResult.Refused>().Which.Reason.Should().Be("the coder is claude only in this epic; gpt-5.5 is codex");
+        CoderRoute.Narrow(routed, "sonnet").Should().BeOfType<RouteResult.Routed>().Which.Models.Should().BeEquivalentTo(new[] { new ModelRef("sonnet", "claude") }, "a claude name asked for is not a refusal; the list entry of another vendor is dropped as before");
+        CoderRoute.Narrow(routed).Should().BeOfType<RouteResult.Routed>().Which.Models.Should().BeEquivalentTo(new[] { new ModelRef("sonnet", "claude") }, "no model named by the caller: the entries of other vendors are dropped as before");
     }
 
     [Fact]
