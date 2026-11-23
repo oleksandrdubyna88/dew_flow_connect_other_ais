@@ -5,9 +5,11 @@ half: extension
 dependsOn:
   - e2-thin-shell
 doneWhen:
+  - "M2 = command → the REAL sidebar menu (section headers Notifications, Active gates, Active consultations, Phrases, Bugz) painted AND interactive (page posts menuReady; a skeleton or inert snapshot does not count) ≤ 2000 ms in every sample, on Linux CI, Windows CI and Remote-WSL (owner, 2026-11-23); M1 ≤ 100 ms"
   - "sidebar polls only while visible"
   - "all chat host scenarios pass"
   - "M2 still ≤ 2000 ms"
   - "no escalation or cadence control or watcher in the bundle"
   - "--setup-clients runs after every activation (after ready) and finishes an interrupted client update"
   - "the sidebar module draws the real interactive menu itself (collapsed section headers) without the legacy bundle; opening a section before the old code is ready shows loading for that section only; menuReady ≤ 2000 ms in every sample"
+  - "install + --setup-clients also start after a restored chat tab activates the extension (no sidebar, no command)"

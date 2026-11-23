@@ -11,3 +11,4 @@ doneWhen:
   - "a real plan → code round passes on 2.0"
   - "http/ contract suite live against the deployed Team server; new client vs old server and old extension vs new mcp checked"
   - "mcp released as 2.0.0 (the automatic --migrate-v2 runs only from major 2); release notes say to restart every client"
+  - "joint smoke (shell VSIX + E1 server binary) runs here, where both exist"

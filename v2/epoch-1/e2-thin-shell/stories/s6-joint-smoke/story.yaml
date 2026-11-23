@@ -3,3 +3,4 @@ id: s6-joint-smoke
 title: "Joint smoke: shell VSIX + E1 binary"
 dependsOn:
   - s2-measure
+  - e1-gate-simplify/s4-migrate-v2
