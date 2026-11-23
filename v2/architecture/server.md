@@ -399,3 +399,10 @@ the item status in the YAML deterministically. The page is epoch 4 E5 (was "Feat
    removes the unit after exit (use `--wait` for the result). **Memory limits need `-p MemorySwapMax=0`** besides
    `MemoryMax` — without it the 4 GB WSL swap absorbs the excess and nothing is killed. The scheduler (epoch 3 E5) uses
    both. Open: survival when the whole client process tree is killed, across `wsl --terminate`.
+3. **Detach facts (v2/spikes/RESULTS_detach.md, epoch-3 E1 s1):** a `systemd-run --user` unit survives a kill of the
+   launcher's process group AND of the client's cgroup (own cgroup under app.slice); `setsid -f` survives a group/session
+   kill but NOT a cgroup kill. Without a user manager, systemd-run fails in < 10 ms ("Failed to connect to user scope
+   bus") → choose the road by trying. **A unit does not inherit the launcher's environment** (no ~/.local/bin, no nvm
+   PATH) → env.json carries PATH explicitly. **With the default `OOMPolicy=stop` an oom-kill of the runner's child stops the
+   whole unit** (job → lost, no result) → the launcher passes `-p OOMPolicy=continue`. A .NET child usually ends with an
+   OutOfMemoryException before the kernel kill (heap capped at 75 % of the cgroup limit).
