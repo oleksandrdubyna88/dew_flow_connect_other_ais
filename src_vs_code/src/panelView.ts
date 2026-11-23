@@ -53,13 +53,10 @@ import { ON_EXHAUSTED_CHOICES, gateNotes } from './onExhaustedPanel';
 import { CoaiSettings, GatePer, LANGUAGES, OnExhausted, enabledCodeRoles, keptPerSide, roleIsOn } from './settingsShape';
 import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
 import { Consultation, consultationsBody } from './consultations';
-import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
 import { featureNote, reviewsFeatures } from './featureGate';
 import { help, segmentedRadio } from './panelControls';
-import { cadenceBlock } from './cadenceSettings';
-import type { CadenceLine } from './cadenceLine';
 import { allowedModelsFor, ModelChoice, modelsFor, RemoteProvenance, Runtime } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { FEATURE_CODE, PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
@@ -169,12 +166,6 @@ export interface PanelState {
    */
   readonly consultations?: readonly Consultation[] | undefined;
   /**
-   * Each recent plan's consultation cadence, as `coai-mcp --cadence` answered it
-   * (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2). Optional for the reason
-   * {@link consultations} is: absent means no line, which is what a panel with no plan in flight shows.
-   */
-  readonly cadence?: readonly CadenceLine[] | undefined;
-  /**
    * The question consultant's shipped prompts' override files as they are ON DISK, by prompt id — read at paint
    * time like {@link consultPrompt} (todo/PLAN_question_consultant.md, S4). Absent or empty = the shipped words.
    */
@@ -269,7 +260,6 @@ export interface PanelState {
    * sidebar) draws Setup › This side without the list.
    */
   readonly sides?: SidesView | undefined;
-  readonly questions: readonly Escalation[];
   readonly sessions: readonly SessionFile[];
   /** Which collapsible sections are open. Empty falls back to {@link OPEN_BY_DEFAULT}. */
   readonly openSections: readonly string[];
@@ -581,10 +571,7 @@ export function consultantSection(state: PanelState, callerRows: string): string
     // Each caller's pick carries its own health block (`consultantPicks.ts`); the body draws the switch, the caps and
     // the prompt around the picks.
     + consultantBody(state.settings.consult, { consultPrompt: state.consultPrompt, vibeHomes: state.settings.vibeHomesDirectory,
-      vibeHomesFinding: findingFor(state.pathFindings ?? [], VIBE_HOMES.id, state.settings.vibeHomesDirectory) }, callerRows)
-    // WHEN the consultant is asked without anybody being stuck, under WHO is asked
-    // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
-    + cadenceBlock(state.settings.cadence);
+      vibeHomesFinding: findingFor(state.pathFindings ?? [], VIBE_HOMES.id, state.settings.vibeHomesDirectory) }, callerRows);
 }
 
 /**
@@ -1814,11 +1801,7 @@ function limitsBody(s: CoaiSettings, enabledVendors: number): string {
   <input type="number" id="roundTimeoutMinutes" min="0" data-setting="roundTimeoutMinutes" value="${s.roundTimeoutMinutes}"
          aria-describedby="roundTimeoutNote">
 </div>
-<div class="hint" id="roundTimeoutNote">${escapeHtml(roundLimitNote(s, enabledVendors))}</div>
-<div class="field inline">
-  ${labelled('escalationMinutes', 'Wait for you, minutes', 'escalationMinutes')}
-  <input type="number" id="escalationMinutes" min="1" data-setting="escalationMinutes" value="${s.escalationMinutes}">
-</div>`;
+<div class="hint" id="roundTimeoutNote">${escapeHtml(roundLimitNote(s, enabledVendors))}</div>`;
 }
 
 /**
@@ -3000,7 +2983,7 @@ export function liveRegions(
   nowMs: number = Date.now(),
 ): { qconsults: string; rounds: string; consultations: string; notifications: string } {
   return {
-    qconsults: activeQuestionsBody(state.questions, state.qconsults ?? [], nowMs),
+    qconsults: activeQuestionsBody(state.qconsults ?? [], nowMs),
     rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)),
     consultations: consultationsBody(state.consultations ?? [], nowMs),
     notifications: notificationsBody(state),
@@ -3336,7 +3319,6 @@ ${BUSY_CSS}
  */
 export const PANEL_COMMANDS = [
   'showNotifications',
-  'answer',
   'addVendor',
   'removeVendor',
   'runVendor',

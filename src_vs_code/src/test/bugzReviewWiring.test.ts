@@ -469,7 +469,7 @@ test('the sidebar hands its hook to the chat, and the extension gives it the win
   assert.ok(readFileSync(join(__dirname, '..', '..', 'shell', 'modules', 'chat', 'register.ts'), 'utf8').includes('const chatPanels = new ChatPanels();'), 'the chat registration makes no registry');
   // No door is recorded: the door inventory is one recorder per MANIFEST command, and this button is
   // not one — recording it as the right-click `choose` would count a press nobody made there.
-  assert.match(extension, /\}, consultations, \(chat\) => loadShellModule<ChatModuleDoor>\(MODULE_CHAT\)\.then\(\(chatModule\) => chatModule\.chooseFromBug\(context, chat\)\)\.catch\(\(reason: unknown\) => \{/u,
+  assert.match(extension, /new PanelProvider\(context, dataDir\(\), \(chat\) => loadShellModule<ChatModuleDoor>\(MODULE_CHAT\)\.then\(\(chatModule\) => chatModule\.chooseFromBug\(context, chat\)\)\.catch\(\(reason: unknown\) => \{/u,
     'a press goes into THIS window\'s conversations, through the chat module the shell loads');
   // The panel starts the hook with `void`, so a throw nobody catches is a press that does nothing and
   // says nothing — every other action on this page catches and says so. (Our own code reviewer.)

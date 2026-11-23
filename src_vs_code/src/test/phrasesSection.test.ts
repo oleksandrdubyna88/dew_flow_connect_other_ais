@@ -34,7 +34,6 @@ const state = (phrases: readonly Phrase[] = PHRASES): PanelState => ({
   hostKind: 'windows',
   side: '',
   perSide: false,
-  questions: [],
   sessions: [],
   openSections: ['phrases'],
   usage: [],

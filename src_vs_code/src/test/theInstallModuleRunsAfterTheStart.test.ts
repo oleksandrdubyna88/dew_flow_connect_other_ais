@@ -17,7 +17,7 @@ import { extensionContext, INSTALL_LOG, installEditor, LOADED, recordingEditor, 
  * `installWork.test.ts` and `setupClients.test.ts`.</p>
  */
 
-type Door = { readonly install: () => Promise<unknown> };
+type Door = { readonly install: () => Promise<{ readonly install?: { readonly finished: Promise<void>; readonly adoptedCommands: () => readonly string[] } } | undefined> };
 
 interface World {
   readonly dir: string;
@@ -157,8 +157,10 @@ test('the real install module: a binary that answers exit 64 (before --setup-cli
   try {
     const log = putFakeServer(world, 64, 'unknown argument --setup-clients');
 
-    await world.doors.install();
-    await world.doors.install();
+    const door = (await world.doors.install())?.install;
+    assert.ok(door !== undefined, 'in test mode the install module hands back its door');
+    await door.finished;
+    await (await world.doors.install())?.install?.finished;
 
     const path = join(world.dir, 'global-storage', 'coai-mcp');
     // The update check's own `--version` probe asks the same binary; only the mode's runs are counted here.
@@ -178,7 +180,7 @@ test('the real install module: a refused client is ONE warning, and it is not a 
   try {
     putFakeServer(world, 78, JSON.stringify({ mode: 'setup-clients', clients: [{ cli: 'claude', result: 'changed' }, { cli: 'codex', result: 'refused', reason: 'foreign entry' }, { cli: 'agy', result: 'failed', reason: 'timed out' }] }));
 
-    await world.doors.install();
+    await (await world.doors.install())?.install?.finished;
     await settle();
 
     assert.equal(warnings(world), 1, 'two clients that failed are ONE notification');
@@ -194,7 +196,7 @@ test('the real install module: with no binary installed nothing is spawned and n
   const world = await shell('install-real-none', 'real');
   const undo = truthfulStat(world);
   try {
-    await world.doors.install();
+    await (await world.doors.install())?.install?.finished;
 
     assert.equal(warnings(world), 0);
     assert.equal(existsSync(join(world.dir, 'global-storage', 'coai-mcp')), false);

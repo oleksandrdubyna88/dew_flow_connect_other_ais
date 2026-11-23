@@ -544,7 +544,7 @@ const DEAD: Element = { tag: 'button', classes: ['secondary'], attrs: { disabled
 const ON_THE_PAGE: readonly Element[] = [{ tag: 'div', classes: ['pager'], attrs: {} }];
 
 function sheet(): Rule[] {
-  return stylesheet(roundsLogHtml([], [], 'n0nce', '', '', TOTALS));
+  return stylesheet(roundsLogHtml([], 'n0nce', '', '', TOTALS));
 }
 
 test('a pager button that cannot be pressed does not look pressable', () => {
@@ -692,7 +692,7 @@ test('a conversation is not offered an export, and is not counted as a round on 
   // One shared table means the tick-boxes, both Export controls and the database footer are all
   // still in the DOM. They are hidden by the view rather than left to be pressed over rows whose
   // findings do not exist. (The plan round.)
-  const css = stylesheet(roundsLogHtml([], [], 'n0nce', 'usage', 'spots', TOTALS));
+  const css = stylesheet(roundsLogHtml([], 'n0nce', 'usage', 'spots', TOTALS));
   const inChat: readonly Element[] = [{ tag: 'section', classes: ['view-conversations'], attrs: { id: 'tab-rounds' } }];
   const gone = (id: string): boolean => css.some(
     (rule) => /display:\s*none/.test(rule.body)
@@ -707,7 +707,7 @@ test('a conversation is not offered an export, and is not counted as a round on 
 });
 
 test('the two views name the same column differently, and neither header is built by script', () => {
-  const html = roundsLogHtml([], [], 'n0nce', 'usage', 'spots', TOTALS);
+  const html = roundsLogHtml([], 'n0nce', 'usage', 'spots', TOTALS);
   const head = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
   // THE HEADERS AS CELLS, keyed by the column they sort — not a search of the page for a word.
   // A substring can be found anywhere, including in a tooltip or a comment; a cell is the thing a
@@ -777,7 +777,7 @@ test('a filter a conversation cannot answer does not travel into its view', () =
 });
 
 test('the facets a conversation cannot answer are off the screen in its view', () => {
-  const css = stylesheet(roundsLogHtml([], [], 'n0nce', 'usage', 'spots', TOTALS));
+  const css = stylesheet(roundsLogHtml([], 'n0nce', 'usage', 'spots', TOTALS));
   const inChat: readonly Element[] = [{ tag: 'section', classes: ['view-conversations'], attrs: { id: 'tab-rounds' } }];
   const hidden = (facet: string): boolean => css.some(
     (rule) => /display:\s*none/.test(rule.body)
@@ -846,7 +846,7 @@ test('every tab section carries the marker, whatever its id looks like or where 
   // `<section id="tab-([a-z]+)"` — so `tab-audit-log` would not have matched at all, and neither
   // would a section whose class came before its id. It parses every section now and reads the two
   // attributes out of whatever order they are in. (codex, the S6 code round, from three roles.)
-  const html = roundsLogHtml([row()], [], 'n0nce', 'usage', 'spots', TOTALS);
+  const html = roundsLogHtml([row()], 'n0nce', 'usage', 'spots', TOTALS);
   const attribute = (tag: string, name: string): string | undefined =>
     new RegExp(`\\s${name}="([^"]*)"`, 'u').exec(tag)?.[1];
   const tabs = new Set([...html.matchAll(/<button[^>]*\sdata-tab="([^"]*)"/gu)].map((f) => f[1]));
@@ -1008,7 +1008,7 @@ test('a period with no consultation in it says so, rather than showing an empty 
 });
 
 test('each tab\'s row renders where its filter can reach it', () => {
-  const html = roundsLogHtml([], [], 'n0nce');
+  const html = roundsLogHtml([], 'n0nce');
 
   assert.match(html, /<div class="asChat"><div class="windows" data-periods="conversations">/,
     'the Conversations row is not inside the shared table, shown only in its view');

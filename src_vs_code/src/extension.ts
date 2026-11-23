@@ -31,9 +31,6 @@ import { pastedSnippetStatus } from './snippetInWorkspace';
 import { mcpServerBlock } from './mcpBlock';
 import { knownServerVersion, serverExists, serverPath, thisSide } from './installer';
 import { onServerInstalled } from './serverInstalled';
-import { EscalationWatcher } from './escalationWatcher';
-import { ConsultationWatcher } from './consultationWatcher';
-import { QuestionConsultWatcher } from './questionConsultWatcher';
 import { qconsultLogHtml } from './qconsultLog';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
@@ -101,14 +98,13 @@ export interface CoaiExports {
 }
 
 /**
- * ConnectOtherAIs — the human surface. Five commands, one directory watcher, and no port: the
- * review itself lives in `coai-mcp`, which an MCP client owns and starts.
+ * ConnectOtherAIs — the human surface: commands, pages and no port. The review itself lives in
+ * `coai-mcp`, which an MCP client owns and starts.
  *
  * <p>The restraint is deliberate and inherited from CredsForDevs: the config block is OFFERED on
  * the clipboard, never written into another program's file; the binary goes into extension
- * storage, never onto the `PATH`. The one thing the server needs to reach us for — a question for
- * a person — arrives as a FILE in the data directory this extension already reads, which is why
- * there is still nothing listening on a socket.</p>
+ * storage, never onto the `PATH`. (The escalation, consultation and question watchers are gone with the
+ * held gates they watched — v2 E4, story s6-dead-v1-out — so nothing here polls a directory for a question.)</p>
  */
 export function activate(context: vscode.ExtensionContext): CoaiExports {
   measureMark('oldActivateStart');
@@ -118,9 +114,9 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   measureMark('oldNotifications');
 
   // BEFORE even that: WHERE this window keeps its data. Every line below that resolves a path — the
-  // two watchers immediately after this, the chat store, the panel — asks `dataDir.ts`, and until
-  // this has run it answers the DEFAULT directory. A window that read the choice late would watch
-  // the wrong directory for escalations and write a Team-server token where nothing reads it.
+  // chat store, the panel, the path watch — asks `dataDir.ts`, and until this has run it answers the
+  // DEFAULT directory. A window that read the choice late would read the wrong directory and write
+  // a Team-server token where nothing reads it.
   storageReadsThisSide(context);
   // And how this host asks the disk whether a CLI path of the other OS's spelling is a file HERE (paths per side, E1.2):
   // before this every such path is "unknown" and kept. Installed, not imported, because the page's modules may not reach node:fs.
@@ -153,15 +149,6 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   chatReadsThisSide(context);
   bindChatPresets(context);
   measureMark('oldBindings');
-  const watcher = new EscalationWatcher(dataDir());
-  // The second watcher, and it asks for nothing from anybody: a consultation blocks nothing, so it
-  // has no modal and no status-bar item — it appears in the sidebar where a person is already
-  // looking, and nowhere else.
-  const consultations = new ConsultationWatcher(dataDir());
-  // The third, for Active questions (todo/PLAN_question_consultant.md, S4): a question the consultants are
-  // answering blocks nothing either, so it too is drawn where a person is looking and raises nothing.
-  const questionConsults = new QuestionConsultWatcher(dataDir());
-  measureMark('oldWatchersBuilt');
 
   // Exports run one at a time: two dialogs answered with the same path would otherwise race,
   // and the file would hold whichever write finished last while both reported success.
@@ -169,38 +156,32 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // Declared before the panel so the hooks can reach it; assigned right after.
   let panelRef: PanelProvider;
   const roundsLog = new RoundsLogPanel({
-    onAnswer: async (id) => {
-      const question = watcher.openQuestions.find((q) => q.id === id);
-      if (question !== undefined) {
-        await watcher.answerCommand(question);
-      }
-    },
     // The spending tab's two commands go to the sidebar's provider, which owns the window choice,
     // the price cache and the "forget" marks — one owner, whichever surface shows the numbers.
     // A window press re-asks the Team servers too: their figures are cached per window, and the new one's are not
     // fresh (todo/PLAN_team_usage_by_person.md, 1.1).
     onUsageWindow: async (window) => {
       panelRef.setUsageWindow(window);
-      await askTheTeamServers(roundsLog, watcher, panelRef);
+      await askTheTeamServers(roundsLog, panelRef);
     },
     // *What it keeps missing*'s period: the server counts it, so the log is read again over it.
     onSpotsPeriod: async (period) => {
       panelRef.setSpotsPeriod(period);
-      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+      await refreshRoundsLog(roundsLog, panelRef, true);
     },
     onForget: async (provider) => {
       await panelRef.forgetUsage(provider);
-      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+      await refreshRoundsLog(roundsLog, panelRef, true);
     },
     // The log is where every consultation is, including the ones that have lapsed out of the
     // sidebar — so this is the only surface from which the state the issue describes can be ended.
     onCloseConsultation: async (id) => {
       await panelRef.closeConsultation(id);
-      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+      await refreshRoundsLog(roundsLog, panelRef, true);
     },
     onForgetChat: async (provider, model) => {
       await panelRef.forgetChatUsage(provider, model);
-      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+      await refreshRoundsLog(roundsLog, panelRef, true);
     },
     // A row was opened. The list no longer carries findings — 3.78 MB of a 3.83 MB payload, for
     // rounds nobody had opened — so this is the read that replaces them, for the one round clicked.
@@ -273,14 +254,14 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // pushes the tab at once — "Asking <server>…" — and asks; the answer pushes it again when it lands.
     onTeamWindow: async (id) => {
       panelRef.setTeamWindow(id);
-      await askTheTeamServers(roundsLog, watcher, panelRef);
+      await askTheTeamServers(roundsLog, panelRef);
     },
     onTeamRefresh: async (server) => {
-      await askTheTeamServers(roundsLog, watcher, panelRef, server);
+      await askTheTeamServers(roundsLog, panelRef, server);
     },
     onTeamServer: async (server) => {
       panelRef.setTeamServer(server);
-      await askTheTeamServers(roundsLog, watcher, panelRef);
+      await askTheTeamServers(roundsLog, panelRef);
     },
     // In front again: whatever went stale while it was behind is asked now rather than on the next minute.
     onVisible: (visible) => {
@@ -292,7 +273,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     onTeamTab: async (shown) => {
       panelRef.setTeamTabShown(shown);
       if (shown) {
-        await askTheTeamServers(roundsLog, watcher, panelRef);
+        await askTheTeamServers(roundsLog, panelRef);
       }
     },
   });
@@ -300,12 +281,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // The page draws what the watch publishes, and repaints when it changes; the server's answer about the roots reaches
   // the watch through the panel's probe (paths per side, E5.3 / E5.6).
   onFindings(() => { void panelRef.render(); });
-  const panel = panelRef = new PanelProvider(context, watcher, dataDir(), async (id) => {
-    const question = watcher.openQuestions.find((q) => q.id === id);
-    if (question !== undefined) {
-      await watcher.answerCommand(question);
-    }
-  }, consultations, (chat) => loadShellModule<ChatModuleDoor>(MODULE_CHAT).then((chatModule) => chatModule.chooseFromBug(context, chat)).catch((reason: unknown) => {
+  const panel = panelRef = new PanelProvider(context, dataDir(), (chat) => loadShellModule<ChatModuleDoor>(MODULE_CHAT).then((chatModule) => chatModule.chooseFromBug(context, chat)).catch((reason: unknown) => {
     // CAUGHT, as `takeTheQuestion` is below: the review page starts this with `void`, and a throw nobody
     // catches is a press that does nothing and explains nothing. (Our own code reviewer, issue #487.)
     console.error('CoAI: choose on a bug failed', reason);
@@ -331,49 +307,10 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   context.subscriptions.push({ dispose: () => { panel.dispose(); } });
   // A Team-server answer landing repaints the rounds log too, not only the sidebar — the page is where the company
   // figures are, and it may be open with the sidebar closed (todo/PLAN_team_usage_by_person.md, 1.1).
-  panel.onTeamUsageChanged = () => { void refreshRoundsLog(roundsLog, watcher, panel); };
+  panel.onTeamUsageChanged = () => { void refreshRoundsLog(roundsLog, panel); };
   // The Rounds page draws from the cached store reach and does not wait for the probe; when the probe changes the cache it repaints.
   // `refreshRoundsLog` returns at once when the page is closed, so a probe landing late never paints a disposed webview.
-  panel.onStoreReachChanged = () => { void refreshRoundsLog(roundsLog, watcher, panel); };
-  // The panel repaints whenever the watcher's state moves, so a question answered in the modal
-  // disappears from the sidebar without anyone asking it to.
-  watcher.onChanged = () => {
-    // What the title bar switches on: green while somebody is waiting on an answer.
-    void vscode.commands.executeCommand('setContext', 'coai.hasQuestions', watcher.openQuestions.length > 0);
-    void panel.render();
-    // And the rounds log, if it is open: a round advances on its own, so the page it is shown on
-    // has to as well. Nothing is read for it when nobody is looking, and nothing is pushed when
-    // nothing changed.
-    void refreshRoundsLog(roundsLog, watcher, panel);
-  };
-  watcher.start();
-
-  // The same contract as above, and only when something a person can SEE moved: the watcher
-  // compares what it read before telling anybody, so a directory polled every five seconds for an
-  // afternoon repaints the sidebar exactly as often as a consultation changes.
-  consultations.onChanged = () => {
-    // A consultation that closed may be the one a plan's cadence was waiting on — ask again before painting.
-    panel.forgetCadence();
-    // And the round counts: a consultation-only session ends no round, and its turns must still move the numbers.
-    panel.forgetRoundCounts();
-    void panel.render();
-    // And the LOG, which draws the same consultations on its own tab. Repainting only the sidebar
-    // left an open Consultations tab showing history from before the conversation started, advanced
-    // or ended — and the page's own ten-second cache could hold that past the LAST watcher event,
-    // so it stayed wrong until somebody clicked something. (CodeRabbit, on the pull request.)
-    panel.forgetRoundsLog();
-    void refreshRoundsLog(roundsLog, watcher, panel, true);
-  };
-  consultations.start();
-
-  panel.questionConsults = questionConsults;
-  questionConsults.onChanged = () => {
-    // A question row that ended spent its vendor too: the round counts' ledger is read again on the next refresh.
-    panel.forgetRoundCounts();
-    void panel.render();
-  };
-  questionConsults.start();
-  measureMark('oldWatchersStarted');
+  panel.onStoreReachChanged = () => { void refreshRoundsLog(roundsLog, panel); };
 
   // A Models card offers a dropped per-side CLI path back with Restore, and repaints when the keeper's list changes (E4.1).
   panel.cliPathKeep = cliPathKeep;
@@ -511,9 +448,6 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
       }
     }),
     bridge.registerCommand('coai.restoreCatalogBackup', () => restoreFromBeforeTheCatalog(context)),
-    watcher,
-    consultations,
-    questionConsults,
     bridge.registerWebviewViewProvider(PanelProvider.viewType, panel),
     // The key is typed HERE or in the tab, and stored in the editor's secret storage either way.
     // A command as well as a button because the tab cannot be opened usefully without a key, and a
@@ -583,11 +517,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     bridge.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     bridge.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
     ...registerConfigTransfer(context, () => panel.vaultKeyNames()),
-    bridge.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher, panel)),
-    bridge.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
-    // The same action under a second id, so the title bar can show a green icon while a question
-    // is waiting — a menu icon cannot be recoloured by state, but which command is shown can.
-    bridge.registerCommand('coai.answerQuestionWaiting', () => answerQuestion(watcher)),
+    bridge.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, panel)),
   );
 
   measureMark('oldCommandsRegistered');
@@ -601,7 +531,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
 }
 
 export async function deactivate(): Promise<void> {
-  // The watcher is a subscription; VS Code disposes it. No server, no port — but the chat ledger's
+  // No server, no port — but the chat ledger's
   // writes are deliberately NOT awaited by the turn that made them (a person's answer must not wait
   // on a disk), so a host closed the instant a turn ends could take the record with it. VS Code
   // awaits what this returns, which is the one moment the queue can be drained for free.
@@ -1066,37 +996,6 @@ function dataDir(): vscode.Uri {
   return vscode.Uri.file(coaiDataDir());
 }
 
-/** Answer an open question by hand — the same path the modal's button takes. */
-async function answerQuestion(watcher: EscalationWatcher): Promise<void> {
-  await watcher.refresh();
-  const open = watcher.openQuestions;
-  if (open.length === 0) {
-    void notify({
-      as: 'information',
-      class: 'refusal',
-      source: 'escalations',
-      code: 'no-question-waiting',
-      title: 'No ConnectOtherAIs review is waiting on an answer.',
-    });
-    return;
-  }
-
-  const picked =
-    open.length === 1
-      ? open[0]
-      : await vscode.window
-          .showQuickPick(
-            open.map((e) => ({ label: e.branch, detail: e.question, escalation: e })),
-            { title: 'Which question?' },
-          )
-          .then((choice) => choice?.escalation);
-
-  if (picked !== undefined) {
-    await watcher.answerCommand(picked);
-  }
-}
-
-
 async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> {
   const path = serverPath(context.globalStorageUri);
   if (path === undefined) {
@@ -1158,23 +1057,20 @@ async function copyClaudeSnippet(): Promise<void> {
  * tables nobody could sort, filter or search, and a rewrite that reloaded the editor on every tick.
  * The page keeps the same command and the same data; only the surface changed.</p>
  */
-async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider): Promise<void> {
-  await watcher.refresh();
-
+async function showRoundsLog(log: RoundsLogPanel, panel: PanelProvider): Promise<void> {
   // The page FIRST, from the session files alone — everything it has ever shown comes from those, so
   // it is complete without the database. Reading the database spawns the server, and a person who
   // opened a log should not wait on a process to see it: the findings arrive in the next push, a
   // moment later. Raised by the gate as blocking the panel on an unannounced read.
   log.show(
     await logRows(panel, undefined),
-    watcher.openQuestions,
     await regionOr('spending', () => panel.usageTab()));
   // The page's own clock for the Team-server figures: every minute while it is open, whether or not the sidebar is,
   // and stopped when it closes. Company figures only while the Team server tab is the one showing (teamTabSelection.ts).
   // The page's closing is what ends both — and tells the host the Team server tab is no longer showing, which no
   // message from a closing page ever could (teamTabHost.ts).
   log.whileOpen(() => panel.teamPageOpened());
-  await refreshRoundsLog(log, watcher, panel, true);
+  await refreshRoundsLog(log, panel, true);
 }
 
 /**
@@ -1182,14 +1078,14 @@ async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, pa
  * ask; the answer pushes again when it lands, through `onTeamUsageChanged`. `force` is a server whose figures are asked
  * again whatever is fresh: the Refresh button.
  */
-async function askTheTeamServers(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider, force = ''): Promise<void> {
+async function askTheTeamServers(log: RoundsLogPanel, panel: PanelProvider, force = ''): Promise<void> {
   const asking = panel.refreshTeamUsage(force);
-  await refreshRoundsLog(log, watcher, panel, true);
+  await refreshRoundsLog(log, panel, true);
   await asking;
 }
 
 /** Keeps an OPEN log current while a round runs. Nothing is read when nobody is looking. */
-async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider, force = false): Promise<void> {
+async function refreshRoundsLog(log: RoundsLogPanel, panel: PanelProvider, force = false): Promise<void> {
   if (!log.isOpen) {
     return;
   }
@@ -1205,7 +1101,6 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   const team = teamRegion(panel);
   log.update(
     await logRows(panel, fresh),
-    watcher.openQuestions,
     usage,
     force,
     spots,

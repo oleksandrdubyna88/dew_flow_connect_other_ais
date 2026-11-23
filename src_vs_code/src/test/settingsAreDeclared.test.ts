@@ -31,7 +31,6 @@ const state = (): PanelState => ({
   hostKind: 'windows',
   side: '',
   perSide: false,
-  questions: [],
   sessions: [],
   openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],
   usage: [],

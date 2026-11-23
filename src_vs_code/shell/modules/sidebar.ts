@@ -5,7 +5,7 @@
 //   1. sets the view's options and writes the menu (`src/sidebarMenu.ts`): the section headers with the old panel's words, order and colours, every one a
 //      `details` element that opens at once, each with a "loading…" line inside until live content exists. The page says `menuReady` when its headers are
 //      on screen and usable; that message is the end of the cold-start measurement (owner, 2026-11-23: the start is over when the REAL menu is shown and
-//      clickable, not when a skeleton or an inert snapshot is);
+//      clickable, not when a skeleton or an inert copy is);
 //   2. after `menuReady` (or after a person opens a section, or after FALLBACK_MS if the page never says it) loads the legacy module in the background and hands
 //      it THIS view with the sections the person opened or closed; the legacy panel provider repaints the page with live data, as it always has.
 //      The listener stays until the old code has the view, so no toggle in between is lost, and is removed just before the hand-over: the old code is then

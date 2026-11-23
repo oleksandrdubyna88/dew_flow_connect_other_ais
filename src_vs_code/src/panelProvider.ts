@@ -17,8 +17,6 @@ import { chatModelPresetsFrom, vendorOfPreset, type ModelPreset } from './chatPr
 import { savedModels } from './chatConfig';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
 import { filledSidebarState, paintSidebarInStages, sidebarState, type SidebarReads } from './firstPaint';
-import { extensionVersionOf, NONCE_PLACEHOLDER } from './sidebarSnapshot';
-import { SidebarSnapshotWriter } from './sidebarSnapshotStore';
 import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
 import { catalogHtml, catalogKey } from './catalogPage';
 import { FIRST_SEEN_KEY } from './newTags';
@@ -28,8 +26,6 @@ import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
-import { EscalationWatcher } from './escalationWatcher';
-import { ConsultationWatcher } from './consultationWatcher';
 import { ModelChoice, parseAgyModels, parseCodexModels } from './models';
 import {
   isPanelCommand,
@@ -64,15 +60,12 @@ import {
 } from './cliVersions';
 import { rememberCliStatus } from './cliVersionMemory';
 import { askVersion, capture } from './versionProbe';
-import { CADENCE_CAP_MS, CadenceProbes } from './cadenceProbe';
-import type { CadenceLine } from './cadenceLine';
 import { ConsultantHealthPanel } from './consultantHealthPanel';
 import { consultantTabShowing } from './consultantHealthWatcher';
 import { ClaudeProbeCache } from './claudeProbeCache';
 import { ConsultPromptFile } from './consultPromptFile';
 import { QconsultHost, isQconsultCallerKey, type QconsultWriteHooks } from './qconsultHost';
 import { isQconsultCommand } from './qconsultWrite';
-import type { QuestionConsult } from './questionConsults';
 import { securityLaneFrom, securityLaneSave } from './securityLane';
 import { securityTryAnswer, securityTryFailed, securityTryRefusal, securityTryRequest, type SecurityTryResult } from './securityTry';
 import { editSecurityPrompt } from './securityPromptEditor';
@@ -236,8 +229,8 @@ import { access } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { asText } from './asText';
 import { notify, notifyAndAsk, notifyOnce } from './notify';
-import { chosenRoot, coaiDataDir, dataSideName, serverEnv, whereData, type DataLocation } from './dataDir';
-import { alsoWatchDataDirectories } from './escalationWatcher';
+import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
+import { alsoWatchDataDirectories } from './alsoWatch';
 import { usableDirs, watchedDirs, type WatchedDir } from './escalationDirs';
 import { consultationsHtml } from './roundsLog';
 import { CLOSE_CHOICES, refusalIn, SERVER_TOO_OLD } from './consultations';
@@ -355,8 +348,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   private readonly claudeProbes: ClaudeProbeCache;
 
-  /** Each recent plan's consultation cadence, asked of `coai-mcp --cadence` and never awaited by a render. */
-  private readonly cadenceProbes: CadenceProbes;
 
   /** The Consultant tab's health blocks — probe, watcher, Check and Copy — composed in `consultantHealthPanel.ts`. */
   private readonly consultantHealth: ConsultantHealthPanel;
@@ -368,11 +359,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   private readonly consultPrompt: ConsultPromptFile;
   /** The Question consultant tab's host half — its buttons, its writes, its prompt files (todo/PLAN_question_consultant.md, S4). */
-  /**
-   * What Active questions draws its first stage from — the question-consults watcher, handed in by `extension.ts`
-   * beside the escalation watcher rather than as one more constructor argument. Absent reads as none.
-   */
-  public questionConsults: { readonly questions: readonly QuestionConsult[] } | undefined;
   /**
    * The per-side CLI-path keeper (`cliPathKeepHost.ts`), handed in by `extension.ts` the same way: what each Models card
    * offers back with **Restore**, and the restore a press runs — the keeper's own, which re-reads the row at the click
@@ -417,11 +403,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** Engines probed for CONSULTANT endpoints, keyed by the endpoint the row stores. */
   private consultEngines: Record<string, LocalEngine> = {};
   private consultEngineAt: Record<string, number> = {};
-  /**
-   * The last page the sidebar was painted with, kept on disk for the NEXT window (`sidebarSnapshot.ts`, v2 E4): the sidebar module paints it
-   * before this code has loaded. Offered after a paint that has the sidebar's data; written later, never on the render's path.
-   */
-  private snapshotWriter: SidebarSnapshotWriter | undefined;
   /** One nonce per panel instance: the CSP admits our one script, and a repaint reuses it. */
   private readonly nonce = webviewNonce();
   /** Which sections the person has open — kept HERE because the panel repaints on every
@@ -551,22 +532,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly watcher: EscalationWatcher,
     private readonly dataDir: vscode.Uri,
-    private readonly answer: (id: string) => Promise<void>,
-    /**
-     * What is being consulted right now, or nothing.
-     *
-     * <p>Optional and defaulted, so every test that builds a provider is unchanged and a build with
-     * no watcher paints an empty region rather than crashing. It is a WATCHER rather than a list
-     * because the files change without anybody touching the panel — the same reason the escalation
-     * watcher is one.</p>
-     */
-    private readonly consultations?: ConsultationWatcher,
     /**
      * A bug from the review page, into a chat — the row's *CoAI: choose* (issue #487). The chat
-     * registry is the extension's, not this panel's, so it is handed in; optional like the watcher
-     * above, and a build without it simply does nothing on a press.
+     * registry is the extension's, not this panel's, so it is handed in; optional, and a build
+     * without it simply does nothing on a press.
      */
     private readonly chooseInChat?: (chat: BugChat) => Promise<void>,
     /**
@@ -586,15 +556,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       dataDir,
       render: () => this.render(),
       watched: () => anyHeld(this.slots),
-    });
-    this.cadenceProbes = new CadenceProbes({
-      executable: () => serverPath(this.context.globalStorageUri)?.fsPath ?? '',
-      // With this window's data directory, for the reason `readProviders` gives: the answer comes out of
-      // the settings file and the session files inside it.
-      run: (executable, args) => capture(executable, args, false, CADENCE_CAP_MS, undefined, serverEnv()),
-      now: Date.now,
-      render: () => { void this.render(); },
-      log: (message) => console.warn(message),
     });
     this.consultantHealth = this.healthPanel(dataDir);
     this.securityPromptWatch = this.watchSecurityPrompts(dataDir.fsPath);
@@ -754,10 +715,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     });
   }
 
-  /** A consultation changed, so every plan's cadence line is asked again — each stays up until its answer lands. */
-  forgetCadence(): void {
-    this.cadenceProbes.forget();
-  }
 
   async roundsLog(): Promise<DbLog> {
     return this.roundsLog_.roundsLog();
@@ -1395,7 +1352,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     this.rolesRedraw.dispose();
     this.commandsRedraw.dispose();
     this.chatPresetsRedraw.dispose();
-    this.snapshotWriter?.dispose();
   }
 
   /**
@@ -1474,13 +1430,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         const { bugz, localEngines } = kept = await this.sidebarSlow(vendors, step);
 
         return filledSidebarState(first, {
-          bugz, localEngines, cadence: this.cadenceLines(settings, first.sessions), rankByRuntime: await this.rankByRuntime(),
+          bugz, localEngines, rankByRuntime: await this.rankByRuntime(),
         });
       },
       paintFill: (state) => {
         if (!this.renders.superseded(number)) {
           this.paintSidebarOnly(state);
-          this.keepSnapshot(state);
           measureMark('firstData');
         }
       },
@@ -1499,29 +1454,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       vendors: vendors.filter(isReviewerRow),
       catalogRows: vendors,
       sessions,
-      // Starts no probe: the lines wait for the fill, which asks for them.
-      cadence: [],
       rankByRuntime: this.rankByRuntimeKnown(),
       hostKind: await this.hostKindHere,
       bugz: undefined,
     };
   }
 
-  private questionsAnswering(): NonNullable<PanelState['qconsults']> {
-    return this.questionConsults?.questions ?? [];
-  }
-
-  private consultationsRunning(): NonNullable<PanelState['consultations']> {
-    return this.consultations?.running ?? [];
-  }
-
   /** The live regions' own caches and the rest of what the host already holds in memory — read, never asked. */
-  private sidebarCaches(): Pick<SidebarReads, 'questions' | 'openSections' | 'qconsults' | 'consultations' | 'notifications' | 'phrases' | 'localEngines'> {
+  private sidebarCaches(): Pick<SidebarReads, 'openSections' | 'notifications' | 'phrases' | 'localEngines'> {
     return {
-      questions: this.watcher.openQuestions,
       openSections: this.openSections,
-      qconsults: this.questionsAnswering(),
-      consultations: this.consultationsRunning(),
       notifications: this.notificationsGlance,
       phrases: this.phrases(),
       localEngines: this.localEngines,
@@ -1548,21 +1490,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return hasFeature({ features: this.features?.known() ?? [], why: '', settled: false }, FEATURES.bugzRuntime);
   }
 
-  /** The cadence lines — and a probe for whatever is stale, so only where the sidebar may wait for one. Not asked while the cadence is off. */
-  private cadenceLines(settings: CoaiSettings, sessions: readonly SessionFile[]): readonly CadenceLine[] {
-    return settings.cadence.mode === 'off' ? [] : this.cadenceProbes.lines(sessions);
-  }
-
   /** Paints the sidebar alone, from a state that never carries what the Settings page draws, and marks the document painted. */
   private paintSidebarOnly(state: PanelState): void {
     paintEach([this.sidebar], (slot) => this.pageFor(slot, state), { type: 'live', ...liveRegions(state) });
     this.sidebarPainted = true;
-  }
-
-  /** Offers the sidebar's page, with its data, as the next window's first paint. No focus and nothing in flight: a snapshot is a still picture. */
-  private keepSnapshot(state: PanelState): void {
-    this.snapshotWriter ??= new SidebarSnapshotWriter({ directory: () => this.context.globalStorageUri.fsPath, version: extensionVersionOf(this.context) });
-    this.snapshotWriter.offer(() => panelHtml({ ...state, focus: undefined, busy: undefined }, NONCE_PLACEHOLDER));
   }
 
   /** The render itself: the configuration, the sessions, the ledger and the probes, then the paint. */
@@ -1640,11 +1571,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       perSide: this.perSide(config),
       // Read from globalState on EVERY render (E2.2): a side another window stamped appears at the next repaint.
       sides: { here: this.sideHere(), seen: sidesIn(this.context.globalState, Date.now()), mode: pathFieldsModeOf(config.get('pathFieldsPerSide')), now: Date.now() },
-      questions: this.watcher.openQuestions,
       openSections: this.openSections,
       sessions,
-      // Not asked at all while the cadence is off: the server would answer `null` for every session.
-      cadence: settings.cadence.mode === 'off' ? [] : this.cadenceProbes.lines(sessions),
       // Never awaited: the probe and the watcher land on their own and repaint (epic 5 of the consultant plan). Only while
       // the Consultant tab is SHOWING — --consultants asks every CLI its version — and paused otherwise (the review, N2).
       consultantHealth: this.consultantHealth.stateWhile(consultantTabShowing(this.settingsTab.view?.visible === true, heldSettingsTab())),
@@ -1677,8 +1605,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       typedRefusals: this.typedRefusals,
       // The other side's data directory, read-only, from that side's overlay through the registry (E4.3, D2) — never stat'ed.
       otherSideData: otherSideDataDirectories(this.context.globalState, this.sideHere(), Date.now()),
-      qconsults: this.questionConsults?.questions ?? [],
-      consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
       // has gone out, so a slow disk delays the count and not the panel.
       notifications: this.notificationsGlance,
@@ -1766,7 +1692,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const live = { type: 'live', ...liveRegions(state) };
     paintEach(this.slots, (slot) => this.pageFor(slot, state), live);
     this.sidebarPainted ||= this.sidebar.view !== undefined;
-    this.keepSnapshot(state);
     // The first state with its data handed to the webview, which is where M3 (command -> first data) ends. The sidebar's own cards may have been filled earlier.
     measureMark('firstData');
 
@@ -2803,11 +2728,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
 
     switch (command) {
-      case 'answer':
-        if (id !== undefined) {
-          await this.answer(id);
-        }
-        break;
       case 'addVendor':
         await this.addVendor();
         break;

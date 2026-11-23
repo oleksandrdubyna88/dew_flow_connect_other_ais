@@ -66,7 +66,7 @@ interface RunningPage {
 
 /** The page's own click listener, captured out of its script exactly as the webview would run it. */
 function pageClickListener(): RunningPage {
-  const html = roundsLogHtml([], [], 'n0nce');
+  const html = roundsLogHtml([], 'n0nce');
   const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
   const body = script.slice(script.indexOf('>') + 1);
 

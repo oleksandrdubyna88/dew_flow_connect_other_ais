@@ -5,21 +5,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { escapeHtml } from '../escapeHtml';
 import { escapeHtml as escapeHtmlWithQuote, escapeHtmlForHighlighting } from '../webviewHtml';
-import { parseEscalation } from '../escalations';
-import { questionsHtml, repoNameOf } from '../roundsLog';
+import { repoNameOf } from '../roundsLog';
 import { ViewHandle, isDisposedRejection } from '../viewHandle';
 
 /**
- * What stopped a person answering the question a review was waiting on.
+ * What stopped the rounds log opening.
  *
- * 2026-09-08: a plan review ran, the gate asked a question, and opening the rounds log to answer it
- * produced two notifications — `Webview is disposed` and `e.replace is not a function`. The one
- * moment a question waits on a person is the one moment the surface for answering it threw twice.
+ * 2026-09-08: opening the rounds log produced two notifications — `Webview is disposed` and `e.replace is not a function`. (The held question the log used to
+ * show at the top is gone with the held gate, v2 E4; what is left of the story is the two failures.)
  *
  * The second error is the one these tests hold. `escapeHtml` is typed `(text: string)` and calls
  * `text.replace` directly; TypeScript erases that type at run time and every value it escapes comes
- * from JSON on disk, which `parseEscalation` validates two fields of. A number or an object in any
- * of the other eight produces that message verbatim.
+ * from JSON on disk. A number or an object in any field produces that message verbatim.
  */
 
 test('escaping survives a value that is not a string', () => {
@@ -62,36 +59,6 @@ test('a repo path that is not a string does not stop the log', () => {
   assert.doesNotThrow(() => repoNameOf(7 as unknown as string));
   assert.doesNotThrow(() => repoNameOf(undefined as unknown as string));
   assert.equal(repoNameOf('D:/rsd/dew_flow_connect_other_ais/'), 'dew_flow_connect_other_ais');
-});
-
-test('a question with bad metadata is still answerable', () => {
-  // THE INVERSION, and the reason this test exists at all. The first draft of the plan said a file
-  // that fails validation should be SKIPPED. Both gemini and codex refused it on the plan round:
-  // the file being validated IS the question a person is waiting to answer, so dropping it because
-  // `branch` is a number leaves the round gated with nothing on screen — a crash traded for a hang,
-  // which is worse, because a crash at least says that something happened.
-  const question = parseEscalation(JSON.stringify({
-    id: 'q-1',
-    question: 'Ship it despite the two majors?',
-    branch: 17,
-    repoPath: { path: 'D:/rsd/x' },
-    askedUtc: 1757353200,
-    openFindings: [{ severity: 3, category: null, file: 'a.ts', line: '10', title: 'a title' }],
-  }));
-
-  assert.notEqual(question, undefined, 'a question with bad metadata is still a question');
-  const html = questionsHtml([question!]);
-  assert.match(html, /Ship it despite the two majors\?/, 'the question itself survives');
-  assert.match(html, /data-command="answer" data-id="q-1"/, 'and it keeps the button that answers it');
-});
-
-test('a question with no usable id or question is skipped', () => {
-  // The one case that still skips, and the guard that it is the ONLY one: without an id there is
-  // nothing to write an answer file for, and without a question there is nothing to ask.
-  assert.equal(parseEscalation(JSON.stringify({ question: 'no id here' })), undefined);
-  assert.equal(parseEscalation(JSON.stringify({ id: 'q-2', question: '' })), undefined);
-  assert.equal(parseEscalation(JSON.stringify({ id: 5, question: 'a numeric id' })), undefined);
-  assert.equal(parseEscalation('not json at all'), undefined);
 });
 
 // ---------- `Webview is disposed` ----------

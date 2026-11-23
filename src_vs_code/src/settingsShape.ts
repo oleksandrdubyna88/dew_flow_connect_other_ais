@@ -22,7 +22,6 @@ import {
   consultSettingsFrom,
   CONSULT_SETTINGS,
 } from './consultSettings';
-import { CADENCE_SETTINGS, CadenceSettings, DEFAULT_CADENCE, cadenceEnv, cadenceSettingsFrom } from './cadenceSettings';
 import { DEFAULT_QCONSULT, QCONSULT_SETTINGS, QconsultSettings, qconsultEnv, qconsultSettingsFrom } from './qconsultSettings';
 import { CommandModels, commandModelsEnv, commandModelsFrom } from './commandModels';
 import { commandsFrom, type CommandRow } from './commands';
@@ -101,15 +100,6 @@ export interface CoaiSettings {
   readonly securityLane: SecurityLane;
 
   /**
-   * When the consultant is asked without anybody being stuck — once per group of epics, and on the
-   * riskiest pieces of a big plan (research/PLAN_consult_on_a_cadence.md).
-   *
-   * <p>Its own module (`cadenceSettings.ts`) for the reason `consult` has one: the panel block and the
-   * env block read it through ONE function.</p>
-   */
-  readonly cadence: CadenceSettings;
-
-  /**
    * The question consultant — the models a question is put to before the person is asked
    * (todo/PLAN_question_consultant.md, S4). Its own module (`qconsultSettings.ts`) for the reason the two
    * above have one.
@@ -159,7 +149,6 @@ export interface CoaiSettings {
    */
   readonly roundTimeoutMinutes: number;
   readonly credsKey: string;
-  readonly escalationMinutes: number;
   /** Per role, the prompt id each round uses — index 0 is round 1. Empty = the universal one. */
   readonly promptsPerRound: Readonly<Record<string, readonly string[]>>;
   /** Spend the rounds on different lenses instead of asking the same broad question again. */
@@ -281,8 +270,6 @@ export const DEFAULTS: CoaiSettings = {
   reviewerTimeoutMinutes: 10,
   roundTimeoutMinutes: 0,
   credsKey: '',
-  // The server's own `PanelSettings.DefaultEscalationMinutes` (15 since S3, A10) — held level by a test that reads the C#.
-  escalationMinutes: 15,
   promptsPerRound: {},
   dealPlanLenses: false,
   dealCodeLenses: false,
@@ -297,7 +284,6 @@ export const DEFAULTS: CoaiSettings = {
   commands: [],
   consult: DEFAULT_CONSULT,
   securityLane: DEFAULT_SECURITY,
-  cadence: DEFAULT_CADENCE,
   qconsult: DEFAULT_QCONSULT,
 };
 
@@ -316,7 +302,7 @@ export type SettingsOverlay = Readonly<Record<string, unknown>>;
  */
 export const OVERLAID_SETTINGS: readonly string[] = [
   'vendors', 'rounds', 'thresholds', 'roleEnabled', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
-  'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
+  'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'promptsPerRound',
   'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'commandModels', 'gatePer', 'codeWorkspace', 'stopLocalWhenQuiet',
   // A person's own review roles belong to the WORK, which is what a side is — beside `rounds`,
   // `thresholds` and `roleEnabled`, which ask the same question about the roles this product ships.
@@ -343,8 +329,6 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   // sides of one machine serving two companies want their own, like every other row above. Spread
   // rather than listed, so adding a sixth consult setting cannot leave it silently shared.
   ...CONSULT_SETTINGS,
-  // When the consultant is asked is a property of the work too, and spread for the same reason.
-  ...CADENCE_SETTINGS,
   // Who the question consultant asks, and the folders a disk row may read, are the work's too.
   ...QCONSULT_SETTINGS,
 ];
@@ -433,7 +417,6 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     vibeHomesDirectory: asString(read('vibeHomesDirectory')).trim(),
     kimiAllowNetworkSignIn: read('kimiAllowNetworkSignIn') === true,
 
-    escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
     promptsPerRound: asPromptRounds(read('promptsPerRound')),
     dealPlanLenses: read('dealPlanLenses') === true,
     dealCodeLenses: read('dealCodeLenses') === true,
@@ -448,7 +431,6 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     commands: commandsFrom(read('commands')),
     consult: consultSettingsFrom(read),
     securityLane: securityLaneFrom(read('securityLane')),
-    cadence: cadenceSettingsFrom(read),
     qconsult: qconsultSettingsFrom(read),
   };
 }
@@ -570,8 +552,6 @@ export function envBlock(
   if (!settings.consult.enabled) {
     env['COAI_CONSULT_ENABLED'] = 'false';
   }
-  // Only the cadence values that differ from the server's own — a pristine panel adds nothing.
-  Object.assign(env, cadenceEnv(settings.cadence));
   // The question consultant's eight, each only when it differs — and none for a server known to be too old to
   // read them (`QCONSULT_SINCE`), which the section then says in a banner.
   Object.assign(env, qconsultEnv(settings.qconsult, installedServerVersion, catalogRowOnTheWire(vendors, installedServerVersion, priceOf, features)));
@@ -589,9 +569,6 @@ export function envBlock(
   }
   if (settings.credsKey) {
     env['COAI_CREDS_KEY'] = settings.credsKey;
-  }
-  if (settings.escalationMinutes !== DEFAULTS.escalationMinutes) {
-    env['COAI_ESCALATION_MINUTES'] = String(settings.escalationMinutes);
   }
   // The Bugz server. NOT the Bugz model (research/PLAN_one_model_catalog.md T7, removed in E5.1): it was written here as
   // `COAI_BUGZ_MODEL` so a collect started from a terminal could find it, and nothing in coai-mcp ever read that key —

@@ -77,7 +77,6 @@ function html(over: {
     side: '',
     perSide: false,
     latestServerVersion: '',
-    questions: [],
     sessions: over.sessions ?? [],
     openSections: [],
     usage: over.usage ?? [],

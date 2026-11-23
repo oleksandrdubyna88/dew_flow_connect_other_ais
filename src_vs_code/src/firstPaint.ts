@@ -8,21 +8,20 @@ import type { BugCorpus } from './roundsDb';
  * <p>The cold-start measurement (M2, `research/RESULTS_v2_start.md`) ends at the sidebar's `ready`, and `ready` can only come once the webview has
  * a document. The old first render awaited every read of the whole state — the published version over the network, each CLI's models and version,
  * the card prices, the corpus, the local engines — BEFORE the first `webview.html` was written, and the sidebar draws almost none of them
- * (`PANEL_SECTIONS`: notifications, gates, consultations, cadence, phrases, Bugz). This file is the half that has no `vscode` in it, so a test can
+ * (`PANEL_SECTIONS`: notifications, gates, consultations, phrases, Bugz). This file is the half that has no `vscode` in it, so a test can
  * run the page it makes, and run the order it is made in.</p>
  *
  * <p>Two stages for the sidebar, then the old render as it was:</p>
  * <ol>
  *   <li><b>first</b> — the state from what is already known: the settings, the rows, the sessions (a read of local files), the live regions' own
  *       caches. The Bugz card says it is loading. Nothing here spawns, asks the network or probes.</li>
- *   <li><b>fill</b> — what only the sidebar's own cards need and is slow: the corpus, the local engines, the server's feature list, the cadence
- *       lines. The sidebar is painted again when they land.</li>
+ *   <li><b>fill</b> — what only the sidebar's own cards need and is slow: the corpus, the local engines, the server's feature list. The sidebar is painted again when they land.</li>
  * </ol>
  */
 
 /** What the sidebar's page is drawn from. Every field is a thing the sidebar's sections read; nothing else is asked for. */
-export type SidebarReads = Pick<PanelState, 'settings' | 'vendors' | 'catalogRows' | 'sessions' | 'questions' | 'openSections' | 'qconsults'
-| 'consultations' | 'cadence' | 'notifications' | 'phrases' | 'localEngines' | 'rankByRuntime' | 'hostKind'> & {
+export type SidebarReads = Pick<PanelState, 'settings' | 'vendors' | 'catalogRows' | 'sessions' | 'openSections'
+| 'notifications' | 'phrases' | 'localEngines' | 'rankByRuntime' | 'hostKind'> & {
   /** The corpus as the server read it; `undefined` while that read has not landed — the card then says it is loading. */
   readonly bugz: BugCorpus | undefined;
 };
@@ -56,7 +55,7 @@ export function sidebarState(reads: SidebarReads): PanelState {
 }
 
 /** What the sidebar's own slow cards wait for, once it has them. */
-export type SidebarSlow = Pick<PanelState, 'localEngines' | 'cadence' | 'rankByRuntime'> & { readonly bugz: BugCorpus };
+export type SidebarSlow = Pick<PanelState, 'localEngines' | 'rankByRuntime'> & { readonly bugz: BugCorpus };
 
 /** The first state with its slow cards filled: the corpus read, the engines probed, the lines and the ranking rule known. */
 export function filledSidebarState(first: PanelState, slow: SidebarSlow): PanelState {

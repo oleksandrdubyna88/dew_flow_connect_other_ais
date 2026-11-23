@@ -32,7 +32,7 @@ const panel = attaching.map((f) => fs.readFileSync(path.join(source, f), 'utf8')
 
 test('the modules that attach tooltips are found — a search that finds only one has stopped working', () => {
   assert.ok(attaching.includes('panelView.ts'), attaching.join(', '));
-  assert.ok(attaching.includes('cadenceSettings.ts'), attaching.join(', '));
+  assert.ok(attaching.includes('consultantView.ts'), attaching.join(', '));
 });
 
 test('every tooltip key is attached to a control in the panel', () => {

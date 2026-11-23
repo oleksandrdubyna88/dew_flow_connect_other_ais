@@ -4,7 +4,7 @@
 /** The module a command, view or panel belongs to when no other module has taken it: the old code (`moduleOf` says which commands have gone). */
 export const MODULE_LEGACY = 'legacy';
 
-/** The module that paints the sidebar's last snapshot before the legacy module has loaded, then hands the view to the legacy one (v2 E4). */
+/** The module that draws the sidebar's real menu before the legacy module has loaded, then hands the view to the legacy one (v2 E4). */
 export const MODULE_SIDEBAR = 'sidebar';
 
 /**
@@ -89,8 +89,6 @@ export const COMMANDS: readonly string[] = [
   'coai.exportConfig',
   'coai.importConfig',
   'coai.showRounds',
-  'coai.answerQuestion',
-  'coai.answerQuestionWaiting',
   'coai.chatWithOtherAi',
   'coai.askFromTerminal',
   'coai.takeTheQuestion',

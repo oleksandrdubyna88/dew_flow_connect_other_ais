@@ -254,18 +254,6 @@
         "category": "ConnectOtherAIs"
       },
       {
-        "command": "coai.answerQuestion",
-        "title": "Answer the open question…",
-        "icon": "$(comment-discussion)",
-        "category": "ConnectOtherAIs"
-      },
-      {
-        "command": "coai.answerQuestionWaiting",
-        "category": "ConnectOtherAIs",
-        "title": "Answer the open question…",
-        "icon": "media/question-waiting.svg"
-      },
-      {
         "command": "coai.chatWithOtherAi",
         "title": "Chat with other AI",
         "category": "ConnectOtherAIs"
@@ -408,12 +396,6 @@
           "type": "string",
           "default": "",
           "markdownDescription": "The CredsForDevs **config-entry key** (minted by *Enable Code Access…* on the entry holding vendor API keys). A pass to one vault entry — revocable, useless while VS Code is closed — not a secret itself. Empty = keyless vendors only."
-        },
-        "coai.escalationMinutes": {
-          "type": "integer",
-          "default": 15,
-          "minimum": 1,
-          "description": "How long a question waits for you before the AI is told to ask in the chat instead."
         },
         "coai.teamServers": {
           "type": "array",
@@ -678,7 +660,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Data folders belonging to **other installations**, whose questions this window should also answer. A round that calls for a human writes its question into the data folder of whichever installation is running it — so a Claude Code session inside **WSL** writes into the WSL folder, and a Windows window watching only its own never shows the modal while that round blocks. Name the other folder here and its questions appear beside your own; the answer is written back next to the question, where the server that asked is looking. Only the questions are shared — no database is opened across the boundary. From a Windows window a WSL folder must be named the way Windows can reach it, `\\\\wsl.localhost\\<distro>\\home\\<user>\\.local\\share\\coai-mcp`; a path starting with `/` is refused and says so, because guessing which distribution you meant would mean watching a folder you never chose. *Where this window keeps its data* lists what is being watched and what could not be read."
+          "markdownDescription": "Data folders belonging to **other installations**, which this window also reads, read-only. A **WSL** session keeps its data in the WSL folder and a Windows window keeps its own, so the consultants' health and the rounds' counts of the other side are shown beside your own only when its folder is named here. No database is opened across the boundary, and nothing is written there. From a Windows window a WSL folder must be named the way Windows can reach it, `\\\\wsl.localhost\\<distro>\\home\\<user>\\.local\\share\\coai-mcp`; a path starting with `/` is refused and says so, because guessing which distribution you meant would mean reading a folder you never chose. *Where this window keeps its data* lists what is read and what could not be."
         },
         "coai.dataSide": {
           "type": "string",
@@ -1094,39 +1076,6 @@
           "default": true,
           "markdownDescription": "Whether the `consult` tool answers at all — for all three kinds: a stuck AI asking on its own, and the cadence and risk consultations the gate orders. Off refuses by NAME, so the AI is told the feature is switched off rather than left to guess why nothing came back, and a consultation cadence on Require stands its refusal down with the reason on the round."
         },
-        "coai.cadenceMode": {
-          "type": "string",
-          "enum": [
-            "off",
-            "remind",
-            "require"
-          ],
-          "enumDescriptions": [
-            "No cadence orders, nothing refused.",
-            "Every review reply carries the order to consult on the current group of epics; nothing is refused.",
-            "The first code round of a group of epics is refused until its consultation has been taken and closed with an outcome."
-          ],
-          "default": "remind",
-          "markdownDescription": "The consultation cadence: after a plan is split into epics, every group of epics owes one consultation before its first code round, and from `coai.cadenceRiskThreshold` epics the riskiest epics and stories get one each. A consultant that cannot be reached never jams the work — the round goes through with the reason written on it."
-        },
-        "coai.cadenceEvery": {
-          "type": "integer",
-          "default": 3,
-          "minimum": 1,
-          "description": "One cadence consultation per this many epics of a plan."
-        },
-        "coai.cadenceRiskThreshold": {
-          "type": "integer",
-          "default": 5,
-          "minimum": 1,
-          "description": "From this many epics, the assistant is asked which epics and stories carry the most risk, and each one it names gets a consultation of its own."
-        },
-        "coai.cadenceRiskMax": {
-          "type": "integer",
-          "default": 3,
-          "minimum": 1,
-          "description": "The most risky epics and stories one plan may name for a consultation of their own."
-        },
         "coai.qconsultEnabled": {
           "type": "boolean",
           "default": true,
@@ -1242,16 +1191,6 @@
           "group": "navigation@1"
         },
         {
-          "command": "coai.answerQuestion",
-          "when": "view == coai.panel && !coai.hasQuestions",
-          "group": "navigation@0"
-        },
-        {
-          "command": "coai.answerQuestionWaiting",
-          "when": "view == coai.panel && coai.hasQuestions",
-          "group": "navigation@0"
-        },
-        {
           "command": "coai.showRounds",
           "when": "view == coai.panel",
           "group": "navigation@2"
@@ -1288,10 +1227,6 @@
         }
       ],
       "commandPalette": [
-        {
-          "command": "coai.answerQuestionWaiting",
-          "when": "false"
-        },
         {
           "command": "coai.forgetPickedConversation",
           "when": "false"

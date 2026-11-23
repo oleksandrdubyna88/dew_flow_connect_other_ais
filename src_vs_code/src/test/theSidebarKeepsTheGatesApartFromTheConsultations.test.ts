@@ -2,7 +2,6 @@ import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { CadenceLine } from '../cadenceLine';
 import { panelHtml } from '../panelView';
 import { stylesheet } from './cssRules';
 import { panelState } from './panelPageHarness';
@@ -57,20 +56,10 @@ for (const id of ['consultations']) {
   });
 }
 
-const LINE: readonly CadenceLine[] = [{
-  repoPath: 'D:/repo', branch: 'feat/epic-4',
-  answer: {
-    plan: 'todo/PLAN_x.md', mode: 'remind', epics: 14, epicsClosed: [1, 2, 3, 4],
-    groups: [{ range: '1-3', consulted: true }, { range: '4-6', consulted: false }],
-    risk: [], riskAnswered: true, unreadable: '',
-  },
-}];
-
-test('Consultation cadence is not on the sidebar: no section, no heading colour, and a cadence line is drawn nowhere', () => {
-  const html = panelHtml(panelState('', { cadence: LINE }), 'n');
+test('Consultation cadence is not on the sidebar: no section, no heading colour, and nothing of it is drawn', () => {
+  const html = panelHtml(panelState('', {}), 'n');
 
   assert.equal(html.includes('data-section="cadence"'), false, 'the section is still drawn');
   assert.equal(html.includes('Consultation cadence'), false, 'its heading is still on the page');
-  assert.equal(html.includes('PLAN_x.md'), false, 'a cadence line is still drawn');
   assert.equal(stylesheet(html).some((rule) => rule.selector.includes('.sec-cadence')), false, 'its colour rule is still shipped');
 });

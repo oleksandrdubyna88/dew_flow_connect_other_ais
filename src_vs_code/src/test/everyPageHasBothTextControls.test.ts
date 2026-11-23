@@ -48,7 +48,7 @@ function idsIn(html: string): readonly string[] {
 const PAGES: readonly (readonly [name: string, render: () => string])[] = [
   ['Phrases', () => phrasesHtml({ rows: [], uiScale: 0 }, 'n')],
   ['Notifications', () => notificationsPageHtml({ rows: [], dataDir: 'd', older: false, loaded: 0, generation: 1 }, 'n')],
-  ['Review rounds', () => roundsLogHtml([], [], 'n')],
+  ['Review rounds', () => roundsLogHtml([], 'n')],
   ['Who holds a key', () => usersPageHtml({ view: { kind: 'no-key', said: '' } }, 'n')],
   // The Settings page (PLAN_one_model_catalog.md E3) — the only one in its tab since E5.1 step 5 removed the page it replaced.
   ['Settings page', () => catalogHtml(panelState(''), 'n', 'models')],
@@ -133,8 +133,8 @@ test('the census renders the seven pages it names — a table that lost a row wo
 test('the ids read off the Review rounds markup cover every id this test once had to list by hand', () => {
   // The hand list as it stood when it was retired (2026-10-10): the derivation must reach each of these, or it is a
   // narrower thing than what it replaced.
-  const handListed = ['failed', 'rows', 'empty', 'count', 'exportpicked', 'clearpicked', 'pickall', 'prev', 'next', 'pageinfo', 'recorded', 'tab-rounds', 'search', 'from', 'to', 'today', 'alldates', 'clear', 'consultations-body', 'consultations-none', 'qconsults-body', 'spots-body', 'usage-body', 'questions', 'team-q', 'team-sort', 'team-server', 'team-refresh', 'team-status'];
-  const derived = new Set(idsIn(roundsLogHtml([], [], 'n')));
+  const handListed = ['failed', 'rows', 'empty', 'count', 'exportpicked', 'clearpicked', 'pickall', 'prev', 'next', 'pageinfo', 'recorded', 'tab-rounds', 'search', 'from', 'to', 'today', 'alldates', 'clear', 'consultations-body', 'consultations-none', 'qconsults-body', 'spots-body', 'usage-body', 'team-q', 'team-sort', 'team-server', 'team-refresh', 'team-status'];
+  const derived = new Set(idsIn(roundsLogHtml([], 'n')));
   assert.deepEqual(handListed.filter((id) => !derived.has(id)), [], 'an id the page needs is missing from its own markup');
 });
 

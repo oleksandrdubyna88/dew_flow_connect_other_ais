@@ -9,7 +9,6 @@ import { build } from 'esbuild';
 import { panelHtml, PANEL_SECTIONS } from '../panelView';
 import { sectionsOn } from '../panelSurface';
 import { MENU_SECTIONS, menuPage } from '../sidebarMenu';
-import { NONCE_PLACEHOLDER, skeletonPage, snapshotPage } from '../sidebarSnapshot';
 import { type DomElement } from './pageDom';
 import { runMenuPage } from './menuPageHarness';
 import { panelState } from './panelPageHarness';
@@ -187,14 +186,13 @@ test('a press on a header opens its section and tells the host, a second press c
   assert.deepEqual(run.posted.at(-1), { type: 'section', id: target, open: false });
 });
 
-test('menuReady is said ONLY by a document that shows every header and lets a person use it: a skeleton, an inert copy, a missing header, a header without words say nothing', () => {
+test('menuReady is said ONLY by a document that shows every header and lets a person use it: an inert copy, a missing header, a header without words say nothing', () => {
   const live = menuPage('test-nonce');
   const messagesOf = (html: string) => runMenuPage(html).posted.map((one) => one['type']);
   assert.ok(messagesOf(live).includes('menuReady'), 'the same harness, the real menu: it says menuReady (without this the refusals below could be a broken harness)');
 
   const first = MENU_SECTIONS[0].id;
   const refused: readonly (readonly [string, string])[] = [
-    ['the old skeleton', skeletonPage('test-nonce')],
     ['an inert menu', live.replace('<body>', '<body inert>')],
     ['a menu whose first header is inert', live.replace(`data-section="${first}"`, `data-section="${first}" inert`)],
     ['a menu whose first header is hidden', live.replace(`data-section="${first}"`, `data-section="${first}" hidden`)],
@@ -204,20 +202,14 @@ test('menuReady is said ONLY by a document that shows every header and lets a pe
   for (const [what, html] of refused) {
     assert.equal(messagesOf(html).includes('menuReady'), false, `${what} must not say menuReady`);
   }
-  assert.ok(messagesOf(skeletonPage('test-nonce')).includes('ready'), 'the skeleton still says ready: ready alone is NOT the end of the start');
 });
 
-test('a snapshot of the old page, replayed inert, says ready but never menuReady; the same page live says it', () => {
-  const state = panelState('bugz', { phrases: [{ id: 'p1', name: 'Deploy the snapshot', text: 'deploy it' }] });
-  const stored = panelHtml(state, NONCE_PLACEHOLDER);
-  const stubs = { requestAnimationFrame: () => 0 };
-  const inert = runMenuPage(snapshotPage(stored, 'n1'), undefined, stubs);
+test('the old page, shown live, draws the same headers as the menu and says menuReady too (the sidebar module may be absent)', () => {
+  const state = panelState('bugz', { phrases: [{ id: 'p1', name: 'Deploy it', text: 'deploy it' }] });
+  const live = runMenuPage(panelHtml(state, 'n2'), undefined, { requestAnimationFrame: () => 0 });
 
-  assert.ok(inert.posted.some((one) => one['type'] === 'ready'));
-  assert.equal(inert.posted.some((one) => one['type'] === 'menuReady'), false, 'an inert page cannot be used, so it is not the menu being ready');
-  const live = runMenuPage(panelHtml(state, 'n2'), undefined, stubs);
   assert.deepEqual(headersOf(live.sections()), MENU_SECTIONS.map((one) => ({ id: one.id, title: one.title })), 'the old page draws the same headers the menu draws');
-  assert.ok(live.posted.some((one) => one['type'] === 'menuReady'), 'the old page says menuReady too when it is shown live (the sidebar module may be absent)');
+  assert.ok(live.posted.some((one) => one['type'] === 'menuReady'), 'the old page says menuReady too when it is shown live');
 });
 
 test('the old panel and the shell\'s menu draw the same sections: the same ids, words and order, and the old stylesheet carries the menu\'s rules', () => {

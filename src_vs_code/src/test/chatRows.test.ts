@@ -236,7 +236,7 @@ test('the kind is the TAB now, and the detail row still spans every column', () 
   // The colspan is the column COUNT, and it used to be a literal `15`. A column added without it
   // leaves an opened row's detail short by one and the table visibly ragged — so it is derived, and
   // this is the test that says so.
-  const html = roundsLogHtml([reviewRow()], [], 'n0nce');
+  const html = roundsLogHtml([reviewRow()], 'n0nce');
   // EVERY header, not only the sortable ones. Counting `<th data-sort="` was a proxy for "every
   // column" that held exactly as long as every column sorted; the actions column does not, and the
   // proxy would have quietly let the detail row fall one short of the table again — which is the

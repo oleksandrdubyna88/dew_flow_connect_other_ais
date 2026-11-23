@@ -11,7 +11,6 @@ import {
   reviewedFromHtml,
   writtenWithHtml,
 } from '../roundsLog';
-import { Escalation } from '../escalations';
 import { escapeHtml } from '../escapeHtml';
 import { writtenWith } from '../authorsLine';
 import { calledBy, CallerDeclaration, reviewedFrom, RoundRecord, SessionFile } from '../rounds';
@@ -180,21 +179,9 @@ test('search reads the subject, the branch, the repository and the reviewer line
 
 // ---------- the page ----------
 
-function question(): Escalation {
-  return {
-    id: 'q1',
-    sessionId: 'ba0c73a1',
-    repoPath: 'D:/rsd/dew_flow_connect_other_ais',
-    branch: 'feat/shared-gate-rule',
-    question: 'Ship with the <b>unresolved</b> finding?',
-    openFindings: [{ severity: 'major', category: 'security', file: 'src/a.cs', line: 12, title: 'Token in log' }],
-    askedUtc: '2026-09-05T07:50:00.000Z',
-  };
-}
-
 test('the page carries the rows as JSON, the predicates verbatim, and no backtick in its script', () => {
   const rows = rowsFrom([session([round()])], NOW);
-  const html = roundsLogHtml(rows, [], 'n0nce');
+  const html = roundsLogHtml(rows, 'n0nce');
   const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
 
   assert.ok(html.includes('<table'), 'a table');
@@ -205,26 +192,23 @@ test('the page carries the rows as JSON, the predicates verbatim, and no backtic
   assert.ok(html.includes('nonce="n0nce"'));
 });
 
-test('nothing from a session or a question reaches the page unescaped', () => {
+test('nothing from a session reaches the page unescaped', () => {
   const rows = rowsFrom([session([round({ subject: '<img src=x onerror=alert(1)>' })])], NOW);
-  const html = roundsLogHtml(rows, [question()], 'n');
+  const html = roundsLogHtml(rows, 'n');
 
   assert.ok(!html.includes('<img src=x'), 'the subject is data, in the JSON and in the markup');
-  assert.ok(html.includes('&lt;b&gt;unresolved&lt;/b&gt;'), 'the question is text');
-  assert.ok(html.includes('Token in log'));
-  assert.ok(roundsLogHtml([], [{ ...question(), openFindings: [] }], 'n').includes('No findings attached'), 'and a question without findings says so');
-  assert.ok(html.includes('data-command="answer"') && html.includes('data-id="q1"'), 'the answer button reaches the command');
 });
 
-test('with no question waiting there is no questions section', () => {
-  const html = roundsLogHtml([], [], 'n');
+test('the page has no questions section and no Answer button: a held question is gone with the held gate (v2)', () => {
+  const html = roundsLogHtml([], 'n');
 
   assert.ok(!html.includes('waiting on you'));
+  assert.ok(!html.includes('data-command="answer"') && !html.includes('id="questions"'), 'no block for an open question, no button that answers one');
   assert.ok(html.includes('No rounds yet'), 'and an empty log says so');
 });
 
 test('the table offers every column the log has, each sortable, and a filter per facet', () => {
-  const html = roundsLogHtml(rowsFrom([session([round()])], NOW), [], 'n');
+  const html = roundsLogHtml(rowsFrom([session([round()])], NOW), 'n');
 
   for (const column of ['when', 'repository', 'branch', 'stage', 'round', 'what', 'status', 'verdict', 'gating', 'findings', 'took', 'tokens in', 'tokens out', 'cost', 'reviewers']) {
     assert.ok(html.toLowerCase().includes(`data-sort="${column.replace(' ', '')}"`) || html.toLowerCase().includes(`>${column}<`), `column ${column}`);
@@ -576,13 +560,13 @@ test('a declared model cannot put markup on the page', () => {
     askedByHtml(calledBy({ vendor: 'claude', client: nasty, model: 'm' }), escapeHtml),
     '<div class="reviewer asked">asked by &lt;img src=x onerror=alert(1)&gt; · m</div>');
   assert.ok(
-    !roundsLogHtml(rowsFrom([session([round({ caller: { vendor: 'claude', client: nasty, model: 'm' } })])], NOW), [], 'n')
+    !roundsLogHtml(rowsFrom([session([round({ caller: { vendor: 'claude', client: nasty, model: 'm' } })])], NOW), 'n')
       .includes('<img src=x'),
     'and the row carrying it into the page is escaped there too');
 });
 
 test('the page embeds the asked-by builder by assignment, so the tested function is the run one', () => {
-  const html = roundsLogHtml(rowsFrom([session([round({ caller: claude })])], NOW), [], 'n');
+  const html = roundsLogHtml(rowsFrom([session([round({ caller: claude })])], NOW), 'n');
   const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
 
   assert.ok(script.includes('var askedByHtml = ' + askedByHtml.toString()), 'bound by assignment, as compareRows is');
@@ -625,7 +609,7 @@ test('a hostile path cannot put markup on the page', () => {
     reviewedFromHtml(line, escapeHtml),
     '<div class="reviewer source">reviewed from &lt;img src=x onerror=alert(1)&gt; @ aaaaaaa · blob bbbbbbb · 98 304 bytes</div>');
   assert.ok(
-    !roundsLogHtml(rowsFrom([session([round({ stage: 'PlanReview', planSource: { ...PLAN_SOURCE, path: nasty } })])], NOW), [], 'n')
+    !roundsLogHtml(rowsFrom([session([round({ stage: 'PlanReview', planSource: { ...PLAN_SOURCE, path: nasty } })])], NOW), 'n')
       .includes('<img src=x'),
     'and the row carrying it into the page is escaped there too');
 });
@@ -669,7 +653,7 @@ test('a hostile model id cannot put markup on the page', () => {
     writtenWithHtml(line, escapeHtml),
     '<div class="reviewer authors">written with &lt;img src=x onerror=alert(1)&gt; (main) · main only</div>');
   assert.ok(
-    !roundsLogHtml(rowsFrom([session([round({ authors: { ...AUTHORS, rows: [{ ...AUTHORS_ROW, model: nasty }] } })])], NOW), [], 'n')
+    !roundsLogHtml(rowsFrom([session([round({ authors: { ...AUTHORS, rows: [{ ...AUTHORS_ROW, model: nasty }] } })])], NOW), 'n')
       .includes('<img src=x'),
     'and the row carrying it into the page is escaped there too');
 });

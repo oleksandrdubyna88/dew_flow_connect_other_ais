@@ -34,7 +34,6 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   hostKind: 'windows',
   side: '',
   perSide: false,
-  questions: [],
   sessions: [],
   openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],
   usage: [],
@@ -279,73 +278,6 @@ test('with no question waiting there is no waiting section at all', () => {
   assert.ok(!everyPageHtml(state(), 'n').includes('waiting on you'));
 });
 
-test('an open question is shown with its findings and an answer button', () => {
-  const html = everyPageHtml(
-    state({
-      questions: [
-        {
-          id: 'q1',
-          sessionId: 's',
-          repoPath: 'D:/repo',
-          branch: 'feature/x',
-          question: 'Ship anyway?',
-          openFindings: [
-            { severity: 'blocking', category: 'security', file: 'a.cs', line: 1, title: 'token compared with ==' },
-          ],
-          askedUtc: '2026-08-31T15:00:00Z',
-        },
-      ],
-    }),
-    'n',
-  );
-  assert.ok(html.includes('waiting on you'));
-  assert.ok(html.includes('Ship anyway?'));
-  assert.ok(html.includes('token compared with =='));
-  assert.ok(html.includes('data-command="answer" data-id="q1"'));
-});
-
-test('an untranslated question says why, rather than pretending', () => {
-  const html = everyPageHtml(
-    state({
-      questions: [
-        {
-          id: 'q1',
-          sessionId: 's',
-          repoPath: 'r',
-          branch: 'b',
-          question: 'Ship anyway?',
-          openFindings: [],
-          askedUtc: 'now',
-          translationNote: 'the gemini CLI timed out',
-        },
-      ],
-    }),
-    'n',
-  );
-  assert.ok(html.includes('shown untranslated: the gemini CLI timed out'));
-});
-
-test('a question written by someone else cannot inject markup', () => {
-  const html = everyPageHtml(
-    state({
-      questions: [
-        {
-          id: 'q1',
-          sessionId: 's',
-          repoPath: 'r',
-          branch: 'b',
-          question: '<img src=x onerror="alert(1)">',
-          openFindings: [],
-          askedUtc: 'now',
-        },
-      ],
-    }),
-    'n',
-  );
-  assert.ok(!html.includes('<img src=x'), 'the question is data, never markup');
-  assert.ok(html.includes('&lt;img src=x'));
-});
-
 test('the sidebar lists what is running; a finished round belongs to the log', () => {
   assert.ok(everyPageHtml(state(), 'n').includes('Nothing is running'));
   const html = everyPageHtml(
@@ -448,23 +380,6 @@ test('a section the person opened stays open through a repaint', () => {
   const html = everyPageHtml(state({ openSections: ['bugz'] }), 'n');
   assert.ok(html.includes('data-section="bugz" open'));
   assert.ok(!html.includes('data-section="rounds" open'), 'their choice is the whole set');
-});
-
-test('a waiting question is never collapsible', () => {
-  const html = everyPageHtml(
-    state({
-      questions: [
-        { id: 'q1', sessionId: 's', repoPath: 'r', branch: 'b', question: 'Ship?', openFindings: [], askedUtc: 'now' },
-      ],
-    }),
-    'n',
-  );
-  const heading = html.indexOf('waiting on you');
-  assert.ok(heading >= 0);
-  assert.ok(
-    heading < html.indexOf('<details'),
-    'it stands before every collapsible section — a blocked round is not tidied away behind an arrow',
-  );
 });
 
 test('the accordion reports its own toggles, so the open set survives', () => {
@@ -603,7 +518,7 @@ test('a spending row shows the vendor and its cost apart, not run together', () 
     [{ utc: new Date().toISOString(), provider: 'antigravity', model: 'm', role: 'PlanCritique',
        stage: 'PlanReview', outcome: 'Ok', tokensIn: 55_800, tokensOut: 25_500, costUsd: null, seconds: 84 } as UsageEntry],
     'day', [], {});
-  const html = roundsLogHtml([], [], 'n0nce', usage);
+  const html = roundsLogHtml([], 'n0nce', usage);
 
   assert.match(html, /<span class="cost">/, 'the money needs an element the row can push to its far end');
   assert.match(html, /\.spend \.head \{[^}]*space-between/, 'the row puts the name and the cost at opposite ends');
@@ -823,7 +738,7 @@ test('every limits row holds exactly a label and an input, so none can crowd its
   const section = paneIn(everyPageHtml(state({ openSections: ['limits'] }), 'n0nce'), 'reviews/limits');
   const rows = [...section.matchAll(/<div class="field inline">((?:(?!<\/div>)[\s\S])*)<\/div>/g)].map((m) => m[1]!);
 
-  assert.equal(rows.length, 5, 'five numeric settings');
+  assert.equal(rows.length, 4, 'four numeric settings');
   for (const row of rows) {
     // The label carries the `?` help span inside itself, so three tags for two flex children.
     const tags = [...row.matchAll(/<(\w+)[\s>]/g)].map((m) => m[1]!);

@@ -40,7 +40,6 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   reviewerTimeoutMinutes: 12,
   roundTimeoutMinutes: 25,
   credsKey: 'coai-key',
-  escalationMinutes: 45,
   promptsPerRound: { SecurityReliability: ['sec-attack'] },
   dealCodeLenses: true,
   codeWorkspace: 'worktree',
@@ -72,9 +71,6 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
     idleMinutes: 30,
     enabled: false,
   },
-  // The consultation cadence (research/PLAN_consult_on_a_cadence.md): one setting holding four things,
-  // every one of them changed, for the reason `consult` above gives.
-  cadence: { mode: 'require', every: 4, riskThreshold: 6, riskMax: 2 },
   // The question consultant (todo/PLAN_question_consultant.md, S4): eight settings in one, every one changed;
   // `qconsultSettings.test.ts` changes each alone and checks its key.
   qconsult: {

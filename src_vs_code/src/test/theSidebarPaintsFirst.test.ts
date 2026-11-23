@@ -25,11 +25,7 @@ function reads(): SidebarReads {
     vendors: DEFAULT_VENDORS,
     catalogRows: DEFAULT_VENDORS,
     sessions: [],
-    questions: [],
     openSections: ['bugz'],
-    qconsults: [],
-    consultations: [],
-    cadence: [],
     notifications: NOT_LOOKED,
     phrases: [],
     localEngines: {},
@@ -56,7 +52,7 @@ function held() {
   const stages = {
     first: () => Promise.resolve(sidebarState(reads())),
     paintFirst: paint,
-    fill: async (first: PanelState) => filledSidebarState(first, { bugz: await slow, localEngines: {}, cadence: [], rankByRuntime: false }),
+    fill: async (first: PanelState) => filledSidebarState(first, { bugz: await slow, localEngines: {}, rankByRuntime: false }),
     paintFill: paint,
   };
 
@@ -97,7 +93,7 @@ test('when the slow read lands the card is filled: a second page, with the corpu
 });
 
 test('the filled page is the page a render with every read would draw: what the first paint stands in for is never on the sidebar', () => {
-  const filled = filledSidebarState(sidebarState(reads()), { bugz: READ, localEngines: {}, cadence: [], rankByRuntime: false });
+  const filled = filledSidebarState(sidebarState(reads()), { bugz: READ, localEngines: {}, rankByRuntime: false });
   // What the Settings page draws and the sidebar does not: models, the server, prices, usage, versions, the side — all unlike the stand-ins.
   const everything: PanelState = {
     ...filled,
@@ -118,7 +114,7 @@ test('the filled page is the page a render with every read would draw: what the 
 test('the loading card and the filled card differ in the key, so the fill is a repaint; a read that never lands leaves the loading card, not a wrong one', () => {
   const first = sidebarState(reads());
 
-  assert.notEqual(staticKey(first), staticKey(filledSidebarState(first, { bugz: READ, localEngines: {}, cadence: [], rankByRuntime: false })));
+  assert.notEqual(staticKey(first), staticKey(filledSidebarState(first, { bugz: READ, localEngines: {}, rankByRuntime: false })));
   assert.equal(first.bugzLoading, true);
   assert.equal(first.bugz, undefined, 'the first state names no corpus, so none can be mistaken for the server\'s answer');
 });

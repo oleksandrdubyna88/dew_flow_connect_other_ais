@@ -114,7 +114,7 @@ test('a press reaches the server: the page command, the hook, a fresh read over 
     /const work = workFor\(command, this\.hooks\);\s*if \(work !== undefined\) \{\s*void track\(work\);/,
     'the panel no longer hands a press to its hook');
   assert.match(read('extension.ts'),
-    /onSpotsPeriod: async \(period\) => \{\s*panelRef\.setSpotsPeriod\(period\);\s*await refreshRoundsLog\(roundsLog, watcher, panelRef, true\);/,
+    /onSpotsPeriod: async \(period\) => \{\s*panelRef\.setSpotsPeriod\(period\);\s*await refreshRoundsLog\(roundsLog, panelRef, true\);/,
     'a spots press no longer stores the period and forces a fresh read');
   const cache = read('roundsLogCache.ts');
   assert.match(cache, /setSpotsPeriod\(period: LogPeriod\): void \{\s*this\.spots = period;\s*this\.forgetRoundsLog\(\);/,

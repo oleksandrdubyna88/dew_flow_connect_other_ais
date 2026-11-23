@@ -52,17 +52,19 @@ export function registeredChat(panels: ChatPanels, key: object, saveId: string, 
  * hand-over scenario reads one list: the commands the two adopters hold between them, and a view provider AND a serializer.</p>
  */
 export async function activated<T>(extension: vscode.Extension<T>): Promise<T> {
-  const shell = await extension.activate() as unknown as { readonly legacy: () => Promise<T>; readonly chat: () => Promise<ChatDoors> };
+  const shell = await extension.activate() as unknown as { readonly legacy: () => Promise<T>; readonly chat: () => Promise<ChatDoors>; readonly install: () => Promise<InstallDoors> };
   const old = await shell.legacy() as T & { readonly shell?: LegacyDoor };
   const chat = await shell.chat();
   const { chat: chatDoor, ...doors } = chat;
+  // The install module (v2 E4 S5) holds `coai.installServer`; its work is not awaited here (it asks the network), only its door is read.
+  const installDoor = (await shell.install()).install;
 
   return {
     ...old,
     ...doors,
     ...(old.shell === undefined || chatDoor === undefined ? {} : {
       shell: {
-        adoptedCommands: () => [...old.shell?.adoptedCommands() ?? [], ...chatDoor.adoptedCommands()],
+        adoptedCommands: () => [...old.shell?.adoptedCommands() ?? [], ...chatDoor.adoptedCommands(), ...installDoor?.adoptedCommands() ?? []],
         adoptedViewAndSerializer: () => old.shell?.adoptedView() === true && chatDoor.adoptedSerializer(),
       },
     }),
@@ -72,6 +74,10 @@ export async function activated<T>(extension: vscode.Extension<T>): Promise<T> {
 interface LegacyDoor {
   readonly adoptedCommands: () => readonly string[];
   readonly adoptedView: () => boolean;
+}
+
+interface InstallDoors {
+  readonly install?: { readonly adoptedCommands: () => readonly string[] };
 }
 
 interface ChatDoors {

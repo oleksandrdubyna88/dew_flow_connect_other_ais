@@ -57,7 +57,6 @@ const state = (): PanelState => ({
   hostKind: 'windows',
   side: '',
   perSide: false,
-  questions: [],
   sessions: [],
   openSections: ['server'],
   usage: [],

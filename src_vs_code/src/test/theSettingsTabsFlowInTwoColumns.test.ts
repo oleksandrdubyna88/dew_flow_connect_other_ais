@@ -167,10 +167,10 @@ test('each named tab draws every family of its repeated cards, all of it, in the
   }
 });
 
-test('Limits stays one column — five numbers do not need two', () => {
+test('Limits stays one column — four numbers do not need two', () => {
   const pane = paneOn('reviews/limits');
 
-  assert.ok(pane.find((node) => node.dataset.setting !== undefined || node.tagName === 'INPUT').length >= 5, 'the fixture: Limits draws its five numbers');
+  assert.ok(pane.find((node) => node.dataset.setting !== undefined || node.tagName === 'INPUT').length >= 4, 'the fixture: Limits draws its four numbers');
   assert.deepEqual(pane.find((node) => has(node, COLUMNS)).map((node) => node.tagName), [], 'Limits drew a column grid');
 });
 

@@ -66,7 +66,6 @@ const LAUNCHES: Readonly<Record<string, Launch>> = {
   '--providers': 'reader',
   '--features': 'reader',
   '--version': 'reader',
-  '--cadence': 'reader',
   '--collect-bugs': 'a person acts, refused by the server',
   '--pairs-keep': 'a person acts, refused by the server',
   '--pairs-decide': 'a person acts, refused by the server',

@@ -12,6 +12,7 @@ import { serverExists, serverPath } from '../../../src/installer';
 import { announceServerInstalled } from '../../../src/serverInstalled';
 import { notify } from '../../../src/notify';
 import { spawnServer } from '../../../src/setupClients';
+import { INSTALL_COMMANDS } from '../../ids';
 import type { InstallModule } from '../../lazy';
 import { offerUpdate, installServer } from './flow';
 
@@ -50,10 +51,22 @@ export const command: InstallModule['command'] = async (context, id) => {
   }
 };
 
+/** What a test host may read of the install module; present only in `ExtensionMode.Test`, like the other modules' doors. */
+export interface InstallTestDoor {
+  /** The commands the shell routes to this module. */
+  readonly adoptedCommands: () => readonly string[];
+  /** Settles when the one run of the install work has finished — a host awaits it where a person never would. */
+  readonly finished: Promise<void>;
+}
+
 export const start: InstallModule['start'] = (context) => {
   mark('installStart');
+  const finished = workOf(context).start().finally(() => { mark('installEnd'); });
 
-  return workOf(context).start().finally(() => { mark('installEnd'); });
+  // In a test host the door is handed back at once, NOT the work: the host must not wait for a version check against the network, as no caller of this module does.
+  return context.extensionMode === vscode.ExtensionMode.Test
+    ? { install: { adoptedCommands: () => INSTALL_COMMANDS, finished } satisfies InstallTestDoor }
+    : finished;
 };
 
 export const deactivate: InstallModule['deactivate'] = () => undefined;

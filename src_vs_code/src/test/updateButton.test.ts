@@ -44,7 +44,6 @@ function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>):
     side: '',
     perSide: false,
     latestServerVersion: '',
-    questions: [],
     sessions: [],
     openSections: [],
     usage: [],
