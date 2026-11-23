@@ -30,6 +30,12 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
     /// <summary>How often the heartbeat is written: <see cref="RoleJobLimits.HeartbeatEvery"/>, 15 seconds.</summary>
     internal TimeSpan HeartbeatEvery { get; init; } = RoleJobLimits.HeartbeatEvery;
 
+    /// <summary>Where the runner's notices go (a model switch, a failed job): <c>ServerNotices.Append</c> over the data directory in the real runner. Without one a notice is dropped.</summary>
+    internal Func<ServerNotice, bool> Notice { get; init; } = _ => false;
+
+    /// <summary>The settings the work reads — the environment over the data directory's settings file — asked AFTER the job's environment was restored, so it sees what the start captured.</summary>
+    internal Func<Func<string, string?>> SettingsOf { get; init; } = () => Environment.GetEnvironmentVariable;
+
     public async Task<int> RunAsync(string jobId, CancellationToken stop)
     {
         if (store.FolderOf(jobId) is not { Exists: true } folder || folder.ReadRequest() is not { } request)
@@ -61,7 +67,10 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
         {
             // The detached edge of the runner: nothing may leave it as a crash that leaves the job at `running` until a sweep. The job is closed, and the fault is in the log.
             log.Error(e, "role job {JobId} failed inside its runner", jobId);
-            Close(lease, current => current with { State = RoleJobStates.Failed, Stop = "runner-error", Reason = $"the runner failed: {e.GetType().Name}: {Redaction.SafeText(e.Message, Redaction.TitleLimit)}", EndedUtc = clock.GetUtcNow().UtcDateTime, Child = null });
+            if (Close(lease, current => current with { State = RoleJobStates.Failed, Stop = "runner-error", Reason = $"the runner failed: {e.GetType().Name}: {Redaction.SafeText(e.Message, Redaction.TitleLimit)}", EndedUtc = clock.GetUtcNow().UtcDateTime, Child = null }) is RoleJobWrite.Written { Job: var faulted })
+            {
+                Notice(RoleJobNotices.Failed(faulted, clock.GetUtcNow().UtcDateTime));
+            }
 
             return Fault;
         }
@@ -79,13 +88,13 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
             return Finished(Close(lease, job => job with { State = RoleJobStates.Failed, Stop = "no-descriptor", Reason = $"this build has no work for role '{request.Role}'", EndedUtc = clock.GetUtcNow().UtcDateTime, Child = null }));
         }
 
-        if (lease.Write(job => job with { State = RoleJobStates.Running }) is not RoleJobWrite.Written)
+        if (lease.Write(job => job with { State = RoleJobStates.Running }) is not RoleJobWrite.Written { Job: var running })
         {
             return NotTheWriter;
         }
 
         using var watch = new RunWatch(clock, folder, lease, stop, TimeSpan.FromMinutes(Math.Max(1, request.TimeoutMinutes)), WatchEvery, HeartbeatEvery);
-        var outcome = await RunWorkAsync(descriptor, new RunContext(request, folder.Location, watch), watch);
+        var outcome = await RunWorkAsync(descriptor, new RunContext(request, running, folder.Location, store.DataDir, SettingsOf(), log, clock, Notice, lease, watch), watch);
         await watch.EndedAsync();
 
         return Finish(lease, outcome, watch.Why, request);
@@ -121,6 +130,11 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
             _ => Close(lease, job => Stopped(job, why, request, now)),
         };
 
+        if (written is RoleJobWrite.Written { Job: { State: RoleJobStates.Failed } failedJob })
+        {
+            Notice(RoleJobNotices.Failed(failedJob, now));
+        }
+
         return Finished(written);
     }
 
@@ -145,7 +159,8 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
         Stale,
     }
 
-    private sealed class RunContext(RoleJobRequest request, string folder, RunWatch watch) : IRoleRun
+    private sealed class RunContext(
+        RoleJobRequest request, RoleJobRecord job, string folder, string dataDir, Func<string, string?> settings, Serilog.ILogger log, TimeProvider clock, Func<ServerNotice, bool> notice, RoleLease lease, RunWatch watch) : IRoleRun
     {
         public RoleJobRequest Request => request;
 
@@ -154,6 +169,45 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
         public IProcessTracker Children => watch.Tracker;
 
         public void Phase(string phase, int attempt) => watch.SetPhase(phase, attempt);
+
+        public RoleJobRecord Job => job;
+
+        public string DataDir => dataDir;
+
+        public Func<string, string?> Settings => settings;
+
+        public Serilog.ILogger Log => log;
+
+        public TimeProvider Clock => clock;
+
+        public bool Notice(ServerNotice offered)
+        {
+            try
+            {
+                return notice(offered);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                log.Warning(e, "a notice of role job {JobId} could not be written", request.JobId);
+
+                return false;
+            }
+        }
+
+        public bool Trying(string model) => Written(lease.Write(current => current with { Model = model }));
+
+        public bool Attempted(RoleAttempt attempt) => Written(lease.Write(current => current with { Attempts = [.. current.Attempts, attempt] }));
+
+        /// <summary>A write the lease refused as stale means somebody took the job over: the work must stop, and the watch is told so.</summary>
+        private bool Written(RoleJobWrite written)
+        {
+            if (written is RoleJobWrite.Stale or RoleJobWrite.Over)
+            {
+                watch.Stale();
+            }
+
+            return written is RoleJobWrite.Written;
+        }
     }
 
     /// <summary>The loop beside the work: the heartbeat, the look for a cancel, the timeout and the signal — one token out, one cause kept.</summary>
@@ -205,6 +259,9 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
             await _ending.CancelAsync();
             await _loop;
         }
+
+        /// <summary>The lease is no longer this runner's: the first cause, unless an earlier one stands.</summary>
+        internal void Stale() => Fire(StopWhy.Stale);
 
         private void Fire(StopWhy why)
         {

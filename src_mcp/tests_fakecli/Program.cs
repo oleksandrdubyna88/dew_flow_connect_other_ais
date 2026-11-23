@@ -69,6 +69,8 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //                           child was killed" is checked rather than assumed)
 //   FAKECLI_EXPORT_TEXT   — Vibe's `--output-dir <folder>`: this text is written there as export.json (D7 of
 //                           todo/PLAN_vibe_and_kimi_runtimes.md); {{env:NAME}} in it is the value NAME had in THIS child
+//   FAKECLI_MODEL_MAP     — one JSON file: model name (the value after --model or -m) -> {stdout, stderr, exit, sleepMs, outfileText}; "*" is any other model
+//                           (epoch 3 E1 s3: a whole failover route scripted in one place). An entry beats the FAKECLI_* variables for that launch
 //   FAKECLI_RECORD_ENV    — a file this launch writes every environment variable NAME it was started with into, one per
 //                           line, and the VALUE of each VIBE_* and PYTHON* — what crossed the process boundary, not what a dictionary said
 //   FAKECLI_HOME_WRITE    — a path relative to this child's VIBE_HOME, written as a file: a Vibe that leaves something in
@@ -180,7 +182,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         LaunchRecord.Write(record, string.Join('\0', args.Append(prompt.StdIn)), read("FAKECLI_RECORD_GATE"));
     }
 
-    var steering = Steering.For(prompt.Text, read);
+    var steering = Steering.For(prompt.Text, read, CoaiMcp.FakeCli.ModelMap.For(args, read));
 
     // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
     // never answers `--version` must be reported as silent rather than as whatever exit code the
@@ -480,15 +482,19 @@ sealed class Steering
 {
     private readonly string[] _prefixes;
     private readonly Func<string, string?> _read;
+    private readonly Func<string, string?>? _model;
 
-    private Steering(string[] prefixes, Func<string, string?> read) => (_prefixes, _read) = (prefixes, read);
+    private Steering(string[] prefixes, Func<string, string?> read, Func<string, string?>? model) => (_prefixes, _read, _model) = (prefixes, read, model);
 
-    /// <summary>The first of the prefixes that names a value — most specific first.</summary>
+    /// <summary>The model map's value for this launch's model (FAKECLI_MODEL_MAP) first; else the first of the prefixes that names a value — most specific first.</summary>
     public string? Get(string name) =>
-        _prefixes.Select(prefix => _read(prefix + name)).FirstOrDefault(value => value is { Length: > 0 });
+        _model?.Invoke(name) is { } mapped
+            ? mapped
+            : _prefixes.Select(prefix => _read(prefix + name)).FirstOrDefault(value => value is { Length: > 0 });
 
     /// <param name="read">Where a steering value comes from: the environment, or the minimal-environment file.</param>
-    public static Steering For(string prompt, Func<string, string?> read)
+    /// <param name="model">What the model map says for this launch's model, or null when there is no map or no entry.</param>
+    public static Steering For(string prompt, Func<string, string?> read, Func<string, string?>? model = null)
     {
         var turn = TurnOf(prompt, read);
         var repair = read("FAKECLI_REPAIR_MARKER") is { Length: > 0 } marker
@@ -498,7 +504,7 @@ sealed class Steering
             ? [$"FAKECLI_TURN{turn}_REPAIR_", $"FAKECLI_TURN{turn}_", "FAKECLI_"]
             : [$"FAKECLI_TURN{turn}_", "FAKECLI_"];
 
-        return new Steering(prefixes, read);
+        return new Steering(prefixes, read, model);
     }
 
     /// <summary>Turn n when the prompt carries the marker with n filled in, for the smallest n from 2 up to 16; else 1.</summary>

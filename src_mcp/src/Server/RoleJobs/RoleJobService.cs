@@ -60,15 +60,22 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
             return RoleJobAnswers.Refused(read.Refusal);
         }
 
+        // The router first, before anything is made: a role whose list is empty, or a model the task may not take, is refused here with the setting that fixes it — no folder, no runner.
+        var (plan, routeRefusal) = RoleRouting.Plan(RoleDescriptors.Find(Descriptors, role)!, request, settings);
+        if (plan is null)
+        {
+            return RoleJobAnswers.Refused(routeRefusal);
+        }
+
         var store = Store();
         var keeper = Keeper(store);
         await keeper.SweepAsync(ct);
         RoleJobRetention.Apply(store, log);
 
-        return await MadeAsync(store, request, config, ct);
+        return await MadeAsync(store, request, plan, config, ct);
     }
 
-    private async Task<string> MadeAsync(RoleJobStore store, RoleJobRequest request, RoleJobSettings config, CancellationToken ct)
+    private async Task<string> MadeAsync(RoleJobStore store, RoleJobRequest request, RoleJobPlan plan, RoleJobSettings config, CancellationToken ct)
     {
         Directory.CreateDirectory(store.JobsRoot);
         using var capLock = await CapLockAsync(store.JobsRoot, ct);
@@ -85,7 +92,7 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
         }
 
         var made = request with { JobId = RoleJobIds.New(Clock) };
-        var job = store.Create(made);
+        var job = store.Create(made, plan);
         store.FolderOf(made.JobId)!.WriteEnvironment(RoleRunEnvironment.Capture(EnvironmentSource));
 
         return await LaunchedAsync(store, job, config, ct);

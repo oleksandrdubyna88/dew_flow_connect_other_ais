@@ -21,7 +21,7 @@ internal static class RoleJobAnswers
         }
     });
 
-    /// <summary><c>start_role</c>: <c>{jobId, state, route[], launcher}</c>. The route is the router's (story s3); until it runs it is empty.</summary>
+    /// <summary><c>start_role</c>: <c>{jobId, state, route[], launcher}</c>. The route is the router's, <c>vendor/model</c> in the order they are tried (story s3); a role that asks no model (the probe) has an empty one.</summary>
     public static string Started(RoleJobRecord job) => Write(json =>
     {
         json.WriteString("jobId", job.JobId);

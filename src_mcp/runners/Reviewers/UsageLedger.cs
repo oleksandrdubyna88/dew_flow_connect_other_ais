@@ -55,15 +55,21 @@ public static class UsageKinds
     /// </summary>
     public const string Probe = "probe";
 
+    /// <summary>
+    /// One launch of an external-role job (epoch 3 E1 s3): a model of the role's route asked, billed apart from a review, a consultation and a question row. Local only — the Team server runs no role job. A failover writes one line
+    /// for EACH launch, so a job that moved to its second model has two.
+    /// </summary>
+    public const string Role = "role";
+
     /// <summary>Every kind this build knows how to name. Order is the order a report reads best in.</summary>
-    public static IReadOnlyList<string> Known { get; } = [Review, Chat, Consult, Question, Canary, Probe];
+    public static IReadOnlyList<string> Known { get; } = [Review, Chat, Consult, Question, Canary, Probe, Role];
 
     /// <summary>
     /// Kinds the Team server never produces: a consultation, a question row and a probe run on this machine
     /// only. The server's wire vocabulary is therefore <see cref="Known"/> minus these, and the test
     /// that holds the two vocabularies level says so rather than asserting a false equality.
     /// </summary>
-    public static IReadOnlyList<string> LocalOnly { get; } = [Consult, Question, Probe];
+    public static IReadOnlyList<string> LocalOnly { get; } = [Consult, Question, Probe, Role];
 
     /// <summary>Whether a non-empty kind is one this build knows. Empty is "not said", which is fine.</summary>
     public static bool IsKnown(string kind) =>

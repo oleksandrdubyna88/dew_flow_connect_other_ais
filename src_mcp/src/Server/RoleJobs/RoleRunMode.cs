@@ -47,7 +47,14 @@ internal static class RoleRunMode
         {
             var store = new RoleJobStore(dataDir, clock, log, RoleJobProjection.For(dataDir, log));
 
-            return await new RoleRunner(store, descriptors, clock, note, log).RunAsync(request.JobId, stop);
+            // The notices go where the server's go: the data directory the restored environment names (env.json carries COAI_DATA_DIR and COAI_DATA_SIDE), resolved when a notice is written — after the environment is back.
+            var runner = new RoleRunner(store, descriptors, clock, note, log)
+            {
+                Notice = notice => ServerNotices.Append(PanelSettings.DataDirectoryFor(Environment.GetEnvironmentVariable), notice),
+                SettingsOf = () => Roles.RolesMode.Layered(Environment.GetEnvironmentVariable),
+            };
+
+            return await runner.RunAsync(request.JobId, stop);
         }
         finally
         {

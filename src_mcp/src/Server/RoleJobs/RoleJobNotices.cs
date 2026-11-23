@@ -1,9 +1,11 @@
 using CoaiMcp.Core.Notices;
+using CoaiMcp.Core.Roles;
 
 namespace CoaiMcp.Server.RoleJobs;
 
 /// <summary>
-/// The notices a role job writes about itself (spec A): <c>role-job-stalled</c> — one per stall — and <c>role-job-lost</c> — one per job. The subject is the job id, so a repeat of the same
+/// The notices a role job writes about itself (spec A): <c>role-job-stalled</c> — one per stall — <c>role-job-lost</c> — one per job — <c>role-job-failed</c> — one per failed job — and <c>role-model-switched</c> — one per
+/// switch of model (subject <c>&lt;jobId&gt;/&lt;n&gt;</c>, and it NAMES THE VENDOR the work goes to: the repository text goes with it). The subject is the job id, so a repeat of the same
 /// code for the same job coalesces on the page; the title names the role and the state and carries no round or error sentence (the key is <c>(code, subject)</c>).
 /// </summary>
 internal static class RoleJobNotices
@@ -20,6 +22,37 @@ internal static class RoleJobNotices
         Title = $"Role job {job.JobId} ({job.Role}) has not shown a sign of life for {(int)silent.TotalMinutes} minutes",
         Detail = "Its runner still holds the lease, so it is stopped or hung, not dead; the job is NOT taken over. role_status shows stalled: true; role_cancel stops it.",
         Cure = "Wait if the machine was asleep; otherwise cancel the job with role_cancel and start it again.",
+        Role = job.Role,
+        Repo = job.Repo,
+    };
+
+    /// <summary>One model switch: the job's <paramref name="attempt"/>-th attempt stopped (<paramref name="stop"/>) and the work goes on <paramref name="to"/>. Names both vendors; the Provider field is the one the text goes to.</summary>
+    public static ServerNotice Switched(RoleJobRecord job, ModelRef from, ModelRef to, RoleStop stop, int attempt, DateTime nowUtc) => new()
+    {
+        Utc = ServerNotice.Iso(nowUtc),
+        Class = "outcome",
+        Source = Source,
+        Code = ServerNoticeCodes.RoleModelSwitched,
+        Subject = $"{job.JobId}/{attempt}",
+        Title = $"Role job {job.JobId} ({job.Role}) moved from {RoleRoute.Format(from)} to {RoleRoute.Format(to)} after {stop.Word}",
+        Detail = $"{RoleRoute.Format(from)} stopped ({stop.Word}): {stop.Reason} The job now sends its repository text to the {to.Vendor} vendor ({to.Model}).{(from.Vendor == to.Vendor ? string.Empty : $" That is another vendor than {from.Vendor}.")}",
+        Cure = "Nothing is needed. To keep the work with one vendor, change the role's list in COAI_ROLES_MODELS.",
+        Role = job.Role,
+        Repo = job.Repo,
+        Provider = to.Vendor,
+    };
+
+    /// <summary>A job that ended <c>failed</c>: its stop and its reason, the way <c>role_status</c> shows them.</summary>
+    public static ServerNotice Failed(RoleJobRecord job, DateTime nowUtc) => new()
+    {
+        Utc = ServerNotice.Iso(nowUtc),
+        Class = "failure",
+        Source = Source,
+        Code = ServerNoticeCodes.RoleJobFailed,
+        Subject = job.JobId,
+        Title = $"Role job {job.JobId} ({job.Role}) failed: {job.Stop}",
+        Detail = job.Reason,
+        Cure = "role_status names every attempt and the stop of each. Fix what the stop says (a limit, a sign-in, a model name) and start the role again.",
         Role = job.Role,
         Repo = job.Repo,
     };

@@ -18,6 +18,9 @@ internal sealed class RoleJobStore(string dataDir, TimeProvider clock, Serilog.I
     /// <summary>How long a runner keeps trying for its lease: an observer's probe holds the file for microseconds, and a runner that gave up on that would leave a job nobody runs.</summary>
     internal static readonly TimeSpan TakeWindow = TimeSpan.FromSeconds(2);
 
+    /// <summary>The data directory the jobs live in.</summary>
+    public string DataDir => dataDir;
+
     public string JobsRoot => Path.Combine(dataDir, "roles", "jobs");
 
     public TimeProvider Clock => clock;
@@ -26,7 +29,7 @@ internal sealed class RoleJobStore(string dataDir, TimeProvider clock, Serilog.I
     public RoleJobFolder? FolderOf(string jobId) => RoleJobIds.IsValid(jobId) ? new RoleJobFolder(Path.Combine(JobsRoot, jobId)) : null;
 
     /// <summary>Makes the job: its folder, <c>request.json</c> and a <c>job.json</c> in state <c>queued</c>, generation 0. Request first, record last, so a record is never without its request.</summary>
-    public RoleJobRecord Create(RoleJobRequest request)
+    public RoleJobRecord Create(RoleJobRequest request, RoleJobPlan? plan = null)
     {
         var folder = FolderOf(request.JobId) ?? throw new ArgumentException($"'{request.JobId}' is not a job id", nameof(request));
         Directory.CreateDirectory(folder.Location);
@@ -39,6 +42,9 @@ internal sealed class RoleJobStore(string dataDir, TimeProvider clock, Serilog.I
             WorkItem = request.WorkItem,
             TaskFile = request.TaskFile,
             TimeoutMinutes = request.TimeoutMinutes,
+            Route = plan?.Route ?? [],
+            Complexity = Math.Max(0, plan?.Complexity ?? 0),
+            Security = plan?.Security ?? false,
             CreatedUtc = now,
             UpdatedUtc = now,
         };

@@ -73,6 +73,15 @@ public static class ServerNoticeCodes
     /// <summary>A role job whose lease nobody holds any more and that never reached a terminal state: closed as <c>lost</c>, its recorded child stopped (epoch 3 E1 s1). Subject is the job id; one per job.</summary>
     public const string RoleJobLost = "role-job-lost";
 
+    /// <summary>
+    /// A role job moved on to its next model after a stop (limit, refusal or crash) — one per switch, subject <c>&lt;jobId&gt;/&lt;n&gt;</c> (epoch 3 E1 s3, spec A). It names the vendor the work went to, because the next model may belong to
+    /// another vendor and the repository text (also of a security task) goes with it (spec D, risk 5).
+    /// </summary>
+    public const string RoleModelSwitched = "role-model-switched";
+
+    /// <summary>A role job ended <c>failed</c> — every model of its route stopped, or a stop that allows no failover (<c>tree-changed</c>, <c>output-invalid</c>), or its own timeout. Subject is the job id; one per job (epoch 3 E1 s3).</summary>
+    public const string RoleJobFailed = "role-job-failed";
+
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>
     public static IReadOnlyList<string> All =>
     [
@@ -94,5 +103,7 @@ public static class ServerNoticeCodes
         V2ConvertedAnsweredHold,
         RoleJobStalled,
         RoleJobLost,
+        RoleModelSwitched,
+        RoleJobFailed,
     ];
 }

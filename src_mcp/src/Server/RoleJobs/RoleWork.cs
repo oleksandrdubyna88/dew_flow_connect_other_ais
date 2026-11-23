@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Notices;
 using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Server.RoleJobs;
@@ -35,6 +36,30 @@ internal interface IRoleRun
 
     /// <summary>What the heartbeat reports: the phase and the attempt number the work is in.</summary>
     void Phase(string phase, int attempt);
+
+    /// <summary>The job as the runner took it: its route, its complexity and its security flag, as the router left them at the start (spec A).</summary>
+    RoleJobRecord Job { get; }
+
+    /// <summary>The data directory the job lives in — where the usage ledger and the notices are written.</summary>
+    string DataDir { get; }
+
+    /// <summary>The settings the work reads (the environment over the data directory's settings file): where a vendor's CLI is.</summary>
+    Func<string, string?> Settings { get; }
+
+    /// <summary>The runner's log: the one Information line of each model switch goes here.</summary>
+    Serilog.ILogger Log { get; }
+
+    /// <summary>The clock of the job — a wait of the retry ladder runs on it, so a test moves it.</summary>
+    TimeProvider Clock { get; }
+
+    /// <summary>Offers a notice; false when it could not be written (never a reason to stop the job).</summary>
+    bool Notice(ServerNotice notice);
+
+    /// <summary>Writes the model the work is trying now into <c>job.json</c>, under the lease. False when the lease is no longer this runner's: the work must stop.</summary>
+    bool Trying(string model);
+
+    /// <summary>Appends one finished attempt to <c>job.json</c> (and, through the store's projection, to <c>role_attempts</c>), under the lease. False when the lease is no longer this runner's.</summary>
+    bool Attempted(RoleAttempt attempt);
 }
 
 /// <summary>
@@ -49,5 +74,11 @@ internal interface IRoleWork
     Task<RoleWorkOutcome> RunAsync(IRoleRun run, CancellationToken ct);
 }
 
-/// <summary>What a role IS to the job machinery: its name, a one-line summary for the tool's refusal, and how to make its work. A role with no descriptor cannot be started.</summary>
-internal sealed record RoleDescriptor(string Role, string Summary, Func<IRoleWork> CreateWork);
+/// <summary>
+/// What a role IS to the job machinery: its name, a one-line summary for the tool's refusal, how to make its work, and the entry of the roles table its models come from. A role with no descriptor cannot be started.
+/// </summary>
+/// <param name="RouteAs">
+/// The role-table name the router reads for this role's models (<c>ba</c>, <c>coder</c>…), or empty for a role that asks no model — the <c>probe</c>, whose route is empty. A start for a role whose list is empty is refused
+/// naming <c>COAI_ROLES_MODELS</c> before any folder is made (epoch 3 E1 s3).
+/// </param>
+internal sealed record RoleDescriptor(string Role, string Summary, Func<IRoleWork> CreateWork, string RouteAs = "");

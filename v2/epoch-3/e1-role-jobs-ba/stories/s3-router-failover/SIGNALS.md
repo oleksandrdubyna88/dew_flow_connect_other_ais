@@ -34,9 +34,10 @@ Findings from the table:
    the vendor's other models, so the role layer (t3) reads them on top, from the three recorded sentences above (claude `result`
    starting "Not logged in", codex `401 Unauthorized`, agy `authentication required` / `authentication failed`).
 2. **A claude 429 envelope also reads `exit`** (see section 3). The role layer reads the structured integer `api_error_status: 429`, not prose.
-3. **A bad flag is ours; a bad model is the list's.** A bad flag fails the same way for every model of that vendor, so `vendor-refused`
-   skips the vendor's other models. An unknown model of codex or agy is refused for that model only (agy before any model call), so it is
-   a plain crash: the next model is tried.
+3. **A bad flag is ours; a bad model is the list's.** Only claude's wording of a bad flag is read as `vendor-refused` (it fails the same way
+   for every model of that vendor, so the vendor's other models are skipped). The bad flags of codex and agy read as a plain `exit`, so
+   each of that vendor's models fails in turn — a known limit, it costs one fast launch per model. An unknown model of codex or agy is refused
+   for that model only (agy before any model call), so it is a plain crash: the next model is tried.
 4. **Where the failure text is differs per vendor**: claude on stdout (envelope), codex on stdout (events), agy on stdout (`result` event)
    and on stderr. Only a bad flag puts the sentence on stderr alone.
 
