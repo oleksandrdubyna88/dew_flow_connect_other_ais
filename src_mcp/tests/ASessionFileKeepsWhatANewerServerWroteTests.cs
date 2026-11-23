@@ -395,7 +395,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         (ServerJsonContext.Default.PersistedSession,
             ["state", "rounds", "openedUtc", "pending", "planText", "featureBase", "carried", "caller", "usedPrompts"]),
         (ServerJsonContext.Default.SessionState,
-            ["sessionId", "repoPath", "branch", "config", "stage", "roundsRunThisStage", "awaitingResolve", "planProceeded", "advanceOnResolve", "rejections", "secondRound", "document", "isDocumentSession", "feature", "isFeatureSession"]),
+            ["sessionId", "repoPath", "branch", "config", "stage", "roundsRunThisStage", "awaitingResolve", "planProceeded", "advanceOnResolve", "rejections", "secondRound", "document", "isDocumentSession", "feature", "isFeatureSession", "inherited"]),
         (ServerJsonContext.Default.PanelConfig,
             ["catalog", "roles"]),
         (ServerJsonContext.Default.RoleGate,

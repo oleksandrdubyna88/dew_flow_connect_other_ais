@@ -396,6 +396,13 @@ public sealed record SessionState(
     /// <summary>Pending stage advance, decided at round completion, applied by resolve.</summary>
     public bool AdvanceOnResolve { get; init; }
 
+    /// <summary>
+    /// The plan this session did not review itself but INHERITED (epoch 3 E2 s5): a coder job's session (<c>coder/&lt;jobId&gt;</c>) carries the proceed of the plan its job was started under. Null for every other
+    /// session, and for one saved before the field existed. It is set only by <see cref="RoundMachine.InheritPlan"/>, from a binding the server proved against the job's own record and the feature's session.
+    /// </summary>
+    /// <remarks>Nullable and NOT normalised on the way in: "inherited nothing" and "not recorded" are one fact here, and a getter that made an empty one would put a plan in a session that has none.</remarks>
+    public InheritedPlan? Inherited { get; init; }
+
     public ImmutableArray<PriorRejection> Rejections { get; init; } = [];
 
     /// <summary>
@@ -457,6 +464,18 @@ public sealed record SessionState(
     [JsonExtensionData, JsonInclude]
     public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
+
+/// <summary>
+/// The plan a coder job's session inherited: where it came from and which revision of it. The session id and the plan hash say WHICH proceed was inherited — the feature's session may move on, and a binding that no longer
+/// matches is refused at the next round, never silently followed.
+/// </summary>
+/// <param name="SourceSession">The session id of the branch the job was started from (the feature's own session).</param>
+/// <param name="StartBranch">That branch.</param>
+/// <param name="PlanHash">The id of the plan revision that proceeded: the git blob of the plan file as the plan round read it.</param>
+/// <param name="PlanCommit">The commit that plan round ran on.</param>
+/// <param name="PlanPath">The plan file, repository-relative.</param>
+/// <param name="JobId">The coder job whose record carried the binding.</param>
+public sealed record InheritedPlan(string SourceSession, string StartBranch, string PlanHash, string PlanCommit, string PlanPath, string JobId);
 
 /// <summary>The canonical identity of a session: same checkout + branch → same session, always.</summary>
 /// <remarks>

@@ -42,6 +42,9 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
     /// <summary>The process environment the runner's <c>env.json</c> is taken from.</summary>
     internal IDictionary EnvironmentSource { get; init; } = Environment.GetEnvironmentVariables();
 
+    /// <summary>The review sessions a coder's start reads the plan it is started under from; the server hands over its own store, a bare service reads the data directory's.</summary>
+    internal SessionStore? Sessions { get; init; }
+
     private RoleJobStore Store() => new(dataDir, Clock, log, RoleJobProjection.For(dataDir, log));
 
     private RoleJobKeeper Keeper(RoleJobStore store) => new(store, notice, log);
@@ -81,11 +84,12 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
         var keeper = Keeper(store);
         await keeper.SweepAsync(ct);
         RoleJobRetention.Apply(store, log);
+        var link = request.Role == RoleDescriptors.Coder ? await CoderPlanBinding.CaptureAsync(Sessions ?? new SessionStore(dataDir), request, ct) : null;
 
-        return await MadeAsync(store, request, plan, config, ct);
+        return await MadeAsync(store, request, plan, link, config, ct);
     }
 
-    private async Task<string> MadeAsync(RoleJobStore store, RoleJobRequest request, RoleJobPlan plan, RoleJobSettings config, CancellationToken ct)
+    private async Task<string> MadeAsync(RoleJobStore store, RoleJobRequest request, RoleJobPlan plan, CoderPlanLink? link, RoleJobSettings config, CancellationToken ct)
     {
         Directory.CreateDirectory(store.JobsRoot);
         using var capLock = await CapLockAsync(store.JobsRoot, ct);
@@ -102,7 +106,7 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
         }
 
         var made = request with { JobId = RoleJobIds.New(Clock) };
-        var job = store.Create(made, plan);
+        var job = store.Create(made, plan, link);
         store.FolderOf(made.JobId)!.WriteEnvironment(RoleRunEnvironment.Capture(EnvironmentSource));
 
         return await LaunchedAsync(store, job, config, ct);

@@ -98,6 +98,15 @@ internal sealed record RoleJobRecord
 
     public string TaskFile { get; init; } = string.Empty;
 
+    /// <summary>The commit a coder's worktree starts at, settled at the start (<see cref="CoderBase"/>); empty for every other role and for a job written before the field.</summary>
+    public string BaseSha { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The plan a coder job was started under — the branch of the repository when it started, the session of that branch and the plan revision that session had proceeded (<see cref="CoderPlanBinding"/>). Null for every other role
+    /// and for a job written before the field, which the gate then refuses to bind. Read by the gate from here, never from the branch name.
+    /// </summary>
+    public CoderPlanLink? Plan { get; init; }
+
     public string State { get; init; } = RoleJobStates.Queued;
 
     public int Generation { get; init; }
@@ -150,6 +159,8 @@ internal sealed record RoleJobRecord
         Repo = Repo ?? string.Empty,
         WorkItem = WorkItem ?? string.Empty,
         TaskFile = TaskFile ?? string.Empty,
+        BaseSha = BaseSha ?? string.Empty,
+        Plan = Plan?.Normalised(),
         State = State ?? RoleJobStates.Queued,
         Launcher = Launcher ?? string.Empty,
         Model = Model ?? string.Empty,

@@ -7,6 +7,7 @@ using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Runners.Worktrees;
+using CoaiMcp.Server.RoleJobs;
 using CoaiMcp.Store;
 
 namespace CoaiMcp.Server;
@@ -190,7 +191,7 @@ public sealed class PanelService
     public PanelSettings Settings => _settings;
 
     /// <summary>The external-role jobs of this data directory, over this service's log and notice boundary (epoch 3 E1 s1) — the three role tools need nothing else of it.</summary>
-    internal RoleJobs.RoleJobService RoleJobs() => new(_settings.DataDir, Roles.RolesMode.Layered(Environment.GetEnvironmentVariable), _log, _noticing.Offer);
+    internal RoleJobs.RoleJobService RoleJobs() => new(_settings.DataDir, Roles.RolesMode.Layered(Environment.GetEnvironmentVariable), _log, _noticing.Offer) { Sessions = _store };
 
     /// <summary>
     /// The roster this service deals its rounds from — internal so a test can build a round's work
@@ -504,16 +505,27 @@ public sealed class PanelService
                 // a save moves a scratch file over this one.
                 OpenedUtc = DateTime.UtcNow,
             };
-        session = session with
-        {
-            Caller = CallerDeclaration.From(CallerIdentity.Current(), client, clientVersion, callerModel),
-        };
+        var caller = CallerDeclaration.From(CallerIdentity.Current(), client, clientVersion, callerModel);
+        session = await InheritingAsync(session with { Caller = caller }, ct);
         _store.Save(session);
         _log.Information(
             "session {SessionId} open for {Branch}, asked by {Caller}",
-            session.State.SessionId, branch, session.Caller.Phrase);
+            session.State.SessionId, branch, caller.Phrase);
         return Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer);
     }
+
+    /// <summary>
+    /// A coder job's branch takes the plan proceed of the feature it was started under (epoch 3 E2 s5): when <see cref="CoderPlanBinding"/> proves the binding from the job's own record, the session starts its code stage with
+    /// that plan and the plan's text; in every other case — no coder job made this branch, or the binding does not hold — the session is left exactly as it was, and <c>review_code</c> says why when it is asked.
+    /// </summary>
+    private async Task<PersistedSession> InheritingAsync(PersistedSession session, CancellationToken ct) =>
+        await CoderPlanBinding.CheckAsync(_settings.DataDir, _store, session.State.RepoPath, session.State.Branch, _log, ct) is PlanBindingOutcome.Bound bound
+            ? session with
+            {
+                State = RoundMachine.InheritPlan(session.State, bound.Plan),
+                PlanText = session.PlanText.Length > 0 ? session.PlanText : bound.PlanText,
+            }
+            : session;
 
     /// <param name="document">
     /// Which document's review, when the session is one: the same <c>documentPath</c> or
@@ -720,13 +732,13 @@ public sealed class PanelService
         ReviewCodeAsync(repoPath, branch, baseRef, planText, again, string.Empty, ct);
 
     /// <summary>The code gate for a call that names the plan item it is for (<see cref="WorkItems"/>); `workItem` empty is the old call.</summary>
-    public Task<string> ReviewCodeAsync(
+    public async Task<string> ReviewCodeAsync(
         string repoPath, string branch, string baseRef, string planText, bool again, string workItem, CancellationToken ct = default)
     {
         var (item, itemRefusal) = WorkItems.Check(workItem);
         if (itemRefusal.Length > 0)
         {
-            return Task.FromResult(Error(itemRefusal));
+            return Error(itemRefusal);
         }
 
         // Before the scope check and before anything is built, because it needs nothing to be true:
@@ -741,23 +753,31 @@ public sealed class PanelService
             _log.Warning(
                 "review_code refused: every code role is switched off ({Roles})",
                 string.Join(", ", PanelConfig.CodeRoleNames));
-            return Task.FromResult(Error(NoCodeRolesRefusal));
+            return Error(NoCodeRolesRefusal);
         }
 
+        // A coder job's branch inherits its feature's plan proceed — proved from the job's record each time it is asked, never trusted from an earlier call. A binding that does not hold is refused here with its reason.
+        var binding = await CoderPlanBinding.CheckAsync(_settings.DataDir, _store, repoPath, branch, _log, ct);
+        if (binding is PlanBindingOutcome.Refused refusedBinding)
+        {
+            return Error(refusedBinding.Sentence);
+        }
+
+        var inherited = binding as PlanBindingOutcome.Bound;
         var scope = Scope(repoPath, branch, planText);
+        scope = scope.Length == 0 && inherited is not null ? inherited.PlanText : scope;
         var before = _store.Load(repoPath, branch);
         // Only once the stage itself is reachable. "The plan stage has not passed" is the more
         // useful sentence for a caller who skipped it, and telling them to send a scope for a
         // round that could not have run either way sends them to fix the wrong thing.
-        if (before is { State.PlanProceeded: true } && !ReviewScope.IsSubstantial(scope))
+        if ((before is { State.PlanProceeded: true } || inherited is not null) && !ReviewScope.IsSubstantial(scope))
         {
             // Refused before any worktree, any launcher, any token: nothing has to run to know it.
-            return Task.FromResult(Error(ReviewScope.Refusal));
+            return Error(ReviewScope.Refusal);
         }
 
-
-        return _engine.RunStageAsync(repoPath, branch, scope, new StageRun(
-            again ? RoundMachine.BeginCodeRoundAgain : RoundMachine.BeginCodeRound,
+        return await _engine.RunStageAsync(repoPath, branch, scope, new StageRun(
+            Inheriting(again ? RoundMachine.BeginCodeRoundAgain : RoundMachine.BeginCodeRound, inherited?.Plan),
             NeedsWorktree: true, Stage: Stage.CodeReview, ReadsCheckout: true,
             async (session, workingDir, sha, roundToken) =>
             {
@@ -895,6 +915,10 @@ public sealed class PanelService
         },
             ct);
     }
+
+    /// <summary>The code gate's begin, after the plan the session inherits (when it does) is put into the state it begins from.</summary>
+    private static Func<SessionState, Transition> Inheriting(Func<SessionState, Transition> begin, InheritedPlan? plan) =>
+        plan is null ? begin : state => begin(RoundMachine.InheritPlan(state, plan));
 
     /// <summary>A code round's number and the commit it reviewed; number 0 is "none".</summary>
     private sealed record CodeRound(int Number, string Sha);
@@ -1840,6 +1864,7 @@ public sealed class PanelService
     {
         Consultations = _consultations.OpenIn(session.State.RepoPath),
         Pending = session.State.AwaitingResolve ? session.Pending : [],
+        Inherited = session.State.Inherited,
     };
 
     /// <summary>

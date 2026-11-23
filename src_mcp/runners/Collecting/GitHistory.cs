@@ -217,6 +217,10 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
             ? RunAsync(repoPath, ["cat-file", "blob", oid], ct)
             : Refused;
 
+    /// <summary>The branch HEAD is on, as one line; no output (exit 1) on a detached HEAD.</summary>
+    public Task<GitAnswer> HeadBranchAsync(string repoPath, CancellationToken ct = default) =>
+        RunAsync(repoPath, ["symbolic-ref", "--quiet", "--short", "HEAD"], ct);
+
     /// <summary>The working tree's root and the commit HEAD is on — two lines, in that order.</summary>
     public Task<GitAnswer> RootAndHeadAsync(string repoPath, CancellationToken ct = default) =>
         RunAsync(repoPath, ["rev-parse", "--show-toplevel", "HEAD"], ct);
