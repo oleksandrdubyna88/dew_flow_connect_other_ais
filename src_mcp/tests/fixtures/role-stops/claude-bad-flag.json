@@ -1,0 +1,24 @@
+{
+  "cli": "claude",
+  "cliVersion": "2.1.330 (Claude Code)",
+  "recordedUtc": "2026-11-23T01:43:49.137Z",
+  "how": "claude-bad-flag",
+  "argv": [
+    "-p",
+    "--no-such-flag"
+  ],
+  "envOverrides": [],
+  "stdin": "",
+  "exitCode": 1,
+  "signal": null,
+  "seconds": 0.1,
+  "stdout": "",
+  "stderr": "error: unknown option '--no-such-flag'\n",
+  "spawnError": "",
+  "recordedBy": "this story (epoch 3 E1 s3 t1), run live on 2026-11-23",
+  "scrubbed": [
+    "scratch folder path",
+    "session_id and uuid set to zeros",
+    "credential_expires_at"
+  ]
+}

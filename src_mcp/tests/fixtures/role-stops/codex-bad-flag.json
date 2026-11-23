@@ -1,0 +1,24 @@
+{
+  "cli": "codex",
+  "cliVersion": "codex-cli 0.171.0",
+  "recordedUtc": "2026-11-23T01:44:35.804Z",
+  "how": "codex-bad-flag",
+  "argv": [
+    "exec",
+    "--no-such-flag"
+  ],
+  "envOverrides": [],
+  "stdin": "",
+  "exitCode": 2,
+  "signal": null,
+  "seconds": 0,
+  "stdout": "",
+  "stderr": "error: unexpected argument '--no-such-flag' found\n\n  tip: to pass '--no-such-flag' as a value, use '-- --no-such-flag'\n\nUsage: codex exec [OPTIONS] [PROMPT]\n       codex exec [OPTIONS] <COMMAND> [ARGS]\n\nFor more information, try '--help'.\n",
+  "spawnError": "",
+  "recordedBy": "this story (epoch 3 E1 s3 t1), run live on 2026-11-23",
+  "scrubbed": [
+    "scratch folder path",
+    "session_id and uuid set to zeros",
+    "credential_expires_at"
+  ]
+}
