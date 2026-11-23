@@ -177,7 +177,10 @@ thing in this file so an appended line lands in it, so notes on rows are written
   on the one slow sample (host delay 302.3 / 362.2 / 719.8 ms); in that sample the editor took 1016 ms to evaluate the extension, 1736 ms to call `activate`, 1911 ms to ask
   for the sidebar view, and the menu then took 362 ms more (`ready` at 2021.3, `menuReady` 252 ms after it, then the old code loaded). The other two samples took 1022 and 1126 ms.
   Windows, the same commit run again once after the whole run finished (the one re-run the brief allows after an outlier): M2 904.2 / 1538.2 / 1966.4 ms, **pass with 34 ms to spare**, host delay
-  263.3 / 684.5 / 937.9 ms. Both Windows runs say the same thing: the time is the editor's (`eval` to `viewResolve` is 835 ms in the median of the second run and
+  263.3 / 684.5 / 937.9 ms. Windows, a third run (commit 8122df75, which adds only this file to the code of 9948827e; run 45089625239): M2 747.5 / 1628.6 / 2408.1 ms, **FAIL**
+  on one sample again (host delay 307.7 / 799.7 / 1017.3 ms); in the slow sample `eval` came at 1115.7 ms, `activate` at 2133.1 ms, the sidebar view at 2293.2 ms, and `menuReady` 115 ms
+  after that. Linux in the same run: M2 358.4 / 478.7 / 536.3 ms, host delay 12.3 / 31.3 / 62.5 ms, pass. Summary of the three Windows runs: the maximum was over 2000 ms in two of them and
+  at 1966.4 ms in the third; in every slow sample more than 1.9 s had passed before the editor asked for the sidebar view. All three Windows runs say the same thing: the time is the editor's (`eval` to `viewResolve` is 835 ms in the median of the second run and
   `viewResolve` to `menuReady` is 86 ms), so a Windows runner that is slow to start a window can put one sample over 2000 ms whatever the menu does. This is two runs of
   three samples each; it does not say the margin on a slow runner is safe. The old code and chat load after the mark (`moduleRequire` follows `menuReady` by 5 ms in the
   median of the second run).
@@ -193,3 +196,5 @@ thing in this file so an appended line lands in it, so notes on rows are written
 | 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1) | local | linux | 1.1 | 277.2 / 303.6 / 468.8 | null (not read) | pass |
 | 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1) | local | win32 | 32.8 | 1022.1 / 1126.2 / 2273.5 | null (not read) | FAIL (one sample over 2000 ms) |
 | 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1 re-run once after the run finished) | local | win32 | 28.2 | 904.2 / 1538.2 / 1966.4 | null (not read) | pass |
+| 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | linux | 2 | 358.4 / 478.7 / 536.3 | null (not read) | pass |
+| 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | win32 | 12.4 | 747.5 / 1628.6 / 2408.1 | null (not read) | FAIL (one sample over 2000 ms) |
