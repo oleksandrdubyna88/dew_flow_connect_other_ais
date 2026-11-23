@@ -7,6 +7,8 @@
 //   stderr-exit <text> <code>            — text to stderr, exit <code>
 //   sleep <ms>                           — exit 0 after the delay
 //   emit-bytes <n>                       — n bytes of 'x' on stdout in lines of 99, no pause, exit 0 (a check step that is too chatty; epoch 3 E2 s1 t2)
+//   write-files <path>...                — try to write each path; "wrote <path>" on stdout, "fake-cli: could not write <path>: <why>" on stderr; exit 0 (the fake as a coder, epoch 3 E2 s2 t5)
+//   hold-in <folder> <ms>                — write <folder>/ready, then wait <ms>, exit 0 (a coder that is working; a test waits for the file)
 //   emit-repeat <text> <times>           — <text> <times> times on stdout, exit 0 (output whose bytes outnumber its characters)
 //   busy <dir> <ms>                      — write <guid>.start (ticks), sleep, write <guid>.end (ticks)
 //   flip <flag> <firstStderr> <firstExit> <thenStdout>
@@ -329,6 +331,13 @@ switch (args0)
         }
 
         return 0;
+
+    // Epoch 3 E2 s2 t5: the fake as a CODER. `write-files` tries each path and says which it could not write (the OS layer's answer, on stderr), exiting 0; `hold-in` says it is working by writing `ready` into a folder, then waits.
+    case ["write-files", ..var writePaths]:
+        return CoaiMcp.FakeCli.CoderVerbs.WriteFiles(writePaths);
+
+    case ["hold-in", var holdFolder, var holdMs]:
+        return CoaiMcp.FakeCli.CoderVerbs.HoldIn(holdFolder, int.Parse(holdMs));
 
     // Every environment variable NAME this child was started with, one per line. The only way to ask
     // what a launch actually handed a process: a dictionary asserted in-process is a test of the

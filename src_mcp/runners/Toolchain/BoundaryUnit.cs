@@ -37,12 +37,7 @@ internal static class BoundaryUnit
 
         return
         [
-            "ProtectSystem=strict",
-            "ProtectHome=tmpfs",
-            "TemporaryFileSystem=/run/user",
-            "TemporaryFileSystem=/mnt",
-            "TemporaryFileSystem=/dev/shm",
-            "InaccessiblePaths=-/run/WSL",
+            .. Isolation,
             $"BindPaths={tree.Root}",
             $"BindReadOnlyPaths={tree.MainCheckout}",
             $"BindReadOnlyPaths={tree.GitEntry}",
@@ -51,18 +46,44 @@ internal static class BoundaryUnit
             $"BindPaths={job.VarTempFolder}:{UnitVarTemp}",
             .. host.ReadOnlyCaches.Select(cache => $"BindReadOnlyPaths={cache}"),
             .. network == CheckNetwork.Host && host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
-            "NoNewPrivileges=yes",
-            "PrivateUsers=yes",
-            "RestrictSUIDSGID=yes",
-            "LockPersonality=yes",
-            "ProtectKernelTunables=yes",
-            "ProtectControlGroups=yes",
-            "Nice=10",
+            .. Hardening,
             network == CheckNetwork.Private ? "PrivateNetwork=yes" : "PrivateNetwork=no",
-            $"RuntimeMaxSec={Math.Max(1, (long)Math.Ceiling(runtimeMax.TotalSeconds)).ToString(CultureInfo.InvariantCulture)}",
-            .. DetachedLauncher.MemoryProperties(job.MemoryMegabytes),
+            .. Limits(job, runtimeMax),
         ];
     }
+
+    /// <summary>
+    /// What hides the host from a unit, for a check and for a coder alike: <c>/home</c>, <c>/root</c> and <c>/run/user</c> are empty tmpfs (<c>ProtectHome=tmpfs</c>), <c>/mnt</c> and <c>/dev/shm</c> too, the rest of the file system is read-only, and the WSL
+    /// interop folder is closed. A folder the unit needs is bound back afterwards, one by one.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> Isolation =
+    [
+        "ProtectSystem=strict",
+        "ProtectHome=tmpfs",
+        "TemporaryFileSystem=/run/user",
+        "TemporaryFileSystem=/mnt",
+        "TemporaryFileSystem=/dev/shm",
+        "InaccessiblePaths=-/run/WSL",
+    ];
+
+    /// <summary>The hardening properties of every unit of this family, and <c>Nice=10</c>: a unit runs below the person's own work (<c>common/local-cpu-budget.md</c> § 2).</summary>
+    internal static readonly IReadOnlyList<string> Hardening =
+    [
+        "NoNewPrivileges=yes",
+        "PrivateUsers=yes",
+        "RestrictSUIDSGID=yes",
+        "LockPersonality=yes",
+        "ProtectKernelTunables=yes",
+        "ProtectControlGroups=yes",
+        "Nice=10",
+    ];
+
+    /// <summary>The deadline backstop and the memory ceiling that kills: <c>RuntimeMaxSec</c>, <c>MemoryMax</c> and <c>MemorySwapMax=0</c>.</summary>
+    internal static IReadOnlyList<string> Limits(BoundaryJob job, TimeSpan runtimeMax) =>
+    [
+        $"RuntimeMaxSec={Math.Max(1, (long)Math.Ceiling(runtimeMax.TotalSeconds)).ToString(CultureInfo.InvariantCulture)}",
+        .. DetachedLauncher.MemoryProperties(job.MemoryMegabytes),
+    ];
 
     /// <summary>
     /// The whole environment of a step, as it is set by <c>env -i</c> inside the unit: <c>PATH</c> of system folders, the job's own <c>HOME</c>, <c>DOTNET_CLI_HOME</c>, <c>NUGET_PACKAGES</c> and <c>npm_config_cache</c>, the
@@ -103,15 +124,25 @@ internal static class BoundaryUnit
             throw new ArgumentException("the program to run in the unit is empty, starts with '-' or holds '='", nameof(command));
         }
 
+        return Wrap(unit, job.Tree.Root, [], Properties(host, job, network, runtimeMax),
+            ["/usr/bin/env", "-i", .. Environment(host, job, extra).Select(pair => $"{pair.Key}={pair.Value}"), .. command], degrade);
+    }
+
+    /// <summary>
+    /// The argv of <c>systemd-run</c> for any unit of this family: <c>--wait --pipe</c>, the unit and its folder, the extra client options (<c>--setenv=NAME</c> copies a variable from the client by NAME, so a value never
+    /// reaches an argv), every property, then <paramref name="inner"/> — the command the unit runs, which sets its own environment.
+    /// </summary>
+    internal static IReadOnlyList<string> Wrap(string unit, string workingDirectory, IReadOnlyList<string> options, IReadOnlyList<string> properties, IReadOnlyList<string> inner,
+        Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade)
+    {
         IReadOnlyList<string> arguments =
         [
             "--wait", "--pipe",
-            .. DetachedLauncher.UnitPrefix(unit, job.Tree.Root),
-            .. Properties(host, job, network, runtimeMax).SelectMany(property => new[] { "-p", property }),
+            .. DetachedLauncher.UnitPrefix(unit, workingDirectory),
+            .. options,
+            .. properties.SelectMany(property => new[] { "-p", property }),
             "--",
-            "/usr/bin/env", "-i",
-            .. Environment(host, job, extra).Select(pair => $"{pair.Key}={pair.Value}"),
-            .. command,
+            .. inner,
         ];
 
         return degrade is null ? arguments : degrade(arguments);

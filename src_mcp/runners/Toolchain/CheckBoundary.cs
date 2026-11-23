@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using CoaiMcp.Core.Toolchain;
 using CoaiMcp.Runners.Processes;
 
@@ -38,12 +37,9 @@ public sealed record BoundaryRun(ProcessResult Result, string Unit, bool Gone, B
 /// </remarks>
 public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
 {
+    private readonly UnitControl _units = new(launcher, host);
+
     private static readonly TimeSpan PreflightBudget = TimeSpan.FromSeconds(60);
-
-    private static readonly TimeSpan StopBudget = TimeSpan.FromSeconds(20);
-
-    /// <summary>How long past the step's own deadline systemd lets the unit live if nobody stops it.</summary>
-    internal static readonly TimeSpan Backstop = TimeSpan.FromMinutes(1);
 
     /// <summary>For a test only: rewrites the finished <c>systemd-run</c> argument list of every unit this boundary starts, so a RED can drop one property and see the preflight refuse. Production never sets it.</summary>
     internal Func<IReadOnlyList<string>, IReadOnlyList<string>>? Degrade { get; init; }
@@ -75,17 +71,11 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
         finally
         {
-            TidyAfterPreflight(job, program.Copy);
+            BoundaryFolders.Tidy(job, program.Copy, job.TempFolder, job.VarTempFolder);
         }
     }
 
-    private string EarlyRefusal(BoundaryJob job) => host.Platform switch
-    {
-        BoundaryPlatform.Linux => job.Problem(),
-        BoundaryPlatform.Windows => "Coder jobs are refused on native Windows in this epoch: it has no OS write boundary for the checks. Run the job in WSL.",
-        BoundaryPlatform.MacOs => "Coder jobs are refused on macOS in this epoch: it has no OS write boundary for the checks. Run the job on Linux with a systemd user manager.",
-        _ => "Coder jobs are refused here: this operating system has no OS write boundary for the checks.",
-    };
+    private string EarlyRefusal(BoundaryJob job) => host.PlatformRefusal() is { Length: > 0 } platform ? platform : job.Problem();
 
     private async Task<BoundaryAdmission> AskEveryNetworkAsync(BoundaryJob job, IReadOnlyCollection<CheckNetwork> networks, string program, CancellationToken ct)
     {
@@ -93,7 +83,7 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
         foreach (var network in networks.Distinct())
         {
             var rows = await PreflightAsync(job, network, program, ct);
-            var record = new BoundaryRecord(BoundaryRecord.UnitBoundary, PropertiesFor(job, network, PreflightBudget + Backstop), network == CheckNetwork.Private ? "none" : "host", string.Empty, rows);
+            var record = new BoundaryRecord(BoundaryRecord.UnitBoundary, PropertiesFor(job, network, PreflightBudget + UnitControl.Backstop), network == CheckNetwork.Private ? "none" : "host", string.Empty, rows);
             var bad = rows.FirstOrDefault(row => !row.Held);
             if (bad is not null)
             {
@@ -109,90 +99,16 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
     private static BoundaryAdmission.Refused Refuse(string sentence, IReadOnlyList<PreflightRow> rows) =>
         new(sentence, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "none", string.Empty, rows));
 
-    /// <summary>Makes the job's folders and the three marker files the preflight looks for (in its /tmp, its /var/tmp and the worktree), and copies the Windows program into the worktree when the host has one. A sentence says why it could not.</summary>
-    private (string Sentence, string Copy) PrepareFolders(BoundaryJob job)
-    {
-        try
-        {
-            foreach (var folder in job.Folders)
-            {
-                Directory.CreateDirectory(folder);
-            }
-
-            File.WriteAllText(Path.Combine(job.TempFolder, BoundaryPreflight.MarkerName(job)), string.Empty);
-            File.WriteAllText(Path.Combine(job.VarTempFolder, BoundaryPreflight.MarkerName(job)), string.Empty);
-            File.WriteAllText(Path.Combine(job.Tree.Root, BoundaryPreflight.MarkerName(job)), string.Empty);
-
-            return (string.Empty, CopyProgram(job));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return ($"The job folders could not be made, so the job was refused: {e.Message}", string.Empty);
-        }
-    }
-
-    private string CopyProgram(BoundaryJob job)
-    {
-        if (host.WindowsProgram.Length == 0 || !File.Exists(host.WindowsProgram))
-        {
-            return string.Empty;
-        }
-
-        var copy = Path.Combine(job.Tree.Root, BoundaryPreflight.ProgramCopyName);
-        File.Copy(host.WindowsProgram, copy, overwrite: true);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(copy, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        return copy;
-    }
-
-    private static void TidyAfterPreflight(BoundaryJob job, string copy)
-    {
-        TryDelete(copy);
-        TryDelete(Path.Combine(job.TempFolder, BoundaryPreflight.MarkerName(job)));
-        TryDelete(Path.Combine(job.VarTempFolder, BoundaryPreflight.MarkerName(job)));
-        TryDelete(Path.Combine(job.Tree.Root, BoundaryPreflight.MarkerName(job)));
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (path.Length > 0)
-            {
-                File.Delete(path);
-            }
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // The marker is the job's own file in the job's own folder; a copy of a program that cannot be removed is reported by the next git status, not here.
-        }
-    }
+    private (string Sentence, string Copy) PrepareFolders(BoundaryJob job) => BoundaryFolders.Prepare(host, job, job.Folders, job.TempFolder, job.VarTempFolder);
 
     private async Task<IReadOnlyList<PreflightRow>> PreflightAsync(BoundaryJob job, CheckNetwork network, string program, CancellationToken ct)
     {
         var unit = BoundaryUnit.UnitName(job, network == CheckNetwork.Private ? "pre-none" : "pre-host");
         var command = BoundaryPreflight.Command(job, host, network, program);
         var started = await StartAsync(job, unit, network, PreflightBudget, new Dictionary<string, string?>(), command, ct);
-        if (started.Problem.Length > 0)
-        {
-            return [new PreflightRow("user-manager", false, started.Problem)];
-        }
 
-        var gone = await EnsureGoneAsync(unit);
-
-        // A unit that did not run to its end has no rows worth reading: the one row says why, and the job is refused on it.
-        return started.Result is { TimedOut: false, ExitCode: 0 } && gone
-            ? [new PreflightRow("user-manager", true, "systemd-run --user started the preflight unit"), .. BoundaryPreflight.Parse(started.Result.StdOut)]
-            : [new PreflightRow("user-manager", false, Unanswered(started.Result, gone))];
+        return BoundaryPreflight.Rows(started, started.Problem.Length == 0 && await _units.EnsureGoneAsync(unit), BoundaryPreflight.Items);
     }
-
-    private static string Unanswered(ProcessResult result, bool gone) =>
-        !gone ? "the preflight unit could not be stopped"
-        : result.TimedOut ? "the preflight unit did not finish in time"
-        : $"the preflight unit did not start or did not finish (exit {result.ExitCode}): {Short(result.StdErr)}";
 
     /// <summary>Runs one step inside its unit: the program with the argv, <c>env -i</c> and the allow-list set inside, the deadline and the cancel honoured, and the unit asked after and stopped if it is still there.</summary>
     /// <param name="admitted">The preflight's answer for THIS job. A step cannot be started without it: an admission of another job, or one that did not cover the step's network state, is refused with an exception — a programming error, never a data one.</param>
@@ -214,86 +130,33 @@ public sealed class CheckBoundary(IProcessLauncher launcher, BoundaryHost host)
         }
 
         var unit = BoundaryUnit.UnitName(job, part);
-        var record = seen with { Network = network.Wire, NetworkReason = network.Reason, Properties = PropertiesFor(job, network.Mode, timeout + Backstop) };
+        var record = seen with { Network = network.Wire, NetworkReason = network.Reason, Properties = PropertiesFor(job, network.Mode, timeout + UnitControl.Backstop) };
         try
         {
             var started = await StartAsync(job, unit, network.Mode, timeout, extra, command, ct, maxOutputChars);
 
             var result = started.Problem.Length > 0 ? started.Result with { StdErr = started.Problem } : started.Result;
 
-            return new BoundaryRun(result, unit, await EnsureGoneAsync(unit), record);
+            return new BoundaryRun(result, unit, await _units.EnsureGoneAsync(unit), record);
         }
         catch
         {
-            await EnsureGoneAsync(unit);
+            await _units.EnsureGoneAsync(unit);
             throw;
         }
     }
 
-    private sealed record Started(ProcessResult Result, string Problem);
-
-    private async Task<Started> StartAsync(BoundaryJob job, string unit, CheckNetwork network, TimeSpan timeout, IReadOnlyDictionary<string, string?> extra,
+    private async Task<UnitStart> StartAsync(BoundaryJob job, string unit, CheckNetwork network, TimeSpan timeout, IReadOnlyDictionary<string, string?> extra,
         IReadOnlyList<string> command, CancellationToken ct, int maxOutputChars = 1024 * 1024)
     {
-        var arguments = BoundaryUnit.Arguments(host, job, unit, network, timeout + Backstop, extra, command, Degrade);
-        var request = new ProcessRequest(host.SystemdRun, arguments, job.Tree.Root)
+        var arguments = BoundaryUnit.Arguments(host, job, unit, network, timeout + UnitControl.Backstop, extra, command, Degrade);
+
+        return await _units.StartAsync(new ProcessRequest(host.SystemdRun, arguments, job.Tree.Root)
         {
             Timeout = timeout,
             InheritsEnvironment = false,
-            Passthrough = Client,
+            Passthrough = UnitControl.Client,
             MaxOutputChars = maxOutputChars,
-        };
-        try
-        {
-            return new Started(await launcher.RunAsync(request, ct), string.Empty);
-        }
-        catch (Exception e) when (e is Win32Exception or InvalidOperationException)
-        {
-            return new Started(new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, string.Empty, TimedOut: false), $"there is no systemd-run --user on this machine ({e.Message})");
-        }
-    }
-
-    /// <summary>What the <c>systemd-run</c> CLIENT is started with. The unit's own environment is set by <c>env -i</c> inside it; the client only needs to find the user manager.</summary>
-    private static readonly IReadOnlySet<string> Client = new HashSet<string>(["PATH", "HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "LANG"], StringComparer.Ordinal);
-
-    /// <summary>Asks the manager whether the unit is still there and stops it when it is. True when no process of it is left — the unit is not active now.</summary>
-    private async Task<bool> EnsureGoneAsync(string unit)
-    {
-        if (!await IsActiveAsync(unit))
-        {
-            return true;
-        }
-
-        await ControlAsync(["--user", "stop", $"{unit}.service"]);
-
-        return !await IsActiveAsync(unit);
-    }
-
-    private async Task<bool> IsActiveAsync(string unit)
-    {
-        var shown = await ControlAsync(["--user", "show", "--property=ActiveState", "--value", $"{unit}.service"]);
-        var state = shown.StdOut.Trim();
-
-        // An answer that is not a state — the manager did not answer — counts as "still there": a unit that cannot be shown cannot be called gone.
-        return shown.ExitCode != 0 || state is "active" or "activating" or "deactivating" or "reloading" or "";
-    }
-
-    private async Task<ProcessResult> ControlAsync(string[] arguments)
-    {
-        try
-        {
-            return await launcher.RunAsync(new ProcessRequest(host.Systemctl, arguments, Path.GetTempPath()) { Timeout = StopBudget, InheritsEnvironment = false, Passthrough = Client }, CancellationToken.None);
-        }
-        catch (Exception e) when (e is Win32Exception or InvalidOperationException)
-        {
-            return new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, e.Message, TimedOut: false);
-        }
-    }
-
-    private static string Short(string text)
-    {
-        var line = text.Trim().ReplaceLineEndings(" ");
-
-        return line.Length <= 300 ? line : line[..300] + "…";
+        }, ct);
     }
 }

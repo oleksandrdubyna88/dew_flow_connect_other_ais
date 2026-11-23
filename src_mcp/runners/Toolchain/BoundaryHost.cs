@@ -64,6 +64,27 @@ public sealed record BoundaryHost(
         : OperatingSystem.IsMacOS() ? BoundaryPlatform.MacOs
         : BoundaryPlatform.Other;
 
+    /// <summary>
+    /// The sentence that says why no coder job can be bounded on this operating system, or empty on Linux. Native Windows and macOS have no OS write boundary and no write probe in this epoch (decision 8,
+    /// <c>RESULTS_coder_write_boundary_judgement.md</c> § 3); the check boundary and the coder's boundary refuse alike, before any process starts.
+    /// </summary>
+    public string PlatformRefusal() => Platform switch
+    {
+        BoundaryPlatform.Linux => string.Empty,
+        BoundaryPlatform.Windows => "Coder jobs are refused on native Windows in this epoch: it has no OS write boundary for the checks. Run the job in WSL.",
+        BoundaryPlatform.MacOs => "Coder jobs are refused on macOS in this epoch: it has no OS write boundary for the checks. Run the job on Linux with a systemd user manager.",
+        _ => "Coder jobs are refused here: this operating system has no OS write boundary for the checks.",
+    };
+
+    /// <summary>
+    /// The claude CLI's sign-in file under the real home, when it is there — the ONE file of the real home the coder's unit gets, bound read-only into the coder's own home (<see cref="BoundaryJob.CoderSignInFile"/>). Empty when there is none:
+    /// a launch with a key on its row needs no file, and one with neither cannot sign in, which the CLI says itself.
+    /// </summary>
+    public string SignInFile =>
+        RealHome.Length > 0 && System.IO.File.Exists(System.IO.Path.Combine(RealHome, ".claude", ".credentials.json"))
+            ? System.IO.Path.Combine(RealHome, ".claude", ".credentials.json")
+            : string.Empty;
+
     /// <summary>Where node is installed under the real home (<c>~/.nvm</c>).</summary>
     private string NvmRoot => System.IO.Path.Combine(RealHome, ".nvm");
 

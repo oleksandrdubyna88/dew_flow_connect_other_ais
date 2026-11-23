@@ -79,6 +79,32 @@ public sealed record BoundaryJob(
     /// <summary>Every per-job folder coai makes, in the order they are made.</summary>
     public IReadOnlyList<string> Folders => [HomeFolder, TempFolder, VarTempFolder, NuGetFolder, NpmFolder, DotnetFolder];
 
+    /// <summary>
+    /// Where the CODER's own process lives: a folder beside the checks' folders, never the same one. What the claude CLI writes (its config, its transcripts, its caches) must not be in the HOME the checks read, or a coder that writes a
+    /// <c>.npmrc</c>, a <c>.gitconfig</c> or a NuGet source there would steer the build that runs after it.
+    /// </summary>
+    public string CoderFolder => Path.Combine(JobRoot, "coder");
+
+    /// <summary>The coder's <c>HOME</c>: the job's own, with the sign-in file bound into it read-only — never the real one.</summary>
+    public string CoderHomeFolder => Path.Combine(CoderFolder, "home");
+
+    /// <summary>What the coder's unit sees as <c>/tmp</c>.</summary>
+    public string CoderTempFolder => Path.Combine(CoderFolder, "tmp");
+
+    /// <summary>What the coder's unit sees as <c>/var/tmp</c>.</summary>
+    public string CoderVarTempFolder => Path.Combine(CoderFolder, "vartmp");
+
+    /// <summary>Where the sign-in file is bound inside the coder's home.</summary>
+    public string CoderSignInFile => Path.Combine(CoderHomeFolder, ".claude", ".credentials.json");
+
+    /// <summary>Every per-job folder the coder's unit needs, in the order they are made.</summary>
+    public IReadOnlyList<string> CoderFolders => [CoderHomeFolder, Path.Combine(CoderHomeFolder, ".claude"), CoderTempFolder, CoderVarTempFolder];
+
+    /// <summary>
+    /// The folder that holds the worktree, and every other coder worktree beside it: read-only to the coder, with the one worktree of the job bound writable on top. A coder that writes BESIDE its worktree writes into another job's.
+    /// </summary>
+    public string CoderRoot => Path.GetDirectoryName(Tree.Root) ?? string.Empty;
+
     /// <summary>The network state of a step.</summary>
     public NetworkChoice NetworkOf(Core.Toolchain.CheckStep step) => step == Core.Toolchain.CheckStep.Build ? BuildNetwork : TestNetwork;
 
@@ -97,6 +123,16 @@ public sealed record BoundaryJob(
 
         return odd is null ? InsideProblem() : $"The path '{odd}' cannot be given to a unit: it must be absolute and hold no space, colon, backslash or control character.";
     }
+
+    /// <summary>
+    /// <see cref="Problem"/>, and what only a coder's unit needs: a coder root that can be given to a unit and is not the file system's root (a worktree directly under <c>/</c> would make the whole machine read-only).
+    /// </summary>
+    public string CoderProblem() =>
+        Problem() is { Length: > 0 } problem
+            ? problem
+            : !IsPlain(CoderRoot) || CoderRoot == Path.GetPathRoot(CoderRoot)
+                ? $"The coder root '{CoderRoot}' cannot be given to a unit: it must be an absolute folder that is not the root of the file system and holds no space, colon, backslash or control character."
+                : string.Empty;
 
     private string InsideProblem()
     {

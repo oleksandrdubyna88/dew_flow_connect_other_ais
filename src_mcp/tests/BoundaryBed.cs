@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 /// (epoch 3 E2 s2 t4). Nothing here touches the real HOME or a real data folder: every folder is a temp folder, and <see cref="BoundaryHost.RealHome"/> is a path that is not there.
 /// </summary>
 /// <remarks>
-/// <b>It stops every unit its job started.</b> A unit left behind is a process of a test that outlived it, so <see cref="DisposeAsync"/> asks the user manager for <c>coai-check-&lt;job&gt;-*</c>, stops what is there and then FAILS the test that left it.
+/// <b>It stops every unit its job started.</b> A unit left behind is a process of a test that outlived it, so <see cref="DisposeAsync"/> asks the user manager for <c>coai-check-&lt;job&gt;-*</c> and <c>coai-coder-&lt;job&gt;-*</c>, stops what is there and then FAILS the test that left it.
 /// The unit names carry a random job id, so two runs of this suite on one user manager (another worktree's build, say) never meet.
 /// </remarks>
 internal sealed class BoundaryBed : IAsyncDisposable
@@ -101,11 +101,19 @@ internal sealed class BoundaryBed : IAsyncDisposable
         return await boundary.RunAsync(admitted, Job, choice, part, command, extra, timeout ?? TimeSpan.FromSeconds(60), 1024 * 1024, ct);
     }
 
+    /// <summary>The units of this job that are still loaded — a check's (<c>coai-check-</c>) or the coder's (<c>coai-coder-</c>). Empty where there is no systemctl at all: then no unit can have been started.</summary>
     public async Task<string> ActiveUnitsAsync()
     {
-        var listed = await Launcher.RunAsync(new ProcessRequest("systemctl", ["--user", "list-units", $"coai-check-{JobId}-*", "--all", "--no-legend", "--plain"], Worktree) { Timeout = TimeSpan.FromSeconds(20) });
+        try
+        {
+            var listed = await Launcher.RunAsync(new ProcessRequest("systemctl", ["--user", "list-units", $"coai-check-{JobId}-*", $"coai-coder-{JobId}-*", "--all", "--no-legend", "--plain"], Worktree) { Timeout = TimeSpan.FromSeconds(20) });
 
-        return listed.StdOut.Trim();
+            return listed.StdOut.Trim();
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return string.Empty;
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -121,6 +129,6 @@ internal sealed class BoundaryBed : IAsyncDisposable
 
         await _bed.DisposeAsync();
         _home.Dispose();
-        left.Should().BeEmpty("a test of the check boundary must stop every unit it starts");
+        left.Should().BeEmpty("a test of the check boundary or the coder boundary must stop every unit it starts");
     }
 }
