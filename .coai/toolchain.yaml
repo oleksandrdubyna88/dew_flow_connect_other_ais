@@ -1,0 +1,19 @@
+# The checks coai runs on a coder job's worktree in this repository (server.md § 12; shared/toolchain.schema.json).
+# A coder job reads THIS file at its BASE commit, so a change to it takes effect for the jobs after it, not for the job that made it.
+# Block lists only: the strict YAML subset has no flow list but []. Every argv runs from the repository root, with no shell.
+version: 1
+projects:
+  - path: src_mcp
+    adapter: dotnet
+    # Build the whole solution: the MCP server is the thing under test, and its test executable is built with it.
+    build:
+      - dotnet
+      - build
+      - dew_flow_connect_other_ais.slnx
+      - -c
+      - Debug
+      - "-m:{jobs}"
+    # The MTP executable, never `dotnet test`: there is no VSTest host here and it aborts (.agents/conventions/common/testing.md).
+    test:
+      - ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests
+    memoryMb: 3000
