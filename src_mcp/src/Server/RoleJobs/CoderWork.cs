@@ -50,6 +50,7 @@ internal sealed class CoderWork : IRoleWork
 
     public async Task<RoleWorkOutcome> RunAsync(IRoleRun run, CancellationToken ct)
     {
+        var started = run.Clock.GetTimestamp();
         run.Phase("coder-prepare", 0);
         var (site, refusal) = CoderTask.Locate(run.Request.RepoPath, run.Request.TaskFile);
         if (site is null)
@@ -68,10 +69,15 @@ internal sealed class CoderWork : IRoleWork
         var layer = LayerFor(run, prepared);
         RoleFailover? failover = null;
         var judge = new CoderJudge(site.DodIds, () => failover!.RepairTurnsUsed);
-        failover = new RoleFailover(run, judge.Judge) { MaxRepairTurns = RepairTurns, AttemptTimeout = AttemptTimeout, Ladder = Ladder, Coder = new LaunchConfinement.Coder(run.Request.JobId, prepared.Tree.Root), OsLayer = layer };
+        var confinement = new LaunchConfinement.Coder(run.Request.JobId, prepared.Tree.Root);
+        failover = new RoleFailover(run, judge.Judge) { MaxRepairTurns = RepairTurns, AttemptTimeout = AttemptTimeout, Ladder = Ladder, Coder = confinement, OsLayer = layer };
         var outcome = await failover.RunAsync(CoderPrompt.Build(site.PromptInputs, new RolePrompts(run.DataDir)), ct);
+        if (outcome is not RoleWorkOutcome.Succeeded || failover.Session is not { } answered)
+        {
+            return outcome;
+        }
 
-        return outcome is RoleWorkOutcome.Succeeded ? await PublishAsync(run, git, prepared, site, judge.Accepted, layer, ct) : outcome;
+        return await PublishAsync(run, git, prepared, site, judge.Accepted, layer, new CoderFixSession(answered.Model, answered.Handle, confinement), started, ct);
     }
 
     /// <summary>
@@ -114,9 +120,10 @@ internal sealed class CoderWork : IRoleWork
     }
 
     /// <summary>
-    /// The coder has answered: compare the generation, make the one commit of the turn, run the checks on THAT commit, compare again, and give the envelope — green when the checks are, failed with the envelope as the evidence when they are not.
+    /// The coder has answered: compare the generation, make the one commit of turn 0, then the way to green (<see cref="CoderFixLoop"/> — the checks on that commit and, while they are red, fix turns in the same session, one commit each), compare the generation
+    /// again, and give the envelope: green when the checks are, failed with the envelope as the evidence when they are not.
     /// </summary>
-    private async Task<RoleWorkOutcome> PublishAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderReport? report, CoderOsLayer layer, CancellationToken ct)
+    private async Task<RoleWorkOutcome> PublishAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderReport? report, CoderOsLayer layer, CoderFixSession session, long started, CancellationToken ct)
     {
         run.Phase("coder-commit", 0);
         Boundary?.Invoke("before-commit");
@@ -131,9 +138,24 @@ internal sealed class CoderWork : IRoleWork
             return ct.IsCancellationRequested ? new RoleWorkOutcome.Stopped() : failed;
         }
 
-        var head = committed.Head;
-        var round = await new CoderChecks(run, git, layer, prepared.Tree, prepared.BaseSha).RunAsync(0, head, ct);
-        var changes = head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, head, ct);
+        var (cap, note) = FixRounds.Read(run.Settings);
+        if (note.Length > 0)
+        {
+            run.Log.Warning("role job {JobId}: {Note}", run.Request.JobId, note);
+        }
+
+        var loop = new CoderFixLoop(run, git, layer, prepared.Tree, prepared.BaseSha, site, session, started) { Cap = cap, AttemptTimeout = AttemptTimeout, Boundary = Boundary };
+        var ended = await loop.RunAsync(committed.Head, report, ct);
+
+        return ended is CoderLoopEnd.Done done
+            ? await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), ct)
+            : ((CoderLoopEnd.Halted)ended).Outcome;
+    }
+
+    /// <summary>The loop ended with something to show: list the files from git, compare the generation again, and make the envelope — a success when it is green, a failure carrying the same envelope when it is not.</summary>
+    private async Task<RoleWorkOutcome> EnvelopeAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderOsLayer layer, CoderLoopEnd.Done end, CoderChecksReport checks, CancellationToken ct)
+    {
+        var changes = end.Head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, end.Head, ct);
         if (changes is null)
         {
             return ct.IsCancellationRequested ? new RoleWorkOutcome.Stopped() : new RoleWorkOutcome.Failed("coder-commit", "git could not list the files the commit changed");
@@ -145,10 +167,9 @@ internal sealed class CoderWork : IRoleWork
             return new RoleWorkOutcome.Stopped();
         }
 
-        var checks = new CoderChecksReport([round], 0, string.Empty);
-        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, head, prepared.Branch, report is not null, 0, changes, report, layer.Evidence, checks).ToJson();
+        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, end.Head, prepared.Branch, end.Report is not null, end.FixTurns, changes, end.Report, layer.Evidence, checks).ToJson();
 
-        return round.Green ? new RoleWorkOutcome.Succeeded(json) : new RoleWorkOutcome.Failed(round.Stop, round.Note, json);
+        return end.Stop.Length == 0 ? new RoleWorkOutcome.Succeeded(json) : new RoleWorkOutcome.Failed(end.Stop, end.Reason, json);
     }
 
     /// <summary>The worktree as the work holds it.</summary>

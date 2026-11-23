@@ -73,6 +73,9 @@ internal static class RoleAnswers
     }
 }
 
+/// <summary>The session an attempt's answer came from: the model, and the handle its first turn reported (empty when the vendor named none).</summary>
+internal sealed record RoleSession(ModelRef Model, string Handle);
+
 /// <summary>
 /// The attempt loop of a role job (spec A, "Failover", epoch 3 E1 s3): the models of the job's route in order, each launched through its vendor's own CLI in a NEW session — a read-only role restarts from turn 0. Limit, refusal and
 /// crash go to the next model AT ONCE; only the LAST model waits (the <see cref="RetryLadder"/>, inside the job's budget) and only for a throttle; a spent quota, a missing CLI or a lost sign-in also skip the vendor's other models;
@@ -104,6 +107,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// below is NOT made: the main checkout is not read-only to the PERSON, so a change of it is evidence the layer records (decision 8, <c>server.md</c> § 16), never a reason to end the job; only the read-only roles keep <c>tree-changed</c>.
     /// </summary>
     public CoderOsLayer? OsLayer { get; init; }
+
+    /// <summary>
+    /// The session the answer came from, once an attempt ended with one: the model and the handle of its FIRST turn. A coder's fix turns (<see cref="CoderFixLoop"/>) resume exactly this session — never a new one, and never the handle a later turn
+    /// reported. Null until an attempt answered.
+    /// </summary>
+    public RoleSession? Session { get; private set; }
 
     /// <summary>The repair turns the LAST attempt used — what the role reports of how it got its answer.</summary>
     public int RepairTurnsUsed { get; private set; }
@@ -258,6 +267,11 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             }
 
             var launched = await LaunchTurnAsync(model, sent, attempt, left, ct);
+            if (turn == 0)
+            {
+                attempt.FirstHandle = launched.Handle;
+            }
+
             if (ct.IsCancellationRequested)
             {
                 return Interrupted(model, attempt, launched);
@@ -311,6 +325,11 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         LedgerTurn(model, attempt, launched, stop);
         Record(model, attempt, stop, evidence);
 
+        if (stop is null)
+        {
+            Session = new RoleSession(model, attempt.FirstHandle);
+        }
+
         return stop is null ? new Ended.Answer(result) : new Ended.Stop(stop);
     }
 
@@ -347,25 +366,14 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             return new Read(new RoleStop(RoleStopWords.TreeChanged, Redaction.SafeText(sentence, Redaction.TitleLimit), ConsultFailureKinds.TreeChanged, false, false), string.Empty);
         }
 
-        if (launched.OsStop is { } osStop)
+        if (StopOfLaunch(model, launched) is { } stopped)
         {
-            // The layer's word comes before anything the coder said: a coder that was stopped from writing did not do its work, whatever its report claims, and the next model would meet the same layer.
-            return new Read(new RoleStop(RoleStopWords.CoderBoundary, Redaction.SafeText(osStop.Sentence, Redaction.TitleLimit), osStop.Kind, false, false), string.Empty);
-        }
-
-        var name = RoleModelLauncher.RuntimeOf(model.Vendor).Name;
-        if (launched.Refused is { } refused)
-        {
-            return new Read(RoleStops.Of(refused, model.Vendor), string.Empty);
+            return new Read(stopped, string.Empty);
         }
 
         var launch = launched.Launch!;
-        if (launch.Terminal is not null || string.IsNullOrWhiteSpace(launch.Answer))
-        {
-            return new Read(RoleStops.Of(launched.Runtime, launch, model.Vendor, name, new ConsultFailure.Timeout()), string.Empty);
-        }
 
-        return judge(launched.Runtime.ReadAdvice(launch.Answer)) switch
+        return judge(launched.Runtime.ReadAdvice(launch.Answer!)) switch
         {
             RoleAnswerVerdict.Valid valid => new Read(null, valid.ResultJson),
             RoleAnswerVerdict.Repair repair => new Read(null, string.Empty, repair),
@@ -373,6 +381,29 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             RoleAnswerVerdict.Invalid invalid => new Read(new RoleStop(RoleStopWords.OutputInvalid, Redaction.SafeText(invalid.Reason, Redaction.TitleLimit), "output-invalid", false, false), string.Empty),
             _ => new Read(new RoleStop(RoleStopWords.OutputInvalid, "the role gave no verdict on the answer", "output-invalid", false, false), string.Empty),
         };
+    }
+
+    /// <summary>
+    /// What a finished launch came to when it gave no answer the role can judge, or null when it did: the layer's own word first (a coder that was stopped from writing did not do its work, whatever its report claims, and the next model would meet the same
+    /// layer), then a refused preparation, then a launch that ended with a terminal state or said nothing. One reading for every launch of a job — a coder's fix turns read theirs here too.
+    /// </summary>
+    internal static RoleStop? StopOfLaunch(ModelRef model, RoleLaunched launched)
+    {
+        if (launched.OsStop is { } osStop)
+        {
+            return new RoleStop(RoleStopWords.CoderBoundary, Redaction.SafeText(osStop.Sentence, Redaction.TitleLimit), osStop.Kind, false, false);
+        }
+
+        if (launched.Refused is { } refused)
+        {
+            return RoleStops.Of(refused, model.Vendor);
+        }
+
+        var launch = launched.Launch!;
+
+        return launch.Terminal is not null || string.IsNullOrWhiteSpace(launch.Answer)
+            ? RoleStops.Of(launched.Runtime, launch, model.Vendor, RoleModelLauncher.RuntimeOf(model.Vendor).Name, new ConsultFailure.Timeout())
+            : null;
     }
 
     // ---------- the tree ----------
@@ -455,10 +486,24 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         }
 
         var share = launched.Runtime.UsageIsCumulative ? ConsultationUsage.Less(launch.Usage, attempt.CounterBefore) : launch.Usage;
+        RecordLedger(run, model, launched, stop, attempt.TurnEnded - attempt.TurnBegun, share);
+    }
+
+    /// <summary>
+    /// One line of the usage ledger for one launch of a role job — the one writer, so a coder's fix turn is a line exactly as turn 0 is. Nothing for a preparation that refused before anything started. <paramref name="share"/> is what THIS launch
+    /// consumed (a cumulative vendor's report is cut by the caller). Never throws.
+    /// </summary>
+    internal static void RecordLedger(IRoleRun run, ModelRef model, RoleLaunched launched, RoleStop? stop, TimeSpan duration, Usage share)
+    {
+        if (launched.Launch is not { } launch)
+        {
+            return;
+        }
+
         var ranWith = (launched.Invocation?.RanWith ?? LaunchOptions.None).VersionedBy(launch.CliVersion);
         new UsageLedger(run.DataDir).RecordJob(
             string.Empty, model.Vendor, model.Model, run.Request.Role, stop is null ? "ok" : stop.Kind.Length > 0 ? stop.Kind : stop.Word,
-            attempt.TurnEnded - attempt.TurnBegun, share, UsageKinds.Role, "RoleJob", ranWith, resetsUtc: UsageLedger.StatedResetOf(launch.Terminal, DateTimeOffset.UtcNow));
+            duration, share, UsageKinds.Role, "RoleJob", ranWith, resetsUtc: UsageLedger.StatedResetOf(launch.Terminal, DateTimeOffset.UtcNow));
     }
 
     /// <summary>The mutable state of ONE attempt across its turns: where its evidence goes, the session to resume, and what its launches consumed.</summary>
@@ -473,6 +518,9 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         public FilesystemSnapshot? Before => before;
 
         public string Handle { get; set; } = string.Empty;
+
+        /// <summary>The handle turn 0 reported: what a coder's fix turns resume, whatever a later turn answered with.</summary>
+        public string FirstHandle { get; set; } = string.Empty;
 
         public DateTime TurnBegun { get; set; }
 
