@@ -646,13 +646,14 @@ jobs:
         run: node scripts/host-job-streak.mjs
 
   # THE COLD-START MEASUREMENT (v2 extension.md § 2; epic E2, story S2). REQUIRED — no `continue-on-error`, unlike the job above: a sidebar that
-  # takes more than two seconds to paint, or an entry that spends more than 50 ms in `activate`, is a regression of the one thing the thin
+  # takes more than two seconds (Linux) or three seconds (Windows) to paint, or an entry that spends more than 100 ms in `activate`, is a regression of the one thing the thin
   # shell is for, and a check that reports and cannot fail would be read as a number nobody has to keep.
   #
   # Each of three samples is its OWN launch of a real VS Code with a fresh user-data directory, extensions directory, workspace and data directory
   # (`scripts/run-host.mjs measure`); the scenario asserts the extension is not active, starts its clock, runs `workbench.view.extension.coai`,
-  # waits for a fresh `menuReady` (the real sidebar menu is shown and usable; owner rule 2026-11-23) and reads the marks through `coai.__measure`. It fails when the MAXIMUM M2 is over 2000 ms, M1 over
-  # 50 ms, or an acknowledgement is missing; M3 (first data) is recorded. Linux runs under xvfb exactly like the job above; Windows needs no display.
+  # waits for a fresh `menuReady` (the real sidebar menu is shown and usable; owner rule 2026-11-23) and reads the marks through `coai.__measure`. It fails when the MAXIMUM M2 is over 2000 ms on Linux or over
+  # 3000 ms on Windows (owner decision 2026-11-23; `scripts/coldstart-lib.mjs` reads the platform from the run's own records, `host.platform`), M1 over
+  # 100 ms, or an acknowledgement is missing; M3 (first data) is recorded. Linux runs under xvfb exactly like the job above; Windows needs no display.
   # The numbers are in the log and in the `cold-start-<os>` artifact; the Remote-WSL leg is run by hand (`scripts/measure-remote-wsl.ps1`).
   measure:
     name: extension · cold start (${{ matrix.os }})
@@ -689,6 +690,7 @@ jobs:
         shell: bash
         run: xvfb-run -a npm run measure:host -- --json "$RUNNER_TEMP/cold-start.json" --label "ci ${{ matrix.os }}"
 
+      # The M2 limit of this leg is 3000 ms (owner decision 2026-11-23); the Linux leg above keeps 2000 ms. Both come from the platform in the run's records.
       - name: Cold start in a real editor (Windows)
         if: runner.os == 'Windows'
         working-directory: src_vs_code

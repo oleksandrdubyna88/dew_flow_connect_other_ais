@@ -14,7 +14,8 @@
  *   <li><b>M2</b> — the driver's clock, started just before it runs `workbench.view.extension.coai`, to the moment the REAL sidebar menu is shown
  *       and usable: the webview's `menuReady` message reaching the host, `menuReady.at - t0`, using the FIRST `menuReady` made at or after `t0`.
  *       A page says it only when it shows every section header and none of them is inert or hidden (`src/sidebarMenu.ts`); a skeleton, or an
- *       inert copy of an old page, never says it. Limit 2000 ms, and the MAXIMUM of the samples counts. <b>Definition changed 2026-11-23</b> (owner
+ *       inert copy of an old page, never says it. Limit 2000 ms on Linux (and on any platform not named in {@link LIMITS}), 3000 ms on Windows (owner decision, 2026-11-23); the platform is the one in the sample's own record (`host.platform`, the extension host's `process.platform`),
+ *       so a Remote-WSL host, which runs on Linux, has 2000 ms. The MAXIMUM of the samples counts. <b>Definition changed 2026-11-23</b> (owner
  *       rule): M2 used to end at `ready`, the page's first acknowledgement. `ready` and `firstPaint` are still recorded, as marks and as
  *       {@link deriveSample}'s `ready` / `firstPaint` (ms after the clock), and judged by nothing.</li>
  *   <li><b>M3</b> — the same clock to the first state handed to the webview (`firstData`). Recorded, never a limit.</li>
@@ -35,8 +36,17 @@
 
 export const SCHEMA = 1;
 
-/** The limits of the design: M2 (command to the real menu, `menuReady`) at most 2000 ms in every sample, M1 (own time of the entry) at most 100 ms. */
-export const LIMITS = Object.freeze({ m2MaxMs: 2000, m1MaxMs: 100 });
+/**
+ * The limits of the design. M2 (command to the real menu, `menuReady`) is at most `m2MaxMs[platform]` in every sample: 3000 ms on Windows (`win32`), 2000 ms on
+ * Linux and on every platform not named here (`default`) — owner decision 2026-11-23. M1 (own time of the entry) is at most 100 ms on every platform.
+ * Read the M2 limit through {@link m2LimitFor}, never by indexing, so an unnamed platform (or a name like `constructor`) gets `default`.
+ */
+export const LIMITS = Object.freeze({ m2MaxMs: Object.freeze({ win32: 3000, default: 2000 }), m1MaxMs: 100 });
+
+/** The M2 limit in ms for the platform a sample was measured on (`process.platform` of its extension host); `default` for a platform not named, or not stated. */
+export function m2LimitFor(platform, table = LIMITS.m2MaxMs) {
+  return typeof platform === 'string' && platform !== 'default' && Object.hasOwn(table, platform) ? table[platform] : table.default;
+}
 
 /** How many cold launches make one measurement. */
 export const SAMPLES = 3;
@@ -201,7 +211,9 @@ export function stats(values) {
 
 /**
  * Raw records to the verdict. `expected` is how many launches the measurement needs (a record missing for a failed launch
- * is a missing sample, which is a failure, not a smaller measurement).
+ * is a missing sample, which is a failure, not a smaller measurement). The M2 limit is the one of the platform the RECORDS name (`host.platform`),
+ * not of the machine that reads them: a Remote-WSL record read on Windows is a Linux record. Records of two platforms are a problem, and the
+ * default limit applies to them.
  */
 export function summarize(raws, { expected = SAMPLES, recordOnly = false, limits = LIMITS } = {}) {
   const samples = raws.map((raw) => deriveSample(raw, { recordOnly }));
@@ -219,12 +231,18 @@ export function summarize(raws, { expected = SAMPLES, recordOnly = false, limits
   if (locations.length > 1) {
     problems.push(`the samples ran in different places: ${locations.join(', ')}`);
   }
+  const platforms = [...new Set(samples.map((one) => one.platform))];
+  const platform = platforms.length === 1 ? platforms[0] : null;
+  if (platforms.length > 1) {
+    problems.push(`the samples ran on different platforms: ${platforms.join(', ')}`);
+  }
+  const applied = { m2MaxMs: m2LimitFor(platform, limits.m2MaxMs), m1MaxMs: limits.m1MaxMs };
   if (!recordOnly) {
-    if (m2 !== null && m2.max > limits.m2MaxMs) {
-      problems.push(`M2 max ${m2.max} ms is over the ${limits.m2MaxMs} ms limit`);
+    if (m2 !== null && m2.max > applied.m2MaxMs) {
+      problems.push(`M2 max ${m2.max} ms is over the ${applied.m2MaxMs} ms limit (${platform ?? 'platform not stated'})`);
     }
-    if (m1 !== null && m1.max > limits.m1MaxMs) {
-      problems.push(`M1 max ${m1.max} ms is over the ${limits.m1MaxMs} ms limit`);
+    if (m1 !== null && m1.max > applied.m1MaxMs) {
+      problems.push(`M1 max ${m1.max} ms is over the ${applied.m1MaxMs} ms limit`);
     }
   }
 
@@ -232,7 +250,8 @@ export function summarize(raws, { expected = SAMPLES, recordOnly = false, limits
     schema: SCHEMA,
     kind: 'coai-cold-start',
     recordOnly,
-    limits: recordOnly ? null : { ...limits },
+    // The limits that were applied: M2's is the one of this measurement's platform.
+    limits: recordOnly ? null : applied,
     // The extension host's place: 'local', or the remote's name ('wsl', 'ssh-remote', ...).
     location: locations.length === 1 ? locations[0] : null,
     platform: samples[0]?.platform ?? null,

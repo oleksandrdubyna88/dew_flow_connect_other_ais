@@ -15,7 +15,7 @@ parallelWith:
 doneWhen:
   - "no onStartupFinished; activate() only registers (entryPurity test)"
   - "entry firewall checks inputs and output imports; byte budgets green"
-  - "M2 = command → the REAL sidebar menu (section headers Notifications, Active gates, Active consultations, Phrases, Bugz) painted AND interactive (page posts menuReady; a skeleton or inert snapshot does not count) ≤ 2000 ms in every sample, on Linux CI, Windows CI and Remote-WSL (owner, 2026-11-23); M1 ≤ 100 ms"
+  - "M2 = command → the REAL sidebar menu (section headers Notifications, Active gates, Active consultations, Phrases, Bugz) painted AND interactive (page posts menuReady; a skeleton or inert snapshot does not count) ≤ 2000 ms in every sample on Linux CI and Remote-WSL (its extension host runs on Linux), ≤ 3000 ms on Windows CI (owner, 2026-11-23); M1 ≤ 100 ms"
   - "v1 baseline and per-step marks of the old activate() recorded"
   - "joint smoke with the E1 binary passes; settings-mirror check done"
 ```
@@ -227,10 +227,10 @@ dependsOn:
 doneWhen:
   - "sidebar polls only while visible"
   - "all chat host scenarios pass"
-  - "M2 still ≤ 2000 ms"
+  - "M2 still ≤ 2000 ms on Linux and ≤ 3000 ms on Windows"
   - "no escalation or cadence control or watcher in the bundle"
   - "--setup-clients runs after every activation (after ready) and finishes an interrupted client update"
-  - "the sidebar module draws the real interactive menu itself (collapsed section headers) without the legacy bundle; opening a section before the old code is ready shows loading for that section only; menuReady ≤ 2000 ms in every sample"
+  - "the sidebar module draws the real interactive menu itself (collapsed section headers) without the legacy bundle; opening a section before the old code is ready shows loading for that section only; menuReady ≤ 2000 ms (Linux) or ≤ 3000 ms (Windows) in every sample"
 ```
 
 ## v2/epoch-1/e4-shell-modules/stories/s3-sidebar/story.yaml
@@ -392,7 +392,7 @@ dod:
 ```yaml
 # coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
 id: t2-recheck-m2
-title: "Re-run the measure launch; M2 still ≤ 2000 ms"
+title: "Re-run the measure launch; M2 still ≤ 2000 ms on Linux and ≤ 3000 ms on Windows"
 kind: measure
 complexity: 2
 dependsOn:

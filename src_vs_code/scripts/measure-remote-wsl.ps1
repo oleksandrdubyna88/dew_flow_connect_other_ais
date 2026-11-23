@@ -17,6 +17,8 @@
        in the workspace folder; the script reads it back over \\wsl.localhost\<distro>\...;
     5. closes the window; at the end it removes its run folder in the distro (which is where everything it installed lives).
   Then scripts/coldstart-report.mjs (node) applies the same rule as CI: the MAXIMUM M2 at most 2000 ms, M1 at most 100 ms, a fresh ack in every sample.
+  The M2 limit follows the platform the records name (owner 2026-11-23: 3000 ms on Windows, 2000 ms on Linux). Remote-WSL runs the extension host on
+  LINUX, so the records say `linux` and the limit here is 2000 ms, not the 3000 ms of the Windows CI job, although this script runs on Windows.
   The result names the extension-host location: `location` is `wsl` when the extension host really ran in WSL (the script fails otherwise), and
   every sample also records the platform and the path the extension was loaded from.
 

@@ -316,9 +316,10 @@ test('a page that never says menuReady does not hold the old code and chat back 
   const chat = fakeChat();
   const timers = manualTimers();
 
-  // The fallback must not fire inside the 2000 ms the start is allowed (coldstart-lib.mjs LIMITS.m2MaxMs): the old code loads in one block of the host's
+  // The fallback must not fire inside the start budget — 2000 ms on Linux, 3000 ms on Windows (coldstart-lib.mjs LIMITS.m2MaxMs): the old code loads in one block of the host's
   // thread, and one that began while menuReady was on its way would be counted as the menu's time.
   assert.ok(sidebar.FALLBACK_MS > 2000, 'the fallback is later than the start budget');
+  assert.ok(sidebar.FALLBACK_MS > 3000, 'and later than the longest budget of any platform (Windows, 3000 ms)');
   sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, chat.chat, NO_INSTALL);
   timers.advance(sidebar.FALLBACK_MS - 1);
   assert.equal(old.loads() + chat.started(), 0, 'not before the fallback');
@@ -538,7 +539,7 @@ test('a page that never says menuReady starts the install work on the fallback, 
 
   sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat, install.install);
   timers.advance(sidebar.FALLBACK_MS - 1);
-  assert.equal(install.started(), 0, 'not before the fallback: the start budget is 2000 ms and the fallback is later');
+  assert.equal(install.started(), 0, 'not before the fallback: the start budget is 2000 ms (Linux) or 3000 ms (Windows) and the fallback is later');
   timers.advance(sidebar.FALLBACK_MS);
   assert.equal(install.started(), 1);
   fake.hear({ type: 'menuReady' });

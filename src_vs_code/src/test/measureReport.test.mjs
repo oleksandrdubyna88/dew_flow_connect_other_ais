@@ -15,10 +15,10 @@ import { summarize } from '../../scripts/coldstart-lib.mjs';
 
 const quiet = () => {};
 const T0 = 7_000_000;
-const sample = (n, remoteName = 'wsl', m2 = 900) => ({
+const sample = (n, remoteName = 'wsl', m2 = 900, platform = 'linux') => ({
   schema: 1, sample: n, t0: T0, startedActive: false,
   marks: [{ name: 'eval', at: T0 - 100 }, { name: 'activateStart', at: T0 - 100 }, { name: 'activateReturn', at: T0 - 90 }, { name: 'firstData', at: T0 + 500 }, { name: 'ready', at: T0 + m2 - 10 }, { name: 'menuReady', at: T0 + m2 }],
-  host: { remoteName, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Code' },
+  host: { remoteName, platform, vscodeVersion: '1.99.0', appName: 'Code' },
 });
 
 function files(t, records) {
@@ -46,11 +46,24 @@ test('R1 three good records pass: the exit code is 0, the JSON is written, and t
   assert.ok(lines.some((line) => line.includes('passed')));
 });
 
+test('R1b the limit follows the platform of the RECORDS, not of the machine that runs the report: Remote-WSL records (linux) 2000 ms, Windows records 3000 ms', async (t) => {
+  const errors = [];
+  const wsl = await report(files(t, [sample(1), sample(2, 'wsl', 2000.1), sample(3)]), { log: quiet, error: (line) => errors.push(line) });
+  assert.equal(wsl, 1, 'a Remote-WSL host runs on Linux: its limit is 2000 ms even though the report is read on Windows');
+  assert.match(errors.join('\n'), /M2 max 2000\.1 ms is over the 2000 ms limit \(linux\)/);
+  assert.equal(await report(files(t, [sample(1), sample(2, 'wsl', 2000), sample(3)]), { log: quiet, error: quiet }), 0);
+
+  const windowsErrors = [];
+  assert.equal(await report(files(t, [sample(1, null, 900, 'win32'), sample(2, null, 3000, 'win32'), sample(3, null, 900, 'win32')]), { log: quiet, error: quiet }), 0);
+  assert.equal(await report(files(t, [sample(1, null, 900, 'win32'), sample(2, null, 3000.1, 'win32'), sample(3, null, 900, 'win32')]), { log: quiet, error: (line) => windowsErrors.push(line) }), 1);
+  assert.match(windowsErrors.join('\n'), /M2 max 3000\.1 ms is over the 3000 ms limit \(win32\)/);
+});
+
 test('R2 a slow sample, a missing sample, a bad flag and an unreadable file each fail with their own code', async (t) => {
   const errors = [];
   const slow = await report(files(t, [sample(1), sample(2, 'wsl', 2500), sample(3)]), { log: quiet, error: (line) => errors.push(line) });
   assert.equal(slow, 1);
-  assert.match(errors.join('\n'), /M2 max 2500 ms is over the 2000 ms limit/);
+  assert.match(errors.join('\n'), /M2 max 2500 ms is over the 2000 ms limit \(linux\)/);
 
   assert.equal(await report(files(t, [sample(1), sample(2)]), { log: quiet, error: (line) => errors.push(line) }), 1);
   assert.match(errors.join('\n'), /2 sample\(s\) came back, 3 were needed/);

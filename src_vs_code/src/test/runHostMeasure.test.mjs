@@ -21,10 +21,10 @@ const quiet = () => {};
 const T0 = 5_000_000;
 
 /** What the scenario writes for one sample; `m2: null` is a launch whose ack never came. */
-function record(sample, { m1 = 15, m2 = 900, startedActive = false } = {}) {
+function record(sample, { m1 = 15, m2 = 900, startedActive = false, platform = 'linux' } = {}) {
   const marks = [{ name: 'eval', at: T0 - 3000 }, { name: 'activateStart', at: T0 - 3000 }, { name: 'activateReturn', at: T0 - 3000 + m1 }, ...(m2 === null ? [] : [{ name: 'firstData', at: T0 + 700 }, { name: 'ready', at: T0 + m2 - 10 }, { name: 'menuReady', at: T0 + m2 }])];
 
-  return { schema: 1, sample, t0: T0, startedActive, marks, host: { remoteName: null, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Code' } };
+  return { schema: 1, sample, t0: T0, startedActive, marks, host: { remoteName: null, platform, vscodeVersion: '1.99.0', appName: 'Code' } };
 }
 
 /** A launch that behaves as `plan(sample)` says: a record to write, an error to throw, or both. */
@@ -99,15 +99,29 @@ test('M2 a planted 3 s sleep in activation fails the launch, naming M1', async (
   assert.match(errors.join('\n'), /M1 max 3000 ms is over the 100 ms limit/);
 });
 
-test('M3 an M2 over 2000 ms in any one sample fails, a missing ack fails, and the others still ran', async (t) => {
+test('M3 an M2 over 2000 ms (Linux) in any one sample fails, a missing ack fails, and the others still ran', async (t) => {
   const slow = await run(t, [], (sample) => ({ write: record(sample, { m2: sample === 3 ? 2400 : 500 }) }));
   assert.equal(slow.code, 1);
-  assert.match(slow.errors.join('\n'), /M2 max 2400 ms is over the 2000 ms limit/);
+  assert.match(slow.errors.join('\n'), /M2 max 2400 ms is over the 2000 ms limit \(linux\)/);
 
   const missing = await run(t, [], (sample) => ({ write: record(sample, { m2: sample === 1 ? null : 500 }) }));
   assert.equal(missing.code, 1);
   assert.equal(missing.seen.length, 3, 'a sample without an ack does not stop the rest');
   assert.match(missing.errors.join('\n'), /sample 1: no menuReady/);
+});
+
+test('M3b the M2 limit is that of the platform, read from the record the editor wrote: Windows 3000 ms, Linux 2000 ms, whatever machine runs this script (owner 2026-11-23)', async (t) => {
+  const windows = await run(t, [], (sample) => ({ write: record(sample, { platform: 'win32', m2: sample === 2 ? 3000 : 500 }) }));
+  assert.equal(windows.code, 0, windows.errors.join('\n'));
+  const windowsSlow = await run(t, [], (sample) => ({ write: record(sample, { platform: 'win32', m2: sample === 2 ? 3000.1 : 500 }) }));
+  assert.equal(windowsSlow.code, 1);
+  assert.match(windowsSlow.errors.join('\n'), /M2 max 3000\.1 ms is over the 3000 ms limit \(win32\)/);
+
+  const linux = await run(t, [], (sample) => ({ write: record(sample, { platform: 'linux', m2: sample === 2 ? 2000 : 500 }) }));
+  assert.equal(linux.code, 0, linux.errors.join('\n'));
+  const linuxSlow = await run(t, [], (sample) => ({ write: record(sample, { platform: 'linux', m2: sample === 2 ? 2000.1 : 500 }) }));
+  assert.equal(linuxSlow.code, 1);
+  assert.match(linuxSlow.errors.join('\n'), /M2 max 2000\.1 ms is over the 2000 ms limit \(linux\)/);
 });
 
 test('M4 an extension that was already active is not a cold start', async (t) => {

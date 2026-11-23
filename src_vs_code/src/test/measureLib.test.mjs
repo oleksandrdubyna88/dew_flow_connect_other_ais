@@ -1,7 +1,7 @@
 import '../../scripts/inRunFolder.cjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { deriveSample, LIMITS, parseMeasureArgs, stats, stepsOf, stepsTable, summarize, summaryLine, tableRow, TABLE_HEADER } from '../../scripts/coldstart-lib.mjs';
+import { deriveSample, LIMITS, m2LimitFor, parseMeasureArgs, stats, stepsOf, stepsTable, summarize, summaryLine, tableRow, TABLE_HEADER } from '../../scripts/coldstart-lib.mjs';
 
 /**
  * The pure parts of the cold-start measurement (v2 extension.md § 2, epic E2 story S2): how M1/M2/M3 are read off the marks, which samples do not
@@ -15,7 +15,7 @@ const T0 = 1_000_000;
  * A raw record like `measureScenario.ts` writes: M1 = `m1` ms, host delay = `hostDelay` ms, M2 = `m2` ms (the `menuReady` mark; null: none), M3 = `m3` ms (null: none).
  * The page's `ready` comes 10 ms before its `menuReady`; `skeleton: true` is a page that said `ready` and never `menuReady`.
  */
-function raw({ sample = 1, m1 = 12, hostDelay = 40, m2 = 800, m3 = 700, startedActive = false, remoteName = null, extra = [], skeleton = false } = {}) {
+function raw({ sample = 1, m1 = 12, hostDelay = 40, m2 = 800, m3 = 700, startedActive = false, remoteName = null, extra = [], skeleton = false, platform = 'linux' } = {}) {
   const marks = [
     { name: 'eval', at: T0 - 5_000 },
     { name: 'activateStart', at: T0 - 5_000 + hostDelay },
@@ -27,7 +27,7 @@ function raw({ sample = 1, m1 = 12, hostDelay = 40, m2 = 800, m3 = 700, startedA
     ...extra,
   ];
 
-  return { schema: 1, sample, t0: T0, startedActive, marks, host: { remoteName, platform: 'linux', vscodeVersion: '1.99.0', appName: 'Code' } };
+  return { schema: 1, sample, t0: T0, startedActive, marks, host: { remoteName, platform, vscodeVersion: '1.99.0', appName: 'Code' } };
 }
 
 test('M1 is activateReturn minus activateStart, the host delay is activateStart minus eval, M2 is the first menuReady at or after the clock minus the clock, M3 is firstData minus the clock; ready is recorded beside them', () => {
@@ -159,8 +159,8 @@ test('a sample whose extension was already active is not a cold start; so is one
   assert.match(deriveSample(unsaid).problems.join('\n'), /does not say/);
 });
 
-test('the rule: the MAXIMUM M2 must be at most 2000 ms and M1 at most 100 ms; the edge passes, a millisecond over fails', () => {
-  assert.deepEqual(LIMITS, { m2MaxMs: 2000, m1MaxMs: 100 });
+test('the rule: the MAXIMUM M2 must be at most 2000 ms (Linux) and M1 at most 100 ms; the edge passes, a millisecond over fails', () => {
+  assert.deepEqual(LIMITS, { m2MaxMs: { win32: 3000, default: 2000 }, m1MaxMs: 100 });
   const edge = summarize([raw({ m2: 2000, m1: 100 }), raw({ m2: 100 }), raw({ m2: 100 })]);
   const m1Over = summarize([raw({ m1: 100.1 }), raw(), raw()]);
   assert.equal(m1Over.pass, false, "M1 a tenth of a millisecond over its limit fails");
@@ -175,6 +175,55 @@ test('the rule: the MAXIMUM M2 must be at most 2000 ms and M1 at most 100 ms; th
   const heavy = summarize([raw({ m1: 3000 }), raw(), raw()]);
   assert.equal(heavy.pass, false, 'an activation that sleeps 3 s fails on M1 even when M2 is fine');
   assert.match(heavy.problems.join('\n'), /M1 max 3000 ms is over the 100 ms limit/);
+});
+
+test('M2 limit per platform (owner 2026-11-23): 3000 ms on win32, 2000 ms on linux and on any platform nobody named; the edge passes, a tenth over fails, the message names the limit of that platform', () => {
+  assert.equal(m2LimitFor('win32'), 3000);
+  assert.equal(m2LimitFor('linux'), 2000);
+  for (const other of ['darwin', 'freebsd', null, undefined, 'default', 'constructor', '__proto__']) {
+    assert.equal(m2LimitFor(other), 2000, `${String(other)} keeps the strict limit`);
+  }
+
+  const windowsEdge = summarize([raw({ platform: 'win32', m2: 3000 }), raw({ platform: 'win32' }), raw({ platform: 'win32' })]);
+  assert.equal(windowsEdge.pass, true, JSON.stringify(windowsEdge.problems));
+  assert.equal(windowsEdge.m2.max, 3000);
+  assert.deepEqual(windowsEdge.limits, { m2MaxMs: 3000, m1MaxMs: 100 }, 'the result says which limit was applied');
+  const windowsSlow = summarize([raw({ platform: 'win32' }), raw({ platform: 'win32', m2: 3000.1 }), raw({ platform: 'win32' })]);
+  assert.equal(windowsSlow.pass, false);
+  assert.match(windowsSlow.problems.join('\n'), /M2 max 3000\.1 ms is over the 3000 ms limit \(win32\)/);
+  const windows2500 = summarize([raw({ platform: 'win32', m2: 2500 }), raw({ platform: 'win32' }), raw({ platform: 'win32' })]);
+  assert.equal(windows2500.pass, true, '2500 ms is inside the Windows limit');
+
+  const linuxEdge = summarize([raw({ platform: 'linux', m2: 2000 }), raw(), raw()]);
+  assert.equal(linuxEdge.pass, true, JSON.stringify(linuxEdge.problems));
+  assert.deepEqual(linuxEdge.limits, { m2MaxMs: 2000, m1MaxMs: 100 });
+  const linuxSlow = summarize([raw(), raw({ platform: 'linux', m2: 2000.1 }), raw()]);
+  assert.equal(linuxSlow.pass, false);
+  assert.match(linuxSlow.problems.join('\n'), /M2 max 2000\.1 ms is over the 2000 ms limit \(linux\)/);
+  const linux2500 = summarize([raw({ m2: 2500 }), raw(), raw()]);
+  assert.equal(linux2500.pass, false, '2500 ms is over the Linux limit');
+  const darwinSlow = summarize([raw({ platform: 'darwin', m2: 2500 }), raw({ platform: 'darwin' }), raw({ platform: 'darwin' })]);
+  assert.equal(darwinSlow.pass, false, 'a platform nobody named keeps 2000 ms');
+
+  // The platform is the one in the RECORD (the extension host's own process.platform), never the machine that reads the records.
+  assert.equal(summarize([raw({ platform: 'win32', m2: 2900 }), raw({ platform: 'win32' }), raw({ platform: 'win32' })]).pass, true, 'a Windows record read anywhere gets the Windows limit');
+  assert.equal(summarize([raw({ platform: 'linux', m2: 2900 }), raw(), raw()]).pass, false, 'a Linux record read anywhere gets the Linux limit');
+  const noPlatform = raw({ m2: 2500 });
+  delete noPlatform.host.platform;
+  assert.equal(summarize([noPlatform, raw(), raw()]).pass, false, 'a record that does not say its platform gets the strict limit');
+});
+
+test('samples from two platforms do not make one measurement: the limit of neither is applied silently', () => {
+  const mixed = summarize([raw({ platform: 'win32', m2: 2500 }), raw({ platform: 'linux' }), raw({ platform: 'win32' })]);
+
+  assert.equal(mixed.pass, false);
+  assert.match(mixed.problems.join('\n'), /different platforms: win32, linux/);
+});
+
+test('record-only applies no M2 limit on any platform', () => {
+  const v1 = (platform) => ({ ...raw({ m2: 9000, startedActive: true, platform }), marks: [{ name: 'ready', at: T0 + 9000 }] });
+
+  assert.equal(summarize([v1('win32'), v1('win32'), v1('win32')], { recordOnly: true }).pass, true);
 });
 
 test('a measurement needs every sample it asked for: two records of three is a failure', () => {

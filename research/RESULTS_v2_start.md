@@ -205,6 +205,8 @@ it needs its own M1 row). Not done in this branch: it changes the activation con
 A round driven through the sidebar by hand with the final VSIX is still open for the owner's own machine.
 
 
+**M2 limit per platform, owner decision 2026-11-23.** The limit of M2 (command to `menuReady`, the maximum of the samples) is **3000 ms on Windows** and stays **2000 ms on Linux** and on any other platform. M1 stays 100 ms; every other rule is unchanged (a fresh `menuReady` in every sample, the maximum counts, three samples). The platform is the one the run's own records name (`host.platform`, the extension host's `process.platform`), not the machine that reads them: the Windows CI job is 3000 ms, the Linux CI job is 2000 ms, and a Remote-WSL run (`scripts/measure-remote-wsl.ps1`) is **2000 ms**, because its extension host runs on Linux although the script runs on Windows. Code: `scripts/coldstart-lib.mjs` (`LIMITS.m2MaxMs`, `m2LimitFor`); the failure text names the limit and the platform (`M2 max 2400 ms is over the 2000 ms limit (linux)`). Rows dated before this note were judged against 2000 ms on every platform: a Windows row marked FAIL for a maximum between 2000 and 3000 ms (all 2026-11-23: 9948827e, 8122df75 and 65fa2fd6) would pass under the Windows limit; the rows are kept as they were written, and none was changed.
+
 | date | commit | label | host location | platform | M1 max ms | M2 min / median / max ms | M3 min / median / max ms | verdict |
 |---|---|---|---|---|---|---|---|---|
 | 2026-11-22 | 503a65ad | S2 shell + legacy sidebar | local | linux | 173.1 | 1890.1 / 2176.4 / 2386.1 | 1807.4 / 2072.6 / 2315.3 | FAIL |
