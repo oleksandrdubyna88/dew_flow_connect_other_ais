@@ -189,6 +189,9 @@ public sealed class PanelService
     /// </summary>
     public PanelSettings Settings => _settings;
 
+    /// <summary>The external-role jobs of this data directory, over this service's log and notice boundary (epoch 3 E1 s1) — the three role tools need nothing else of it.</summary>
+    internal RoleJobs.RoleJobService RoleJobs() => new(_settings.DataDir, Roles.RolesMode.Layered(Environment.GetEnvironmentVariable), _log, _noticing.Offer);
+
     /// <summary>
     /// The roster this service deals its rounds from — internal so a test can build a round's work
     /// without running it.

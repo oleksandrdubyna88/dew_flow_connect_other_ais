@@ -551,6 +551,64 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
+            // `timeoutMinutes` and the optional strings carry C# defaults: without one the SDK publishes an argument as required.
+            async (string role, string repoPath, string? taskFile = null, string? brief = null, string? model = null, int? timeoutMinutes = null, string? workItem = null) =>
+                await (await host.CurrentAsync()).RoleJobs().StartAsync(role, repoPath, taskFile, brief, model, timeoutMinutes, workItem),
+            new McpServerToolCreateOptions
+            {
+                Name = "start_role",
+                Title = "Start an external role (a model other than yours) as a detached job",
+                Description = """
+                    Starts `role` as a DETACHED job and answers at once with `{jobId, state, route[], launcher}` — it never waits for the role. The job outlives this call, this server and
+                    your session: it is run by its own process, which holds the job's lease and writes the result into the job's folder. Read it with `role_status`, stop it with `role_cancel`.
+                    Send exactly one of `taskFile` (a path inside `repoPath`, written from its top level) or `brief` (text, at most 64 KiB). `model` is optional and names one model;
+                    `timeoutMinutes` is 1 to 1440 (default 30); `workItem` is the plan item the job is for. At most `COAI_ROLE_JOBS_MAX` jobs run at once (3, and 2 on WSL): a start past the
+                    cap is REFUSED with the live job ids, never queued. A role with no descriptor in this build is refused naming the roles that can be started (today: `probe`, a diagnostic
+                    that runs a scripted brief — `succeed`, `sleep N`, `fail WHY`, `child N` — and asks no model anything).
+                    """,
+                ReadOnly = false,
+                Idempotent = false,
+                Destructive = false,
+                OpenWorld = false,
+            });
+
+        yield return McpServerTool.Create(
+            async (string jobId, int maxSeconds = 0) => await (await host.CurrentAsync()).RoleJobs().StatusAsync(jobId, maxSeconds),
+            new McpServerToolCreateOptions
+            {
+                Name = "role_status",
+                Title = "Where a detached role job stands",
+                Description = """
+                    Answers `{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef}], stalled, result}` for `jobId`, plus the role, launcher, route, stop and reason, and the
+                    times. `maxSeconds` (0 to 50, default 0) waits up to that long for the job to END before answering. States: queued, starting, running, succeeded, failed, cancelled, lost.
+                    `lost` means the job's runner died without a result (nothing held its lease any more); `stalled: true` means the runner is alive but has shown no sign of life for two
+                    minutes — it is NOT taken over; wait, or `role_cancel` it. `result` is the role's JSON answer once `succeeded`, else null. A call is also what closes a dead runner's job as
+                    `lost` and writes the one notice about a stall.
+                    """,
+                ReadOnly = false,
+                Idempotent = true,
+                Destructive = false,
+                OpenWorld = false,
+            });
+
+        yield return McpServerTool.Create(
+            async (string jobId) => await (await host.CurrentAsync()).RoleJobs().CancelAsync(jobId),
+            new McpServerToolCreateOptions
+            {
+                Name = "role_cancel",
+                Title = "Stop a detached role job",
+                Description = """
+                    Stops `jobId`: asks its runner to stop and waits up to 10 seconds; if the runner does not (it is stopped, hung or dead) the recorded runner process and its CLI child are killed,
+                    identified by pid AND start time, and the job's generation is raised first so a runner that is only paused publishes nothing when it is resumed. Answers `{jobId, state, stop,
+                    reason, alreadyOver}`. A job that is already over is answered as it is and changed in no way.
+                    """,
+                ReadOnly = false,
+                Idempotent = true,
+                Destructive = true,
+                OpenWorld = false,
+            });
+
+        yield return McpServerTool.Create(
             // `McpServer` is injected, not part of the schema: the client's own name tells which AI is the main one. Read afresh per call (the settings file may have changed), and it needs no service —
             // so it answers while the first one is still being built.
             (McpServer server) => Roles.RolesAnswer.Json(Roles.RolesAnswer.Compute(

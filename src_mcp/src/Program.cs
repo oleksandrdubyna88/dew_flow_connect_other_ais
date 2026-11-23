@@ -2319,6 +2319,8 @@ internal static class Program
                 // Once per window for every server on this data directory (ConsultantsSurveyClaim). Cancelled with serving,
                 // which kills a probe still running.
                 var surveying = ConsultantsReadMode.WriteInBackground(settings, launcher, log, noticing, serving.Token);
+                // The role jobs a dead runner left (epoch 3 E1 s1): one look at each job not over, then the retention. Background, never fatal.
+                var sweepingRoles = Server.RoleJobs.RoleJobStartup.SweepInBackground(dataDir, Roles.RolesMode.Layered(Environment.GetEnvironmentVariable), log, noticing, serving.Token);
                 try
                 {
                     await server.RunAsync(stopping.Token);
@@ -2330,7 +2332,7 @@ internal static class Program
                     // ONE bounded wait, well inside the signal's grace so the notices still drain: the stop cuts a survey's
                     // probes, the vault read and the sweeper's wait short, and an ending process does not wait on a start
                     // still sweeping or a beat still running (the code round, codex and gemini, 2026-10-07).
-                    await StartingHost.Ended(Task.WhenAll(sweeping, surveying, starting.Started), StartingHost.EndBudget);
+                    await StartingHost.Ended(Task.WhenAll(sweeping, surveying, sweepingRoles, starting.Started), StartingHost.EndBudget);
                 }
             }
             catch (Exception) when (starting.Failed)
