@@ -1,0 +1,5 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s2-work-plan-schema
+title: "Work-plan schema, validate_work, limits from the device config"
+cornerstone: true
+dependsOn: []

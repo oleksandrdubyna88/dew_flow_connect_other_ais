@@ -356,3 +356,53 @@ Sound as written (consultant): the codex resume shape (CodexConsultant.cs:108, :
 7. **Old/new compatibility before 2.0.** Epoch 1 changes no Team-server wire field. Before the 2.0 release (epoch 1 E5):
    the `http/` contract suite runs live against the deployed Team server (0.16.x), new client ↔ old server and old
    client (extension 0.89.x) ↔ new mcp are checked; the hub (epoch 2) is a new route group that old clients never call.
+
+## 19. External roles (owner, 2026-11-22)
+
+"External roles" = roles relative to the main AI. Every role except the orchestrator is an MCP tool: **coder** (writes
+code in its worktree — § 2 coder delegation + § 10 fix loop), **scout** (read-only research → strict JSON
+`{facts:[{claim, evidence:[file:line]}], files:[]}`), **BA** (splits a plan into epochs/epics/stories/tasks; writes only
+the feature folder; the result must pass `validate_work`), **important/judge** (Fable by default; review, design
+decision, cornerstone spec; read-only; strict JSON verdict/findings). One tool family: `start_role(role, taskFile |
+brief, repoPath, model?, timeoutMinutes?)` / `role_status(jobId, maxSeconds)` / `role_cancel(jobId)`; the role decides
+the model (roles table / complexity band), the permissions and the output schema; `start_coder` is the coder case (no
+separate tool). Placement in the epochs: decided with the Fable split review.
+
+## 20. Important / responsible role and vendor failover (owner, 2026-11-22)
+
+- The **important** role always runs the strongest model, selectable per device (e.g. `fable`, codex `astra`). The router
+  sends it every task with `complexity: 10` and every security task (`security: true` in task.yaml, or kind `security`:
+  crypto, authN/authZ, secrets).
+- **Per-role failover:** each role has an ordered model list (e.g. important: fable → codex astra). A run that stops with
+  a refusal, a spend/rate limit or an error is re-run on the next model in the list; the switch is recorded in the job
+  envelope (`attempts: [{model, vendor, stop, reason}]`), logged, and raised as a notification. The other vendor's own
+  policy applies to it; nothing is hidden. A list that is exhausted ends the task `failed` with every attempt named.
+
+## 21. Plans page and per-item reports (owner, 2026-11-22)
+
+A separate Plans page lists every plan (feature folder) as a tree epoch → epic → story → task, with status open /
+in progress / done and progress counts. Every item has a report: gates run (and rounds), `cons` and `consask` counts,
+execution time. Data: an optional `workItem` argument (feature-folder path) on `review_*`, `cons`, `consask` and
+`start_role`, recorded in RoundsDb from 2.0 (epoch 1 E3 s8); `--plan-report <feature-dir> --json` aggregates it; coai sets
+the item status in the YAML deterministically. The page is epoch 4 E5 (was "Features page").
+
+## 22. Spike results 2026-11-23 (v2/spikes/RESULTS_spikes_2026-11-23.md) — design rules
+
+1. **AskUserQuestion hook (claude 2.1.330):** in an interactive session a PreToolUse hook returning `allow` +
+   `updatedInput{questions, answers}` answers the tool: the model gets a normal result ("Your questions have been
+   answered: …"), no widget seen. In `-p` mode the tool is not offered at all (the hook never fires there).
+   **Rule: answer ALL questions or NONE.** A partial `answers` map leaves the other questions unanswered and the person
+   is never asked them; an empty map yields "The user did not answer the questions." So when consask cannot settle
+   every question (no majority on one), `--ask-hook` prints nothing and the native widget shows all of them. Open:
+   `multiSelect` answer format, free-text "Other", hook failure/timeout behaviour, non-auto permission modes.
+2. **systemd-run --user (WSL, systemd 259, Linger=yes):** works; a unit survives the launching shell; `--collect`
+   removes the unit after exit (use `--wait` for the result). **Memory limits need `-p MemorySwapMax=0`** besides
+   `MemoryMax` — without it the 4 GB WSL swap absorbs the excess and nothing is killed. The scheduler (epoch 3 E5) uses
+   both. Open: survival when the whole client process tree is killed, across `wsl --terminate`.
+3. **Detach facts (v2/spikes/RESULTS_detach.md, epoch-3 E1 s1):** a `systemd-run --user` unit survives a kill of the
+   launcher's process group AND of the client's cgroup (own cgroup under app.slice); `setsid -f` survives a group/session
+   kill but NOT a cgroup kill. Without a user manager, systemd-run fails in < 10 ms ("Failed to connect to user scope
+   bus") → choose the road by trying. **A unit does not inherit the launcher's environment** (no ~/.local/bin, no nvm
+   PATH) → env.json carries PATH explicitly. **With the default `OOMPolicy=stop` an oom-kill of the runner's child stops the
+   whole unit** (job → lost, no result) → the launcher passes `-p OOMPolicy=continue`. A .NET child usually ends with an
+   OutOfMemoryException before the kernel kill (heap capped at 75 % of the cgroup limit).

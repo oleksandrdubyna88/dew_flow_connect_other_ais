@@ -2,4 +2,4 @@
 id: s4-migrate-v2
 title: "--migrate-v2: held sessions, cards, stores, settings keys"
 dependsOn:
-  - s3-renames
+  - s1-verdicts-and-holds

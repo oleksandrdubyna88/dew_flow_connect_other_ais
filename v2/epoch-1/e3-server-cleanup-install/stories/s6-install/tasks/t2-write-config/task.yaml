@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-write-config
+title: "Write MCP config through vendor commands (claude mcp add-json --scope user, codex mcp add); agy path measured first; backup + idempotent by command path"
+kind: code
+complexity: 7
+dependsOn:
+  - t1-find-clis
+parallel: false
+files:
+  - src_mcp/src/Install
+dod:
+  - id: d1
+    item: "second run changes nothing"
+  - id: d2
+    item: "a backup exists before the first write"

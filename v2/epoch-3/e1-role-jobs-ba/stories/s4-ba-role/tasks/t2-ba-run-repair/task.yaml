@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-ba-run-repair
+title: "BA run: overlay validation, 2 repair turns, files, manifest"
+kind: code
+complexity: 8
+dependsOn:
+  - t1-ba-contract
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/BaRun.cs
+  - src_mcp/tests_fakecli
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "FakeCli: valid at turn 0; valid after 1 repair in the same session; invalid 3 times ends output-invalid, zero files written"
+  - id: d2
+    item: "nothing outside the epic folder changes; an epic with a story is refused before a launch"

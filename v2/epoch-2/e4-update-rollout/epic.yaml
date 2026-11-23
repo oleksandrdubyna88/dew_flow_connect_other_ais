@@ -1,0 +1,10 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: e4-update-rollout
+title: "Update everywhere and rollout to all devices"
+half: both
+dependsOn:
+  - e3-device-agent-sync
+doneWhen:
+  - "a desired version moves every device; swap survives a kill; last 2 versions kept; rollback works"
+  - "shared VM swap needs no root after the first install"
+  - "2 VMs (shared), WSL and Windows enrolled; one rollout followed to the end"

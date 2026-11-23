@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-schema-vectors-limits
+title: "Schema, vectors, work-method.md; two new limits; ba default list [fable, opus]"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: true
+files:
+  - shared/work-plan.schema.json
+  - shared/work-plan-vectors.json
+  - shared/work-method.md
+  - shared/role-defaults.json
+  - src_mcp/src/Roles
+  - src_mcp/tests/AWorkMethodLimitTests.cs
+dod:
+  - id: d1
+    item: "each error code has one failing and one passing vector"
+  - id: d2
+    item: "roles answers maxStoriesPerEpic and maxTasksPerStory; an unknown key keeps the other keys"

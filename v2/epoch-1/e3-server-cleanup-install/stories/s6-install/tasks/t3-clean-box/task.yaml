@@ -1,0 +1,13 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-clean-box
+title: "Clean WSL box test (fresh HOME): one command → working MCP setup"
+kind: test
+complexity: 5
+dependsOn:
+  - t2-write-config
+parallel: false
+files:
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "claude and codex list the coai server"

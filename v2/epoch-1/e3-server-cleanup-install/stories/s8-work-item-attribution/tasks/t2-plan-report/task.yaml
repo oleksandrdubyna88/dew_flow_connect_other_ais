@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-plan-report
+title: "One-shot --plan-report <feature-dir> --json: per item gates run, rounds, cons and consask counts, first/last event, wall time, status"
+kind: code
+complexity: 5
+dependsOn:
+  - t1-workitem-param
+parallel: false
+files:
+  - src_mcp/src
+dod:
+  - id: d1
+    item: "listed in PROJECT.md"
+  - id: d2
+    item: "an item with no events reports zeros, not missing"

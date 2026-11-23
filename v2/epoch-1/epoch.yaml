@@ -6,6 +6,6 @@ dependsOn: []
 epics:
   - e1-gate-simplify
   - e2-thin-shell
-  - e3-work-contract-install
-  - e4-kit-local-pages
+  - e3-server-cleanup-install
+  - e4-shell-modules
   - e5-release-2-0
