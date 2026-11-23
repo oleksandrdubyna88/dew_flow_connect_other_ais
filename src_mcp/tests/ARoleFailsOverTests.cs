@@ -210,6 +210,8 @@ public sealed class ARoleFailsOverTests
         var job = rig.NewJob(["claude/fable", "claude/opus"]);
         var running = Task.Run(() => rig.RunAsync(job), TestContext.Current.CancellationToken);
         RoleJobWorld.WaitFor(() => rig.World.Store.Read(job.JobId) is { Child: not null }, "the first model's CLI to start and be recorded");
+        // The store records the child when it is started; the FAKE records its own argv a moment later. A cancel in between kills it before it wrote anything, and "the first launch asked for fable" has no line to read.
+        RoleJobWorld.WaitFor(() => rig.Models().Count == 1, "the first launch to be recorded by the fake CLI itself");
 
         rig.World.Store.FolderOf(job.JobId)!.RequestCancel();
         var (exit, after) = await running;
