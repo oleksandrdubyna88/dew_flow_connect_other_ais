@@ -9,7 +9,7 @@ import { backToSource } from '../../chatReturnCommand';
 import { conversationHooks } from '../../chatHooks';
 import { signatureOf } from '../../renderAnswer';
 import { threads, type Thread } from '../../chatThread';
-import { until, registeredChat } from './hostHelpers';
+import { until, registeredChat, activated } from './hostHelpers';
 import { aClaudeLookingTabDoesNotTakeATerminalChat, backToATerminalInARealEditor } from './terminalReturnScenario';
 import { aTerminalTakesBackItsConversationInARealEditor } from './terminalReattachScenario';
 import { aRevisionInARealEditor } from './revisionScenario';
@@ -247,7 +247,7 @@ const SCENARIOS: readonly Scenario[] = [
 
       assert.ok(extension !== undefined,
         'the extension under test is not installed in this host, so nothing below is about it');
-      await extension.activate();
+      await activated(extension);
       assert.equal(extension.isActive, true, 'the extension did not activate');
 
       // WHAT THE MANIFEST PROMISES, against what the host actually has. A command declared and never
@@ -266,6 +266,26 @@ const SCENARIOS: readonly Scenario[] = [
 
       assert.deepEqual(missing, [],
         `declared in the manifest and never registered, so the menu item does nothing: ${missing.join(', ')}`);
+    },
+  },
+  {
+    // THE SHELL'S HAND-OVER (v2 E2 S1). The shell registers every command, the sidebar view provider and the chat serializer;
+    // the old activation runs on first use and must give each of them a handler instead of registering it a second time.
+    // A command the shell owns and the old code never registered is a menu item that throws on first press, and the
+    // test above cannot see it: the shell registered the name, so the host has it.
+    name: 'the old activation hands the shell a handler for every command, the sidebar view and the chat serializer',
+    run: async (): Promise<void> => {
+      const extension = vscode.extensions.getExtension<{ readonly shell?: { readonly adoptedCommands: () => readonly string[]; readonly adoptedViewAndSerializer: () => boolean } }>('remsoftdev.connect-other-ais');
+      assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
+      const first = await activated(extension);
+      const again = await activated(extension);
+      assert.ok(first.shell !== undefined, 'the legacy module offers no test door, so nothing below can be read');
+      assert.equal(again.shell?.adoptedCommands().length, first.shell.adoptedCommands().length, 'a second start changed what was adopted');
+      const manifest = JSON.parse(fs.readFileSync(path.join(extension.extensionPath, 'package.json'), 'utf8')) as { contributes: { commands: readonly { readonly command: string }[] } };
+      const declared = manifest.contributes.commands.map((one) => one.command).sort();
+
+      assert.deepEqual([...first.shell.adoptedCommands()].sort(), declared, 'the old activation and the manifest disagree about which commands exist');
+      assert.equal(first.shell.adoptedViewAndSerializer(), true, 'the old activation gave the shell no sidebar view provider or no chat serializer');
     },
   },
   {
@@ -309,7 +329,7 @@ const SCENARIOS: readonly Scenario[] = [
         .filter((one) => one.input instanceof vscode.TabInputWebview && one.input.viewType.endsWith(viewType));
       const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
       assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-      await extension.activate();
+      await activated(extension);
 
       await vscode.commands.executeCommand('coai.openSettings', 'questionconsultant');
       await until(() => tabsOf('coaiSettings').length === 1, 'the gear did not open the Settings tab on the Question consultant section');
@@ -414,7 +434,7 @@ const SCENARIOS: readonly Scenario[] = [
       const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
 
       assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-      await extension.activate();
+      await activated(extension);
 
       const file = path.join(home, 'settings.json');
       const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
@@ -460,7 +480,7 @@ const SCENARIOS: readonly Scenario[] = [
       const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
 
       assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-      await extension.activate();
+      await activated(extension);
 
       const role = 'HostRole';
       const prompt = path.join(home, 'prompts', 'hostrole-general.md');
@@ -523,7 +543,7 @@ const SCENARIOS: readonly Scenario[] = [
       // can type into what is supposed to be a historical file. (Code round, codex.)
       const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
       assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-      await extension.activate();
+      await activated(extension);
 
       const documents = RevisionDocuments.register({ subscriptions: [] } as unknown as vscode.ExtensionContext);
       const asReviewed = 'public int GetOrAdd(int n)\n{\n    return n + 1;\n}\n';

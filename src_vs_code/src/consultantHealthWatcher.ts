@@ -5,7 +5,7 @@ import type { HealthSide } from './consultantSides';
 /**
  * The health files of every side, kept fresh — E5.4 of `research/PLAN_the_consultant_works_on_every_vendor.md`.
  *
- * <p>The `ConsultationWatcher` shape: THIS side's `consultations/health/*.json` under a file watcher, and EVERY side
+ * <p>The consultation watcher's shape (since removed): THIS side's `consultations/health/*.json` under a file watcher, and EVERY side
  * on a five-second poll — a watcher on a path outside the workspace is not guaranteed to fire, and on a
  * `\\wsl.localhost` share there is none to be had, so the poll is what makes "you will see it" true. Ports rather than
  * `vscode`, so the rules are tests: a side that could not be read keeps its last snapshot; the view is told only when

@@ -38,7 +38,7 @@ function at(text: string, needle: string, where: string): number {
 }
 
 test('S1-T11: a terminal that opens re-attaches the conversation of its name', () => {
-  assert.equal([...sourceOf('extension.ts').matchAll(/bindReattach\(context, chatPanels\)/gu)].length, 1, 'extension.ts does not bind the re-attach trigger exactly once');
+  assert.equal([...sourceOf('../shell/modules/chat/register.ts').matchAll(/bindReattach\(context, chatPanels\)/gu)].length, 1, 'the chat registration does not bind the re-attach trigger exactly once');
   const bind = bodyOf(sourceOf('terminalHost.ts'), 'export function bindReattach(');
 
   assert.ok(bind.includes('onDidOpenTerminal('), 'bindReattach does not listen for terminals that open');

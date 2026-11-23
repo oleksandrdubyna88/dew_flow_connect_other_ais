@@ -42,16 +42,6 @@ test('defaults match the master plan configuration table', () => {
 });
 
 /**
- * The wait for a person: a person's own value reaches the env block, the default does not. (It used to be held against
- * `PanelSettings.DefaultEscalationMinutes`, read out of the C#; the server dropped that constant with its holds in v2 E1.S1,
- * and the setting itself is still the panel's until the thin shell replaces it.)
- */
-test("the escalation wait's default is not written, and a person's 30 still reaches the env block", () => {
-  assert.equal(envBlock(settingsFrom(reader({})))['COAI_ESCALATION_MINUTES'], undefined, 'the default is not written');
-  assert.equal(envBlock(settingsFrom(reader({ escalationMinutes: 30 })))['COAI_ESCALATION_MINUTES'], '30', 'a person who chooses 30 gets 30');
-});
-
-/**
  * The manifest and `DEFAULTS` are one decision written twice, and nothing held them together.
  *
  * <p>VS Code answers `getConfiguration` from `contributes.configuration` when a person has set
@@ -74,7 +64,6 @@ test('the manifest ships the same defaults this code falls back to', () => {
   assert.equal(declared('maxConcurrency'), DEFAULTS.maxConcurrency);
   assert.equal(declared('maxPerProvider'), DEFAULTS.maxPerProvider);
   assert.equal(declared('reviewerTimeoutMinutes'), DEFAULTS.reviewerTimeoutMinutes);
-  assert.equal(declared('escalationMinutes'), DEFAULTS.escalationMinutes);
 });
 
 test('the shipped reviewers are the two whose CLIs authenticate themselves', () => {

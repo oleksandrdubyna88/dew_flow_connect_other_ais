@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-role-tools
+title: "Tools start_role, role_status, role_cancel; workItem; live-job cap"
+kind: code
+complexity: 6
+dependsOn:
+  - t3-detached-runner
+parallel: false
+files:
+  - src_mcp/src/Tools.cs
+  - src_mcp/src/Server/RoleJobs/RoleJobService.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "A6 and A15 pass; start_role answers in 2 s or less"
+  - id: d2
+    item: "a role without a descriptor is refused"

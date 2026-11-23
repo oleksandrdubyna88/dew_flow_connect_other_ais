@@ -8,6 +8,38 @@
 > this file's own preference, and the reason is written there rather than left as a version bump
 > somebody finds later.
 
+## The shell and its modules (2026-11-23, v2 epoch 1, epics E2 and E4)
+
+> **This section describes what runs now.** Older sections below that speak of one `activate()` doing everything (`extension.ts` as "activation, the four commands, the update offer", the serializer and the commands registered by the old activation) are marked *superseded* where they stand and are otherwise left as written: they are the record of why the old code is shaped as it is, and that code still runs, inside the `legacy` module. Design: [../v2/architecture/extension.md](../v2/architecture/extension.md); epic plans: `v2/epoch-1/e2-thin-shell`, `v2/epoch-1/e4-shell-modules`; numbers: [RESULTS_v2_start.md](RESULTS_v2_start.md).
+
+### The entry: `activate` registers and does nothing else
+
+`dist/extension.js` is built from `shell/entry.ts`, `lazy.ts`, `ids.ts` and `measure.ts` only (16 KiB budget). `activate` makes `register*` calls and `subscriptions.push`, nothing more: no file, process, network, memento write, configuration read or timer. Three tests hold it: `entryPurity.test.ts` runs the entry against a recording `vscode` and fails on any other call; `scripts/entry-firewall.mjs` bounds the bundle's inputs, its external imports and its size; ESLint `no-restricted-imports` allows the entry only `vscode`, `node:path` and its own siblings. Activation events are `onView:coai.panel`, `onWebviewPanel:coaiChat` and `onUri`, plus VS Code's implicit command events; there is no `onStartupFinished`. It registers every command id in `ids.ts` `COMMANDS` (a test fails when that list and `package.json` drift apart), the `coai.panel` view provider, the `coaiChat` serializer and the URI handler. Each registration is a thunk that loads the module that owns the id (`moduleOf`: chat commands to `chat`, `coai.installServer` to `install`, every other command, the URI handler and the fallback view to `legacy`).
+
+### Lazy modules
+
+`lazy.ts` loads `dist/modules/<id>.js` with one `require`, memoised, with a timing mark (`moduleRequire`, `moduleEval`, `moduleLoaded`). A load that throws is forgotten, so the next call tries again. One CommonJS esbuild entry per module, listed in `scripts/bundle-entries.json` with its byte budget, its allowed inputs where a firewall applies, and the files it must not contain. The loader also publishes a handle on `globalThis` (`Symbol.for('coai.shell')`) with `runtime()` and `module(id)`: that is how one bundle reaches state or another module without bundling a copy (`src/hostRuntime.ts`). The old code still registers through `src/shellBridge.ts`: while a module's adopter is installed, a registration it owns is handed to the shell's own table instead of VS Code, which would refuse a second registration of the same id.
+
+### The sidebar: a native menu first, the old panel second
+
+`resolveWebviewView` loads only the `sidebar` module (`shell/modules/sidebar.ts`, 96 KiB budget, inputs limited to the menu files). It sets the webview options and writes the menu at once (`src/sidebarMenu.ts`): the old panel's section headers (Notifications, Active gates, Active consultations, Phrases, Bugz) with its words, order and colours, each a `details` element, each with a "loading..." line. The page posts `menuReady` when every header is on screen and usable; a skeleton or an inert copy never says it, and that message is where the cold start ends (owner, 2026-11-23). After `menuReady`, on timers that run after the message handler has returned and the `menuReady` mark was made, the module (1) loads `legacy` and hands it the SAME view together with the sections the person opened or closed meanwhile (the legacy panel provider repaints with live data, as it always has; the sidebar's listener stays until that moment so no press is lost), (2) starts chat, (3) starts the install work. A section the person opens before then asks for the hand-over at once. If the page never says `menuReady`, the same three happen after `FALLBACK_MS` (5 s). If the hand-over fails, the module logs it and paints a failed page. If the sidebar module cannot be loaded at all, the shell catches that and lets `legacy` resolve the view alone, as before the module existed.
+
+### The chat module
+
+Every chat command and the `coaiChat` serializer load `chat` (`shell/modules/chat/`, 576 KiB budget), never `legacy`. On its first load it runs `registerChat` once: data root, side-specific models, remote sessions, presets, the chat store with its migration, housekeeping, the orphan sweep and the rename follower. A failure is kept, so a second call re-throws it instead of starting chat again. It hands each handler to the shell through the bridge. The old activation no longer starts any of this. `restorePanel` is the serializer's answer after a reload; once the restore has settled it asks, on a 250 ms timer and once per host, for the install start, because a window whose only activation is a restored tab would otherwise never see `menuReady` or a command. A bug's *Chat* button in the legacy sidebar reaches chat through `chooseFromBug` and the loader's `module(id)`, never by importing it.
+
+### The runtime module
+
+`runtime` (8 KiB) holds the state that must exist once per host: the notify suppressor, the notification ledger's gap, the data root and the findings board (`src/runtimeState.ts`). The loader memoises it and every bundle reaches the same object by reference through `src/hostRuntime.ts`; no other bundle may contain `runtimeState.ts` (`forbidInputs`, checked by the firewall). Without a shell (unit tests) each process makes its own.
+
+### The install module
+
+`install` (`shell/modules/install/`, 112 KiB budget) is the binary check, `coai-mcp --setup-clients` (with this extension's own binary named) and the offer of a newer server, in that order (`src/installWork.ts`, pure of the editor: every seam is a port). It runs once per activation however often it is asked, and a step that fails is logged and does not stop the next. It is asked from three places and never inside the cold start: the sidebar after its first `menuReady` (or the fallback), the entry once the FIRST command has answered, and the chat restore. Each place reports a refusal with context on the console (`ConnectOtherAIs: the install work could not be started after the first command` and its two siblings); none swallows it. `coai.installServer` is its one command; after a successful (re)install the legacy panel is told to repaint and the mode runs again.
+
+### Measurement
+
+`COAI_MEASURE=1` makes the shell register `coai.__measure` (nothing is registered otherwise) and record wall-clock marks (`shell/measure.ts`, one copy per bundle, the list shared on `globalThis`). M1 is the entry's own time inside `activate` (limit 100 ms); M2 is the driver's clock, started just before `workbench.view.extension.coai`, to the first `menuReady` after it (limit 2000 ms, the MAXIMUM of three samples counts); M3 is recorded only. A sample whose extension was already active at the start does not count. Runs: `node scripts/run-host.mjs measure` on Linux and Windows CI, and `scripts/measure-remote-wsl.ps1` by hand on the owner's Windows machine for an extension host inside WSL; `coldstart-report.mjs` gives both the same verdict and the same row in [RESULTS_v2_start.md](RESULTS_v2_start.md). The result row names the host location. Two safety rules of the tools: the commit id is read with a bounded `git` (executable and argv, a deadline, the whole process tree killed at the deadline, `unknown` when it cannot answer), and the Remote-WSL script never touches the person's own installation: it installs the VSIX under test into an isolated extensions folder and data folder inside the distro (`VSCODE_EXTENSIONS` and `VSCODE_AGENT_FOLDER`, passed through `WSLENV`), refuses to start while a VS Code server already runs there unless `-StopServers` is given, checks after the install that the isolated folder holds the extensions, and compares the person's `~/.vscode-server/extensions` listing before and after. It cannot run in CI; the isolation was read from the server's source and the file parse-checked, and a first run on the owner's machine is still the proof.
+
 ### Everything this side says to a person is written down (2026-09-16, in progress)
 
 Every place this side speaks to a person had, until now, no durable record of any kind:
@@ -4762,6 +4794,8 @@ panel with no Team servers has.
 
 ## Commands
 
+> **Superseded in part (2026-11-23, v2 E4):** these commands are now REGISTERED by the shell's entry and run by the module that owns each id (chat, install or legacy); see *The shell and its modules* at the top. What each command does, below, is unchanged.
+
 | Command | Does |
 |---|---|
 | `coai.installServer` | Downloads the latest `mcp-v*` asset for this RID into the extension's storage **on the side this extension host is running on**, verifies its `.sha256`, extracts with `tar`, records the version under that side's own key, and puts the `mcpServers` block on the clipboard |
@@ -5039,7 +5073,7 @@ code. `roundsLogNotes.test.ts` runs the page.
 | `consultationWatcher.ts` | `consultations/*.json` as a `JsonDirectoryWatcher` shape (since S4b of the question consultant): debounced events, the poll only for a UNC folder, silent unless something a person would SEE changed |
 | `escalationWatcher.ts` | `escalations/*.json` over a `JsonDirectoryWatcher` (since S4b: debounced events, the poll only for a UNC folder, an unreachable directory showing no cards), the modal, the status-bar item, the atomic answer write |
 | `jsonDirectory.ts` · `jsonDirectoryWatcher.ts` | the one record-directory watcher (S4b): the pure snapshot (last good snapshot, the generation guard) and the editor around it |
-| `extension.ts` | activation, the four commands, the update offer |
+| `extension.ts` | **Superseded 2026-11-23:** registration is `shell/entry.ts`; this file is the old `activate()` that the `legacy` module runs once, lazily, for the commands and the sidebar view the other modules do not own. |
 
 ## Three UI decisions with a cause
 
@@ -5201,6 +5235,8 @@ guard that cannot be described in a fixture is a guard nobody can trust. The dis
 `.tsx`, `.mts` and `.cts`, so a panel arriving as a `.tsx` is not a panel nobody scans.
 
 ## A conversation survives a window reload (2026-09-09)
+
+> **Superseded in part (2026-11-23, v2 E4):** the `coaiChat` serializer is registered by the shell and answered by the chat module's `restorePanel`, not by the old activation; a restore also asks for the install work once. The design below (identity, the store) is unchanged.
 
 There was no `registerWebviewPanelSerializer` anywhere in this extension, so a window reload — or an
 extension update restarting the host — emptied every chat tab. `retainContextWhenHidden` keeps a

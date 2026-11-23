@@ -198,7 +198,7 @@ export async function readNewest(
 /**
  * How many whole records a ledger has gained since `from`, without parsing one of them.
  *
- * <p><b>This is the panel's count, and it had to be cheap.</b> `EscalationWatcher` re-renders every
+ * <p><b>This is the panel's count, and it had to be cheap.</b> The escalation watcher (since removed) re-rendered every
  * window every five seconds whatever happened, so a count that meant "read the newest three
  * thousand records" would be ~1.2 MB of JSON parsing per window per tick, from a directory that may
  * be a NAS. The plan specified the watermark and never said how a number came out of it; this is

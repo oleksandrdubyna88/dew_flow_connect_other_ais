@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-epic-acceptance
+title: "Acceptance suite on the real binary; tool docs"
+kind: test
+complexity: 4
+dependsOn: []
+parallel: true
+files:
+  - src_mcp/tests/TheRoleJobsEpicAcceptanceTests.cs
+  - ARCHITECTURE.md
+  - README.md
+dod:
+  - id: d1
+    item: "refusal, limit, crash each go to the next model: 3 switches, 3 log lines, 3 notices"
+  - id: d2
+    item: "the MCP server restarts in mid-job and the job ends succeeded"

@@ -301,7 +301,6 @@ export function panelState(openSection: string, overrides: Partial<PanelState> =
     hostKind: 'windows',
     side: '',
     perSide: false,
-    questions: [],
     sessions: [],
     openSections: [openSection],
     usage: [],

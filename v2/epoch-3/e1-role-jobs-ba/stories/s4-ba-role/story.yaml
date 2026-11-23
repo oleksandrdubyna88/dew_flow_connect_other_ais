@@ -1,0 +1,6 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s4-ba-role
+title: "BA role: structured output, repair turns, change measure"
+dependsOn:
+  - s2-work-plan-schema
+  - s3-router-failover

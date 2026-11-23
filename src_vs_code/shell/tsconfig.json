@@ -1,0 +1,8 @@
+{
+  // The shell is bundled by esbuild, which does not type-check; this file is how `tsc` and the ESLint project
+  // service see it. `rootDir` is the package root because the legacy module imports `../../src/extension`.
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": ".." },
+  "include": ["./**/*"],
+  "exclude": []
+}

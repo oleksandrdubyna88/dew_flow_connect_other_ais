@@ -21,7 +21,6 @@ function recording(): { readonly hooks: RoundsLogHooks; readonly called: string[
   return {
     called,
     hooks: {
-      onAnswer: (id) => note(`answer ${id}`)(),
       onUsageWindow: (window) => note(`usageWindow ${window}`)(),
       onSpotsPeriod: (period) => note(`spotsPeriod ${period}`)(),
       onForget: (provider) => note(`forget ${provider}`)(),
@@ -41,7 +40,6 @@ function recording(): { readonly hooks: RoundsLogHooks; readonly called: string[
 test('every command that asks the host for work maps to its own hook, and the work is what is awaited', async () => {
   const { hooks, called } = recording();
   const commands: readonly LogCommand[] = [
-    { kind: 'answer', id: 'q1' },
     { kind: 'usageWindow', window: 'week' },
     { kind: 'spotsPeriod', period: 'month' },
     { kind: 'forget', provider: 'codex' },
@@ -62,7 +60,7 @@ test('every command that asks the host for work maps to its own hook, and the wo
   }
 
   assert.deepEqual(called, [
-    'answer q1', 'usageWindow week', 'spotsPeriod month', 'forget codex', 'closeConsultation c1',
+    'usageWindow week', 'spotsPeriod month', 'forget codex', 'closeConsultation c1',
     'forgetChat codex gpt-6-astra', 'export 0', 'findings k1 s1/CodeReview/2',
     'teamWindow acme|year', 'teamRefresh acme', 'teamServer acme', 'teamTab true',
   ]);

@@ -2,7 +2,7 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 
 import { recordOf, USER_WITNESS, USER_WITNESS_WORD } from '../../onExhaustedMigration';
-import { until } from './hostHelpers';
+import { until, activated } from './hostHelpers';
 
 /**
  * The one-time reset of *When the rounds run out* to Auto completes in a REAL editor
@@ -22,7 +22,7 @@ import { until } from './hostHelpers';
 export async function theOnExhaustedMigrationCompletesInARealEditor(): Promise<void> {
   const extension = vscode.extensions.getExtension<{ readonly onExhaustedMigration?: () => unknown }>('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  const exports = await extension.activate();
+  const exports = await activated(extension);
   const record = exports?.onExhaustedMigration;
   assert.ok(typeof record === 'function', 'activation returned no onExhaustedMigration, so this host cannot read the record');
 

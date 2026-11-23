@@ -1161,7 +1161,7 @@ const QUESTIONS_LOG = {
 function bundledLog(): {
   parseLog: (text: string, paged?: boolean) => { questions?: readonly unknown[] };
   qconsultLogHtml: (questions: readonly unknown[]) => string;
-  roundsLogHtml: (rows: unknown[], questions: unknown[], nonce: string, usage?: string, spots?: string, totals?: unknown, options?: Record<string, unknown>) => string;
+  roundsLogHtml: (rows: unknown[], nonce: string, usage?: string, spots?: string, totals?: unknown, options?: Record<string, unknown>) => string;
 } {
   const dir = ownedTemp('coai-bundle');
   const entry = path.join(dir, 'entry.mjs');
@@ -1236,7 +1236,7 @@ test('a server too old for questionConsults is an empty Questions tab, saying wh
 
 test('the shipped page opens the Questions tab on a press, and a push replaces its body', () => {
   const log = bundledLog();
-  const html = log.roundsLogHtml([], [], 'n0nce', '', '', undefined, { qconsults: '<div class="empty">first</div>' });
+  const html = log.roundsLogHtml([], 'n0nce', '', '', undefined, { qconsults: '<div class="empty">first</div>' });
   const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
   const body = script.slice(script.indexOf('>') + 1);
   const seen: Record<string, Stub> = {};

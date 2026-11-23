@@ -62,7 +62,6 @@ function state(sessions: readonly SessionFile[]): PanelState {
     side: '',
     perSide: false,
     latestServerVersion: '',
-    questions: [],
     sessions: [...sessions],
     openSections: ['rounds'],
     usage: [],
@@ -315,7 +314,22 @@ test('a live patch that carries the same HTML as last time does not touch the DO
     assert.equal(page.regionWrites(`live-${region}`), 0, `an identical push rebuilt the ${region} region`);
   }
   page.deliver({ type: 'live', ...liveRegions(state([session([round()])]), NOW) });
-  assert.equal(page.regionWrites('live-rounds'), 1, 'a push that changed the rounds did not replace its region');
+  assert.equal(page.regionWrites('live-rounds'), 1, 'a push that changed the rounds did not replace their region');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The cadence line is gone (v2 E4, story s6-dead-v1-out)
+// ---------------------------------------------------------------------------------------------
+
+test('Consultation cadence is no section of the sidebar since v2 (owner, 2026-11-23): nothing of it is drawn on the page, first paint or live push, and no region is left for it', () => {
+  // RUN, not matched: the panel's own script receives the push, and what is on screen is what this watches.
+  const page = runPanel(panelState('rounds'));
+  assert.ok(!/Consultation cadence/u.test(page.html), 'the first paint names the cadence section');
+  assert.equal(page.region('live-cadence'), '', 'there is a region for the cadence');
+  assert.equal((LIVE_REGION_IDS as readonly string[]).includes('cadence'), false, 'the cadence is still a live region');
+
+  page.deliver({ type: 'live', ...liveRegions(panelState('rounds'), NOW), cadence: '<div>PLAN_x.md</div>' });
+  assert.equal(page.regionWrites('live-cadence'), 0, 'a push that names the old region wrote somewhere');
 });
 
 test('the rounds region is exactly the running rounds', () => {

@@ -24,6 +24,7 @@ import { type BusySnapshot, IDLE } from './busySnapshot';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
+import { menuReadyScript, MENU_BASE_CSS, MENU_SECTION_CSS, menuTitle } from './sidebarMenu';
 import { runtimeOnServer, runtimeSkewNote } from './runtimeSince';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
@@ -39,7 +40,6 @@ import { mainPrompt } from './chatPresets';
 import { ON_EXHAUSTED_CHOICES, gateNotes } from './onExhaustedPanel';
 import { CoaiSettings, LANGUAGES, OnExhausted, enabledCodeRoles, keptPerSide, roleIsOn } from './settingsShape';
 import { Consultation, consultationsBody } from './consultations';
-import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
 import { featureNote, reviewsFeatures } from './featureGate';
@@ -239,7 +239,6 @@ export interface PanelState {
    * sidebar) draws Setup › This side without the list.
    */
   readonly sides?: SidesView | undefined;
-  readonly questions: readonly Escalation[];
   readonly sessions: readonly SessionFile[];
   /** Which collapsible sections are open. Empty falls back to {@link OPEN_BY_DEFAULT}. */
   readonly openSections: readonly string[];
@@ -341,6 +340,11 @@ export interface PanelState {
    * exactly that — never as "there is no material", which is a different and untrue sentence.</p>
    */
   readonly bugz?: BugCorpus | undefined;
+  /**
+   * The corpus has been asked for and has not answered: the Bugz card says it is loading, rather than "not read" (which is the
+   * answer of a server that is not installed). The first paint of the sidebar sets it (`firstPaint.ts`); absent means not loading.
+   */
+  readonly bugzLoading?: boolean;
 
   /**
    * What the CLAUDE.md snippet pasted into this workspace is, next to what this build hands out.
@@ -518,14 +522,16 @@ function focusLiteral(focus: PanelFocus | undefined): string {
 export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // The SIDEBAR: what is happening now, and the two tools a person reaches for while it happens — in the
   // order the operator named them (`research/PLAN_settings_page.md`, D1).
-  { id: 'notifications', title: 'Notifications', surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
+  { id: 'notifications', title: menuTitle('notifications'), surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
   // The gates and the consultations each in a section of its own, where Active rounds was — the operator's
-  // ask of 2026-09-29 (`research/PLAN_every_page_reads_alike.md`, S4). The gates keep the id `rounds`. A consultation being had is present
-  // tense exactly as a round is, so it stays in the sidebar (`research/PLAN_settings_page.md`, D2).
-  { id: 'rounds', title: 'Active gates', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
-  { id: 'consultations', title: 'Active consultations', surface: 'sidebar', body: (_state, live) => liveRegion('consultations', live) },
-  { id: 'phrases', title: 'Phrases', surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
-  { id: 'bugz', title: 'Bugz', surface: 'sidebar', body: (state) => bugzSection(state) },
+  // ask of 2026-09-29 (`research/PLAN_every_page_reads_alike.md`, S4). The gates keep the id `rounds`. A consultation
+  // being had is present tense exactly as a round is, so it stays in the sidebar (`research/PLAN_settings_page.md`, D2).
+  // The cadence section is gone (owner, 2026-11-23: removed in v2). The titles and the order are `sidebarMenu.ts`'s: the
+  // shell's own menu draws the same headers before this code has loaded.
+  { id: 'rounds', title: menuTitle('rounds'), surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
+  { id: 'consultations', title: menuTitle('consultations'), surface: 'sidebar', body: (_state, live) => liveRegion('consultations', live) },
+  { id: 'phrases', title: menuTitle('phrases'), surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
+  { id: 'bugz', title: menuTitle('bugz'), surface: 'sidebar', body: (state) => bugzSection(state) },
 ];
 
 /**
@@ -577,6 +583,7 @@ function bugzSection(state: PanelState): string {
     // for one commit, and nothing assigned those fields — so choosing a model did nothing.
     model: state.settings.bugzModel,
     server: state.settings.bugzServer,
+    loading: state.bugzLoading === true,
   });
 }
 
@@ -861,6 +868,7 @@ ${selectSearchScript(['', '__other__'])}
   // LAST: this document is ready to hear what is running. Anything announced while it was being built reached the
   // document it replaced (busyMark.ts; research/PLAN_model_search_and_busy_marks.md §3.12).
   vscode.postMessage({ type: 'ready' });
+${menuReadyScript()}
 </script>
 </body>
 </html>`;
@@ -1622,11 +1630,7 @@ function limitsBody(s: CoaiSettings, enabledVendors: number): string {
   <input type="number" id="roundTimeoutMinutes" min="0" data-setting="roundTimeoutMinutes" value="${s.roundTimeoutMinutes}"
          aria-describedby="roundTimeoutNote">
 </div>
-<div class="hint" id="roundTimeoutNote">${escapeHtml(roundLimitNote(s, enabledVendors))}</div>
-<div class="field inline">
-  ${labelled('escalationMinutes', 'Wait for you, minutes', 'escalationMinutes')}
-  <input type="number" id="escalationMinutes" min="1" data-setting="escalationMinutes" value="${s.escalationMinutes}">
-</div>`;
+<div class="hint" id="roundTimeoutNote">${escapeHtml(roundLimitNote(s, enabledVendors))}</div>`;
 }
 
 /**
@@ -2743,7 +2747,7 @@ export function liveRegions(
   nowMs: number = Date.now(),
 ): { qconsults: string; rounds: string; consultations: string; notifications: string } {
   return {
-    qconsults: activeQuestionsBody(state.questions, state.qconsults ?? [], nowMs),
+    qconsults: activeQuestionsBody(state.qconsults ?? [], nowMs),
     rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)),
     consultations: consultationsBody(state.consultations ?? [], nowMs),
     notifications: notificationsBody(state),
@@ -2779,42 +2783,12 @@ function labelled(forId: string, text: string, key: HelpKey): string {
 export { escapeHtml } from './escapeHtml';
 
 const CSS = `
-  /* Everything measures its own border and padding: without this a 100% field plus padding is
-     wider than its parent, and the whole view gains a horizontal scrollbar. */
-  *, *::before, *::after { box-sizing: border-box; }
-  :root { color-scheme: light dark; }
-  /* The ROOT carries the text size, and the small print below is measured from it in rem — 13 of them
-     to the old pixel, so at the theme's default 13px every line is exactly the size it was. The Settings
-     tab roots it in its size control instead, which is how the notes follow that control: rem is measured
-     from the root alone, so no nested size compounds (research/PLAN_every_page_reads_alike.md, D5). */
-  html { font-size: var(--vscode-font-size); }
-  body {
-    font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
-    color: var(--vscode-foreground); background: transparent;
-    /* Air down both sides: nothing should touch the edge of the view, and the right-hand gap is
-       a shade wider so a field never sits under the scrollbar's track. */
-    margin: 0; padding: 4px 14px 20px 12px; overflow-x: hidden;
-  }
+${MENU_BASE_CSS}
   h2 {
     font-size: calc(11rem / 13); text-transform: uppercase; letter-spacing: .06em; opacity: .75;
     margin: 10px 0 6px; font-weight: 600;
   }
-  .section { border-top: 1px solid var(--vscode-panel-border); padding: 0 0 8px; }
-  .section > summary {
-    /* .9 rather than .75: coloured text at .75 on a dark ground is muddy, and the colour is
-       doing the separating now. */
-    font-size: calc(11rem / 13); text-transform: uppercase; letter-spacing: .06em; opacity: .9;
-    font-weight: 600; padding: 10px 0 6px; cursor: pointer; list-style: none;
-    display: flex; align-items: center; gap: 6px; user-select: none;
-  }
-  .section > summary:hover { opacity: 1; }
-  /* Each header that opens carries its own tone, from the same palette the role boxes use, so a
-     column of eight identical grey words becomes something you can aim at. The chevron follows for
-     free: it is drawn from currentColor.
-
-     Colour is never the only signal — every heading is also its own word — and each tone is a
-     --vscode-charts-* token with a hex fallback, so a theme that redefines the charts palette
-     moves these with it. */
+${MENU_SECTION_CSS}
   .sec-reviewers > summary { color: var(--tone-arch); }
   .sec-prompts   > summary { color: var(--tone-plan); }
   .sec-gate      > summary { color: var(--tone-sec); }
@@ -2843,34 +2817,11 @@ const CSS = `
      not about the gate at all, and a new hue would say "another kind of setting" when what it is
      is another kind of WORK. */
   .sec-chat      > summary { color: var(--tone-uxdx); }
-  .sec-phrases   > summary { color: var(--tone-plan); }
   /* The consultant takes the chat's tone for the same reason the chat took the server's: the two
      are one idea from opposite ends — a person asking another vendor about a passage, an AI asking
      one about the tree it is stuck in — and sharing a hue says so without a word. */
   .sec-consultant > summary { color: var(--tone-uxdx); }
-  /* Bugz takes the security tone because that is what the corpus IS: the accepted findings it
-     reads back are Reliability, Performance and Security ones, filtered to exactly those. Sharing
-     the hue with the gate says the two are the same subject seen from opposite ends — one deciding
-     what is a defect, the other keeping what was. */
-  .sec-bugz      > summary { color: var(--tone-sec); }
   .sec-usage     > summary { color: var(--tone-arch); }
-  .sec-rounds    > summary { color: var(--tone-plan); }
-  /* The Consultant section's own hue: the settings and the consultations they start read as one thing. */
-  .sec-consultations > summary { color: var(--tone-uxdx); }
-  /* Notifications take the reliability tone, because that is what every record in them is
-     about: something refused, failed, stood down or repeated. Sharing the hue with the gate's
-     own reliability role says the two are asking the same question of different subjects. */
-  .sec-notifications > summary { color: var(--tone-sec); }
-  .section > summary::-webkit-details-marker { display: none; }
-  /* A real chevron, drawn from two borders rather than borrowed from punctuation: it matches the
-     Explorer's weight, scales with the text, and points the right way in both states with no
-     script. (A '›' glyph rendered a third of this size — a disclosure arrow nobody can hit.) */
-  .section > summary::before {
-    content: ''; flex: 0 0 auto; width: 6px; height: 6px; margin: 0 4px 0 2px;
-    border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
-    transform: rotate(-45deg); transition: transform .12s ease;
-  }
-  .section[open] > summary::before { transform: rotate(45deg); margin-top: -3px; }
   /* One row of buttons that wraps: a phrase list is a handful of short labels, and a column of them
      would push everything below it off the fold for no gain. */
   .phrases { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -2927,7 +2878,6 @@ const CSS = `
   .seg input { margin: 0; }
   .inline > label { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
   .inline > input[type="number"] { flex: 0 0 calc(64rem / 13); width: calc(64rem / 13); }
-  .hint { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; line-height: 1.45; }
   /* Sixteen names, in a sidebar whose width is somebody else's choice: two columns where there is
      room, one where there is not, and never a reason to scroll sideways. */
   .inventory { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; padding-left: 16px;
@@ -3133,7 +3083,6 @@ ${BUSY_CSS}
  */
 export const PANEL_COMMANDS = [
   'showNotifications',
-  'answer',
   'addVendor',
   'removeVendor',
   'runVendor',

@@ -397,8 +397,6 @@ const ALIAS: Record<string, string> = {
   // gone, and the Settings tab's article names the three by their titles as the redirects they are for one release.
   'coai.copyConfigBlock': 'copy the mcp config block',
   'coai.copyClaudeSnippet': 'copy the claude.md snippet',
-  'coai.answerQuestion': 'answer it in the panel',
-  'coai.answerQuestionWaiting': 'the title-bar icon turns green',
   'coai.showRounds': 'show review rounds',
   // Its title is one word that every article uses, so the title alone would pass whether or not the gear
   // was ever explained — the phrase is the article's own.
@@ -438,7 +436,6 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.maxPerProvider': 'per vendor',
   'coai.reviewerTimeoutMinutes': 'reviewer timeout',
   'coai.roundTimeoutMinutes': 'a whole round',
-  'coai.escalationMinutes': 'wait for you',
   'coai.rounds': 'rounds',
   'coai.thresholds': 'passes at or under',
   'coai.roleEnabled': 'its **active** tick in **reviews › roles & prompts**',
@@ -477,9 +474,9 @@ const SETTING_ALIAS: Record<string, string> = {
   // an operating system, which is the moment these two settings exist for.
   'coai.dataDirectory': 'where your data lives',
   'coai.dataSide': 'a name for this installation',
-  // The one that only bites when two installations share a person: a round running in WSL writes its
-  // question where a Windows window is not looking, and the round blocks on a modal nobody sees.
-  'coai.alsoWatchDataDirectories': 'questions from another installation',
+  // The one that only bites when two installations share a person: the other side's consultants and rounds are in a folder this window
+  // does not read unless it is named.
+  'coai.alsoWatchDataDirectories': 'data folders of other installations',
   // The model catalog's one-time move (PLAN_one_model_catalog.md E1.3): the marker and the backup, both written by
   // the extension, by the words the article uses for them.
   'coai.catalogMigration': 'moved into the catalog',

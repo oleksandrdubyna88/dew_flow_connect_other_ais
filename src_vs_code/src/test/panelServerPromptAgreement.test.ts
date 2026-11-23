@@ -27,7 +27,6 @@ const baseState = (): PanelState => ({
   hostKind: 'windows',
   side: '',
   perSide: false,
-  questions: [],
   sessions: [],
   openSections: ['prompts'],
   usage: [],

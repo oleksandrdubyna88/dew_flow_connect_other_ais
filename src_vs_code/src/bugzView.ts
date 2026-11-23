@@ -31,6 +31,8 @@ export interface BugzViewState {
    * worded by why: a row unticked or gone, or a ticked row the ranking allowlist refuses (CodeRabbit on #709).
    */
   readonly stranded?: StrandedPick;
+  /** The corpus has been asked for and has not answered yet: the card says so and offers no action that depends on it. */
+  readonly loading?: boolean;
 }
 
 /** As much of a pick as the view words a stranded one from. */
@@ -180,6 +182,9 @@ function strandedLine(stranded: StrandedPick, pickable: boolean): string {
       + ' never ranks with a model you did not choose.</div>';
 }
 
+/** What the card says while the corpus is being read: the first paint of the sidebar does not wait for it (`firstPaint.ts`). */
+const LOADING_LINE = 'Loading the corpus…';
+
 /** The section's body. */
 export function bugzBody(state: BugzViewState = {
   corpus: EMPTY_CORPUS, models: [], model: '', server: '',
@@ -195,14 +200,15 @@ export function bugzBody(state: BugzViewState = {
   // What the pick offers is already what the ranking allowlist accepts — THIS server's list when it said, the panel's own
   // when it is too old to (`bugzPick.rankingRuleOf`) — so the view draws it as it is: one rule, in the domain (E5.1's
   // code round, findings 0 and 7), where this used to filter a second time.
+  const loading = state.loading === true;
   const picker = pickerHtml(state.models, state.model, state.stranded ?? HOLDS);
 
   return `<div class="field">
-  <div class="hint">${escape(lastRunLine(state.corpus))}</div>
+  <div class="hint">${escape(loading ? LOADING_LINE : lastRunLine(state.corpus))}</div>
   <label for="bugz-model">Ranking model</label>
   ${picker}
   <div class="row">
-    <button type="button" class="run" data-command="collectBugs"${running ? ' disabled' : ''}>${
+    <button type="button" class="run" data-command="collectBugs"${running || loading ? ' disabled' : ''}>${
   escape(collectLabel(run))}</button>
     <button type="button" class="run" data-command="reviewBugs"${
   state.corpus.funnel.collected > 0 ? '' : ' disabled'}>Review bugs</button>
@@ -210,10 +216,10 @@ export function bugzBody(state: BugzViewState = {
   </div>
   <div class="row">
     <button type="button" class="run" data-command="sendBugs"${
-  busy || waiting(state.corpus) === 0 ? ' disabled' : ''}>${escape(sendLabel(send, state.corpus))}</button>
+  busy || loading || waiting(state.corpus) === 0 ? ' disabled' : ''}>${escape(sendLabel(send, state.corpus))}</button>
     <button type="button" class="run quiet" data-command="setBugsKey">Set the contributor key…</button>
   </div>
-  <div class="hint" id="bugz-send">${escape(lastSendLine(state.corpus))}</div>
+  <div class="hint" id="bugz-send">${loading ? '' : escape(lastSendLine(state.corpus))}</div>
   <button type="button" class="run" data-command="setBugsServer">${
   state.server.length > 0 ? `Ingest server: ${escape(state.server)}` : 'Set the ingest server…'}</button>
   <div class="hint">Collect reads this machine's own gate findings and writes what it learned to the

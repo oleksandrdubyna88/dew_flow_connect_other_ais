@@ -142,7 +142,6 @@ export interface CoaiSettings {
    */
   readonly roundTimeoutMinutes: number;
   readonly credsKey: string;
-  readonly escalationMinutes: number;
   /**
    * What a code reviewer is launched in: `none` (Fast — the diff alone) or `worktree` (Full).
    *
@@ -218,8 +217,6 @@ export const DEFAULTS: CoaiSettings = {
   reviewerTimeoutMinutes: 10,
   roundTimeoutMinutes: 0,
   credsKey: '',
-  // The server's own `PanelSettings.DefaultEscalationMinutes` (15 since S3, A10) — held level by a test that reads the C#.
-  escalationMinutes: 15,
   codeWorkspace: 'none',
   roles: [],
   consult: DEFAULT_CONSULT,
@@ -241,7 +238,7 @@ export type SettingsOverlay = Readonly<Record<string, unknown>>;
  */
 export const OVERLAID_SETTINGS: readonly string[] = [
   'vendors', 'rounds', 'thresholds', 'roleEnabled', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
-  'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'escalationMinutes',
+  'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey',
   'codeWorkspace',
   // A person's own review roles belong to the WORK, which is what a side is — beside `rounds`,
   // `thresholds` and `roleEnabled`, which ask the same question about the roles this product ships.
@@ -352,7 +349,6 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     vibeHomesDirectory: asString(read('vibeHomesDirectory')).trim(),
     kimiAllowNetworkSignIn: read('kimiAllowNetworkSignIn') === true,
 
-    escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
     codeWorkspace: read('codeWorkspace') === 'worktree' ? 'worktree' : 'none',
     roles: rolesFrom(read('roles')),
     consult: consultSettingsFrom(read),
@@ -462,9 +458,6 @@ export function envBlock(
   }
   if (settings.credsKey) {
     env['COAI_CREDS_KEY'] = settings.credsKey;
-  }
-  if (settings.escalationMinutes !== DEFAULTS.escalationMinutes) {
-    env['COAI_ESCALATION_MINUTES'] = String(settings.escalationMinutes);
   }
   // The Bugz server. NOT the Bugz model (research/PLAN_one_model_catalog.md T7, removed in E5.1): it was written here as
   // `COAI_BUGZ_MODEL` so a collect started from a terminal could find it, and nothing in coai-mcp ever read that key —

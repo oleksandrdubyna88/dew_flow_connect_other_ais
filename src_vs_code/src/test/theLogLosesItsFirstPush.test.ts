@@ -178,7 +178,7 @@ interface RunPage {
 }
 
 function runPage(usageHtml = '', spotsHtml = ''): RunPage {
-  const html = roundsLogHtml([], [], 'n0nce', usageHtml, spotsHtml);
+  const html = roundsLogHtml([], 'n0nce', usageHtml, spotsHtml);
   const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
   const body = script.slice(script.indexOf('>') + 1);
 
@@ -282,12 +282,12 @@ test('a tab with nothing in it yet says it is reading the log', () => {
   // The first paint is database-free on purpose, so both of these open empty and are filled a moment
   // later. An empty div made a push that never arrived look exactly like one that had not arrived
   // YET — which is why the operator's report could not say which it was.
-  const html = roundsLogHtml([], [], 'n0nce');
+  const html = roundsLogHtml([], 'n0nce');
 
   assert.match(html, /id="spots-body"><div class="empty">Reading the log…<\/div>/, 'the spots tab opens blank');
   assert.match(html, /id="usage-body"><div class="empty">Reading the log…<\/div>/, 'the spending tab opens blank');
 
-  const filled = roundsLogHtml([], [], 'n0nce', '<b>spent</b>', '<b>missed</b>');
+  const filled = roundsLogHtml([], 'n0nce', '<b>spent</b>', '<b>missed</b>');
   assert.match(filled, /id="spots-body"><b>missed<\/b><\/div>/, 'real content replaces the hint');
   assert.match(filled, /id="usage-body"><b>spent<\/b><\/div>/, 'in both sections');
 });
@@ -306,10 +306,10 @@ test('ready is read as ready, and everything unknown is ignored', () => {
   assert.deepEqual(logCommandOf({ type: 'command', command: 'nope', id: 'x' }), { kind: 'ignore' });
 });
 
-test('the three things the page can ask for still arrive', () => {
+test('the commands the page can ask for still arrive, and an Answer press is no longer one (no held question, v2)', () => {
   // The regression guard on the extraction: the log's commands worked before this change and must
   // not be collateral of it.
-  assert.deepEqual(logCommandOf({ type: 'command', command: 'answer', id: 'e7' }), { kind: 'answer', id: 'e7' });
+  assert.deepEqual(logCommandOf({ type: 'command', command: 'answer', id: 'e7' }), { kind: 'ignore' }, 'the page has no Answer button, so a message that says it is a stale page, ignored');
   assert.deepEqual(
     logCommandOf({ type: 'command', command: 'usageWindow', id: 'month' }),
     { kind: 'usageWindow', window: 'month' });

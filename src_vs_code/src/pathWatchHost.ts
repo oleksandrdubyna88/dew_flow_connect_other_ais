@@ -1,7 +1,7 @@
 import { promises as fsp } from 'node:fs';
 import * as vscode from 'vscode';
 import { coaiDataDir, defaultDataDir, namedRoot } from './dataDir';
-import { alsoWatchDataDirectories } from './escalationWatcher';
+import { alsoWatchDataDirectories } from './alsoWatch';
 import { hostExecutableSide } from './hostSide';
 import { notifyOnceThen, notifyResolved } from './notify';
 import { type PathFinding, SETTING_PATH_MISSING, findingSubject, missingCure, missingTitle } from './pathFindings';

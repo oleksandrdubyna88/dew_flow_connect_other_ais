@@ -52,7 +52,7 @@ function page(over: Partial<PanelState> = {}): string {
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '', perSide: false,
-    questions: [], sessions: [], openSections: ['reviewers'],
+    sessions: [], openSections: ['reviewers'],
     usage: [], usageWindow: 'day', latestServerVersion: '',
     cliStatus: {}, cardPrices: {},
     snippetStatus: { kind: 'absent', version: 0 },

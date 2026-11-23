@@ -5,6 +5,7 @@ import { collectWithPick } from '../../bugzCollect';
 import { bugzInputsOf } from '../../bugzPick';
 import { settingsFrom } from '../../settingsShape';
 import { vendorsFrom } from '../../vendors';
+import { activated } from './hostHelpers';
 
 /**
  * The Bugz collect's refusal in a REAL editor (research/PLAN_one_model_catalog.md E5.1; its code round, finding 6).
@@ -23,7 +24,7 @@ import { vendorsFrom } from '../../vendors';
 export async function aBugzCollectIsRefusedInARealEditor(): Promise<void> {
   const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
-  await extension.activate();
+  await activated(extension);
   const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
   const before = config().inspect('bugzModel')?.globalValue;
   try {

@@ -14,7 +14,7 @@
  *
  *   npm run compile && node scripts/render-page.mjs <page> <out.png> [width] [height] [--size n] [--browser path]
  *
- * <page>: sidebar · sidebar-question · settings[:<tab>] · catalog[:<place>]
+ * <page>: sidebar · settings[:<tab>] · catalog[:<place>]
  *
  * Width: headless Chromium lays a page out at no less than about 500px and CROPS a narrower screenshot, so
  * a 340px sidebar comes out cut at the right edge rather than wrapped. Render the sidebar at 500.
@@ -104,7 +104,7 @@ const LIGHT = {
 
 const NONCE = 'render';
 
-/** Something happening, for the sidebar's picture: one round running, one consultation being had, a plan the cadence follows, three phrases. */
+/** Something happening, for the sidebar's picture: one round running, one consultation being had, three phrases. */
 function DEMO_SIDEBAR() {
   const minutesAgo = (n) => new Date(Date.now() - n * 60_000).toISOString();
   const round = {
@@ -158,16 +158,6 @@ function page(name, size) {
     case 'sidebar': {
       const open = ['notifications', 'rounds', 'consultations', 'phrases', 'bugz'];
       return from('panelView.js').panelHtml({ ...panelState(''), ...text, ...DEMO_SIDEBAR(), openSections: open }, NONCE);
-    }
-    case 'sidebar-question': {
-      // The card a round nobody could answer leaves: the operator's own text of 2026-09-29.
-      const question = 'The plan review gate needs your decision: no reviewer answered — nothing was reviewed. 0 of 3 reviewers answered; failed: '
-        + 'local/PlanCritique: exit 69: [coai-mcp] the local engine at http://127.0.0.1:11434/v1 did not finish in time - it was still working after 290s of the 290s this reviewer was given., '
-        + 'gemini/PlanCritique: exit 1: error: Eligibility check failed: UNAUTHENTICATED (code 401): Request had invalid authentication credentials., '
-        + 'codex/PlanCritique: rate limited (after 1 attempt): {"type":"error","message":"You’ve hit your usage limit. Try again at Oct 3rd, 2026 7:…. '
-        + 'Proceed anyway, or fix the findings and review again?';
-      const questions = [{ id: 'q1', sessionId: 's1', repoPath: 'D:/work/app', branch: 'feat/cadence-own-section', question, openFindings: [], askedUtc: new Date().toISOString() }];
-      return from('panelView.js').panelHtml({ ...panelState(''), ...text, questions }, NONCE);
     }
     case 'catalog':
       // The new Settings page, on a place: `catalog`, `catalog:setup/team` (research/PLAN_one_model_catalog.md E3).

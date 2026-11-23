@@ -76,7 +76,7 @@ test('the store writes of ONE conversation are chained, and the chain survives a
 });
 
 test('the extension gives the chat a store to write to, under the coai data directory, and the same store to the migration and the serializer', () => {
-  const wiring = source('extension.ts');
+  const wiring = source('../shell/modules/chat/register.ts');
 
   assert.match(wiring, /const chatStore = new ChatStoreFile\(conversationsDir\(coaiDataDir\(\)\)\)/u,
     'the chat has no store, so every conversation is written to the memento alone');

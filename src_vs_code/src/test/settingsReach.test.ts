@@ -37,7 +37,6 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   reviewerTimeoutMinutes: 12,
   roundTimeoutMinutes: 25,
   credsKey: 'coai-key',
-  escalationMinutes: 45,
   codeWorkspace: 'worktree',
   roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
             prompts: [{ id: 'requirements-general', label: 'General' }] }],

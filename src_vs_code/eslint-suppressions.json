@@ -508,30 +508,12 @@
       "count": 3
     }
   },
-  "src/escalationDirs.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/escalationWatcher.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/escalations.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/extension.ts": {
     "complexity": {
-      "count": 7
+      "count": 6
     },
     "max-lines-per-function": {
-      "count": 3
+      "count": 2
     }
   },
   "src/helpPage.ts": {

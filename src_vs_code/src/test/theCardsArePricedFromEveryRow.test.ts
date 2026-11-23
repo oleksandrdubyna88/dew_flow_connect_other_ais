@@ -21,7 +21,7 @@ const source = (file: string): string => fs.readFileSync(path.join(__dirname, '.
 test('the render prices the cards from every row, through the price service', () => {
   const panel = source('panelProvider.ts');
 
-  assert.match(panel, /cardPrices: await this\.cardPrices\(vendors\),/u, 'the cards are not priced from every catalog row');
+  assert.match(panel, /cardPrices: (?:after\('renderCardPrices', )?await this\.cardPrices\(vendors\)\)?,/u, 'the cards are not priced from every catalog row');
   assert.doesNotMatch(panel, /cardPrices: await this\.cardPrices\(shown\),/u,
     'priced from the reviewers only, a consultant-only row shows a dash where the list prices it');
   assert.match(panel, /return cardPrices\(rows, \(model, baseUrl\) => PRICE_BOOK\.priceOf\(model, baseUrl\)\);/u,

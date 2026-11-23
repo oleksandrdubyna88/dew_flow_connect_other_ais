@@ -11,17 +11,24 @@ import { sourceOf } from './sourceReading';
  * `vscode`, so no test can run it: this is a source check over the one place the field is built, with its controls.</p>
  */
 
-const text = sourceOf('extension.ts');
+// The door is built by the chat module now (v2 E4): `CoaiExports` (the type other code reads) is still `extension.ts`'s, the build is `index.ts`'s,
+// and the one binding of the road is the chat registration's.
+const text = sourceOf('../shell/modules/chat/index.ts');
+const typeText = sourceOf('extension.ts');
+const registration = sourceOf('../shell/modules/chat/register.ts');
 
 test('the remote test door is built only behind the test-mode check', () => {
   const built = [...text.matchAll(/remoteSessions\s*:\s*testDoorOf\(/gu)];
   assert.equal(built.length, 1, `the scan expected ONE place that builds the door, found ${built.length}`);
   const before = text.slice(Math.max(0, (built[0]?.index ?? 0) - 160), built[0]?.index ?? 0);
   assert.match(before, /extensionMode\s*===\s*vscode\.ExtensionMode\.Test\s*\?\s*\{\s*$/u, 'the remote test door is reachable outside test mode: it is not built behind ExtensionMode.Test');
-  assert.match(text, /readonly remoteSessions\?:\s*RemoteSessionsTestDoor/u, 'the field of CoaiExports is not optional, so production would have to supply it');
+  assert.match(typeText, /readonly remoteSessions\?:\s*RemoteSessionsTestDoor/u, 'the field of CoaiExports is not optional, so production would have to supply it');
 });
 
 test('nothing else in the extension builds a remote road for a caller', () => {
-  assert.ok(!/remoteSessionsOf\(/u.test(text), 'extension.ts builds a second road beside the bound one');
-  assert.equal([...text.matchAll(/bindRemoteSessions\(/gu)].length, 1, 'the road is not bound exactly once');
+  for (const [name, source] of [['extension.ts', typeText], ['the chat module', text], ['the chat registration', registration]] as const) {
+    assert.ok(!/remoteSessionsOf\(/u.test(source), `${name} builds a second road beside the bound one`);
+  }
+  assert.equal([...typeText.matchAll(/bindRemoteSessions\(/gu)].length, 0, 'the old activation binds the road again, beside the chat module');
+  assert.equal([...registration.matchAll(/bindRemoteSessions\(/gu)].length, 1, 'the road is not bound exactly once');
 });

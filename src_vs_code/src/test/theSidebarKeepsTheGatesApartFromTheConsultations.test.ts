@@ -29,6 +29,7 @@ function sectionOf(html: string, id: string): string {
 }
 
 test('the sidebar is Notifications, Active gates, Active consultations, Phrases and Bugz, in that order', () => {
+  // Consultation cadence had a section of its own from 2026-09-29 (`research/PLAN_the_cadence_has_its_own_section.md`); the owner removed it for v2 on 2026-11-23.
   assert.deepEqual(sections(HTML), [
     ['notifications', 'Notifications'],
     ['rounds', 'Active gates'],
@@ -54,3 +55,11 @@ for (const id of ['consultations']) {
     assert.match(heading[0]!.body, /color:/);
   });
 }
+
+test('Consultation cadence is not on the sidebar: no section, no heading colour, and nothing of it is drawn', () => {
+  const html = panelHtml(panelState('', {}), 'n');
+
+  assert.equal(html.includes('data-section="cadence"'), false, 'the section is still drawn');
+  assert.equal(html.includes('Consultation cadence'), false, 'its heading is still on the page');
+  assert.equal(stylesheet(html).some((rule) => rule.selector.includes('.sec-cadence')), false, 'its colour rule is still shipped');
+});

@@ -1,0 +1,14 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-detach-measure
+title: "Measure the open detach cases"
+kind: measure
+complexity: 3
+dependsOn: []
+parallel: true
+files:
+  - v2/spikes/RESULTS_detach.md
+dod:
+  - id: d1
+    item: "result recorded: client process tree killed; no user manager; Windows client job object; wsl --terminate"
+  - id: d2
+    item: "the launcher order of spec A is confirmed or corrected"

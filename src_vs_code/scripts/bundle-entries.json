@@ -1,0 +1,49 @@
+{
+  "_": "The one list of bundles, read by scripts/bundle.mjs (npm run bundle), scripts/entry-firewall.mjs and src/test/entryPurity.test.ts. One CommonJS esbuild entry per module: the extension host loads CommonJS, ESM splitting is not used, and duplicate code costs disk, not start time. 'firewall' bundles are bounded by entry-firewall.mjs (allowed inputs and external imports); 'budgetBytes' is the minified size ceiling; 'forbidInputs' lists files a bundle must not contain (the once-per-host state lives in the runtime bundle only).",
+  "common": { "format": "cjs", "platform": "node", "external": ["vscode"], "minify": true },
+  "bundles": [
+    {
+      "id": "extension",
+      "entry": "shell/entry.ts",
+      "out": "dist/extension.js",
+      "budgetBytes": 16384,
+      "firewall": { "inputs": ["shell/entry.ts", "shell/lazy.ts", "shell/ids.ts", "shell/measure.ts"], "imports": ["vscode", "node:path", "path"] },
+      "forbidInputs": ["src/runtimeState.ts", "shell/modules/runtime.ts"]
+    },
+    {
+      "id": "sidebar",
+      "entry": "shell/modules/sidebar.ts",
+      "out": "dist/modules/sidebar.js",
+      "budgetBytes": 98304,
+      "firewall": { "inputs": ["shell/modules/sidebar.ts", "shell/measure.ts", "src/sidebarMenu.ts", "src/panelSurface.ts", "src/escapeHtml.ts", "src/asText.ts", "src/roleTone.ts", "src/webviewHtml.ts", "src/webviewNonce.ts"], "imports": ["vscode", "node:crypto", "crypto"] },
+      "forbidInputs": ["src/runtimeState.ts", "shell/modules/runtime.ts"]
+    },
+    {
+      "id": "legacy",
+      "entry": "shell/modules/legacy.ts",
+      "out": "dist/modules/legacy.js",
+      "forbidInputs": ["src/runtimeState.ts", "shell/modules/runtime.ts"]
+    },
+    {
+      "id": "chat",
+      "entry": "shell/modules/chat/index.ts",
+      "out": "dist/modules/chat.js",
+      "budgetBytes": 589824,
+      "forbidInputs": ["src/runtimeState.ts", "shell/modules/runtime.ts"]
+    },
+    {
+      "id": "install",
+      "entry": "shell/modules/install/index.ts",
+      "out": "dist/modules/install.js",
+      "budgetBytes": 114688,
+      "forbidInputs": ["src/runtimeState.ts", "shell/modules/runtime.ts"]
+    },
+    {
+      "id": "runtime",
+      "entry": "shell/modules/runtime.ts",
+      "out": "dist/modules/runtime.js",
+      "budgetBytes": 8192,
+      "firewall": { "inputs": ["shell/modules/runtime.ts", "src/runtimeState.ts", "src/suppression.ts", "src/writeGap.ts", "src/notice.ts", "src/notifications.ts"], "imports": ["node:crypto", "crypto"] }
+    }
+  ]
+}

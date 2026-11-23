@@ -59,7 +59,7 @@ export function sectionsOn<S>(specs: readonly SectionSpec<S>[], surface: Surface
   return specs.filter((spec) => spec.surface === surface);
 }
 
-function disclosure(id: string, title: string, open: boolean, body: string): string {
+export function disclosure(id: string, title: string, open: boolean, body: string): string {
   return `<details class="section sec-${id}" data-section="${id}"${open ? ' open' : ''}>
   <summary>${escapeHtml(title)}</summary>
 ${body}

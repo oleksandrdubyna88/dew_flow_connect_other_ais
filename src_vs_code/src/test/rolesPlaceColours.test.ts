@@ -48,7 +48,6 @@ const panel = (over: Partial<PanelState> = {}): PanelState => ({
   hostKind: 'windows',
   side: '',
   perSide: false,
-  questions: [],
   sessions: [],
   openSections: ['prompts'],
   usage: [],

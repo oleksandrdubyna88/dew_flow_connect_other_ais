@@ -1,0 +1,68 @@
+# The cold-start measurement of the v1 baseline (v2 epic E2 story S2). NOT a workflow of the current tree: `scripts/coldstart-overlay.mjs` copies this file to
+# `.github/workflows/cold-start-baseline.yml` of the OLD checkout (commit c24e5141 has no cold-start job in its ci.yml), so a pull request from the branch
+# `measure/v1-baseline` measures the old extension with the same harness and prints the numbers. See research/RESULTS_v2_start.md § 2.
+#
+# The old extension activates itself at start-up (`onStartupFinished`), so it is measured with `--record-only`: three cold launches, no limits, and whether
+# the extension was already active at the clock is in the result. The log has the summary line, the per-step table and the row; the `cold-start-baseline-<os>`
+# artifact has the JSON.
+name: cold-start-baseline
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    name: extension · cold start of v1 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .agents/conventions
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+
+      - name: Shared instruction dependencies
+        run: npm ci --ignore-scripts --prefix .agents/conventions
+
+      - name: Install
+        working-directory: src_vs_code
+        run: npm ci
+
+      - name: Compile
+        working-directory: src_vs_code
+        run: npm run compile
+
+      - name: Cold start of v1 in a real editor (Linux, under xvfb)
+        if: runner.os == 'Linux'
+        working-directory: src_vs_code
+        shell: bash
+        run: xvfb-run -a node scripts/run-host.mjs measure --record-only --json "$RUNNER_TEMP/cold-start.json" --label "v1 baseline, ci ${{ matrix.os }}"
+
+      - name: Cold start of v1 in a real editor (Windows)
+        if: runner.os == 'Windows'
+        working-directory: src_vs_code
+        shell: bash
+        run: node scripts/run-host.mjs measure --record-only --json "$RUNNER_TEMP/cold-start.json" --label "v1 baseline, ci ${{ matrix.os }}"
+
+      # `if: always()`: the numbers of a run that failed are the ones worth reading.
+      - name: Keep the numbers
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cold-start-baseline-${{ matrix.os }}
+          path: ${{ runner.temp }}/cold-start.json
+          if-no-files-found: warn

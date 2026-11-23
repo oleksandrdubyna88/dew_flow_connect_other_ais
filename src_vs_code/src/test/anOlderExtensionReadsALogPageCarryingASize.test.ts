@@ -108,7 +108,7 @@ test('AnOlderExtensionReadsALogPageCarryingASize: the page it draws is the page 
   const draw = (text: string): { html: string; rows: number } => {
     const rows = rowsFrom([SESSION], now, () => undefined, [], parseLog(text, true));
 
-    return { html: roundsLogHtml(rows, [], 'n'), rows: rows.length };
+    return { html: roundsLogHtml(rows, 'n'), rows: rows.length };
   };
 
   const carrying = draw(page(true));
