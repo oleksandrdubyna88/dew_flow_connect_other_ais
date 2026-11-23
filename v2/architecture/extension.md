@@ -89,6 +89,20 @@ a fakeDom test and an axe test:
 | Rounds & notifications | `--log`, `--findings` (roundsDbRead.ts) + hub logs; notification ledger | Tabs, DataTable | K2 |
 | Features (new) | `--plan-tree <feature-dir> --json` (server parses/validates YAML; the extension never parses YAML); watched while visible | StatusMark | K3 epoch→epic→story→task (status, complexity, model, parallel lane, depends-on), K2, K6 DoD |
 
+**Pages are a face only (owner, 2026-11-23).** A page may later be served as a web site instead of a VS Code webview
+(first case: the settings of a standalone orchestrator AMI). So:
+- Every page talks to ONE transport-neutral page API: typed messages `get(doc)`, `put(doc, revision)` (If-Match
+  semantics, "changed elsewhere" answer), `list(kind, filter)`, `subscribe(kind)`. The message types live in
+  `shared/` as a JSON schema, used by the page, the extension host and the server.
+- No business rule, validation or file access in the page or in the extension host: the coai server (core) owns them
+  and re-checks every `put`. The extension host is only a transport: webview postMessage ↔ coai-mcp (one-shot or the
+  local socket).
+- The page bundle has no `vscode` import outside one adapter file (`acquireVsCodeApi` / theme variables); a second
+  adapter (fetch/HTTPS + token) can replace it without a change to the page. A contract test runs each page against a
+  fake transport, and an entry-firewall check refuses a `vscode` import elsewhere in a page bundle.
+- Later web serving (not in v2 scope): the hub, or `coai-mcp --serve-pages` bound to localhost with a token on a
+  standalone machine, answers the same page API over HTTPS.
+
 Enrolment: single-use key, 30 min, shown once; two copy lines that download, verify the hub-shown sha256, then run (server.md § 17.1, § 17.3).
 "Update everywhere": `POST /hub/rollout`, per-device progress until every device reports the new version.
 

@@ -426,5 +426,8 @@ coai is baked into an Ubuntu x64 AMI that runs the orchestrator. One instance, o
   `loginctl enable-linger <user>` is part of the bake; the check-boundary preflight (epoch 3 E2 s2 t4) refuses coder
   jobs if it is missing, with that line as the cure.
 - Updates: a new AMI build. coai must not try to self-update there (the one-click update path is off when no hub).
+- Standalone is the DEFAULT for this image (owner). A settings page for it may come later as a web site, not a VS Code
+  window: the pages are a face only over one transport-neutral page API (extension.md § 3), so the same page can be
+  served by `coai-mcp --serve-pages` (localhost + token) without new settings logic.
 - Proof: an Ubuntu x64 container or VM built by the same bake script runs the epoch-3 E2 acceptance (coder job to green
   with FakeCli) and two parallel MCP sessions, headless, with no hub.
