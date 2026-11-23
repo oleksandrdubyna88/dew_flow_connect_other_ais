@@ -36,6 +36,8 @@ judgement half — faster, with quality kept.
   as ONE OS user, one instance, standalone (no hub; settings from files baked into the image; updates by a new AMI
   build). It must work there with no manual step and no problem (server.md § 23).
 - Windows cold start to the real menu: limit 3000 ms on Windows (owner, 2026-11-23); 2000 ms stays on Linux.
+- Session upload for analysis (owner, 2026-11-23): a per-device switch (off by default); when a WHOLE plan (feature)
+  is done, coai uploads the Claude sessions of that plan to the hub for analysis (server.md § 24).
 - Notifications reach the TERMINAL (owner, 2026-11-23): every coai notification is shown in the terminal of the main
   AI session: the coai Claude mod (band/line) in Claude Code plus the same text as hook context for the AI on its next
   turn; a plain line through the hook/start output for codex and agy; stdout + log when headless (AMI). The VS Code

@@ -431,3 +431,28 @@ coai is baked into an Ubuntu x64 AMI that runs the orchestrator. One instance, o
   served by `coai-mcp --serve-pages` (localhost + token) without new settings logic.
 - Proof: an Ubuntu x64 container or VM built by the same bake script runs the epoch-3 E2 acceptance (coder job to green
   with FakeCli) and two parallel MCP sessions, headless, with no hub.
+
+## 24. Session upload after a whole plan (owner, 2026-11-23)
+
+Purpose: analysis of how a plan was done (time, turns, gates, failures), across devices, on the hub.
+
+- Switch: device setting `uploadSessionsOnPlanDone` (bool, default **false**), on the Main AI page; set per device from
+  the hub like every other setting. Off = nothing is collected or sent.
+- Trigger: the plan's feature folder reaches done (every epoch done; the status coai sets in the YAML, § 21). Once per
+  plan revision; a re-opened and re-finished plan uploads again as a new bundle.
+- What: every Claude Code session JSONL of that plan — the main AI sessions and their subagent transcripts whose cwd is
+  the plan's repository (or a worktree of it) and whose time falls between the plan's first and last recorded work item
+  (RoundsDb `workItem` rows), plus coai's own role-job turn files (`attempts/<n>/turn-k.txt`, job.json, result.json)
+  of jobs with that feature's `workItem`, plus the `--plan-report` JSON. Other vendors' sessions (codex, agy) only
+  when their transcript location is measured; not in the first version.
+- Safety: the bundle passes the redaction (`Redaction`, every secret class) line by line before it leaves the device;
+  a line that cannot be parsed is dropped, never sent raw; no file outside the listed set; size cap per bundle
+  (default 200 MB after gzip) — over the cap the oldest sessions are left out and the manifest says so. The upload uses
+  the device's hub token over HTTPS; nothing goes anywhere else.
+- Hub: `POST /api/hub/sessions` (bundle + manifest: device, repo, feature, plan revision, file list with sha256,
+  redaction counts); stored under the hub data folder with its own retention (default 180 days) and a size budget;
+  listed per plan on the Plans page.
+- Standalone (no hub, e.g. the AMI): the switch keeps the redacted bundle in the data folder
+  (`sessions-out/<feature>-<rev>.tar.gz`) and says so; it never sends to any other place.
+- A failed upload is one terminal notification (decision on notifications) and a retry at the next start; never a loop.
+- Build: with the Plans page (epoch 4 E5) for the trigger and listing; the hub endpoint with epoch 2 E1 hub routes.
