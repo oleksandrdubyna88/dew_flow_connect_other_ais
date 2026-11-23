@@ -91,3 +91,12 @@ right after the commit of the written stories it must read 0.00. **Pending.**
 - `--role-delta … --at HEAD` right after the commit: changedShare 0.00 (0 of 23). The pass criterion (< 0.20 after the
   orchestrator's review) is measured after that epic's plan gate — pending.
 - Total spend of this story: 2.2462 (run 1, lost to a tree change) + 1.7251 (run 2) = 3.97 USD.
+
+## The orchestrator measure (after the epoch-3 E2 plan gate, 2026-11-23)
+
+- The plan gate on the BA-written e2 stories returned `proceed` with 4 findings, all accepted; the orchestrator made
+  them as one added DoD item in each of 4 task files (s1/t2, s2/t4, s4/t1, s5/t1), commit `9a8bc821`.
+- `--role-delta r20261123034558-89577cf7 --at 9a8bc821`: 23 manifest tasks, 4 changed, 0 deleted, 0 added →
+  **changedShare 0.1739 — pass (below 0.20)**. The epic's BA criterion is met.
+- Usability finding: `--at HEAD` resolves HEAD in the job's own repository path (here the epoch-3 E1 worktree), not the
+  caller's; pass the exact commit. Follow-up: say so in the tool description, or resolve against the caller's tree.
