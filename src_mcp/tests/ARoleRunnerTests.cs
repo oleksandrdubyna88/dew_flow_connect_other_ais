@@ -73,13 +73,13 @@ public sealed class ARoleRunnerTests
     public async Task ARoleWithNoWorkInThisBuild_IsClosedAsFailed_NamingTheRole()
     {
         using var world = new RoleJobWorld();
-        var job = world.NewJob("anything", role: "ba");
+        var job = world.NewJob("anything", role: "scout");
 
         await RunnerFor(world).RunAsync(job.JobId, TestContext.Current.CancellationToken);
 
         var after = world.Store.Read(job.JobId)!;
         (after.State, after.Stop).Should().Be((RoleJobStates.Failed, "no-descriptor"));
-        after.Reason.Should().Contain("'ba'");
+        after.Reason.Should().Contain("'scout'");
     }
 
     [Fact]

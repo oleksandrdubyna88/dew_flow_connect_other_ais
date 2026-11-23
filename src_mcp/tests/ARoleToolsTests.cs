@@ -108,7 +108,7 @@ public sealed class ARoleToolsTests
     {
         using var rig = new Rig(launcher: LauncherThatStartsNothing());
 
-        foreach (var role in new[] { "ba", "nonesuch", "coder", string.Empty })
+        foreach (var role in new[] { "scout", "nonesuch", "coder", string.Empty })
         {
             var answer = await rig.Start("succeed", role);
 

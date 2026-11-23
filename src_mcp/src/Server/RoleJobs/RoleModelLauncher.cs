@@ -18,8 +18,8 @@ internal sealed record RoleLaunched(ReviewerLaunch? Launch, ConsultFailure? Refu
 /// stdin, the CLI child recorded in <c>job.json</c> by the tracker the runner handed in, so a cancel or a sweep can stop it by identity.
 /// </summary>
 /// <remarks>
-/// <para><b>A fresh session, always.</b> The launch carries no handle: a role that fails over restarts from turn 0 on the next model (a read-only role has nothing to carry). The handle read off the launch is returned for the
-/// role's own continuation inside one attempt.</para>
+/// <para><b>A fresh session, unless the role asks to continue one.</b> A launch carries no handle by default: a role that fails over restarts from turn 0 on the next model (a read-only role has nothing to carry). The handle read
+/// off the launch is returned, and a role that repairs its own answer (the BA) passes it back as <c>handle</c> to put the next turn in the SAME session of the SAME model — never across models.</para>
 /// <para><b>Where each CLI is.</b> <c>COAI_ROLE_CLAUDE_CLI</c>, <c>COAI_ROLE_CODEX_CLI</c> and <c>COAI_ROLE_AGY_CLI</c> in the layered settings name an executable path; unset, the CLI is found on the PATH by its own name.
 /// The three names carry the <c>COAI_ROLE_</c> prefix, so a start hands them to its runner through <c>env.json</c>.</para>
 /// </remarks>
@@ -31,11 +31,11 @@ internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcess
     /// <summary>The vendors a route may name: the three CLIs of the vendor-routing rule.</summary>
     public static bool Knows(string vendor) => vendor is "claude" or "codex" or "agy";
 
-    public async Task<RoleLaunched> LaunchAsync(ModelRef model, string prompt, string repoPath, string outputDir, TimeSpan timeout, CancellationToken ct)
+    public async Task<RoleLaunched> LaunchAsync(ModelRef model, string prompt, string repoPath, string outputDir, TimeSpan timeout, CancellationToken ct, string handle = "")
     {
         var (runtime, name) = RuntimeOf(model.Vendor);
         var launcher = new ProcessLauncher(tracker);
-        var launch = new ConsultantLaunch(repoPath, prompt, string.Empty, outputDir, new ReviewerSettings(model.Vendor)
+        var launch = new ConsultantLaunch(repoPath, prompt, handle, outputDir, new ReviewerSettings(model.Vendor)
         {
             ExecutablePath = settings(CliKey(model.Vendor)) ?? string.Empty,
             Model = model.Model,

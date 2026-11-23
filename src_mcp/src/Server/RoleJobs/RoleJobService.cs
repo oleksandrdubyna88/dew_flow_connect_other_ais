@@ -167,7 +167,10 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
             return (none, fileRefusal.Length > 0 ? fileRefusal : $"send exactly one of taskFile (a path inside the repository) or brief (text of at most {RoleRequestChecks.MaxBriefLength} characters)");
         }
 
-        return Bounded(none with { Role = role, RepoPath = Path.GetFullPath(repoPath), TaskFile = file, Brief = text }, model, timeoutMinutes, workItem);
+        var (request, bounded) = Bounded(none with { Role = role, RepoPath = Path.GetFullPath(repoPath), TaskFile = file, Brief = text }, model, timeoutMinutes, workItem);
+
+        // The role's own look at the request, before the router and before any folder: the BA refuses an epic that already has a story.
+        return bounded.Length == 0 && RoleDescriptors.Find(Descriptors, role)!.Check?.Invoke(request) is { Length: > 0 } unfit ? (none, unfit) : (request, bounded);
     }
 
     private static (RoleJobRequest Request, string Refusal) Bounded(RoleJobRequest request, string? model, int? timeoutMinutes, string? workItem)
@@ -246,5 +249,18 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
         var store = Store();
         await Keeper(store).SweepAsync(ct);
         RoleJobRetention.Apply(store, log);
+        SweepBaStaging(store);
+    }
+
+    /// <summary>A BA job that ended — killed between its first write and the rename, or after — leaves no staging folder in its epic (spec E.2): the sweep removes the one each ended BA job could have left.</summary>
+    private void SweepBaStaging(RoleJobStore store)
+    {
+        foreach (var id in store.JobIds())
+        {
+            if (store.Read(id) is { Role: RoleDescriptors.Ba, Terminal: true } job && job.TaskFile.Length > 0 && Path.GetDirectoryName(Path.Combine(job.Repo, job.TaskFile)) is { Length: > 0 } epicFolder)
+            {
+                BaStaging.RemoveOf(epicFolder, id);
+            }
+        }
     }
 }

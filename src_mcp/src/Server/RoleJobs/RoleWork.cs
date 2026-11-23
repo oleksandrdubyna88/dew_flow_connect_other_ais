@@ -60,6 +60,15 @@ internal interface IRoleRun
 
     /// <summary>Appends one finished attempt to <c>job.json</c> (and, through the store's projection, to <c>role_attempts</c>), under the lease. False when the lease is no longer this runner's.</summary>
     bool Attempted(RoleAttempt attempt);
+
+    /// <summary>Writes how many repair turns the job has used (<c>job.json</c>'s <c>repairTurns</c>, <c>role_jobs.repair_turns</c>), under the lease. False when the lease is no longer this runner's.</summary>
+    bool Repaired(int turns);
+
+    /// <summary>
+    /// True while this runner is still the job's writer (the generation on disk is the lease's and the job is not over). A role asks it before it writes into the REPOSITORY — a stale runner (a cancel fenced it) must publish
+    /// nothing there (spec A, "Lease + generation").
+    /// </summary>
+    bool StillWriter();
 }
 
 /// <summary>
@@ -77,8 +86,12 @@ internal interface IRoleWork
 /// <summary>
 /// What a role IS to the job machinery: its name, a one-line summary for the tool's refusal, how to make its work, and the entry of the roles table its models come from. A role with no descriptor cannot be started.
 /// </summary>
+/// <param name="Check">
+/// A role's own look at a request, made at the start BEFORE the router and before any folder is made: the empty string when the request is fit for the role, else the sentence that refuses it (the BA refuses an epic that already has
+/// a story). Null for a role with nothing to check.
+/// </param>
 /// <param name="RouteAs">
 /// The role-table name the router reads for this role's models (<c>ba</c>, <c>coder</c>…), or empty for a role that asks no model — the <c>probe</c>, whose route is empty. A start for a role whose list is empty is refused
 /// naming <c>COAI_ROLES_MODELS</c> before any folder is made (epoch 3 E1 s3).
 /// </param>
-internal sealed record RoleDescriptor(string Role, string Summary, Func<IRoleWork> CreateWork, string RouteAs = "");
+internal sealed record RoleDescriptor(string Role, string Summary, Func<IRoleWork> CreateWork, string RouteAs = "", Func<RoleJobRequest, string>? Check = null);

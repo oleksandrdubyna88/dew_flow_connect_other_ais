@@ -198,6 +198,10 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
 
         public bool Attempted(RoleAttempt attempt) => Written(lease.Write(current => current with { Attempts = [.. current.Attempts, attempt] }));
 
+        public bool Repaired(int turns) => Written(lease.Write(current => current with { RepairTurns = turns }));
+
+        public bool StillWriter() => lease.IsCurrent();
+
         /// <summary>A write the lease refused as stale means somebody took the job over: the work must stop, and the watch is told so.</summary>
         private bool Written(RoleJobWrite written)
         {

@@ -101,6 +101,9 @@ internal sealed class RoleFailoverRig : IAsyncDisposable
 
     internal string Repo => _repo!.Path;
 
+    /// <summary>The scenario's repository, for a test that lays a plan folder into it.</summary>
+    internal TempGitRepo Git => _repo!;
+
     internal string RecordFolder => _temp.At("launches");
 
     internal string MapFile => _temp.At("model-map.json");
@@ -142,10 +145,25 @@ internal sealed class RoleFailoverRig : IAsyncDisposable
             new RoleJobRequest { JobId = RoleJobIds.New(_world.Clock), Role = FailoverProbeWork.Role, RepoPath = Repo, Brief = brief, TimeoutMinutes = timeoutMinutes },
             new RoleJobPlan(route, 0, false));
 
-    internal RoleRunner RunnerFor(TimeSpan attemptTimeout, IReadOnlyList<TimeSpan>? ladder = null, TimeProvider? clock = null)
-    {
-        var descriptors = new List<RoleDescriptor> { new(FailoverProbeWork.Role, "a test-only role that asks its route's models", () => new FailoverProbeWork(attemptTimeout, ladder ?? [TimeSpan.FromMinutes(5)]), RouteAs: "ba") };
+    /// <summary>A queued job of <paramref name="role"/> over <paramref name="route"/>, for the task file <paramref name="taskFile"/> (a path inside the repository) — made the way a start makes it.</summary>
+    internal RoleJobRecord NewJob(string role, IReadOnlyList<string> route, string taskFile, int timeoutMinutes = 5) =>
+        _world.Store.Create(
+            new RoleJobRequest { JobId = RoleJobIds.New(_world.Clock), Role = role, RepoPath = Repo, TaskFile = taskFile, TimeoutMinutes = timeoutMinutes },
+            new RoleJobPlan(route, 0, false));
 
+    /// <summary>Runs the job to its end with the real runner and the given descriptors: its exit code and the record it left.</summary>
+    internal async Task<(int Exit, RoleJobRecord Job)> RunAsync(RoleJobRecord job, IReadOnlyList<RoleDescriptor> descriptors)
+    {
+        var exit = await RunnerWith(descriptors).RunAsync(job.JobId, TestContext.Current.CancellationToken);
+
+        return (exit, _world.Store.Read(job.JobId)!);
+    }
+
+    internal RoleRunner RunnerFor(TimeSpan attemptTimeout, IReadOnlyList<TimeSpan>? ladder = null, TimeProvider? clock = null) =>
+        RunnerWith([new(FailoverProbeWork.Role, "a test-only role that asks its route's models", () => new FailoverProbeWork(attemptTimeout, ladder ?? [TimeSpan.FromMinutes(5)]), RouteAs: "ba")], clock);
+
+    internal RoleRunner RunnerWith(IReadOnlyList<RoleDescriptor> descriptors, TimeProvider? clock = null)
+    {
         return new RoleRunner(_world.ProjectedStore(), descriptors, clock ?? TimeProvider.System, _ => { }, _world.Log)
         {
             WatchEvery = Fast,

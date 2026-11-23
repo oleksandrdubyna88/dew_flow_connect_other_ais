@@ -85,7 +85,7 @@ for `--model no-such-model-xyz` and for `--model claude-no-such-model-9-9`, and 
 `claude-unknown-model-name-runs-on-the-default.json` and `claude-unknown-full-model-name-budget-capped.json`.
 
 Consequence for the router (t2) and for roles: a wrong model name in a claude list is **not** a crash and not a refusal — the CLI answers with another model and bills it.
-`COAI_ROLES_MODELS` names are therefore the owner's to get right; `VendorRouting` checks only the family. A later story may compare `modelUsage` with the asked model.
+`COAI_ROLES_MODELS` names were therefore the owner's to get right, and `VendorRouting` checks only the family. **Since story s4 the router refuses such a name before any launch** (`shared/role-model-names.json`, `core/Roles/RoleModelNames.cs`): for claude only the aliases opus, sonnet, haiku, fable and ids that match `claude-[a-z0-9.-]+`; for codex and agy only the names of their lists. A refusal names the setting that holds the name (`COAI_ROLES_MODELS`, `COAI_ROLES_BANDS`, or the model argument of `start_role`), and the failover loop checks the whole route again before its first launch. A later story may still compare `modelUsage` with the asked model: an id of the right shape that the CLI does not know is still answered with the default model.
 No more paid calls were made for this task.
 
 ## 7. How the role layer reads a stop (what t3 builds on this)
