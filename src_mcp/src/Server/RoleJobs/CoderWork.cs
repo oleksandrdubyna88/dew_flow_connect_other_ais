@@ -3,6 +3,7 @@ using CoaiMcp.Roles;
 using CoaiMcp.Runners.Collecting;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Toolchain;
 using CoaiMcp.Runners.Worktrees;
 
 namespace CoaiMcp.Server.RoleJobs;
@@ -13,6 +14,8 @@ namespace CoaiMcp.Server.RoleJobs;
 /// (<see cref="CoderEnvelope"/>).
 /// </summary>
 /// <remarks>
+/// <para><b>The coder runs inside the OS layer — the one road</b> (<see cref="CoderOsLayer"/>, <see cref="CoderTurns"/>): every launch, the repair turn included, is a named unit with the main checkout and the coder root read-only and the worktree the one writable folder; a machine
+/// that cannot prove that refuses the job before the coder starts. A change of the main checkout during the job is recorded in the envelope (<c>mainCheckout</c>) as evidence and never fails the job (decision 8).</para>
 /// <para><b>The coder writes files; coai does everything else.</b> The coder has no shell (the measured write launch): it cannot commit, build or test. The commit, the base, the branch and the list of changed files are coai's, taken
 /// from git. A report is a claim — <c>met</c> true makes nothing green (green is story s4's, from checks).</para>
 /// <para><b>The loop is the failover loop</b> (<see cref="RoleFailover"/>): the models of the route in order, every launch one ledger line, every attempt in <c>job.json</c>, the repair turn in the same session of the same model. A model
@@ -20,7 +23,8 @@ namespace CoaiMcp.Server.RoleJobs;
 /// <para><b>The generation is compared twice</b>: before the commit and before the result. A stale runner (a cancel or a sweep fenced it) writes neither; the runner then exits 75. A cancel stops the CLI child by the
 /// runner's token and leaves the worktree where it is — removing it is the retention sweep's work, never this turn's.</para>
 /// <para><b>Ends:</b> <c>succeeded</c> with the envelope; <c>failed</c> with <c>coder-task</c> (the task is not fit — checked again here, the repository may have changed since the start), <c>coder-worktree</c>
-/// (git refused the worktree: the cap, a taken name, an unknown base), <c>coder-commit</c> (git could not commit), or the failover's own stops (<c>refusal</c> when the coder declared one, <c>models-exhausted</c>…).</para>
+/// (git refused the worktree: the cap, a taken name, an unknown base), <c>coder-commit</c> (git could not commit), <c>coder-boundary</c> (the OS layer refused to start the coder, or stopped a write of it — the sentence names the path),
+/// or the failover's own stops (<c>refusal</c> when the coder declared one, <c>models-exhausted</c>…).</para>
 /// </remarks>
 internal sealed class CoderWork : IRoleWork
 {
@@ -37,6 +41,12 @@ internal sealed class CoderWork : IRoleWork
     /// A hook at the two points where the generation is compared (<c>before-commit</c>, <c>before-result</c>) — for the tests, which move the generation there; null in the product.
     /// </summary>
     public Action<string>? Boundary { get; init; }
+
+    /// <summary>
+    /// For a test only: makes the <see cref="CoderTurns"/> of the job from the job's one launcher — over a stand-in for the person's home (never the real one), a machine with no user manager, or units with a property taken away so the preflight
+    /// refuses. Null in the product (<see cref="CoderOsLayer.ShippedTurns"/>): the boundary of this machine.
+    /// </summary>
+    internal Func<IProcessLauncher, CoderTurns>? Turns { get; init; }
 
     public async Task<RoleWorkOutcome> RunAsync(IRoleRun run, CancellationToken ct)
     {
@@ -55,12 +65,26 @@ internal sealed class CoderWork : IRoleWork
         }
 
         var prepared = made.Prepared!;
+        var layer = LayerFor(run, prepared);
         RoleFailover? failover = null;
         var judge = new CoderJudge(site.DodIds, () => failover!.RepairTurnsUsed);
-        failover = new RoleFailover(run, judge.Judge) { MaxRepairTurns = RepairTurns, AttemptTimeout = AttemptTimeout, Ladder = Ladder, Coder = new LaunchConfinement.Coder(run.Request.JobId, prepared.Tree.Root) };
+        failover = new RoleFailover(run, judge.Judge) { MaxRepairTurns = RepairTurns, AttemptTimeout = AttemptTimeout, Ladder = Ladder, Coder = new LaunchConfinement.Coder(run.Request.JobId, prepared.Tree.Root), OsLayer = layer };
         var outcome = await failover.RunAsync(CoderPrompt.Build(site.PromptInputs, new RolePrompts(run.DataDir)), ct);
 
-        return outcome is RoleWorkOutcome.Succeeded ? await PublishAsync(run, git, prepared, site, judge.Accepted, ct) : outcome;
+        return outcome is RoleWorkOutcome.Succeeded ? await PublishAsync(run, git, prepared, site, judge.Accepted, layer.Evidence, ct) : outcome;
+    }
+
+    /// <summary>
+    /// The OS layer of this job: the boundary job (the worktree writable, the main checkout and the coder root read-only, the job's own folders — the coder's home among them — under <see cref="CoderOsLayer.JobFolder"/>), and ONE launcher for
+    /// every process of it, so the systemd-run client of a turn is recorded in <c>job.json</c> like any CLI child. The layer lives as long as the work: the repair turn and the fix turns of the checks run in it too, on the same home.
+    /// </summary>
+    private CoderOsLayer LayerFor(IRoleRun run, Prepared prepared)
+    {
+        var folder = CoderOsLayer.JobFolder(run.Settings, said => run.Log.Warning("role job {JobId}: {Said}", run.Request.JobId, said), run.Request.JobId);
+
+        var launcher = new ProcessLauncher(run.Children);
+
+        return new CoderOsLayer(BoundaryJob.ForCoder(run.Request.JobId, prepared.Tree, folder), (Turns ?? CoderOsLayer.ShippedTurns)(launcher));
     }
 
     /// <summary>The base commit, the worktree made at it and the tree opened for coai's own git — or the failure that ends the job.</summary>
@@ -90,7 +114,7 @@ internal sealed class CoderWork : IRoleWork
     }
 
     /// <summary>The coder has answered: compare the generation, make the one commit, compare again, and give the envelope.</summary>
-    private async Task<RoleWorkOutcome> PublishAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderReport? report, CancellationToken ct)
+    private async Task<RoleWorkOutcome> PublishAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderReport? report, CoderMainEvidence evidence, CancellationToken ct)
     {
         run.Phase("coder-commit", 0);
         Boundary?.Invoke("before-commit");
@@ -118,7 +142,7 @@ internal sealed class CoderWork : IRoleWork
             return new RoleWorkOutcome.Stopped();
         }
 
-        return new RoleWorkOutcome.Succeeded(new CoderEnvelope(run.Request.JobId, prepared.BaseSha, head, prepared.Branch, report is not null, 0, changes, report).ToJson());
+        return new RoleWorkOutcome.Succeeded(new CoderEnvelope(run.Request.JobId, prepared.BaseSha, head, prepared.Branch, report is not null, 0, changes, report, evidence).ToJson());
     }
 
     /// <summary>Stages everything the coder wrote and makes ONE commit of it; no change means no commit and the head stays the base.</summary>

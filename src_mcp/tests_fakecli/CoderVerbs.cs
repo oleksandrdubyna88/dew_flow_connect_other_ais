@@ -29,6 +29,24 @@ internal static class CoderVerbs
     }
 
     /// <summary>
+    /// The model map's <c>tryWriteFiles</c>: a JSON array of absolute paths, each tried; ONE line on stderr for every one the OS refused (the same line as <see cref="WriteFiles"/>) and NOTHING on stdout — the vendor answer that follows must stay the only thing there.
+    /// </summary>
+    internal static void TryWrite(string json)
+    {
+        foreach (var path in System.Text.Json.JsonSerializer.Deserialize<string[]>(json) ?? [])
+        {
+            try
+            {
+                File.WriteAllText(path, "written by the fake coder\n");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"fake-cli: could not write {path}: {e.Message}");
+            }
+        }
+    }
+
+    /// <summary>
     /// <c>hold-in &lt;folder&gt; &lt;ms&gt;</c>: writes <c>ready</c> into the folder (the EVENT a test waits for, never a sleep), then waits <paramref name="milliseconds"/> and exits 0 — a coder that is working while something else happens to the main checkout.
     /// </summary>
     internal static int HoldIn(string folder, int milliseconds)

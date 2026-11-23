@@ -132,7 +132,7 @@ public sealed class ACoderToolTextTests
     [MemberData(nameof(BadBases))]
     public async Task D2_ABaseShaThatIsNotACommitOfTheRepository_IsRefused_BeforeAnyFolder(string baseSha, string says)
     {
-        await using var rig = await CoderRig.CreateAsync();
+        await using var rig = await CoderRig.CreateAsync(needsLayer: false);
 
         var answer = Parse(await Start(ServiceFor(rig), rig, baseSha));
 
@@ -143,7 +143,7 @@ public sealed class ACoderToolTextTests
     [Fact]
     public async Task D2_ABaseSha_ForARoleThatHasNoBase_IsRefused_NotSilentlyDropped()
     {
-        await using var rig = await CoderRig.CreateAsync();
+        await using var rig = await CoderRig.CreateAsync(needsLayer: false);
 
         var answer = Parse(await Start(ServiceFor(rig), rig, rig.Base, role: RoleDescriptors.Probe));
 

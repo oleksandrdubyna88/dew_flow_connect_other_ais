@@ -196,6 +196,12 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         return 65;
     }
 
+    // A coder that tries to write where it must not (model map `tryWriteFiles`): absolute paths, each attempted; a refusal is a line on stderr and the answer still follows.
+    if (steering.Get("TRY_WRITE_FILES") is { Length: > 0 } tryWriteFiles)
+    {
+        CoaiMcp.FakeCli.CoderVerbs.TryWrite(tryWriteFiles);
+    }
+
     // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
     // never answers `--version` must be reported as silent rather than as whatever exit code the
     // kill produced, and that cannot be tested by a stand-in which always answers at once.

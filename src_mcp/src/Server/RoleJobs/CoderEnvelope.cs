@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using CoaiMcp.Core.Coder;
+using CoaiMcp.Runners.Toolchain;
 
 namespace CoaiMcp.Server.RoleJobs;
 
@@ -16,8 +17,10 @@ internal sealed record CoderFileChange(string Status, string Path);
 /// the coder's report as the reader parsed it, or null when it was not valid after its one repair turn (<c>schemaValid</c> false). There is no <c>green</c>: a report with every <c>met</c> true is a claim, and green comes from
 /// the checks of story s4.</para>
 /// <para><b><c>fixTurns</c></b> counts the turns the CHECKS sent the coder back for (story s4); this turn makes none, so it is 0. The one repair turn of an invalid report is the job's <c>repairTurns</c>.</para>
+/// <para><b><c>mainCheckout</c></b> is EVIDENCE about the repository the job was started in, never a verdict (decision 8, <c>server.md</c> § 16): what two snapshots of it, before and after each launch of the coder, showed. The coder cannot write there (the OS
+/// layer holds it read-only), so a path listed is somebody else's edit during the job — a person's. It never makes a job fail; a reader looks at it before the branch is merged.</para>
 /// </remarks>
-internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSha, string Branch, bool SchemaValid, int FixTurns, IReadOnlyList<CoderFileChange> FilesChanged, CoderReport? Report)
+internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSha, string Branch, bool SchemaValid, int FixTurns, IReadOnlyList<CoderFileChange> FilesChanged, CoderReport? Report, CoderMainEvidence? MainCheckout = null)
 {
     public string ToJson()
     {
@@ -42,10 +45,35 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
 
             json.WriteEndArray();
             WriteReport(json);
+            WriteMainCheckout(json);
             json.WriteEndObject();
         }
 
         return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    private void WriteMainCheckout(Utf8JsonWriter json)
+    {
+        if (MainCheckout is null)
+        {
+            return;
+        }
+
+        json.WriteStartObject("mainCheckout");
+        json.WriteBoolean("taken", MainCheckout.Taken);
+        json.WriteBoolean("changed", MainCheckout.Changed);
+        json.WriteStartArray("changes");
+        foreach (var change in MainCheckout.Changes)
+        {
+            json.WriteStartObject();
+            json.WriteString("path", change.Path);
+            json.WriteString("what", change.What);
+            json.WriteEndObject();
+        }
+
+        json.WriteEndArray();
+        json.WriteString("note", MainCheckout.Note);
+        json.WriteEndObject();
     }
 
     private void WriteReport(Utf8JsonWriter json)

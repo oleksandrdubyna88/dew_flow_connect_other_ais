@@ -99,6 +99,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// </summary>
     public LaunchConfinement.Coder? Coder { get; init; }
 
+    /// <summary>
+    /// The OS layer the coder's launches run inside (<see cref="CoderOsLayer"/>), the one road. Required whenever <see cref="Coder"/> is set — a launch of a coder without it is refused (<see cref="RoleModelLauncher.Layer"/>). With a coder the tree check
+    /// below is NOT made: the main checkout is not read-only to the PERSON, so a change of it is evidence the layer records (decision 8, <c>server.md</c> § 16), never a reason to end the job; only the read-only roles keep <c>tree-changed</c>.
+    /// </summary>
+    public CoderOsLayer? OsLayer { get; init; }
+
     /// <summary>The repair turns the LAST attempt used — what the role reports of how it got its answer.</summary>
     public int RepairTurnsUsed { get; private set; }
 
@@ -277,7 +283,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private async Task<RoleLaunched> LaunchTurnAsync(ModelRef model, string prompt, AttemptRun attempt, TimeSpan left, CancellationToken ct)
     {
         attempt.TurnBegun = run.Clock.GetUtcNow().UtcDateTime;
-        var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder }
+        var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder, Layer = OsLayer }
             .LaunchAsync(model, prompt, run.Request.RepoPath, attempt.Folder, left < AttemptTimeout ? left : AttemptTimeout, ct, attempt.Handle);
         attempt.TurnEnded = run.Clock.GetUtcNow().UtcDateTime;
         attempt.Add(launched);
@@ -341,6 +347,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             return new Read(new RoleStop(RoleStopWords.TreeChanged, Redaction.SafeText(sentence, Redaction.TitleLimit), ConsultFailureKinds.TreeChanged, false, false), string.Empty);
         }
 
+        if (launched.OsStop is { } osStop)
+        {
+            // The layer's word comes before anything the coder said: a coder that was stopped from writing did not do its work, whatever its report claims, and the next model would meet the same layer.
+            return new Read(new RoleStop(RoleStopWords.CoderBoundary, Redaction.SafeText(osStop.Sentence, Redaction.TitleLimit), osStop.Kind, false, false), string.Empty);
+        }
+
         var name = RoleModelLauncher.RuntimeOf(model.Vendor).Name;
         if (launched.Refused is { } refused)
         {
@@ -370,6 +382,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// <summary>The tree before the attempt, or null where it cannot be taken (not a git work tree) — said once in the log.</summary>
     private async Task<FilesystemSnapshot?> SnapshotAsync(CancellationToken ct)
     {
+        if (Coder is not null)
+        {
+            // A coder's main checkout is held read-only by the OS layer and observed by it, turn by turn, as evidence (CoderTurns); this loop's invariant is the read-only roles'.
+            return null;
+        }
+
         try
         {
             return await Invariant().SnapshotAsync(run.Request.RepoPath, ct);
@@ -410,9 +428,10 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
 
     private string Evidence(string folder, int n, RoleLaunched launched, RoleStop stop)
     {
-        var text = launched.Launch is { } launch
-            ? string.IsNullOrWhiteSpace(launch.Answer) ? ConsultFailures.EvidenceOf(launch) : launch.Answer!
-            : stop.Reason;
+        var text = launched.OsStop is not null ? stop.Reason
+            : launched.Launch is { } launch
+                ? string.IsNullOrWhiteSpace(launch.Answer) ? ConsultFailures.EvidenceOf(launch) : launch.Answer!
+                : stop.Reason;
         var file = EvidenceFile.Keep(folder, "evidence.txt", Redaction.SafeSource(text), e => run.Log.Warning(e, "role job {JobId}: the evidence of attempt {N} could not be kept", run.Request.JobId, n));
 
         return file.Length == 0 ? string.Empty : $"attempts/{n}/evidence.txt";

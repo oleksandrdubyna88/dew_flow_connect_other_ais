@@ -11,7 +11,8 @@ namespace CoaiMcp.Server.RoleJobs;
 /// <param name="Runtime">The consultant runtime that built the launch — it reads the handle and classifies the stop.</param>
 /// <param name="Invocation">The invocation the launch ran, for the ledger line; null when nothing was built.</param>
 /// <param name="Handle">The vendor's own session id, read off the launch, for a role that continues the conversation (the BA's repair turns); empty when the vendor named none.</param>
-internal sealed record RoleLaunched(ReviewerLaunch? Launch, ConsultFailure? Refused, IConsultantRuntime Runtime, ReviewerInvocation? Invocation, string Handle);
+/// <param name="OsStop">Set for a coder launch the OS layer stopped (<see cref="CoderOsStop"/>): a write it refused, or a launch it refused to start. The launch ends the job whatever the coder answered; null for every other launch.</param>
+internal sealed record RoleLaunched(ReviewerLaunch? Launch, ConsultFailure? Refused, IConsultantRuntime Runtime, ReviewerInvocation? Invocation, string Handle, CoderOsStop? OsStop = null);
 
 /// <summary>
 /// Launches ONE model of a role route through its vendor's own CLI (spec A, "Brief": through the consultant adapters, <c>IConsultantRuntime.Build</c> and <c>ReadHandle</c>) — read-only, in the repository, the prompt on
@@ -31,6 +32,12 @@ internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcess
     /// </summary>
     public LaunchConfinement.Coder? Coder { get; init; }
 
+    /// <summary>
+    /// The OS layer a coder launch runs inside (<see cref="CoderOsLayer"/>) — the ONE road: with <see cref="Coder"/> set and no layer the launch is refused before anything starts, so a coder can never run unconfined by a missing argument.
+    /// The capability probes (<c>--version</c>, <c>--help</c>) write nothing and run as they always did; the coder's own process is the layer's.
+    /// </summary>
+    public CoderOsLayer? Layer { get; init; }
+
     /// <summary>The settings key naming the CLI of <paramref name="vendor"/>.</summary>
     public static string CliKey(string vendor) => $"COAI_ROLE_{vendor.ToUpperInvariant()}_CLI";
 
@@ -40,6 +47,11 @@ internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcess
     public async Task<RoleLaunched> LaunchAsync(ModelRef model, string prompt, string repoPath, string outputDir, TimeSpan timeout, CancellationToken ct, string handle = "")
     {
         var (runtime, name) = RuntimeOf(model.Vendor);
+        if (Coder is not null && Layer is null)
+        {
+            return new RoleLaunched(null, new ConsultFailure.LaunchRefused("a coder launch runs only inside the OS layer, and none was given; nothing was launched"), runtime, null, string.Empty);
+        }
+
         var launcher = new ProcessLauncher(tracker);
         var launch = new ConsultantLaunch(repoPath, prompt, Coder is null ? handle : string.Empty, outputDir, new ReviewerSettings(model.Vendor)
         {
@@ -59,9 +71,28 @@ internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcess
         }
 
         var invocation = runtime.Build(((ConsultantPreparation.Ready)prepared).Launch);
-        var finished = await new ReviewerExecutor(launcher).LaunchOnceAsync(invocation, ct);
+        if (Coder is null)
+        {
+            var finished = await new ReviewerExecutor(launcher).LaunchOnceAsync(invocation, ct);
 
-        return new RoleLaunched(finished, null, runtime, invocation, finished.Process is { } process ? runtime.ReadHandle(process) : string.Empty);
+            return new RoleLaunched(finished, null, runtime, invocation, finished.Process is { } process ? runtime.ReadHandle(process) : string.Empty);
+        }
+
+        return await LaunchCoderAsync(runtime, invocation, ct);
+    }
+
+    /// <summary>
+    /// The coder's launch: the same executor and classification, with the process itself started by the layer. A write the layer stopped, or a launch it refused, is on the result as <see cref="RoleLaunched.OsStop"/>; a refused launch
+    /// has no <see cref="RoleLaunched.Launch"/> — nothing ran, so nothing is read and no ledger line is made.
+    /// </summary>
+    private async Task<RoleLaunched> LaunchCoderAsync(IConsultantRuntime runtime, ReviewerInvocation invocation, CancellationToken ct)
+    {
+        var turn = new CoderTurnLauncher(Layer!);
+        var finished = await new ReviewerExecutor(turn).LaunchOnceAsync(invocation, ct);
+        var stop = turn.Outcome is { } outcome ? CoderOsLayer.StopOf(outcome) : null;
+        var handle = finished.Process is { } process ? runtime.ReadHandle(process) : string.Empty;
+
+        return new RoleLaunched(stop is { Started: false } ? null : finished, null, runtime, invocation, handle, stop);
     }
 
     /// <summary>The consultant runtime of a vendor and the runtime name its install cure is read by.</summary>

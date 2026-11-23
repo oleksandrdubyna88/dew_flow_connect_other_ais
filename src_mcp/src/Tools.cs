@@ -585,7 +585,7 @@ internal static class Tools
                     Answers `{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef}], stalled, result}` for `jobId`, plus the role, launcher, route, stop and reason, and the
                     times. `maxSeconds` (0 to 50, default 0) waits up to that long for the job to END before answering. States: queued, starting, running, succeeded, failed, cancelled, lost.
                     `lost` means the job's runner died without a result (nothing held its lease any more); `stalled: true` means the runner is alive but has shown no sign of life for two
-                    minutes — it is NOT taken over; wait, or `role_cancel` it. `result` is the role's JSON answer once `succeeded` — for a coder the envelope `{jobId, baseSha, headSha, branch, schemaValid, fixTurns, filesChanged[], report}`, the same JSON as the job's `result.json` — else null. A call is also what closes a dead runner's job as
+                    minutes — it is NOT taken over; wait, or `role_cancel` it. `result` is the role's JSON answer once `succeeded` — for a coder the envelope `{jobId, baseSha, headSha, branch, schemaValid, fixTurns, filesChanged[], report, mainCheckout}` (`mainCheckout` is evidence only: what changed in the repository while the coder ran, never a failure), the same JSON as the job's `result.json` — else null. A call is also what closes a dead runner's job as
                     `lost` and writes the one notice about a stall.
                     """,
                 ReadOnly = false,

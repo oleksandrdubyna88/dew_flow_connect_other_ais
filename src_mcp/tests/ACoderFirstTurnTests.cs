@@ -103,7 +103,7 @@ public sealed class ACoderFirstTurnTests
         File.Exists(Path.Combine(rig.WorktreeOf(job), "src", "thing.cs")).Should().BeTrue("the edit landed in the worktree the coder stood in");
         File.Exists(Path.Combine(rig.Repo, "src", "thing.cs")).Should().BeFalse("and not in the main checkout");
         (await CoderTestBed.SnapshotOfAsync(rig.Repo)).Should().BeEquivalentTo(before);
-        var argv = rig.Rig.Launches().Should().ContainSingle().Subject;
+        var argv = rig.Launches(job).Should().ContainSingle().Subject;
         argv.Should().Contain(["--restricted", "acceptEdits"]);
         argv.SkipWhile(arg => arg != "--add-dir").Skip(1).First().Should().EndWith($"coai-coder-{job.JobId}", "the worktree is the only added directory");
     }
@@ -138,7 +138,7 @@ public sealed class ACoderFirstTurnTests
 
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
         ended.RepairTurns.Should().Be(1);
-        var launches = rig.Rig.Launches();
+        var launches = rig.Launches(job);
         launches.Should().HaveCount(2);
         Resumed(launches[0]).Should().BeEmpty("turn 0 is a fresh session");
         Resumed(launches[1]).Should().Be(Session, "the repair turn resumes the session the first turn reported");
@@ -159,7 +159,7 @@ public sealed class ACoderFirstTurnTests
         var (_, ended) = await rig.RunAsync(job);
 
         ended.State.Should().Be(RoleJobStates.Succeeded, ended.Reason);
-        rig.Rig.Launches().Should().HaveCount(2, "ONE repair turn, never a second");
+        rig.Launches(job).Should().HaveCount(2, "ONE repair turn, never a second");
         var envelope = rig.Envelope(job);
         envelope.GetProperty("schemaValid").GetBoolean().Should().BeFalse();
         envelope.GetProperty("report").ValueKind.Should().Be(JsonValueKind.Null);
@@ -201,7 +201,7 @@ public sealed class ACoderFirstTurnTests
     [Fact]
     public async Task ATaskThatCannotBeRead_IsAFailedJob_BeforeAnyWorktree()
     {
-        await using var rig = await CoderRig.CreateAsync();
+        await using var rig = await CoderRig.CreateAsync(needsLayer: false);
         rig.Says("sonnet", edits: null, CoderRig.Report());
         var job = rig.World.Store.Create(
             new RoleJobRequest { JobId = RoleJobIds.New(rig.World.Clock), Role = RoleDescriptors.Coder, RepoPath = rig.Repo, TaskFile = CoderRig.TaskFile.Replace("t1-a", "t9-gone"), TimeoutMinutes = 5 },
@@ -212,7 +212,7 @@ public sealed class ACoderFirstTurnTests
         ended.State.Should().Be(RoleJobStates.Failed);
         ended.Reason.Should().Contain("task.yaml");
         Directory.GetDirectories(rig.Root).Should().BeEmpty("no worktree was made");
-        rig.Rig.Launches().Should().BeEmpty();
+        rig.Launches(job).Should().BeEmpty();
     }
 
     // ---------- d3: the generation, the cancel ----------

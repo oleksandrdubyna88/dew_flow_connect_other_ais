@@ -187,9 +187,12 @@ internal sealed class RoleFailoverRig : IAsyncDisposable
     }
 
     /// <summary>The argv of every launch FakeCli recorded, in the order they were made (the claude capability probe's <c>--help</c> is not a launch and is not recorded).</summary>
-    internal IReadOnlyList<string[]> Launches() =>
+    internal IReadOnlyList<string[]> Launches() => LaunchesIn(RecordFolder);
+
+    /// <summary>The argv of every launch recorded in <paramref name="folder"/>, in the order they were made — a coder's records are in the job's own temp folder, which is where its unit's <c>/tmp</c> is.</summary>
+    internal static IReadOnlyList<string[]> LaunchesIn(string folder) =>
     [
-        .. new DirectoryInfo(RecordFolder).EnumerateFiles("*.argv").OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
+        .. new DirectoryInfo(folder).EnumerateFiles("*.argv").OrderBy(file => file.CreationTimeUtc).ThenBy(file => file.LastWriteTimeUtc)
             .Select(file => LaunchRecords.Read(file.FullName).Split('\0')),
     ];
 
