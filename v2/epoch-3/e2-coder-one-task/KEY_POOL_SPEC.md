@@ -416,3 +416,16 @@ each key keeping its id (sha256 prefix) whatever its source:
 
 `account` (subscription email) lets the pool know which keys share one limit: a limit signal cools down every key of
 the same account, not only the one that hit it.
+
+### Measured 2026-11-23 — the creds source
+
+- The owner's entry exists: CredsForDevs `config` entry **"claude long tokens"** (folder `configs`, format json).
+- `creds config -` (installed CLI at ~/.local/bin/creds) "asks the VS Code window holding your vault for this config and
+  prints it"; the code-access key goes on stdin (never argv) or in `CREDSFORDEVS_KEY`. So a read works ONLY while that
+  window is open and the vault unlocked — never headless, never on the AMI.
+- Decision: no standing link. The creds source is a one-shot IMPORT into the local pool:
+  `creds config | coai-mcp --keys import --format creds-json` (owner's terminal, key only for that command), and a VS
+  Code command "coai: Import keys from creds" that asks for the code-access key in a password field. coai NEVER stores
+  the creds code-access key. Re-import after the entry changes; a key gone from the entry is disabled, not deleted, on
+  re-import (the import names its source so only keys of that source are touched).
+- `--format creds-json` reads `{"version":1,"keys":[{"label","account","token"}]}`; unknown keys refused; labels unique.
