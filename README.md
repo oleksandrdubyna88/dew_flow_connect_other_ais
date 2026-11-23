@@ -149,6 +149,17 @@ German and Spanish.
 
 ![The help page, in five languages](assets/help-in-five-languages.png)
 
+## Roles that run as jobs (v2)
+
+Beside the review tools, `coai-mcp` can run a role on another model as a **detached job** that outlives the call, the server and your session:
+
+- `start_role(role, repoPath, taskFile | brief)` starts it and answers at once with a `jobId`. Today: `ba` (plans an epic that has no stories into stories and tasks) and `probe` (a diagnostic).
+- `role_status(jobId, maxSeconds?)` shows the state, the attempts (which model, why one stopped) and the result; `role_cancel(jobId)` stops the job.
+- If a model hits a limit, refuses or crashes, the job moves to the next model of the role's list (`COAI_ROLES_MODELS`) at once, with one log line and one notice per switch.
+- `validate_work(repoPath, featureFolder)` (or `coai-mcp --validate-work <dir>`) checks a work-plan tree; `coai-mcp --role-delta <jobId> --at <commit>` measures how much of a BA's task files the orchestrator changed (the plan passes below 20 %).
+
+The design is in [ARCHITECTURE.md](ARCHITECTURE.md#role-jobs-and-the-ba-v2-epoch-3).
+
 ## Security lane
 
 The optional **Security lane** adds reviewer/prompt pairs beside ordinary code and feature reviews.

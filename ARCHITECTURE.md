@@ -92,6 +92,32 @@ always `good_enough` (a round nobody answered is `not_reviewed`; a feature revie
 retried first): the gate never waits and never writes a card. Only the AI's own question can still reach a
 person, and it does so in the AI's own chat, after its consultants.
 
+## Role jobs and the BA (v2, epoch 3)
+
+A role is a model that is not yours, run as a **detached job**. Four tools and one one-shot mode carry it:
+
+| Surface | What it does |
+|---|---|
+| `start_role(role, repoPath, taskFile \| brief, model?, timeoutMinutes?, workItem?)` | Starts the job and answers at once with `{jobId, state, route[], launcher}`. The job is run by its own process (`coai-mcp --role-run <jobId>`): it outlives the call, this server and your session. Roles today: `ba` and `probe` (a diagnostic that asks no model). Refused, never queued, past `COAI_ROLE_JOBS_MAX` (3; 2 on WSL). |
+| `role_status(jobId, maxSeconds?)` | `{state, generation, attempts[{n, model, vendor, stop, reason, evidenceRef}], stalled, result}`. `maxSeconds` (0–50) waits for the end. States: `queued`, `starting`, `running`, `succeeded`, `failed`, `cancelled`, `lost`. `lost` = the runner died without a result; `stalled` = alive but silent for two minutes (never taken over). |
+| `role_cancel(jobId)` | Asks the runner to stop, waits 10 s, then kills the recorded runner and CLI child by pid and start time. The generation is raised first, so a paused runner publishes nothing. |
+| `validate_work(repoPath, featureFolder)` and `coai-mcp --validate-work <dir>` | Checks a work-plan tree against `shared/work-plan.schema.json` and the rules of `shared/work-method.md`, with this device's limits. Writes nothing. |
+| `coai-mcp --role-delta <jobId> --at <commit>` | The measure of the BA: `changedShare` = (changed + deleted + added task files) / the task files of the BA's manifest, read at `<commit>`. Passes below 0.20; take it at the commit after the plan gate. Exit 0 measured, 65 wrong arguments or no such job, 74 unreadable. |
+
+**Job files are the authority.** `<dataDir>/roles/jobs/<jobId>/` holds `request.json`, `job.json`, the lease, the heartbeat,
+`attempts/<n>/` (the answers), `result.json` and, for the BA, `ba-manifest.json`. RoundsDb (`role_jobs`, `role_attempts`) is a projection.
+A job is `lost` only when its OS lock is free.
+
+**Router and failover.** The route comes from the role's list in `COAI_ROLES_MODELS` (the default `ba` list is `fable`, then `opus`); a security, kind-`security` or
+complexity-10 task takes the `important` list. A model name no CLI is known to accept is refused before any launch (`claude` bills an unknown name). A model that
+stops with a **limit**, a **refusal** (the output arm `status: "refused"`, never prose) or a **crash** sends the job to the next model at once, from turn 0 in a new
+session; only the last model waits. Every switch is one Information line (`role job … switched A -> B after <stop>: <reason>`) and one `role-model-switched` notice that names the vendor
+the repository text now goes to.
+
+**The BA** (`start_role role: "ba"`, `taskFile:` an `epic.yaml` that has no stories) reads the plan and answers ONE JSON object (`shared/ba-output.schema.json`, no paths). coai checks it
+with `validate_work`'s rules over an overlay, sends the errors back to the same session (at most two repair turns), and only then writes `stories/**/story.yaml`, `task.yaml` and
+`ba-manifest.json` atomically (a staging folder, one rename). An invalid plan writes nothing (`failed: output-invalid`).
+
 ## Install
 
 1. **The server**: *ConnectOtherAIs: Install the MCP Server…* downloads the release asset for your

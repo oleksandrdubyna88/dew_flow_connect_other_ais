@@ -563,7 +563,8 @@ internal static class Tools
                     your session: it is run by its own process, which holds the job's lease and writes the result into the job's folder. Read it with `role_status`, stop it with `role_cancel`.
                     Send exactly one of `taskFile` (a path inside `repoPath`, written from its top level) or `brief` (text, at most 64 KiB). `model` is optional and names one model;
                     `timeoutMinutes` is 1 to 1440 (default 30); `workItem` is the plan item the job is for. At most `COAI_ROLE_JOBS_MAX` jobs run at once (3, and 2 on WSL): a start past the
-                    cap is REFUSED with the live job ids, never queued. A role with no descriptor in this build is refused naming the roles that can be started (today: `probe`, a diagnostic
+                    cap is REFUSED with the live job ids, never queued. A role with no descriptor in this build is refused naming the roles that can be started (today: `ba`, which plans
+                    the epic named by `taskFile` (an `epic.yaml` with no stories) into stories and tasks and writes them after `validate_work`'s rules pass; and `probe`, a diagnostic
                     that runs a scripted brief — `succeed`, `sleep N`, `fail WHY`, `child N` — and asks no model anything).
                     """,
                 ReadOnly = false,
