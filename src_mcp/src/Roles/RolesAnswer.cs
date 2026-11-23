@@ -204,6 +204,8 @@ internal static class RolesAnswer
             json.WriteNumber("max", result.WorkMethod.MvpMax);
             json.WriteEndObject();
             json.WriteNumber("maxEpicsPerEpoch", result.WorkMethod.MaxEpicsPerEpoch);
+            json.WriteNumber("maxStoriesPerEpic", result.WorkMethod.MaxStoriesPerEpic);
+            json.WriteNumber("maxTasksPerStory", result.WorkMethod.MaxTasksPerStory);
             json.WriteNumber("minConsultsPerEpoch", result.WorkMethod.MinConsultsPerEpoch);
             json.WriteNumber("minConsultsPerEpic", result.WorkMethod.MinConsultsPerEpic);
             json.WriteEndObject();
@@ -269,7 +271,7 @@ internal static class RolesAnswer
         }
 
         var method = result.WorkMethod;
-        text.Append($"Work method: build the MVP in {method.MvpMin}-{method.MvpMax} epics first, then polish; at most {method.MaxEpicsPerEpoch} epics per epoch (more is a new epoch); at least {method.MinConsultsPerEpoch} consult per epoch and {method.MinConsultsPerEpic} per epic.\n");
+        text.Append($"Work method: build the MVP in {method.MvpMin}-{method.MvpMax} epics first, then polish; at most {method.MaxEpicsPerEpoch} epics per epoch (more is a new epoch), at most {method.MaxStoriesPerEpic} stories per epic and {method.MaxTasksPerStory} tasks per story; at least {method.MinConsultsPerEpoch} consult per epoch and {method.MinConsultsPerEpic} per epic.\n");
         text.Append("Call the coai MCP tool `roles` for the full table.");
 
         return text.ToString();

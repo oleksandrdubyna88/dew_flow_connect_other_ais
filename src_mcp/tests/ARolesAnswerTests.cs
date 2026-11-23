@@ -33,7 +33,7 @@ public sealed class ARolesAnswerTests
         Models(answer, "orchestrator").Should().Equal("opus:claude");
         Models(answer, "coder").Should().Equal("sonnet:claude");
         Models(answer, "scout").Should().Equal("sonnet:claude"); // a role the setting did not name keeps its default
-        Models(answer, "ba").Should().Equal("fable:claude");
+        Models(answer, "ba").Should().Equal("fable:claude", "opus:claude"); // a second model to fail over to (epoch 3 E1 s2, risk 8)
         answer.GetProperty("complexityBands").EnumerateArray().Select(band => $"{band.GetProperty("min").GetInt32()}-{band.GetProperty("max").GetInt32()}={band.GetProperty("model").GetString()}")
             .Should().Equal("0-2=haiku", "3-6=sonnet", "7-8=opus", "9-10=fable");
         answer.GetProperty("haikuKinds").EnumerateArray().Select(kind => kind.GetString()).Should().Contain(["translate", "summarize", "rename", "changelog", "simple-docs"]);

@@ -16,7 +16,7 @@
             "source": "server.md §20 names it (important: fable, then codex astra); the repository holds `codex-astra` as a codex model in shared/runtime-capabilities.json (read-outside-bare cells) and in Tools.cs"
           }
         ],
-        "ba": [ { "model": "fable", "vendor": "claude" } ]
+        "ba": [ { "model": "fable", "vendor": "claude" }, { "model": "opus", "vendor": "claude" } ]
       },
       "complexityBands": [
         { "min": 0, "max": 2, "model": "haiku", "vendor": "claude" },
@@ -54,6 +54,8 @@
   "workMethod": {
     "mvpEpics": { "min": 1, "max": 2 },
     "maxEpicsPerEpoch": 5,
+    "maxStoriesPerEpic": 8,
+    "maxTasksPerStory": 6,
     "minConsultsPerEpoch": 1,
     "minConsultsPerEpic": 0
   }

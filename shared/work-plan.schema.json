@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coai.dev/schemas/work-plan.schema.json",
+  "$comment": "The work-plan contract of coai v2 (epoch 3 E1, story s2): the YAML files of a feature folder, one def per file name (feature.yaml -> feature, epoch.yaml -> epoch, epic.yaml -> epic, story.yaml -> story, task.yaml -> task). `coai-mcp --validate-work` and the `validate_work` tool check the files against the same tables (src_mcp/core/Work/WorkTables.cs); neither half has a JSON Schema engine, so a test (AWorkPlanSchemaAgreesWithTheValidatorTests) holds this file and the tables equal. Rules a schema cannot say - folder name = id, limits from the device, dependsOn resolution, parallel overlap - are in shared/work-method.md and the validator. An unknown key below the feature level is an error: a typo such as `secuirty` must not pass.",
+  "title": "coai work plan",
+  "oneOf": [
+    { "$ref": "#/$defs/feature" },
+    { "$ref": "#/$defs/epoch" },
+    { "$ref": "#/$defs/epic" },
+    { "$ref": "#/$defs/story" },
+    { "$ref": "#/$defs/task" }
+  ],
+  "$defs": {
+    "idList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "feature": {
+      "type": "object",
+      "required": ["id", "title", "epochs"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "epochs": { "$ref": "#/$defs/idList" },
+        "workMethod": { "type": "object" }
+      }
+    },
+    "epoch": {
+      "type": "object",
+      "required": ["id", "title", "dependsOn", "epics"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^epoch-\\d+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "proves": { "type": "string" },
+        "dependsOn": { "$ref": "#/$defs/idList" },
+        "epics": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "epic": {
+      "type": "object",
+      "required": ["id", "title", "dependsOn"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^e\\d+-[a-z0-9-]+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "mvp": { "type": "boolean" },
+        "half": { "type": "string" },
+        "dependsOn": { "$ref": "#/$defs/idList" },
+        "parallelWith": { "$ref": "#/$defs/idList" },
+        "doneWhen": { "$ref": "#/$defs/idList" },
+        "spec": { "type": "string" }
+      }
+    },
+    "story": {
+      "type": "object",
+      "required": ["id", "title", "dependsOn"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^s\\d+-[a-z0-9-]+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "dependsOn": { "$ref": "#/$defs/idList" },
+        "cornerstone": { "type": "boolean" }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "title", "kind", "complexity", "dependsOn", "parallel", "files", "dod"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^t\\d+-[a-z0-9-]+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["code", "test", "docs", "measure", "config", "rename", "translate", "summarize", "changelog", "simple-docs", "security"]
+        },
+        "complexity": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "dependsOn": { "$ref": "#/$defs/idList" },
+        "parallel": { "type": "boolean" },
+        "files": { "$ref": "#/$defs/idList" },
+        "dod": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "item"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "pattern": "^d\\d+$" },
+              "item": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "security": { "type": "boolean" },
+        "status": { "enum": ["open", "in-progress", "done"] }
+      }
+    }
+  }
+}

@@ -6,8 +6,8 @@ internal sealed record ModelRef(string Model, string Vendor);
 /// <summary>A complexity band: tasks scored <see cref="Min"/> to <see cref="Max"/> run <see cref="Model"/>.</summary>
 internal sealed record Band(int Min, int Max, string Model, string Vendor);
 
-/// <summary>The work method's numbers (server.md §8) — read by the validator and the instructions, never typed into them.</summary>
-internal sealed record WorkMethod(int MvpMin, int MvpMax, int MaxEpicsPerEpoch, int MinConsultsPerEpoch, int MinConsultsPerEpic);
+/// <summary>The work method's numbers (server.md §8) — read by the validator (<c>validate_work</c>) and the instructions, never typed into them.</summary>
+internal sealed record WorkMethod(int MvpMin, int MvpMax, int MaxEpicsPerEpoch, int MinConsultsPerEpoch, int MinConsultsPerEpic, int MaxStoriesPerEpic, int MaxTasksPerStory);
 
 /// <summary>The main AI the answer is for.</summary>
 internal sealed record MainAi(string Vendor, string Cli, string Version);

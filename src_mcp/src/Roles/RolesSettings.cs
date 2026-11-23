@@ -188,6 +188,10 @@ internal static class RolesSettings
         }
     }
 
+    /// <summary>
+    /// The work method, KEY BY KEY: a key that reads replaces its default, a key this server does not know or cannot read is named and leaves ONLY itself at its default — the
+    /// other keys still apply (risk 3 of the epoch 3 E1 spec: one unknown key used to reset every number, so a newer settings file lost its limits on an older binary without a word).
+    /// </summary>
     internal static WorkMethod WorkMethodOf(string? text, WorkMethod defaults, List<RoleSettingProblem> problems)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -205,26 +209,20 @@ internal static class RolesSettings
                 return defaults;
             }
 
-            var (mvpMin, mvpMax, epics, perEpoch, perEpic) = (defaults.MvpMin, defaults.MvpMax, defaults.MaxEpicsPerEpoch, defaults.MinConsultsPerEpoch, defaults.MinConsultsPerEpic);
+            var method = defaults;
             foreach (var member in document.RootElement.EnumerateObject())
             {
-                var ok = member.Name switch
+                if (WorkNumber(member, method) is { } applied)
                 {
-                    "mvpEpics" => MvpRange(member.Value, ref mvpMin, ref mvpMax),
-                    "maxEpicsPerEpoch" => Positive(member.Value, 1, ref epics),
-                    "minConsultsPerEpoch" => Positive(member.Value, 0, ref perEpoch),
-                    "minConsultsPerEpic" => Positive(member.Value, 0, ref perEpic),
-                    _ => false,
-                };
-                if (!ok)
+                    method = applied;
+                }
+                else
                 {
-                    problems.Add(Problem(RolesKeys.WorkMethod, $"'{member.Name}' is not a work-method number this server knows (mvpEpics {{min,max}}, maxEpicsPerEpoch, minConsultsPerEpoch, minConsultsPerEpic — whole numbers); the default method stands"));
-
-                    return defaults;
+                    problems.Add(Problem(RolesKeys.WorkMethod, $"'{member.Name}' is not a work-method number this server reads (mvpEpics {{min,max}}, maxEpicsPerEpoch, maxStoriesPerEpic, maxTasksPerStory, minConsultsPerEpoch, minConsultsPerEpic — whole numbers); the default of that key stands"));
                 }
             }
 
-            return new WorkMethod(mvpMin, mvpMax, epics, perEpoch, perEpic);
+            return method;
         }
         catch (JsonException e)
         {
@@ -234,29 +232,23 @@ internal static class RolesSettings
         }
     }
 
-    private static bool MvpRange(JsonElement value, ref int min, ref int max)
+    /// <summary>The method with one member applied, or null when the member is not a key this server knows or its value does not read.</summary>
+    private static WorkMethod? WorkNumber(JsonProperty member, WorkMethod method) => member.Name switch
     {
-        if (value.ValueKind != JsonValueKind.Object || Whole(value, "min") is not { } low || Whole(value, "max") is not { } high || low < 1 || low > high)
-        {
-            return false;
-        }
+        "mvpEpics" => MvpRange(member.Value) is { } range ? method with { MvpMin = range.Min, MvpMax = range.Max } : null,
+        "maxEpicsPerEpoch" => Positive(member.Value, 1) is { } epics ? method with { MaxEpicsPerEpoch = epics } : null,
+        "maxStoriesPerEpic" => Positive(member.Value, 1) is { } stories ? method with { MaxStoriesPerEpic = stories } : null,
+        "maxTasksPerStory" => Positive(member.Value, 1) is { } tasks ? method with { MaxTasksPerStory = tasks } : null,
+        "minConsultsPerEpoch" => Positive(member.Value, 0) is { } perEpoch ? method with { MinConsultsPerEpoch = perEpoch } : null,
+        "minConsultsPerEpic" => Positive(member.Value, 0) is { } perEpic ? method with { MinConsultsPerEpic = perEpic } : null,
+        _ => null,
+    };
 
-        (min, max) = (low, high);
+    private static (int Min, int Max)? MvpRange(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Object && Whole(value, "min") is { } low && Whole(value, "max") is { } high && low >= 1 && low <= high ? (low, high) : null;
 
-        return true;
-    }
-
-    private static bool Positive(JsonElement value, int least, ref int target)
-    {
-        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var number) || number < least)
-        {
-            return false;
-        }
-
-        target = number;
-
-        return true;
-    }
+    private static int? Positive(JsonElement value, int least) =>
+        value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) && number >= least ? number : null;
 
     private static string? Text(JsonElement entry, string name) =>
         entry.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()?.Trim() : null;

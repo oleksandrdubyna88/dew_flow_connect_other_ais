@@ -70,7 +70,9 @@ internal sealed class RoleDefaults
                 mvp.GetProperty("max").GetInt32(),
                 method.GetProperty("maxEpicsPerEpoch").GetInt32(),
                 method.GetProperty("minConsultsPerEpoch").GetInt32(),
-                method.GetProperty("minConsultsPerEpic").GetInt32()));
+                method.GetProperty("minConsultsPerEpic").GetInt32(),
+                method.GetProperty("maxStoriesPerEpic").GetInt32(),
+                method.GetProperty("maxTasksPerStory").GetInt32()));
     }
 
     private static VendorDefaults VendorOf(JsonElement vendor)
