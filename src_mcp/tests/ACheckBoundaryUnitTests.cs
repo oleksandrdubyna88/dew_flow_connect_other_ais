@@ -28,6 +28,34 @@ public sealed class ACheckBoundaryUnitTests
         run.Gone.Should().BeTrue();
     }
 
+    /// <summary>
+    /// The one rule of both boundaries: no variable VALUE that crosses into a unit is on a command line. A coder's unit crosses a few by name (<c>CoderUnit.Inner</c>); a check's crosses none, and this holds it there — no <c>--setenv</c> in what <c>systemd-run</c> is
+    /// given — so a later secret for a check cannot ride in <c>env -i NAME=value</c> without a test going red. Every value on that line is a fixed one of the allow-list.
+    /// </summary>
+    [Fact]
+    public async Task AStepCrossesNoVariableByName_SoNoValueOfTheCallersEnvironmentIsOnItsCommandLine()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        var needle = "zz-dummy-not-a-secret-" + Guid.NewGuid().ToString("N");
+        var name = "ZZ_DUMMY_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(name, needle);
+        try
+        {
+            var run = await bed.ShellAsync("env");
+
+            run.Result.ExitCode.Should().Be(0, run.Result.StdErr);
+            run.Result.StdOut.Should().NotContain(needle, "the unit's environment is the allow-list alone");
+            var started = bed.Launcher.Requests.Single(item => item.Arguments.Contains($"coai-check-{bed.JobId}-s1") && item.Arguments.Contains("/usr/bin/env"));
+            started.Arguments.Should().NotContain(argument => argument.StartsWith("--setenv", StringComparison.Ordinal), "a check crosses nothing by name");
+            started.Arguments.Should().NotContain(argument => argument.Contains(needle, StringComparison.Ordinal));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(name, null);
+        }
+    }
+
     [Fact]
     public async Task TheUnit_WritesWhereItMay_AndIsRefusedWhereItMayNot_ReadOffTheRealFileSystem()
     {

@@ -13,7 +13,7 @@ namespace CoaiMcp.Runners.Toolchain;
 /// among the source folders. Unlike a check it has the HOST network (the CLI talks to its vendor) and one file of the real home — the sign-in file, read-only, bound into a home of the coder's own. Measured with the real CLI on 2.1.330
 /// (<c>RESULTS_s2_check_boundary.md</c>, t5): with that home and the resolver file the CLI signed in and answered; everything it wrote was in its own home and <c>/tmp</c>, and the real <c>~/.claude</c>, <c>~/.claude.json</c> and <c>settings.json</c> were never needed
 /// — so none of them is bound, and a coder that wrote a hook into them would write it into a folder that is gone with the job.</para>
-/// <para><b>The environment is set INSIDE the unit</b> by <c>env -i</c>, as for the checks. A value that must reach the CLI — the row's own key, a proxy — travels by NAME (<c>--setenv=NAME</c> copies it from the client), never in an argv.</para>
+/// <para><b>The environment is set INSIDE the unit</b> (every variable but the crossed names is unset, then the fixed list is set — see <see cref="Inner"/>; the checks use <c>env -i</c>). A value that must reach the CLI — the row's own key, a proxy — travels by NAME (<c>--setenv=NAME</c> copies it from the client), never in an argv.</para>
 /// </remarks>
 internal static partial class CoderUnit
 {
@@ -100,13 +100,20 @@ internal static partial class CoderUnit
         new HashSet<string>([.. UnitControl.Client, .. byName], StringComparer.Ordinal);
 
     /// <summary>
-    /// What the unit runs: a shell that clears the environment, sets the fixed list and copies each name in <paramref name="byName"/> from the unit's own (where <c>--setenv</c> put it), then execs the program with its argv. The program and its argv are
-    /// positional arguments of the shell, never text of its script.
+    /// What the unit runs: a shell that UNSETS every exported variable but the names in <paramref name="byName"/> (which <c>--setenv</c> put in the unit's own environment), sets the fixed list, then execs the program with its argv. The program and its
+    /// argv are positional arguments of the shell, never text of its script; the names are identifiers, spelled into the script, never their values.
     /// </summary>
+    /// <remarks>
+    /// <b>No crossed value is ever on a command line.</b> The first shape was <c>exec /usr/bin/env -i "NAME=$NAME" …</c>: the shell expanded the value into <c>env</c>'s argv, and <c>/proc/&lt;pid&gt;/cmdline</c> is readable by every process of the user — measured with a dummy
+    /// value, it showed in 228 of 300 tries (a shell that only exports the name: 0 of 300). Here the value stays in the environment all the way: it is never expanded, and <c>env</c> is given the fixed allow-list only (<c>PATH</c>, <c>HOME</c>… no secret). The unit's
+    /// environment is still exactly the allow-list and the crossed names: the shell's own <c>PWD</c> is unset before the exec.
+    /// </remarks>
     internal static IReadOnlyList<string> Inner(BoundaryHost host, BoundaryJob job, CoderProgram program, IReadOnlyList<string> arguments, IReadOnlyList<string> byName) =>
     [
         "/bin/sh", "-c",
-        $"exec /usr/bin/env -i {string.Join(' ', byName.Select(name => $"\"{name}=${name}\""))} \"$@\"",
+        "for v in $(/usr/bin/env | /usr/bin/sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p'); do "
+        + $"case \" {string.Join(' ', byName)} \" in *\" $v \"*) ;; *) unset \"$v\" 2>/dev/null ;; esac; done; "
+        + "unset PWD OLDPWD; exec /usr/bin/env \"$@\"",
         "coai-coder",
         .. Environment(host, job).Select(pair => $"{pair.Key}={pair.Value}"),
         program.Real,

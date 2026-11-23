@@ -220,6 +220,71 @@ public sealed class ACoderBoundaryTests
         record.Preflight.Should().OnlyContain(row => row.Held);
     }
 
+    /// <summary>
+    /// A crossed variable's VALUE is on no command line while the unit starts. The first shape of the inner command was <c>exec /usr/bin/env -i "NAME=$NAME" …</c>: the shell spelled the value into <c>env</c>'s argv, and <c>/proc/&lt;pid&gt;/cmdline</c> is world-readable —
+    /// measured with a dummy value, it showed in 228 of 300 tries. The window is milliseconds long, so the test makes many launches of a short program under ONE admission while a scanner reads the command line of every process, all the time. The needle is a dummy built
+    /// here, never a credential.
+    /// </summary>
+    [Fact]
+    public async Task ACrossedVariablesValue_IsOnNoCommandLineOfAnyProcess_WhileTheUnitsStart()
+    {
+        NeedAUserManager();
+        await using var bed = await CoderBed.CreateAsync();
+        var needle = "zz-dummy-not-a-secret-" + Guid.NewGuid().ToString("N");
+        var crossing = new Dictionary<string, string?> { ["ANTHROPIC_API_KEY"] = needle };
+        var boundary = bed.Boundary();
+        var admission = await boundary.AdmitAsync(bed.Job, FakeCliInvocations.Exe);
+        var admitted = admission.Should().BeOfType<BoundaryAdmission.Admitted>(admission.ToString()).Subject;
+        using var done = new CancellationTokenSource();
+        var scans = 0;
+        var seen = new List<int>();
+        var scanner = Task.Run(async () =>
+        {
+            while (!done.IsCancellationRequested)
+            {
+                foreach (var pid in Directory.EnumerateDirectories("/proc").Select(Path.GetFileName).Where(name => name is not null && name.All(char.IsAsciiDigit)).Select(name => int.Parse(name!, System.Globalization.CultureInfo.InvariantCulture)))
+                {
+                    if (CommandLineOf(pid).Contains(needle, StringComparison.Ordinal))
+                    {
+                        seen.Add(pid);
+                    }
+                }
+
+                scans++;
+                await Task.Yield();
+            }
+        }, TestContext.Current.CancellationToken);
+
+        for (var launch = 1; launch <= 40; launch++)
+        {
+            var run = await boundary.RunAsync(admitted, bed.Job, bed.Fake("emit", "done") with { Environment = crossing, Passthrough = new HashSet<string>() }, $"c{launch}", TestContext.Current.CancellationToken);
+            run.Result.ExitCode.Should().Be(0, run.Result.StdErr);
+        }
+
+        await done.CancelAsync();
+        await scanner;
+
+        scans.Should().BeGreaterThan(10, "the scanner looked at /proc many times while the units started");
+        seen.Should().BeEmpty("no process, at any moment, had the value of the crossed variable on its command line");
+        var control = await bed.Turns().RunAsync(bed.Job, bed.Request("/usr/bin/env") with { Environment = crossing, Passthrough = new HashSet<string>() }, "k1");
+        control.Should().BeOfType<CoderTurnOutcome.Finished>(control.ToString()).Which.Run.Result.StdOut.Should().Contain($"ANTHROPIC_API_KEY={needle}", "CONTROL: the value DID reach the program — by the environment, not by an argv");
+    }
+
+    private static string CommandLineOf(int pid)
+    {
+        try
+        {
+            using var stream = new FileStream($"/proc/{pid}/cmdline", FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+
+            return reader.ReadToEnd();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
     /// <summary>Admits the job and runs one launch, as the road of <see cref="CoderTurns"/> does, so a test can read the process itself.</summary>
     private static async Task<BoundaryRun> RunAsync(CoderBed bed, ProcessRequest request)
     {
