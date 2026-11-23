@@ -219,14 +219,29 @@ version: 1
 projects:
   - path: src_mcp
     adapter: dotnet
-    build: [dotnet, build, app.slnx, -c, Debug, "-m:{jobs}"]
-    test:  [./src_mcp/tests/bin/Debug/net10.0/App.Tests]
+    build:
+      - dotnet
+      - build
+      - app.slnx
+      - -c
+      - Debug
+      - "-m:{jobs}"
+    test:
+      - ./src_mcp/tests/bin/Debug/net10.0/App.Tests
     memoryMb: 3000
   - path: src_vs_code
     adapter: node
-skip: [audit, coverage]
-timeouts: {build: 15m, test: 30m}
+skip:
+  - audit
+  - coverage
+timeouts:
+  build: 15m
+  test: 30m
 ```
+
+Block style only: the strict YAML subset reader (epoch-3 E1) refuses flow lists and flow maps except `[]`
+(epoch-3 E2 s1, RESULTS_s1_toolchain.md). Every argv runs from the repository root with no shell; a coder job
+reads this file at its BASE commit.
 
 ## 13. Studio attachments
 
