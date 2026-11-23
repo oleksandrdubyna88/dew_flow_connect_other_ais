@@ -60,6 +60,9 @@ internal sealed record RoleJobRequest
 
     public string WorkItem { get; init; } = string.Empty;
 
+    /// <summary>The commit a coder's worktree starts at (a full 40-character id); empty for "the HEAD of the repository when the coder's work began" (epoch 3 E2 s3 t3). Other roles ignore it.</summary>
+    public string BaseSha { get; init; } = string.Empty;
+
     public DateTime CreatedUtc { get; init; }
 
     /// <summary>Strings a reader may meet as null (a field an older or newer build did not write, doctrine 4a) become empty; the request is read through this.</summary>
@@ -72,6 +75,7 @@ internal sealed record RoleJobRequest
         Brief = Brief ?? string.Empty,
         Model = Model ?? string.Empty,
         WorkItem = WorkItem ?? string.Empty,
+        BaseSha = BaseSha ?? string.Empty,
     };
 }
 

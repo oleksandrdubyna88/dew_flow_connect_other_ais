@@ -93,6 +93,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// </summary>
     public int MaxRepairTurns { get; init; }
 
+    /// <summary>
+    /// Set for the coder (epoch 3 E2 s3 t3): every launch of the loop is this job's WRITE launch, in its worktree, and a repair turn resumes the session through a handle bound to the job and the worktree
+    /// (<see cref="RoleModelLauncher.Coder"/>). Null for the read-only roles.
+    /// </summary>
+    public LaunchConfinement.Coder? Coder { get; init; }
+
     /// <summary>The repair turns the LAST attempt used — what the role reports of how it got its answer.</summary>
     public int RepairTurnsUsed { get; private set; }
 
@@ -271,7 +277,7 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     private async Task<RoleLaunched> LaunchTurnAsync(ModelRef model, string prompt, AttemptRun attempt, TimeSpan left, CancellationToken ct)
     {
         attempt.TurnBegun = run.Clock.GetUtcNow().UtcDateTime;
-        var launched = await new RoleModelLauncher(run.Settings, run.Children)
+        var launched = await new RoleModelLauncher(run.Settings, run.Children) { Coder = Coder }
             .LaunchAsync(model, prompt, run.Request.RepoPath, attempt.Folder, left < AttemptTimeout ? left : AttemptTimeout, ct, attempt.Handle);
         attempt.TurnEnded = run.Clock.GetUtcNow().UtcDateTime;
         attempt.Add(launched);

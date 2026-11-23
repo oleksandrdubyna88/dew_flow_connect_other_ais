@@ -149,7 +149,7 @@ internal sealed class BaJudge(BaEpicSite site, WorkLimits limits)
         new RoleAnswerVerdict.Repair(BaPrompt.Repair(errors), $"the plan has {errors.Count} error{(errors.Count == 1 ? string.Empty : "s")}; the first: {errors[0]}");
 
     /// <summary>The answer as one JSON object — a single surrounding code fence is taken off, since a model puts one there however it is told not to; anything else that is not JSON is null.</summary>
-    private static JsonElement? Parsed(string answer)
+    internal static JsonElement? Parsed(string answer)
     {
         try
         {
