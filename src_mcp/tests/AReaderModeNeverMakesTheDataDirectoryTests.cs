@@ -51,6 +51,8 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--band-json" },
         // What each item of a plan cost (v2 E3.S8): reads the rounds database read-only; the folder argument is this test's own build output, inside the checkout.
         new[] { "--plan-report", AppContext.BaseDirectory, "--json" },
+        // A work plan checked (epoch 3 E1 s2): reads the working tree and the settings file, never opens the data directory; this test's own build output has no feature.yaml, so it answers 65 and still makes nothing.
+        new[] { "--validate-work", AppContext.BaseDirectory },
         new[] { "--version" },
         // Launched on a person's act, but it reads stdin and answers stdout only (research/PLAN_names_and_a_missing_root.md 3.3).
         new[] { "--check-security" },

@@ -172,6 +172,12 @@ internal static class Program
         PlanReport,
 
         /// <summary>
+        /// A work plan (the YAML folder tree of <c>shared/work-method.md</c>) checked against the work-plan contract, in one JSON object: <c>--validate-work &lt;feature-dir&gt;</c> — reads the working tree, never makes the data directory.
+        /// See <see cref="ValidateWorkMode"/> (epoch 3 E1 s2).
+        /// </summary>
+        ValidateWork,
+
+        /// <summary>
         /// The roles table in one JSON object (<c>--format json</c>) or as Claude Code's SessionStart hook output (<c>--format claude-hook</c>) — read-only, never makes the data directory.
         /// See <see cref="Roles.RolesMode"/> (v2 E3.S7).
         /// </summary>
@@ -388,6 +394,7 @@ internal static class Program
                 "--host-facts" => Startup.HostFacts,
                 "--band-json" => Startup.BandJson,
                 "--plan-report" => Startup.PlanReport,
+                "--validate-work" => Startup.ValidateWork,
                 "--roles" => Startup.Roles,
                 "--setup-clients" => Startup.SetupClients,
                 "--install" => Startup.Install,
@@ -507,6 +514,10 @@ internal static class Program
             case Startup.PlanReport:
                 // One object on stdout, read-only, exit 0; a wrong argument or a folder outside a checkout is 65, never 64.
                 return PlanReportMode.Run(args, Environment.GetEnvironmentVariable, Directory.GetCurrentDirectory(), Console.Out, Note);
+
+            case Startup.ValidateWork:
+                // One object on stdout, read-only, exit 0 valid or 1 invalid; a wrong argument or a folder with no feature.yaml is 65, a read the disk refuses 74, never 64.
+                return ValidateWorkMode.Run(args, Environment.GetEnvironmentVariable, Directory.GetCurrentDirectory(), Console.Out, Note);
 
             case Startup.Roles:
                 // One object on stdout, read-only, exit 0; a wrong argument is 65, never 64. A hook calls this, so nothing here may take a session down.
@@ -2655,6 +2666,10 @@ internal static class Program
         folder, by name — no YAML is read), each with the gates run, rounds, cons and consask counts, the first and last event (UTC) and the wall time of the calls that named it in their
         `workItem` argument, read from the rounds database and never creating the data directory. An item with no events reports zeros. 65 for other arguments or a folder not inside a
         git checkout, 74 when the database cannot be read; a build too old for the mode exits 64.
+        `--validate-work <feature-dir>` checks a work plan (feature.yaml, epoch-N/epoch.yaml, eN-*/epic.yaml, stories/sN-*/story.yaml, tasks/tN-*/task.yaml; the rules are in shared/work-method.md) and prints ONE JSON object
+        {mode, featureFolder, valid, counts, limits {…, source: device|default, settingsRevision}, errors [{code, path, node, message}], notes, important [{node, reason}], truncated}. The limits are this device's work method
+        (`roles`), never constants. Reads the working tree and the settings, writes nothing, never creates the data directory. Exit 0 a valid plan, 1 an invalid one, 65 for a wrong argument or a folder with no
+        feature.yaml, 74 when a file cannot be read; never 64. The MCP tool `validate_work(repoPath, featureFolder)` answers the same object.
         `--roles [--format json|claude-hook]` prints the roles table: the main AI, an ORDERED model list per role (the order is the failover order), the complexity bands,
         the task kinds a small model may take, the work method and a settings revision — as ONE JSON object, or with `claude-hook` as Claude Code's SessionStart hook output
         (a short role table and the work-method sentence in `hookSpecificOutput.additionalContext`). Read from the settings file and the environment (`COAI_ROLES_MODELS`,

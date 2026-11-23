@@ -529,6 +529,28 @@ internal static class Tools
             RenamedTools.Alias(consask, RenamedTools.OldAsk));
 
         yield return McpServerTool.Create(
+            // A reader like `roles`: it needs no service, so it answers while the first one is still being built. The settings are read afresh per call.
+            (string repoPath, string featureFolder) => Work.ValidateWorkTool.Answer(Environment.GetEnvironmentVariable, repoPath, featureFolder),
+            new McpServerToolCreateOptions
+            {
+                Name = "validate_work",
+                Title = "Check a work plan (the YAML tree of a feature folder) against the work-plan contract",
+                Description = """
+                    Validates the work plan in `featureFolder` (the repository-relative path of the folder that holds feature.yaml, for example
+                    `v2`) under `repoPath`, from the working tree — nothing is written. Answers ONE object, the same as `coai-mcp --validate-work`:
+                    `valid`, `counts`, the `limits` it checked against (this device's work method, with `source` device|default and the
+                    `settingsRevision`: a plan valid on one device can be invalid on another), `errors` [{code, path, node, message}] sorted and at
+                    most 200, `notes`, `important` (the tasks that run on the important models: security: true, kind security or complexity 10, with
+                    the reason) and `truncated`. The rules and the error codes are in shared/work-method.md. A path that is absolute, has a `..`
+                    segment or runs through a link, or a folder with no feature.yaml, answers {"error": "..."} instead.
+                    """,
+                ReadOnly = true,
+                Idempotent = true,
+                Destructive = false,
+                OpenWorld = false,
+            });
+
+        yield return McpServerTool.Create(
             // `McpServer` is injected, not part of the schema: the client's own name tells which AI is the main one. Read afresh per call (the settings file may have changed), and it needs no service —
             // so it answers while the first one is still being built.
             (McpServer server) => Roles.RolesAnswer.Json(Roles.RolesAnswer.Compute(

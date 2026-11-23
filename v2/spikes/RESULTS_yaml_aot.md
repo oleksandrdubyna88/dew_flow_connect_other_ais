@@ -39,9 +39,16 @@ integer is an integer, a quoted scalar is always a string, anything else plain i
 anchors, aliases, tags, flow collections other than `[]`, block scalars, a second document, duplicate keys in one map, tabs as
 indentation, a file above 64 KiB.
 
-## Native AOT evidence
+## Native AOT evidence (task t4, 2026-11-23)
 
-Recorded at the end of task t4 (the reader is code of this repository, so the check is the publish of the server project):
-see the section below, filled in when the publish ran.
+The subset reader (`src_mcp/core/Work/StrictYamlReader.cs`) is code of this repository, so the check is the publish of the server project the way CI ships it (`.github/workflows/ci.yml`: Native AOT, warnings as errors), plus the byte comparison below.
 
-<!-- AOT-EVIDENCE -->
+| Check | Command | Result |
+|---|---|---|
+| linux-x64 publish, warnings as errors, no `NoWarn` | `dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r linux-x64 -warnaserror -m:4 --disable-build-servers -o <scratch>` (SDK 10.0.114, ILCompiler 10.0.14, `PublishAot` and the trim/AOT analyzers on) | **succeeded, 0 warnings, 0 errors** (1 m 40 s); `coai-mcp` 33 465 008 bytes. `TreatWarningsAsErrors` is on in `Directory.Build.props` and no `NoWarn` was added anywhere |
+| the native binary reads the plan | `coai-mcp --validate-work v2` | exit 0, `valid: true`, counts 5 epochs, 24 epics, 22 stories, 60 tasks (every `feature.yaml`, `epoch.yaml`, `epic.yaml`, `story.yaml` and `task.yaml` of `v2/`) |
+| B12: native and JIT give the same bytes | `COAI_CONTRACT_EXE=<the native binary> CoaiMcp.Tests --filter-class "*TheBinaryAnswersLikeTheInProcessValidatorTests"` | **passed**: all 91 vectors of `shared/work-plan-vectors.json` and the `v2/` folder give the same stdout bytes and the same exit code from the native process and from the JIT validator in the test process (same test without `COAI_CONTRACT_EXE`: the built JIT binary against the in-process validator, also passed) |
+
+Not run: `win-x64`. A Native AOT publish links with the target platform's toolchain, so it cannot be made from this Linux host; the release workflow publishes it on a Windows runner. The reader uses no platform API (it is text in, a value out), so no platform difference is expected, and the release smoke runs the same test through `COAI_CONTRACT_EXE`.
+
+The analyzers found nothing to fix in the reader or the validator: no reflection, no `Activator`, JSON written by hand with `Utf8JsonWriter`, regexes through `[GeneratedRegex]`.
