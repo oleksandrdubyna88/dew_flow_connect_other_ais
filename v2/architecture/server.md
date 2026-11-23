@@ -417,8 +417,9 @@ coai is baked into an Ubuntu x64 AMI that runs the orchestrator. One instance, o
   second run is a no-op. The bake step and a first-boot check are scripted, nothing manual.
 - Settings: files baked into the image (the same device settings file the hub would write); no hub token, no device
   agent. A missing hub is a normal state there, never a failure notice loop.
-- Claude role keys: an env file `/etc/coai/claude-keys.env` (0600, the orchestrator user) placed by the launch step,
-  synced into the key pool at every start (KEY_POOL_SPEC.md, owner 2026-11-23); no AWS dependency.
+- Claude role keys: from `COAI_CLAUDE_KEY_<label>` environment variables of coai or a file at `COAI_CLAUDE_KEYS_FILE`
+  (any path), synced into the key pool at every start; how they get onto the instance is the launch step's business
+  (KEY_POOL_SPEC.md, owner 2026-11-23); no AWS dependency.
 - Secrets: NEVER baked into the AMI. CLI sign-ins and any key arrive at boot from the instance secret source (for
   example a setup-token placed by the launch script) into the user's own CLI config; coai only checks they exist.
 - One instance: several MCP server processes (one per orchestrator session) share ONE data folder; SQLite writes,
