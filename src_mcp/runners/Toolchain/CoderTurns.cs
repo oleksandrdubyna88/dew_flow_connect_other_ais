@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Consultation;
+using CoaiMcp.Core.Toolchain;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Files;
@@ -34,7 +35,7 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
     {
         if (WrongWorktree(job, request) is { Length: > 0 } wrong)
         {
-            return new CoderTurnOutcome.Refused(wrong, new Core.Toolchain.BoundaryRecord(Core.Toolchain.BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
+            return new CoderTurnOutcome.Refused(wrong, new BoundaryRecord(BoundaryRecord.UnitBoundary, [], "host", CoderBoundary.NetworkReason, []));
         }
 
         var admission = await boundary.AdmitAsync(job, request.Executable, ct);

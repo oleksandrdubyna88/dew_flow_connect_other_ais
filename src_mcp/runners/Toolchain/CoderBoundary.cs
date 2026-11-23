@@ -113,11 +113,18 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <param name="part">The unit's part name — <c>c1</c>, <c>c2</c> — unique within the job.</param>
     /// <param name="ct">The caller's cancel.</param>
     /// <exception cref="InvalidOperationException">The admission is not for this job, or the program cannot be given to the unit.</exception>
+    /// <exception cref="ArgumentException">The part name is not one a unit can be named with.</exception>
     public async Task<BoundaryRun> RunAsync(BoundaryAdmission.Admitted admitted, BoundaryJob job, ProcessRequest request, string part, CancellationToken ct = default)
     {
         if (admitted.JobId != job.JobId || !admitted.Records.TryGetValue(CheckNetwork.Host, out var seen))
         {
             throw new InvalidOperationException($"the preflight of job '{job.JobId}' did not admit a coder launch; the coder may not start before it has");
+        }
+
+        ArgumentException.ThrowIfNullOrEmpty(part);
+        if (!CoderUnit.IsPart(part))
+        {
+            throw new ArgumentException("the unit's part name is 1 to 16 characters of a-z, 0-9 and '-', starting with a letter or a digit", nameof(part));
         }
 
         var program = CoderProgram.Resolve(request.Executable, host.Path, job);

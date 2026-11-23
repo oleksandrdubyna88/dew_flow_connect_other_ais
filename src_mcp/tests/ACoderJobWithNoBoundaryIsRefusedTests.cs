@@ -194,6 +194,27 @@ public sealed class ACoderJobWithNoBoundaryIsRefusedTests
         bed.Launcher.Requests.Skip(launches).Where(request => request.Executable != "git").Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("c 1")]
+    [InlineData("../x")]
+    [InlineData("C1")]
+    [InlineData("a-name-that-is-far-too-long")]
+    public async Task APartNameThatIsNotSafeInAUnitName_IsRefusedWithAnException_NoProcessStarts(string part)
+    {
+        NeedAUserManager();
+        await using var bed = await CoderBed.CreateAsync();
+        var boundary = bed.Boundary();
+        var admission = (BoundaryAdmission.Admitted)await boundary.AdmitAsync(bed.Job, FakeCliInvocations.Exe);
+        var launches = bed.Launcher.Requests.Count;
+
+        var run = async () => await boundary.RunAsync(admission, bed.Job, Coder(bed), part);
+
+        await run.Should().ThrowAsync<ArgumentException>();
+        bed.Launcher.Requests.Count.Should().Be(launches);
+        File.Exists(Marker(bed)).Should().BeFalse();
+    }
+
     [Fact]
     public async Task ALaunch_CannotStartWithoutThePreflightsAdmission_OrWithAnotherJobs()
     {

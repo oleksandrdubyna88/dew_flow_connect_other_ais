@@ -30,6 +30,12 @@ internal static partial class CoderUnit
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
     private static partial Regex Identifier();
 
+    [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,15}$")]
+    private static partial Regex Part();
+
+    /// <summary>Whether <paramref name="part"/> can be the last word of a unit's name: it is spelled into the name and into <c>systemctl</c> commands, so only the safe shape is.</summary>
+    internal static bool IsPart(string part) => Part().IsMatch(part);
+
     /// <summary>The <c>-p</c> properties of the coder's unit, in the order they are given.</summary>
     internal static IReadOnlyList<string> Properties(BoundaryHost host, BoundaryJob job, CoderProgram program, TimeSpan runtimeMax)
     {
