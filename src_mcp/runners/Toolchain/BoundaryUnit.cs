@@ -1,4 +1,5 @@
 using System.Globalization;
+using CoaiMcp.Runners.Detach;
 
 namespace CoaiMcp.Runners.Toolchain;
 
@@ -11,7 +12,7 @@ namespace CoaiMcp.Runners.Toolchain;
 /// option can fail open, which the measured R7 did for claude's own sandbox. So no test of this class asserts that a property is in the list and calls it a boundary; the effects are asserted on a real unit
 /// (<c>ACheckBoundaryUnitTests</c>) and by the preflight before each job (<c>BoundaryPreflight</c>).</para>
 /// <para><b>The property set</b> is the must-have list of <c>v2/spikes/RESULTS_coder_write_boundary_judgement.md</c> § 2, plus four hardening properties (<c>RestrictSUIDSGID</c>, <c>LockPersonality</c>, <c>ProtectKernelTunables</c>,
-/// <c>ProtectControlGroups</c>) that the real build and test of this repository ran under (<c>RESULTS_s2_check_boundary.md</c>).</para>
+/// <c>ProtectControlGroups</c>) and <c>Nice=10</c> (a check runs below the person's own work, <c>common/local-cpu-budget.md</c> § 2). The real build and the whole test suite of this repository ran under all of it (<c>RESULTS_s2_check_boundary.md</c>).</para>
 /// <para><b>The environment is set INSIDE the unit</b> by <c>env -i</c>. The program that starts a unit is <c>systemd-run</c>; the unit gets the user manager's environment — measured to hold <c>SSH_AUTH_SOCK</c>,
 /// <c>DBUS_SESSION_BUS_ADDRESS</c>, <c>GPG_AGENT_INFO</c> and <c>XDG_RUNTIME_DIR</c> — and a list set on the client would never reach it.</para>
 /// </remarks>
@@ -19,6 +20,12 @@ internal static class BoundaryUnit
 {
     /// <summary>The prefix of every unit this class names; a leftover is found by it.</summary>
     internal const string UnitPrefix = "coai-check-";
+
+    /// <summary>What a step sees as <c>/tmp</c>: the job's own folder bound there. Named once so a test refers to it without a raw temp path of its own.</summary>
+    internal const string UnitTemp = "/tmp";
+
+    /// <summary>What a step sees as <c>/var/tmp</c>.</summary>
+    internal const string UnitVarTemp = "/var/tmp";
 
     /// <summary>The unit's name for one part of a job (<c>pre-none</c>, <c>pre-host</c>, <c>s1</c>, <c>s2</c>…), without the <c>.service</c> suffix.</summary>
     internal static string UnitName(BoundaryJob job, string part) => $"{UnitPrefix}{job.JobId}-{part}";
@@ -40,19 +47,20 @@ internal static class BoundaryUnit
             $"BindReadOnlyPaths={tree.MainCheckout}",
             $"BindReadOnlyPaths={tree.GitEntry}",
             $"BindPaths={job.JobRoot}",
-            $"BindPaths={job.TempFolder}:/tmp",
-            $"BindPaths={job.VarTempFolder}:/var/tmp",
+            $"BindPaths={job.TempFolder}:{UnitTemp}",
+            $"BindPaths={job.VarTempFolder}:{UnitVarTemp}",
             .. host.ReadOnlyCaches.Select(cache => $"BindReadOnlyPaths={cache}"),
+            .. network == CheckNetwork.Host && host.ResolverFile.Length > 0 ? [$"BindReadOnlyPaths={host.ResolverFile}"] : Array.Empty<string>(),
             "NoNewPrivileges=yes",
             "PrivateUsers=yes",
             "RestrictSUIDSGID=yes",
             "LockPersonality=yes",
             "ProtectKernelTunables=yes",
             "ProtectControlGroups=yes",
+            "Nice=10",
             network == CheckNetwork.Private ? "PrivateNetwork=yes" : "PrivateNetwork=no",
             $"RuntimeMaxSec={Math.Max(1, (long)Math.Ceiling(runtimeMax.TotalSeconds)).ToString(CultureInfo.InvariantCulture)}",
-            $"MemoryMax={job.MemoryMegabytes.ToString(CultureInfo.InvariantCulture)}M",
-            "MemorySwapMax=0",
+            .. DetachedLauncher.MemoryProperties(job.MemoryMegabytes),
         ];
     }
 
@@ -69,7 +77,7 @@ internal static class BoundaryUnit
             new("DOTNET_CLI_HOME", job.DotnetFolder),
             new("NUGET_PACKAGES", job.NuGetFolder),
             new("npm_config_cache", job.NpmFolder),
-            new("TMPDIR", "/tmp"),
+            new("TMPDIR", UnitTemp),
             new("LANG", "C.UTF-8"),
             new("TERM", "dumb"),
             new("GIT_TERMINAL_PROMPT", "0"),
@@ -97,9 +105,8 @@ internal static class BoundaryUnit
 
         IReadOnlyList<string> arguments =
         [
-            "--user", "--wait", "--pipe", "--collect", "--quiet",
-            "--unit", unit,
-            "--working-directory", job.Tree.Root,
+            "--wait", "--pipe",
+            .. DetachedLauncher.UnitPrefix(unit, job.Tree.Root),
             .. Properties(host, job, network, runtimeMax).SelectMany(property => new[] { "-p", property }),
             "--",
             "/usr/bin/env", "-i",

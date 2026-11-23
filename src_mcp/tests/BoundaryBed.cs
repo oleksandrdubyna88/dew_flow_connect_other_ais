@@ -56,10 +56,6 @@ internal sealed class BoundaryBed : IAsyncDisposable
     /// <summary>The shared NuGet package folder, with one file in it.</summary>
     public string SharedPackages => Path.Combine(_home.Path, "shared-packages");
 
-    /// <summary>What a step sees as its temp folder: the job's own folder bound there, never the host's.</summary>
-    // testsToDelete-exempt: raw-temp — the unit's own temp folder, not the host's
-    public const string UnitTmp = "/tmp";
-
     /// <summary>A random job id of the strict shape — never the same twice, so two runs never share a unit name.</summary>
     public static string NewJobId() => "t4-" + Guid.NewGuid().ToString("N")[..12];
 

@@ -88,7 +88,7 @@ public sealed class ACheckBoundaryPreflightTests
         "no-user-manager-inside" => Drop(Drop(Drop(arguments, "-i"), "TemporaryFileSystem=/run/user"), "ProtectHome=tmpfs"),
         "windows-exe" => Drop(arguments, "InaccessiblePaths=-/run/WSL"),
         "home-is-the-jobs" => Replace(arguments, $"HOME={bed.Job.HomeFolder}", $"HOME={bed.Host.RealHome}"),
-        "tmp-is-the-jobs" => Drop(arguments, $"BindPaths={bed.Job.TempFolder}:{BoundaryBed.UnitTmp}"),
+        "tmp-is-the-jobs" => Drop(arguments, $"BindPaths={bed.Job.TempFolder}:{BoundaryUnit.UnitTemp}"),
         "network-state" => Replace(arguments, "PrivateNetwork=yes", "PrivateNetwork=no"),
         "no-sockets-no-interop" => Drop(arguments, "TemporaryFileSystem=/mnt"),
         _ => Drop(arguments, "-i"),

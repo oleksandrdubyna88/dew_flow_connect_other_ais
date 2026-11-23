@@ -45,10 +45,10 @@ internal static class BoundaryPreflight
     internal const string ProgramCopyName = ".coai-preflight.exe";
 
     /// <summary>
-    /// <c>$1</c> worktree, <c>$2</c> main checkout, <c>$3</c> real home, <c>$4</c> network (<c>none</c>|<c>host</c>), <c>$5</c> job id, <c>$6</c> the Windows program to try (empty: none).
+    /// <c>$1</c> worktree, <c>$2</c> main checkout, <c>$3</c> real home, <c>$4</c> network (<c>none</c>|<c>host</c>), <c>$5</c> job id, <c>$6</c> the Windows program to try (empty: none), <c>$7</c> the resolver file bound back under <c>/mnt</c> for a host-network step (empty: none).
     /// </summary>
     private const string Script = """
-        wt=$1; main=$2; rh=$3; net=$4; job=$5; exe=$6
+        wt=$1; main=$2; rh=$3; net=$4; job=$5; exe=$6; res=$7
         row() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; }
         probe=.coai-preflight-probe
         if [ ! -e "$wt/.coai-job-$job" ]; then row worktree-write bad "the worktree inside the unit is not the job's worktree"
@@ -72,15 +72,16 @@ internal static class BoundaryPreflight
         else row network-state ok "the host network, as the step asked"; fi
         gone=
         [ -n "$(ls -A /run/user 2>/dev/null)" ] && gone="$gone /run/user is not empty;"
-        [ -n "$(ls -A /mnt 2>/dev/null)" ] && gone="$gone /mnt is not empty;"
+        if [ -n "$res" ]; then left=$(find /mnt -mindepth 1 -maxdepth 2 2>/dev/null | grep -vxF -e "$res" -e "$(dirname "$res")"); else left=$(find /mnt -mindepth 1 -maxdepth 2 2>/dev/null); fi
+        [ -n "$left" ] && gone="$gone /mnt holds something but the resolver file;"
         ls /run/WSL >/dev/null 2>&1 && gone="$gone /run/WSL is reachable;"
-        if [ -z "$gone" ]; then row no-sockets-no-interop ok "/run/user and /mnt are empty and /run/WSL is closed"; else row no-sockets-no-interop bad "$gone"; fi
+        if [ -z "$gone" ]; then row no-sockets-no-interop ok "/run/user is empty, /mnt holds nothing but the resolver file at most, and /run/WSL is closed"; else row no-sockets-no-interop bad "$gone"; fi
         if env | grep -Eq '^(SSH_AUTH_SOCK|DBUS_SESSION_BUS_ADDRESS|GPG_AGENT_INFO|XDG_RUNTIME_DIR|COAI_[A-Za-z0-9_]*|[A-Za-z0-9_]*(API_KEY|TOKEN|SECRET))='; then row clean-environment bad "a name a check must never see is in the environment"; else row clean-environment ok "no vendor key, COAI_ name, agent or bus socket is in the environment"; fi
         """;
 
     /// <summary>The command of the preflight unit.</summary>
     internal static IReadOnlyList<string> Command(BoundaryJob job, BoundaryHost host, CheckNetwork network, string program) =>
-        ["/bin/sh", "-c", Script, "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, network == CheckNetwork.Private ? "none" : "host", job.JobId, program];
+        ["/bin/sh", "-c", Script, "coai-preflight", job.Tree.Root, job.Tree.MainCheckout, host.RealHome, network == CheckNetwork.Private ? "none" : "host", job.JobId, program, network == CheckNetwork.Host ? host.ResolverFile : string.Empty];
 
     /// <summary>
     /// The rows the unit printed, one for each item in <see cref="Items"/>, in that order; an item the script did not answer, or answered twice with different words, is a row that did not hold. Lines that are not rows are ignored.

@@ -192,6 +192,7 @@ public sealed class ACoderGitIsHardenedTests
     [Fact]
     public async Task TheCoderRoad_ReadsTheBaseToolchainFromTheMainRepositoryPath_NeverThroughTheWorktree()
     {
+        Assert.SkipUnless(SystemdUser.Works(out var why), why);
         await using var bed = await BoundaryBed.CreateAsync(ToolchainText);
         using var logs = TempDir.For("coai-cb-d5-");
         var checks = new ChecksAtBase(new GitHistory(bed.Launcher), new CheckRunner(bed.Launcher, bed.Boundary()));
@@ -210,6 +211,7 @@ public sealed class ACoderGitIsHardenedTests
     [Fact]
     public async Task TheCoderRoad_RefusesAChangedPointerBeforeAnyStep_AndDistrustsAResultWhosePointerChangedDuringTheChecks()
     {
+        Assert.SkipUnless(SystemdUser.Works(out var why), why);
         await using var bed = await BoundaryBed.CreateAsync(ToolchainText);
         using var logs = TempDir.For("coai-cb-d5-");
         var original = File.ReadAllText(bed.Tree.GitEntry);

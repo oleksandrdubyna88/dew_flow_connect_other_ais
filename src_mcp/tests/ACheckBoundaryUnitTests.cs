@@ -97,6 +97,22 @@ public sealed class ACheckBoundaryUnitTests
     }
 
     [Fact]
+    public async Task AHostNetworkStep_CanReadTheResolverFile_APrivateOneNeedsNone_AndNothingElseUnderMntIsThere()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        Assert.SkipWhen(bed.Host.ResolverFile.Length == 0, "/etc/resolv.conf of this host does not link into /mnt, so nothing is hidden from a host-network step");
+        const string script = "if [ -s /etc/resolv.conf ]; then echo resolver-readable; else echo resolver-missing; fi; find /mnt -mindepth 1 -maxdepth 2 | tr '\\n' ' '";
+
+        var onHost = await bed.ShellAsync(script, "dns", CheckNetwork.Host);
+        var alone = await bed.ShellAsync(script, "dns2", CheckNetwork.Private);
+
+        onHost.Result.StdOut.Should().StartWith("resolver-readable", "without it a host-network step has no DNS: NuGet could not reach api.nuget.org when /mnt was hidden");
+        onHost.Result.StdOut.Should().Contain(bed.Host.ResolverFile).And.NotContain("/mnt/c", "the Windows drives stay hidden");
+        alone.Result.StdOut.Should().StartWith("resolver-missing").And.NotContain("/mnt/wsl", "a private-network step has no use for it and gets nothing under /mnt");
+    }
+
+    [Fact]
     public async Task ExitCode_AndBothStreams_PassThroughTheUnit()
     {
         NeedAUserManager();
@@ -146,7 +162,7 @@ public sealed class ACheckBoundaryUnitTests
 
         var said = run.Result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         said.Should().Contain($"HOME={bed.Job.HomeFolder}");
-        said.Should().Contain($"TMPDIR={BoundaryBed.UnitTmp}");
+        said.Should().Contain($"TMPDIR={BoundaryUnit.UnitTemp}");
         var path = said.Single(line => line.StartsWith("PATH=", StringComparison.Ordinal))["PATH=".Length..];
         path.Split(':').Should().NotContain(entry => entry.StartsWith("/mnt", StringComparison.Ordinal) || entry.StartsWith(bed.Host.RealHome, StringComparison.Ordinal), "no Windows folder and no folder of the real home is on the unit's PATH");
     }

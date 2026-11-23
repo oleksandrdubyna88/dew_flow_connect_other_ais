@@ -19,6 +19,7 @@ public enum BoundaryPlatform
 /// <param name="Path">The PATH of coai's own process; only the entries under <c>~/.nvm</c> are taken from it (see <see cref="UnitPath"/>).</param>
 /// <param name="SystemdRun">The program that starts a unit — <c>systemd-run</c>. A name that is not there, or a program that exits non-zero, is how a test makes a machine with no user manager.</param>
 /// <param name="Systemctl">The program that stops a unit — <c>systemctl</c>.</param>
+/// <param name="ResolverFile">The real file <c>/etc/resolv.conf</c> links to when that file is under <c>/mnt</c> (WSL: <c>/mnt/wsl/resolv.conf</c>), else empty. Hiding <c>/mnt</c> would leave a HOST-network step with no DNS (measured: NuGet could not reach api.nuget.org), so that one file is bound back read-only for such a step.</param>
 /// <param name="WindowsProgram">A Windows <c>.exe</c> the preflight tries to run from inside the unit; empty when this host has no WSL interop, and then there is nothing to try.</param>
 public sealed record BoundaryHost(
     BoundaryPlatform Platform,
@@ -27,7 +28,8 @@ public sealed record BoundaryHost(
     string Path,
     string SystemdRun,
     string Systemctl,
-    string WindowsProgram)
+    string WindowsProgram,
+    string ResolverFile)
 {
     /// <summary>The system folders a check finds its tools in. Never a folder of the person's home and never a Windows folder under <c>/mnt</c>.</summary>
     public const string SystemPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -44,7 +46,15 @@ public sealed record BoundaryHost(
         Environment.GetEnvironmentVariable("PATH") ?? string.Empty,
         "systemd-run",
         "systemctl",
-        System.IO.File.Exists(InteropMarker) && System.IO.File.Exists(WindowsWhoami) ? WindowsWhoami : string.Empty);
+        System.IO.File.Exists(InteropMarker) && System.IO.File.Exists(WindowsWhoami) ? WindowsWhoami : string.Empty,
+        ResolverUnderMnt());
+
+    private static string ResolverUnderMnt()
+    {
+        var target = System.IO.File.ResolveLinkTarget("/etc/resolv.conf", returnFinalTarget: true)?.FullName ?? string.Empty;
+
+        return target.StartsWith("/mnt/", StringComparison.Ordinal) && System.IO.File.Exists(target) ? target : string.Empty;
+    }
 
     private static BoundaryPlatform CurrentPlatform() =>
         OperatingSystem.IsLinux() ? BoundaryPlatform.Linux

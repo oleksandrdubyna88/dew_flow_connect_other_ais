@@ -25,14 +25,18 @@ public sealed class DetachedLauncher(IProcessLauncher processes)
     /// <summary>How long one road may take to answer. A healthy <c>systemd-run</c> answers in about 15 ms.</summary>
     public static readonly TimeSpan RoadBudget = TimeSpan.FromMilliseconds(1500);
 
+    /// <summary>The <c>systemd-run</c> arguments every road shares — a user unit that is collected, quiet, named, started in a folder. The check boundary (<c>CheckBoundary</c>) starts from these too and adds <c>--wait --pipe</c>.</summary>
+    public static IReadOnlyList<string> UnitPrefix(string unitName, string workingDirectory) =>
+        ["--user", "--collect", "--quiet", "--unit", unitName, "--working-directory", workingDirectory];
+
+    /// <summary>The two memory properties, as <c>Name=Value</c>: the ceiling and <c>MemorySwapMax=0</c>, which makes it a kill — without it the swap absorbs the excess and nothing is killed. One place, two callers.</summary>
+    public static IReadOnlyList<string> MemoryProperties(int megabytes) => [$"MemoryMax={megabytes}M", "MemorySwapMax=0"];
+
     /// <summary>The arguments of the <c>systemd-run</c> road: the unit, the working folder and BOTH memory properties — without <c>MemorySwapMax=0</c> the swap absorbs the excess and nothing is killed.</summary>
     public static IReadOnlyList<string> SystemdRunArguments(DetachSpec spec) =>
     [
-        "--user", "--collect", "--quiet",
-        "--unit", spec.UnitName,
-        "--working-directory", spec.WorkingDirectory,
-        "-p", $"MemoryMax={spec.MemoryMegabytes}M",
-        "-p", "MemorySwapMax=0",
+        .. UnitPrefix(spec.UnitName, spec.WorkingDirectory),
+        .. MemoryProperties(spec.MemoryMegabytes).SelectMany(property => new[] { "-p", property }),
         "-p", "OOMPolicy=continue",
         "--", spec.Executable, .. spec.Arguments,
     ];
