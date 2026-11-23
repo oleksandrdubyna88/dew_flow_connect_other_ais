@@ -25,6 +25,12 @@ internal sealed record RoleLaunched(ReviewerLaunch? Launch, ConsultFailure? Refu
 /// </remarks>
 internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcessTracker tracker)
 {
+    /// <summary>
+    /// Set for a coder (epoch 3 E2 s3 t3): the launch is the WRITE launch of this job in its worktree, not a read-only consult. A handle passed to <see cref="LaunchAsync"/> is then bound to this job and worktree
+    /// (<see cref="CoderHandle.Bind"/>) and travels as the coder's own resume, never as the launch's handle.
+    /// </summary>
+    public LaunchConfinement.Coder? Coder { get; init; }
+
     /// <summary>The settings key naming the CLI of <paramref name="vendor"/>.</summary>
     public static string CliKey(string vendor) => $"COAI_ROLE_{vendor.ToUpperInvariant()}_CLI";
 
@@ -35,13 +41,16 @@ internal sealed class RoleModelLauncher(Func<string, string?> settings, IProcess
     {
         var (runtime, name) = RuntimeOf(model.Vendor);
         var launcher = new ProcessLauncher(tracker);
-        var launch = new ConsultantLaunch(repoPath, prompt, handle, outputDir, new ReviewerSettings(model.Vendor)
+        var launch = new ConsultantLaunch(repoPath, prompt, Coder is null ? handle : string.Empty, outputDir, new ReviewerSettings(model.Vendor)
         {
             ExecutablePath = settings(CliKey(model.Vendor)) ?? string.Empty,
             Model = model.Model,
             Timeout = timeout,
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(settings),
-        });
+        })
+        {
+            Confinement = Coder is null ? LaunchConfinement.AsShipped : Coder with { Resume = handle.Length == 0 ? CoderHandle.None : CoderHandle.Bind(Coder, handle) },
+        };
         Directory.CreateDirectory(outputDir);
         var prepared = await runtime.PrepareAsync(launch, launcher, ct);
         if (prepared is ConsultantPreparation.Refused refused)

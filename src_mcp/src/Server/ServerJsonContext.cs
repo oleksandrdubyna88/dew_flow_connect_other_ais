@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Rounds;
 
 namespace CoaiMcp.Server;
 
@@ -191,6 +192,12 @@ public sealed record SessionAnswer(
     /// research/PLAN_a_failed_round_can_be_retried.md).
     /// </remarks>
     public IReadOnlyList<Finding> Pending { get; init; } = [];
+
+    /// <summary>
+    /// The plan a coder branch's session inherited from the feature it was started under, and from which session (epoch 3 E2 s5). Absent for every other session, so its JSON reads as it did.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public InheritedPlan? Inherited { get; init; }
 }
 
 /// <summary>What a review tool returns: the verdict, the honest reviewer count, the findings.</summary>

@@ -104,7 +104,10 @@ internal static class RoleRouting
         var (kind, complexity, security) = RoleTaskFacts.Read(request.RepoPath, request.TaskFile);
         var roles = RolesAnswer.Compute(settings, string.Empty, string.Empty, claudeHook: false);
 
-        return RoleRouter.Route(new RouteRequest(descriptor.RouteAs, request.Model, kind, complexity, security), new RouteTable(roles.Roles, roles.ComplexityBands)) switch
+        var decided = RoleRouter.Route(new RouteRequest(descriptor.RouteAs, request.Model, kind, complexity, security), new RouteTable(roles.Roles, roles.ComplexityBands));
+
+        // The coder's launch is claude only: its route keeps the claude entries, and a route with none is refused here, before any folder.
+        return (descriptor.RouteAs == RoleRouter.CoderRole ? CoderRoute.Narrow(decided, request.Model) : decided) switch
         {
             RouteResult.Routed routed => (new RoleJobPlan(RoleRoute.Format(routed.Models), complexity, security), string.Empty),
             RouteResult.Refused refused => (null, refused.Reason),

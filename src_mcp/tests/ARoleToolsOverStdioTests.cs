@@ -28,9 +28,9 @@ public sealed class ARoleToolsOverStdioTests
 
             tools.Keys.Should().Contain(["start_role", "role_status", "role_cancel"]);
             var required = tools["start_role"].GetProperty("inputSchema").GetProperty("required").EnumerateArray().Select(name => name.GetString()).ToList();
-            required.Should().BeEquivalentTo(["role", "repoPath"], "taskFile, brief, model, timeoutMinutes and workItem are optional");
+            required.Should().BeEquivalentTo(["role", "repoPath"], "taskFile, brief, model, timeoutMinutes, workItem and baseSha are optional");
             tools["start_role"].GetProperty("inputSchema").GetProperty("properties").EnumerateObject().Select(property => property.Name)
-                .Should().BeEquivalentTo(["role", "repoPath", "taskFile", "brief", "model", "timeoutMinutes", "workItem"]);
+                .Should().BeEquivalentTo(["role", "repoPath", "taskFile", "brief", "model", "timeoutMinutes", "workItem", "baseSha"]);
             tools["role_status"].GetProperty("inputSchema").GetProperty("required").EnumerateArray().Select(name => name.GetString()).Should().Equal("jobId");
         }
         finally

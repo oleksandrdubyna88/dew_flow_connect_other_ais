@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.RegularExpressions;
 using CoaiMcp.Core.Work;
 using CoaiMcp.Roles;
 
@@ -17,7 +16,7 @@ internal sealed record BaPromptInputs(string EpicPath, string EpicFolder, string
 /// <c>shared/work-method.md</c> and the output schema is <c>shared/ba-output.schema.json</c>, both embedded: the prompt cannot say something else than the checker does.</para>
 /// <para>One pass over the template: a value that holds <c>{{…}}</c> is not read again, so an epic whose text names a placeholder cannot change the prompt. An unknown placeholder in the template is a build fault, so it throws.</para>
 /// </remarks>
-internal static partial class BaPrompt
+internal static class BaPrompt
 {
     internal const string PromptResource = "CoaiMcp.ba-prompt.md";
     internal const string RulesResource = "CoaiMcp.work-method.md";
@@ -25,9 +24,6 @@ internal static partial class BaPrompt
 
     /// <summary>The most errors one repair turn carries; the rest are counted, not listed.</summary>
     public const int MostErrors = 40;
-
-    [GeneratedRegex(@"\{\{([A-Za-z]+)\}\}", RegexOptions.CultureInvariant)]
-    private static partial Regex Placeholder();
 
     /// <summary>The first prompt of a BA job.</summary>
     public static string Build(BaPromptInputs inputs, WorkMethod method, int repairTurns) => Fill(Template(PromptResource), Values(inputs, method, repairTurns));
@@ -72,18 +68,8 @@ internal static partial class BaPrompt
         ["schema"] = Template(SchemaResource).TrimEnd(),
     };
 
-    private static string Fill(string template, Dictionary<string, string> values) =>
-        Placeholder().Replace(template, match => values.TryGetValue(match.Groups[1].Value, out var value)
-            ? value
-            : throw new InvalidOperationException($"the BA prompt has a placeholder {{{{{match.Groups[1].Value}}}}} that nothing fills — the template and BaPrompt disagree"));
+    private static string Fill(string template, Dictionary<string, string> values) => PromptTemplate.Fill("BA", template, values);
 
     /// <summary>An embedded text of the prompt: a missing one is a build fault, so it throws (a default that can go missing is not a default).</summary>
-    internal static string Template(string resource)
-    {
-        using var stream = typeof(BaPrompt).Assembly.GetManifestResourceStream(resource)
-            ?? throw new InvalidOperationException($"the embedded {resource} is missing — the build did not embed it");
-        using var reader = new StreamReader(stream);
-
-        return reader.ReadToEnd();
-    }
+    internal static string Template(string resource) => PromptTemplate.Embedded(resource);
 }

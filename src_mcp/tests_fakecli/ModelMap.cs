@@ -7,7 +7,7 @@ namespace CoaiMcp.FakeCli;
 /// is limited, the second crashes, the third answers. Vendor mode only; a model that has no entry and no <c>"*"</c> entry is steered by the ordinary <c>FAKECLI_*</c> variables as before.
 /// </summary>
 /// <remarks>
-/// The file is a JSON object of model name to an object — or to an ARRAY of objects, the k-th launch of that model taking the k-th (the last repeats), counted in a file beside the map — with any of <c>stdout</c>, <c>stderr</c>, <c>exit</c> (a number), <c>sleepMs</c> (a number) and <c>outfileText</c> (what codex's <c>-o</c> file holds). The name <c>"*"</c> is
+/// The file is a JSON object of model name to an object — or to an ARRAY of objects, the k-th launch of that model taking the k-th (the last repeats), counted in a file beside the map — with any of <c>stdout</c>, <c>stderr</c>, <c>exit</c> (a number), <c>sleepMs</c> (a number) and <c>outfileText</c> (what codex's <c>-o</c> file holds), and <c>writeFiles</c> (an object of relative path to text, written below the working folder before the fake answers — a coder's edits, <see cref="CwdWrites"/>). The name <c>"*"</c> is
 /// the entry for any model the file does not name. The path is read through the same lookup as every other steering value, so the minimal-environment file can carry it too.
 /// </remarks>
 internal static class ModelMap
@@ -35,7 +35,7 @@ internal static class ModelMap
         }
 
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (steering, field) in new[] { ("STDOUT", "stdout"), ("STDERR", "stderr"), ("EXIT", "exit"), ("SLEEP_MS", "sleepMs"), ("OUTFILE_TEXT", "outfileText") })
+        foreach (var (steering, field) in new[] { ("STDOUT", "stdout"), ("STDERR", "stderr"), ("EXIT", "exit"), ("SLEEP_MS", "sleepMs"), ("OUTFILE_TEXT", "outfileText"), ("WRITE_FILES", "writeFiles") })
         {
             if (entry.TryGetProperty(field, out var value))
             {

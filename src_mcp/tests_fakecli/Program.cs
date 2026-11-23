@@ -188,6 +188,14 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
 
     var steering = Steering.For(prompt.Text, read, CoaiMcp.FakeCli.ModelMap.For(args, read));
 
+    // A coder's edits (model map `writeFiles`): files below the working folder, written before the answer and before any wait.
+    if (steering.Get("WRITE_FILES") is { Length: > 0 } writeFiles && CoaiMcp.FakeCli.CwdWrites.Apply(writeFiles, Directory.GetCurrentDirectory()) is { Length: > 0 } notWritten)
+    {
+        Console.Error.WriteLine($"fake-cli: {notWritten}");
+
+        return 65;
+    }
+
     // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
     // never answers `--version` must be reported as silent rather than as whatever exit code the
     // kill produced, and that cannot be tested by a stand-in which always answers at once.

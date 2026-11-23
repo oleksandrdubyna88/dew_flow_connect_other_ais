@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coai.dev/schemas/coder-report.schema.json",
+  "$comment": "What the coder role (epoch 3 E2 s3) answers at the end of its turn: ONE JSON object, the REPORT. The coder changes files in its own worktree and nothing else: coai (not the coder) formats, commits, builds and tests, and takes the list of changed files from git, so this report names no file and no commit. Arm `ok` carries one entry for EVERY dod id of the task (an id the task does not have, a missing id and a repeated id are errors) and optional notes; `met` is the coder's own claim and never makes a job green by itself. Arm `refused` carries a reason. The dod id pattern is the one of shared/work-plan.schema.json, verbatim - the tests of ACoderContractTests hold the two equal; neither half has a JSON Schema engine, so coai-mcp reads this shape with its own strict reader (core/Coder/CoderReport.cs) and that test is the guard against drift. An unknown key is an error, in either arm: a `evidnce` typo must not pass. Which dod ids the task has is NOT in this file: the reader is told.",
+  "title": "coai coder report",
+  "type": "object",
+  "required": ["status"],
+  "additionalProperties": false,
+  "properties": {
+    "status": { "enum": ["ok", "refused"] },
+    "reason": { "type": "string", "minLength": 1 },
+    "dod": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/dodReport" }
+    },
+    "notes": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "ok" } } },
+      "then": {
+        "required": ["dod"],
+        "properties": { "status": {}, "dod": {}, "notes": {} },
+        "additionalProperties": false
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "refused" } } },
+      "then": {
+        "required": ["reason"],
+        "properties": { "status": {}, "reason": {} },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "$defs": {
+    "dodReport": {
+      "type": "object",
+      "required": ["id", "met", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^d\\d+$" },
+        "met": { "type": "boolean" },
+        "evidence": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
