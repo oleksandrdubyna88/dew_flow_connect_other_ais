@@ -4,3 +4,4 @@ title: "Claude key pool: role jobs run on a round robin of setup-tokens kept per
 dependsOn:
   - s2-write-boundary
   - s3-coder-role-case
+  - s4-fix-loop
