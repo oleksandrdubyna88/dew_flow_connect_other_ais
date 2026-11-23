@@ -12,6 +12,9 @@ public enum CheckState
     /// <summary>A step ended with a non-zero exit code, ran over its timeout or could not start: <c>failed</c>. The steps after it were not run.</summary>
     Failed,
 
+    /// <summary>A coder job was refused before anything ran because its OS boundary did not hold or could not be made: <c>boundary_refused</c>. Never green; nothing was run.</summary>
+    BoundaryRefused,
+
     /// <summary>Every step ran and every one exited 0: <c>green</c>.</summary>
     Green,
 }
@@ -23,6 +26,7 @@ public static class CheckStates
     {
         CheckState.NotConfigured => "not_configured",
         CheckState.ToolchainRefused => "toolchain_refused",
+        CheckState.BoundaryRefused => "boundary_refused",
         CheckState.Failed => "failed",
         _ => "green",
     };
@@ -61,6 +65,12 @@ public sealed record StepRecord(
     /// <summary>The exit code recorded for a process that never started — no real exit code is negative on every platform.</summary>
     public const int NotStartedExitCode = -1;
 
+    /// <summary>The exit code recorded for a step whose unit could not be stopped when the step ended: a process of the step may still be running, so the step never passes.</summary>
+    public const int UnitSurvivedExitCode = -2;
+
+    /// <summary>What the step ran inside: the boundary, its properties and the network state. <see cref="BoundaryRecord.None"/> for a run that was not a coder job's.</summary>
+    public BoundaryRecord Boundary { get; init; } = BoundaryRecord.None;
+
     /// <summary>Whether the step passed: it started, was not stopped and exited 0.</summary>
     public bool Passed => Started && !TimedOut && ExitCode == 0;
 }
@@ -97,6 +107,9 @@ public static class CheckLimits
 /// <param name="ToolchainChange">What the worktree did to <c>.coai/toolchain.yaml</c> against the base — <see cref="CoaiMcp.Core.Toolchain.ToolchainChange.Unchanged"/> when the run was not asked to compare.</param>
 public sealed record CheckResult(CheckState State, IReadOnlyList<StepRecord> Steps, string Note, ToolchainChange ToolchainChange = ToolchainChange.Unchanged)
 {
+    /// <summary>What the run was bounded by. For a refused coder job this carries the preflight rows that said no; for a run that happened, each step's own record is the one to read.</summary>
+    public BoundaryRecord Boundary { get; init; } = BoundaryRecord.None;
+
     /// <summary>Only a run that ran every step and saw every one pass.</summary>
     public bool Green => State == CheckState.Green;
 
