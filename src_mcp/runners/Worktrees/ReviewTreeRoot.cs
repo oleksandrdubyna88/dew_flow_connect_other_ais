@@ -60,21 +60,29 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
     /// happened to start in, and the root must be where every later call finds the same trees. An ignored
     /// value is <paramref name="said"/>, so nobody believes a root they set is in use.
     /// </remarks>
-    public static string DefaultIn(Func<string, string?> env, Action<string> said)
+    public static string DefaultIn(Func<string, string?> env, Action<string> said) =>
+        DefaultIn(env, said, RootVariable, Default, "review trees");
+
+    /// <summary>
+    /// The same rule for ANY machine-local root of this product: <paramref name="variable"/> when it is an absolute path, else
+    /// <paramref name="fallback"/>, saying which of <paramref name="what"/> went to the fallback. One rule, so the coder worktrees' root
+    /// (<c>CoderWorktree.DefaultIn</c>) can never disagree with this one about what an unusable value means.
+    /// </summary>
+    public static string DefaultIn(Func<string, string?> env, Action<string> said, string variable, string fallback, string what)
     {
-        var asked = env(RootVariable);
+        var asked = env(variable);
         if (asked is null)
         {
-            return Default;
+            return fallback;
         }
         var trimmed = asked.Trim();
         if (trimmed.Length > 0 && System.IO.Path.IsPathFullyQualified(trimmed))
         {
             return trimmed;
         }
-        said($"{RootVariable} is set but is not an absolute path, so it was ignored; the review trees are in {Default}.");
+        said($"{variable} is set but is not an absolute path, so it was ignored; the {what} are in {fallback}.");
 
-        return Default;
+        return fallback;
     }
 
     /// <summary>
