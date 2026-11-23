@@ -19,11 +19,12 @@ internal sealed class BoundaryBed : IAsyncDisposable
 
     private readonly TempDir _home = TempDir.For("cb-home-");
 
-    private BoundaryBed(CoderTestBed bed, CoderTree tree, string jobId)
+    private BoundaryBed(CoderTestBed bed, CoderTree tree, string jobId, string baseSha)
     {
         _bed = bed;
         Tree = tree;
         JobId = jobId;
+        BaseSha = baseSha;
         JobRoot = Path.Combine(bed.Parent, "job");
         // The "real" home of a test is a path that is not there: nothing real is ever named, and a write to it can only fail. The shared package folder is a temp folder.
         Host = BoundaryHost.Current() with { RealHome = "/nonexistent/coai-real-home-" + jobId, NuGetPackages = SharedPackages, Path = string.Empty };
@@ -33,6 +34,9 @@ internal sealed class BoundaryBed : IAsyncDisposable
     public CoderTree Tree { get; }
 
     public string JobId { get; }
+
+    /// <summary>The commit the worktree was made at.</summary>
+    public string BaseSha { get; }
 
     public string JobRoot { get; }
 
@@ -59,17 +63,29 @@ internal sealed class BoundaryBed : IAsyncDisposable
     /// <summary>A random job id of the strict shape — never the same twice, so two runs never share a unit name.</summary>
     public static string NewJobId() => "t4-" + Guid.NewGuid().ToString("N")[..12];
 
-    public static async Task<BoundaryBed> CreateAsync()
+    /// <summary>The bed. With <paramref name="toolchain"/> the repository gets one more commit that holds <c>.coai/toolchain.yaml</c>, and that commit is the base of the worktree.</summary>
+    public static async Task<BoundaryBed> CreateAsync(string toolchain = "")
     {
         var bed = await CoderTestBed.CreateAsync();
-        var started = await bed.Coder.StartAsync(bed.Repo.Path, CoderTestBed.JobId(1), bed.Shas[2]);
+        var baseSha = toolchain.Length == 0 ? bed.Shas[2] : await CommitToolchainAsync(bed, toolchain);
+        var started = await bed.Coder.StartAsync(bed.Repo.Path, CoderTestBed.JobId(1), baseSha);
         var tree = CoderTree.Open(started.Should().BeOfType<CoderWorktreeOutcome.Started>(started.ToString()).Subject.Path, bed.Repo.Path);
         var opened = tree.Should().BeOfType<CoderTreeOpening.Opened>(tree.ToString()).Subject.Tree;
-        var made = new BoundaryBed(bed, opened, NewJobId());
+        var made = new BoundaryBed(bed, opened, NewJobId(), baseSha);
         Directory.CreateDirectory(made.SharedPackages);
         await File.WriteAllTextAsync(Path.Combine(made.SharedPackages, "seed.txt"), "shared\n");
 
         return made;
+    }
+
+
+    private static async Task<string> CommitToolchainAsync(CoderTestBed bed, string toolchain)
+    {
+        Directory.CreateDirectory(Path.Combine(bed.Repo.Path, ".coai"));
+        await bed.Repo.WriteAsync(".coai/toolchain.yaml", toolchain);
+        await bed.Repo.CommitAsync("c4 toolchain");
+
+        return await bed.Repo.HeadAsync();
     }
 
     public CheckBoundary Boundary(Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, BoundaryHost? host = null) =>
