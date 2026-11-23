@@ -358,6 +358,12 @@ internal static class Program
         /// </summary>
         /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs (74). An unknown job is 65, never 64.</remarks>
         RoleRun,
+
+        /// <summary>
+        /// How much of what a BA job wrote the orchestrator changed: <c>--role-delta &lt;jobId&gt; --at &lt;commit&gt;</c>, in one JSON object — read-only, never makes the data directory (epoch 3 E1 s4). See <see cref="RoleDeltaMode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c>. Exit 0 measured, 65 a wrong argument or no such job or commit, 74 a read that fails — never 64.</remarks>
+        RoleDelta,
     }
 
     /// <summary>
@@ -435,6 +441,7 @@ internal static class Program
                 "--check-model" => Startup.CheckModel,
                 "--migrate-v2" => Startup.MigrateV2,
                 "--role-run" => Startup.RoleRun,
+                "--role-delta" => Startup.RoleDelta,
                 _ => Startup.Usage,
             };
 
@@ -646,6 +653,10 @@ internal static class Program
                 {
                     return await Server.RoleJobs.RoleRunMode.RunAsync(args, Environment.GetEnvironmentVariable, Note, stopping.Token);
                 }
+
+            case Startup.RoleDelta:
+                // One object on stdout, read-only, exit 0 whatever the share; a wrong argument, no such job or commit is 65, a read that fails 74 — never 64.
+                return await RoleDeltaMode.RunAsync(args, Environment.GetEnvironmentVariable, Console.Out, Note);
 
             default:
                 return await ServeAsync();
@@ -2715,6 +2726,10 @@ internal static class Program
         exist, 70 for an unexpected fault (the job is closed as failed), 75 when it is not the job's writer (the lease is held elsewhere, the job is over, or it was taken over); a named data
         folder that is missing is 74 — never 64. Optional environment: COAI_ROLE_JOBS_MAX (live jobs at once, 3; 2 on WSL), COAI_ROLE_MEMORY_MB (a runner unit's memory ceiling, 4096),
         COAI_ROLE_LAUNCHER (auto, systemd-run or setsid).
+        `--role-delta <jobId> --at <commit>` measures how much of what a BA job wrote the orchestrator changed: of the task files in the job's manifest, how many are edited, deleted or joined by another
+        task file at that commit (line ends read as LF), as ONE JSON object {mode, jobId, epic, commit, manifestTasks, changed, deleted, added, changedShare, threshold, pass, changedFiles, deletedFiles, addedFiles};
+        pass is a share below 0.20. Reads the job folder and the repository, writes nothing, never creates the data directory. Exits 0 measured (pass or not), 65 for a wrong argument, no such job,
+        a job that is not a BA job that succeeded, a repository or commit that is not there, 74 when a manifest or git cannot be read — never 64.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

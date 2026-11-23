@@ -53,6 +53,8 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--plan-report", AppContext.BaseDirectory, "--json" },
         // A work plan checked (epoch 3 E1 s2): reads the working tree and the settings file, never opens the data directory; this test's own build output has no feature.yaml, so it answers 65 and still makes nothing.
         new[] { "--validate-work", AppContext.BaseDirectory },
+        // How much of a BA job's plan the orchestrator changed (epoch 3 E1 s4): reads the job folder and git; a missing named root has no job, so it answers 65 and makes nothing.
+        new[] { "--role-delta", "r20260101000000-aaaaaaaa", "--at", "HEAD" },
         new[] { "--version" },
         // Launched on a person's act, but it reads stdin and answers stdout only (research/PLAN_names_and_a_missing_root.md 3.3).
         new[] { "--check-security" },
