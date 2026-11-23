@@ -60,7 +60,7 @@ Not measured: a cold NuGet cache (the shared folder was warm; the per-job `NUGET
 
 # Task t5 — the claude coder process inside the OS layer, measured
 
-Recorded 2026-11-23 on the same WSL2 box. Code: `CoderBoundary`, `CoderUnit`, `CoderProgram`, `CoderTurns`, `CoderTurnOutcome` (`src_mcp/runners/Toolchain/`), commits of epoch 3 E2 s2 t5 (d1 to d4). The layer is option (a) of `v2/spikes/RESULTS_coder_write_boundary_judgement.md` § 4: the CLI process itself runs in a named `systemd-run --user` unit of the checks' family. It shares `BoundaryUnit` (isolation, hardening, limits, the one `systemd-run` wrapper), `BoundaryPreflight` (the same row fragments), `UnitControl` and `BoundaryFolders` (extracted from `CheckBoundary` without a change of behaviour: the 39 tests of the check boundary passed before and after).
+Recorded 2026-11-23 on the same WSL2 box. Code: `CoderBoundary`, `CoderUnit`, `CoderProgram`, `CoderTurns`, `CoderTurnOutcome` (`src_mcp/runners/Toolchain/`), commits of epoch 3 E2 s2 t5 (d1 to d4). The layer is option (a) of `v2/spikes/RESULTS_coder_write_boundary_judgement.md` § 4: the CLI process itself runs in a named `systemd-run --user` unit of the checks' family. It shares `BoundaryUnit` (isolation, hardening, limits, the one `systemd-run` wrapper), `BoundaryPreflight` (the same row fragments), `UnitControl` and `BoundaryFolders` (extracted from `CheckBoundary` without a change of behaviour: the 39 tests of the check boundary pass after the extraction).
 
 ## The coder's properties (`W` worktree, `M` main checkout, `R` coder root = the folder that holds `W`, `C` the job's `coder/` folder)
 
