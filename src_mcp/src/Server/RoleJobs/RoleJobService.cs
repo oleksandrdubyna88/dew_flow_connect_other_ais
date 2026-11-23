@@ -46,12 +46,22 @@ internal sealed class RoleJobService(string dataDir, Func<string, string?> setti
 
     private RoleJobKeeper Keeper(RoleJobStore store) => new(store, notice, log);
 
-    public async Task<string> StartAsync(string role, string repoPath, string? taskFile, string? brief, string? model, int? timeoutMinutes, string? workItem, CancellationToken ct = default)
+    public Task<string> StartAsync(string role, string repoPath, string? taskFile, string? brief, string? model, int? timeoutMinutes, string? workItem, CancellationToken ct = default) =>
+        StartAsync(role, repoPath, taskFile, brief, model, timeoutMinutes, workItem, null, ct);
+
+    /// <param name="baseSha">The commit a coder's worktree starts at (a full 40-character id); empty or null for the HEAD of <paramref name="repoPath"/> at this call. A role other than the coder has no base and refuses one (<see cref="CoderBase"/>).</param>
+    public async Task<string> StartAsync(string role, string repoPath, string? taskFile, string? brief, string? model, int? timeoutMinutes, string? workItem, string? baseSha, CancellationToken ct = default)
     {
-        var (request, refusal) = Checked(role, repoPath, taskFile, brief, model, timeoutMinutes, workItem);
+        var (checkedRequest, refusal) = Checked(role, repoPath, taskFile, brief, model, timeoutMinutes, workItem);
         if (refusal.Length > 0)
         {
             return RoleJobAnswers.Refused(refusal);
+        }
+
+        var (request, baseRefusal) = await CoderBase.SettledAsync(checkedRequest, baseSha, ct);
+        if (baseRefusal.Length > 0)
+        {
+            return RoleJobAnswers.Refused(baseRefusal);
         }
 
         var read = RoleJobSettings.Read(settings, OnWsl);

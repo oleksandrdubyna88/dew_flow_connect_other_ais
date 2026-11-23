@@ -34,12 +34,17 @@ public sealed class ACoderTaskCheckTests
     private static BaTask TaskOf(string id = "t1-a", int complexity = 4, string kind = "code", bool? security = null) =>
         new(id, "Write the thing", kind, complexity, [], false, ["src/thing.cs", "src/tests"], [new BaDod("d1", "the thing works"), new BaDod("d2", "the thing is tested")], security);
 
-    /// <summary>A repository with the demo plan and one story; the task is written by <see cref="Put"/>.</summary>
-    private static TempDir Repo()
+    /// <summary>A git repository with the demo plan and one story, committed (a coder's start reads the HEAD it will work from); the task is written by <see cref="Put"/>.</summary>
+    private static async Task<TempDir> RepoAsync()
     {
         var repo = TempDir.For("coai-coder-task-");
         BaScenario.Lay(repo);
         BaScenario.Write(repo, $"{Story}/story.yaml", WorkPlanYaml.Story(new BaStory("s1-first", "A story", [], [])));
+        foreach (var args in new string[][] { ["init", "-b", "main"], ["add", "-A"], ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-m", "the plan"] })
+        {
+            var ran = await new ProcessLauncher().RunAsync(new ProcessRequest("git", args, repo.Path));
+            ran.ExitCode.Should().Be(0, ran.StdErr);
+        }
 
         return repo;
     }
@@ -87,7 +92,7 @@ public sealed class ACoderTaskCheckTests
     public async Task ATaskOfAValidPlan_Starts_WithItsRoute()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var file = Put(repo, TaskOf());
 
         var answer = Parse(await Start(ServiceFor(world), repo, file));
@@ -100,7 +105,7 @@ public sealed class ACoderTaskCheckTests
     public async Task AStart_WithNoTaskFile_IsRefused_AndAbriefIsNotATask()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         Put(repo, TaskOf());
 
         var answer = Parse(await Start(ServiceFor(world), repo, taskFile: null, brief: "fix the bug in the parser"));
@@ -118,7 +123,7 @@ public sealed class ACoderTaskCheckTests
     public async Task ATaskFile_ThatIsNotCalledTaskYaml_IsRefused(string file)
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         Put(repo, TaskOf());
 
         var answer = Parse(await Start(ServiceFor(world), repo, file));
@@ -131,7 +136,7 @@ public sealed class ACoderTaskCheckTests
     public async Task ATaskFile_ThatIsNotThere_AndOneOutsideTheRepository_AreRefused()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var file = Put(repo, TaskOf());
 
         Error(Parse(await Start(ServiceFor(world), repo, file.Replace("t1-a", "t9-gone", StringComparison.Ordinal)))).Should().Contain("task.yaml").And.Contain("inside the repository");
@@ -146,7 +151,7 @@ public sealed class ACoderTaskCheckTests
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "a symbolic link needs a privilege there");
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         using var outside = TempDir.For("coai-coder-outside-");
         var file = Put(repo, TaskOf());
         File.Copy(Path.Combine(repo, file), Path.Combine(outside, "task.yaml"));
@@ -163,7 +168,7 @@ public sealed class ACoderTaskCheckTests
     public async Task ATaskYaml_ThatIsNotInAWorkPlan_IsRefused_NamingTheShape()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         BaScenario.Write(repo, "src/task.yaml", WorkPlanYaml.Task(TaskOf()));
         BaScenario.Write(repo, "task.yaml", WorkPlanYaml.Task(TaskOf()));
         var file = Put(repo, TaskOf());
@@ -183,7 +188,7 @@ public sealed class ACoderTaskCheckTests
     public async Task ATask_ThatBreaksTheShapeRules_IsRefused_NamingTheRule(string why, string extra, string code)
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var file = Put(repo, TaskOf(), text => why == "a bad kind" ? text.Replace("kind: code", extra.TrimEnd(), StringComparison.Ordinal) : text + extra);
 
         var answer = Parse(await Start(ServiceFor(world), repo, file));
@@ -196,7 +201,7 @@ public sealed class ACoderTaskCheckTests
     public async Task ATask_WithNoDod_AFolderThatIsNotItsId_ADuplicateDodId_AndAContradictingSecurityFlag_AreEachRefused()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var noDod = Put(repo, TaskOf("t1-a") with { Dod = [] }, text => text.Replace("dod:", "dod: []", StringComparison.Ordinal));
         var twin = Put(repo, TaskOf("t2-b") with { Dod = [new BaDod("d1", "one"), new BaDod("d1", "two")] });
         var wrongId = Put(repo, TaskOf("t3-c"), text => text.Replace("id: t3-c", "id: t3-other", StringComparison.Ordinal));
@@ -214,7 +219,7 @@ public sealed class ACoderTaskCheckTests
     public async Task ABrokenOtherTask_IsNotThisTasksFault()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var good = Put(repo, TaskOf("t1-a"));
         Put(repo, TaskOf("t2-b") with { Dod = [] });
 
@@ -230,7 +235,7 @@ public sealed class ACoderTaskCheckTests
     public async Task AComplexityFourTask_GetsTheBandModel_ThenTheCoderList_InOrder()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var settings = new Dictionary<string, string?> { ["COAI_ROLES_MODELS"] = """{"coder":[{"model":"opus","vendor":"claude"},{"model":"haiku","vendor":"claude"}]}""" };
 
         var answer = Parse(await StartWith(world, repo, TaskOf(complexity: 4), settings));
@@ -246,7 +251,7 @@ public sealed class ACoderTaskCheckTests
     public async Task AnImportantTask_GetsTheImportantList_NotTheCoderList(int complexity, bool? security, string reason)
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var settings = new Dictionary<string, string?> { ["COAI_ROLES_MODELS"] = """{"important":[{"model":"fable","vendor":"claude"},{"model":"opus","vendor":"claude"}],"coder":[{"model":"haiku","vendor":"claude"}]}""" };
 
         var answer = Parse(await StartWith(world, repo, TaskOf(complexity: complexity, security: security), settings));
@@ -260,7 +265,7 @@ public sealed class ACoderTaskCheckTests
     public async Task AVendorThatIsNotClaude_IsDroppedFromACoderRoute_InTheCoderListAndInTheImportantList()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var settings = new Dictionary<string, string?>
         {
             ["COAI_ROLES_MODELS"] = """{"coder":[{"model":"gpt-5.5","vendor":"codex"},{"model":"opus","vendor":"claude"}],"important":[{"model":"fable","vendor":"claude"},{"model":"astra","vendor":"codex"}]}""",
@@ -274,7 +279,7 @@ public sealed class ACoderTaskCheckTests
     public async Task ARouteWithNoClaudeModel_IsRefused_NamingTheSetting_AndMakesNoFolder()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var settings = new Dictionary<string, string?>
         {
             ["COAI_ROLES_MODELS"] = """{"coder":[{"model":"gpt-5.5","vendor":"codex"}]}""",
@@ -291,7 +296,7 @@ public sealed class ACoderTaskCheckTests
     public async Task AnExplicitNonClaudeModel_IsRefused_WithASentence_AndMakesNoFolder()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
 
         var answer = Parse(await StartWith(world, repo, TaskOf(complexity: 4), model: "gpt-5.5"));
 
@@ -303,7 +308,7 @@ public sealed class ACoderTaskCheckTests
     public async Task AnExplicitClaudeModel_StillGoesFirst()
     {
         using var world = new RoleJobWorld();
-        using var repo = Repo();
+        using var repo = await RepoAsync();
 
         Route(Parse(await StartWith(world, repo, TaskOf(complexity: 4), model: "opus"))).Should().StartWith("claude/opus");
     }
@@ -332,9 +337,9 @@ public sealed class ACoderTaskCheckTests
     }
 
     [Fact]
-    public void TheCheckHandsThePromptTheTaskFacts_ThatTheFileSays()
+    public async Task TheCheckHandsThePromptTheTaskFacts_ThatTheFileSays()
     {
-        using var repo = Repo();
+        using var repo = await RepoAsync();
         var file = Put(repo, TaskOf("t1-a", complexity: 7, kind: "test", security: true));
 
         var (site, refusal) = CoderTask.Locate(repo, file);
