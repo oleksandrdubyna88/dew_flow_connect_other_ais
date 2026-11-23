@@ -48,12 +48,15 @@ public sealed class AntigravityConsultant(
     /// prepared is REFUSED here, with the reason, before anything is launched — never launched without its block.
     /// </summary>
     public Task<ConsultantPreparation> PrepareAsync(ConsultantLaunch launch, IProcessLauncher launcher, CancellationToken ct) =>
-        Task.FromResult<ConsultantPreparation>((prepare ?? DefaultPrepare)() switch
-        {
-            AntigravityReadOnly.Prepared.Failed failed => new ConsultantPreparation.Refused(
-                new ConsultFailure.VendorRefused(failed.Reason, $"make {AntigravityReadOnly.DefaultBase} writable for this user, then ask again")),
-            _ => new ConsultantPreparation.Ready(launch, string.Empty, string.Empty),
-        });
+        // The coder is claude only in this epoch (t3, d5): refused before the read-only folder is made for a launch that will not happen.
+        launch.Confinement is LaunchConfinement.Coder
+            ? Task.FromResult<ConsultantPreparation>(CoderLaunches.NotClaude)
+            : Task.FromResult<ConsultantPreparation>((prepare ?? DefaultPrepare)() switch
+            {
+                AntigravityReadOnly.Prepared.Failed failed => new ConsultantPreparation.Refused(
+                    new ConsultFailure.VendorRefused(failed.Reason, $"make {AntigravityReadOnly.DefaultBase} writable for this user, then ask again")),
+                _ => new ConsultantPreparation.Ready(launch, string.Empty, string.Empty),
+            });
 
     private static AntigravityReadOnly.Prepared DefaultPrepare() =>
         AntigravityReadOnly.Prepare(AntigravityReadOnly.DefaultBase, HookHandler.OfThisProcess());
