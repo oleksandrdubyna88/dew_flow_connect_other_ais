@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coai.dev/schemas/toolchain.schema.json",
+  "$comment": "The repository toolchain file of coai v2 (epoch 3 E2, story s1): .coai/toolchain.yaml, which wins over detection (server.md § 12). `coai-mcp` reads it with the strict YAML subset reader (src_mcp/core/Toolchain/ToolchainFile.cs, tables in ToolchainTables.cs); there is no JSON Schema engine in either half, so a test (AToolchainSchemaAgreesWithTheReaderTests) holds this file and the tables equal. The strict subset has block lists and block maps and no flow list but `[]`: a command is written one argv item to a line. An argv is started WITHOUT a shell, from the repository root, with a minimal environment; `{jobs}` is replaced by the number of build workers; a secret never goes in argv (the reader refuses text that looks like one). `path` names the project folder; an argv path is relative to the repository root. A command the file does not name is left to the adapter's default; `[]` says there is no such step. `build` and `test` cannot be skipped: a file that skips them would be green having checked nothing. A timeout is a whole number and a unit (s, m, h) of at most 24 hours; the defaults are 15m for a build step and 30m for a test step.",
+  "title": "coai toolchain",
+  "$ref": "#/$defs/toolchain",
+  "$defs": {
+    "argv": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "toolchain": {
+      "type": "object",
+      "required": ["version", "projects"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "const": 1 },
+        "projects": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/project" }
+        },
+        "skip": {
+          "type": "array",
+          "items": { "enum": ["restore", "lint", "format", "formatCheck", "audit", "coverage"] }
+        },
+        "timeouts": { "$ref": "#/$defs/timeouts" }
+      }
+    },
+    "project": {
+      "type": "object",
+      "required": ["path", "adapter"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string" },
+        "adapter": { "type": "string", "enum": ["dotnet", "node", "php", "rust", "python", "java"] },
+        "build": { "$ref": "#/$defs/argv" },
+        "test": { "$ref": "#/$defs/argv" },
+        "memoryMb": { "type": "integer", "minimum": 1, "maximum": 1048576 }
+      }
+    },
+    "timeouts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build": { "type": "string", "pattern": "^[1-9][0-9]*[smh]$" },
+        "test": { "type": "string", "pattern": "^[1-9][0-9]*[smh]$" }
+      }
+    }
+  }
+}
