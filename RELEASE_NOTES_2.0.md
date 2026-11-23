@@ -1,7 +1,7 @@
 # coai 2.0 — release notes (DRAFT)
 
 > Draft. Do not publish until the owner approves the merge. It covers `coai-mcp` 2.0.0 and the VS Code extension 2.0.0.
-> The numbers marked "see the PR" come from the CI of the integration pull request and are copied in before the release.
+> Numbers come from the CI of the integration pull request #1036 (research/RESULTS_v2_start.md, section 5).
 
 ## What changes for you
 
@@ -17,7 +17,7 @@ while the new ones (`COAI_CONS_*`, `COAI_CONSASK_*`) are not set.
 **The sidebar starts in 2 seconds or less.** The extension is now a thin shell. It does not start at editor start-up. It
 loads when you open the sidebar, run a coai command or open a chat. The sidebar draws its own menu (Notifications, Active
 gates, Active consultations, Phrases, Bugz) before the older code has loaded, and polls the server only while it is visible.
-Measured time from the command to the usable menu: Linux 0.3 to 0.5 s. Windows 0.7 to 2.4 s on a CI runner (see "Known limits").
+Measured time from the command to the usable menu on the integration branch: Linux 0.35 to 0.55 s; Windows 1.1 to 2.3 s on a CI runner, one of two runs over 2.0 s (see "Known limits").
 
 **Install is one step.** After the sidebar is ready, the extension runs `coai-mcp --setup-clients`. It finds the AI command
 lines on this machine (Claude Code, Codex, agy), writes the `coai` MCP entry for each, and finishes an update that stopped
@@ -58,14 +58,14 @@ them read.
    The marker `migrations/v2.done` says it finished.
 3. **Removed settings are moved, not deleted.** Every setting 2.0 does not read leaves `settings.json` and is kept in
    `settings.v1-removed.json` in the same data folder. Copy a value back by hand if you ever need it.
-4. **Update the server and the extension together.** An old extension with the new `coai-mcp`, and the new extension with an
-   old Team server, were both checked in the contract suite (see the PR); update everywhere in the same hour anyway.
+4. **Update the server and the extension together.** Old extension with the new `coai-mcp`, and new extension with an old Team server,
+   are checked before the release is published (epic E5, "done when"); update everywhere in the same hour anyway.
 
 ## Known limits
 
 - **Windows host time.** On a CI runner the editor sometimes needs 1.9 s or more before it even asks for the sidebar. That
-  time is the editor's, not coai's, so one slow sample can pass 2000 ms on a slow Windows machine. Three runs of three
-  samples each were measured; this does not prove the margin is safe on every machine.
+  time is the editor's, not coai's, so one slow sample can pass 2000 ms on a slow Windows machine. Five CI runs of three
+  samples each were measured on Windows (three had a sample over 2.0 s); this does not prove the margin is safe on every machine.
 - **agy on Windows is not measured.** The agy road (hook and setup) is tested on Linux. Its Windows behaviour is not measured yet.
 - **A settings edit made outside coai may reach the server late.** The extension copies its settings to the server file only
   after the old code has loaded (when you open a coai surface). A `coai.*` value you edit in VS Code's own settings, in a window

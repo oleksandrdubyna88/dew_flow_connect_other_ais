@@ -218,3 +218,7 @@ A round driven through the sidebar by hand with the final VSIX is still open for
 | 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1 re-run once after the run finished) | local | win32 | 28.2 | 904.2 / 1538.2 / 1966.4 | null (not read) | pass |
 | 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | linux | 2 | 358.4 / 478.7 / 536.3 | null (not read) | pass |
 | 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | win32 | 12.4 | 747.5 / 1628.6 / 2408.1 | null (not read) | FAIL (one sample over 2000 ms) |
+| 2026-11-23 | 65fa2fd6 | integration branch E1-E4 (PR #1036, ci run 1) | local | linux | 6.8 | 374 / 389.7 / 454.5 | null (not read) | pass |
+| 2026-11-23 | 65fa2fd6 | integration branch E1-E4 (PR #1036, ci run 1) | local | win32 | 22 | 1503.7 / 1659.7 / 2285.2 | null (not read) | FAIL (max over 2000 ms; host delay 763.3 / 931.6 / 1350.4) |
+| 2026-11-23 | 7ca985c2 | integration branch E1-E4 (PR #1036, ci run 2, docs commit only) | local | linux | 6.3 | 348.9 / 468.3 / 551.5 | null (not read) | pass |
+| 2026-11-23 | 7ca985c2 | integration branch E1-E4 (PR #1036, ci run 2, docs commit only) | local | win32 | 12.5 | 1072.6 / 1245 / 1961.8 | null (not read) | pass (38 ms to spare; host delay 122.4 / 699.1 / 707.2) |
