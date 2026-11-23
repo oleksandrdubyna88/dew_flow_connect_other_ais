@@ -52,6 +52,11 @@
     <EmbeddedResource Include="consultant\consult.md" LogicalName="CoaiMcp.prompts.consult.md" />
     <!-- The roles' defaults per main-AI vendor (v2 E3.S7): inside the binary for the same reason as the prompts above. -->
     <EmbeddedResource Include="..\..\shared\role-defaults.json" LogicalName="CoaiMcp.role-defaults.json" />
+    <!-- The BA role's prompt, the rule text it is held to and the shape of its answer (epoch 3 E1 s4): inside the binary for the same reason as the prompts above. The prompt lives in Roles\prompts, OUTSIDE prompts\,
+         for the reason the consultant's does: generate-help-prompts.mjs walks prompts\ and refuses any file the role seed does not name, and the BA is a v2 role with no seed row. -->
+    <EmbeddedResource Include="Roles\prompts\ba.md" LogicalName="CoaiMcp.ba-prompt.md" />
+    <EmbeddedResource Include="..\..\shared\work-method.md" LogicalName="CoaiMcp.work-method.md" />
+    <EmbeddedResource Include="..\..\shared\ba-output.schema.json" LogicalName="CoaiMcp.ba-output.schema.json" />
   </ItemGroup>
 
   <ItemGroup>

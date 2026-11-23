@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coai.dev/schemas/ba-output.schema.json",
+  "$comment": "What the BA role (epoch 3 E1 s4) returns: ONE JSON object. The BA is read-only and writes no file and no path: coai derives each path from the ids, validates the plan with the story and task files this output would make (the work-plan rules, shared/work-method.md), and writes only <epic>/stories/**/story.yaml and task.yaml. Arm `ok` carries the epic id and the stories; arm `refused` carries a reason. The id patterns, the kinds and the complexity range are those of shared/work-plan.schema.json, verbatim - the test ABaOutputSchemaAgreesWithTheWorkPlanTests holds the two equal; neither half has a JSON Schema engine, so coai-mcp reads this shape with its own strict reader (core/Work/BaOutputReader.cs) and that test is the guard against drift. An unknown key is an error: a `secuirty` typo must not pass. A path in a story or task is never read: ids only. The limits (stories per epic, tasks per story) are the device's and are NOT in this file: the validator checks them.",
+  "title": "coai BA output",
+  "type": "object",
+  "required": ["status"],
+  "additionalProperties": false,
+  "properties": {
+    "status": { "enum": ["ok", "refused"] },
+    "reason": { "type": "string", "minLength": 1 },
+    "epic": { "type": "string", "pattern": "^e\\d+-[a-z0-9-]+$" },
+    "stories": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/story" }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "const": "ok" } } }, "then": { "required": ["epic", "stories"] } },
+    { "if": { "properties": { "status": { "const": "refused" } } }, "then": { "required": ["reason"] } }
+  ],
+  "$defs": {
+    "idList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "story": {
+      "type": "object",
+      "required": ["id", "title", "dependsOn", "tasks"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^s\\d+-[a-z0-9-]+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "dependsOn": { "$ref": "#/$defs/idList" },
+        "cornerstone": { "type": "boolean" },
+        "tasks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/task" }
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "title", "kind", "complexity", "dependsOn", "parallel", "files", "dod"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^t\\d+-[a-z0-9-]+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["code", "test", "docs", "measure", "config", "rename", "translate", "summarize", "changelog", "simple-docs", "security"]
+        },
+        "complexity": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "dependsOn": { "$ref": "#/$defs/idList" },
+        "parallel": { "type": "boolean" },
+        "files": { "$ref": "#/$defs/idList" },
+        "dod": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "item"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "pattern": "^d\\d+$" },
+              "item": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "security": { "type": "boolean" }
+      }
+    }
+  }
+}
