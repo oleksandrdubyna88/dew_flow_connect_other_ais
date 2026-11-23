@@ -31,7 +31,7 @@ function registerCommands(
   const afterFirstCommand = (): void => {
     if (!installAsked) {
       installAsked = true;
-      startInstall().catch(() => undefined);
+      startInstall().catch((error: unknown) => { console.error('ConnectOtherAIs: the install work could not be started after the first command', error); });
     }
   };
 

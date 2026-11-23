@@ -18,6 +18,9 @@ export const ROOT = process.cwd();
 /** Where the tripwire stubs write the id of the module that was required. */
 export const LOADED = Symbol.for('coai.test.loaded');
 
+/** When the stub's start rejects: `globalThis[INSTALL_FAILS] = true`. */
+export const INSTALL_FAILS = Symbol.for('coai.test.installFails');
+
 /** Where the stub install module records what the shell asked of it (`command:<id>`, `start`). */
 export const INSTALL_LOG = Symbol.for('coai.test.install');
 
@@ -100,7 +103,7 @@ export function startHousekeeping(deps) {
  */
 const installStub = `const log = (globalThis[Symbol.for('coai.test.install')] ??= []);
 exports.command = (_context, id) => { log.push('command:' + id); };
-exports.start = () => { log.push('start'); };
+exports.start = () => { log.push('start'); return globalThis[Symbol.for('coai.test.installFails')] === true ? Promise.reject(new Error('the install said no')) : undefined; };
 exports.deactivate = () => undefined;
 `;
 

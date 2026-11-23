@@ -248,7 +248,7 @@ export async function measure({
     }
   });
   if (result !== undefined) {
-    writeResult(result, options, output);
+    await writeResult(result, options, output);
   }
 
   return code;

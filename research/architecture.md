@@ -541,6 +541,8 @@ vocabulary is a shared catalogue like the failure kinds (`shared/consult-check-w
 
 ## The panel is two surfaces: the sidebar and a Settings tab (2026-09-28)
 
+> **Superseded in part (2026-11-23, v2 E2/E4):** the sidebar's first paint is now the shell's native menu, and this panel provider takes the view only after `menuReady`; see *Activation and module interaction in the extension* below.
+
 The sidebar `coai.panel` shows what is happening now — the open question, **Notifications**, **Active
 rounds** (running rounds and the consultations being had), **Phrases**, **Bugz** — and everything
 configured once moved into a **Settings** editor tab, opened by a `$(gear)` beside the help button
@@ -586,6 +588,37 @@ ship on their own clocks: a new server paired with an extension that still draws
 an old server paired with one that draws a tab, both send the person somewhere that exists. The stale
 *Server* section those messages named has been called *MCP server* since 2026-09-07, and the old
 *Server-section Team-server block* the module-map row above describes was removed the same day.
+
+## Activation and module interaction in the extension (2026-11-23, v2 epoch 1, E2 and E4)
+
+> What runs now. The Containers section and the panel sections above describe the extension as one activation; the code they describe still runs, as the `legacy` module below. Detail and tests: [module_extension.md](module_extension.md) (*The shell and its modules*); design: [../v2/architecture/extension.md](../v2/architecture/extension.md).
+
+The extension host calls `activate` in a 16 KiB entry that only registers (commands, the `coai.panel` view provider, the `coaiChat` serializer, the URI handler). Every registration is a thunk that loads a module on first use. There are six bundles and one rule between them: a module reaches another module or shared state only through the loader's handle, never by importing it.
+
+```mermaid
+flowchart LR
+  Host[Extension host] -->|activate: register only| Entry[entry: shell/entry.ts]
+  Entry -->|view resolved| Sidebar[sidebar: native menu]
+  Entry -->|chat command, coaiChat restore| Chat[chat]
+  Entry -->|coai.installServer| Install[install]
+  Entry -->|every other command, URI, fallback view| Legacy[legacy: old activate]
+  Sidebar -->|after menuReady: same view + opened sections| Legacy
+  Sidebar -->|after menuReady| Chat
+  Sidebar -->|after menuReady| Install
+  Entry -->|after the first command| Install
+  Chat -->|250 ms after a restore| Install
+  Chat -.state.-> Runtime[runtime: once per host]
+  Legacy -.state.-> Runtime
+  Legacy -->|bug Chat button via loader handle| Chat
+```
+
+**Order in time.** A person opens the sidebar: the entry loads `sidebar` only, which paints the real menu and waits for the page's `menuReady` (the end of the cold start, limit 2 s). After that, off the critical path, it loads `legacy` and gives it the same view (live data replaces "loading..."), starts `chat` (so its context keys exist) and starts `install` (binary check, `--setup-clients`, update offer). A command loads its owner module; the first command to answer also asks for `install`. A window restored with only a chat tab loads `chat` through the serializer and asks for `install` 250 ms after the restore settled. `install.start` is once per activation, so any two askers are one run.
+
+**Failure paths.** A sidebar module that cannot load: `legacy` resolves the view alone, as before. A failed hand-over: the view shows a failed page and the console says why. A module load that throws is not remembered, so the next call retries; a chat or install start that rejects is reported on the console with its context by whoever asked, and never changes what the command answered.
+
+**Shared state.** The `runtime` module holds what must exist once per host (notification suppressor and ledger gap, data root, findings board). The loader memoises it and publishes a handle on `globalThis`; `legacy`, `chat` and the others read the same object by reference. The old code registers through `src/shellBridge.ts`, which gives a registration to the module that owns the id, so VS Code sees each id once.
+
+**Guards.** `entryPurity.test.ts`, `entry-firewall.mjs` (inputs, external imports, byte budgets, files a bundle must not contain) and the cold-start measurement (`research/RESULTS_v2_start.md`) hold this shape: a call in `activate`, a heavy import in the entry, or a second copy of the runtime fails a check.
 
 ## The extension gained two arrows of its own (2026-09-09)
 

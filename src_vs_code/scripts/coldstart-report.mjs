@@ -10,7 +10,7 @@ import { isMain } from './bundle-lib.mjs';
 import { parseMeasureArgs, stepsTable, summarize, summaryLine } from './coldstart-lib.mjs';
 import { writeResult } from './coldstart-output.mjs';
 
-export function report(argv, { log = console.log, error = console.error, output = {} } = {}) {
+export async function report(argv, { log = console.log, error = console.error, output = {} } = {}) {
   let options;
   try {
     options = parseMeasureArgs(argv);
@@ -28,7 +28,7 @@ export function report(argv, { log = console.log, error = console.error, output 
     }
   }
   const result = summarize(raws, { expected: options.samples, recordOnly: options.recordOnly });
-  writeResult(result, options, output);
+  await writeResult(result, options, output);
   log(summaryLine(result));
   for (const line of stepsTable(result)) {
     log(line);
@@ -42,5 +42,5 @@ export function report(argv, { log = console.log, error = console.error, output 
 }
 
 if (isMain(import.meta.url)) {
-  process.exit(report(process.argv.slice(2)));
+  process.exit(await report(process.argv.slice(2)));
 }

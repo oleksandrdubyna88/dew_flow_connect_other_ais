@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { ids } from './idsOfTheShell';
 import { ownedTemp } from './ownedTemp';
-import { extensionContext, INSTALL_LOG, installEditor, LOADED, recordingEditor, writeShell } from './shellHarness';
+import { extensionContext, INSTALL_FAILS, INSTALL_LOG, installEditor, LOADED, recordingEditor, writeShell } from './shellHarness';
 
 /**
  * The install module through the shell (v2 E4, story s5-install-module): `coai.installServer` is its command, nothing of it runs while `activate` registers, and the first
@@ -101,6 +101,31 @@ test('the FIRST command starts the install work, after that command has answered
     await settle();
     assert.deepEqual(world.installLog(), ['start'], 'a later command asked for the install work again: the module decides once-ness, but the shell asks once');
   } finally {
+    await world.entry.deactivate();
+    world.restore();
+  }
+});
+
+test('a first command whose install start is refused says so, with its context, and the command still answers', async () => {
+  const world = await shell('install-first-command-fails');
+  const holder = globalThis as unknown as Record<symbol, unknown>;
+  const said: unknown[][] = [];
+  const realError = console.error;
+  console.error = (...args: unknown[]): void => { said.push(args); };
+  holder[INSTALL_FAILS] = true;
+  try {
+    await world.editor.commands.get('coai.forgetPickedConversation')?.();
+    await settle();
+    await settle();
+
+    assert.deepEqual(world.installLog(), ['start']);
+    const line = said.find((args) => String(args[0]).includes('install work could not be started after the first command'));
+    assert.ok(line !== undefined, 'the refusal was swallowed: nothing was said about it');
+    assert.match(String(line[0]), /^ConnectOtherAIs: /);
+    assert.match(String((line[1] as Error).message), /the install said no/);
+  } finally {
+    console.error = realError;
+    delete holder[INSTALL_FAILS];
     await world.entry.deactivate();
     world.restore();
   }
