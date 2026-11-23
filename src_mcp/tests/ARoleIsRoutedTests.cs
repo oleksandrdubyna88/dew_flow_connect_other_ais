@@ -80,7 +80,7 @@ public sealed class ARoleIsRoutedTests
 
         vectors.Select(vector => vector.Name).Should().OnlyHaveUniqueItems();
         // The rules, in the spec's order: important (three triggers, an explicit model in and out), explicit model, band, role list, no duplicates, vendor routing, empty list.
-        new[] { "security: true", "kind: security", "complexity 10", "caller named", "band", "coder list", "ba list", "vendor-routing", "COAI_ROLES_MODELS" }
+        new[] { "security: true", "kind: security", "complexity 10", "caller named", "band", "coder list", "ba list", "vendor-routing", "COAI_ROLES_MODELS", "is not a name the claude CLI is known to accept", "COAI_ROLES_BANDS", "the model argument of start_role" }
             .Should().OnlyContain(word => vectors.Any(vector => vector.Why.Contains(word) || vector.Refusal.Contains(word)), "each rule of the router has a vector that names it");
     }
 

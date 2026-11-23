@@ -104,6 +104,12 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             return new RoleWorkOutcome.Failed("route-invalid", $"the job's route is empty, has an entry that is not vendor/model, or names a vendor that is none of claude, codex, agy: [{string.Join(", ", run.Job.Route)}]");
         }
 
+        // A route is read from job.json, which a person or an older build may have written: no name that a CLI is not known to accept reaches a launch, because claude bills the default model for it.
+        if (route.Select(model => RoleModelNames.Refusal(model.Model, model.Vendor, RoleRouter.ModelsSetting)).FirstOrDefault(refusal => refusal.Length > 0) is { Length: > 0 } unknown)
+        {
+            return new RoleWorkOutcome.Failed("route-invalid", $"the job's route has a model name no CLI is known to accept, so nothing was launched — {unknown}");
+        }
+
         var started = run.Clock.GetTimestamp();
         for (var index = 0; index < route.Count; index++)
         {

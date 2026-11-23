@@ -1,0 +1,27 @@
+{
+  "$comment": "The model names a role job may launch with (epoch 3 E1 s4, from the finding of s3: claude 2.1.330 does NOT refuse an unknown model name - it runs the DEFAULT model and bills it, measured twice, about 1.62 USD; see v2/epoch-3/e1-role-jobs-ba/stories/s3-router-failover/SIGNALS.md section 6). coai-mcp embeds this file (src_mcp/core/CoaiMcp.Core.csproj, core/Roles/RoleModelNames.cs) and the router refuses a name that is not here BEFORE a folder or a launch is made, naming the setting that holds it (COAI_ROLES_MODELS, COAI_ROLES_BANDS, or the model argument of start_role). claude: the CLI aliases and any id that matches idPattern - the CLI is the only vendor that bills a typo. codex and agy: only names from these lists; a name is added here when it is measured (a recording in src_mcp/tests/fixtures/role-stops/ or a result under research/) or when .agents/rules/common/vendor-routing.md names it; the `source` of each list says which. Both of those CLIs refused an unknown model before any paid call (codex-bad-model.json, agy-bad-model.json), so for them this list costs a refusal, not money.",
+  "claude": {
+    "aliases": [ "opus", "sonnet", "haiku", "fable" ],
+    "idPattern": "^claude-[a-z0-9.-]+$",
+    "knownIds": [ "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "claude-sonnet-5-5", "claude-haiku-4-5", "claude-fable-5-0" ],
+    "source": "aliases: the four the CLI documents and shared/role-defaults.json uses; knownIds: shared/feature-availability.json (claude-opus-*) and shared/model-display-vectors.json (the others). An id is accepted by its shape, so a new release needs no edit here; a known id is only a test that the shape accepts what the repository already holds."
+  },
+  "codex": {
+    "names": [ "astra", "terra", "gpt-6-astra", "gpt-5.6-terra", "sol", "luna", "gpt-5.5", "gpt-5.4" ],
+    "measured": [ "astra", "terra", "gpt-6-astra", "gpt-5.6-terra" ],
+    "source": "measured: research/RESULTS_question_consultant_capabilities.md section 4 (codex-astra = gpt-6-astra, codex-terra = gpt-5.6-terra) and shared/role-defaults.json (astra); named by .agents/rules/common/vendor-routing.md and not measured: sol, luna, gpt-5.5, gpt-5.4."
+  },
+  "agy": {
+    "names": [
+      "gemini-4-argon-low", "gemini-4-argon-medium", "gemini-4-argon-high",
+      "gemini-3.8-flash-low", "gemini-3.8-flash-medium", "gemini-3.8-flash-high",
+      "gpt-oss-120b-medium"
+    ],
+    "measured": [
+      "gemini-4-argon-low", "gemini-4-argon-medium", "gemini-4-argon-high",
+      "gemini-3.8-flash-low", "gemini-3.8-flash-medium", "gemini-3.8-flash-high",
+      "gpt-oss-120b-medium"
+    ],
+    "source": "measured: `agy models` of agy 1.4.4 (research/PLAN_the_agy_default_is_a_model_agy_offers.md). agy 1.5.14 lists more models by display name (Gemini 4 Neon and Hydrogen, Orchestrator): their ids were not measured, so they are not here. A Claude model on agy is never listed: vendor-routing.md sends it to the claude CLI."
+  }
+}

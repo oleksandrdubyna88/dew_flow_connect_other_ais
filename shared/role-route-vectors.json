@@ -45,6 +45,34 @@
    },
    "bands": []
   },
+  "typo-claude": {
+   "roles": {
+    "ba": [ { "model": "sonet", "vendor": "claude" }, { "model": "opus", "vendor": "claude" } ],
+    "important": [ { "model": "fable", "vendor": "claude" } ]
+   },
+   "bands": []
+  },
+  "typo-band": {
+   "roles": {
+    "coder": [ { "model": "sonnet", "vendor": "claude" } ],
+    "important": [ { "model": "fable", "vendor": "claude" } ]
+   },
+   "bands": [ { "min": 0, "max": 4, "model": "haiko", "vendor": "claude" } ]
+  },
+  "typo-codex": {
+   "roles": {
+    "ba": [ { "model": "opus", "vendor": "claude" }, { "model": "gpt-9-nope", "vendor": "codex" } ],
+    "important": [ { "model": "fable", "vendor": "claude" } ]
+   },
+   "bands": []
+  },
+  "typo-agy": {
+   "roles": {
+    "ba": [ { "model": "gemini-3.7-flash-high", "vendor": "agy" } ],
+    "important": [ { "model": "fable", "vendor": "claude" } ]
+   },
+   "bands": []
+  },
   "two-vendors": {
    "roles": {
     "ba": [ { "model": "opus", "vendor": "claude" }, { "model": "gpt-5.5", "vendor": "codex" }, { "model": "gemini-3.8-flash-low", "vendor": "agy" } ],
@@ -197,8 +225,43 @@
   },
   {
    "name": "an explicit gemini model is placed on agy",
-   "table": "two-vendors", "role": "ba", "model": "gemini-3.7-flash-high",
-   "expect": { "models": [ "gemini-3.7-flash-high@agy", "opus@claude", "gpt-5.5@codex", "gemini-3.8-flash-low@agy" ] }
+   "table": "two-vendors", "role": "ba", "model": "gemini-3.8-flash-high",
+   "expect": { "models": [ "gemini-3.8-flash-high@agy", "opus@claude", "gpt-5.5@codex", "gemini-3.8-flash-low@agy" ] }
+  },
+  {
+   "name": "a typo in a claude name of the roles table is refused naming COAI_ROLES_MODELS - claude would run its default model and bill it",
+   "table": "typo-claude", "role": "ba",
+   "expect": { "refused": "model 'sonet' is not a name the claude CLI is known to accept" }
+  },
+  {
+   "name": "the same refusal names the setting to fix",
+   "table": "typo-claude", "role": "ba",
+   "expect": { "refused": "fix it in COAI_ROLES_MODELS" }
+  },
+  {
+   "name": "an explicit claude model that the family places but the CLI does not know is refused naming the model argument of start_role",
+   "table": "default", "role": "ba", "model": "sonnet9",
+   "expect": { "refused": "fix it in the model argument of start_role" }
+  },
+  {
+   "name": "an explicit claude full id of the right shape is accepted and goes first",
+   "table": "default", "role": "ba", "model": "claude-opus-5-5",
+   "expect": { "models": [ "claude-opus-5-5@claude", "fable@claude", "opus@claude" ] }
+  },
+  {
+   "name": "a typo in a band's model is refused naming COAI_ROLES_BANDS",
+   "table": "typo-band", "role": "coder", "task": { "complexity": 1 },
+   "expect": { "refused": "fix it in COAI_ROLES_BANDS" }
+  },
+  {
+   "name": "a codex name that is in no list is refused",
+   "table": "typo-codex", "role": "ba",
+   "expect": { "refused": "model 'gpt-9-nope' is not in the list of names known for the codex CLI" }
+  },
+  {
+   "name": "an agy name that is in no list is refused: a model agy 1.4.4 already refuses",
+   "table": "typo-agy", "role": "ba",
+   "expect": { "refused": "model 'gemini-3.7-flash-high' is not in the list of names known for the agy CLI" }
   }
  ]
 }

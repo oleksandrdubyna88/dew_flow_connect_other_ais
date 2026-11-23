@@ -88,11 +88,11 @@ internal sealed class RoleDefaults
         // A shipped default has no default of its own to fall back on, so one that breaks the vendor-routing rule is a build fault, like a file that does not parse.
         var wrong = roles.SelectMany(role => role.Item2.Select(model => (Where: $"role '{role.name}'", model.Model, model.Vendor)))
             .Concat(bands.Select(band => (Where: "a band", band.Model, band.Vendor)))
-            .Select(entry => (entry.Where, Refusal: VendorRouting.Refusal(entry.Model, entry.Vendor)))
+            .Select(entry => (entry.Where, Refusal: VendorRouting.Refusal(entry.Model, entry.Vendor) is { Length: > 0 } routed ? routed : RoleModelNames.Refusal(entry.Model, entry.Vendor, "shared/role-defaults.json")))
             .FirstOrDefault(entry => entry.Refusal.Length > 0);
         if (wrong.Refusal is { Length: > 0 })
         {
-            throw new InvalidOperationException($"shared/role-defaults.json: {wrong.Where} breaks the vendor-routing rule — {wrong.Refusal}");
+            throw new InvalidOperationException($"shared/role-defaults.json: {wrong.Where} breaks the vendor-routing rule or names no known model — {wrong.Refusal}");
         }
 
         return new VendorDefaults(

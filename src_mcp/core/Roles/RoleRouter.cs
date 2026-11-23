@@ -55,6 +55,12 @@ internal static class RoleRouter
     /// <summary>The setting every refusal for a missing model names.</summary>
     public const string ModelsSetting = "COAI_ROLES_MODELS";
 
+    /// <summary>The setting that holds a coder band's model — named when that model's name is refused.</summary>
+    public const string BandsSetting = "COAI_ROLES_BANDS";
+
+    /// <summary>What a refusal names for a model that only the caller wrote, in the call itself.</summary>
+    public const string ExplicitModelKey = "the model argument of start_role";
+
     public static RouteResult Route(RouteRequest request, RouteTable table)
     {
         var important = ImportantRule.Reason(request.Kind, request.Complexity, request.Security);
@@ -66,11 +72,14 @@ internal static class RoleRouter
 
         var ordered = Distinct([.. head, .. tail]);
 
-        return Judged(ordered, request, why);
+        return Judged(ordered, request, table, why);
     }
 
-    /// <summary>The list as it stands, or the refusal: an empty list names the setting; an entry that breaks the vendor-routing rule is named.</summary>
-    private static RouteResult Judged(IReadOnlyList<ModelRef> ordered, RouteRequest request, string why)
+    /// <summary>
+    /// The list as it stands, or the refusal: an empty list names the setting; an entry that breaks the vendor-routing rule is named; and so is an entry whose NAME is not one a CLI is known to accept
+    /// (<see cref="RoleModelNames"/>) — claude runs its default model, and bills it, for a name it does not know, so a typo must not reach a launch.
+    /// </summary>
+    private static RouteResult Judged(IReadOnlyList<ModelRef> ordered, RouteRequest request, RouteTable table, string why)
     {
         if (ordered.Count == 0)
         {
@@ -80,9 +89,28 @@ internal static class RoleRouter
 
         var wrong = ordered.Select(entry => VendorRouting.Refusal(entry.Model, entry.Vendor)).FirstOrDefault(refusal => refusal.Length > 0);
 
-        return wrong is { Length: > 0 }
-            ? new RouteResult.Refused($"the route of role '{request.Role}' breaks the vendor-routing rule — {wrong}; fix it in {ModelsSetting}")
+        if (wrong is { Length: > 0 })
+        {
+            return new RouteResult.Refused($"the route of role '{request.Role}' breaks the vendor-routing rule — {wrong}; fix it in {ModelsSetting}");
+        }
+
+        var unknown = ordered.Select(entry => RoleModelNames.Refusal(entry.Model, entry.Vendor, KeyOf(entry, request, table))).FirstOrDefault(refusal => refusal.Length > 0);
+
+        return unknown is { Length: > 0 }
+            ? new RouteResult.Refused($"the route of role '{request.Role}' has a model name no CLI is known to accept — {unknown}")
             : new RouteResult.Routed(ordered, why);
+    }
+
+    /// <summary>The setting that holds an entry of the route: the call itself for a model only the caller wrote, the bands for a band's model, else the roles table.</summary>
+    private static string KeyOf(ModelRef entry, RouteRequest request, RouteTable table)
+    {
+        var inRoles = table.Roles.SelectMany(role => role.Models).Contains(entry);
+        if (!inRoles && request.Model.Length > 0 && string.Equals(entry.Model, request.Model, StringComparison.Ordinal))
+        {
+            return ExplicitModelKey;
+        }
+
+        return !inRoles && table.Bands.Any(band => band.Model == entry.Model && band.Vendor == entry.Vendor) ? BandsSetting : ModelsSetting;
     }
 
     /// <summary>The important list, the explicit model first when it is on it, and a refusal when it is not.</summary>
@@ -108,7 +136,7 @@ internal static class RoleRouter
         {
             return PlacedModel(request, table) is { } placed
                 ? ([placed], list, $"the model the caller named, then the {request.Role} list", string.Empty)
-                : ([], [], string.Empty, $"model '{request.Model}' is in no list of the roles table and no vendor rule places it; add it to {ModelsSetting} with its vendor");
+                : ([], [], string.Empty, $"model '{request.Model}' is in no list of the roles table and no vendor rule places it; fix {ExplicitModelKey}, or add the model to {ModelsSetting} with its vendor");
         }
 
         return request.Role == CoderRole && BandModel(table, request.Complexity) is { } band

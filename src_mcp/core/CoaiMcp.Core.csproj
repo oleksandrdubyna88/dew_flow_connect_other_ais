@@ -53,6 +53,10 @@
          capability and text, embedded so a published binary always has a prompt to pair a row with and a
          default to restore to. The extension generates its copy from the same file (S4). -->
     <EmbeddedResource Include="..\..\shared\question-prompts.json" LogicalName="CoaiMcp.Core.question-prompts.json" />
+
+    <!-- The model names a role job may launch with (epoch 3 E1 s4): claude 2.1.330 runs its DEFAULT model and bills it for an unknown name, so the router refuses a name that is not here
+         before any launch. Embedded for the reason the files above are; RoleModelNames refuses to start without it. -->
+    <EmbeddedResource Include="..\..\shared\role-model-names.json" LogicalName="CoaiMcp.Core.role-model-names.json" />
   </ItemGroup>
 
   <ItemGroup>
