@@ -268,6 +268,8 @@ public sealed class ACoderFirstTurnTests
         var running = Task.Run(() => rig.RunAsync(job), TestContext.Current.CancellationToken);
         RoleJobWorld.WaitFor(() => rig.World.Store.Read(job.JobId)!.Child is not null, "the runner to start its CLI child");
         var child = rig.World.Store.Read(job.JobId)!.Child!;
+        // The child is recorded the moment it starts; the fake writes its edit a moment later and then sleeps. A cancel before that kills it before it wrote anything.
+        RoleJobWorld.WaitFor(() => File.Exists(Path.Combine(rig.WorktreeOf(job), "src", "thing.cs")), "the fake coder to write its edit");
 
         rig.World.Store.FolderOf(job.JobId)!.RequestCancel();
         var (exit, ended) = await running;
