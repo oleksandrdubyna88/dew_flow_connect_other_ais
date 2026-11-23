@@ -1,8 +1,8 @@
 {
   "about": "Every inline test-leftovers exemption of this repository: S6's expected-exemption inventory (todo/PLAN_test_leftovers_E5.md). A new marker, a removed one, a moved line or a changed site is a visible diff here.",
   "rows": [
-    {"file":".github/workflows/release.yml","line":318,"sha256":"eb69d180ee60d3fea9d4fd99d750bbdf59b60d8c8920ac0d5609603f8f9fe4f7","class":"raw-temp","guards":["csharp","node"],"proof":"unreached"},
-    {"file":".github/workflows/release.yml","line":1321,"sha256":"09f341b9accb8335926f70c6efdd824cd2705967d94942697e7b2e64cb37f5f1","class":"raw-temp","guards":["csharp","node"],"proof":"unreached"},
+    {"file":".github/workflows/release.yml","line":345,"sha256":"eb69d180ee60d3fea9d4fd99d750bbdf59b60d8c8920ac0d5609603f8f9fe4f7","class":"raw-temp","guards":["csharp","node"],"proof":"unreached"},
+    {"file":".github/workflows/release.yml","line":1365,"sha256":"09f341b9accb8335926f70c6efdd824cd2705967d94942697e7b2e64cb37f5f1","class":"raw-temp","guards":["csharp","node"],"proof":"unreached"},
     {"file":"deploy/bugs/deploy-cmd.sh","line":110,"sha256":"96cb5e9c29db86c703790131d912aa86f70da138b98a1d1662658c263c2f0d18","class":"raw-temp","guards":["node"],"proof":"unreached"},
     {"file":"deploy/bugs/deploy-cmd.sh","line":167,"sha256":"da7ae23adc2d2ffeae0ce649434866a930aea492220c15758bf0e4b4d4e09c37","class":"raw-temp","guards":["node"],"proof":"unreached"},
     {"file":"deploy/bugs/install-env.sh","line":102,"sha256":"7992d7ba82172fb08fb9f6aa0e54a010bc66c63e31af4cc282429855f4b061e9","class":"raw-temp","guards":["node"],"proof":"reached"},
