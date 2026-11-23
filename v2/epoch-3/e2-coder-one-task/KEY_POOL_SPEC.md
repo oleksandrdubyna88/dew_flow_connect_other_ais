@@ -397,3 +397,22 @@ keys cool down.
 4. **Accounts behind the keys.** Are the many keys from several subscriptions (then a limit on one key does not touch
    the others), or several tokens of one subscription (then one limit stops all of them, and the round robin only
    spreads sessions)? coai cannot see this; it decides how many keys make sense.
+
+## Addendum 2026-11-23 (owner) — key sources
+
+The pool reads keys from more than one SOURCE; the round robin, cooldown, dead state and ledger work over the union,
+each key keeping its id (sha256 prefix) whatever its source:
+
+1. **local** — `coai-mcp --keys add|import` (stdin), the 0600 files of decision 1. Always available.
+2. **creds config** (the owner's machines) — one CredsForDevs `config` entry `coai claude keys`, format json, file
+   `coai-claude-keys.json`, body `{"keys":[{"label","account","token"}]}`, read by coai through the entry's code-access
+   key (the person mints it with "Enable Code Access…"; it reaches coai only as an environment variable, never argv,
+   never a log). coai keeps no second copy when the source can be read at launch time. OPEN, measure before build:
+   does the read work headless (VS Code closed, vault locked)? If not, the creds read fills the local pool at coai
+   start and jobs use the local pool. The code-access key is a long-lived secret with the same rules as a pool key.
+3. **boot import** (the orchestrator AMI, no creds) — a systemd oneshot `coai-keys-sync.service` reads AWS SSM
+   Parameter Store SecureStrings under one path (e.g. `/coai/claude-keys/*`) with the instance role and pipes them to
+   `coai-mcp --keys import`; the image holds the unit, never a key (pending the owner's answer on IAM role + AWS CLI).
+
+`account` (subscription email) lets the pool know which keys share one limit: a limit signal cools down every key of
+the same account, not only the one that hit it.
