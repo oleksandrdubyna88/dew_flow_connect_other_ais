@@ -30,6 +30,9 @@ public sealed class TheCoderFixLoopOverStdioTests
     private static CoderRig.Launch Writes(string text, string session = "") =>
         new(new Dictionary<string, string> { [CoderRig.StateFile] = text + "\n" }, CoderRig.Report(), Session: session);
 
+    /// <summary>The unit of the second step of the checks — the test, which the fixture makes sleep; the build step before it is over in a moment and a wait that stopped at it would race.</summary>
+    private static bool IsTheTestStep(string unit) => unit.StartsWith("coai-check-", StringComparison.Ordinal) && unit.EndsWith("-s2.service", StringComparison.Ordinal);
+
     private static string[] States(JsonElement envelope) =>
         [.. envelope.GetProperty("rounds").EnumerateArray().Select(round => $"{round.GetProperty("turn").GetInt32()}:{round.GetProperty("state").GetString()}")];
 
@@ -284,7 +287,7 @@ public sealed class TheCoderFixLoopOverStdioTests
             await StdioServer.InitializeAsync(first);
             jobId = await world.StartAsync(first);
             var until = DateTime.UtcNow.AddSeconds(60);
-            while (!(await CoderRig.UnitsOfJobAsync(jobId, world.Root.Path)).Any(unit => unit.StartsWith("coai-check-", StringComparison.Ordinal)))
+            while (!(await CoderRig.UnitsOfJobAsync(jobId, world.Root.Path)).Any(unit => IsTheTestStep(unit)))
             {
                 DateTime.UtcNow.Should().BeBefore(until, "a check step was to be running in its unit");
                 await Task.Delay(50, TestContext.Current.CancellationToken);
@@ -297,7 +300,7 @@ public sealed class TheCoderFixLoopOverStdioTests
 
         var store = new RoleJobStore(world.Data.Path, TimeProvider.System, Serilog.Core.Logger.None);
         store.Read(jobId)!.State.Should().Be(RoleJobStates.Running, "the server died while the job was in the middle of its checks: the job is not over, and the runner outlived the server");
-        (await CoderRig.UnitsOfJobAsync(jobId, world.Root.Path)).Should().Contain(unit => unit.StartsWith("coai-check-", StringComparison.Ordinal), "CONTROL: the check step was still running in its unit after the server was gone");
+        (await CoderRig.UnitsOfJobAsync(jobId, world.Root.Path)).Should().Contain(unit => IsTheTestStep(unit), "CONTROL: the test step (the one that sleeps) was still running in its unit after the server was gone");
 
         var second = world.Server();
         try
