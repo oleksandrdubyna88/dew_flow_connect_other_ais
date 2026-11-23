@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-coder-worktree
+title: "Coder worktree: git worktree add -b coder/<jobId> at the base SHA under the machine-local root, removed by coai, at most 20 live per repository"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Worktrees/CoderWorktree.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "a start makes the branch coder/<jobId> and the folder coai-coder-<jobId> at exactly the given base SHA, outside the main checkout; the job id is the only free part of both names and a name that would leave the root is refused before git runs"
+  - id: d2
+    item: "the 21st live coder worktree of one repository is refused (never evicted); a base SHA that does not exist is refused with a sentence; the main checkout's HEAD, index and files are byte-equal before and after"

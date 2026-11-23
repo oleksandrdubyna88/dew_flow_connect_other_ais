@@ -1,0 +1,16 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-toolchain-schema-reader
+title: "shared/toolchain.schema.json and its strict reader (version, projects with path, adapter, build argv, test argv, memoryMb; skip; timeouts)"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - shared/toolchain.schema.json
+  - src_mcp/core/Toolchain/ToolchainFile.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "a valid file read through IYamlReader (StrictYamlReader) gives the projects with their build and test argv as lists; an unknown key, an argv that is not a list of strings, a project path outside the repository (absolute, drive, `..`) and a version other than 1 are each refused with a sentence that names the key"
+  - id: d2
+    item: "no file gives the state not_configured, not an error and not an empty project list; a test holds the schema file and the reader's key tables equal"

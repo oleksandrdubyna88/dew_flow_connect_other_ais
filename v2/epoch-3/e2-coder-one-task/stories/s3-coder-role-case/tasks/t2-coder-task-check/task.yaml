@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-coder-task-check
+title: "The coder's request check: taskFile is a task.yaml of a valid plan; complexity and security go to the router; refusals before any folder"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - src_mcp/src/Server/RoleJobs/CoderTask.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "start_role(role: coder) with a taskFile that is not a file called task.yaml inside the repository, that fails the work-plan task rules, or with no taskFile, is refused with a sentence and no job folder is made"
+  - id: d2
+    item: "a task of complexity 4 gets the route [band model, then the coder list]; a task with security true or complexity 10 gets the important list; a route entry whose vendor is not claude is dropped from a coder route and a route with no claude model is refused naming COAI_ROLES_MODELS"

@@ -1,0 +1,17 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t1-coder-contract
+title: "The coder's contract: shared/coder-report.schema.json with a refused arm, its strict reader, the coder prompt (task, DoD, files, the rules of the worktree)"
+kind: code
+complexity: 5
+dependsOn: []
+parallel: false
+files:
+  - shared/coder-report.schema.json
+  - src_mcp/core/Coder/CoderReport.cs
+  - src_mcp/src/Server/RoleJobs/CoderPrompt.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "the reader accepts {status: ok, dod:[{id, met, evidence}], notes} and {status: refused, reason}; an unknown key, a dod id that the task does not have and a missing dod id are errors with the key named; a test holds the schema file and the reader equal"
+  - id: d2
+    item: "the prompt holds the task's title, kind, files and every dod item, the rule that coai (not the coder) commits, builds and tests, and no path outside the worktree; an override of the coder prompt in RolePrompts is used first"

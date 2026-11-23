@@ -1,0 +1,6 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s6-proof-and-measure
+title: "Proof: one real task of this repository to green by the coder, measured against the main-AI baseline"
+dependsOn:
+  - s4-fix-loop
+  - s5-plan-proceed-inherited

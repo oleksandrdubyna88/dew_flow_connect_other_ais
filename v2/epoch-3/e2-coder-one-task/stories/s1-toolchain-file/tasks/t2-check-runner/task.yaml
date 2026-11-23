@@ -1,0 +1,19 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-check-runner
+title: "Check runner: run build then test argv of each project in a given tree, record argv, exit code, duration and log; not_configured is never green"
+kind: code
+complexity: 6
+dependsOn:
+  - t1-toolchain-schema-reader
+parallel: false
+files:
+  - src_mcp/runners/Toolchain/CheckRunner.cs
+  - src_mcp/core/Toolchain/CheckResult.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "on a fixture tree with a toolchain file: build exit 0 and test exit 0 gives green true with one record per step (argv, exit code, duration, log path); a build that fails gives green false and the test step is not run"
+  - id: d2
+    item: "a tree with no toolchain file gives checks not_configured and green false; a step over its timeout is stopped with its process tree and recorded as failed; the argv is started without a shell and the `{jobs}` placeholder is replaced"
+  - id: d3
+    item: "the toolchain file is read from the tree that is checked (the coder worktree at its head), and a log is cut at 20 MB"

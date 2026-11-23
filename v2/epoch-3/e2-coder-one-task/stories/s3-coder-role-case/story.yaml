@@ -1,0 +1,6 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: s3-coder-role-case
+title: "coder is one role case of start_role: contract, task check, the first turn, the envelope"
+cornerstone: true
+dependsOn:
+  - s2-write-boundary

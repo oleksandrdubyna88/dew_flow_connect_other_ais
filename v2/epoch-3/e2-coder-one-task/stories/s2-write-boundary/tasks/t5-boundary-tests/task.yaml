@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-boundary-tests
+title: "Boundary scenarios with FakeCli: a write outside the worktree, an edit of the main checkout, a person's edit of the main checkout during the job"
+kind: test
+complexity: 6
+dependsOn:
+  - t3-claude-write-launch
+  - t4-checks-inside-boundary
+parallel: false
+security: true
+files:
+  - src_mcp/tests_fakecli
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "FakeCli as coder that writes into the main checkout or beside the worktree: the launch-level boundary is what stops or reports it; the answer names the path and the job does not publish a green result"
+  - id: d2
+    item: "an edit of the main checkout by another process during a coder job does NOT fail the job (unlike a read-only role's tree-changed): it is recorded as snapshot evidence only (server.md section 16, decision 8)"

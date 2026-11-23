@@ -1,0 +1,22 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t3-claude-write-launch
+title: "The claude coder launch: a write arm of the launch confinement with the measured flag set, cwd = the worktree, resumable with --resume"
+kind: security
+complexity: 8
+dependsOn:
+  - t1-boundary-measure
+  - t2-coder-worktree
+parallel: false
+security: true
+files:
+  - src_mcp/runners/Consultation/LaunchConfinement.cs
+  - src_mcp/runners/Consultation/ClaudeConsultant.cs
+  - src_mcp/core/QuestionConsult/ConfinementPlanner.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "the argv of a coder launch is exactly the flag set that RESULTS_coder_write_boundary.md names, with the worktree as cwd and as the only added directory and no MCP server; a resumed turn has the same argv plus --resume <handle>"
+  - id: d2
+    item: "every existing consultant and question-row launch builds the same argv as before, byte for byte (the existing argv tests pass unchanged); a claude CLI that lacks a needed flag is refused before the launch with the cure, never started with a weaker boundary"
+  - id: d3
+    item: "a vendor other than claude asked for a write launch is refused with a sentence that says the coder is claude only in this epic"

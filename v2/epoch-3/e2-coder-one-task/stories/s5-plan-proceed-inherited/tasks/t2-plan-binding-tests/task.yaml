@@ -1,0 +1,15 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-plan-binding-tests
+title: "Scenarios: two sibling task sessions resolve their findings independently; the feature session is not changed by them"
+kind: test
+complexity: 5
+dependsOn:
+  - t1-plan-binding
+parallel: false
+files:
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "two coder jobs of one feature each run a code round with FakeCli reviewers: a resolve in one does not move the stage, the round count or the findings of the other or of the feature's own session"
+  - id: d2
+    item: "status on a coder branch names the plan it inherited and from which session; a second code round with again true works on the coder branch"
