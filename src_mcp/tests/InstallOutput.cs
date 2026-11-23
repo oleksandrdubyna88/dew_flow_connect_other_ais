@@ -60,7 +60,7 @@ internal static class InstallOutput
 
     /// <summary>The same document by its parsed form, which is what "unchanged" means for TOML: spacing and comments are not content.</summary>
     internal static bool SameToml(string a, string b) =>
-        TomlSubset.Parse(a) is { Root: { } left } && TomlSubset.Parse(b) is { Root: { } right} && Equal(left, right);
+        TomlSubset.Parse(a) is { Root: { } left } && TomlSubset.Parse(b) is { Root: { } right } && Equal(left, right);
 
     private static bool Equal(object? a, object? b) => (a, b) switch
     {

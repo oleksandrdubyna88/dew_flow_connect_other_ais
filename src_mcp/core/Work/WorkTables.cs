@@ -46,7 +46,11 @@ public static partial class WorkTables
         "epoch", "epoch.yaml", ["id", "title", "dependsOn", "epics"],
         new Dictionary<string, WorkField>
         {
-            ["id"] = WorkField.Text, ["title"] = WorkField.Text, ["proves"] = WorkField.Text, ["dependsOn"] = WorkField.IdList, ["epics"] = WorkField.IdList,
+            ["id"] = WorkField.Text,
+            ["title"] = WorkField.Text,
+            ["proves"] = WorkField.Text,
+            ["dependsOn"] = WorkField.IdList,
+            ["epics"] = WorkField.IdList,
         },
         AllowUnknown: false, EpochIdPattern);
 
@@ -54,8 +58,14 @@ public static partial class WorkTables
         "epic", "epic.yaml", ["id", "title", "dependsOn"],
         new Dictionary<string, WorkField>
         {
-            ["id"] = WorkField.Text, ["title"] = WorkField.Text, ["mvp"] = WorkField.Boolean, ["half"] = WorkField.Text, ["dependsOn"] = WorkField.IdList,
-            ["parallelWith"] = WorkField.IdList, ["doneWhen"] = WorkField.IdList, ["spec"] = WorkField.Text,
+            ["id"] = WorkField.Text,
+            ["title"] = WorkField.Text,
+            ["mvp"] = WorkField.Boolean,
+            ["half"] = WorkField.Text,
+            ["dependsOn"] = WorkField.IdList,
+            ["parallelWith"] = WorkField.IdList,
+            ["doneWhen"] = WorkField.IdList,
+            ["spec"] = WorkField.Text,
         },
         AllowUnknown: false, EpicIdPattern);
 
@@ -63,7 +73,10 @@ public static partial class WorkTables
         "story", "story.yaml", ["id", "title", "dependsOn"],
         new Dictionary<string, WorkField>
         {
-            ["id"] = WorkField.Text, ["title"] = WorkField.Text, ["dependsOn"] = WorkField.IdList, ["cornerstone"] = WorkField.Boolean,
+            ["id"] = WorkField.Text,
+            ["title"] = WorkField.Text,
+            ["dependsOn"] = WorkField.IdList,
+            ["cornerstone"] = WorkField.Boolean,
         },
         AllowUnknown: false, StoryIdPattern);
 
@@ -71,8 +84,16 @@ public static partial class WorkTables
         "task", "task.yaml", ["id", "title", "kind", "complexity", "dependsOn", "parallel", "files", "dod"],
         new Dictionary<string, WorkField>
         {
-            ["id"] = WorkField.Text, ["title"] = WorkField.Text, ["kind"] = WorkField.Text, ["complexity"] = WorkField.Integer, ["dependsOn"] = WorkField.IdList,
-            ["parallel"] = WorkField.Boolean, ["files"] = WorkField.IdList, ["dod"] = WorkField.Dod, ["security"] = WorkField.Boolean, ["status"] = WorkField.Text,
+            ["id"] = WorkField.Text,
+            ["title"] = WorkField.Text,
+            ["kind"] = WorkField.Text,
+            ["complexity"] = WorkField.Integer,
+            ["dependsOn"] = WorkField.IdList,
+            ["parallel"] = WorkField.Boolean,
+            ["files"] = WorkField.IdList,
+            ["dod"] = WorkField.Dod,
+            ["security"] = WorkField.Boolean,
+            ["status"] = WorkField.Text,
         },
         AllowUnknown: false, TaskIdPattern);
 
