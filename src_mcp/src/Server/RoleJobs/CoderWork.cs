@@ -71,7 +71,7 @@ internal sealed class CoderWork : IRoleWork
         failover = new RoleFailover(run, judge.Judge) { MaxRepairTurns = RepairTurns, AttemptTimeout = AttemptTimeout, Ladder = Ladder, Coder = new LaunchConfinement.Coder(run.Request.JobId, prepared.Tree.Root), OsLayer = layer };
         var outcome = await failover.RunAsync(CoderPrompt.Build(site.PromptInputs, new RolePrompts(run.DataDir)), ct);
 
-        return outcome is RoleWorkOutcome.Succeeded ? await PublishAsync(run, git, prepared, site, judge.Accepted, layer.Evidence, ct) : outcome;
+        return outcome is RoleWorkOutcome.Succeeded ? await PublishAsync(run, git, prepared, site, judge.Accepted, layer, ct) : outcome;
     }
 
     /// <summary>
@@ -84,7 +84,7 @@ internal sealed class CoderWork : IRoleWork
 
         var launcher = new ProcessLauncher(run.Children);
 
-        return new CoderOsLayer(BoundaryJob.ForCoder(run.Request.JobId, prepared.Tree, folder), (Turns ?? CoderOsLayer.ShippedTurns)(launcher));
+        return new CoderOsLayer(BoundaryJob.ForCoder(run.Request.JobId, prepared.Tree, folder), (Turns ?? CoderOsLayer.ShippedTurns)(launcher), launcher);
     }
 
     /// <summary>The base commit, the worktree made at it and the tree opened for coai's own git — or the failure that ends the job.</summary>
@@ -113,8 +113,10 @@ internal sealed class CoderWork : IRoleWork
         };
     }
 
-    /// <summary>The coder has answered: compare the generation, make the one commit, compare again, and give the envelope.</summary>
-    private async Task<RoleWorkOutcome> PublishAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderReport? report, CoderMainEvidence evidence, CancellationToken ct)
+    /// <summary>
+    /// The coder has answered: compare the generation, make the one commit of the turn, run the checks on THAT commit, compare again, and give the envelope — green when the checks are, failed with the envelope as the evidence when they are not.
+    /// </summary>
+    private async Task<RoleWorkOutcome> PublishAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderReport? report, CoderOsLayer layer, CancellationToken ct)
     {
         run.Phase("coder-commit", 0);
         Boundary?.Invoke("before-commit");
@@ -123,14 +125,15 @@ internal sealed class CoderWork : IRoleWork
             return new RoleWorkOutcome.Stopped();
         }
 
-        var committed = await CommitAsync(git, prepared, run.Request.JobId, site.Id, ct);
+        var committed = await CoderCommits.CommitAsync(git, prepared.Tree, CoderCommits.Message(run.Request.JobId, site.Id), ct);
         if (committed.Failure is { } failed)
         {
             return ct.IsCancellationRequested ? new RoleWorkOutcome.Stopped() : failed;
         }
 
         var head = committed.Head;
-        var changes = head == prepared.BaseSha ? [] : await ChangesAsync(git, prepared, head, ct);
+        var round = await new CoderChecks(run, git, layer, prepared.Tree, prepared.BaseSha).RunAsync(0, head, ct);
+        var changes = head == prepared.BaseSha ? [] : await CoderCommits.ChangesAsync(git, prepared.Tree, prepared.BaseSha, head, ct);
         if (changes is null)
         {
             return ct.IsCancellationRequested ? new RoleWorkOutcome.Stopped() : new RoleWorkOutcome.Failed("coder-commit", "git could not list the files the commit changed");
@@ -142,50 +145,11 @@ internal sealed class CoderWork : IRoleWork
             return new RoleWorkOutcome.Stopped();
         }
 
-        return new RoleWorkOutcome.Succeeded(new CoderEnvelope(run.Request.JobId, prepared.BaseSha, head, prepared.Branch, report is not null, 0, changes, report, evidence).ToJson());
+        var checks = new CoderChecksReport([round], 0, string.Empty);
+        var json = new CoderEnvelope(run.Request.JobId, prepared.BaseSha, head, prepared.Branch, report is not null, 0, changes, report, layer.Evidence, checks).ToJson();
+
+        return round.Green ? new RoleWorkOutcome.Succeeded(json) : new RoleWorkOutcome.Failed(round.Stop, round.Note, json);
     }
-
-    /// <summary>Stages everything the coder wrote and makes ONE commit of it; no change means no commit and the head stays the base.</summary>
-    private static async Task<(string Head, RoleWorkOutcome.Failed? Failure)> CommitAsync(GitHistory git, Prepared prepared, string jobId, string taskId, CancellationToken ct)
-    {
-        var staged = await git.InCoderTreeAsync(prepared.Tree, ["add", "-A"], ct);
-        if (!staged.Ran || !staged.Ok)
-        {
-            return (string.Empty, Failed($"git add in the worktree", staged));
-        }
-
-        var pending = await git.InCoderTreeAsync(prepared.Tree, ["diff", "--cached", "--name-only", "-z"], ct);
-        if (!pending.Ran || !pending.Ok)
-        {
-            return (string.Empty, Failed("git diff --cached in the worktree", pending));
-        }
-
-        if (pending.Out.Length > 0)
-        {
-            var made = await git.InCoderTreeAsync(prepared.Tree, ["commit", "--no-verify", "--no-gpg-sign", "-m", $"coder {jobId}: {taskId}"], ct);
-            if (!made.Ran || !made.Ok)
-            {
-                return (string.Empty, Failed("git commit in the worktree (is a git identity, user.name and user.email, configured?)", made));
-            }
-        }
-
-        var head = await git.InCoderTreeAsync(prepared.Tree, ["rev-parse", "HEAD"], ct);
-
-        return head.Ran && head.Ok && head.Lines.Count > 0 && GitHistory.IsCommitish(head.Lines[0])
-            ? (head.Lines[0], null)
-            : (string.Empty, Failed("git rev-parse HEAD in the worktree", head));
-    }
-
-    /// <summary><c>git diff --name-status</c> between the base and the head — the ONLY source of the file list. Null when git could not say.</summary>
-    private static async Task<IReadOnlyList<CoderFileChange>?> ChangesAsync(GitHistory git, Prepared prepared, string head, CancellationToken ct)
-    {
-        var listed = await git.InCoderTreeAsync(prepared.Tree, ["diff", "--name-status", "-z", "--no-renames", prepared.BaseSha, head], ct);
-
-        return listed.Ran && listed.Ok ? CoderEnvelope.ParseNameStatus(listed.Out) : null;
-    }
-
-    private static RoleWorkOutcome.Failed Failed(string doing, GitAnswer answer) =>
-        new("coder-commit", answer.Refusal.Length > 0 ? answer.Refusal : $"{doing} failed{(answer.Ran ? string.Empty : " or did not finish in time")}; the worktree was left as it is");
 
     /// <summary>The worktree as the work holds it.</summary>
     private sealed record Prepared(CoderTree Tree, string BaseSha, string Branch);

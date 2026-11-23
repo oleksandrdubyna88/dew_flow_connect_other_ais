@@ -168,17 +168,18 @@ public sealed class ACoderFirstTurnTests
     }
 
     [Fact]
-    public async Task D2_AReportThatClaimsEveryDodMet_IsAClaim_NotAGreen()
+    public async Task D2_AReportThatClaimsEveryDodMet_IsAClaim_AndTheGreenIsTheChecks()
     {
-        await using var rig = await CoderRig.CreateAsync();
+        await using var rig = await CoderRig.CreateAsync(toolchain: ToolchainFixture.Shell("exit 1", string.Empty));
         rig.Says("sonnet", edits: null, CoderRig.Report(met: true));
+        rig.Rig.Setting("COAI_FIX_ROUNDS", "0");
         var job = rig.NewJob();
 
         var (_, ended) = await rig.RunAsync(job);
 
-        ended.State.Should().Be(RoleJobStates.Succeeded, "the job ended; it is not green");
+        (ended.State, ended.Stop).Should().Be((RoleJobStates.Failed, "not-green"), "every dod item says met and the build says no: green comes from the checks (story s4), never from a coder's own claim");
         var envelope = rig.Envelope(job);
-        envelope.TryGetProperty("green", out _).Should().BeFalse("green comes from checks (story s4), never from a coder's own claim");
+        envelope.GetProperty("green").GetBoolean().Should().BeFalse();
         envelope.GetProperty("report").GetProperty("dod")[0].GetProperty("met").GetBoolean().Should().BeTrue("the claim is shown as a claim");
         envelope.GetProperty("headSha").GetString().Should().Be(rig.Base, "a coder that changed nothing makes no commit");
         Files(envelope).Should().BeEmpty();

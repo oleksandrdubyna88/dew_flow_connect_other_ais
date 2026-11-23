@@ -163,14 +163,14 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
             var empty = new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, string.Empty, TimedOut: false);
             await CheckLog.WriteAsync(log, empty, $"[coai: the process could not be started: {e.Message}]\n");
 
-            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false);
+            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false) { Adapter = step.Project.Adapter };
         }
 
         ct.ThrowIfCancellationRequested();
         var trailer = result.TimedOut ? $"\n[coai: the step ran over its timeout of {step.Timeout} and its whole process tree was killed]\n" : string.Empty;
         var cut = await CheckLog.WriteAsync(log, result, trailer);
 
-        return new StepRecord(step.Project.Path, step.Step, argv, Started: true, result.ExitCode, result.TimedOut, clock.Elapsed, log, cut);
+        return new StepRecord(step.Project.Path, step.Step, argv, Started: true, result.ExitCode, result.TimedOut, clock.Elapsed, log, cut) { Adapter = step.Project.Adapter };
     }
 
     /// <summary>
@@ -190,7 +190,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
             var empty = new ProcessResult(StepRecord.NotStartedExitCode, string.Empty, string.Empty, TimedOut: false);
             await CheckLog.WriteAsync(log, empty, $"[coai: the process could not be started: {started.Problem}]\n");
 
-            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false);
+            return new StepRecord(step.Project.Path, step.Step, argv, Started: false, StepRecord.NotStartedExitCode, TimedOut: false, clock.Elapsed, log, LogCut: false) { Adapter = step.Project.Adapter };
         }
 
         ct.ThrowIfCancellationRequested();
@@ -198,7 +198,7 @@ public sealed class CheckRunner(IProcessLauncher launcher, CheckBoundary? bounda
         var survived = !run.Gone;
         var exit = survived ? StepRecord.UnitSurvivedExitCode : run.Result.ExitCode;
 
-        return new StepRecord(step.Project.Path, step.Step, argv, Started: run.Result.ExitCode != StepRecord.NotStartedExitCode, exit, run.Result.TimedOut, clock.Elapsed, log, cut) { Boundary = run.Record };
+        return new StepRecord(step.Project.Path, step.Step, argv, Started: run.Result.ExitCode != StepRecord.NotStartedExitCode, exit, run.Result.TimedOut, clock.Elapsed, log, cut) { Boundary = run.Record, Adapter = step.Project.Adapter };
     }
 
     private sealed record StartedStep(BoundaryRun? Run, string Problem);

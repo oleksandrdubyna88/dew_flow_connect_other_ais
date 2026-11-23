@@ -24,6 +24,24 @@ internal static class ToolchainFixture
         return text.Append(tail).ToString();
     }
 
+    /// <summary>
+    /// One project <c>app</c> of adapter <c>dotnet</c> whose build and test are two <c>/bin/sh -c</c> scripts — a step a coder job's unit can run (the unit sees system programs only; the fake CLI lives in a home folder it does not see).
+    /// An empty script leaves that step out of the file.
+    /// </summary>
+    internal static string Shell(string build, string test, string tail = "", string path = "app")
+    {
+        var text = new StringBuilder($"version: 1\nprojects:\n  - path: {Quote(path)}\n    adapter: dotnet\n");
+        foreach (var (key, script) in new[] { ("build", build), ("test", test) })
+        {
+            if (script.Length > 0)
+            {
+                text.Append($"    {key}:\n      - \"/bin/sh\"\n      - \"-c\"\n      - {Quote(script)}\n");
+            }
+        }
+
+        return text.Append(tail).ToString();
+    }
+
     private static void Append(StringBuilder text, string key, string[] verb)
     {
         if (verb.Length == 0)

@@ -28,6 +28,11 @@ public sealed class CoderBoundary(IProcessLauncher launcher, BoundaryHost host)
     /// <summary>For a test only: rewrites the finished <c>systemd-run</c> argument list of every unit this boundary starts, so a RED can drop one property and see the preflight refuse. Production never sets it.</summary>
     internal Func<IReadOnlyList<string>, IReadOnlyList<string>>? Degrade { get; init; }
 
+    /// <summary>
+    /// The boundary of the job's CHECKS on this machine: the same launcher, the same host, and — for a test — the same degrade, so a coder job's turns and its checks are bounded by one machine's facts and cannot disagree about it.
+    /// </summary>
+    public CheckBoundary ForChecks() => new(launcher, host) { Degrade = Degrade };
+
     /// <summary>The properties a coder launch of this job runs with — the list the result records. Empty when the program cannot be given to a unit.</summary>
     public IReadOnlyList<string> PropertiesFor(BoundaryJob job, string executable, TimeSpan runtimeMax)
     {

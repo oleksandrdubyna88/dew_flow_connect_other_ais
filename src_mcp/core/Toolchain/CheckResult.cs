@@ -71,6 +71,9 @@ public sealed record StepRecord(
     /// <summary>What the step ran inside: the boundary, its properties and the network state. <see cref="BoundaryRecord.None"/> for a run that was not a coder job's.</summary>
     public BoundaryRecord Boundary { get; init; } = BoundaryRecord.None;
 
+    /// <summary>The adapter of the project the step belongs to (<c>dotnet</c>, <c>node</c>…): the failure digest chooses its reader by it (<see cref="FailureDigest"/>). Empty when the record was not made by the check runner.</summary>
+    public string Adapter { get; init; } = string.Empty;
+
     /// <summary>Whether the step passed: it started, was not stopped and exited 0.</summary>
     public bool Passed => Started && !TimedOut && ExitCode == 0;
 }

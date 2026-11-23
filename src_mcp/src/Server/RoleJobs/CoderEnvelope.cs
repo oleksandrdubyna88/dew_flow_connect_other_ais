@@ -14,13 +14,16 @@ internal sealed record CoderFileChange(string Status, string Path);
 /// </summary>
 /// <remarks>
 /// <para><b>What is here and what is not.</b> <c>filesChanged</c> comes from <c>git diff --name-status &lt;baseSha&gt; &lt;headSha&gt;</c> and from nothing else: a report that names another file changes nothing in it. <c>report</c> is
-/// the coder's report as the reader parsed it, or null when it was not valid after its one repair turn (<c>schemaValid</c> false). There is no <c>green</c>: a report with every <c>met</c> true is a claim, and green comes from
-/// the checks of story s4.</para>
-/// <para><b><c>fixTurns</c></b> counts the turns the CHECKS sent the coder back for (story s4); this turn makes none, so it is 0. The one repair turn of an invalid report is the job's <c>repairTurns</c>.</para>
+/// the coder's report as the reader parsed it, or null when it was not valid after its one repair turn (<c>schemaValid</c> false). <c>green</c> is the CHECKS' word (<see cref="CoderChecksReport"/>), never the report's: a report with every
+/// <c>met</c> true is a claim.</para>
+/// <para><b><c>fixTurns</c></b> counts the turns the CHECKS sent the coder back for (story s4). The one repair turn of an invalid report is the job's <c>repairTurns</c>.</para>
+/// <para><b>The checks fields</b> (when the job reached its checks): <c>green</c>, <c>checksState</c> (<c>green</c>, <c>failed</c>, <c>not_configured</c>, <c>toolchain_refused</c>, <c>boundary_refused</c>, <c>tree_changed</c>), <c>checksNote</c>, <c>format</c>
+/// (the slot of the order a formatter has: <c>not_configured</c> when the toolchain file names none), <c>checks</c> (the steps of the LAST round: <c>{project, step, argv, exitCode, durationMs, logRef}</c>), <c>rounds</c> (every round: its turn, the commit it
+/// checked and its state), <c>fixRounds</c> (the cap and, when the setting was not a whole number from 0 to 10, the note saying so) and <c>lastDigest</c> (what the last failed step went back to the coder as).</para>
 /// <para><b><c>mainCheckout</c></b> is EVIDENCE about the repository the job was started in, never a verdict (decision 8, <c>server.md</c> § 16): what two snapshots of it, before and after each launch of the coder, showed. The coder cannot write there (the OS
 /// layer holds it read-only), so a path listed is somebody else's edit during the job — a person's. It never makes a job fail; a reader looks at it before the branch is merged.</para>
 /// </remarks>
-internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSha, string Branch, bool SchemaValid, int FixTurns, IReadOnlyList<CoderFileChange> FilesChanged, CoderReport? Report, CoderMainEvidence? MainCheckout = null)
+internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSha, string Branch, bool SchemaValid, int FixTurns, IReadOnlyList<CoderFileChange> FilesChanged, CoderReport? Report, CoderMainEvidence? MainCheckout = null, CoderChecksReport? Checks = null)
 {
     public string ToJson()
     {
@@ -46,6 +49,7 @@ internal sealed record CoderEnvelope(string JobId, string BaseSha, string HeadSh
             json.WriteEndArray();
             WriteReport(json);
             WriteMainCheckout(json);
+            Checks?.Write(json);
             json.WriteEndObject();
         }
 

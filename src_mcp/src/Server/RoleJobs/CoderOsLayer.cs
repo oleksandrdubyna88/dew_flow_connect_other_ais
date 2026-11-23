@@ -27,7 +27,7 @@ internal sealed record CoderOsStop(string Kind, string Sentence, bool Started);
 /// retention sweep's, with the worktree — never a turn's.</para>
 /// <para><b>Evidence, never a verdict</b> (decision 8): <see cref="Evidence"/> is the union of what each turn's two snapshots of the main checkout showed. A person's edit of the main checkout during the job shows there and fails nothing.</para>
 /// </remarks>
-internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns)
+internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns, IProcessLauncher launcher)
 {
     /// <summary>The variable that moves the folders the coder's homes live in; an absolute path (the same rule as <see cref="CoderWorktree.RootVariable"/>).</summary>
     public const string JobsVariable = "COAI_CODER_JOBS";
@@ -38,6 +38,12 @@ internal sealed class CoderOsLayer(BoundaryJob job, CoderTurns turns)
 
     /// <summary>The job the layer binds: worktree, main checkout and the job's own folders.</summary>
     public BoundaryJob Job => job;
+
+    /// <summary>The job's one launcher: what starts the coder's units starts the checks' too, so every child of the job is one the runner recorded.</summary>
+    public IProcessLauncher Launcher => launcher;
+
+    /// <summary>The boundary the job's checks run in — the one the turns run in, on the same machine.</summary>
+    public CheckBoundary ChecksBoundary() => turns.ChecksBoundary();
 
     /// <summary>
     /// The folder of one job's own files (home, temp, caches of the coder): <see cref="JobsVariable"/> or the machine-local <c>coder-jobs</c> folder, then the job id. Never inside the coder root — the coder root is read-only to the coder, and

@@ -26,6 +26,9 @@ public sealed class CoderTurns(CoderBoundary boundary, FilesystemInvariant invar
     /// <summary>The words of the OS's answer to a write into a read-only bind (<c>EROFS</c>), as C, node and .NET each spell it.</summary>
     private static readonly string[] ReadOnlySigns = ["read-only file system", "EROFS"];
 
+    /// <summary>The boundary of the checks of a coder job on this machine (<see cref="CoderBoundary.ForChecks"/>): what runs the build and the test after a turn is bounded by what bounded the turn.</summary>
+    public CheckBoundary ChecksBoundary() => boundary.ForChecks();
+
     /// <summary>Launches the coder for <paramref name="job"/> and reports what came of it.</summary>
     /// <param name="job">The job: the worktree the coder stands in, the main checkout it must not write, the folders of its unit.</param>
     /// <param name="request">The launch as <c>ClaudeConsultant.Build</c> made it for a <c>LaunchConfinement.Coder</c>.</param>

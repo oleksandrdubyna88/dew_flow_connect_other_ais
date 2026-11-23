@@ -126,7 +126,7 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
         var written = outcome switch
         {
             RoleWorkOutcome.Succeeded done => lease.Publish(done.ResultJson, job => job with { State = RoleJobStates.Succeeded, EndedUtc = now, Child = null }),
-            RoleWorkOutcome.Failed failed => Close(lease, job => job with { State = RoleJobStates.Failed, Stop = failed.Stop, Reason = failed.Reason, EndedUtc = now, Child = null }),
+            RoleWorkOutcome.Failed failed => FailedWrite(lease, failed, now),
             _ => Close(lease, job => Stopped(job, why, request, now)),
         };
 
@@ -136,6 +136,14 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
         }
 
         return Finished(written);
+    }
+
+    /// <summary>A failed job closes with its stop and reason; one that has evidence publishes it in the same step (<see cref="RoleLease.Publish"/>), so a reader never sees the terminal state without it.</summary>
+    private static RoleJobWrite FailedWrite(RoleLease lease, RoleWorkOutcome.Failed failed, DateTime now)
+    {
+        Func<RoleJobRecord, RoleJobRecord> close = job => job with { State = RoleJobStates.Failed, Stop = failed.Stop, Reason = failed.Reason, EndedUtc = now, Child = null };
+
+        return failed.ResultJson is { } result ? lease.Publish(result, close) : Close(lease, close);
     }
 
     private static RoleJobRecord Stopped(RoleJobRecord job, StopWhy why, RoleJobRequest request, DateTime now) => why switch

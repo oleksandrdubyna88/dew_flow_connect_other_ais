@@ -68,10 +68,31 @@ internal sealed class CoderRig : IAsyncDisposable
     /// <summary>A test-only rewrite of every unit's argument list (a property taken away); null leaves the layer as it ships.</summary>
     internal Func<IReadOnlyList<string>, IReadOnlyList<string>>? Degrade { get; set; }
 
+    /// <summary>The line a fixture file of <see cref="StateFile"/> says to make the test step fail, and the one that lets it pass.</summary>
+    internal const string Red = "state: red";
+
+    internal const string Green = "state: green";
+
+    /// <summary>What the fixture build looks for: a file below <c>src</c> that holds it does not build.</summary>
+    internal const string Broken = "BUILD_BREAK";
+
+    /// <summary>The file the fake coder writes to flip the fixture's checks.</summary>
+    internal const string StateFile = "src/thing.cs";
+
+    /// <summary>
+    /// The toolchain file of a fixture repository (<c>.coai/toolchain.yaml</c>, read at the base commit by the real reader): a REAL tiny build and test, no shell script of the repository and nothing mocked but the vendor. The build fails — printing an
+    /// MSBuild-shaped error line, as a compiler would — when a file below <c>src</c> holds <see cref="Broken"/>; the test fails — printing what failed — when one holds <see cref="Red"/>. Both write nothing, so a green run leaves the worktree as it found it.
+    /// </summary>
+    internal static string DefaultToolchain(string buildTail = "", string testTail = "") =>
+        ToolchainFixture.Shell(
+            $"if grep -rq {Broken} src 2>/dev/null; then echo 'src/thing.cs(1,1): error CS1002: ; expected [app.csproj]'; exit 1; fi; echo built{buildTail}",
+            $"if grep -rq '{Red}' src 2>/dev/null; then echo 'FAILED thing: the state is red'; exit 1; fi; echo tested{testTail}");
+
     /// <summary>
     /// The rig. A coder launch needs a systemd user manager, so without one the test is SKIPPED, with the reason — unless <paramref name="needsLayer"/> is false, for a scenario in which no coder is ever launched.
     /// </summary>
-    internal static async Task<CoderRig> CreateAsync(bool needsLayer = true)
+    /// <param name="toolchain">The text of <c>.coai/toolchain.yaml</c> the BASE commit holds: null is <see cref="DefaultToolchain"/> (a build and a test that pass until a file says otherwise), empty is a repository with no toolchain file.</param>
+    internal static async Task<CoderRig> CreateAsync(bool needsLayer = true, string? toolchain = null)
     {
         if (needsLayer)
         {
@@ -82,6 +103,11 @@ internal sealed class CoderRig : IAsyncDisposable
         BaScenario.Lay(rig.Repo);
         BaScenario.Write(rig.Repo, $"{Story}/story.yaml", WorkPlanYaml.Story(new BaStory("s1-first", "A story", [], [])));
         BaScenario.Write(rig.Repo, TaskFile, WorkPlanYaml.Task(new BaTask(TaskId, "Write the thing", "code", 4, [], false, ["src/thing.cs"], [new BaDod("d1", "the thing works"), new BaDod("d2", "the thing is tested")], null)));
+        if ((toolchain ?? DefaultToolchain()) is { Length: > 0 } toolchainText)
+        {
+            BaScenario.Write(rig.Repo, ".coai/toolchain.yaml", toolchainText);
+        }
+
         foreach (var (key, value) in new[] { ("user.email", "t@t"), ("user.name", "t"), ("commit.gpgsign", "false") })
         {
             await rig.Rig.Git.GitAsync("config", key, value);
@@ -99,7 +125,7 @@ internal sealed class CoderRig : IAsyncDisposable
     /// One launch of the fake coder: the files it writes below its working folder, what it says, how long it waits before it answers, and — a coder that goes where it must not — the ABSOLUTE paths it tries to write (what the OS refuses
     /// goes to its stderr).
     /// </summary>
-    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null);
+    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "");
 
     /// <summary>
     /// What FakeCli does for <paramref name="model"/>, launch by launch (the last repeats). The steering file — the coder's child reads only that — is written again with every call.
@@ -123,7 +149,7 @@ internal sealed class CoderRig : IAsyncDisposable
     {
         var entry = new Dictionary<string, object?>
         {
-            ["stdout"] = JsonSerializer.SerializeToElement(FakeRoleAnswers.ClaudeSays(launch.Answer)).GetProperty("stdout").GetString(),
+            ["stdout"] = WithSession(JsonSerializer.SerializeToElement(FakeRoleAnswers.ClaudeSays(launch.Answer)).GetProperty("stdout").GetString()!, launch.Session),
             ["exit"] = 0,
             ["sleepMs"] = launch.SleepMs,
         };
@@ -139,6 +165,10 @@ internal sealed class CoderRig : IAsyncDisposable
 
         return entry;
     }
+
+    /// <summary>The recorded envelope names session 00000000-…; a launch that names another says it by this replacement of the one field.</summary>
+    private static string WithSession(string stdout, string session) =>
+        session.Length == 0 ? stdout : stdout.Replace("\"session_id\":\"00000000-0000-0000-0000-000000000000\"", $"\"session_id\":\"{session}\"", StringComparison.Ordinal);
 
     internal CoderRig Says(string model, IReadOnlyDictionary<string, string>? edits, string answer, int sleepMs = 0) => Says(model, new Launch(edits, answer, sleepMs));
 
@@ -192,11 +222,17 @@ internal sealed class CoderRig : IAsyncDisposable
     internal IReadOnlyList<string[]> Launches(RoleJobRecord job) =>
         Directory.Exists(Path.Combine(JobTemp(job), "launches")) ? RoleFailoverRig.LaunchesIn(Path.Combine(JobTemp(job), "launches")) : [];
 
-    internal async Task<(int Exit, RoleJobRecord Job)> RunAsync(RoleJobRecord job, Action<string>? boundary = null)
+    internal async Task<(int Exit, RoleJobRecord Job)> RunAsync(RoleJobRecord job, Action<string>? boundary = null, TimeProvider? clock = null)
     {
         Stage(job);
+        if (clock is null)
+        {
+            return await _inner.RunAsync(job, [Descriptor(boundary)]);
+        }
 
-        return await _inner.RunAsync(job, [Descriptor(boundary)]);
+        var exit = await _inner.RunnerWith([Descriptor(boundary)], clock).RunAsync(job.JobId, TestContext.Current.CancellationToken);
+
+        return (exit, World.Store.Read(job.JobId)!);
     }
 
     internal JsonElement Envelope(RoleJobRecord job) => JsonDocument.Parse(World.Store.FolderOf(job.JobId)!.ReadResult()).RootElement.Clone();
@@ -216,18 +252,28 @@ internal sealed class CoderRig : IAsyncDisposable
         var left = new List<string>();
         foreach (var id in _staged)
         {
-            try
-            {
-                var listed = await new ProcessLauncher().RunAsync(new ProcessRequest("systemctl", ["--user", "list-units", $"coai-coder-{id}-*", "--all", "--no-legend", "--plain"], _root.Path) { Timeout = TimeSpan.FromSeconds(20) });
-                left.AddRange(listed.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.Split(' ')[0]));
-            }
-            catch (System.ComponentModel.Win32Exception)
-            {
-                // No systemctl at all: no unit can have been started.
-            }
+            left.AddRange(await UnitsOfAsync(id));
         }
 
         return left;
+    }
+
+    /// <summary>The units of one job that are loaded now — the coder's (<c>coai-coder-</c>) and its checks' (<c>coai-check-</c>); empty where there is no systemctl at all.</summary>
+    internal Task<IReadOnlyList<string>> UnitsOfAsync(RoleJobRecord job) => UnitsOfAsync(job.JobId);
+
+    private async Task<IReadOnlyList<string>> UnitsOfAsync(string jobId)
+    {
+        try
+        {
+            var listed = await new ProcessLauncher().RunAsync(new ProcessRequest("systemctl", ["--user", "list-units", $"coai-coder-{jobId}-*", $"coai-check-{jobId}-*", "--all", "--no-legend", "--plain"], _root.Path) { Timeout = TimeSpan.FromSeconds(20) });
+
+            return [.. listed.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.Split(' ')[0])];
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // No systemctl at all: no unit can have been started.
+            return [];
+        }
     }
 
     public async ValueTask DisposeAsync()
