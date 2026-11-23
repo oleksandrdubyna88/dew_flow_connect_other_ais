@@ -429,3 +429,14 @@ the same account, not only the one that hit it.
   the creds code-access key. Re-import after the entry changes; a key gone from the entry is disabled, not deleted, on
   re-import (the import names its source so only keys of that source are touched).
 - `--format creds-json` reads `{"version":1,"keys":[{"label","account","token"}]}`; unknown keys refused; labels unique.
+
+### Owner decision 2026-11-23 — the AMI source is an env file (replaces the SSM idea)
+
+- File `/etc/coai/claude-keys.env`, owned by the orchestrator user, mode 0600 (wrong owner or mode = refused with a
+  sentence, nothing imported). Placed by the instance launch step, never in the image (the image ships only the empty
+  folder and the rule).
+- Lines: `COAI_CLAUDE_KEY_<label>=<token>` and optional `COAI_CLAUDE_ACCOUNT_<label>=<email>`; label = `[a-z0-9-]{1,40}`
+  after lower-casing; comments `#` and blank lines allowed; any other line refused (named by line number, never echoed).
+- coai syncs the pool from the file at every start (source `file:/etc/coai/claude-keys.env`): new → added, changed →
+  replaced, missing → disabled; only keys of this source are touched. Rotation = edit + restart. No AWS dependency.
+- The same `--format env` import works on any device (`coai-mcp --keys import --format env < file`).
