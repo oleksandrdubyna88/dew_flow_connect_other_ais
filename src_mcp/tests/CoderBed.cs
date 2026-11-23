@@ -17,15 +17,12 @@ internal sealed class CoderBed : IAsyncDisposable
     /// <summary>The line the stand-in's sign-in file holds; a test looks for it inside the unit, and never in a log.</summary>
     internal const string SignInLine = "made-up-sign-in-line-not-a-credential";
 
-    private readonly TempDir _realHome = TempDir.For("cb5-home-");
+    private readonly TempDir _realHome;
 
-    private CoderBed(BoundaryBed inner)
+    private CoderBed(TempDir realHome, BoundaryBed inner)
     {
+        _realHome = realHome;
         Inner = inner;
-        Directory.CreateDirectory(Path.Combine(_realHome.Path, ".claude"));
-        File.WriteAllText(SignIn, SignInLine + "\n");
-        File.WriteAllText(Path.Combine(_realHome.Path, ".claude.json"), "{}\n");
-        File.WriteAllText(Path.Combine(_realHome.Path, ".bashrc"), "# a file of the stand-in's home\n");
         Host = inner.Host with { RealHome = _realHome.Path };
         Evidence = new FilesystemInvariant(inner.Launcher);
     }
@@ -56,7 +53,19 @@ internal sealed class CoderBed : IAsyncDisposable
     /// <summary>The folder that holds the worktree: the coder root.</summary>
     public string CoderRoot => Job.CoderRoot;
 
-    public static async Task<CoderBed> CreateAsync() => new(await BoundaryBed.CreateAsync());
+    /// <summary>
+    /// The bed. <paramref name="toolchainOf"/> makes the toolchain file the base commit holds from the stand-in's path — a fixture check that names it must be written before the commit that holds it.
+    /// </summary>
+    public static async Task<CoderBed> CreateAsync(Func<string, string>? toolchainOf = null)
+    {
+        var home = TempDir.For("cb5-home-");
+        Directory.CreateDirectory(Path.Combine(home.Path, ".claude"));
+        await File.WriteAllTextAsync(Path.Combine(home.Path, ".claude", ".credentials.json"), SignInLine + "\n");
+        await File.WriteAllTextAsync(Path.Combine(home.Path, ".claude.json"), "{}\n");
+        await File.WriteAllTextAsync(Path.Combine(home.Path, ".bashrc"), "# a file of the stand-in's home\n");
+
+        return new CoderBed(home, await BoundaryBed.CreateAsync(toolchainOf?.Invoke(home.Path) ?? string.Empty));
+    }
 
     public CoderBoundary Boundary(Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, BoundaryHost? host = null) =>
         new(Launcher, host ?? Host) { Degrade = degrade };
