@@ -1,13 +1,10 @@
-// Writes the coai v2 feature folder (YAML contract) from one spec. Usage: node gen-v2.mjs <v2-dir>
+// Writes the coai v2 feature folder (YAML contract) from one spec. Usage: node v2/_gen/gen-v2.mjs
+// It writes the folder this file sits in (v2/) and takes no argument: a path from the command line would be a path anywhere on the disk.
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-// The folder is a path under the folder this is run from — a path anywhere else is refused, so a wrong argument cannot write outside the checkout.
-const base = process.cwd();
-const root = process.argv[2] ? resolve(base, process.argv[2]) : '';
-if (!root) { console.error('usage: gen-v2.mjs <v2-dir>'); process.exit(2); }
-const inside = relative(base, root);
-if (inside.startsWith('..') || isAbsolute(inside)) { console.error(`gen-v2.mjs: ${process.argv[2]} is not under ${base}`); process.exit(2); }
+const root = fileURLToPath(new URL('..', import.meta.url));
 
 // Minimal YAML emitter: maps, lists, strings (always quoted when needed), numbers, booleans.
 const q = (s) => (/^[A-Za-z0-9_.\/-]+$/.test(s) && !/^(true|false|null|yes|no|\d.*)$/i.test(s) ? s : JSON.stringify(s));
