@@ -65,6 +65,14 @@ public static class ServerNoticeCodes
     /// </summary>
     public const string V2ConvertedAnsweredHold = "v2-converted-answered-hold";
 
+    /// <summary>
+    /// A role job whose runner still holds its lease but has shown no heartbeat for two minutes — stopped or hung, not dead (epoch 3 E1 s1, spec A). Subject is the job id; one per stall.
+    /// </summary>
+    public const string RoleJobStalled = "role-job-stalled";
+
+    /// <summary>A role job whose lease nobody holds any more and that never reached a terminal state: closed as <c>lost</c>, its recorded child stopped (epoch 3 E1 s1). Subject is the job id; one per job.</summary>
+    public const string RoleJobLost = "role-job-lost";
+
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>
     public static IReadOnlyList<string> All =>
     [
@@ -84,5 +92,7 @@ public static class ServerNoticeCodes
         UncleanExit,
         Crash,
         V2ConvertedAnsweredHold,
+        RoleJobStalled,
+        RoleJobLost,
     ];
 }

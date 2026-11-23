@@ -34,7 +34,7 @@ internal static class Schema
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
         WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
-        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource, TheRoundsAuthors, TheWorkItem,
+        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource, TheRoundsAuthors, TheWorkItem, TheRoleJobs,
     ];
 
     internal const string SecurityEvidence = """
@@ -750,5 +750,54 @@ internal static class Schema
         CREATE INDEX IF NOT EXISTS rounds_by_work_item ON rounds (work_item) WHERE work_item <> '';
         CREATE INDEX IF NOT EXISTS consultations_by_work_item ON consultations (work_item) WHERE work_item <> '';
         CREATE INDEX IF NOT EXISTS question_consults_by_work_item ON question_consults (work_item) WHERE work_item <> '';
+        """;
+
+    /// <summary>
+    /// Step 26: the external-role jobs of epoch 3 E1 — a PROJECTION of <c>roles/jobs/&lt;jobId&gt;/job.json</c>, which is the authority (<c>v2/epoch-3/e1-role-jobs-ba/SPEC.md</c> section 0, decision 1).
+    /// </summary>
+    /// <remarks>
+    /// <para><c>role_jobs</c> holds one row per job: who asked (<c>role</c>, <c>repo</c>, <c>work_item</c>, <c>task_file</c>), where it stands (<c>state</c>, <c>generation</c>, <c>launcher</c>), when
+    /// (<c>created_utc</c> … <c>updated_utc</c>; <b>empty means "not yet"</b>), the model that gave the answer, how many attempts there were, why it did not succeed (<c>stop</c>, <c>reason</c>) and the
+    /// two numbers the router and the repair loop leave (<c>complexity</c>, <c>security</c>, <c>repair_turns</c>). <c>role_attempts</c> holds one row per try of one model (<c>ordinal</c> from 1), with
+    /// its tokens. A row is rewritten from the job file on every change, so a database that missed a write catches up at the next one; a database that cannot be written changes no job.</para>
+    /// <para>Retention removes a terminal job FOLDER after 30 days or past 200; the rows stay (about 1 KB each). Appended, never inserted, for the reason step 20 records; a reader opened read-only
+    /// runs no step and asks the schema whether the table is there.</para>
+    /// </remarks>
+    internal const string TheRoleJobs = """
+        CREATE TABLE IF NOT EXISTS role_jobs (
+            job_id        TEXT PRIMARY KEY,
+            role          TEXT NOT NULL DEFAULT '',
+            repo          TEXT NOT NULL DEFAULT '',
+            work_item     TEXT NOT NULL DEFAULT '',
+            task_file     TEXT NOT NULL DEFAULT '',
+            state         TEXT NOT NULL DEFAULT '',
+            generation    INTEGER NOT NULL DEFAULT 0,
+            launcher      TEXT NOT NULL DEFAULT '',
+            created_utc   TEXT NOT NULL DEFAULT '',
+            started_utc   TEXT NOT NULL DEFAULT '',
+            ended_utc     TEXT NOT NULL DEFAULT '',
+            updated_utc   TEXT NOT NULL DEFAULT '',
+            final_model   TEXT NOT NULL DEFAULT '',
+            attempts      INTEGER NOT NULL DEFAULT 0,
+            stop          TEXT NOT NULL DEFAULT '',
+            reason        TEXT NOT NULL DEFAULT '',
+            repair_turns  INTEGER NOT NULL DEFAULT 0,
+            complexity    INTEGER NOT NULL DEFAULT 0,
+            security      INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS role_attempts (
+            job_id      TEXT NOT NULL REFERENCES role_jobs(job_id),
+            ordinal     INTEGER NOT NULL,
+            model       TEXT NOT NULL DEFAULT '',
+            vendor      TEXT NOT NULL DEFAULT '',
+            started_utc TEXT NOT NULL DEFAULT '',
+            ended_utc   TEXT NOT NULL DEFAULT '',
+            stop        TEXT NOT NULL DEFAULT '',
+            reason      TEXT NOT NULL DEFAULT '',
+            tokens_in   INTEGER NOT NULL DEFAULT 0,
+            tokens_out  INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (job_id, ordinal)
+        );
+        CREATE INDEX IF NOT EXISTS role_jobs_by_state ON role_jobs (state, updated_utc);
         """;
 }

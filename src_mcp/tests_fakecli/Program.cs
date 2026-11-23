@@ -358,6 +358,17 @@ switch (args0)
     case ["hold-file", var mode, var file]:
         return CoaiMcp.FakeCli.HoldFileVerb.Run(mode, file);
 
+    // Epoch 3 E1 s1: a role job's lease, held by a child for the given time (the kernel frees it when the child dies or is killed). Writes <file>.held with its pid once it holds it; 75 when busy.
+    case ["lease-hold", var leaseFile, var leaseMs]:
+        return CoaiMcp.FakeCli.LeaseHoldVerb.Run(leaseFile, int.Parse(leaseMs));
+
+    // Epoch 3 E1 s1 (A14): a memory hog, and a small parent that starts it as its child and writes the child's exit code — the shape of a runner and the CLI it owns.
+    case ["alloc", var allocMb, var allocLog]:
+        return CoaiMcp.FakeCli.AllocVerbs.Alloc(int.Parse(allocMb), allocLog);
+
+    case ["parent-of-alloc", var parentMb, var parentLog, var parentResult]:
+        return CoaiMcp.FakeCli.AllocVerbs.ParentOfAlloc(int.Parse(parentMb), parentLog, parentResult);
+
     // Takes the REAL EngineLease in its own process, holds it, and prints the window it held it
     // for. Five of these are how the cross-process claim is measured rather than asserted: two
     // objects in one process would prove nothing about two servers on one machine.
