@@ -128,3 +128,30 @@ test('R6 the Remote-WSL script never touches the person\'s extensions: no uninst
   assert.match(code, /\$ownerAfter -ne \$ownerBefore/, 'guard 3: the person\'s folder is compared');
   assert.match(script, /^\s*Guard 3 \(after\)|# Guard 3 \(after\)/m);
 });
+
+test('R7 the Remote-WSL script runs with no Node on Windows: a prebuilt driver VSIX, and the report step inside the distro, with the Windows-node path kept', () => {
+  const script = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'scripts', 'measure-remote-wsl.ps1'), 'utf8');
+  const code = script.split('\n').filter((line) => !/^\s*(#|\.|<#|#>)/.test(line)).join('\n');
+
+  assert.match(code, /\[string\] \$DriverVsix = ''/, 'the optional parameter');
+  assert.match(script, /\.PARAMETER DriverVsix/, 'the parameter is documented');
+  assert.match(code, /\$packDriver = \[string\]::IsNullOrWhiteSpace\(\$DriverVsix\)/);
+  // vsce is looked for and run only when no prebuilt driver is given
+  assert.match(code, /if \(\$packDriver\) \{\s*\$Vsce = /);
+  assert.match(code, /if \(\$packDriver\) \{\s*\$driverVsix = Join-Path \$OutDir 'coai-measure-driver\.vsix'[\s\S]*?Invoke-Native -File \$Vsce[\s\S]*?\} else \{\s*\$driverVsix = \$DriverVsix/);
+  assert.ok(!/^(?:if \(-not \(Test-Path -LiteralPath \$Vsce\)\)|\$Vsce = )/m.test(code), 'vsce is not a precondition outside the -DriverVsix-less branch');
+  // node is no longer required up front; its presence picks the path
+  assert.ok(!/throw 'node is not on PATH/.test(code), 'node is not demanded on Windows any more');
+  assert.match(code, /\$windowsNode = \[bool\]\(Get-Command node/);
+  assert.match(code, /if \(\$windowsNode\) \{\s*& node \$reportScript/, 'the Windows-node path is kept');
+  assert.match(code, /& wsl\.exe -d \$Distro --exec bash -l \$distroNodeRunner/, 'the report step runs inside the distro');
+  assert.match(code, /'wslpath', '-u'/, 'files are passed by their distro paths');
+  assert.match(code, /node is not on the Windows PATH and not in \$Distro either/, 'a distro with no node is a clear error');
+  // the same arguments reach the report either way
+  assert.ok((code.match(/'--samples'/g) ?? []).length >= 2 && (code.match(/@rowArgs/g) ?? []).length >= 2);
+  assert.match(code, /'exec node "\$@"'/, 'every argument reaches node whole');
+  assert.match(code, /-join "`n"/, 'the runner is written with LF line endings');
+  // the isolation guards are still there, untouched by the change
+  assert.match(code, /did not land in the isolated folder/);
+  assert.match(code, /\$ownerAfter -ne \$ownerBefore/);
+});

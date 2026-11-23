@@ -9,21 +9,27 @@
 
   What it does, for each sample (3 by default), and every sample is its own launch:
     1. makes a FRESH --user-data-dir (and --extensions-dir) under -OutDir, and a fresh workspace folder and COAI data folder inside the distro;
-    2. installs the coai VSIX and the tiny driver VSIX (scripts/measure-driver) with `code --remote wsl+<distro> --install-extension` into an ISOLATED
+    2. installs the coai VSIX and the tiny driver VSIX (scripts/measure-driver; or the prebuilt one of -DriverVsix) with `code --remote wsl+<distro> --install-extension` into an ISOLATED
        extensions folder inside the distro's run folder (see the notes), never into the person's own ~/.vscode-server/extensions;
     3. launches `code --remote wsl+<distro> <fresh folder>` with COAI_MEASURE=1 (passed to the distro through WSLENV);
     4. the driver extension, running in the remote extension host, checks that the coai extension is NOT active, starts the clock, runs
        workbench.view.extension.coai, waits for a fresh `menuReady` (the real sidebar menu is shown and usable), reads the marks through `coai.__measure` and writes coai-measure-result.json
        in the workspace folder; the script reads it back over \\wsl.localhost\<distro>\...;
     5. closes the window; at the end it removes its run folder in the distro (which is where everything it installed lives).
-  Then scripts/coldstart-report.mjs (node) applies the same rule as CI: the MAXIMUM M2 at most 2000 ms, M1 at most 100 ms, a fresh ack in every sample.
+  Then scripts/coldstart-report.mjs (node: on Windows when node is there, else inside the distro) applies the same rule as CI: the MAXIMUM M2 at most 2000 ms, M1 at most 100 ms, a fresh ack in every sample.
   The M2 limit follows the platform the records name (owner 2026-11-23: 3000 ms on Windows, 2000 ms on Linux). Remote-WSL runs the extension host on
   LINUX, so the records say `linux` and the limit here is 2000 ms, not the 3000 ms of the Windows CI job, although this script runs on Windows.
   The result names the extension-host location: `location` is `wsl` when the extension host really ran in WSL (the script fails otherwise), and
   every sample also records the platform and the path the extension was loaded from.
 
-  Needs: Windows with VS Code (`code` on PATH) and the "WSL" remote extension, the distro, node on PATH, and `npm ci` done in src_vs_code (the
-  driver VSIX is packed with the repository's own vsce). NOT run by CI and never run by the agent that wrote it: read the notes below first.
+  Needs: Windows with VS Code (`code` on PATH) and the "WSL" remote extension, and the distro. NO Node is needed on Windows:
+    * the driver VSIX comes prebuilt with -DriverVsix <path> (build it once in the distro: in src_vs_code/scripts/measure-driver run
+      `../../node_modules/.bin/vsce package --no-dependencies --allow-missing-repository --skip-license --out <file>`); no vsce and no npm are used on Windows.
+      Without -DriverVsix the script packs the driver itself, and then it needs node on PATH and `npm ci` done in src_vs_code (the repository's own vsce);
+    * when node is not on the Windows PATH, the report step (scripts/coldstart-report.mjs) runs inside the distro with the distro's node
+      (a small run-node.sh the script writes into -OutDir; it finds a node from ~/.profile or nvm); the script stops, before it installs anything, with a clear error when the distro has no node.
+      The script is then run from a src_vs_code folder the distro can read: its own /mnt/<drive>/... path, or \\wsl.localhost\<distro>\... .
+  NOT run by CI and never run by the agent that wrote it: read the notes below first.
 
   NOTES YOU MUST KNOW BEFORE THE FIRST RUN
   * `--extensions-dir` and `--user-data-dir` are the LOCAL (Windows) side. The WSL server has its own folders, and the script NEVER touches the person's:
@@ -53,6 +59,8 @@
   The WSL distribution name, as `wsl -l -q` prints it (for example Ubuntu).
 .PARAMETER Vsix
   The ConnectOtherAIs VSIX to measure (npm run package in src_vs_code, or the release asset).
+.PARAMETER DriverVsix
+  A prebuilt driver VSIX (scripts/measure-driver, packed once with the repository's vsce, for example in the distro). When it is given, the script uses no vsce and no npm on Windows.
 .PARAMETER Samples
   Cold launches, each with fresh state. Default 3; the maximum counts.
 .PARAMETER OutDir
@@ -73,11 +81,15 @@
   Do not remove the run's folder in the distro afterwards (it holds the isolated extensions folder with the two VSIX, the server data and the records). It is the run's, never the person's; the script prints its path.
 .EXAMPLE
   .\scripts\measure-remote-wsl.ps1 -Distro Ubuntu -Vsix ..\connect-other-ais-0.90.0.vsix -OutDir C:\measure -StopServers -AppendRow -Label "remote-wsl, Windows 11, Ubuntu 24.04"
+.EXAMPLE
+  # A Windows machine with no Node: a prebuilt driver VSIX, and the report step runs in the distro.
+  .\scripts\measure-remote-wsl.ps1 -Distro Ubuntu -Vsix C:\Users\me\coai-v2\connect-other-ais-2.0.0-rc-abc1234.vsix -DriverVsix C:\Users\me\coai-v2\coai-measure-driver.vsix -OutDir C:\measure -StopServers
 #>
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)] [string] $Distro,
   [Parameter(Mandatory = $true)] [string] $Vsix,
+  [string] $DriverVsix = '',
   [int] $Samples = 3,
   [Parameter(Mandatory = $true)] [string] $OutDir,
   [string] $Code = 'code',
@@ -128,6 +140,14 @@ function Read-InDistro {
   return (($text | ForEach-Object { "$_".Trim() } | Where-Object { $_ }) -join "`n")
 }
 
+function ConvertTo-DistroPath {
+  # A Windows path (C:\x, or \\wsl.localhost\<distro>\x) as the distro sees it, for the report step that runs there.
+  param([string] $WindowsPath)
+  $converted = Read-InDistro -Arguments @('wslpath', '-u', $WindowsPath)
+  if ([string]::IsNullOrWhiteSpace($converted)) { throw "wslpath could not convert $WindowsPath for $Distro (is this folder one the distro can read?)" }
+  return $converted
+}
+
 function Get-OwnerExtensionsSnapshot {
   # What the person's own extensions folder in the distro looks like: the names in it and the hash of extensions.json. Read only. Compared before and after.
   $folder = "$distroHome/.vscode-server/extensions"
@@ -140,10 +160,18 @@ if ($Samples -lt 1) { throw '-Samples needs a whole number of at least 1' }
 if ($AppendRow -and [string]::IsNullOrWhiteSpace($Label)) { throw '-AppendRow needs -Label: a row without its conditions is a number about something else' }
 if (-not (Test-Path -LiteralPath $Vsix)) { throw "the VSIX $Vsix does not exist" }
 $Vsix = (Resolve-Path -LiteralPath $Vsix).Path
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'node is not on PATH: scripts/coldstart-report.mjs needs it' }
 if (-not (Get-Command $Code -ErrorAction SilentlyContinue)) { throw "$Code is not on PATH" }
-$Vsce = Join-Path $PackageRoot 'node_modules\.bin\vsce.cmd'
-if (-not (Test-Path -LiteralPath $Vsce)) { throw "$Vsce is missing: run npm ci in $PackageRoot first" }
+# The driver: a prebuilt VSIX needs nothing on Windows; without one, the repository's own vsce (npm ci) and node are used here.
+$packDriver = [string]::IsNullOrWhiteSpace($DriverVsix)
+if ($packDriver) {
+  $Vsce = Join-Path $PackageRoot 'node_modules\.bin\vsce.cmd'
+  if (-not (Test-Path -LiteralPath $Vsce)) { throw "$Vsce is missing: run npm ci in $PackageRoot first, or pass -DriverVsix <a prebuilt driver VSIX> (no vsce is used then)" }
+} else {
+  if (-not (Test-Path -LiteralPath $DriverVsix)) { throw "the driver VSIX $DriverVsix does not exist" }
+  $DriverVsix = (Resolve-Path -LiteralPath $DriverVsix).Path
+}
+# The report step: node on the Windows PATH when it is there, else the distro's node (checked below, after the distro answered).
+$windowsNode = [bool](Get-Command node -ErrorAction SilentlyContinue)
 
 # The distro must answer, or `--remote wsl+<distro>` would open a window that never connects.
 Invoke-InDistro -Arguments @('true')
@@ -172,12 +200,36 @@ $ownerBefore = Get-OwnerExtensionsSnapshot
 
 $OutDir = Join-Path $OutDir "coai-measure-$runId"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-$driverVsix = Join-Path $OutDir 'coai-measure-driver.vsix'
-Push-Location $DriverFolder
-try {
-  Invoke-Native -File $Vsce -Arguments @('package', '--no-dependencies', '--allow-missing-repository', '--skip-license', '--out', $driverVsix)
-} finally {
-  Pop-Location
+# No node on Windows: the report step runs in the distro, so the distro must have node, and this is said now, before anything is installed or opened. The runner is a
+# small shell file in $OutDir (so no quote has to cross wsl.exe): a login shell finds a node from ~/.profile, and nvm.sh is loaded when that is not enough, because
+# nvm is usually set up in ~/.bashrc, which a non-interactive shell does not read. Lines are joined with LF: a CRLF file would not run in bash.
+$distroNodeRunner = $null
+if (-not $windowsNode) {
+  $runnerLines = @(
+    '#!/bin/bash',
+    'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
+    'if ! command -v node >/dev/null 2>&1 && [ -s "$NVM_DIR/nvm.sh" ]; then . "$NVM_DIR/nvm.sh" >/dev/null 2>&1; fi',
+    'exec node "$@"'
+  )
+  $runnerWindows = Join-Path $OutDir 'run-node.sh'
+  [System.IO.File]::WriteAllText($runnerWindows, (($runnerLines -join "`n") + "`n"), (New-Object System.Text.UTF8Encoding($false)))
+  $distroNodeRunner = ConvertTo-DistroPath $runnerWindows
+  & wsl.exe -d $Distro --exec bash -l $distroNodeRunner --version 2>&1 | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Invoke-InDistro -Arguments @('rm', '-rf', $distroRun) -AllowFailure
+    throw "node is not on the Windows PATH and not in $Distro either: scripts/coldstart-report.mjs needs node in one of them. Install node (20 or newer) in the distro (for example: wsl -d $Distro -- sudo apt install nodejs), or on Windows. Nothing was changed."
+  }
+}
+if ($packDriver) {
+  $driverVsix = Join-Path $OutDir 'coai-measure-driver.vsix'
+  Push-Location $DriverFolder
+  try {
+    Invoke-Native -File $Vsce -Arguments @('package', '--no-dependencies', '--allow-missing-repository', '--skip-license', '--out', $driverVsix)
+  } finally {
+    Pop-Location
+  }
+} else {
+  $driverVsix = $DriverVsix
 }
 
 # COAI_MEASURE reaches the distro through WSLENV: a variable named there is passed on to every Linux process wsl.exe starts. `/u` is
@@ -256,13 +308,20 @@ try {
 
 # The verdict is the repository's own rule (scripts/coldstart-lib.mjs), the same one the CI jobs apply.
 $result = Join-Path $OutDir 'result.json'
-$reportArgs = @((Join-Path $PSScriptRoot 'coldstart-report.mjs'), '--samples', "$Samples", '--json', $result)
+# The rows the report adds to research/RESULTS_v2_start.md; the same for both ways of running it.
+$rowArgs = @()
 if ($AppendRow) {
-  $reportArgs += @('--row', '--label', $Label)
-  if ($Commit) { $reportArgs += @('--commit', $Commit) }
+  $rowArgs += @('--row', '--label', $Label)
+  if ($Commit) { $rowArgs += @('--commit', $Commit) }
 }
-$reportArgs += $records
-& node @reportArgs
+$reportScript = Join-Path $PSScriptRoot 'coldstart-report.mjs'
+if ($windowsNode) {
+  & node $reportScript '--samples' "$Samples" '--json' $result @rowArgs @records
+} else {
+  # Inside the distro, with the distro's node, every file named by its distro path. The runner passes each argument on whole (a label has spaces).
+  $distroRecords = @($records | ForEach-Object { ConvertTo-DistroPath $_ })
+  & wsl.exe -d $Distro --exec bash -l $distroNodeRunner (ConvertTo-DistroPath $reportScript) '--samples' "$Samples" '--json' (ConvertTo-DistroPath $result) @rowArgs @distroRecords
+}
 $code = $LASTEXITCODE
 foreach ($failure in $failures) { Write-Error $failure -ErrorAction Continue }
 
