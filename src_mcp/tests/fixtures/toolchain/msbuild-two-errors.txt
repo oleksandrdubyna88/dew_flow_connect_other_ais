@@ -1,0 +1,14 @@
+
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+/home/dev/coai/src_mcp/core/Toolchain/ZzBroken.cs(5,36): error CS0029: Cannot implicitly convert type 'string' to 'int' [/home/dev/coai/src_mcp/core/CoaiMcp.Core.csproj]
+/home/dev/coai/src_mcp/core/Toolchain/ZzBroken.cs(7,37): error CS0103: The name 'MissingType' does not exist in the current context [/home/dev/coai/src_mcp/core/CoaiMcp.Core.csproj]
+
+Build FAILED.
+
+/home/dev/coai/src_mcp/core/Toolchain/ZzBroken.cs(5,36): error CS0029: Cannot implicitly convert type 'string' to 'int' [/home/dev/coai/src_mcp/core/CoaiMcp.Core.csproj]
+/home/dev/coai/src_mcp/core/Toolchain/ZzBroken.cs(7,37): error CS0103: The name 'MissingType' does not exist in the current context [/home/dev/coai/src_mcp/core/CoaiMcp.Core.csproj]
+    0 Warning(s)
+    2 Error(s)
+
+Time Elapsed 00:00:02.59

@@ -1,0 +1,51 @@
+coai tests: leftovers — removed 0, preserved 1, listed 0
+run: no old coai-* leftovers in /tmp
+failed CoaiMcp.Tests.ZzFailingRecording.ATheoryWithOneBadCase(value: 2) (55ms)
+  Expected value to be 1, but found 2.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message, Object[] args)
+    at FluentAssertions.Numeric.NumericAssertions`2.Be(T expected, String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.ZzFailingRecording.ATheoryWithOneBadCase(Int32 value) in /home/dev/coai/src_mcp/tests/ZzFailingRecording.cs:24
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+failed CoaiMcp.Tests.ZzFailingRecording.TheSecondFailure (10ms)
+  Expected list to be equal to {1, 2, 4}, but {1, 2, 3} differs at index 2.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message, Object[] args)
+    at FluentAssertions.Execution.GivenSelector`1.FailWith(String message, Object[] args)
+    at FluentAssertions.Execution.GivenSelector`1.FailWith(String message, Func`2[] args)
+    at FluentAssertions.Execution.GivenSelectorExtensions.AssertCollectionsHaveSameItems[TActual,TExpected](GivenSelector`1 givenSelector, ICollection`1 expected, Func`3 findIndex)
+    at FluentAssertions.Collections.GenericCollectionAssertions`3.AssertSubjectEquality[TExpectation](IEnumerable`1 expectation, Func`3 equalityComparison, String because, Object[] becauseArgs)
+    at FluentAssertions.Collections.GenericCollectionAssertions`3.Equal(T[] elements)
+    at CoaiMcp.Tests.ZzFailingRecording.TheSecondFailure() in /home/dev/coai/src_mcp/tests/ZzFailingRecording.cs:18
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+failed CoaiMcp.Tests.ZzFailingRecording.TheFirstFailure (3ms)
+  Expected string to be "beta" with a length of 4 because the recording needs a reason, but "alpha" has a length of 5, differs near "alp" (index 0).
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Primitives.StringEqualityStrategy.ValidateAgainstLengthDifferences(IAssertionScope assertion, String subject, String expected)
+    at FluentAssertions.Primitives.StringEqualityStrategy.ValidateAgainstMismatch(IAssertionScope assertion, String subject, String expected)
+    at FluentAssertions.Primitives.StringValidator.Validate(String subject, String expected)
+    at FluentAssertions.Primitives.StringAssertions`1.Be(String expected, String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.ZzFailingRecording.TheFirstFailure() in /home/dev/coai/src_mcp/tests/ZzFailingRecording.cs:12
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Test run summary: Failed! - /home/dev/coai/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 5
+  failed: 3
+  succeeded: 2
+  skipped: 0
+  duration: 1s 409ms
