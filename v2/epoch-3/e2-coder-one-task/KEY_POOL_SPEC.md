@@ -440,3 +440,16 @@ the same account, not only the one that hit it.
 - coai syncs the pool from the file at every start (source `file:/etc/coai/claude-keys.env`): new → added, changed →
   replaced, missing → disabled; only keys of this source are touched. Rotation = edit + restart. No AWS dependency.
 - The same `--format env` import works on any device (`coai-mcp --keys import --format env < file`).
+
+### Owner correction 2026-11-23 — generic sources, no fixed path (supersedes the fixed /etc path above)
+
+How a key gets onto a machine does not matter. coai reads keys from two generic sources, on every device:
+1. **Environment variables of the coai process:** `COAI_CLAUDE_KEY_<label>=<token>` and optional
+   `COAI_CLAUDE_ACCOUNT_<label>=<email>` (set by whatever starts coai: a systemd unit, the MCP client config, a shell).
+2. **A file at a path the person chooses:** `COAI_CLAUDE_KEYS_FILE=<path>` or the device setting `keysFile`. Format is
+   detected: the env-line format above, or the creds json `{"version":1,"keys":[{"label","account","token"}]}`. On Linux
+   the file must not be readable by group/other (refused with a sentence otherwise); on Windows the owner-only ACL rule.
+Both are synced into the pool at every start (new → added, changed → replaced, missing → disabled; only keys of that
+source are touched). The `--keys import` one-shot stays for manual adds and the creds import. The COAI_CLAUDE_KEY_*
+values never reach any child process except the one chosen key as `CLAUDE_CODE_OAUTH_TOKEN` (the minimal environment
+already drops every COAI_ name; a test proves it for these names).
