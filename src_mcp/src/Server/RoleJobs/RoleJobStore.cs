@@ -110,19 +110,27 @@ internal sealed class RoleJobStore(string dataDir, TimeProvider clock, Serilog.I
             return null;
         }
 
-        RoleLease? taken = null;
-        RoleJobRecord? written = null;
-        var locked = folder.UnderLock(() => taken = TakeLocked(folder, held, jobId, identify, out written), clock);
-        if (taken is null)
+        // The lock runs the take in a callback, so what it made comes back through an object the callback fills — a local the lambda assigns reads, to a flow analysis, as never assigned.
+        var attempt = new TakeAttempt();
+        var locked = folder.UnderLock(() => attempt.Lease = TakeLocked(folder, held, jobId, identify, out attempt.Written), clock);
+        if (attempt.Lease is null)
         {
             held.Dispose();
         }
-        else if (locked && written is not null)
+        else if (locked && attempt.Written is not null)
         {
-            Projected(written);
+            Projected(attempt.Written);
         }
 
-        return locked ? taken : null;
+        return locked ? attempt.Lease : null;
+    }
+
+    /// <summary>What a take under the lock made: the lease, and the record it wrote.</summary>
+    private sealed class TakeAttempt
+    {
+        internal RoleLease? Lease;
+
+        internal RoleJobRecord? Written;
     }
 
     private RoleLease? TakeLocked(RoleJobFolder folder, FileStream held, string jobId, Func<RoleJobRecord, RoleJobRecord>? identify, out RoleJobRecord? written)

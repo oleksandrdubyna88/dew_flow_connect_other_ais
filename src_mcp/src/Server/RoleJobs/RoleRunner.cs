@@ -243,7 +243,8 @@ internal sealed class RoleRunner(RoleJobStore store, IReadOnlyList<RoleDescripto
             Tracker = new RoleChildTracker(lease, () => Fire(StopWhy.Stale));
             _signal = stop.Register(() => Fire(StopWhy.Signal));
             _timeout.Token.Register(() => Fire(StopWhy.Timeout));
-            _loop = Task.Run(() => LoopAsync(_ending.Token));
+            // The loop must run even when the stop token is already cancelled: it is what reads the stop and fires it. Not cancellable at start, said out loud.
+            _loop = Task.Run(() => LoopAsync(_ending.Token), CancellationToken.None);
         }
 
         public RoleChildTracker Tracker { get; }
