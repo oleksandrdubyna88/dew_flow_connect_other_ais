@@ -235,7 +235,7 @@ public sealed class ARoleRunnerTests
     [InlineData("--role-run", "r20260101000000-00000000", "--data-dir")]
     [InlineData("--role-run", "r20260101000000-00000000", "--other", "x")]
     [InlineData("--role-run", "r20260101000000-00000000", "extra")]
-    [InlineData("--role-run", "../../etc", "--data-dir", "/tmp")]
+    [InlineData("--role-run", "../../etc", "--data-dir", "/work")]
     public async Task AWrongArgument_IsA65_NeverA64(params string[] args)
     {
         var said = new List<string>();

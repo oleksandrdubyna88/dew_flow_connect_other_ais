@@ -141,7 +141,7 @@ public sealed class ADetachedLauncherTests
         var asked = new List<string>();
         var launcher = new DetachedLauncher(new ScriptedProcesses(asked, request => request.Executable == "systemd-run" ? 1 : 0, stderrOf: _ => "Failed to connect to user scope bus"));
 
-        var result = await launcher.StartAsync(new DetachSpec("/bin/coai-mcp", ["--role-run", "r20261123090000-00000000"], "/tmp", "coai-role-x", 4096), LauncherChoice.Auto, TestContext.Current.CancellationToken);
+        var result = await launcher.StartAsync(new DetachSpec("/bin/coai-mcp", ["--role-run", "r20261123090000-00000000"], "/work", "coai-role-x", 4096), LauncherChoice.Auto, TestContext.Current.CancellationToken);
 
         asked.Should().Equal(OperatingSystem.IsLinux() ? ["systemd-run", "/bin/sh"] : ["/bin/sh"]);
         result.Started.Should().BeTrue();
@@ -154,7 +154,7 @@ public sealed class ADetachedLauncherTests
         var asked = new List<string>();
         var launcher = new DetachedLauncher(new ScriptedProcesses(asked, _ => 1, stderrOf: _ => "no bus"));
 
-        var result = await launcher.StartAsync(new DetachSpec("/bin/coai-mcp", [], "/tmp", "coai-role-x", 4096), LauncherChoice.SystemdRun, TestContext.Current.CancellationToken);
+        var result = await launcher.StartAsync(new DetachSpec("/bin/coai-mcp", [], "/work", "coai-role-x", 4096), LauncherChoice.SystemdRun, TestContext.Current.CancellationToken);
 
         result.Started.Should().BeFalse();
         asked.Should().Equal("systemd-run");
@@ -167,7 +167,7 @@ public sealed class ADetachedLauncherTests
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the POSIX roads");
         var launcher = new DetachedLauncher(new ScriptedProcesses([], _ => 127, stderrOf: _ => "not found"));
 
-        var result = await launcher.StartAsync(new DetachSpec("/bin/coai-mcp", [], "/tmp", "coai-role-x", 4096), LauncherChoice.Auto, TestContext.Current.CancellationToken);
+        var result = await launcher.StartAsync(new DetachSpec("/bin/coai-mcp", [], "/work", "coai-role-x", 4096), LauncherChoice.Auto, TestContext.Current.CancellationToken);
 
         result.Started.Should().BeFalse();
         result.Launcher.Should().BeEmpty();
@@ -181,7 +181,7 @@ public sealed class ADetachedLauncherTests
         var asked = new List<string>();
         var launcher = new DetachedLauncher(new ScriptedProcesses(asked, request => request.Executable == "systemd-run" ? -1 : 0, stderrOf: _ => string.Empty));
 
-        var result = await launcher.StartAsync(new DetachSpec("/bin/coai-mcp", [], "/tmp", "coai-role-x", 4096), LauncherChoice.Auto, TestContext.Current.CancellationToken);
+        var result = await launcher.StartAsync(new DetachSpec("/bin/coai-mcp", [], "/work", "coai-role-x", 4096), LauncherChoice.Auto, TestContext.Current.CancellationToken);
 
         result.Started.Should().BeTrue();
         result.Launcher.Should().Be("setsid", "a road that did not answer in time is failed over, never waited for");
@@ -207,7 +207,7 @@ public sealed class ADetachedLauncherTests
     [Fact]
     public void TheShellRoads_GiveTheRunnerTheNullDeviceForItsStreams_AndItsArgumentsUntouched()
     {
-        var spec = new DetachSpec("/opt/my coai/coai-mcp", ["--role-run", "r1", "--data-dir", "/da ta"], "/tmp", "u", 1);
+        var spec = new DetachSpec("/opt/my coai/coai-mcp", ["--role-run", "r1", "--data-dir", "/da ta"], "/work", "u", 1);
 
         DetachedLauncher.SetsidShellArguments(spec).Should().Equal("-c", "exec setsid -f \"$0\" \"$@\" </dev/null >/dev/null 2>&1", "/opt/my coai/coai-mcp", "--role-run", "r1", "--data-dir", "/da ta");
         DetachedLauncher.NohupShellArguments(spec)[1].Should().Contain("nohup").And.Contain("</dev/null >/dev/null 2>&1 &");
