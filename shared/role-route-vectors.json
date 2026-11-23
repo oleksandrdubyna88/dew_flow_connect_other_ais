@@ -100,8 +100,8 @@
   },
   {
    "name": "an explicit model that is in no list is placed on its family's CLI and goes first",
-   "table": "default", "role": "ba", "model": "claude-haiku-4-5",
-   "expect": { "models": [ "claude-haiku-4-5@claude", "fable@claude", "opus@claude" ] }
+   "table": "default", "role": "ba", "model": "claude-haiku-4-5-20251001",
+   "expect": { "models": [ "claude-haiku-4-5-20251001@claude", "fable@claude", "opus@claude" ] }
   },
   {
    "name": "an explicit codex model of another role's list keeps that list's vendor",

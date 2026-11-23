@@ -420,45 +420,80 @@ internal sealed class YamlParser(string text)
 
     private YamlNode? ParseQuoted(string rest, int number)
     {
-        var quote = rest[0];
         var value = new StringBuilder();
-        var i = 1;
-        for (; i < rest.Length; i++)
+        var end = ScanQuoted(rest, value, number);
+        if (end < 0)
         {
-            var c = rest[i];
-            if (c == quote && quote == '\'' && i + 1 < rest.Length && rest[i + 1] == '\'')
+            return null;
+        }
+
+        return end >= rest.Length
+            ? FailNull(WorkErrorCodes.YamlSyntax, "a quoted value that does not end on its line", number)
+            : QuotedScalar(rest[(end + 1)..].Trim(), value, number);
+    }
+
+    /// <summary>What one character of a quoted value did: it was taken, it is the closing quote, or its escape was wrong (already reported).</summary>
+    private enum QuoteStep
+    {
+        Taken,
+        Closed,
+        Failed,
+    }
+
+    /// <summary>Reads the value after the opening quote into <paramref name="value"/>: the index of the closing quote, <c>rest.Length</c> when the line ends first, or -1 when an escape was wrong.</summary>
+    private int ScanQuoted(string rest, StringBuilder value, int number)
+    {
+        for (var i = 1; i < rest.Length; i++)
+        {
+            switch (Step(rest, ref i, value, number))
             {
-                value.Append('\'');
-                i++;
-            }
-            else if (c == quote)
-            {
-                break;
-            }
-            else if (c == '\\' && quote == '"')
-            {
-                if (!Escape(rest, ref i, value, number))
-                {
-                    return null;
-                }
-            }
-            else
-            {
-                value.Append(c);
+                case QuoteStep.Closed:
+                    return i;
+                case QuoteStep.Failed:
+                    return -1;
             }
         }
 
-        if (i >= rest.Length)
+        return rest.Length;
+    }
+
+    private QuoteStep Step(string rest, ref int i, StringBuilder value, int number)
+    {
+        var c = rest[i];
+        var quote = rest[0];
+        if (c == quote)
         {
-            return FailNull(WorkErrorCodes.YamlSyntax, "a quoted value that does not end on its line", number);
+            return Closing(rest, ref i, value);
         }
 
-        var after = rest[(i + 1)..].Trim();
+        if (c == '\\' && quote == '"')
+        {
+            return Escape(rest, ref i, value, number) ? QuoteStep.Taken : QuoteStep.Failed;
+        }
 
-        return after.Length == 0 || after[0] == '#'
+        value.Append(c);
+
+        return QuoteStep.Taken;
+    }
+
+    /// <summary>A single-quoted value writes a quote as two; anything else at the quote ends the value.</summary>
+    private static QuoteStep Closing(string rest, ref int i, StringBuilder value)
+    {
+        if (rest[0] == '\'' && i + 1 < rest.Length && rest[i + 1] == '\'')
+        {
+            value.Append('\'');
+            i++;
+
+            return QuoteStep.Taken;
+        }
+
+        return QuoteStep.Closed;
+    }
+
+    private YamlNode? QuotedScalar(string after, StringBuilder value, int number) =>
+        after.Length == 0 || after[0] == '#'
             ? new YamlScalar(number, value.ToString(), YamlScalarKind.String)
             : FailNull(WorkErrorCodes.YamlSyntax, $"text after a closing quote: '{Shorten(after)}'", number);
-    }
 
     private bool Escape(string rest, ref int i, StringBuilder value, int number)
     {

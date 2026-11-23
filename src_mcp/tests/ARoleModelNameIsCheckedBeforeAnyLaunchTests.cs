@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Epoch 3 E1 s4 (from the real finding of s3, <c>SIGNALS.md</c> section 6): claude 2.1.330 does NOT refuse an unknown model name — it runs the default model and bills it. So no name reaches a launch unless
-/// <c>shared/role-model-names.json</c> says a CLI accepts it: for claude the four aliases and ids of the shape <c>claude-[a-z0-9.-]+</c>; for codex and agy the names of their lists. A refusal names the setting that holds the
+/// <c>shared/role-model-names.json</c> says a CLI accepts it: for claude the four aliases and the full ids of the verified list (never an id by its shape: a typo of a real id has the same shape); for codex and agy the names of their lists. A refusal names the setting that holds the
 /// name. No test here makes a paid call: the launches that would happen are counted by FakeCli, and the count is zero.
 /// </summary>
 [Collection("fakecli-env")]
@@ -54,8 +54,9 @@ public sealed class ARoleModelNameIsCheckedBeforeAnyLaunchTests
     [InlineData("claude-opus-5-5")]
     [InlineData("claude-sonnet-5-5")]
     [InlineData("claude-haiku-4-5-20251001")]
-    [InlineData("claude-opus-4.8")]
-    public void AClaudeAlias_OrAnIdOfTheShape_IsAccepted(string model) =>
+    [InlineData("claude-opus-4-8")]
+    [InlineData("claude-fable-5-1")]
+    public void AClaudeAlias_OrAVerifiedFullId_IsAccepted(string model) =>
         RoleModelNames.Refusal(model, "claude", "COAI_ROLES_MODELS").Should().BeEmpty();
 
     [Theory]
@@ -71,12 +72,17 @@ public sealed class ARoleModelNameIsCheckedBeforeAnyLaunchTests
     [InlineData("claude-opus-5\n")]
     [InlineData("claude-ópus-5")]
     [InlineData("no-such-model-xyz")]
+    [InlineData("claude-opuss-5-5")]
+    [InlineData("claude-sonet-5-5")]
+    [InlineData("claude-opus-5-55")]
+    [InlineData("claude-opus-4.8")]
+    [InlineData("claude-opus-5-5-2026")]
     [InlineData("")]
     public void AClaudeTypo_IsRefused_NamingTheKey_AndSayingWhyItMatters(string model)
     {
         var refusal = RoleModelNames.Refusal(model, "claude", "COAI_ROLES_MODELS");
 
-        refusal.Should().Contain($"model '{model}'").And.Contain("COAI_ROLES_MODELS").And.Contain("opus, sonnet, haiku, fable").And.Contain("claude-[a-z0-9.-]+").And.Contain("bills it");
+        refusal.Should().Contain($"model '{model}'").And.Contain("COAI_ROLES_MODELS").And.Contain("opus, sonnet, haiku, fable").And.Contain("verified").And.Contain("shared/role-model-names.json").And.Contain("bills it");
     }
 
     [Fact]
@@ -111,6 +117,11 @@ public sealed class ARoleModelNameIsCheckedBeforeAnyLaunchTests
         }
 
         table.ClaudeKnownIds.Should().OnlyContain(id => table.ClaudeAccepts(id));
+        table.ClaudeKnownIds.Should().NotBeEmpty().And.OnlyHaveUniqueItems();
+        var verified = root.GetProperty("claude").GetProperty("verifiedIds").EnumerateArray().ToList();
+        verified.Select(entry => entry.GetProperty("id").GetString()!).Should().Equal(table.ClaudeKnownIds);
+        verified.Select(entry => entry.GetProperty("source").GetString()).Should().OnlyContain(source => !string.IsNullOrWhiteSpace(source), "an id is on the list only with the place it was seen as real");
+        root.GetProperty("claude").TryGetProperty("idPattern", out _).Should().BeFalse("an id is never accepted by its shape: a typo of a real id has the same shape");
         table.ClaudeAliases.Should().Equal("opus", "sonnet", "haiku", "fable");
     }
 
@@ -147,6 +158,9 @@ public sealed class ARoleModelNameIsCheckedBeforeAnyLaunchTests
     [InlineData("sonet")]
     [InlineData("sonnet9")]
     [InlineData("opus-5")]
+    [InlineData("claude-opuss-5-5")]
+    [InlineData("claude-sonet-5-5")]
+    [InlineData("claude-opus-5-55")]
     public async Task ATypoInAnExplicitStartModel_IsRefused_NamingTheArgument_AndNoFolderIsMade(string model)
     {
         using var world = new RoleJobWorld();
@@ -172,19 +186,23 @@ public sealed class ARoleModelNameIsCheckedBeforeAnyLaunchTests
 
     // ---- the runner: a route that holds a bad name launches nothing ----
 
-    [Fact]
-    public async Task AJobWhoseRouteHoldsATypo_LaunchesNothing_AndFailsNamingTheName()
+    [Theory]
+    [InlineData("sonet")]
+    [InlineData("claude-opuss-5-5")]
+    [InlineData("claude-sonet-5-5")]
+    [InlineData("claude-opus-5-55")]
+    public async Task AJobWhoseRouteHoldsATypo_LaunchesNothing_AndFailsNamingTheName(string typo)
     {
         await using var rig = await RoleFailoverRig.CreateAsync();
-        rig.Says("sonet", FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok)).Says("opus", FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok));
-        var job = rig.NewJob(["claude/opus", "claude/sonet"]);
+        rig.Says(typo, FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok)).Says("opus", FakeRoleAnswers.ClaudeSays(FakeRoleAnswers.Ok));
+        var job = rig.NewJob(["claude/opus", $"claude/{typo}"]);
 
         var (exit, after) = await rig.RunAsync(job);
 
         exit.Should().Be(RoleRunner.Done);
         after.State.Should().Be(RoleJobStates.Failed);
         after.Stop.Should().Be("route-invalid");
-        after.Reason.Should().Contain("model 'sonet'").And.Contain("nothing was launched");
+        after.Reason.Should().Contain($"model '{typo}'").And.Contain("nothing was launched");
         rig.Launches().Should().BeEmpty("not even the valid model before the typo was started: the route is checked whole, before the first launch");
         rig.LedgerLines().Should().BeEmpty();
     }

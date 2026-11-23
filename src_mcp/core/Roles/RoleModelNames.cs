@@ -1,15 +1,14 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace CoaiMcp.Core.Roles;
 
 /// <summary>
-/// The model names a role job may launch with (<c>shared/role-model-names.json</c>, embedded): the claude aliases and every id of the shape <c>claude-[a-z0-9.-]+</c>, and the names of the codex and agy lists.
+/// The model names a role job may launch with (<c>shared/role-model-names.json</c>, embedded): the four claude aliases and the full ids of the verified list (<c>claude.verifiedIds</c>, each with the place it was seen as real), and the names of the codex and agy lists.
 /// A name that is not here is refused BEFORE a folder or a launch is made, with a sentence that names the setting that holds it.
 /// </summary>
 /// <remarks>
 /// <para><b>Why this exists.</b> claude 2.1.330 does not refuse an unknown model name: it runs its default model and bills it (measured twice on 2026-11-23, about 1.62 USD; <c>SIGNALS.md</c> of story s3, section 6). So for
-/// the one CLI that bills a typo the check is the only barrier. Codex and agy refused an unknown model before any paid call (recorded), so for them the list costs a refusal and not money — it is kept for the same reason the
+/// the one CLI that bills a typo the check is the only barrier. For that reason a claude id is never accepted by its shape: <c>claude-opuss-5-5</c>, <c>claude-sonet-5-5</c> and <c>claude-opus-5-55</c> have the shape of a real id, and the CLI would run and bill its default model. Only the aliases and the listed ids pass; a newly verified id is added to the file (its <c>howToAdd</c> says how). Codex and agy refused an unknown model before any paid call (recorded), so for them the list costs a refusal and not money — it is kept for the same reason the
 /// owner asked for: a role never runs on a name nobody ever saw work.</para>
 /// <para><b>Case counts.</b> The CLI is handed the name exactly as written, and <c>Sonnet</c> is not a name claude is known to accept; the router's own lookup in a list is case-insensitive and hands on the LIST's spelling, so only
 /// a name that reaches this check as typed is judged as typed.</para>
@@ -31,29 +30,26 @@ internal static class RoleModelNames
     internal sealed class Table
     {
         private readonly HashSet<string> _claudeAliases;
-        private readonly Regex _claudeId;
+        private readonly HashSet<string> _claudeIds;
         private readonly Dictionary<string, IReadOnlyList<string>> _lists;
 
-        internal Table(IReadOnlyList<string> claudeAliases, string claudeIdPattern, IReadOnlyList<string> claudeKnownIds, IReadOnlyDictionary<string, IReadOnlyList<string>> lists)
+        internal Table(IReadOnlyList<string> claudeAliases, IReadOnlyList<string> claudeKnownIds, IReadOnlyDictionary<string, IReadOnlyList<string>> lists)
         {
             ClaudeAliases = claudeAliases;
-            ClaudeIdPattern = claudeIdPattern;
             ClaudeKnownIds = claudeKnownIds;
             _claudeAliases = new HashSet<string>(claudeAliases, StringComparer.Ordinal);
-            _claudeId = new Regex(claudeIdPattern, RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
+            _claudeIds = new HashSet<string>(claudeKnownIds, StringComparer.Ordinal);
             _lists = new Dictionary<string, IReadOnlyList<string>>(lists, StringComparer.Ordinal);
         }
 
         internal IReadOnlyList<string> ClaudeAliases { get; }
-
-        internal string ClaudeIdPattern { get; }
 
         internal IReadOnlyList<string> ClaudeKnownIds { get; }
 
         /// <summary>The names of a list vendor (<c>codex</c>, <c>agy</c>); empty for any other.</summary>
         internal IReadOnlyList<string> NamesOf(string vendor) => _lists.GetValueOrDefault(vendor.Trim().ToLowerInvariant()) ?? [];
 
-        internal bool ClaudeAccepts(string model) => _claudeAliases.Contains(model) || (model.All(c => c is >= ' ' and <= '~') && _claudeId.IsMatch(model));
+        internal bool ClaudeAccepts(string model) => _claudeAliases.Contains(model) || _claudeIds.Contains(model);
 
         internal string Refusal(string model, string vendor, string key)
         {
@@ -62,8 +58,8 @@ internal static class RoleModelNames
             {
                 return ClaudeAccepts(model)
                     ? string.Empty
-                    : $"model '{model}' is not a name the claude CLI is known to accept: use one of {string.Join(", ", _claudeAliases)}, or an id that matches {ClaudeIdPattern} (for example claude-opus-5-5). "
-                      + $"The CLI does NOT refuse an unknown name - it runs its default model and bills it - so a typo is refused here before any launch; fix it in {key}";
+                    : $"model '{model}' is not a name the claude CLI is known to accept: use one of {string.Join(", ", _claudeAliases)}, or a verified full id ({string.Join(", ", ClaudeKnownIds)}). "
+                      + $"The CLI does NOT refuse an unknown name - it runs its default model and bills it - so a typo is refused here before any launch; fix it in {key}, or add an id you verified to shared/role-model-names.json";
             }
 
             if (_lists.TryGetValue(cli, out var names))
@@ -89,7 +85,9 @@ internal static class RoleModelNames
             ["agy"] = Strings(root.GetProperty("agy").GetProperty("names")),
         };
 
-        return new Table(Strings(claude.GetProperty("aliases")), claude.GetProperty("idPattern").GetString() ?? string.Empty, Strings(claude.GetProperty("knownIds")), lists);
+        var verified = claude.GetProperty("verifiedIds").EnumerateArray().Select(row => row.GetProperty("id").GetString() ?? string.Empty);
+
+        return new Table(Strings(claude.GetProperty("aliases")), [.. verified], lists);
     }
 
     private static IReadOnlyList<string> Strings(JsonElement list) => [.. list.EnumerateArray().Select(item => item.GetString() ?? string.Empty)];

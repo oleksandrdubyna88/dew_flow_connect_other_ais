@@ -64,15 +64,12 @@ internal static class RoleRouter
     public static RouteResult Route(RouteRequest request, RouteTable table)
     {
         var important = ImportantRule.Reason(request.Kind, request.Complexity, request.Security);
-        var (head, tail, why, refusal) = important.Length > 0 ? Important(request, table, important) : Ordinary(request, table);
-        if (refusal.Length > 0)
+
+        return (important.Length > 0 ? Important(request, table, important) : Ordinary(request, table)) switch
         {
-            return new RouteResult.Refused(refusal);
-        }
-
-        var ordered = Distinct([.. head, .. tail]);
-
-        return Judged(ordered, request, table, why);
+            RouteResult.Routed chosen => Judged(chosen.Models, request, table, chosen.Why),
+            var refused => refused,
+        };
     }
 
     /// <summary>
@@ -114,34 +111,34 @@ internal static class RoleRouter
     }
 
     /// <summary>The important list, the explicit model first when it is on it, and a refusal when it is not.</summary>
-    private static (IReadOnlyList<ModelRef> Head, IReadOnlyList<ModelRef> Tail, string Why, string Refusal) Important(RouteRequest request, RouteTable table, string reason)
+    private static RouteResult Important(RouteRequest request, RouteTable table, string reason)
     {
         var list = ListOf(table, ImportantRole);
         var why = $"important ({reason}): the {ImportantRole} list";
         if (request.Model.Length == 0)
         {
-            return ([], list, why, string.Empty);
+            return Chosen([], list, why);
         }
 
         return Named(list, request.Model) is { } named
-            ? ([named], list, why + $", {named.Model} first because the caller named it", string.Empty)
-            : ([], [], why, $"model '{request.Model}' is not in the {ImportantRole} list ({Names(list)}), and this task is important ({reason}): it runs only on that list; name one of them or set {ModelsSetting}");
+            ? Chosen([named], list, why + $", {named.Model} first because the caller named it")
+            : new RouteResult.Refused($"model '{request.Model}' is not in the {ImportantRole} list ({Names(list)}), and this task is important ({reason}): it runs only on that list; name one of them or set {ModelsSetting}");
     }
 
     /// <summary>An explicit model, else the coder's band, then the role's list.</summary>
-    private static (IReadOnlyList<ModelRef> Head, IReadOnlyList<ModelRef> Tail, string Why, string Refusal) Ordinary(RouteRequest request, RouteTable table)
+    private static RouteResult Ordinary(RouteRequest request, RouteTable table)
     {
         var list = ListOf(table, request.Role);
         if (request.Model.Length > 0)
         {
             return PlacedModel(request, table) is { } placed
-                ? ([placed], list, $"the model the caller named, then the {request.Role} list", string.Empty)
-                : ([], [], string.Empty, $"model '{request.Model}' is in no list of the roles table and no vendor rule places it; fix {ExplicitModelKey}, or add the model to {ModelsSetting} with its vendor");
+                ? Chosen([placed], list, $"the model the caller named, then the {request.Role} list")
+                : new RouteResult.Refused($"model '{request.Model}' is in no list of the roles table and no vendor rule places it; fix {ExplicitModelKey}, or add the model to {ModelsSetting} with its vendor");
         }
 
         return request.Role == CoderRole && BandModel(table, request.Complexity) is { } band
-            ? ([band], list, $"the model of complexity {request.Complexity}'s band, then the {CoderRole} list", string.Empty)
-            : ([], list, $"the {request.Role} list", string.Empty);
+            ? Chosen([band], list, $"the model of complexity {request.Complexity}'s band, then the {CoderRole} list")
+            : Chosen([], list, $"the {request.Role} list");
     }
 
     /// <summary>The explicit model on its vendor: the role's own list first, then every other list and band, then the vendor-routing rule. Null when nothing places it.</summary>
@@ -170,6 +167,9 @@ internal static class RoleRouter
         table.Roles.FirstOrDefault(entry => entry.Role == role).Models ?? [];
 
     private static string Names(IReadOnlyList<ModelRef> list) => string.Join(", ", list.Select(model => model.Model));
+
+    /// <summary>The ordered route of a rule: the head, then the tail, no duplicates, with the rule that chose it.</summary>
+    private static RouteResult Chosen(IReadOnlyList<ModelRef> head, IReadOnlyList<ModelRef> tail, string why) => new RouteResult.Routed(Distinct([.. head, .. tail]), why);
 
     /// <summary>The first of each (model, vendor) — a model is one entry however many rules named it.</summary>
     private static IReadOnlyList<ModelRef> Distinct(IEnumerable<ModelRef> models)
