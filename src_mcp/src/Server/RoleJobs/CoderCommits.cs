@@ -15,6 +15,9 @@ internal static class CoderCommits
     /// <summary>The message of the commit of fix turn <paramref name="turn"/> (1-based).</summary>
     public static string FixMessage(string jobId, string taskId, int turn) => $"coder {jobId}: {taskId} fix {turn}";
 
+    /// <summary>The message of the commit of the turn 0 of the <paramref name="attempt"/>-th model that answered (2 or more): a model that took over after another stopped made it.</summary>
+    public static string AttemptMessage(string jobId, string taskId, int attempt) => $"coder {jobId}: {taskId} attempt {attempt}";
+
     /// <summary>Stages everything the coder wrote and makes ONE commit of it; no change means no commit and the head stays where it was.</summary>
     public static async Task<(string Head, RoleWorkOutcome.Failed? Failure)> CommitAsync(GitHistory git, CoderTree tree, string message, CancellationToken ct)
     {

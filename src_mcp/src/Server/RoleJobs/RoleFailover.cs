@@ -76,6 +76,20 @@ internal static class RoleAnswers
 /// <summary>The session an attempt's answer came from: the model, and the handle its first turn reported (empty when the vendor named none).</summary>
 internal sealed record RoleSession(ModelRef Model, string Handle);
 
+/// <summary>What a role made of an attempt AFTER the model's first valid answer (<see cref="RoleFailover.Follow"/>): the job's end, or a stop of the same model that goes on to the next one.</summary>
+internal abstract record RoleFollowed
+{
+    private RoleFollowed()
+    {
+    }
+
+    /// <summary>The job ends with this outcome — the envelope of a green job, a failure with its evidence, or a stop (a cancel, a stale lease). The attempt is recorded as a success unless the outcome is a stop.</summary>
+    public sealed record Ended(RoleWorkOutcome Outcome) : RoleFollowed;
+
+    /// <summary>The model stopped AFTER its first answer — in a fix turn — with a stop that fails over (<see cref="RoleStop.FailsOver"/>): the attempt is recorded with it and the next model starts from turn 0.</summary>
+    public sealed record FailsOver(RoleStop Why) : RoleFollowed;
+}
+
 /// <summary>
 /// The attempt loop of a role job (spec A, "Failover", epoch 3 E1 s3): the models of the job's route in order, each launched through its vendor's own CLI in a NEW session — a read-only role restarts from turn 0. Limit, refusal and
 /// crash go to the next model AT ONCE; only the LAST model waits (the <see cref="RetryLadder"/>, inside the job's budget) and only for a throttle; a spent quota, a missing CLI or a lost sign-in also skip the vendor's other models;
@@ -107,6 +121,18 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
     /// below is NOT made: the main checkout is not read-only to the PERSON, so a change of it is evidence the layer records (decision 8, <c>server.md</c> § 16), never a reason to end the job; only the read-only roles keep <c>tree-changed</c>.
     /// </summary>
     public CoderOsLayer? OsLayer { get; init; }
+
+    /// <summary>
+    /// Set for the coder (epoch 3 E2 s4 t3): what the role does with an attempt whose first turn gave a valid answer — the commit of that turn, the checks and the fix turns, in the SAME session (<see cref="CoderFixLoop"/>). It runs INSIDE the attempt, so a stop of a
+    /// later turn (a limit, a refusal, a crash) is the attempt's stop and fails over exactly as a stop of turn 0 does. Null for the read-only roles, whose attempt ends at the first valid answer.
+    /// </summary>
+    public Func<RoleSession, CancellationToken, Task<RoleFollowed>>? Follow { get; init; }
+
+    /// <summary>
+    /// Set for the coder (epoch 3 E2 s4 t3): called before every attempt after the first, once an attempt stopped and another is to start — puts the worktree back to the last coai commit (<see cref="CoderRestore"/>). Returns empty when the worktree is back and
+    /// proven clean; any other text is the sentence the job fails with (<c>coder-worktree</c>): no model is started on a tree nobody has looked at. Null for the read-only roles, which write nothing.
+    /// </summary>
+    public Func<CancellationToken, Task<string>>? Restore { get; init; }
 
     /// <summary>
     /// The session the answer came from, once an attempt ended with one: the model and the handle of its FIRST turn. A coder's fix turns (<see cref="CoderFixLoop"/>) resume exactly this session — never a new one, and never the handle a later turn
@@ -182,6 +208,11 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
                 return new Step.Finished(new RoleWorkOutcome.Succeeded(answer.ResultJson));
             }
 
+            if (end is Ended.Final final)
+            {
+                return new Step.Finished(final.Outcome);
+            }
+
             var stop = ((Ended.Stop)end).Why;
             _history.Add($"{RoleRoute.Format(model)}: {stop.Word} — {stop.Reason}");
             if (!stop.FailsOver)
@@ -248,6 +279,11 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             return new Ended.Stopped();
         }
 
+        if (_attempts > 0 && Restore is not null && await Restore(ct) is { Length: > 0 } notRestored)
+        {
+            return ct.IsCancellationRequested ? new Ended.Stopped() : new Ended.Final(new RoleWorkOutcome.Failed("coder-worktree", notRestored));
+        }
+
         var n = ++_attempts;
         run.Phase("attempt", n);
         if (!run.Trying(RoleRoute.Format(model)))
@@ -282,6 +318,14 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             var blocked = read.Repair is { } wanted ? CannotRepair(wanted, turn, launched.Handle) : null;
             if (read.Repair is null || blocked is not null)
             {
+                if (read.Stop is null && blocked is null && Follow is not null)
+                {
+                    // Turn 0 itself was fine: its ledger line says so, and the rest of the attempt — the commit, the checks, the fix turns — is the role's, inside this attempt.
+                    LedgerTurn(model, attempt, launched, null);
+
+                    return await FollowedAsync(model, attempt, ct);
+                }
+
                 return Finished(model, attempt, launched, read.Stop ?? blocked, read.Result);
             }
 
@@ -317,6 +361,44 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         Record(model, attempt, stop, string.Empty);
 
         return new Ended.Stopped();
+    }
+
+    /// <summary>
+    /// The role's part of an attempt after the first valid answer (<see cref="Follow"/>): the session of this model's turn 0 is handed over, and the attempt ends as the role says — with the job's outcome, or with a stop of a later turn that fails over. A job stopped
+    /// while the role worked closes the attempt as <c>stopped</c>.
+    /// </summary>
+    private async Task<Ended> FollowedAsync(ModelRef model, AttemptRun attempt, CancellationToken ct)
+    {
+        var session = new RoleSession(model, attempt.FirstHandle);
+        Session = session;
+        RoleFollowed followed;
+        try
+        {
+            followed = await Follow!(session, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return Interrupted(model, attempt, null);
+        }
+
+        attempt.TurnEnded = run.Clock.GetUtcNow().UtcDateTime;
+        switch (followed)
+        {
+            case RoleFollowed.Ended { Outcome: RoleWorkOutcome.Stopped }:
+                return Interrupted(model, attempt, null);
+            case RoleFollowed.Ended ended:
+                Record(model, attempt, null, string.Empty);
+
+                return new Ended.Final(ended.Outcome);
+            case RoleFollowed.FailsOver failsOver:
+                Record(model, attempt, failsOver.Why, KeepEvidence(attempt.Folder, attempt.N, Redaction.SafeSource(failsOver.Why.Reason)));
+
+                return new Ended.Stop(failsOver.Why);
+            default:
+                Record(model, attempt, null, string.Empty);
+
+                return new Ended.Final(new RoleWorkOutcome.Failed(RoleStopWords.OutputInvalid, "the role gave no outcome for the attempt"));
+        }
     }
 
     private Ended Finished(ModelRef model, AttemptRun attempt, RoleLaunched launched, RoleStop? stop, string result)
@@ -463,7 +545,13 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
             : launched.Launch is { } launch
                 ? string.IsNullOrWhiteSpace(launch.Answer) ? ConsultFailures.EvidenceOf(launch) : launch.Answer!
                 : stop.Reason;
-        var file = EvidenceFile.Keep(folder, "evidence.txt", Redaction.SafeSource(text), e => run.Log.Warning(e, "role job {JobId}: the evidence of attempt {N} could not be kept", run.Request.JobId, n));
+
+        return KeepEvidence(folder, n, Redaction.SafeSource(text));
+    }
+
+    private string KeepEvidence(string folder, int n, string text)
+    {
+        var file = EvidenceFile.Keep(folder, "evidence.txt", text, e => run.Log.Warning(e, "role job {JobId}: the evidence of attempt {N} could not be kept", run.Request.JobId, n));
 
         return file.Length == 0 ? string.Empty : $"attempts/{n}/evidence.txt";
     }
@@ -566,6 +654,9 @@ internal sealed class RoleFailover(IRoleRun run, Func<string, RoleAnswerVerdict>
         public sealed record Answer(string ResultJson) : Ended;
 
         public sealed record Stop(RoleStop Why) : Ended;
+
+        /// <summary>The attempt ended the JOB with this outcome (the role's own end of it, or a restore that failed) — nothing goes on to another model.</summary>
+        public sealed record Final(RoleWorkOutcome Outcome) : Ended;
 
         public sealed record Stopped : Ended;
     }

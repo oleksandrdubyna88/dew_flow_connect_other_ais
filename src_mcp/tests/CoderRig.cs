@@ -100,21 +100,7 @@ internal sealed class CoderRig : IAsyncDisposable
         }
 
         var rig = new CoderRig(await RoleFailoverRig.CreateAsync());
-        BaScenario.Lay(rig.Repo);
-        BaScenario.Write(rig.Repo, $"{Story}/story.yaml", WorkPlanYaml.Story(new BaStory("s1-first", "A story", [], [])));
-        BaScenario.Write(rig.Repo, TaskFile, WorkPlanYaml.Task(new BaTask(TaskId, "Write the thing", "code", 4, [], false, ["src/thing.cs"], [new BaDod("d1", "the thing works"), new BaDod("d2", "the thing is tested")], null)));
-        if ((toolchain ?? DefaultToolchain()) is { Length: > 0 } toolchainText)
-        {
-            BaScenario.Write(rig.Repo, ".coai/toolchain.yaml", toolchainText);
-        }
-
-        foreach (var (key, value) in new[] { ("user.email", "t@t"), ("user.name", "t"), ("commit.gpgsign", "false") })
-        {
-            await rig.Rig.Git.GitAsync("config", key, value);
-        }
-
-        await rig.Rig.Git.CommitAsync("the plan and its task");
-        rig.Base = await rig.Rig.Git.HeadAsync();
+        rig.Base = await LayFixtureAsync(rig.Rig.Git, toolchain);
         Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", "2.1.330 (Claude Code)\n");
         Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT", File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "claude", "help-2.1.330-wsl.txt")));
 
@@ -122,10 +108,39 @@ internal sealed class CoderRig : IAsyncDisposable
     }
 
     /// <summary>
+    /// Lays the fixture of a coder scenario into <paramref name="repo"/> and commits it: the plan with ONE task (<see cref="TaskFile"/>), the toolchain file (<paramref name="toolchain"/>, as <see cref="CreateAsync"/> reads it) and any <paramref name="extra"/>
+    /// files, with a LOCAL git identity (coai's own commit goes through the hardened door, which cannot carry one). Answers the commit the repository is on — the base of the job. One copy for the in-process rig and the real-binary scenarios.
+    /// </summary>
+    internal static async Task<string> LayFixtureAsync(TempGitRepo repo, string? toolchain = null, IReadOnlyDictionary<string, string>? extra = null)
+    {
+        BaScenario.Lay(repo.Path);
+        BaScenario.Write(repo.Path, $"{Story}/story.yaml", WorkPlanYaml.Story(new BaStory("s1-first", "A story", [], [])));
+        BaScenario.Write(repo.Path, TaskFile, WorkPlanYaml.Task(new BaTask(TaskId, "Write the thing", "code", 4, [], false, ["src/thing.cs"], [new BaDod("d1", "the thing works"), new BaDod("d2", "the thing is tested")], null)));
+        if ((toolchain ?? DefaultToolchain()) is { Length: > 0 } toolchainText)
+        {
+            BaScenario.Write(repo.Path, ".coai/toolchain.yaml", toolchainText);
+        }
+
+        foreach (var (name, text) in extra ?? new Dictionary<string, string>())
+        {
+            BaScenario.Write(repo.Path, name, text);
+        }
+
+        foreach (var (key, value) in new[] { ("user.email", "t@t"), ("user.name", "t"), ("commit.gpgsign", "false") })
+        {
+            await repo.GitAsync("config", key, value);
+        }
+
+        await repo.CommitAsync("the plan and its task");
+
+        return await repo.HeadAsync();
+    }
+
+    /// <summary>
     /// One launch of the fake coder: the files it writes below its working folder, what it says, how long it waits before it answers, and — a coder that goes where it must not — the ABSOLUTE paths it tries to write (what the OS refuses
     /// goes to its stderr).
     /// </summary>
-    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "");
+    internal sealed record Launch(IReadOnlyDictionary<string, string>? Edits, string Answer, int SleepMs = 0, IReadOnlyList<string>? TryWrites = null, string Session = "", int Exit = 0, string Stderr = "", string Stdout = "");
 
     /// <summary>
     /// What FakeCli does for <paramref name="model"/>, launch by launch (the last repeats). The steering file — the coder's child reads only that — is written again with every call.
@@ -145,12 +160,12 @@ internal sealed class CoderRig : IAsyncDisposable
     }
 
     /// <summary>One model-map entry: claude's recorded success envelope around the answer, and — only when there are edits — the <c>writeFiles</c> object (a null would be read by the fake as an edit it cannot make).</summary>
-    private static Dictionary<string, object?> Entry(Launch launch)
+    internal static Dictionary<string, object?> Entry(Launch launch)
     {
         var entry = new Dictionary<string, object?>
         {
-            ["stdout"] = WithSession(JsonSerializer.SerializeToElement(FakeRoleAnswers.ClaudeSays(launch.Answer)).GetProperty("stdout").GetString()!, launch.Session),
-            ["exit"] = 0,
+            ["stdout"] = launch.Stdout.Length > 0 ? launch.Stdout : launch.Exit != 0 ? string.Empty : WithSession(JsonSerializer.SerializeToElement(FakeRoleAnswers.ClaudeSays(launch.Answer)).GetProperty("stdout").GetString()!, launch.Session),
+            ["exit"] = launch.Exit,
             ["sleepMs"] = launch.SleepMs,
         };
         if (launch.Edits is not null)
@@ -161,6 +176,11 @@ internal sealed class CoderRig : IAsyncDisposable
         if (launch.TryWrites is not null)
         {
             entry["tryWriteFiles"] = launch.TryWrites;
+        }
+
+        if (launch.Stderr.Length > 0)
+        {
+            entry["stderr"] = launch.Stderr;
         }
 
         return entry;
@@ -261,11 +281,14 @@ internal sealed class CoderRig : IAsyncDisposable
     /// <summary>The units of one job that are loaded now — the coder's (<c>coai-coder-</c>) and its checks' (<c>coai-check-</c>); empty where there is no systemctl at all.</summary>
     internal Task<IReadOnlyList<string>> UnitsOfAsync(RoleJobRecord job) => UnitsOfAsync(job.JobId);
 
-    private async Task<IReadOnlyList<string>> UnitsOfAsync(string jobId)
+    private Task<IReadOnlyList<string>> UnitsOfAsync(string jobId) => UnitsOfJobAsync(jobId, _root.Path);
+
+    /// <summary>The loaded units of the job <paramref name="jobId"/> — one copy for the in-process rig and the real-binary scenarios; <paramref name="workingFolder"/> is where <c>systemctl</c> is started.</summary>
+    internal static async Task<IReadOnlyList<string>> UnitsOfJobAsync(string jobId, string workingFolder)
     {
         try
         {
-            var listed = await new ProcessLauncher().RunAsync(new ProcessRequest("systemctl", ["--user", "list-units", $"coai-coder-{jobId}-*", $"coai-check-{jobId}-*", "--all", "--no-legend", "--plain"], _root.Path) { Timeout = TimeSpan.FromSeconds(20) });
+            var listed = await new ProcessLauncher().RunAsync(new ProcessRequest("systemctl", ["--user", "list-units", $"coai-coder-{jobId}-*", $"coai-check-{jobId}-*", "--all", "--no-legend", "--plain"], workingFolder) { Timeout = TimeSpan.FromSeconds(20) });
 
             return [.. listed.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.Split(' ')[0])];
         }

@@ -18,8 +18,10 @@ namespace CoaiMcp.Server.RoleJobs;
 /// that cannot prove that refuses the job before the coder starts. A change of the main checkout during the job is recorded in the envelope (<c>mainCheckout</c>) as evidence and never fails the job (decision 8).</para>
 /// <para><b>The coder writes files; coai does everything else.</b> The coder has no shell (the measured write launch): it cannot commit, build or test. The commit, the base, the branch and the list of changed files are coai's, taken
 /// from git. A report is a claim — <c>met</c> true makes nothing green (green is story s4's, from checks).</para>
-/// <para><b>The loop is the failover loop</b> (<see cref="RoleFailover"/>): the models of the route in order, every launch one ledger line, every attempt in <c>job.json</c>, the repair turn in the same session of the same model. A model
-/// that fails over leaves what it wrote in the worktree and the next one starts from turn 0 on that tree; the prompt is the same.</para>
+/// <para><b>The loop is the failover loop</b> (<see cref="RoleFailover"/>): the models of the route in order, every launch one ledger line, every attempt in <c>job.json</c>, the repair turn in the same session of the same model. The commit, the checks and the fix turns
+/// of a model are part of ITS attempt (<see cref="RoleFailover.Follow"/>), so a limit, a refusal or a crash in turn 0 OR in a fix turn goes on to the next model. Before that model starts, the worktree is put back to the last coai commit — what the first one had written and coai
+/// had not committed is dropped, proven by <c>git status</c> through the hardened git (<see cref="CoderRestore"/>) — and it starts from turn 0 with the same task prompt, in a NEW session (a new resume handle, bound to the job and the worktree). The fix-turn count and the cap
+/// are the JOB's, read once: a switch gives no new turns. <c>output-invalid</c>, <c>cancelled</c>, <c>not-green</c>, <c>checks-changed-tree</c>, <c>timeout</c> and <c>coder-boundary</c> are not a model that stopped, and never fail over.</para>
 /// <para><b>The generation is compared twice</b>: before the commit and before the result. A stale runner (a cancel or a sweep fenced it) writes neither; the runner then exits 75. A cancel stops the CLI child by the
 /// runner's token and leaves the worktree where it is — removing it is the retention sweep's work, never this turn's.</para>
 /// <para><b>Ends:</b> <c>succeeded</c> with the envelope; <c>failed</c> with <c>coder-task</c> (the task is not fit — checked again here, the repository may have changed since the start), <c>coder-worktree</c>
@@ -67,17 +69,32 @@ internal sealed class CoderWork : IRoleWork
 
         var prepared = made.Prepared!;
         var layer = LayerFor(run, prepared);
+
+        // The fix cap is read ONCE, here: it is the job's, and a model that takes over does not bring turns of its own (epoch 3 E2 s4 t3).
+        var (cap, note) = FixRounds.Read(run.Settings);
+        if (note.Length > 0)
+        {
+            run.Log.Warning("role job {JobId}: {Note}", run.Request.JobId, note);
+        }
+
+        // ONE loop for the whole job: the fix turns used and the rounds run are the job's, whichever models take part.
+        var loop = new CoderFixLoop(run, git, layer, prepared.Tree, prepared.BaseSha, site, started) { Cap = cap, AttemptTimeout = AttemptTimeout, Boundary = Boundary };
+        var answers = 0;
         RoleFailover? failover = null;
         var judge = new CoderJudge(site.DodIds, () => failover!.RepairTurnsUsed);
         var confinement = new LaunchConfinement.Coder(run.Request.JobId, prepared.Tree.Root);
-        failover = new RoleFailover(run, judge.Judge) { MaxRepairTurns = RepairTurns, AttemptTimeout = AttemptTimeout, Ladder = Ladder, Coder = confinement, OsLayer = layer };
-        var outcome = await failover.RunAsync(CoderPrompt.Build(site.PromptInputs, new RolePrompts(run.DataDir)), ct);
-        if (outcome is not RoleWorkOutcome.Succeeded || failover.Session is not { } answered)
+        failover = new RoleFailover(run, judge.Judge)
         {
-            return outcome;
-        }
+            MaxRepairTurns = RepairTurns,
+            AttemptTimeout = AttemptTimeout,
+            Ladder = Ladder,
+            Coder = confinement,
+            OsLayer = layer,
+            Follow = (answered, token) => FollowAsync(run, git, prepared, site, loop, judge.Accepted, new CoderFixSession(answered.Model, answered.Handle, confinement), ++answers, layer, cap, note, token),
+            Restore = token => CoderRestore.RestoreAsync(git, prepared.Tree, loop.LastCommit, token),
+        };
 
-        return await PublishAsync(run, git, prepared, site, judge.Accepted, layer, new CoderFixSession(answered.Model, answered.Handle, confinement), started, ct);
+        return await failover.RunAsync(CoderPrompt.Build(site.PromptInputs, new RolePrompts(run.DataDir)), ct);
     }
 
     /// <summary>
@@ -120,36 +137,22 @@ internal sealed class CoderWork : IRoleWork
     }
 
     /// <summary>
-    /// The coder has answered: compare the generation, make the one commit of turn 0, then the way to green (<see cref="CoderFixLoop"/> — the checks on that commit and, while they are red, fix turns in the same session, one commit each), compare the generation
-    /// again, and give the envelope: green when the checks are, failed with the envelope as the evidence when they are not.
+    /// What the coder does after a model's turn 0 gave a valid answer, INSIDE that model's attempt (<see cref="RoleFailover.Follow"/>): the one commit of turn 0 (the generation compared first), then the way to green (<see cref="CoderFixLoop"/> — the checks on that commit
+    /// and, while they are red, fix turns in the same session, one commit each), the generation compared again, and the envelope: green when the checks are, failed with the envelope as the evidence when they are not. A fix turn that stops with a limit, a refusal or a
+    /// crash is the attempt's stop: the job goes on with the next model (<see cref="RoleFollowed.FailsOver"/>), after the worktree is put back to the last coai commit.
     /// </summary>
-    private async Task<RoleWorkOutcome> PublishAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderReport? report, CoderOsLayer layer, CoderFixSession session, long started, CancellationToken ct)
+    /// <param name="answers">How many models have answered turn 0 so far, this one included: the second and later turn 0 commits say which attempt made them.</param>
+    private async Task<RoleFollowed> FollowAsync(IRoleRun run, GitHistory git, Prepared prepared, CoderTaskSite site, CoderFixLoop loop, CoderReport? report, CoderFixSession session, int answers, CoderOsLayer layer, int cap, string note, CancellationToken ct)
     {
-        run.Phase("coder-commit", 0);
-        Boundary?.Invoke("before-commit");
-        if (ct.IsCancellationRequested || !run.StillWriter())
+        var message = answers == 1 ? CoderCommits.Message(run.Request.JobId, site.Id) : CoderCommits.AttemptMessage(run.Request.JobId, site.Id, answers);
+        var ended = await loop.RunAsync(report, message, session, ct);
+
+        return ended switch
         {
-            return new RoleWorkOutcome.Stopped();
-        }
-
-        var committed = await CoderCommits.CommitAsync(git, prepared.Tree, CoderCommits.Message(run.Request.JobId, site.Id), ct);
-        if (committed.Failure is { } failed)
-        {
-            return ct.IsCancellationRequested ? new RoleWorkOutcome.Stopped() : failed;
-        }
-
-        var (cap, note) = FixRounds.Read(run.Settings);
-        if (note.Length > 0)
-        {
-            run.Log.Warning("role job {JobId}: {Note}", run.Request.JobId, note);
-        }
-
-        var loop = new CoderFixLoop(run, git, layer, prepared.Tree, prepared.BaseSha, site, session, started) { Cap = cap, AttemptTimeout = AttemptTimeout, Boundary = Boundary };
-        var ended = await loop.RunAsync(committed.Head, report, ct);
-
-        return ended is CoderLoopEnd.Done done
-            ? await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), ct)
-            : ((CoderLoopEnd.Halted)ended).Outcome;
+            CoderLoopEnd.Done done => new RoleFollowed.Ended(await EnvelopeAsync(run, git, prepared, layer, done, new CoderChecksReport(done.Rounds, cap, note), ct)),
+            CoderLoopEnd.FailOver failOver => new RoleFollowed.FailsOver(failOver.Why),
+            _ => new RoleFollowed.Ended(((CoderLoopEnd.Halted)ended).Outcome),
+        };
     }
 
     /// <summary>The loop ended with something to show: list the files from git, compare the generation again, and make the envelope — a success when it is green, a failure carrying the same envelope when it is not.</summary>
