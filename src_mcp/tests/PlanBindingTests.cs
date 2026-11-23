@@ -20,10 +20,6 @@ public sealed class PlanBindingTests
 
     private static string Error(JsonElement answer) => answer.TryGetProperty("error", out var error) ? error.GetString()! : string.Empty;
 
-    /// <summary>Everything about a session that a round or a resolve could move.</summary>
-    private static (string Id, Stage Stage, int Rounds, int Run, bool Awaiting, bool Proceeded, int Rejections, string PlanText, string Inherited) Of(PersistedSession session) =>
-        (session.State.SessionId, session.State.Stage, session.Rounds.Count, session.State.RoundsRunThisStage, session.State.AwaitingResolve, session.State.PlanProceeded, session.State.Rejections.Length, session.PlanText, session.State.Inherited?.ToString() ?? string.Empty);
-
     private static string Verdict(JsonElement answer) => answer.TryGetProperty("verdict", out var verdict) ? verdict.GetString()! : "(" + answer + ")";
 
     // ---------- d1: the accepted case ----------
@@ -88,7 +84,7 @@ public sealed class PlanBindingTests
         await rig.ReviewCodeAsync(jobId);
 
         var after = new SessionStore(rig.Data).Load(rig.Repo, "feature")!;
-        Of(after).Should().Be(Of(before), "a coder branch only READS the feature's session");
+        PlanBindingRig.Snapshot(after).Should().Be(PlanBindingRig.Snapshot(before), "a coder branch only READS the feature's session");
     }
 
     // ---------- d2: the refused ones ----------

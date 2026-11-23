@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Core.Work;
 using CoaiMcp.Runners.Detach;
 using CoaiMcp.Runners.Processes;
@@ -41,11 +42,12 @@ internal sealed class PlanBindingRig : IAsyncDisposable
 
     internal RoleJobStore Jobs => new(Data, TimeProvider.System, Serilog.Core.Logger.None);
 
-    internal static async Task<PlanBindingRig> CreateAsync()
+    /// <param name="threshold">The gate threshold of the review service: 0 makes a round with one major finding `revise`, which leaves a finding to resolve.</param>
+    internal static async Task<PlanBindingRig> CreateAsync(int threshold = 2)
     {
         var rig = new PlanBindingRig();
         await rig._h.InitializeAsync();
-        rig.Service = rig._h.Service();
+        rig.Service = rig._h.Service(threshold: threshold);
         BaScenario.Lay(rig.Repo);
         BaScenario.Write(rig.Repo, $"{Story}/story.yaml", WorkPlanYaml.Story(new BaStory("s1-first", "A story", [], [])));
         BaScenario.Write(rig.Repo, TaskFile, WorkPlanYaml.Task(new BaTask("t1-a", "Write the thing", "code", 4, [], false, ["src/thing.cs"], [new BaDod("d1", "the thing works")], null)));
@@ -111,6 +113,25 @@ internal sealed class PlanBindingRig : IAsyncDisposable
 
         return head;
     }
+
+    /// <summary>One more commit on a branch (the checkout is left where it was) — what a coder does between two code rounds.</summary>
+    internal async Task<string> CommitOnAsync(string branch, string file)
+    {
+        var back = await GitOutAsync("rev-parse", "--abbrev-ref", "HEAD");
+        await GitAsync("checkout", branch);
+        BaScenario.Write(Repo, file, $"another commit that wrote {file}\n");
+        var head = await CommitAsync($"more work in {file}");
+        await GitAsync("checkout", back);
+
+        return head;
+    }
+
+    /// <summary>Everything about a session that a round or a resolve could move — what a sibling's work must leave as it was.</summary>
+    internal static (string Id, Stage Stage, int Rounds, int Run, bool Awaiting, bool Proceeded, int Rejections, int Pending, string PlanText, string Inherited) Snapshot(PersistedSession session) =>
+        (session.State.SessionId, session.State.Stage, session.Rounds.Count, session.State.RoundsRunThisStage, session.State.AwaitingResolve, session.State.PlanProceeded, session.State.Rejections.Length, session.Pending.Count, session.PlanText, session.State.Inherited?.ToString() ?? string.Empty);
+
+    internal (string Id, Stage Stage, int Rounds, int Run, bool Awaiting, bool Proceeded, int Rejections, int Pending, string PlanText, string Inherited) SnapshotOf(string branch) =>
+        Snapshot(new SessionStore(Data).Load(Repo, branch)!);
 
     /// <summary>Starts a job from the current branch, makes its branch, and answers its id.</summary>
     internal async Task<string> JobWithBranchAsync(string? baseSha = null)
