@@ -16,3 +16,5 @@ dod:
     item: "a check command is started with the worktree as cwd and an allow-listed environment (no vendor key and no COAI_ secret name reaches it; a test lists what does)"
   - id: d2
     item: "under the systemd-run launcher a fixture build command that writes a file into the main checkout fails and the main checkout is unchanged; on a launcher with no OS boundary the result records `boundary: cwd-only` and the filesystem snapshot of the main checkout is kept as evidence"
+  - id: d3
+    item: "when an effective OS write boundary cannot be enforced for the coder launch or the checks on this platform, the job is refused before any launch with a sentence naming why (plan gate)"

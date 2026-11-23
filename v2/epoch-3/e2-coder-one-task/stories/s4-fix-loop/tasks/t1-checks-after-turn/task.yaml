@@ -15,3 +15,5 @@ dod:
     item: "a FakeCli turn whose work builds and passes gives green true with checks [{step, argv, exitCode, durationMs, logRef}]; a repository with no .coai/toolchain.yaml gives checks not_configured, green false and the job state failed with stop not-configured"
   - id: d2
     item: "the heartbeat phase is `checks` while a build or test runs, so a long build is never stalled or lost; the checks run through the boundary of s2 t4"
+  - id: d3
+    item: "order per turn: format, commit, then check that exact commit; the worktree and HEAD are verified unchanged through the checks before green is reported (plan gate)"
