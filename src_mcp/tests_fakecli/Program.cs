@@ -6,6 +6,8 @@
 //   emit-to <dst> <text>                 — text into the file (codex -o), nothing on stdout, exit 0
 //   stderr-exit <text> <code>            — text to stderr, exit <code>
 //   sleep <ms>                           — exit 0 after the delay
+//   emit-bytes <n>                       — n bytes of 'x' on stdout in lines of 99, no pause, exit 0 (a check step that is too chatty; epoch 3 E2 s1 t2)
+//   emit-repeat <text> <times>           — <text> <times> times on stdout, exit 0 (output whose bytes outnumber its characters)
 //   busy <dir> <ms>                      — write <guid>.start (ticks), sleep, write <guid>.end (ticks)
 //   flip <flag> <firstStderr> <firstExit> <thenStdout>
 //                                        — first launch: create <flag>, stderr, exit <firstExit>;
@@ -248,6 +250,21 @@ switch (args0)
         Console.Out.Write(text);
         return 0;
 
+    case ["emit-repeat", var piece, var times]:
+        using (var repeated = new StreamWriter(Console.OpenStandardOutput(), new System.Text.UTF8Encoding(false)))
+        {
+            for (var i = 0L; i < long.Parse(times); i++)
+            {
+                repeated.Write(piece);
+            }
+        }
+
+        return 0;
+
+    case ["emit-bytes", var count]:
+        EmitBytes(long.Parse(count));
+        return 0;
+
     case ["emit-to", var dst, var text]:
         File.WriteAllText(dst, text);
         return 0;
@@ -439,6 +456,19 @@ switch (args0)
     default:
         Console.Error.WriteLine($"fake-cli: unknown verb [{string.Join(' ', args0)}]");
         return 64;
+}
+
+/// <summary>The <c>emit-bytes</c> verb: exactly <paramref name="count"/> bytes of ASCII on stdout, in lines of 99 characters and a newline, written through one buffered stream.</summary>
+static void EmitBytes(long count)
+{
+    var line = new byte[100];
+    Array.Fill(line, (byte)'x');
+    line[99] = (byte)'\n';
+    using var stdout = Console.OpenStandardOutput();
+    for (var written = 0L; written < count; written += line.Length)
+    {
+        stdout.Write(line, 0, (int)Math.Min(line.Length, count - written));
+    }
 }
 
 /// <summary>

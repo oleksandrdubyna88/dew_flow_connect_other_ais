@@ -23,19 +23,19 @@ internal sealed partial class ToolchainParse
 
     private void Fault(string sentence) => _faults.Add(sentence);
 
-    private Toolchain NotAMap(YamlNode root)
+    private RepoToolchain NotAMap(YamlNode root)
     {
         Fault($"the toolchain file must be a map of keys ({string.Join(", ", ToolchainTables.Root.Fields.Keys)}), not {WorkShape.Describe(root)}");
 
-        return new Toolchain([], [], ToolchainTimeouts.Default);
+        return new RepoToolchain([], [], ToolchainTimeouts.Default);
     }
 
-    private Toolchain Whole(YamlMap map)
+    private RepoToolchain Whole(YamlMap map)
     {
         Keys(map, ToolchainTables.Root, ToolchainTables.Root.Name);
         Version(map);
 
-        return new Toolchain(Projects(map), Skip(map), Timeouts(map));
+        return new RepoToolchain(Projects(map), Skip(map), Timeouts(map));
     }
 
     /// <summary>The keys of a map: one fault for each that is not in the table and one for each required key that is not there.</summary>

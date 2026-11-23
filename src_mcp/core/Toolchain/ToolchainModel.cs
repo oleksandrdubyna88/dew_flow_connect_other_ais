@@ -30,11 +30,11 @@ public sealed record ToolchainTimeouts(TimeSpan Build, TimeSpan Test)
     public static ToolchainTimeouts Default { get; } = new(ToolchainTables.DefaultBuildTimeout, ToolchainTables.DefaultTestTimeout);
 }
 
-/// <summary>A repository's toolchain file, read and checked.</summary>
+/// <summary>A repository's toolchain file, read and checked. (Not named <c>Toolchain</c>: that is the namespace's own name, and a type of that name hides it from the runners' namespace of the same last segment.)</summary>
 /// <param name="Projects">At least one, in the file's order — the order the checks run in.</param>
 /// <param name="Skip">The optional steps the repository leaves out (each of <see cref="ToolchainTables.SkippableSteps"/>).</param>
 /// <param name="Timeouts">The per-step limits.</param>
-public sealed record Toolchain(IReadOnlyList<ToolchainProject> Projects, IReadOnlyList<string> Skip, ToolchainTimeouts Timeouts);
+public sealed record RepoToolchain(IReadOnlyList<ToolchainProject> Projects, IReadOnlyList<string> Skip, ToolchainTimeouts Timeouts);
 
 /// <summary>
 /// What reading a toolchain file gave — a closed set: there is no file (checks are <c>not_configured</c>, which is never green), a file that is right, or a file that is refused with every
@@ -50,7 +50,7 @@ public abstract record ToolchainRead
     public sealed record NotConfigured : ToolchainRead;
 
     /// <summary>The file is right.</summary>
-    public sealed record Configured(Toolchain Toolchain) : ToolchainRead;
+    public sealed record Configured(RepoToolchain Toolchain) : ToolchainRead;
 
     /// <summary>The file is refused; each fault names the key it is about.</summary>
     public sealed record Refused(IReadOnlyList<string> Faults) : ToolchainRead

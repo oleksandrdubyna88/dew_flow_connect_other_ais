@@ -41,7 +41,7 @@ public sealed class AToolchainFileTests
 
     private static string RefusedBy(string text) => Read(text).Should().BeOfType<ToolchainRead.Refused>($"the file is wrong: {text}").Subject.Sentence;
 
-    private static Toolchain Right(string text) => Read(text).Should().BeOfType<ToolchainRead.Configured>().Subject.Toolchain;
+    private static RepoToolchain Right(string text) => Read(text).Should().BeOfType<ToolchainRead.Configured>().Subject.Toolchain;
 
     /// <summary>One project with these lines after <c>path</c> and <c>adapter</c>.</summary>
     private static string OneProject(string lines) => $"version: 1\nprojects:\n  - path: src_mcp\n    adapter: dotnet\n{lines}";
