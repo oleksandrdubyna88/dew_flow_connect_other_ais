@@ -23,6 +23,18 @@ public sealed record NetworkChoice(CheckNetwork Mode, string Reason)
 
     /// <summary>The word in a result: <c>none</c> or <c>host</c>.</summary>
     public string Wire => Mode == CheckNetwork.Private ? "none" : "host";
+
+    /// <summary>
+    /// The build step's measured default: the HOST network. This repository's build restores packages and NuGet audits them online; <c>TreatWarningsAsErrors</c> makes an unreachable audit service (<c>NU1900</c>) an error, and
+    /// with only a loopback device the build failed in 8 s with 30 of them. A step with the host network still has no credential to send and no folder to write but its own (<c>RESULTS_s2_check_boundary.md</c>).
+    /// </summary>
+    public static NetworkChoice DefaultBuild { get; } = OnHost("the build restores and audits NuGet packages online (NU1900 is an error here); with only a loopback device it failed in 8 s — measured in RESULTS_s2_check_boundary.md");
+
+    /// <summary>
+    /// The test step's measured default: a PRIVATE network. This repository's whole suite (15,730 tests) passed with only a loopback device (<c>RESULTS_s2_check_boundary.md</c>), so a test run, which executes the coder's code, gets no network.
+    /// A repository whose suite needs one declares it on its own job and the result says so.
+    /// </summary>
+    public static NetworkChoice DefaultTest { get; } = None("the whole suite of this repository passed with only a loopback device — measured in RESULTS_s2_check_boundary.md");
 }
 
 /// <summary>
@@ -42,6 +54,10 @@ public sealed record BoundaryJob(
     NetworkChoice TestNetwork,
     int MemoryMegabytes = 6000)
 {
+    /// <summary>A coder job with the measured network defaults (<see cref="NetworkChoice.DefaultBuild"/>, <see cref="NetworkChoice.DefaultTest"/>) and the default memory ceiling.</summary>
+    public static BoundaryJob ForCoder(string jobId, CoderTree tree, string jobRoot) =>
+        new(jobId, tree, jobRoot, NetworkChoice.DefaultBuild, NetworkChoice.DefaultTest);
+
     /// <summary>The job's <c>HOME</c> (and <c>XDG_*</c> by default): never the real one.</summary>
     public string HomeFolder => Path.Combine(JobRoot, "home");
 

@@ -102,6 +102,24 @@ public sealed class ACheckRunnerBoundaryTests
     }
 
     [Fact]
+    public async Task TheMeasuredDefaults_AreTheHostNetworkForTheBuild_AndNoneForTheTests_EachRecordedWithItsReason()
+    {
+        NeedAUserManager();
+        await using var bed = await BoundaryBed.CreateAsync();
+        var job = BoundaryJob.ForCoder(bed.JobId, bed.Tree, bed.JobRoot);
+
+        var run = await RunAsync(bed, "echo built", "ls /sys/class/net", job: job);
+        using var logs = run.Logs;
+
+        run.Result.Green.Should().BeTrue(run.Result.Note);
+        run.Result.Steps[0].Boundary.Network.Should().Be("host");
+        run.Result.Steps[0].Boundary.NetworkReason.Should().Contain("NU1900", "the reason is the measured one");
+        run.Result.Steps[1].Boundary.Network.Should().Be("none");
+        run.Result.Steps[1].Boundary.NetworkReason.Should().Contain("passed with only a loopback device");
+        File.ReadAllText(run.Result.Steps[1].LogPath).Trim().Should().Be("lo");
+    }
+
+    [Fact]
     public async Task APreflightThatSaysNo_RefusesTheJob_BeforeAnyStep_WithTheRowsRecorded()
     {
         NeedAUserManager();

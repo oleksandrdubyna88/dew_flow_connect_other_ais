@@ -51,7 +51,9 @@ public sealed record BoundaryHost(
 
     private static string ResolverUnderMnt()
     {
-        var target = System.IO.File.ResolveLinkTarget("/etc/resolv.conf", returnFinalTarget: true)?.FullName ?? string.Empty;
+        // The product's one link resolver (TheLinkResolverIsOneRoadTests), never File.ResolveLinkTarget.
+        var real = Files.RealPath.Resolve("/etc/resolv.conf");
+        var target = real.Ok ? real.Path : string.Empty;
 
         return target.StartsWith("/mnt/", StringComparison.Ordinal) && System.IO.File.Exists(target) ? target : string.Empty;
     }
