@@ -69,7 +69,7 @@ them read.
 - **agy on Windows is not measured.** The agy road (hook and setup) is tested on Linux. Its Windows behaviour is not measured yet.
 - **A settings edit made outside coai may reach the server late.** The extension copies its settings to the server file only
   after the old code has loaded (when you open a coai surface). A `coai.*` value you edit in VS Code's own settings, in a window
-  where you have not opened coai, reaches the server the next time any window opens one. See `research/RESULTS_v2_start.md`, section 6.
+  where you have not opened coai, reaches the server the next time any window opens one. See `research/RESULTS_v2_start.md`, "Joint smoke" under section 5.
 - **A real round shown in a real VS Code by hand** is checked by CI's real-editor job, not by a person, before this draft.
 - **YamlDotNet is not used.** The work-plan files the new work method will read are an epoch 3 task. 2.0 reads none of them.
 - **Not in 2.0:** the hub, the shared VM instance, the one-click update everywhere, the AskUserQuestion hook, coder

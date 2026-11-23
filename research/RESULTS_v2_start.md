@@ -185,21 +185,7 @@ thing in this file so an appended line lands in it, so notes on rows are written
   three samples each; it does not say the margin on a slow runner is safe. The old code and chat load after the mark (`moduleRequire` follows `menuReady` by 5 ms in the
   median of the second run).
 
-| date | commit | label | host location | platform | M1 max ms | M2 min / median / max ms | M3 min / median / max ms | verdict |
-|---|---|---|---|---|---|---|---|---|
-| 2026-11-22 | 503a65ad | S2 shell + legacy sidebar | local | linux | 173.1 | 1890.1 / 2176.4 / 2386.1 | 1807.4 / 2072.6 / 2315.3 | FAIL |
-| 2026-11-22 | 503a65ad | S2 shell + legacy sidebar | local | win32 | 925.8 | 1258.2 / 2320.9 / 3514.9 | 1230.9 / 2291.3 / 3487.7 | FAIL |
-| 2026-11-22 | 89471dd3 | first paint (sidebar paints before slow reads) | local | linux | 3.2 | 584.2 / 730.1 / 771.9 | 489.6 / 692.5 / 698.6 | PASS |
-| 2026-11-22 | 89471dd3 | first paint (sidebar paints before slow reads) | local | win32 | 60.7 | 672.8 / 736.5 / 1671 | 586.9 / 672.6 / 1654.4 | PASS (M1 limit 100 ms) |
-| 2026-11-22 | 688bda62 | snapshot sidebar (skeleton path, fresh profile) | local | linux | 4.8 | 559.5 / 561.6 / 691.2 | null (read at ready, before the hand-over) | PASS |
-| 2026-11-22 | 688bda62 | snapshot sidebar (skeleton path, fresh profile) | local | win32 | 76.6 | 522.7 / 915.2 / 1403 | null (read at ready, before the hand-over) | PASS |
-| 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1) | local | linux | 1.1 | 277.2 / 303.6 / 468.8 | null (not read) | pass |
-| 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1) | local | win32 | 32.8 | 1022.1 / 1126.2 / 2273.5 | null (not read) | FAIL (one sample over 2000 ms) |
-| 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1 re-run once after the run finished) | local | win32 | 28.2 | 904.2 / 1538.2 / 1966.4 | null (not read) | pass |
-| 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | linux | 2 | 358.4 / 478.7 / 536.3 | null (not read) | pass |
-| 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | win32 | 12.4 | 747.5 / 1628.6 / 2408.1 | null (not read) | FAIL (one sample over 2000 ms) |
-
-## 6. Joint smoke, E2 story s6 (2026-11-23, integration branch `feat/v2-2.0-integration`: E1 server + E2 shell + E3 + E4)
+### Joint smoke, E2 story s6 (2026-11-23, integration branch `feat/v2-2.0-integration`: E1 server + E2 shell + E3 + E4)
 
 **t2, settings mirror under lazy activation: a GAP, found by reading the code of this tree; it is not closed here.** The settings file the server reads (`<data dir>/settings.json`)
 is written only by `mirrorSettings` in the old `activate()` (`src/extension.ts`), and that call runs only inside the `legacy` module, on first use of a legacy command or the
@@ -217,3 +203,18 @@ it needs its own M1 row). Not done in this branch: it changes the activation con
 **t1, a real round shown in a real VS Code with the shell VSIX and the E1 binary: not run here.** This machine has no editor and no display. The real-editor job of CI
 (`measure:host` for the cold start, `test:host` for the host scenarios, Linux under xvfb and Windows) is what runs the shell in a real editor; the PR's checks hold that result.
 A round driven through the sidebar by hand with the final VSIX is still open for the owner's own machine.
+
+
+| date | commit | label | host location | platform | M1 max ms | M2 min / median / max ms | M3 min / median / max ms | verdict |
+|---|---|---|---|---|---|---|---|---|
+| 2026-11-22 | 503a65ad | S2 shell + legacy sidebar | local | linux | 173.1 | 1890.1 / 2176.4 / 2386.1 | 1807.4 / 2072.6 / 2315.3 | FAIL |
+| 2026-11-22 | 503a65ad | S2 shell + legacy sidebar | local | win32 | 925.8 | 1258.2 / 2320.9 / 3514.9 | 1230.9 / 2291.3 / 3487.7 | FAIL |
+| 2026-11-22 | 89471dd3 | first paint (sidebar paints before slow reads) | local | linux | 3.2 | 584.2 / 730.1 / 771.9 | 489.6 / 692.5 / 698.6 | PASS |
+| 2026-11-22 | 89471dd3 | first paint (sidebar paints before slow reads) | local | win32 | 60.7 | 672.8 / 736.5 / 1671 | 586.9 / 672.6 / 1654.4 | PASS (M1 limit 100 ms) |
+| 2026-11-22 | 688bda62 | snapshot sidebar (skeleton path, fresh profile) | local | linux | 4.8 | 559.5 / 561.6 / 691.2 | null (read at ready, before the hand-over) | PASS |
+| 2026-11-22 | 688bda62 | snapshot sidebar (skeleton path, fresh profile) | local | win32 | 76.6 | 522.7 / 915.2 / 1403 | null (read at ready, before the hand-over) | PASS |
+| 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1) | local | linux | 1.1 | 277.2 / 303.6 / 468.8 | null (not read) | pass |
+| 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1) | local | win32 | 32.8 | 1022.1 / 1126.2 / 2273.5 | null (not read) | FAIL (one sample over 2000 ms) |
+| 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1 re-run once after the run finished) | local | win32 | 28.2 | 904.2 / 1538.2 / 1966.4 | null (not read) | pass |
+| 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | linux | 2 | 358.4 / 478.7 / 536.3 | null (not read) | pass |
+| 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | win32 | 12.4 | 747.5 / 1628.6 / 2408.1 | null (not read) | FAIL (one sample over 2000 ms) |
