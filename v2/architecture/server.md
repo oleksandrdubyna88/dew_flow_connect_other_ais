@@ -406,3 +406,25 @@ the item status in the YAML deterministically. The page is epoch 4 E5 (was "Feat
    PATH) → env.json carries PATH explicitly. **With the default `OOMPolicy=stop` an oom-kill of the runner's child stops the
    whole unit** (job → lost, no result) → the launcher passes `-p OOMPolicy=continue`. A .NET child usually ends with an
    OutOfMemoryException before the kernel kill (heap capped at 75 % of the cgroup limit).
+
+## 23. Orchestrator AMI — standalone, headless, one OS user (owner, 2026-11-23)
+
+coai is baked into an Ubuntu x64 AMI that runs the orchestrator. One instance, one OS user, no VS Code, no hub.
+
+- Binary: the existing linux-x64 Native-AOT build; no new target.
+- Install: `coai-mcp --install` and `--setup-clients` run non-interactively at image build time from a baked folder,
+  with no network to the hub; they find claude (priority), codex and agy and write their MCP config and hooks. A
+  second run is a no-op. The bake step and a first-boot check are scripted, nothing manual.
+- Settings: files baked into the image (the same device settings file the hub would write); no hub token, no device
+  agent. A missing hub is a normal state there, never a failure notice loop.
+- Secrets: NEVER baked into the AMI. CLI sign-ins and any key arrive at boot from the instance secret source (for
+  example a setup-token placed by the launch script) into the user's own CLI config; coai only checks they exist.
+- One instance: several MCP server processes (one per orchestrator session) share ONE data folder; SQLite writes,
+  role-job leases and the detached runner must stay correct with N concurrent processes of one UID (the VM shared
+  rules of epoch 2 E2 cover N UIDs; this is the one-UID case of the same tests).
+- Detached role jobs and the coder boundary need the user's systemd manager without a login session:
+  `loginctl enable-linger <user>` is part of the bake; the check-boundary preflight (epoch 3 E2 s2 t4) refuses coder
+  jobs if it is missing, with that line as the cure.
+- Updates: a new AMI build. coai must not try to self-update there (the one-click update path is off when no hub).
+- Proof: an Ubuntu x64 container or VM built by the same bake script runs the epoch-3 E2 acceptance (coder job to green
+  with FakeCli) and two parallel MCP sessions, headless, with no hub.

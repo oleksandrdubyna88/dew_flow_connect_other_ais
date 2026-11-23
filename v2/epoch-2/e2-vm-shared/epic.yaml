@@ -8,3 +8,4 @@ doneWhen:
   - "UID B runs claude, codex and agy after UID A logged in, also after a token refresh by the other UID"
   - "two UIDs write SQLite at the same time"
   - "shared /var/lib/coai with group coai; existing db/WAL permissions repaired"
+  - "the orchestrator AMI case (server.md section 23): Ubuntu x64, headless, one OS user, standalone with baked settings, no secret in the image, linger set; two parallel MCP sessions and a coder job pass there"

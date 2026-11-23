@@ -32,6 +32,10 @@ judgement half — faster, with quality kept.
 - Studio (video) review mode with picture attachments; frames may go to Claude, Gemini (agy), Codex.
 - Security lane deferred. Conventions optional: coai no longer ships or enforces them; a repo that mounts them still has them read (reworked later).
 - Order: foundation → hub/devices/update → new features.
+- Orchestrator AMI (owner, 2026-11-23): coai is also baked into an Ubuntu x64 AMI for the orchestrator. It runs headless
+  as ONE OS user, one instance, standalone (no hub; settings from files baked into the image; updates by a new AMI
+  build). It must work there with no manual step and no problem (server.md § 23).
+- Windows cold start to the real menu: limit 3000 ms on Windows (owner, 2026-11-23); 2000 ms stays on Linux.
 
 ## Architecture
 
