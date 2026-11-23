@@ -282,9 +282,9 @@ const SCENARIOS: readonly Scenario[] = [
       assert.ok(first.shell !== undefined, 'the legacy module offers no test door, so nothing below can be read');
       assert.equal(again.shell?.adoptedCommands().length, first.shell.adoptedCommands().length, 'a second start changed what was adopted');
       const manifest = JSON.parse(fs.readFileSync(path.join(extension.extensionPath, 'package.json'), 'utf8')) as { contributes: { commands: readonly { readonly command: string }[] } };
-      const declared = manifest.contributes.commands.map((one) => one.command).sort();
+      const declared = manifest.contributes.commands.map((one) => one.command).sort((a, b) => a.localeCompare(b));
 
-      assert.deepEqual([...first.shell.adoptedCommands()].sort(), declared, 'the old activation and the manifest disagree about which commands exist');
+      assert.deepEqual([...first.shell.adoptedCommands()].sort((a, b) => a.localeCompare(b)), declared, 'the old activation and the manifest disagree about which commands exist');
       assert.equal(first.shell.adoptedViewAndSerializer(), true, 'the old activation gave the shell no sidebar view provider or no chat serializer');
     },
   },

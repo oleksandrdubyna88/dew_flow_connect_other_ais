@@ -677,9 +677,11 @@ jobs:
       - name: Shared instruction dependencies
         run: npm ci --ignore-scripts --prefix .agents/conventions
 
+      # `--ignore-scripts` (SonarCloud githubactions:S6505): the cold-start run needs `tsc` and the editor download of `@vscode/test-electron`, no dependency postinstall;
+      # the sonarcloud job already builds and tests the extension this way.
       - name: Install
         working-directory: src_vs_code
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Cold start in a real editor (Linux, under xvfb)
         if: runner.os == 'Linux'
