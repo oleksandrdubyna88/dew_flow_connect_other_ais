@@ -33,7 +33,7 @@ public sealed class ARoleStartsWithItsRouteTests
         return new RoleJobService(world.DataDir, name => values.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
         {
             Clock = world.Clock,
-            Launcher = new DetachedLauncher(new NothingStarted()),
+            Launcher = new DetachedLauncher(new NothingStarted(), NoRunnerStarted.Succeeds),
             Descriptors = descriptors ?? [Routed, .. RoleDescriptors.Shipped],
         };
     }

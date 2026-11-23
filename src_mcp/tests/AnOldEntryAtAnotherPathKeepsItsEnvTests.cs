@@ -37,7 +37,7 @@ public sealed class AnOldEntryAtAnotherPathKeepsItsEnvTests
         code.Should().Be(0, err);
         InstallOutput.SameToml(
             world.CodexTomlText,
-            $"[mcp_servers.coai]\ncommand = \"{world.Binary}\"\nargs = [\"--x\"]\n[mcp_servers.coai.env]\nCOAI_DATA_DIR = \"/data/coai\"\nCOAI_DATA_SIDE = \"wsl\"\n").Should().BeTrue(world.CodexTomlText);
+            $"[mcp_servers.coai]\ncommand = {InstallOutput.TomlString(world.Binary)}\nargs = [\"--x\"]\n[mcp_servers.coai.env]\nCOAI_DATA_DIR = \"/data/coai\"\nCOAI_DATA_SIDE = \"wsl\"\n").Should().BeTrue(world.CodexTomlText);
         output.Action("codex").Should().Be("update");
     }
 

@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CoaiMcp.Install;
@@ -62,6 +63,18 @@ internal static class InstallOutput
     internal static bool SameToml(string a, string b) =>
         TomlSubset.Parse(a) is { Root: { } left } && TomlSubset.Parse(b) is { Root: { } right } && Equal(left, right);
 
+    /// <summary>
+    /// A path as the inside of a TOML basic string (the quotes not included). A Windows path has backslashes, and a backslash in a basic string starts an escape — so the file the
+    /// installer writes holds <c>C:\\Users\\…</c>, and a test that spells the expected text from the raw path would compare a different document.
+    /// </summary>
+    internal static string TomlPath(string path) => path.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+
+    /// <summary>A path as a whole TOML basic string, quotes included.</summary>
+    internal static string TomlString(string path) => $"\"{TomlPath(path)}\"";
+
+    /// <summary>A path as the inside of a JSON string (the quotes not included): what a settings file holds, on any platform.</summary>
+    internal static string JsonPath(string path) => JsonEncodedText.Encode(path, JavaScriptEncoder.UnsafeRelaxedJsonEscaping).ToString();
+
     private static bool Equal(object? a, object? b) => (a, b) switch
     {
         (Dictionary<string, object> x, Dictionary<string, object> y) => x.Count == y.Count && x.All(pair => y.TryGetValue(pair.Key, out var other) && Equal(pair.Value, other)),
@@ -73,11 +86,11 @@ internal static class InstallOutput
     internal static void WithOldEntries(InstallWorld world, string old = "/old/coai/versions/1.0.0/coai-mcp")
     {
         world.Put(world.ClaudeJson, $$"""
-            { "numStartups": 3, "mcpServers": { "coai": { "type": "stdio", "command": "{{old}}", "args": ["--x"], "env": { "COAI_DATA_DIR": "/data/coai", "COAI_DATA_SIDE": "wsl" } } } }
+            { "numStartups": 3, "mcpServers": { "coai": { "type": "stdio", "command": "{{JsonPath(old)}}", "args": ["--x"], "env": { "COAI_DATA_DIR": "/data/coai", "COAI_DATA_SIDE": "wsl" } } } }
             """);
         world.Put(world.CodexToml, $"""
             [mcp_servers.coai]
-            command = "{old}"
+            command = "{TomlPath(old)}"
             args = ["--x"]
 
             [mcp_servers.coai.env]

@@ -51,6 +51,11 @@ internal static class MigrateV2Data
                 {
                     var target = Path.Combine(dataDir, folder, Path.GetFileName(file));
                     File.Copy(file, target, overwrite: true);
+                    if (folder == "sessions" && file.EndsWith(".json", StringComparison.Ordinal))
+                    {
+                        NameForThisPlatform(dataDir, target);
+                    }
+
                     if (folder == "escalations" && file.EndsWith(".json", StringComparison.Ordinal))
                     {
                         Stamp(target, at);
@@ -65,6 +70,22 @@ internal static class MigrateV2Data
     /// (<c>MigrateV2RunTests</c>, the kill-at-every-boundary run) — two plants a millisecond apart would differ in their stamps alone.
     /// </summary>
     private static readonly DateTimeOffset PlantedAt = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Renames a planted session to the file THIS platform's store would keep it in. A session's file is named by the hash of its key, and the key folds a document's or a feature's path to lower case
+    /// on Windows (<c>DocumentId.KeyOf</c>) and keeps its case elsewhere; the fixtures were raised on Linux, so on Windows <c>todo/PLAN_the_cart.md</c> would be looked for in a file that is not
+    /// the one that holds it. On Linux and macOS the name is already the right one and nothing moves.
+    /// </summary>
+    private static void NameForThisPlatform(string dataDir, string file)
+    {
+        var state = JsonNode.Parse(File.ReadAllText(file))!["state"]!.AsObject();
+        string Text(string name) => state[name]?.GetValue<string>() ?? string.Empty;
+        var named = new SessionStore(dataDir).FileFor(Text("repoPath"), Text("branch"), Text("document"), Text("feature"));
+        if (!string.Equals(Path.GetFileName(named), Path.GetFileName(file), StringComparison.Ordinal))
+        {
+            File.Move(file, named, overwrite: true);
+        }
+    }
 
     /// <summary>Sets every moment a card or an answer file carries (<c>askedUtc</c>, <c>expiredUtc</c> when it has one, <c>answeredUtc</c>) to <paramref name="at"/>.</summary>
     internal static void Stamp(string file, DateTimeOffset at)

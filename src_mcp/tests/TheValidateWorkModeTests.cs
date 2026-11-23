@@ -44,7 +44,7 @@ public sealed class TheValidateWorkModeTests : IDisposable
         var (code, said, err) = Run(null, "plan");
 
         code.Should().Be(0, err);
-        said.TrimEnd('\n').Should().NotContain("\n", "one object, one line");
+        said.TrimEnd('\r', '\n').Should().NotContain("\n", "one object, one line");
         var answer = Parse(said);
         answer.EnumerateObject().Select(property => property.Name).Should().Equal("mode", "featureFolder", "valid", "counts", "limits", "errors", "notes", "important", "truncated");
         answer.GetProperty("mode").GetString().Should().Be("validate-work");
@@ -253,7 +253,7 @@ public sealed class TheValidateWorkModeTests : IDisposable
         Plan(files);
         Func<string, string?> env = name => name == "COAI_DATA_DIR" ? _root.At("data") : null;
 
-        var oneShot = Run(env, "plan").Out.TrimEnd('\n');
+        var oneShot = Run(env, "plan").Out.TrimEnd('\r', '\n');
         var tool = ValidateWorkTool.Answer(env, _root.At("repo"), "plan");
 
         tool.Should().Be(oneShot);
@@ -269,7 +269,7 @@ public sealed class TheValidateWorkModeTests : IDisposable
         var tool = ValidateWorkTool.Answer(env, RepoPaths.Root(), "v2");
 
         code.Should().Be(0);
-        tool.Should().Be(output.ToString().TrimEnd('\n'));
+        tool.Should().Be(output.ToString().TrimEnd('\r', '\n'));
         Parse(tool).GetProperty("valid").GetBoolean().Should().BeTrue();
     }
 

@@ -32,7 +32,7 @@ public sealed class AnInstallLeavesOtherServersAloneTests
         var after = world.CodexTomlText;
         InstallOutput.SameToml(
             after + "\n",
-            InstallOutput.LivedInCodexToml + $"\n\n[mcp_servers.coai]\ncommand = \"{world.Binary}\"\n").Should().BeTrue(after);
+            InstallOutput.LivedInCodexToml + $"\n\n[mcp_servers.coai]\ncommand = {InstallOutput.TomlString(world.Binary)}\n").Should().BeTrue(after);
         output.ToString().Should().NotContain("value-4711");
     }
 }

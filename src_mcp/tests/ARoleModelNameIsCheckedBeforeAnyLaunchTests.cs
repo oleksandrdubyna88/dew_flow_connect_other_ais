@@ -33,7 +33,7 @@ public sealed class ARoleModelNameIsCheckedBeforeAnyLaunchTests
         return new RoleJobService(world.DataDir, name => settings.GetValueOrDefault(name), world.Log, notice => { world.Notices.Enqueue(notice); return true; })
         {
             Clock = world.Clock,
-            Launcher = new DetachedLauncher(new NothingStarted()),
+            Launcher = new DetachedLauncher(new NothingStarted(), NoRunnerStarted.Succeeds),
             Descriptors = [Routed],
             EnvironmentSource = new Hashtable(),
         };

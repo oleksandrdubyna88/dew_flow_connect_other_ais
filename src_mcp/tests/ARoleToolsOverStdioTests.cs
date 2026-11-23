@@ -65,7 +65,7 @@ public sealed class ARoleToolsOverStdioTests
             clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2), "start_role answers in two seconds or less, server start excluded");
             started.TryGetProperty("jobId", out var id).Should().BeTrue(started.ToString());
             jobId = id.GetString()!;
-            started.GetProperty("launcher").GetString().Should().Be(launcher == "auto" ? "systemd-run" : "setsid");
+            started.GetProperty("launcher").GetString().Should().Be(launcher == "auto" ? "systemd-run" : SetsidTool.Road);
             var store = new RoleJobStore(data.Path, TimeProvider.System, Serilog.Core.Logger.None);
             RoleJobWorld.WaitFor(() => store.Read(jobId) is { State: RoleJobStates.Running }, "the runner to run");
         }

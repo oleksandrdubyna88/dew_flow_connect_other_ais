@@ -130,6 +130,12 @@ if (args is ["acp"] && (Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT")
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScriptFromEnv);
 }
 
+// A copy of this program named for the product answers `--version` from the file beside it (the installer's stand-in for `coai-mcp`; CoaiMcpStandIn.cs).
+if (CoaiMcp.FakeCli.CoaiMcpStandIn.Answer(args) is { } standInExit)
+{
+    return standInExit;
+}
+
 // The MCP verbs of claude and codex (the installer's stand-in): started by a wrapper file named for the CLI, BEFORE the vendor mode, for the reason the ACP stand-in is.
 if (args.Length >= 2 && args[0] == "vendor-mcp")
 {
