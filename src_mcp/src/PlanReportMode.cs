@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.RegularExpressions;
+using CoaiMcp.Core.Work;
 using CoaiMcp.Server;
 using CoaiMcp.Store;
 using Microsoft.Data.Sqlite;
@@ -32,25 +32,13 @@ namespace CoaiMcp;
 /// <para><b>Exit codes.</b> 0 with the object; <b>65</b> for the wrong arguments or a folder that is not one inside a git checkout (the sentence on stderr); <b>74</b> for
 /// a database the disk will not read. Never 64 — that is "never heard of this mode", how a caller takes an older binary.</para>
 /// </remarks>
-internal static partial class PlanReportMode
+internal static class PlanReportMode
 {
     internal const string Usage = "--plan-report takes a feature folder and --json: coai-mcp --plan-report <feature-dir> --json";
 
     private static readonly JsonWriterOptions WriterOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    [GeneratedRegex(@"^epoch-\d+$", RegexOptions.CultureInvariant)]
-    private static partial Regex EpochName();
-
-    [GeneratedRegex(@"^e\d+-.+$", RegexOptions.CultureInvariant)]
-    private static partial Regex EpicName();
-
-    [GeneratedRegex(@"^s\d+-.+$", RegexOptions.CultureInvariant)]
-    private static partial Regex StoryName();
-
-    [GeneratedRegex(@"^t\d+-.+$", RegexOptions.CultureInvariant)]
-    private static partial Regex TaskName();
-
-    /// <summary>One folder of the feature.</summary>
+        /// <summary>One folder of the feature.</summary>
     internal sealed record Item(string Path, string Parent, string Kind, string Name);
 
     /// <summary>One attributed row of the database, reduced to what the report totals.</summary>
@@ -159,7 +147,7 @@ internal static partial class PlanReportMode
 
     private static void Walk(string repositoryRoot, string folder, string parent, List<Item> items)
     {
-        foreach (var child in Directory.EnumerateDirectories(folder).Select(path => new DirectoryInfo(path)).OrderBy(Numbered).ThenBy(d => d.Name, StringComparer.Ordinal))
+        foreach (var child in Directory.EnumerateDirectories(folder).Select(path => new DirectoryInfo(path)).OrderBy(d => WorkNames.Number(d.Name)).ThenBy(d => d.Name, StringComparer.Ordinal))
         {
             // A symbolic link is never followed: a link inside the feature folder must not lead the walk out of it, or round in a circle.
             if (child.Attributes.HasFlag(FileAttributes.ReparsePoint))
@@ -180,20 +168,7 @@ internal static partial class PlanReportMode
         }
     }
 
-    private static string? KindOf(string name) =>
-        EpochName().IsMatch(name) ? "epoch"
-        : EpicName().IsMatch(name) ? "epic"
-        : StoryName().IsMatch(name) ? "story"
-        : TaskName().IsMatch(name) ? "task"
-        : null;
-
-    /// <summary>The number in a folder's name (<c>epoch-2</c>, <c>e10-x</c>), so <c>e10</c> follows <c>e9</c>; a name with none sorts last.</summary>
-    private static int Numbered(DirectoryInfo folder)
-    {
-        var digits = new string([.. folder.Name.SkipWhile(c => !char.IsDigit(c)).TakeWhile(char.IsDigit)]);
-
-        return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number : int.MaxValue;
-    }
+    private static string? KindOf(string name) => WorkNames.KindOf(name) is { Length: > 0 } kind ? kind : null;
 
     private static string Relative(string root, string path) =>
         System.IO.Path.GetRelativePath(root, path).Replace('\\', '/') is var relative && relative == "." ? string.Empty : relative;

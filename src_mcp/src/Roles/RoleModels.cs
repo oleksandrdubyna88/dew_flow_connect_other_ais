@@ -1,3 +1,5 @@
+using CoaiMcp.Core.Work;
+
 namespace CoaiMcp.Roles;
 
 /// <summary>One model of a role's list — the model's name and the vendor whose CLI runs it. A role's list is ORDERED: the first is the model, the later ones the failover order.</summary>
@@ -7,7 +9,11 @@ internal sealed record ModelRef(string Model, string Vendor);
 internal sealed record Band(int Min, int Max, string Model, string Vendor);
 
 /// <summary>The work method's numbers (server.md §8) — read by the validator (<c>validate_work</c>) and the instructions, never typed into them.</summary>
-internal sealed record WorkMethod(int MvpMin, int MvpMax, int MaxEpicsPerEpoch, int MinConsultsPerEpoch, int MinConsultsPerEpic, int MaxStoriesPerEpic, int MaxTasksPerStory);
+internal sealed record WorkMethod(int MvpMin, int MvpMax, int MaxEpicsPerEpoch, int MinConsultsPerEpoch, int MinConsultsPerEpic, int MaxStoriesPerEpic, int MaxTasksPerStory)
+{
+    /// <summary>The numbers the work-plan validator checks against: the device's, exactly as the <c>roles</c> answer holds them.</summary>
+    internal WorkLimits ToLimits() => new(MaxEpicsPerEpoch, MvpMin, MvpMax, MaxStoriesPerEpic, MaxTasksPerStory);
+}
 
 /// <summary>The main AI the answer is for.</summary>
 internal sealed record MainAi(string Vendor, string Cli, string Version);
