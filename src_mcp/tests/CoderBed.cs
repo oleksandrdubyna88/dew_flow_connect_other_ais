@@ -70,7 +70,7 @@ internal sealed class CoderBed : IAsyncDisposable
     public CoderBoundary Boundary(Func<IReadOnlyList<string>, IReadOnlyList<string>>? degrade = null, BoundaryHost? host = null) =>
         new(Launcher, host ?? Host) { Degrade = degrade };
 
-    public CoderTurns Turns(CoderBoundary? boundary = null) => new(boundary ?? Boundary(), Evidence);
+    public CoderTurns Turns(CoderBoundary? boundary = null, FilesystemInvariant? evidence = null) => new(boundary ?? Boundary(), evidence ?? Evidence);
 
     /// <summary>A launch of <paramref name="program"/> as a coder would be launched: in the worktree, with a minute to live.</summary>
     public ProcessRequest Request(string program, params string[] arguments) =>
