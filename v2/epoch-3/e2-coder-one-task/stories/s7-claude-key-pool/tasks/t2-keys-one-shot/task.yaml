@@ -1,0 +1,27 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t2-keys-one-shot
+title: "The one-shot mode --keys: list, add (the text is one line on stdin, no echo), import for a boot script, relabel, disable, enable, remove, scan; the same answers serve the Keys page (KEY_POOL_SPEC.md sections 4 and 8)"
+kind: security
+complexity: 6
+dependsOn:
+  - t1-key-store
+parallel: false
+security: true
+files:
+  - src_mcp/src/Program.cs
+  - src_mcp/src/Server/Keys
+  - .agents/PROJECT.md
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "--keys is chosen by args[0] before any transport, never exits 64, answers 65 with a sentence for wrong arguments or data, and is in the one-shot list of .agents/PROJECT.md (a test reads that list)"
+  - id: d2
+    item: "add reads at most 4096 bytes and one line from stdin and trims the line end; with a terminal on stdin it prompts on stderr and reads with no echo; no verb takes the text as an argument, from a named file or from the environment (a test tries each and gets a refusal or an unknown flag)"
+  - id: d3
+    item: "the shape check (the prefix the CLI itself tests, the character set, 40 to 512 characters) refuses with the rule that failed and the length, never with a character of the input; an API key is refused with a sentence that says the pool takes setup-tokens; add makes no vendor call"
+  - id: d4
+    item: "import reads one JSON object per line (label and text), 200 lines at most, and prints counts only: added, already there, refused with line numbers and reasons; a second run with the same input adds nothing"
+  - id: d5
+    item: "list (and list --json) answers the metadata rows, the usable count, adminRevision and the state of the fallback switch, and never a text; relabel, disable, enable and remove answer the row; a write with a stale adminRevision answers changed elsewhere; adminRevision moves on a change by a person and never on a pick"
+  - id: d6
+    item: "scan --path walks the folder and prints path and key id for every file that holds the exact text of a pool key, never the text; a test with a planted file finds it and a clean folder answers no hit"

@@ -1,0 +1,26 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t4-round-robin
+title: "The pool: the next usable key after the persisted cursor for every fresh session, cooldown after a limit until the stated reset, dead after an auth failure with a notice, safe with many processes and many users (KEY_POOL_SPEC.md section 5)"
+kind: security
+complexity: 8
+dependsOn:
+  - t1-key-store
+parallel: false
+security: true
+files:
+  - src_mcp/src/Server/Keys
+  - src_mcp/core/Notices/ServerNoticeCodes.cs
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "a pick under pool.lock takes the first usable key after the cursor in the ring ordered by addedUtc then id, writes the cursor, lastUsedUtc and launches plus 1, and answers the key; three keys and six picks give A B C A B C, and the cursor survives a new process"
+  - id: d2
+    item: "8 processes that pick 400 times at once: every pick answers one whole key, the launches of the keys differ by 1 at most, no file is ever read half written, and a holder killed in the middle leaves the pool usable; under a shared data folder the files are 0660 and the folder 2770 (the second-user run is recorded as not made here if the machine has no second user)"
+  - id: d3
+    item: "a limit recorded for a key sets cooldownUntilUtc to the reset the vendor stated, else to CooldownParser.Until with the key's consecutive count, and a throttle to 60 seconds; a key in cooldown is not picked until that time; a launch that ended well clears the cooldown and the count"
+  - id: d4
+    item: "an auth failure recorded for a key (only the signal of the fixture t3 saved) makes it dead with reason auth and writes ONE claude-key-dead notice with the label, the id and the cure; a network error, a 5xx or a timeout never does; enable ends dead; exposed makes it dead with reason exposed and the notice claude-key-exposed"
+  - id: d5
+    item: "with no usable key the pool answers none with the earliest free time and the count of keys by state, and at most one claude-keys-exhausted notice in 30 minutes is written; an empty pool answers empty (a disabled or dead key is still a key)"
+  - id: d6
+    item: "a session's key is asked for by its id (a resumed turn): the same key is answered while it exists and is not dead, also when it is disabled or in cooldown; a removed, dead or missing key answers gone"

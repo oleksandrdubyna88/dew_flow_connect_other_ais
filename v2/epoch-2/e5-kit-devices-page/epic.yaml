@@ -8,3 +8,4 @@ doneWhen:
   - "kit 0.3.0 released with K1-K6, each with a story, fakeDom and axe test"
   - "Devices: tree VM → user / WSL / Windows, per-device settings and logs, enrolment lines, update everywhere with progress"
   - "412 handled: reload, changed elsewhere, no overwrite"
+  - "Keys page (a face only over the page API): the claude key pool of a device as label, id, added, last used, state and counts; add once in a write-only field, relabel, disable, remove; a token is never shown again and never in a page-message log (epoch-3 e2 KEY_POOL_SPEC.md)"

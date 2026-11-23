@@ -1,0 +1,23 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t6-no-leak-tests
+title: "Scenarios K1 to K16 with FakeCli and made-up tokens, and the canary: a token put in the pool is in no argv, log, ledger, page message, result or commit (KEY_POOL_SPEC.md section 10)"
+kind: test
+complexity: 7
+dependsOn:
+  - t5-role-launch-wiring
+parallel: false
+security: true
+files:
+  - src_mcp/tests_fakecli
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "FakeCli has one verb for the pool: it reads CLAUDE_CODE_OAUTH_TOKEN and answers by a marker in the made-up token (ok, a limit with a stated reset, the refused-key fixture of t3, print the token, write the token into a worktree file); every made-up token is built at run time from parts, so no token-shaped literal is in the source"
+  - id: d2
+    item: "the canary: a canary token is added through the real --keys add on stdin and a coder job runs to green; then every argv the test launcher recorded, job.json, request.json, env.json (read before it is deleted), the attempts folder, result.json, usage.jsonl, server-notices.jsonl, the log files, coai.db, the page answers and the page-message log of a fake transport, and the commit of the job hold no canary text; the companion check finds the canary in the .key file with the same search"
+  - id: d3
+    item: "every scenario of the table K1 to K16 has a test with its number in the name, or the result says which earlier test of t1 to t5 covers it; K14 (the fake prints its token and writes it into a file) ends with the stored output scrubbed, no commit, key-in-output and one claude-key-exposed notice"
+  - id: d4
+    item: "structural scans, each with a companion that proves it matches something: one caller of the store's text member; no logger or console call takes the secret type; the write-only field of the page API is dropped by the one function a transport logs through"
+  - id: d5
+    item: "the whole suite and the epic acceptance of s6 t2 pass with a pool of made-up keys; no test calls a vendor and none reads a real key"

@@ -1,0 +1,18 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-pool-key-proof
+title: "Real proof of the key pool: one coder job (claude, haiku) to green with a pool key and not the person's sign-in, at most 0.10 USD (KEY_POOL_SPEC.md section 10)"
+kind: measure
+complexity: 4
+dependsOn:
+  - t2-epic-acceptance
+parallel: false
+security: true
+files:
+  - v2/epoch-3/e2-coder-one-task/RESULTS_coder_proof.md
+dod:
+  - id: d1
+    item: "one real coder job on a small task of this repository ends green with a key of the pool; the results file holds the job id, the key id in the ledger line and in the attempt, the unit's properties with no bind of .credentials.json, and the key's lastUsedUtc and launches before and after"
+  - id: d2
+    item: "the person's .credentials.json has the same bytes and modification time before and after the job, and coai-mcp --keys scan over the data folder, the log folder and the worktree answers no hit"
+  - id: d3
+    item: "the spend is written down and is 0.10 USD at most; two paid runs at most, the second only after a recorded change; with two real keys in the pool a second job shows the other key id, if the total stays in the limit"

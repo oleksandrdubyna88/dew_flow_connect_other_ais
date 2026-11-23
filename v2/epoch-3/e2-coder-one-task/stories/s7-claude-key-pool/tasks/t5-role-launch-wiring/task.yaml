@@ -1,0 +1,45 @@
+# coai v2 work contract (draft schema; validated by validate_work from epoch 1 E3)
+id: t5-role-launch-wiring
+title: "Every claude launch of a role job carries a pool key: the value reaches the child only as CLAUDE_CODE_OAUTH_TOKEN by name, the person's sign-in file is not bound, a session keeps its key, a limit switches the key, an empty pool refuses (KEY_POOL_SPEC.md sections 5 to 7)"
+kind: security
+complexity: 9
+dependsOn:
+  - t3-pool-launch-measure
+  - t4-round-robin
+parallel: false
+security: true
+files:
+  - src_mcp/src/Server/RoleJobs
+  - src_mcp/runners/Consultation/ClaudeConsultant.cs
+  - src_mcp/runners/Consultation/CoderHandle.cs
+  - src_mcp/runners/Consultation/CoderLaunches.cs
+  - src_mcp/runners/Toolchain/CoderUnit.cs
+  - src_mcp/runners/Toolchain/CoderBoundary.cs
+  - src_mcp/runners/Toolchain/BoundaryPreflight.cs
+  - src_mcp/runners/Toolchain/BoundaryUnit.cs
+  - src_mcp/runners/Reviewers/UsageLedger.cs
+  - src_mcp/src/Store/RoundsDb.cs
+  - src_mcp/src/Tools.cs
+  - ARCHITECTURE.md
+  - README.md
+  - v2/architecture/server.md
+  - src_mcp/tests
+dod:
+  - id: d1
+    item: "FIRST, as a red test: the inner command of the coder unit is seen to hold a by-name value in /proc/<pid>/cmdline (the shape of CoderUnit today); then the command is changed to the shape t3 measured and the same reader sees it in 0 of 300 runs; the test that only asserted --setenv=NAME is present now reads the child's real environment"
+  - id: d2
+    item: "RoleModelLauncher asks the pool for the key of a fresh claude session and the claude adapter sets CLAUDE_CODE_OAUTH_TOKEN in the one place it sets a credential; the systemd-run argv has the name only; a launch with a key and ANTHROPIC_API_KEY, or with --bare, is a contract violation; env.json never holds the name (a test)"
+  - id: d3
+    item: "with a key the coder unit has no BindReadOnlyPaths of the person's .credentials.json, and the preflight has two more rows that hold: the sign-in file is not in the unit, and the keys folder cannot be read from the unit (InaccessiblePaths where the data folder is not under a hidden path); each row goes red when its property is dropped with Degrade"
+  - id: d4
+    item: "a read-only role launch with a key gets a HOME, the XDG names and a CLAUDE_CONFIG_DIR under its job folder, and a canary .credentials.json in the test's home is byte-equal and not opened"
+  - id: d5
+    item: "the key id is in the attempt of job.json and in the coder's resume handle; a resumed turn uses the same key and a handle with another key id is refused; a key that is gone stops the turn as a limit does"
+  - id: d6
+    item: "after a limit on a key the loop does not skip the claude vendor while an unused usable key exists: the same model runs on the next key in a new session through the one restart road of a model switch (the coder: the worktree at the last coai commit, s4-fix-loop t3), 3 switches per job at most, each one attempt with its keyId and one log line; with no usable key the claude models are skipped, another vendor's model runs, else the job fails limit with the earliest free time, and start_role refuses a claude-only route in 2 seconds or less before any folder"
+  - id: d7
+    item: "the exact text of the launch's key is replaced with the id mark in stdout, stderr, the attempts files and the result before they are stored or read; the coder's changed files are searched before the commit, and a hit means no commit, the job fails key-in-output and the key is dead with reason exposed"
+  - id: d8
+    item: "an empty pool refuses a claude role job at start_role with the cure and one claude-keys-empty notice per day; with COAI_ROLE_CLAUDE_PERSON_SIGN_IN set to 1 and NO key in the pool the launch is today's (the read-only bind, the person's home), recorded with keyId person-sign-in and one claude-person-sign-in-used notice per day; the switch does nothing when a key exists"
+  - id: d9
+    item: "UsageEntry has KeyId (appended, empty when not a pool launch), role_attempts has key_id through a new appended RoundsDb step, role_status shows keyId per attempt; ARCHITECTURE.md, README.md and server.md name the pool, the --keys mode, the variable, the switch and the measured limits, and the consultants and reviewers are said to be unchanged"
