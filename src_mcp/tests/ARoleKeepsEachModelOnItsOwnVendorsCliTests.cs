@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CoaiMcp.Core.Roles;
 using CoaiMcp.Roles;
 using FluentAssertions;
 using Xunit;

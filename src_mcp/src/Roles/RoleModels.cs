@@ -1,12 +1,7 @@
+using CoaiMcp.Core.Roles;
 using CoaiMcp.Core.Work;
 
 namespace CoaiMcp.Roles;
-
-/// <summary>One model of a role's list — the model's name and the vendor whose CLI runs it. A role's list is ORDERED: the first is the model, the later ones the failover order.</summary>
-internal sealed record ModelRef(string Model, string Vendor);
-
-/// <summary>A complexity band: tasks scored <see cref="Min"/> to <see cref="Max"/> run <see cref="Model"/>.</summary>
-internal sealed record Band(int Min, int Max, string Model, string Vendor);
 
 /// <summary>The work method's numbers (server.md §8) — read by the validator (<c>validate_work</c>) and the instructions, never typed into them.</summary>
 internal sealed record WorkMethod(int MvpMin, int MvpMax, int MaxEpicsPerEpoch, int MinConsultsPerEpoch, int MinConsultsPerEpic, int MaxStoriesPerEpic, int MaxTasksPerStory)

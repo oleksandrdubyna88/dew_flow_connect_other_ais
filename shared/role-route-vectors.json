@@ -1,0 +1,204 @@
+{
+ "$comment": "Test vectors of the role router (epoch 3 E1 s3, scenario A12). `tables` holds named roles tables: {roles: {role: [{model, vendor}]}, bands: [{min, max, model, vendor}]}; `default` is the claude main-AI table of shared/role-defaults.json with the codex row of `important` present (a test holds it to that file). Each vector is {name, table, role, model?, task?: {kind?, complexity?, security?}, expect}; `expect` is {models: [\"model@vendor\", ...], why?: text the reason must contain} for a route, or {refused: text the refusal must contain}. Server only in E1 (the extension has no router).",
+ "tables": {
+  "default": {
+   "roles": {
+    "orchestrator": [ { "model": "opus", "vendor": "claude" } ],
+    "coder": [ { "model": "sonnet", "vendor": "claude" } ],
+    "scout": [ { "model": "sonnet", "vendor": "claude" } ],
+    "important": [ { "model": "fable", "vendor": "claude" }, { "model": "astra", "vendor": "codex" } ],
+    "ba": [ { "model": "fable", "vendor": "claude" }, { "model": "opus", "vendor": "claude" } ]
+   },
+   "bands": [
+    { "min": 0, "max": 2, "model": "haiku", "vendor": "claude" },
+    { "min": 3, "max": 6, "model": "sonnet", "vendor": "claude" },
+    { "min": 7, "max": 8, "model": "opus", "vendor": "claude" },
+    { "min": 9, "max": 10, "model": "fable", "vendor": "claude" }
+   ]
+  },
+  "empty-ba": {
+   "roles": {
+    "coder": [ { "model": "sonnet", "vendor": "claude" } ],
+    "important": [ { "model": "fable", "vendor": "claude" } ],
+    "ba": []
+   },
+   "bands": []
+  },
+  "empty-important": {
+   "roles": {
+    "coder": [ { "model": "sonnet", "vendor": "claude" } ],
+    "important": []
+   },
+   "bands": []
+  },
+  "duplicates": {
+   "roles": {
+    "ba": [ { "model": "fable", "vendor": "claude" }, { "model": "Fable", "vendor": "claude" }, { "model": "opus", "vendor": "claude" }, { "model": "opus", "vendor": "claude" } ],
+    "important": [ { "model": "fable", "vendor": "claude" } ]
+   },
+   "bands": []
+  },
+  "broken-route": {
+   "roles": {
+    "ba": [ { "model": "opus", "vendor": "codex" } ],
+    "important": [ { "model": "fable", "vendor": "claude" } ]
+   },
+   "bands": []
+  },
+  "two-vendors": {
+   "roles": {
+    "ba": [ { "model": "opus", "vendor": "claude" }, { "model": "gpt-5.5", "vendor": "codex" }, { "model": "gemini-3.8-flash-low", "vendor": "agy" } ],
+    "coder": [ { "model": "sonnet", "vendor": "claude" } ],
+    "important": [ { "model": "fable", "vendor": "claude" } ]
+   },
+   "bands": [ { "min": 0, "max": 4, "model": "haiku", "vendor": "claude" } ]
+  }
+ },
+ "vectors": [
+  {
+   "name": "a role with a list takes its list in order",
+   "table": "default", "role": "ba",
+   "expect": { "models": [ "fable@claude", "opus@claude" ], "why": "ba list" }
+  },
+  {
+   "name": "an explicit model that is in the role's list goes first and is not repeated",
+   "table": "default", "role": "ba", "model": "opus",
+   "expect": { "models": [ "opus@claude", "fable@claude" ], "why": "caller named" }
+  },
+  {
+   "name": "an explicit model is matched without regard to case and keeps the list's spelling",
+   "table": "default", "role": "ba", "model": "OPUS",
+   "expect": { "models": [ "opus@claude", "fable@claude" ] }
+  },
+  {
+   "name": "an explicit model that is in no list is placed on its family's CLI and goes first",
+   "table": "default", "role": "ba", "model": "claude-haiku-4-5",
+   "expect": { "models": [ "claude-haiku-4-5@claude", "fable@claude", "opus@claude" ] }
+  },
+  {
+   "name": "an explicit codex model of another role's list keeps that list's vendor",
+   "table": "default", "role": "ba", "model": "astra",
+   "expect": { "models": [ "astra@codex", "fable@claude", "opus@claude" ] }
+  },
+  {
+   "name": "an explicit model that is in no list and no vendor rule places is refused",
+   "table": "default", "role": "ba", "model": "mystery-9",
+   "expect": { "refused": "COAI_ROLES_MODELS" }
+  },
+  {
+   "name": "a coder task takes the model of its complexity band, then the coder list",
+   "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 7 },
+   "expect": { "models": [ "opus@claude", "sonnet@claude" ], "why": "band" }
+  },
+  {
+   "name": "a coder task of a low complexity takes the small band model",
+   "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 2 },
+   "expect": { "models": [ "haiku@claude", "sonnet@claude" ] }
+  },
+  {
+   "name": "a coder task whose band model is the list's model has one entry",
+   "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 4 },
+   "expect": { "models": [ "sonnet@claude" ] }
+  },
+  {
+   "name": "a coder task of complexity 9 takes the top band and is not important",
+   "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 9 },
+   "expect": { "models": [ "fable@claude", "sonnet@claude" ] }
+  },
+  {
+   "name": "a coder job with no task facts takes the coder list",
+   "table": "default", "role": "coder",
+   "expect": { "models": [ "sonnet@claude" ], "why": "coder list" }
+  },
+  {
+   "name": "a complexity no band covers falls back to the role's list",
+   "table": "two-vendors", "role": "coder", "task": { "complexity": 8 },
+   "expect": { "models": [ "sonnet@claude" ] }
+  },
+  {
+   "name": "bands are for the coder only: a scout of complexity 7 takes the scout list",
+   "table": "default", "role": "scout", "task": { "complexity": 7 },
+   "expect": { "models": [ "sonnet@claude" ] }
+  },
+  {
+   "name": "an explicit model beats the band: it goes first, then the band is not used",
+   "table": "default", "role": "coder", "model": "haiku", "task": { "complexity": 7 },
+   "expect": { "models": [ "haiku@claude", "sonnet@claude" ] }
+  },
+  {
+   "name": "security: true takes the important list",
+   "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 3, "security": true },
+   "expect": { "models": [ "fable@claude", "astra@codex" ], "why": "security: true" }
+  },
+  {
+   "name": "kind security takes the important list",
+   "table": "default", "role": "coder", "task": { "kind": "security", "complexity": 3 },
+   "expect": { "models": [ "fable@claude", "astra@codex" ], "why": "kind: security" }
+  },
+  {
+   "name": "complexity 10 takes the important list",
+   "table": "default", "role": "coder", "task": { "kind": "code", "complexity": 10 },
+   "expect": { "models": [ "fable@claude", "astra@codex" ], "why": "complexity 10" }
+  },
+  {
+   "name": "an important task ignores the role's own list",
+   "table": "default", "role": "ba", "task": { "security": true },
+   "expect": { "models": [ "fable@claude", "astra@codex" ] }
+  },
+  {
+   "name": "an explicit model on the important list goes first",
+   "table": "default", "role": "coder", "model": "astra", "task": { "security": true },
+   "expect": { "models": [ "astra@codex", "fable@claude" ], "why": "caller named" }
+  },
+  {
+   "name": "an explicit model outside the important list is refused for an important task",
+   "table": "default", "role": "coder", "model": "sonnet", "task": { "security": true },
+   "expect": { "refused": "important" }
+  },
+  {
+   "name": "the same explicit model is accepted when the task is not important",
+   "table": "default", "role": "coder", "model": "sonnet", "task": { "security": false, "complexity": 9 },
+   "expect": { "models": [ "sonnet@claude" ] }
+  },
+  {
+   "name": "an empty role list is a refusal that names COAI_ROLES_MODELS",
+   "table": "empty-ba", "role": "ba",
+   "expect": { "refused": "COAI_ROLES_MODELS" }
+  },
+  {
+   "name": "a role the table does not know is a refusal that names COAI_ROLES_MODELS",
+   "table": "default", "role": "probe",
+   "expect": { "refused": "COAI_ROLES_MODELS" }
+  },
+  {
+   "name": "complexity 10 with a one-entry important list gives that one entry",
+   "table": "empty-ba", "role": "coder", "task": { "complexity": 10 },
+   "expect": { "models": [ "fable@claude" ] }
+  },
+  {
+   "name": "an important task with an empty important list is a refusal that names COAI_ROLES_MODELS",
+   "table": "empty-important", "role": "coder", "task": { "security": true },
+   "expect": { "refused": "COAI_ROLES_MODELS" }
+  },
+  {
+   "name": "duplicates are removed whatever the case and wherever they come from",
+   "table": "duplicates", "role": "ba", "model": "fable",
+   "expect": { "models": [ "fable@claude", "opus@claude" ] }
+  },
+  {
+   "name": "an entry that breaks the vendor-routing rule is a refusal naming it",
+   "table": "broken-route", "role": "ba",
+   "expect": { "refused": "vendor-routing" }
+  },
+  {
+   "name": "two vendors keep their order: the list's order is the failover order",
+   "table": "two-vendors", "role": "ba",
+   "expect": { "models": [ "opus@claude", "gpt-5.5@codex", "gemini-3.8-flash-low@agy" ] }
+  },
+  {
+   "name": "an explicit gemini model is placed on agy",
+   "table": "two-vendors", "role": "ba", "model": "gemini-3.7-flash-high",
+   "expect": { "models": [ "gemini-3.7-flash-high@agy", "opus@claude", "gpt-5.5@codex", "gemini-3.8-flash-low@agy" ] }
+  }
+ ]
+}

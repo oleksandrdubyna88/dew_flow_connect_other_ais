@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CoaiMcp.Server;
+using CoaiMcp.Core.Roles;
 
 namespace CoaiMcp.Roles;
 

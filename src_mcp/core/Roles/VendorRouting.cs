@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace CoaiMcp.Roles;
+namespace CoaiMcp.Core.Roles;
 
 /// <summary>
 /// The vendor-routing rule (<c>.agents/rules/common/vendor-routing.md</c>) as a check on a roles entry: a Claude model runs only through the <c>claude</c> CLI, a GPT model through <c>codex</c> (never <c>agy</c>);
@@ -27,9 +27,22 @@ internal static partial class VendorRouting
             : string.Empty;
     }
 
+    /// <summary>
+    /// The CLI the rule sends a model to — <c>claude</c>, <c>codex</c> or <c>agy</c> — or the empty string for a name the rule does not know (the router then refuses an explicit model it cannot place, and never guesses).
+    /// </summary>
+    internal static string CliFor(string model)
+    {
+        var name = model.Trim().ToLowerInvariant();
+
+        return IsClaude(name) ? "claude" : IsGpt(name) ? "codex" : OnAgy().IsMatch(name) ? "agy" : string.Empty;
+    }
+
     private static bool IsClaude(string name) => ClaudeName().IsMatch(name);
 
     private static bool IsGpt(string name) => GptName().IsMatch(name);
+
+    [GeneratedRegex(@"^(gemini|gpt-?oss)(-|\.|\d|$)", RegexOptions.CultureInvariant)]
+    private static partial Regex OnAgy();
 
     [GeneratedRegex(@"^(claude(-|$)|(opus|sonnet|haiku|fable)(-|\.|\d|$))", RegexOptions.CultureInvariant)]
     private static partial Regex ClaudeName();
