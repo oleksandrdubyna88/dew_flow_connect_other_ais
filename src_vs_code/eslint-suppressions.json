@@ -528,10 +528,10 @@
   },
   "src/extension.ts": {
     "complexity": {
-      "count": 7
+      "count": 6
     },
     "max-lines-per-function": {
-      "count": 3
+      "count": 2
     }
   },
   "src/helpPage.ts": {

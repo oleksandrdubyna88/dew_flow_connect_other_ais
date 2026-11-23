@@ -14,6 +14,12 @@ export const MODULE_SIDEBAR = 'sidebar';
 export const MODULE_CHAT = 'chat';
 
 /**
+ * The binary install and update, and `coai-mcp --setup-clients` (v2 E4, story s5-install-module): the module the shell loads only AFTER the first `menuReady`
+ * of the sidebar or the first command, never inside the cold start's M2 window. `coai.installServer` is its one command.
+ */
+export const MODULE_INSTALL = 'install';
+
+/**
  * The state that must exist once per host (notify suppressor, the notification ledger's gap, the data root, the findings board): one module the
  * loader memoises and hands to every bundle by reference, so no bundle carries a copy (`src/runtimeState.ts`).
  */
@@ -49,8 +55,13 @@ export const CHAT_COMMANDS: readonly string[] = [
   'coai.forgetPickedConversation',
 ];
 
-/** The module that runs a command: chat for the chat commands, legacy for everything else. */
-export const moduleOf = (command: string): string => (CHAT_COMMANDS.includes(command) ? MODULE_CHAT : MODULE_LEGACY);
+/** The commands that belong to the install module: the one that puts the published `coai-mcp` on this side. `COMMANDS` holds it too, in `package.json` order. */
+export const INSTALL_COMMANDS: readonly string[] = [
+  'coai.installServer',
+];
+
+/** The module that runs a command: chat for the chat commands, install for the install command, legacy for everything else. */
+export const moduleOf = (command: string): string => (CHAT_COMMANDS.includes(command) ? MODULE_CHAT : INSTALL_COMMANDS.includes(command) ? MODULE_INSTALL : MODULE_LEGACY);
 
 /**
  * Every command `contributes.commands` lists, in that order. `shellIds.test.ts` fails when this list and

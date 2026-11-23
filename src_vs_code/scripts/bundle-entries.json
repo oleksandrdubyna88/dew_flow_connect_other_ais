@@ -32,6 +32,13 @@
       "forbidInputs": ["src/runtimeState.ts", "shell/modules/runtime.ts"]
     },
     {
+      "id": "install",
+      "entry": "shell/modules/install/index.ts",
+      "out": "dist/modules/install.js",
+      "budgetBytes": 114688,
+      "forbidInputs": ["src/runtimeState.ts", "shell/modules/runtime.ts"]
+    },
+    {
       "id": "runtime",
       "entry": "shell/modules/runtime.ts",
       "out": "dist/modules/runtime.js",

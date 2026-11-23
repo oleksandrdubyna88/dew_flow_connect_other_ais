@@ -287,7 +287,9 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // registered command does (`terminal-door-failed`, one more site, the same code).
 // 183 -> 185 on 2026-11-17 (E2.S2 of research/PLAN_auto_never_asks_a_person_E2.md), two sites: the one notification of the reset of When the rounds run out to
 // Auto, in its two forms (`on-exhausted-migrated`, an `outcome`), and the warning for a settings file that refused the change (`on-exhausted-not-reset`).
-const PLACES_THIS_SPEAKS = 185;
+// 185 -> 186 on 2026-11-23 (v2 E4, story s5-install-module): the one notification for the AI clients that `coai-mcp --setup-clients` refused or could not set up
+// (`clients-not-set-up`, a failure, one for all of them, never a question). The install and update notices moved with the install module and are not new.
+const PLACES_THIS_SPEAKS = 186;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

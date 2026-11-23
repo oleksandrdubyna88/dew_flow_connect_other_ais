@@ -18,6 +18,9 @@ export const ROOT = process.cwd();
 /** Where the tripwire stubs write the id of the module that was required. */
 export const LOADED = Symbol.for('coai.test.loaded');
 
+/** Where the stub install module records what the shell asked of it (`command:<id>`, `start`). */
+export const INSTALL_LOG = Symbol.for('coai.test.install');
+
 /** The counters the chat build's spies write (`chatBuild`): drains of the usage queue, housekeeping starts and disposals. */
 export const SPY = Symbol.for('coai.test.chat.spy');
 
@@ -91,11 +94,22 @@ export function startHousekeeping(deps) {
   };
 }
 
-/** Writes the shell into `dir`: the real entry, runtime and chat modules, and tripwires for the legacy and sidebar modules. */
-export async function writeShell(dir: string, options: { readonly spies?: boolean } = {}): Promise<void> {
+/**
+ * A stand-in for the install module: the shell loads it after the first command, so a test that is not about it must not find a tripwire there. It records what it
+ * is asked (`start`, `command:<id>`) in {@link INSTALL_LOG} and does nothing else — no download, no spawn, no notice.
+ */
+const installStub = `const log = (globalThis[Symbol.for('coai.test.install')] ??= []);
+exports.command = (_context, id) => { log.push('command:' + id); };
+exports.start = () => { log.push('start'); };
+exports.deactivate = () => undefined;
+`;
+
+/** Writes the shell into `dir`: the real entry, runtime and chat modules, a tripwire for the legacy and sidebar modules, and the install module (a stub unless `install: 'real'`). */
+export async function writeShell(dir: string, options: { readonly spies?: boolean; readonly install?: 'stub' | 'real' } = {}): Promise<void> {
   put(join(dir, 'extension.js'), await bundleText('extension'));
   put(join(dir, 'modules', 'runtime.js'), await bundleText('runtime'));
   put(join(dir, 'modules', 'chat.js'), await bundleText('chat', options.spies === true ? [chatSpies()] : []));
+  put(join(dir, 'modules', 'install.js'), options.install === 'real' ? await bundleText('install') : installStub);
   put(join(dir, 'modules', 'legacy.js'), tripwire('legacy'));
   put(join(dir, 'modules', 'sidebar.js'), tripwire('sidebar'));
 }

@@ -26,11 +26,11 @@ import { onDataRootBack, onFindings, refuseUnderMissingRootOnceSettled } from '.
 import { startPathWatch } from './pathWatchHost';
 import { startCliPathKeep } from './cliPathKeepHost';
 import { fileAt, useFileProbe } from './pathFamily';
-import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
-import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { installedVersion, installLatest, knownServerVersion, latestServerVersion, serverExists, serverOnThisSide, serverPath, thisSide } from './installer';
+import { mcpServerBlock } from './mcpBlock';
+import { knownServerVersion, serverExists, serverPath, thisSide } from './installer';
+import { onServerInstalled } from './serverInstalled';
 import { EscalationWatcher } from './escalationWatcher';
 import { ConsultationWatcher } from './consultationWatcher';
 import { QuestionConsultWatcher } from './questionConsultWatcher';
@@ -573,15 +573,13 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     // the same provider as the sidebar (research/PLAN_settings_page.md). The argument, when there is one, is a
     // tab id; the title bar and the palette pass none, and anything that is not a tab changes nothing.
     bridge.registerCommand('coai.openSettings', (tab?: unknown) => { openSettings(panel, tab); }),
-    // Both doors repaint. The panel's own button used to be the only path that did — it awaits
-    // the command and then renders — so an update started from THIS menu left the MCP server tab
-    // showing the version it had replaced, which is the very symptom the button was fixed for.
-    bridge.registerCommand('coai.installServer', async () => {
-      await installServer(context);
+    // `coai.installServer` is the install module's (v2 E4, s5-install-module). Both doors still repaint: the module announces a (re)installed server, and this
+    // listener — the panel's own button used to be the only path that repainted — makes the MCP server tab show the version that was just installed.
+    { dispose: onServerInstalled(() => {
       // A (re)installed server reads the roots afresh on its start; the page asks the disk afresh too.
       panel.forgetQconsultRootAnswers();
-      await panel.render();
-    }),
+      void panel.render();
+    }) },
     bridge.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     bridge.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
     ...registerConfigTransfer(context, () => panel.vaultKeyNames()),
@@ -593,7 +591,6 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   );
 
   measureMark('oldCommandsRegistered');
-  void offerUpdate(context);
   measureMark('oldActivateEnd');
 
   return {
@@ -1100,68 +1097,6 @@ async function answerQuestion(watcher: EscalationWatcher): Promise<void> {
 }
 
 
-/** One install at a time: the panel button and the ⋯ menu are two doors to the same work. */
-const installing = new SingleFlight<void>();
-
-async function installServer(context: vscode.ExtensionContext): Promise<void> {
-  await installing.run(() => install(context));
-}
-
-async function install(context: vscode.ExtensionContext): Promise<void> {
-  try {
-    // Asked BEFORE the download, because `installLatest` writes this side's record at the end of it
-    // and the question is "has this side ever installed", not "did that just succeed".
-    const firstTime = installedVersion(context.globalState, context.globalStorageUri) === undefined;
-    const target = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Installing coai-mcp…' },
-      () => installLatest(context.globalStorageUri, context.globalState),
-    );
-    if (firstTime && await askWhereDataLives(context, true) === 'refused') {
-      // The choice did not land, so the block below would carry a configuration nobody asked for —
-      // and the install record written moments ago stops the question ever being asked again. Say
-      // so instead of copying something misleading. (codex, code round.)
-      void notify({
-        as: 'error',
-        class: 'failure',
-        source: 'installServer',
-        code: 'install-data-directory-not-saved',
-        title: `coai-mcp is installed at ${target.fsPath}, but where its data should live could not be `
-          + 'saved. Nothing has been copied to your clipboard: set it with "ConnectOtherAIs: Change '
-          + 'where your data lives" and paste the block it gives you.',
-        cure: 'Set the folder with "ConnectOtherAIs: Change where your data lives", then copy the block again.',
-      });
-
-      return;
-    }
-    // The block carries the two variables — the ONE configuration a client entry must hold, because
-    // the settings file that carries everything else lives inside the directory they select. See
-    // `serverEnv`, and the guard in `install.test.ts` that allows these two keys and no others.
-    await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath, serverEnv()));
-    const targets = clientTargetsLine(CLIENT_TARGETS);
-    void notify({
-      as: 'information',
-      class: 'outcome',
-      source: 'installServer',
-      code: 'server-installed',
-      title: `${installedMessage(target.fsPath)} Paste it into: ${targets}`,
-    });
-  } catch (error) {
-    const raw = message(error);
-    const hint = installFailureHint(raw, codeOf(error));
-    void notify({
-      as: 'error',
-      class: 'failure',
-      source: 'installServer',
-      code: 'server-not-installed',
-      title: hint.length > 0 ? `coai-mcp was not updated: ${hint}` : `coai-mcp was not installed: ${raw}`,
-      // The raw reason as well as the hint: a hint that matched nothing is exactly the case where
-      // somebody needs what the process actually said.
-      detail: raw,
-    });
-  }
-}
-
-
 async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> {
   const path = serverPath(context.globalStorageUri);
   if (path === undefined) {
@@ -1547,40 +1482,6 @@ async function readSessions(): Promise<SessionFile[]> {
     // No data dir yet — an empty view says so honestly.
   }
   return sessions;
-}
-
-async function offerUpdate(context: vscode.ExtensionContext): Promise<void> {
-  const server = await serverOnThisSide(
-    context.globalStorageUri,
-    context.globalState,
-    (await latestServerVersion()) ?? '',
-  );
-  // `absent` never offers: an install is not an update, and this runs at activation — a machine
-  // with nothing on this side would otherwise be told to update something it does not have.
-  if (!server.updateOffered) {
-    return;
-  }
-  const answer = await notifyAndAsk({
-    as: 'information',
-    class: 'offer',
-    source: 'installServer',
-    code: 'newer-server-published',
-    title: 'A newer coai-mcp is published.',
-    action: 'Install it',
-  });
-  if (answer === 'Install it') {
-    await installServer(context);
-  }
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** Node puts an errno here; `vscode.FileSystemError` puts its own name. Absent is empty, never a guess. */
-function codeOf(error: unknown): string {
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === 'string' ? code : '';
 }
 
 /**

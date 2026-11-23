@@ -11,7 +11,9 @@
 //      The listener stays until the old code has the view, so no toggle in between is lost, and is removed just before the hand-over: the old code is then
 //      the view's only reader;
 //   3. after `menuReady` also starts the chat module in the background, so its context keys (`coai.terminalReadsSession`, the skip-list check) exist within
-//      seconds. It runs on a timer after the message handler returned: it never delays `menuReady`.
+//      seconds. It runs on a timer after the message handler returned: it never delays `menuReady`;
+//   4. after `menuReady` also starts the install work (the binary check and `coai-mcp --setup-clients`, story s5-install-module), the same way and for the same
+//      reason: it is never inside the cold start's window. Only the first `menuReady` (or the fallback, when the page never says it) asks, and only once.
 // It imports `node:crypto` (the nonce) and the small files of the menu, and nothing of the old tree. The bundle's budget and allowed inputs are in
 // `scripts/bundle-entries.json`.
 import { mark } from '../measure';
@@ -67,6 +69,7 @@ interface World {
   readonly token: vscode.CancellationToken;
   readonly legacy: () => Promise<ShellModule>;
   readonly startChat: () => Promise<unknown>;
+  readonly startInstall: () => Promise<unknown>;
 }
 
 /** One resolved view's life: the menu, what the person does on it, and the hand-over of the view to the old code. */
@@ -76,6 +79,7 @@ class MenuSession {
   /** The old code has been asked for (it may still be loading). */
   private asked = false;
   private chatAsked = false;
+  private installAsked = false;
   private fallback: unknown;
   /** What the person did on the menu: a section is in one of these two sets, the one of its last press. */
   private readonly opened = new Set<string>();
@@ -84,7 +88,7 @@ class MenuSession {
   private readonly heard: Readonly<Record<string, (said: Said) => void>> = {
     ready: () => { mark('ready'); },
     // The mark FIRST, in the handler; everything that costs anything is on a timer after it.
-    menuReady: () => { mark('menuReady'); this.seams.setTimeout(this.handOver, 0); this.seams.setTimeout(this.askChat, 0); },
+    menuReady: () => { mark('menuReady'); this.seams.setTimeout(this.handOver, 0); this.seams.setTimeout(this.askChat, 0); this.seams.setTimeout(this.askInstall, 0); },
     section: (said) => { this.toggled(said); },
   };
 
@@ -96,7 +100,7 @@ class MenuSession {
       // A view that goes away before the hand-over is not handed over: VS Code resolves a new one when the sidebar is shown again.
       this.world.view.onDidDispose(() => { this.release(); }),
     );
-    this.fallback = this.seams.setTimeout(() => { this.handOver(); this.askChat(); }, FALLBACK_MS);
+    this.fallback = this.seams.setTimeout(() => { this.handOver(); this.askChat(); this.askInstall(); }, FALLBACK_MS);
   }
 
   private hear(message: unknown): void {
@@ -156,6 +160,13 @@ class MenuSession {
     }
   };
 
+  private readonly askInstall = (): void => {
+    if (!this.installAsked) {
+      this.installAsked = true;
+      this.world.startInstall().catch((error: unknown) => { this.seams.log('the install work could not be started in the background', error); });
+    }
+  };
+
   private toggled(said: Said): void {
     const id = menuIdOf(said);
     if (id === undefined) {
@@ -184,11 +195,12 @@ export function resolveWith(
   token: vscode.CancellationToken,
   legacy: () => Promise<ShellModule>,
   startChat: () => Promise<unknown>,
+  startInstall: () => Promise<unknown>,
 ): void {
   paintFirst(view);
-  new MenuSession(seams, { context, view, resolveContext, token, legacy, startChat }).start();
+  new MenuSession(seams, { context, view, resolveContext, token, legacy, startChat, startInstall }).start();
 }
 
-export const resolveSidebar: SidebarModule['resolveSidebar'] = (context, view, resolveContext, token, legacy, startChat) => {
-  resolveWith(REAL, context, view, resolveContext, token, legacy, startChat);
+export const resolveSidebar: SidebarModule['resolveSidebar'] = (context, view, resolveContext, token, legacy, startChat, startInstall) => {
+  resolveWith(REAL, context, view, resolveContext, token, legacy, startChat, startInstall);
 };

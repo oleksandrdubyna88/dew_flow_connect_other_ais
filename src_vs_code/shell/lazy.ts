@@ -39,7 +39,8 @@ export interface ShellModule {
  * What the sidebar module exports (v2 E4): it draws the sidebar's real menu at once, and hands the SAME view to the legacy module
  * (`legacy().resolveView`) after the page has said the menu is ready. `legacy` is the entry's own loader, so there is one copy of the old code and one
  * registration. `startChat` loads the chat module and starts it (the entry's own loader again): the sidebar module asks for it once the menu is ready, so the
- * chat's context keys appear without anybody opening a chat.
+ * chat's context keys appear without anybody opening a chat. `startInstall` does the same for the install module (binary check, `--setup-clients`): asked
+ * once, after `menuReady`, never before it.
  */
 export interface SidebarModule {
   readonly resolveSidebar: (
@@ -49,6 +50,7 @@ export interface SidebarModule {
     token: vscode.CancellationToken,
     legacy: () => Promise<ShellModule>,
     startChat: () => Promise<unknown>,
+    startInstall: () => Promise<unknown>,
   ) => void;
 }
 
@@ -62,6 +64,13 @@ export interface ChatModule extends Pick<ShellModule, 'command' | 'start' | 'dea
   /** The review page's `Chat` on a bug (the legacy sidebar's callback): puts the bug into a chat through the one chat registry. */
   readonly chooseFromBug: (context: vscode.ExtensionContext, chat: unknown) => Promise<void>;
 }
+
+/**
+ * What the install module exports (v2 E4 story s5-install-module): the part of `ShellModule` the install work answers. `command` runs `coai.installServer`;
+ * `start` is the once-per-activation work — the binary check and `coai-mcp --setup-clients` — which the shell asks for only after the sidebar's first
+ * `menuReady` or the first command, never inside the cold start's M2 window.
+ */
+export type InstallModule = Pick<ShellModule, 'command' | 'start' | 'deactivate'>;
 
 /** What a `runtime` module exports: the one `HostRuntime` of the host (`src/runtimeState.ts`); this file never names its type. */
 export interface RuntimeModule {

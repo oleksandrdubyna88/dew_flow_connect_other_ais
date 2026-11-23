@@ -109,8 +109,8 @@ const marksNow = (): string[] => ((globalThis as unknown as Record<symbol, { nam
 type HandOver = { readonly opened: readonly string[]; readonly closed: readonly string[] } | undefined;
 
 interface Sidebar {
-  readonly resolveWith: (seams: unknown, context: unknown, view: unknown, resolveContext: unknown, token: unknown, legacy: () => Promise<unknown>, chat: () => Promise<unknown>) => void;
-  readonly resolveSidebar: (context: unknown, view: unknown, resolveContext: unknown, token: unknown, legacy: () => Promise<unknown>, chat: () => Promise<unknown>) => void;
+  readonly resolveWith: (seams: unknown, context: unknown, view: unknown, resolveContext: unknown, token: unknown, legacy: () => Promise<unknown>, chat: () => Promise<unknown>, install: () => Promise<unknown>) => void;
+  readonly resolveSidebar: (context: unknown, view: unknown, resolveContext: unknown, token: unknown, legacy: () => Promise<unknown>, chat: () => Promise<unknown>, install: () => Promise<unknown>) => void;
   readonly FALLBACK_MS: number;
 }
 
@@ -153,6 +153,8 @@ const nonceOf = (html: string): { policy: string | undefined; script: string | u
 });
 const SEAMS = (timers: ReturnType<typeof manualTimers>, logged: string[] = []) => ({ setTimeout: timers.setTimeout, clearTimeout: timers.clearTimeout, log: (message: string) => { logged.push(message); } });
 const CONTEXT = {};
+/** The install work as a fake that is never asked for in the tests that are not about it. */
+const NO_INSTALL = (): Promise<unknown> => Promise.resolve({});
 
 /** The ids and visible words of the section headers a page drew, in order. */
 const headersOf = (sections: readonly DomElement[]): { id: string | null; title: string }[] => sections.map((one) => ({ id: one.getAttribute('data-section'), title: one.querySelector('summary')?.textContent.trim() ?? '' }));
@@ -245,7 +247,7 @@ test('the menu is written before anything is loaded; menuReady is marked before 
   const timers = manualTimers();
   const before = marksNow().length;
 
-  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, chat.chat);
+  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, chat.chat, NO_INSTALL);
 
   assert.deepEqual(fake.view.webview.options, { enableScripts: true }, 'the options are the old provider\'s own, so its later assignment is no change');
   assert.deepEqual(headersOf(runMenuPage(fake.view.webview.html).sections()), MENU_SECTIONS.map((one) => ({ id: one.id, title: one.title })), 'the page the view holds is the menu');
@@ -276,7 +278,7 @@ test('chat is started in the background even while the old code is still loading
   const timers = manualTimers();
   const logged: string[] = [];
 
-  sidebar.resolveWith(SEAMS(timers, logged), CONTEXT, fake.view, {}, {}, old.legacy, chat.chat);
+  sidebar.resolveWith(SEAMS(timers, logged), CONTEXT, fake.view, {}, {}, old.legacy, chat.chat, NO_INSTALL);
   showMenu(fake);
   timers.advance(0);
   await settle();
@@ -291,7 +293,7 @@ test('a section opened before the old code has the view shows "loading…" in th
   const fake = fakeView();
   const old = heldLegacy();
   const timers = manualTimers();
-  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat);
+  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat, NO_INSTALL);
   // The person opens two sections and closes one again, on a page whose menuReady never arrived at the host: only the ARRIVAL of a press asks for the old code.
   const page = runMenuPage(fake.view.webview.html, (message) => { if (message['type'] !== 'menuReady') fake.hear(message); });
   const [gates, consultations] = [MENU_SECTIONS[1].id, MENU_SECTIONS[2].id];
@@ -325,7 +327,7 @@ test('a page that never says menuReady does not hold the old code and chat back 
   // The fallback must not fire inside the 2000 ms the start is allowed (coldstart-lib.mjs LIMITS.m2MaxMs): the old code loads in one block of the host's
   // thread, and one that began while menuReady was on its way would be counted as the menu's time.
   assert.ok(sidebar.FALLBACK_MS > 2000, 'the fallback is later than the start budget');
-  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, chat.chat);
+  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, chat.chat, NO_INSTALL);
   timers.advance(sidebar.FALLBACK_MS - 1);
   assert.equal(old.loads() + chat.started(), 0, 'not before the fallback');
   timers.advance(sidebar.FALLBACK_MS);
@@ -345,7 +347,7 @@ test('a view that is disposed before the old code has it is never handed over, a
   const old = heldLegacy();
   const timers = manualTimers();
 
-  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat);
+  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat, NO_INSTALL);
   showMenu(fake);
   timers.advance(0);
   assert.equal(old.loads(), 1);
@@ -365,7 +367,7 @@ test('messages that are not a menu\'s are ignored: an unknown type, a section th
 
   const chat = fakeChat();
   const menuReadyBefore = marksNow().filter((name) => name === 'menuReady').length;
-  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, chat.chat);
+  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, chat.chat, NO_INSTALL);
   for (const message of [null, 7, 'menuReady', { type: 'nonsense' }, { type: 'section', id: 'cadence', open: true }, { type: 'section', id: 7, open: true }, { type: 'section', open: true }]) {
     fake.hear(message);
   }
@@ -381,7 +383,7 @@ test('every paint has its OWN nonce: the policy and the script agree, and none i
   const nonces: string[] = [];
   for (let at = 0; at < 3; at += 1) {
     const fake = fakeView();
-    sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, () => new Promise(() => undefined), () => new Promise(() => undefined));
+    sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, () => new Promise(() => undefined), () => new Promise(() => undefined), NO_INSTALL);
     const { policy, script } = nonceOf(fake.view.webview.html);
     assert.ok(policy !== undefined && policy === script, 'the content security policy admits exactly the script the page carries');
     assert.match(policy, /^[A-Za-z0-9_-]{22}$/u, '128 bits, base64url, as `webviewNonce` makes them');
@@ -397,7 +399,7 @@ test('when the old code cannot be loaded the person is told, in words, and the f
   const timers = manualTimers();
   const logged: string[] = [];
 
-  sidebar.resolveWith(SEAMS(timers, logged), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat);
+  sidebar.resolveWith(SEAMS(timers, logged), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat, NO_INSTALL);
   showMenu(fake);
   timers.advance(0);
   old.fail(new Error('Cannot find module <legacy>'));
@@ -415,7 +417,7 @@ test('the real entry point: resolveSidebar draws the menu at once, and on its ow
   const old = heldLegacy();
   const chat = fakeChat();
 
-  sidebar.resolveSidebar(CONTEXT, fake.view, {}, {}, old.legacy, chat.chat);
+  sidebar.resolveSidebar(CONTEXT, fake.view, {}, {}, old.legacy, chat.chat, NO_INSTALL);
   assert.deepEqual(headersOf(runMenuPage(fake.view.webview.html).sections()).map((one) => one.id), MENU_SECTIONS.map((one) => one.id));
   showMenu(fake);
   await new Promise((resolve) => { setTimeout(resolve, 20); });
@@ -496,4 +498,75 @@ test('when the sidebar module cannot be loaded or throws, the old code resolves 
 
     assert.deepEqual(seen, [view], `the sidebar module ${what}: the old code must still resolve the view`);
   }
+});
+
+/* ---------------------------------------------------------------------------------------------- *
+ * The install work (v2 E4 story s5-install-module): never inside the start, once after the first menuReady.
+ * ---------------------------------------------------------------------------------------------- */
+
+/** The install work as a fake: it records that it was started, and which marks existed when it was. */
+function fakeInstall(outcome: 'starts' | 'throws' = 'starts') {
+  const startedAfter: string[][] = [];
+
+  return {
+    install: () => { startedAfter.push(marksNow()); return outcome === 'starts' ? Promise.resolve({}) : Promise.reject(new Error('install is broken')); },
+    started: () => startedAfter.length,
+    startedAfter,
+  };
+}
+
+test('the install work starts AFTER menuReady, on a timer, never inside the message handler, and only once', async () => {
+  const sidebar = await loadSidebar();
+  const fake = fakeView();
+  const old = heldLegacy();
+  const install = fakeInstall();
+  const timers = manualTimers();
+
+  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat, install.install);
+  assert.equal(install.started(), 0, 'nothing of the install work while the menu is written');
+
+  showMenu(fake);
+  assert.equal(install.started(), 0, 'the message handler that carries menuReady started no install work: it is on a timer after it');
+  timers.advance(0);
+  assert.equal(install.started(), 1, 'the install work starts once the menu is ready');
+  assert.ok(install.startedAfter[0]?.includes('menuReady'), 'it was asked for AFTER the menuReady mark existed, so it is outside the M2 window');
+
+  // A second menuReady (a page that says it twice) and the fallback timer start nothing more.
+  fake.hear({ type: 'menuReady' });
+  timers.advance(sidebar.FALLBACK_MS + 1000);
+  assert.equal(install.started(), 1, 'the install work runs once per activation, not once per message');
+});
+
+test('a page that never says menuReady starts the install work on the fallback, once; a late menuReady starts nothing again', async () => {
+  const sidebar = await loadSidebar();
+  const fake = fakeView();
+  const old = heldLegacy();
+  const install = fakeInstall();
+  const timers = manualTimers();
+
+  sidebar.resolveWith(SEAMS(timers), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat, install.install);
+  timers.advance(sidebar.FALLBACK_MS - 1);
+  assert.equal(install.started(), 0, 'not before the fallback: the start budget is 2000 ms and the fallback is later');
+  timers.advance(sidebar.FALLBACK_MS);
+  assert.equal(install.started(), 1);
+  fake.hear({ type: 'menuReady' });
+  timers.advance(10_000);
+  assert.equal(install.started(), 1);
+});
+
+test('an install start that fails is logged, never thrown into the menu, and the menu still hands the view over', async () => {
+  const sidebar = await loadSidebar();
+  const fake = fakeView();
+  const old = heldLegacy();
+  const timers = manualTimers();
+  const logged: string[] = [];
+
+  sidebar.resolveWith(SEAMS(timers, logged), CONTEXT, fake.view, {}, {}, old.legacy, fakeChat().chat, fakeInstall('throws').install);
+  showMenu(fake);
+  timers.advance(0);
+  old.finish();
+  await settle();
+
+  assert.deepEqual(logged, ['the install work could not be started in the background']);
+  assert.equal(old.calls.length, 1, 'the hand-over to the old code did not wait for, or depend on, the install work');
 });
