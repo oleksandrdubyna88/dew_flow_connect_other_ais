@@ -81,3 +81,13 @@ right after the commit of the written stories it must read 0.00. **Pending.**
 3. A running BA job is sensitive to any change in the worktree, also by the owner's own editor or another agent's build in the same tree; in practice the BA needs a tree nobody touches for about 3 minutes.
 4. `role_status` shows `attempts` only when an attempt ends; during an attempt `attempts` is empty, so a client cannot see which model is running except from `model` and the heartbeat.
 5. The acceptance suite uses one vendor and a throttle for the limit (section 1).
+
+## Run 2 (2026-11-23, main session, untouched tree) — the live proof
+
+- Job `r20261123034558-89577cf7`, role `ba`, route claude/fable → claude/opus, launcher systemd-run, scratch data dir.
+- **succeeded** on attempt 1 (fable): **6 stories, 23 tasks, 0 repair turns**, wall 157.9 s, **1.725 USD** (CLI envelope).
+- Files written only under `v2/epoch-3/e2-coder-one-task/stories/` (+ `ba-manifest.json`), committed as `22c9c8d6`.
+- `--validate-work v2`: valid — 5 epochs, 24 epics, 28 stories, 83 tasks, 0 errors, 7 notes.
+- `--role-delta … --at HEAD` right after the commit: changedShare 0.00 (0 of 23). The pass criterion (< 0.20 after the
+  orchestrator's review) is measured after that epic's plan gate — pending.
+- Total spend of this story: 2.2462 (run 1, lost to a tree change) + 1.7251 (run 2) = 3.97 USD.
