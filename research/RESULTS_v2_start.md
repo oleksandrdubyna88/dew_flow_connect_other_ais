@@ -198,3 +198,22 @@ thing in this file so an appended line lands in it, so notes on rows are written
 | 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1 re-run once after the run finished) | local | win32 | 28.2 | 904.2 / 1538.2 / 1966.4 | null (not read) | pass |
 | 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | linux | 2 | 358.4 / 478.7 / 536.3 | null (not read) | pass |
 | 2026-11-23 | 8122df75 | native menu, M2 to menuReady (ci run 2, same code, docs commit only) | local | win32 | 12.4 | 747.5 / 1628.6 / 2408.1 | null (not read) | FAIL (one sample over 2000 ms) |
+
+## 6. Joint smoke, E2 story s6 (2026-11-23, integration branch `feat/v2-2.0-integration`: E1 server + E2 shell + E3 + E4)
+
+**t2, settings mirror under lazy activation: a GAP, found by reading the code of this tree; it is not closed here.** The settings file the server reads (`<data dir>/settings.json`)
+is written only by `mirrorSettings` in the old `activate()` (`src/extension.ts`), and that call runs only inside the `legacy` module, on first use of a legacy command or the
+sidebar view. The manifest's activation events are now `onView:coai.panel`, `onWebviewPanel:coaiChat` and `onUri` (v1 had `onStartupFinished`), and the shell has no settings
+listener of its own. So a window that never opens coai neither activates the extension nor mirrors: the server (which re-reads the file on every reload and treats a missing
+file as "the normal case before the panel has ever been opened", `SettingsRead.Missing`) keeps what the LAST window to load the old code wrote, or its defaults if none ever did.
+What reaches the server correctly: every change made through the Settings page or any other coai surface, because opening one loads the old code, which mirrors once at start and
+again on every change. What does not: a `coai.*` value edited directly in VS Code's own settings (UI or JSON) or pulled in by Settings Sync in a window where no coai surface has been
+opened since; the server uses the older values until some window opens one. The server cannot read its settings without the mirror in epoch 1 (the hub-held settings that replace the
+mirror are a later epoch, `v2/architecture/extension.md`). Ways to close it, for the owner: (a) accept it for 2.0 — settings are changed through the panel, which mirrors;
+(b) add `onStartupFinished` and a small listener in the shell that loads the legacy module only when a `coai.*` value changes (it costs every window one idle activation, so
+it needs its own M1 row). Not done in this branch: it changes the activation contract that E2 measured. No host scenario covers "never opened"; every existing scenario calls
+`activated(extension)`, which loads the old code first.
+
+**t1, a real round shown in a real VS Code with the shell VSIX and the E1 binary: not run here.** This machine has no editor and no display. The real-editor job of CI
+(`measure:host` for the cold start, `test:host` for the host scenarios, Linux under xvfb and Windows) is what runs the shell in a real editor; the PR's checks hold that result.
+A round driven through the sidebar by hand with the final VSIX is still open for the owner's own machine.
