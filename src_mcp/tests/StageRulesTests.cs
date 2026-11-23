@@ -100,6 +100,9 @@ public sealed class StageRulesTests : IDisposable
     /// <para><b>Re-baselined 2026-11-23 (epoch 3 E1 s2: <c>--validate-work</c>).</b> `.agents/PROJECT.md` names the new one-shot mode
     /// (+19, `, \`--validate-work\``), which it must (`TheValidateWorkModeTests`). The base is 18 039, the tier unchanged at 65 336, the pair
     /// 83 375, leaving 9 926 of 93 301; the tail canaries below ran unchanged and green.</para>
+    /// <para><b>Re-baselined 2026-11-23 (epoch 3 E1 s1: <c>--role-run</c>).</b> `.agents/PROJECT.md` names the new one-shot mode
+    /// (+14, `, \`--role-run\``), which it must (`ARoleRunnerTests`). The base is 18 053, the tier unchanged at 65 336, the pair
+    /// 83 389, leaving 9 912 of 93 301; the tail canaries below ran unchanged and green.</para>
     /// <para>The unit is the one the collector spends: characters of the line-ending-normalised text
     /// (<c>RuleFile.Text.Length</c>), which is what <c>RuleFiles.DefaultBudgetBytes</c> calls bytes. They
     /// differ for the non-ASCII characters in these files, and are equal on every platform.</para>
@@ -117,13 +120,13 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
             .Sum(file => file.Text.Length);
 
-        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 18 039 + 65 336 = 83 375 of 93 301, since epoch 3 E1 s2 named --validate-work in .agents/PROJECT.md; 18 020 + 65 336 = 83 356, since coai v2 E3.S8 named --plan-report in .agents/PROJECT.md; 18 003 + 65 336 = 83 339, since coai v2 E3 merged E1 and named --migrate-v2 in .agents/PROJECT.md; 17 987 + 65 336 = 83 323, since coai v2 E3.S7 named --roles in .agents/PROJECT.md; 17 976 + 65 336 = 83 312, since coai v2 E3.S6 named --setup-clients and --install in .agents/PROJECT.md; 17 944 + 65 336 = 83 280, since coai v2 E3.S4 named --band-json in .agents/PROJECT.md; 17 929 + 65 336 = 83 265, since coai v2 E3.S2 removed three one-shot modes from .agents/PROJECT.md; 17 988 + 65 336 = 83 324 of 93 301, since the conventions pin moved to 37b9aa5 and the owner raised the budget on 2026-11-06; 17 988 + 62 035 = 80 023 of 90 000, since E6.S1's --round-counts-merged met the conventions pin 105d53c on 2026-11-05; 17 988 + 62 061 = 80 049 on the E6.S1 branch before the merge; 17 963 + 62 035 = 79 998 since the conventions pin moved to 105d53c on 2026-11-01; 17 963 + 62 061 = 80 024 until then; 17 947 + 62 061 = 80 008 before E1.S2's --host-facts; 17 925 + 62 061 = 79 986 before E7). "
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 18 053 + 65 336 = 83 389 of 93 301, since epoch 3 E1 s1 named --role-run in .agents/PROJECT.md; 18 039 + 65 336 = 83 375, since epoch 3 E1 s2 named --validate-work in .agents/PROJECT.md; 18 020 + 65 336 = 83 356, since coai v2 E3.S8 named --plan-report in .agents/PROJECT.md; 18 003 + 65 336 = 83 339, since coai v2 E3 merged E1 and named --migrate-v2 in .agents/PROJECT.md; 17 987 + 65 336 = 83 323, since coai v2 E3.S7 named --roles in .agents/PROJECT.md; 17 976 + 65 336 = 83 312, since coai v2 E3.S6 named --setup-clients and --install in .agents/PROJECT.md; 17 944 + 65 336 = 83 280, since coai v2 E3.S4 named --band-json in .agents/PROJECT.md; 17 929 + 65 336 = 83 265, since coai v2 E3.S2 removed three one-shot modes from .agents/PROJECT.md; 17 988 + 65 336 = 83 324 of 93 301, since the conventions pin moved to 37b9aa5 and the owner raised the budget on 2026-11-06; 17 988 + 62 035 = 80 023 of 90 000, since E6.S1's --round-counts-merged met the conventions pin 105d53c on 2026-11-05; 17 988 + 62 061 = 80 049 on the E6.S1 branch before the merge; 17 963 + 62 035 = 79 998 since the conventions pin moved to 105d53c on 2026-11-01; 17 963 + 62 061 = 80 024 until then; 17 947 + 62 061 = 80 008 before E1.S2's --host-facts; 17 925 + 62 061 = 79 986 before E7). "
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
         tierBytes.Should().Be(65_336, message);
-        baseBytes.Should().Be(18_039, message);
-        (baseBytes + tierBytes).Should().Be(83_375, message);
+        baseBytes.Should().Be(18_053, message);
+        (baseBytes + tierBytes).Should().Be(83_389, message);
     }
 
     /// <summary>

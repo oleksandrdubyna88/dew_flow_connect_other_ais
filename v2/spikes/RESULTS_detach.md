@@ -50,6 +50,9 @@ Consequence for the design: `env.json` must carry the allow-listed names the CLI
 - A unit started with `--collect` leaves no record after it ends (`status` answers not-found), so the result of a runner must come from the job files, never from `systemctl`. A unit killed from outside without `--collect` ends `ActiveState=failed Result=signal ExecMainStatus=9` and stays listed until `reset-failed`.
 - `KillMode=control-group` (the default): stopping the unit kills every process in its cgroup, the CLI child included.
 
+- **An oom-kill stops the whole unit unless `OOMPolicy=continue` is set** (measured at the end of s1 t3, 2026-11-23). A parent that starts a memory hog as its child, in a unit with `-p MemoryMax=300M -p MemorySwapMax=0`: with the default policy the kernel killed the hog at about 280 MB AND systemd stopped the unit — the parent wrote no result (no `exit=` file, unit inactive). With `-p OOMPolicy=continue` added, only the hog died: the parent survived, saw exit code 137 (SIGKILL) and wrote it. A runner whose CLI child is oom-killed must survive to fail over (spec A14), so the launcher passes `OOMPolicy=continue`. Spec A named only the two memory properties; this is a third.
+- **A managed .NET child never reaches the kernel's kill.** The runtime reads the cgroup limit and caps its GC heap at three quarters of it: a managed hog in the same unit ended with an `OutOfMemoryException` (exit 97 in the test stand-in), not SIGKILL. A vendor CLI that is a node or native program is killed by the kernel; a .NET one dies of its own exception. Both are a crash of the child; only the exit code differs.
+
 ## 5. Not measured here
 
 - **Windows, client job object.** No Windows host is reachable from this run. Case "a client in a job object with KILL_ON_JOB_CLOSE kills a `DETACHED_PROCESS` child" is **not measured here**; `CREATE_BREAKAWAY_FROM_JOB` and the `windows-in-job` fallback of spec A stay as designed, untested. The launcher's Windows branch ships behind that gap and must be measured on a Windows machine before anyone relies on it.
@@ -63,6 +66,8 @@ Consequence for the design: `env.json` must carry the allow-listed names the CLI
 Order confirmed: (1) Linux with a user manager: `systemd-run --user --collect --unit coai-role-<jobId> -p MemoryMax=<MB>M -p MemorySwapMax=0 ...`; (2) otherwise `setsid -f`; (3) Windows `CreateProcess` with `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB`, falling back without breakaway (`windows-in-job`, unmeasured, see 5).
 
 Corrections / additions to record in the code:
+
+0. **Add `-p OOMPolicy=continue`** next to the two memory properties (section 4, last two bullets).
 
 1. **Choose by trying, not by probing**: run `systemd-run`; any non-zero exit (no bus: rc 1 in under 10 ms; duplicate unit: rc 1) goes to `setsid -f`. The launcher name recorded is the one that worked.
 2. **The unit needs `--working-directory` and an environment restored from `env.json` including `PATH`** (section 3). Without it the unit cannot find `claude`/`codex` on this machine.

@@ -351,6 +351,13 @@ internal static class Program
         /// </summary>
         /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs. Never exits 64.</remarks>
         MigrateV2,
+
+        /// <summary>
+        /// The detached runner of one external-role job: <c>--role-run &lt;jobId&gt; [--data-dir &lt;folder&gt;]</c> takes the job's lease, runs the role's work and writes its result (epoch 3 E1 s1). Started by a role start
+        /// through <see cref="Runners.Detach.DetachedLauncher"/>, never by a person; speaks no JSON-RPC and prints nothing on stdout. See <see cref="Server.RoleJobs.RoleRunMode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs (74). An unknown job is 65, never 64.</remarks>
+        RoleRun,
     }
 
     /// <summary>
@@ -366,7 +373,7 @@ internal static class Program
     internal static readonly IReadOnlySet<Startup> WriterModes = new HashSet<Startup>
     {
         Startup.CheckConsultant, Startup.CheckModel, Startup.Collect, Startup.PairsKeep, Startup.PairsDecide,
-        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors, Startup.MigrateV2,
+        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors, Startup.MigrateV2, Startup.RoleRun,
     };
 
     /// <summary>Why <paramref name="startup"/> may not run here — empty when it may (not a writer, or its root is there).</summary>
@@ -427,6 +434,7 @@ internal static class Program
                 "--features" => Startup.Features,
                 "--check-model" => Startup.CheckModel,
                 "--migrate-v2" => Startup.MigrateV2,
+                "--role-run" => Startup.RoleRun,
                 _ => Startup.Usage,
             };
 
@@ -629,6 +637,15 @@ internal static class Program
                 return Server.Migrations.MigrateV2Mode.Run(
                     args, Environment.GetEnvironmentVariable, Console.Out, Note,
                     MigrationNotices(Environment.GetEnvironmentVariable, NoticeWriter.Shared, Serilog.Core.Logger.None, RunIds.New()));
+
+            case Startup.RoleRun:
+                // The detached runner of one role job: stdout stays empty, its sentences go to stderr and to its own log file; 0 terminal state reached, 65 wrong argument or no such job, 70 fault, 75 not the writer — never 64.
+                // SIGTERM and SIGINT reach the work's token, so a stopped unit ends its child and writes its state instead of leaving the job at running.
+                using (var stopping = new CancellationTokenSource())
+                using (Runners.Processes.StopSignals.Into(stopping))
+                {
+                    return await Server.RoleJobs.RoleRunMode.RunAsync(args, Environment.GetEnvironmentVariable, Note, stopping.Token);
+                }
 
             default:
                 return await ServeAsync();
@@ -2691,6 +2708,11 @@ internal static class Program
         run again. Prints ONE JSON object on stdout (status plan, done, busy, partial or failed; counts; the holds a person had
         answered; the steps). Exits 0 plan printed or apply complete, 65 a bad argument, 74 the data folder is missing or not
         writable, 75 another migration holds the lease, or some objects were deferred and no marker was written — never 64.
+        `--role-run <jobId> [--data-dir <folder>]` is the detached runner of one external-role job (the `start_role` tool launches it; a person never needs to): it takes the job's lease, runs the
+        role's work, writes the result or the terminal state and exits, printing nothing on stdout. Exits 0 when it took the job to a terminal state, 65 for a wrong argument or a job that does not
+        exist, 70 for an unexpected fault (the job is closed as failed), 75 when it is not the job's writer (the lease is held elsewhere, the job is over, or it was taken over); a named data
+        folder that is missing is 74 — never 64. Optional environment: COAI_ROLE_JOBS_MAX (live jobs at once, 3; 2 on WSL), COAI_ROLE_MEMORY_MB (a runner unit's memory ceiling, 4096),
+        COAI_ROLE_LAUNCHER (auto, systemd-run or setsid).
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

@@ -46,6 +46,7 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     [
         new("src_mcp/src/Server/RoleJobs/RoleJobStore.cs", "a wall STAMP on each job record and instants compared with a monotonic reading for its two bounded waits (job.lock, the runner's take window), both on the injected clock; ARoleJobLeaseTests move it by hand (epoch 3 E1 s1)"),
         new("src_mcp/src/Server/RoleJobs/RoleLease.cs", "a wall STAMP on each write and the heartbeat's instant, from the store's clock; it waits for nothing itself (epoch 3 E1 s1)"),
+        new("src_mcp/src/Server/RoleJobs/RoleRunner.cs", "hands its clock to the job's timeout source and the watch loop's PeriodicTimer, both armed ON that clock (ARoleRunnerTests advance a manual one to fire the timeout); the work's own waits take the work's token (epoch 3 E1 s1)"),
         new("src_mcp/src/Server/Backfill/BackfillAttribution.cs", "forwards its clock to the peer lookup (AuthorPeers.Find) as a deadline instant; no timer, no wait — E5/E7's own tests pin it"),
         new("src_mcp/src/Server/Backfill/BackfillRun.cs", "only defaults and forwards the clock to BackfillAttribution; it arms nothing itself"),
         new("src_mcp/src/Server/Migrations/HoldBoundary.cs", "a wall STAMP only: the notice's utc comes from the clock, and the two doors (the migration, convert-on-load) hand it their own; it waits for nothing and arms no timer (E1.S4)"),

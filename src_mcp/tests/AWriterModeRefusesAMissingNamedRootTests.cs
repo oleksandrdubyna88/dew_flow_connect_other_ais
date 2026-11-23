@@ -56,6 +56,8 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
         new[] { "--requeue-refused" },
         new[] { "--consultants" },
         new[] { "--migrate-v2", "--apply" },
+        // The detached runner of one role job (epoch 3 E1 s1): a server started it, so its data folder is there; named and missing, it is refused before it runs.
+        new[] { "--role-run", "r20260101000000-00000000" },
     };
     // END WRITER MODES
 

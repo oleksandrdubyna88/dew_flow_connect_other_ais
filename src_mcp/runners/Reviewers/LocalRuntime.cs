@@ -61,7 +61,7 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
 
     /// <summary>How to start this binary again: the executable, and the arguments that must precede
     /// ours.</summary>
-    internal static (string Executable, IReadOnlyList<string> Prefix) SelfInvocation()
+    public static (string Executable, IReadOnlyList<string> Prefix) SelfInvocation()
     {
         var process = Environment.ProcessPath ?? "coai-mcp";
         var name = Path.GetFileNameWithoutExtension(process);
