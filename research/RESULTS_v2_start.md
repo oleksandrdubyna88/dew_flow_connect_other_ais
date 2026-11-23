@@ -171,6 +171,17 @@ thing in this file so an appended line lands in it, so notes on rows are written
 
 - **M1 limit raised to 100 ms (2026-11-22).** Run 45065934436 (first paint, 89471dd3): Windows M2 672.8 / 736.5 / 1671 ms passes the 2000 ms budget, but M1 max was 60.7 ms on a cold windows-latest runner (Linux 3.2 ms) — registering ~40 commands with cold JIT. M1 is a guard against work creeping into `activate()`, not the user budget (M2 is); 100 ms keeps that guard (a planted 3 s sleep still fails) without failing on runner noise.
 
+- **M2 to `menuReady` (2026-11-23, commit 9948827e, PR #1034 CI run 45085683757).** From here M2 ends when the real sidebar menu is shown and usable (§ 1); the rows above
+  ended at `ready`. Prediction (§ 3): within about 30 ms of the skeleton rows, all samples under 2000 ms. Observed, Linux: M2 277.2 / 303.6 / 468.8 ms, host delay
+  8.2 / 69.1 / 80.7 ms, `ready` 275.0 / 303.3 / 462.5 ms: lower than the skeleton rows (559.5 / 561.6 / 691.2), pass. Windows, first run: M2 1022.1 / 1126.2 / 2273.5 ms, **FAIL**
+  on the one slow sample (host delay 302.3 / 362.2 / 719.8 ms); in that sample the editor took 1016 ms to evaluate the extension, 1736 ms to call `activate`, 1911 ms to ask
+  for the sidebar view, and the menu then took 362 ms more (`ready` at 2021.3, `menuReady` 252 ms after it, then the old code loaded). The other two samples took 1022 and 1126 ms.
+  Windows, the same commit run again once after the whole run finished (the one re-run the brief allows after an outlier): M2 904.2 / 1538.2 / 1966.4 ms, **pass with 34 ms to spare**, host delay
+  263.3 / 684.5 / 937.9 ms. Both Windows runs say the same thing: the time is the editor's (`eval` to `viewResolve` is 835 ms in the median of the second run and
+  `viewResolve` to `menuReady` is 86 ms), so a Windows runner that is slow to start a window can put one sample over 2000 ms whatever the menu does. This is two runs of
+  three samples each; it does not say the margin on a slow runner is safe. The old code and chat load after the mark (`moduleRequire` follows `menuReady` by 5 ms in the
+  median of the second run).
+
 | date | commit | label | host location | platform | M1 max ms | M2 min / median / max ms | M3 min / median / max ms | verdict |
 |---|---|---|---|---|---|---|---|---|
 | 2026-11-22 | 503a65ad | S2 shell + legacy sidebar | local | linux | 173.1 | 1890.1 / 2176.4 / 2386.1 | 1807.4 / 2072.6 / 2315.3 | FAIL |
@@ -179,3 +190,6 @@ thing in this file so an appended line lands in it, so notes on rows are written
 | 2026-11-22 | 89471dd3 | first paint (sidebar paints before slow reads) | local | win32 | 60.7 | 672.8 / 736.5 / 1671 | 586.9 / 672.6 / 1654.4 | PASS (M1 limit 100 ms) |
 | 2026-11-22 | 688bda62 | snapshot sidebar (skeleton path, fresh profile) | local | linux | 4.8 | 559.5 / 561.6 / 691.2 | null (read at ready, before the hand-over) | PASS |
 | 2026-11-22 | 688bda62 | snapshot sidebar (skeleton path, fresh profile) | local | win32 | 76.6 | 522.7 / 915.2 / 1403 | null (read at ready, before the hand-over) | PASS |
+| 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1) | local | linux | 1.1 | 277.2 / 303.6 / 468.8 | null (not read) | pass |
+| 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1) | local | win32 | 32.8 | 1022.1 / 1126.2 / 2273.5 | null (not read) | FAIL (one sample over 2000 ms) |
+| 2026-11-23 | 9948827e | native menu, M2 to menuReady (ci run 1 re-run once after the run finished) | local | win32 | 28.2 | 904.2 / 1538.2 / 1966.4 | null (not read) | pass |
