@@ -10,9 +10,10 @@ import * as vscode from 'vscode';
 import { adoptRegistrationsFor } from '../../../src/shellBridge';
 import { chooseFromBug as chooseFromBugIn } from '../../../src/chatCommand';
 import { flushChatUsage } from '../../../src/chatUsageFile';
+import { loadShellModule } from '../../../src/hostRuntime';
 import { testDoorOf } from '../../../src/remoteSessionHost';
-import { CHAT_COMMANDS, PANEL_CHAT } from '../../ids';
-import type { ChatModule } from '../../lazy';
+import { CHAT_COMMANDS, MODULE_INSTALL, PANEL_CHAT } from '../../ids';
+import type { ChatModule, InstallModule } from '../../lazy';
 import { type ChatRegistration, registerChat } from './register';
 
 type Handler = (...args: unknown[]) => unknown;
@@ -78,10 +79,35 @@ export const command: ChatModule['command'] = (context, id, args) => {
   return handler(...args);
 };
 
+/** How long after a restore the install work is asked for: a timer, so the person's chat tab has painted and the restore's own work is done first. */
+const INSTALL_AFTER_RESTORE_MS = 250;
+
+let installAsked = false;
+
+/**
+ * A window whose only activation is a restored `coaiChat` tab never sees the sidebar's `menuReady` or a first command, the two other places that start the install work
+ * (v2 E4 plan gate). So the restore asks for it, once per host, on a timer AFTER the restore has settled. `start` is once per activation inside the install module, so
+ * a sidebar or a command that asks as well is still one run.
+ */
+function askInstallLater(context: vscode.ExtensionContext): void {
+  if (installAsked) {
+    return;
+  }
+  installAsked = true;
+  setTimeout(() => {
+    loadShellModule<InstallModule>(MODULE_INSTALL)
+      .then((module) => module.start(context))
+      .catch((error: unknown) => { console.error('ConnectOtherAIs: the install work could not be started after a chat restore', error); });
+  }, INSTALL_AFTER_RESTORE_MS);
+}
+
 export const restorePanel: ChatModule['restorePanel'] = (context, panel, state) => {
   started(context);
+  const restored = Promise.resolve(serializer?.deserializeWebviewPanel(panel, state));
+  const asked = (): void => { askInstallLater(context); };
+  restored.then(asked, asked);
 
-  return serializer?.deserializeWebviewPanel(panel, state);
+  return restored;
 };
 
 /** The legacy sidebar's `Chat` on a bug: the bug goes into a chat through the one registry this module made. */

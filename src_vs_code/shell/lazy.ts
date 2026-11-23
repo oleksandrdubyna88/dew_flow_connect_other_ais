@@ -59,7 +59,7 @@ export interface SidebarModule {
  * The shell registers the chat commands and the `coaiChat` serializer once; their thunks load THIS module, not the legacy one.
  */
 export interface ChatModule extends Pick<ShellModule, 'command' | 'start' | 'deactivate'> {
-  /** Restores a `coaiChat` tab after a reload, from the chat store, without the sidebar and without the legacy module. */
+  /** Restores a `coaiChat` tab after a reload, from the chat store, without the sidebar and without the legacy module; once it has settled, asks (on a timer, once per host) for the install start. */
   readonly restorePanel: (context: vscode.ExtensionContext, panel: vscode.WebviewPanel, state: unknown) => void | Thenable<void>;
   /** The review page's `Chat` on a bug (the legacy sidebar's callback): puts the bug into a chat through the one chat registry. */
   readonly chooseFromBug: (context: vscode.ExtensionContext, chat: unknown) => Promise<void>;
