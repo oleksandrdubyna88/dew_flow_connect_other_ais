@@ -3,6 +3,7 @@ import { win32 } from 'node:path';
 import { credsSession } from './credsSession';
 import { Platform, hostPlatform } from './hostSide';
 import { system32 } from './processLauncher';
+import { withoutControls } from './remoteAccountsReply';
 import { callOf, shQuoted } from './remoteScript';
 import { Captured, capture } from './versionProbe';
 
@@ -212,8 +213,6 @@ function logged(seams: RemoteSeams, line: string): void {
   }
 }
 
-/** A line of ssh's stderr is text from the VM: its control characters (an escape sequence, a bell) and its format characters (a bidi override, a zero-width space) never reach the person or the log. */
-const withoutControls = (line: string): string => line.replace(/[\p{Cc}\p{Cf}]/gu, '');
 
 /**
  * ssh's last line: the last one that is not empty, control characters taken out, at most 300 characters with `…` after a cut.

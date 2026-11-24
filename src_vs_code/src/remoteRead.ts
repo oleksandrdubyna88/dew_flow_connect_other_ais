@@ -3,6 +3,7 @@ import { namedAmong, projectDirNames } from './claudeSessions';
 import { NOTHING_OF_YOURS, promptsIn } from './sessionPrompts';
 import { CredsName, credsSession } from './credsSession';
 import { oneAtATime } from './oneAtATime';
+import { withoutControls } from './remoteAccountsReply';
 import { RemoteCandidate, RemoteRead, TitledSession, UNREADABLE_SAID, Unreadable, readRemote } from './remoteFrame';
 import { FOLDERS_MAX, REMOTE_SCRIPT, RemoteCall, isFolderName, operandsOf } from './remoteScript';
 import type { Committed, Consent, HostStanding } from './remoteHosts';
@@ -54,7 +55,7 @@ const refuse = (refusal: string): RemoteAnswer => ({ kind: 'refused', refusal })
 const SHOWN_MAX = 80;
 
 /** Text from the VM with its control and format characters (bidi marks, zero-width space) taken out: what a person reads is what is there. */
-const plainOf = (text: string): string => text.replace(/[\p{Cc}\p{Cf}]/gu, '');
+const plainOf = (text: string): string => withoutControls(text);
 
 /** Text from the VM for a sentence: control and format characters taken out, cut with `…`. */
 function shown(text: string): string {

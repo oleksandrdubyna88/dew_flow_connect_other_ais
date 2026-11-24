@@ -190,3 +190,24 @@ test('A2-T21: the name pattern finds the four accounts modules, and they hold no
     assert.deepEqual(forbiddenIn(sourceOf(wanted)), [], `${wanted} holds something a pure parser module must not`);
   }
 });
+
+// ───────────────── A3-T28: one rule takes control and format characters out (E1.S3; S2 X12) ─────────────────
+
+/** The character class of the plain rule, written as source text: control and format characters. */
+const PLAIN_CLASS = String.raw`[\p{Cc}\p{Cf}]`;
+
+/** The files of `src/*.ts` (tests are in `src/test`, so none is here) that hold the class. */
+const filesWithPlainClass = (names: readonly string[], read: (name: string) => string): readonly string[] => names.filter((name) => read(name).includes(PLAIN_CLASS));
+
+test('A3-T28 companion: the scan finds the class in a sample, and finds nothing in text without it', () => {
+  assert.deepEqual(filesWithPlainClass(['a.ts', 'b.ts'], (name) => (name === 'a.ts' ? `x.replace(/${PLAIN_CLASS}/gu, '')` : 'const none = 1;')), ['a.ts']);
+  assert.deepEqual(filesWithPlainClass(['b.ts'], () => 'const none = 1;'), []);
+});
+
+test('A3-T28: the plain rule stands in ONE file, and the two older copies call it', () => {
+  assert.deepEqual(filesWithPlainClass(sourceFiles(), sourceOf), ['remoteAccountsReply.ts'], 'the plain rule stands in two files');
+  for (const file of ['remoteSsh.ts', 'remoteRead.ts']) {
+    assert.match(sourceOf(file), /import\s*\{[^}]*\bwithoutControls\b[^}]*\}\s*from\s*'\.\/remoteAccountsReply'/u, `${file} does not import withoutControls from ./remoteAccountsReply`);
+  }
+  assert.ok(!/from\s*'\.\/remote(?:Ssh|Read)'/u.test(sourceOf('remoteAccountsReply.ts')), 'remoteAccountsReply.ts imports a file that imports it: an import circle');
+});
