@@ -3,6 +3,13 @@
 > The next release of coai-mcp is 2.0.0, requested by hand with a `Release-As: 2.0.0` footer: the v1 data migration runs only from major version 2 (v2 epoch 1, E5).
 > What changes for a person is in `RELEASE_NOTES_2.0.md` at the repository root.
 
+## [0.66.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.66.0...mcp-v0.66.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **mcp:** the agy hook knows its own folder, looks only at local paths, and refuses a spelling Windows reads elsewhere ([#1023](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/1023)) ([9721a7f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9721a7fef02f758ed165df42e0a9f85f084b5ce9))
+
 ## [0.66.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.65.4...mcp-v0.66.0) (2026-11-17)
 
 

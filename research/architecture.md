@@ -482,6 +482,23 @@ the coai folder (`cwd`). A relative path, a missing field or any failure to reso
 On the Team server this keeps one job's reviewer out of another job's folder. A link swapped after the check, hard links and bind mounts are
 not closed; `SECURITY.md` lists the limits.
 
+**It knows its own folder, and looks only at local paths (2026-11-18, `todo/PLAN_the_agy_hook_on_windows_folds_dot_dot_as_text.md`).** Three
+corrections to the paragraph above, which stays as written.
+- *The coai folder is where the hook runs, not the payload's `cwd`.* agy sorts `workspacePaths` and sends its first entry as `cwd`, so a
+  granted root that sorts before the coai folder was taken for the coai folder and every read in it was denied
+  ([RESULTS_agy_read_file.md](RESULTS_agy_read_file.md) §7). The coai folder is now the parent of the hook process's own working folder,
+  the `.agents` folder its relative command starts in (`HookSite.CoaiFolderOf`). The environment plays no part, because the Team server
+  and a question row give the hook another environment than the launcher's. A hook that does not run from `.agents` denies every read.
+  The payload's `cwd` is still validated and names nothing.
+- *The guarded reader (D9).* Every look the hook takes at the disk goes through one reader, `AgyHookPlaces.Guarded`, that refuses a path that
+  is not local before any I/O, and every resolved path must be local (`HookSite.IsLocal`, over `Junctions.IsLocal`). A UNC, device or
+  mapped-network path is never looked up, so no credentials are offered to a share. A network checkout is therefore not supported.
+- *The dot rule (D10).* Where the OS folds `.` and `..` as text, which is Windows (`HookSite.FoldsDotsAsText`), a `Path` with a segment
+  that is exactly `.` or `..` is denied before it is resolved, because `RealPath`'s `..` rule is the Unix one. `RealPath` itself is unchanged.
+
+The hook's decision is `AntigravityReadOnly.Decide(payload, HookSite)`; `HookSite` holds what one hook process knows by itself, and the
+place check is `AgyHookPlaces`.
+
 ### And it is SEEN across the seam, twice (2026-09-13)
 
 Story 4 gave the consultation two readers on the other side, and neither is a new channel — both are

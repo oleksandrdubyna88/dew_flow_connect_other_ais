@@ -123,8 +123,14 @@ public static partial class Junctions
     /// The same question with the drive's type given. A drive-rooted spelling on Windows; on any other OS the Unix rule — so the
     /// decisions that ask it run, and are tested, on a Linux host with a test's shell (D18 keeps the product off every host but Windows).
     /// </summary>
-    internal static bool IsLocal(string target, Func<string, DriveType> driveType) =>
-        OperatingSystem.IsWindows() ? IsLocalDrivePath(target, driveType) : IsLocalUnixPath(target);
+    internal static bool IsLocal(string target, Func<string, DriveType> driveType) => IsLocal(target, driveType, OperatingSystem.IsWindows());
+
+    /// <summary>
+    /// The same question with the OS given as well: the rule is TEXT (and the drive table, through <paramref name="driveType"/>), so a Linux run
+    /// judges a Windows spelling and a Windows run a Unix one.
+    /// </summary>
+    internal static bool IsLocal(string target, Func<string, DriveType> driveType, bool windows) =>
+        windows ? IsLocalDrivePath(target, driveType) : IsLocalUnixPath(target);
 
     /// <summary>
     /// A rooted <c>X:/</c> path that is not a UNC or device path and whose drive is not a mapped network drive. Judged by its SPELLING (a
@@ -149,8 +155,9 @@ public static partial class Junctions
 
     private static bool IsLocalDrive(DriveType type) => type is not (DriveType.Network or DriveType.Unknown or DriveType.NoRootDirectory);
 
+    /// <summary>The Unix rule as TEXT: rooted by a <c>/</c> (not the host's idea of a root: on Windows <see cref="Path.IsPathRooted(string)"/> answers true for <c>C:x</c> and <c>\x</c>), not <c>//</c>, not under an automount folder.</summary>
     private static bool IsLocalUnixPath(string target) =>
-        Path.IsPathRooted(target) && !target.StartsWith("//", StringComparison.Ordinal) && !NetworkFolders.Any(folder => target.StartsWith(folder, StringComparison.Ordinal));
+        target.StartsWith("/", StringComparison.Ordinal) && !target.StartsWith("//", StringComparison.Ordinal) && !NetworkFolders.Any(folder => target.StartsWith(folder, StringComparison.Ordinal));
 
     /// <summary>Where Unix hosts automount network shares: the autofs <c>/net</c> and <c>/misc</c>, macOS's <c>/Network</c>.</summary>
     private static readonly string[] NetworkFolders = ["/net/", "/misc/", "/Network/"];
